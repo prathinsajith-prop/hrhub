@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Tabs } from '@/components/ui/form-controls'
 import { DataTable } from '@/components/ui/data-table'
-import { KPICard } from '@/components/ui/kpi-card'
+import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
 import { useJobs, useApplications, useUpdateApplicationStage } from '@/hooks/useRecruitment'
@@ -145,10 +145,10 @@ export function RecruitmentPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard label="Open Positions" value={openJobs} icon={Briefcase} variant="primary" />
-        <KPICard label="Total Applicants" value={candidates.length} icon={Users} variant="info" />
-        <KPICard label="In Interview" value={inInterview} icon={Clock} variant="warning" />
-        <KPICard label="Offer Stage" value={inOffer} icon={TrendingUp} variant="success" />
+        <KpiCardCompact label="Open Positions" value={openJobs} icon={Briefcase} color="blue" />
+        <KpiCardCompact label="Total Applicants" value={candidates.length} icon={Users} color="cyan" />
+        <KpiCardCompact label="In Interview" value={inInterview} icon={Clock} color="amber" />
+        <KpiCardCompact label="Offer Stage" value={inOffer} icon={TrendingUp} color="green" />
       </div>
 
       <Tabs

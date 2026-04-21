@@ -37,7 +37,7 @@ import type { KpiColor } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'
-import { useDashboardKPIs, useNotifications } from '@/hooks/useDashboard'
+import { useDashboardKPIs, useNotifications, usePayrollTrend, useNationalityBreakdown, useDeptHeadcount } from '@/hooks/useDashboard'
 import { useVisas } from '@/hooks/useVisa'
 
 /* Token-driven chart palette — keep chart colors in sync with globals.css. */
@@ -52,31 +52,13 @@ const CHART_COLORS = {
   axis: 'hsl(var(--muted-foreground))',
 }
 
-const payrollTrend = [
-  { month: 'Nov', amount: 4.62 },
-  { month: 'Dec', amount: 4.71 },
-  { month: 'Jan', amount: 4.75 },
-  { month: 'Feb', amount: 4.80 },
-  { month: 'Mar', amount: 4.82 },
-  { month: 'Apr', amount: 4.89 },
-]
-
-const nationalityData = [
-  { name: 'Indian', value: 102, fill: CHART_COLORS.primary },
-  { name: 'Emirati', value: 46, fill: CHART_COLORS.success },
-  { name: 'Filipino', value: 38, fill: CHART_COLORS.accent },
-  { name: 'British', value: 22, fill: CHART_COLORS.info },
-  { name: 'Others', value: 45, fill: CHART_COLORS.muted },
-]
-
-const departmentData = [
-  { dept: 'Sales', count: 68 },
-  { dept: 'Operations', count: 52 },
-  { dept: 'Finance', count: 31 },
-  { dept: 'Marketing', count: 24 },
-  { dept: 'HR', count: 18 },
-  { dept: 'IT', count: 15 },
-  { dept: 'Legal', count: 12 },
+// Chart fill palette: must stay in same order as backend NationalityBreakdown colors
+const NAT_FILLS = [
+  CHART_COLORS.primary,
+  CHART_COLORS.success,
+  CHART_COLORS.accent,
+  CHART_COLORS.info,
+  CHART_COLORS.muted,
 ]
 
 const kpiCards: Array<{
@@ -87,31 +69,31 @@ const kpiCards: Array<{
   color: KpiColor
   change?: number
 }> = [
-  {
-    label: 'Total Employees',
-    key: 'totalEmployees',
-    sub: 'Active workforce',
-    icon: Users,
-    color: 'blue',
-    change: 1.2,
-  },
-  { label: 'Active Visas', key: 'activeVisas', sub: 'Processing now', icon: Plane, color: 'cyan' },
-  { label: 'Open Jobs', key: 'openJobs', sub: 'In pipeline', icon: Briefcase, color: 'amber' },
-  {
-    label: 'Expiring Visas',
-    key: 'expiringVisas',
-    sub: 'Next 90 days',
-    icon: FileText,
-    color: 'red',
-  },
-  {
-    label: 'Pending Leave',
-    key: 'pendingLeave',
-    sub: 'Awaiting approval',
-    icon: CheckCircle2,
-    color: 'green',
-  },
-]
+    {
+      label: 'Total Employees',
+      key: 'totalEmployees',
+      sub: 'Active workforce',
+      icon: Users,
+      color: 'blue',
+      change: 1.2,
+    },
+    { label: 'Active Visas', key: 'activeVisas', sub: 'Processing now', icon: Plane, color: 'cyan' },
+    { label: 'Open Jobs', key: 'openJobs', sub: 'In pipeline', icon: Briefcase, color: 'amber' },
+    {
+      label: 'Expiring Visas',
+      key: 'expiringVisas',
+      sub: 'Next 90 days',
+      icon: FileText,
+      color: 'red',
+    },
+    {
+      label: 'Pending Leave',
+      key: 'pendingLeave',
+      sub: 'Awaiting approval',
+      icon: CheckCircle2,
+      color: 'green',
+    },
+  ]
 
 const tooltipStyle: React.CSSProperties = {
   borderRadius: 8,
@@ -126,6 +108,16 @@ export function DashboardPage() {
   const { data: kpis } = useDashboardKPIs()
   const { data: notifications } = useNotifications(20)
   const { data: visaData } = useVisas({ limit: 10 })
+  const { data: payrollTrendRaw } = usePayrollTrend()
+  const { data: nationalityRaw } = useNationalityBreakdown()
+  const { data: deptRaw } = useDeptHeadcount()
+
+  const payrollTrend = payrollTrendRaw ?? []
+  const nationalityData = (nationalityRaw ?? []).map((d, i) => ({
+    ...d,
+    fill: NAT_FILLS[i] ?? CHART_COLORS.muted,
+  }))
+  const departmentData = deptRaw ?? []
 
   const notifList = (notifications as any[]) ?? []
   const urgentAlerts = notifList.filter(
@@ -191,9 +183,13 @@ export function DashboardPage() {
                 <CardDescription>Monthly total payroll in AED millions</CardDescription>
               </div>
               <div className="text-right">
-                <p className="text-xl font-bold font-display">AED 4.89M</p>
+                <p className="text-xl font-bold font-display">
+                  {payrollTrend.length > 0
+                    ? `AED ${payrollTrend[payrollTrend.length - 1].amount}M`
+                    : '—'}
+                </p>
                 <p className="text-[11px] text-success font-medium flex items-center gap-1 justify-end">
-                  <TrendingUp className="h-3 w-3" /> +1.4% this month
+                  <TrendingUp className="h-3 w-3" /> Latest month
                 </p>
               </div>
             </div>

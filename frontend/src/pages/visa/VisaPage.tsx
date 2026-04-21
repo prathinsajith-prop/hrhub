@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs } from '@/components/ui/form-controls'
-import { KPICard } from '@/components/ui/kpi-card'
+import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { formatDate, cn } from '@/lib/utils'
 import { useVisas } from '@/hooks/useVisa'
@@ -195,10 +195,10 @@ export function VisaPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard label="Active Visas" value={activeCount} icon={CheckCircle2} variant="success" />
-        <KPICard label="In Processing" value={processingCount} icon={Clock} variant="info" />
-        <KPICard label="Critical" value={criticalCount} icon={AlertTriangle} variant="destructive" />
-        <KPICard label="Expiring 30d" value={expiringCount} icon={Plane} variant="warning" />
+        <KpiCardCompact label="Active Visas" value={activeCount} icon={CheckCircle2} color="green" />
+        <KpiCardCompact label="In Processing" value={processingCount} icon={Clock} color="cyan" />
+        <KpiCardCompact label="Critical" value={criticalCount} icon={AlertTriangle} color="red" />
+        <KpiCardCompact label="Expiring 30d" value={expiringCount} icon={Plane} color="amber" />
       </div>
 
       <Tabs
