@@ -1,0 +1,11 @@
+// Central schema barrel — import everything from here
+export * from './tenants'
+export * from './users'
+export * from './employees'
+export * from './recruitment'
+export * from './visa'
+export * from './documents'
+export * from './onboarding'
+export * from './payroll'
+export * from './leave'
+export * from './notifications'

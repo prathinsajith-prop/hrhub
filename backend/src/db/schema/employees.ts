@@ -1,0 +1,71 @@
+import { pgTable, uuid, text, boolean, timestamp, numeric, date, index } from 'drizzle-orm/pg-core'
+import { relations } from 'drizzle-orm'
+import { tenants, entities } from './tenants'
+
+export const employees = pgTable('employees', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    entityId: uuid('entity_id').notNull().references(() => entities.id),
+    employeeNo: text('employee_no').notNull(),
+    firstName: text('first_name').notNull(),
+    lastName: text('last_name').notNull(),
+    email: text('email'),
+    phone: text('phone'),
+    nationality: text('nationality'),
+    passportNo: text('passport_no'),
+    emiratesId: text('emirates_id'),
+    dateOfBirth: date('date_of_birth'),
+    gender: text('gender').$type<'male' | 'female'>(),
+    department: text('department'),
+    designation: text('designation'),
+    reportingTo: uuid('reporting_to'),
+    joinDate: date('join_date').notNull(),
+    status: text('status').notNull().default('onboarding')
+        .$type<'active' | 'onboarding' | 'probation' | 'suspended' | 'terminated' | 'visa_expired'>(),
+    basicSalary: numeric('basic_salary', { precision: 12, scale: 2 }),
+    totalSalary: numeric('total_salary', { precision: 12, scale: 2 }),
+    visaStatus: text('visa_status')
+        .$type<'not_started' | 'entry_permit' | 'medical_pending' | 'eid_pending' | 'stamping' | 'active' | 'expiring_soon' | 'expired' | 'cancelled'>(),
+    visaExpiry: date('visa_expiry'),
+    passportExpiry: date('passport_expiry'),
+    emiratisationCategory: text('emiratisation_category').$type<'emirati' | 'expat'>(),
+    avatarUrl: text('avatar_url'),
+    // Extended fields
+    workEmail: text('work_email'),
+    personalEmail: text('personal_email'),
+    mobileNo: text('mobile_no'),
+    maritalStatus: text('marital_status').$type<'single' | 'married' | 'divorced' | 'widowed'>(),
+    gradeLevel: text('grade_level'),
+    managerName: text('manager_name'),
+    labourCardNumber: text('labour_card_number'),
+    bankName: text('bank_name'),
+    iban: text('iban'),
+    housingAllowance: numeric('housing_allowance', { precision: 12, scale: 2 }),
+    transportAllowance: numeric('transport_allowance', { precision: 12, scale: 2 }),
+    otherAllowances: numeric('other_allowances', { precision: 12, scale: 2 }),
+    paymentMethod: text('payment_method').$type<'bank_transfer' | 'cash' | 'cheque'>(),
+    emergencyContact: text('emergency_contact'),
+    homeCountryAddress: text('home_country_address'),
+    visaNumber: text('visa_number'),
+    visaIssueDate: date('visa_issue_date'),
+    visaType: text('visa_type').$type<'employment' | 'investor' | 'dependent' | 'mission'>(),
+    emiratesIdExpiry: date('emirates_id_expiry'),
+    sponsoringEntity: text('sponsoring_entity'),
+    contractType: text('contract_type').$type<'permanent' | 'contract' | 'part_time'>(),
+    workLocation: text('work_location'),
+    probationEndDate: date('probation_end_date'),
+    contractEndDate: date('contract_end_date'),
+    isArchived: boolean('is_archived').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    tenantIdx: index('idx_employees_tenant').on(t.tenantId),
+    entityIdx: index('idx_employees_entity').on(t.entityId),
+    statusIdx: index('idx_employees_status').on(t.status),
+    visaExpiryIdx: index('idx_employees_visa_expiry').on(t.visaExpiry),
+}))
+
+export const employeesRelations = relations(employees, ({ one }) => ({
+    tenant: one(tenants, { fields: [employees.tenantId], references: [tenants.id] }),
+    entity: one(entities, { fields: [employees.entityId], references: [entities.id] }),
+}))
