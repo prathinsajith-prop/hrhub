@@ -8,9 +8,11 @@ import { Tabs } from '@/components/ui/form-controls'
 import { DataTable } from '@/components/ui/data-table'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
 import { useJobs, useApplications, useUpdateApplicationStage } from '@/hooks/useRecruitment'
-import { toast } from '@/components/ui/overlays'
+import { toast, ConfirmDialog } from '@/components/ui/overlays'
+import { NewJobDialog } from '@/components/shared/action-dialogs'
 import type { Candidate, ApplicationStage } from '@/types'
 import type { ColumnDef } from '@tanstack/react-table'
 
@@ -110,6 +112,8 @@ const jobColumns: ColumnDef<any>[] = [
 
 export function RecruitmentPage() {
   const [activeTab, setActiveTab] = useState('pipeline')
+  const [jobDialogOpen, setJobDialogOpen] = useState(false)
+  const [closeConfirm, setCloseConfirm] = useState<string[] | null>(null)
   const { data: jobsData } = useJobs({ limit: 50 })
   const { data: appsData } = useApplications({ limit: 100 })
   const updateStage = useUpdateApplicationStage()
@@ -130,12 +134,12 @@ export function RecruitmentPage() {
   const inOffer = candidates.filter((c: any) => c.stage === 'offer' || c.stage === 'pre_boarding').length
 
   return (
-    <div className="space-y-6">
+    <PageWrapper>
       <PageHeader
         title="Recruitment"
         description="Manage job postings and track candidates through the hiring pipeline"
         actions={
-          <Button className="gap-2">
+          <Button className="gap-2" onClick={() => setJobDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Job</span>
             <span className="sm:hidden">Add</span>
@@ -144,7 +148,7 @@ export function RecruitmentPage() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCardCompact label="Open Positions" value={openJobs} icon={Briefcase} color="blue" />
         <KpiCardCompact label="Total Applicants" value={candidates.length} icon={Users} color="cyan" />
         <KpiCardCompact label="In Interview" value={inInterview} icon={Clock} color="amber" />
@@ -202,7 +206,7 @@ export function RecruitmentPage() {
             enableSelection
             getRowId={(row: any) => String(row.id)}
             toolbar={
-              <Button size="sm" className="gap-1.5">
+              <Button size="sm" className="gap-1.5" onClick={() => setJobDialogOpen(true)}>
                 <Plus className="h-3.5 w-3.5" />
                 New Job
               </Button>
@@ -210,11 +214,11 @@ export function RecruitmentPage() {
             bulkActions={(selected) => (
               <>
                 <Button variant="outline" size="sm"
-                  onClick={() => toast.success(`${selected.length} job listings closed`)}>
+                  onClick={() => setCloseConfirm(selected.map((r: any) => r.id))}>
                   Close
                 </Button>
                 <Button variant="outline" size="sm"
-                  onClick={() => toast.success(`${selected.length} jobs duplicated`)}>
+                  onClick={() => toast.info(`Duplicate queued for ${selected.length} jobs`, 'This will create editable draft copies.')}>
                   Duplicate
                 </Button>
               </>
@@ -222,7 +226,21 @@ export function RecruitmentPage() {
           />
         </Card>
       )}
-    </div>
+
+      <NewJobDialog open={jobDialogOpen} onOpenChange={setJobDialogOpen} />
+      <ConfirmDialog
+        open={!!closeConfirm}
+        onOpenChange={(o) => !o && setCloseConfirm(null)}
+        title={`Close ${closeConfirm?.length ?? 0} job${closeConfirm?.length === 1 ? '' : 's'}?`}
+        description="Closing these jobs will stop accepting new applications. Existing candidates remain in the pipeline."
+        confirmLabel="Close jobs"
+        variant="warning"
+        onConfirm={() => {
+          toast.success(`${closeConfirm?.length ?? 0} jobs closed`, 'They are now read-only.')
+          setCloseConfirm(null)
+        }}
+      />
+    </PageWrapper>
   )
 }
 

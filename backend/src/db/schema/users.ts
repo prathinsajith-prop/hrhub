@@ -32,11 +32,27 @@ export const refreshTokens = pgTable('refresh_tokens', {
     userIdx: index('idx_refresh_tokens_user').on(t.userId),
 }))
 
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').unique().notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    userIdx: index('idx_password_reset_tokens_user').on(t.userId),
+}))
+
 export const usersRelations = relations(users, ({ one, many }) => ({
     tenant: one(tenants, { fields: [users.tenantId], references: [tenants.id] }),
     refreshTokens: many(refreshTokens),
+    passwordResetTokens: many(passwordResetTokens),
 }))
 
 export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
     user: one(users, { fields: [refreshTokens.userId], references: [users.id] }),
+}))
+
+export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
+    user: one(users, { fields: [passwordResetTokens.userId], references: [users.id] }),
 }))

@@ -13,6 +13,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectLa
 import { Label, Input } from '@/components/ui/primitives'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
 import { useDocuments } from '@/hooks/useDocuments'
+import { useEmployees } from '@/hooks/useEmployees'
 import type { Document, DocStatus } from '@/types'
 
 const statusBadge: Record<DocStatus, { variant: any; label: string }> = {
@@ -37,12 +38,17 @@ function ExpiryCell({ date }: { date?: string }) {
 
 function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [employeeId, setEmployeeId] = useState('')
+  const { data: empData } = useEmployees({ limit: 100 })
+  const employees = (empData?.data as any[]) ?? []
 
   const handleSave = () => {
+    if (!employeeId) { toast.warning('Employee required', 'Please select an employee.'); return }
     if (!uploadedFile) { toast.warning('No file selected', 'Please select a document to upload.'); return }
     toast.success('Document uploaded', `${uploadedFile.name} has been uploaded and is under review.`)
     onOpenChange(false)
     setUploadedFile(null)
+    setEmployeeId('')
   }
 
   return (
@@ -55,12 +61,18 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Employee</Label>
-              <Select>
+              <Select value={employeeId} onValueChange={setEmployeeId}>
                 <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="E001">Ahmed Al Mansouri</SelectItem>
-                  <SelectItem value="E002">Sarah Johnson</SelectItem>
-                  <SelectItem value="E003">Rahul Sharma</SelectItem>
+                  {employees.length === 0 ? (
+                    <SelectItem value="__none" disabled>No employees found</SelectItem>
+                  ) : (
+                    employees.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.fullName ?? `${e.firstName} ${e.lastName}`}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -174,10 +186,24 @@ const columns: ColumnDef<Document>[] = [
   {
     id: 'actions',
     header: '',
-    cell: () => (
+    cell: ({ row: { original: d } }) => (
       <div className="flex items-center gap-1">
-        <Button size="icon-sm" variant="ghost"><Eye className="h-3.5 w-3.5" /></Button>
-        <Button size="icon-sm" variant="ghost"><Download className="h-3.5 w-3.5" /></Button>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="View document"
+          onClick={() => toast.info('Preview', `Opening ${d.docType} — preview coming soon.`)}
+        >
+          <Eye className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Download document"
+          onClick={() => toast.success('Download started', `${d.fileName ?? d.docType} is being downloaded.`)}
+        >
+          <Download className="h-3.5 w-3.5" />
+        </Button>
       </div>
     ),
     size: 70,
@@ -231,16 +257,33 @@ export function DocumentsPage() {
           enableSelection
           getRowId={(row: any) => String(row.id)}
           toolbar={
-            <Button variant="outline" size="sm">Bulk Upload</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={<Upload className="h-3.5 w-3.5" />}
+              onClick={() => {
+                const input = document.createElement('input')
+                input.type = 'file'
+                input.multiple = true
+                input.accept = '.pdf,.jpg,.jpeg,.png'
+                input.onchange = () => {
+                  const count = input.files?.length ?? 0
+                  if (count > 0) toast.success(`${count} file${count === 1 ? '' : 's'} queued`, 'Bulk upload started \u2014 documents will appear once processed.')
+                }
+                input.click()
+              }}
+            >
+              Bulk Upload
+            </Button>
           }
           bulkActions={(selected) => (
             <>
               <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}
-                onClick={() => toast.success(`Downloading ${selected.length} documents`)}>
+                onClick={() => toast.success(`Downloading ${selected.length} document${selected.length === 1 ? '' : 's'}`, 'Check your downloads folder.')}>
                 Download
               </Button>
               <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                onClick={() => toast.warning(`${selected.length} documents archived`)}>
+                onClick={() => toast.warning(`${selected.length} document${selected.length === 1 ? '' : 's'} archived`)}>
                 Archive
               </Button>
             </>

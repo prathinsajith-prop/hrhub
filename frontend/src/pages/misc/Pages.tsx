@@ -11,6 +11,8 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useLeaveRequests, useApproveLeave } from '@/hooks/useLeave'
 import { useOnboardingChecklists } from '@/hooks/useOnboarding'
+import { useComplianceReport } from '@/hooks/useCompliance'
+import { ApplyLeaveDialog } from '@/components/shared/action-dialogs'
 import type { LeaveRequest } from '@/types'
 
 // ─── Leave Page ───────────────────────────────────────────────────────────────
@@ -37,6 +39,8 @@ export function LeavePage() {
   const approveLeave = useApproveLeave()
   const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null)
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null)
+  const [applyOpen, setApplyOpen] = useState(false)
+  const [bulkAction, setBulkAction] = useState<{ ids: string[]; approve: boolean } | null>(null)
 
   const columns: ColumnDef<LeaveRequest>[] = [
     {
@@ -98,7 +102,7 @@ export function LeavePage() {
         title="Leave Management"
         description="Review and manage employee leave requests"
         actions={
-          <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}>Apply Leave</Button>
+          <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setApplyOpen(true)}>Apply Leave</Button>
         }
       />
 
@@ -122,11 +126,11 @@ export function LeavePage() {
           bulkActions={(selected) => (
             <>
               <Button variant="outline" size="sm" leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
-                onClick={() => toast.success(`${selected.length} leave requests approved`)}>
+                onClick={() => setBulkAction({ ids: selected.map((l: any) => l.id), approve: true })}>
                 Approve
               </Button>
               <Button variant="destructive" size="sm" leftIcon={<XCircle className="h-3.5 w-3.5" />}
-                onClick={() => toast.error(`${selected.length} leave requests rejected`)}>
+                onClick={() => setBulkAction({ ids: selected.map((l: any) => l.id), approve: false })}>
                 Reject
               </Button>
             </>
@@ -162,6 +166,27 @@ export function LeavePage() {
         }}
         variant="destructive"
       />
+      <ConfirmDialog
+        open={!!bulkAction}
+        onOpenChange={o => !o && setBulkAction(null)}
+        title={bulkAction?.approve ? `Approve ${bulkAction.ids.length} leave request${bulkAction.ids.length === 1 ? '' : 's'}?` : `Reject ${bulkAction?.ids.length} leave request${bulkAction?.ids.length === 1 ? '' : 's'}?`}
+        description={bulkAction?.approve ? 'All selected requests will be approved and employees notified.' : 'All selected requests will be rejected and employees notified.'}
+        confirmLabel={bulkAction?.approve ? 'Approve all' : 'Reject all'}
+        variant={bulkAction?.approve ? 'warning' : 'destructive'}
+        onConfirm={() => {
+          if (!bulkAction) return
+          Promise.all(
+            bulkAction.ids.map(id => new Promise<void>(res =>
+              approveLeave.mutate({ id, approved: bulkAction.approve }, { onSettled: () => res() })
+            ))
+          ).then(() => {
+            if (bulkAction.approve) toast.success(`${bulkAction.ids.length} requests approved`)
+            else toast.error(`${bulkAction.ids.length} requests rejected`)
+            setBulkAction(null)
+          })
+        }}
+      />
+      <ApplyLeaveDialog open={applyOpen} onOpenChange={setApplyOpen} />
     </PageWrapper >
   )
 }
@@ -225,15 +250,9 @@ export function OnboardingPage() {
 
 // ─── Compliance Page ──────────────────────────────────────────────────────────
 export function CompliancePage() {
-  const checks = [
-    { label: 'WPS Compliance', score: 100, status: 'pass', desc: 'All employees paid via WPS on time' },
-    { label: 'Emiratisation Ratio', score: 90, status: 'warning', desc: '1.8% vs 2.0% MOHRE target' },
-    { label: 'Visa Validity', score: 96, status: 'warning', desc: '2 employees with expiring visas' },
-    { label: 'Labour Contracts', score: 100, status: 'pass', desc: 'All contracts registered with MOHRE' },
-    { label: 'Health Insurance', score: 98, status: 'pass', desc: '1 pending renewal' },
-    { label: 'Document Completeness', score: 88, status: 'warning', desc: '3 missing documents flagged' },
-  ]
-  const overall = Math.round(checks.reduce((a, c) => a + c.score, 0) / checks.length)
+  const { data: report, isLoading } = useComplianceReport()
+  const checks = report?.checks ?? []
+  const overall = report?.overall ?? 0
 
   return (
     <PageWrapper>
@@ -255,20 +274,26 @@ export function CompliancePage() {
         </Card>
         <Card className="lg:col-span-2 p-5">
           <h3 className="font-semibold mb-4 text-sm">Compliance Breakdown</h3>
-          <div className="space-y-3">
-            {checks.map(c => (
-              <div key={c.label} className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">{c.label}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{c.desc}</span>
-                    <span className={cn('text-xs font-bold', c.score >= 98 ? 'text-emerald-600' : c.score >= 90 ? 'text-amber-600' : 'text-red-600')}>{c.score}%</span>
+          {isLoading ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">Loading checks&hellip;</p>
+          ) : checks.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">No compliance data available yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {checks.map(c => (
+                <div key={c.label} className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">{c.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{c.desc}</span>
+                      <span className={cn('text-xs font-bold', c.score >= 98 ? 'text-emerald-600' : c.score >= 90 ? 'text-amber-600' : 'text-red-600')}>{c.score}%</span>
+                    </div>
                   </div>
+                  <Progress value={c.score} className="h-1.5" color={c.score >= 98 ? 'bg-emerald-500' : c.score >= 90 ? 'bg-amber-500' : 'bg-red-500'} />
                 </div>
-                <Progress value={c.score} className="h-1.5" color={c.score >= 98 ? 'bg-emerald-500' : c.score >= 90 ? 'bg-amber-500' : 'bg-red-500'} />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
     </PageWrapper>

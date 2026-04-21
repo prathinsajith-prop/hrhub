@@ -14,3 +14,22 @@ export function useExpiryAlerts() {
         queryFn: () => api.get<{ data: unknown }>('/compliance/expiry-alerts').then(r => r.data),
     })
 }
+
+export interface ComplianceCheck {
+    label: string
+    score: number
+    status: 'pass' | 'warning' | 'fail'
+    desc: string
+}
+
+export interface ComplianceReport {
+    overall: number
+    checks: ComplianceCheck[]
+}
+
+export function useComplianceReport() {
+    return useQuery({
+        queryKey: ['compliance', 'report'],
+        queryFn: () => api.get<{ data: ComplianceReport }>('/compliance/report').then(r => r.data),
+    })
+}

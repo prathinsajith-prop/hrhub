@@ -9,10 +9,12 @@ import { Progress } from '@/components/ui/progress'
 import { Tabs } from '@/components/ui/form-controls'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatDate, cn } from '@/lib/utils'
 import { useVisas } from '@/hooks/useVisa'
 import type { VisaApplication, VisaStatus } from '@/types'
 import { toast } from '@/components/ui/overlays'
+import { NewVisaApplicationDialog } from '@/components/shared/action-dialogs'
 
 const statusLabel: Record<VisaStatus, string> = {
   not_started: 'Not Started',
@@ -155,8 +157,14 @@ const columns: ColumnDef<VisaApplication>[] = [
   {
     id: 'actions',
     header: '',
-    cell: () => (
-      <Button size="icon" variant="ghost" className="h-8 w-8">
+    cell: ({ row: { original: v } }) => (
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-8 w-8"
+        aria-label="View visa details"
+        onClick={() => toast.info('Visa details', `Opening ${(v as any).employeeName ?? 'case'} — detail view coming in the next release.`)}
+      >
         <Eye className="h-3.5 w-3.5" />
       </Button>
     ),
@@ -166,6 +174,7 @@ const columns: ColumnDef<VisaApplication>[] = [
 
 export function VisaPage() {
   const [activeTab, setActiveTab] = useState('all')
+  const [newAppOpen, setNewAppOpen] = useState(false)
   const { data: visaData } = useVisas({ limit: 50 })
   const visaApplications: VisaApplication[] = (visaData?.data as VisaApplication[]) ?? []
 
@@ -180,12 +189,12 @@ export function VisaPage() {
   const expiringCount = visaApplications.filter((v: any) => v.status === 'expiring_soon').length
 
   return (
-    <div className="space-y-6">
+    <PageWrapper>
       <PageHeader
         title="Visa Management"
         description="Track visa applications, renewals, and compliance status"
         actions={
-          <Button className="gap-2">
+          <Button className="gap-2" onClick={() => setNewAppOpen(true)}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Application</span>
             <span className="sm:hidden">Add</span>
@@ -194,7 +203,7 @@ export function VisaPage() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCardCompact label="Active Visas" value={activeCount} icon={CheckCircle2} color="green" />
         <KpiCardCompact label="In Processing" value={processingCount} icon={Clock} color="cyan" />
         <KpiCardCompact label="Critical" value={criticalCount} icon={AlertTriangle} color="red" />
@@ -252,7 +261,7 @@ export function VisaPage() {
                   <RefreshCw className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Sync Portals</span>
                 </Button>
-                <Button size="sm" className="gap-1.5">
+                <Button size="sm" className="gap-1.5" onClick={() => setNewAppOpen(true)}>
                   <Plus className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">New Application</span>
                 </Button>
@@ -261,7 +270,9 @@ export function VisaPage() {
           />
         </Card>
       )}
-    </div>
+
+      <NewVisaApplicationDialog open={newAppOpen} onOpenChange={setNewAppOpen} />
+    </PageWrapper>
   )
 }
 

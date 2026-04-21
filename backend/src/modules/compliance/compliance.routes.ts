@@ -1,6 +1,6 @@
 // @ts-nocheck
 import type { FastifyPluginAsync } from 'fastify/types/plugin.js'
-import { getEmiratisationMetrics, getExpiryAlerts } from './compliance.service.js'
+import { getEmiratisationMetrics, getExpiryAlerts, getComplianceReport } from './compliance.service.js'
 
 const complianceRoutes: FastifyPluginAsync = async (fastify) => {
     const auth = { preHandler: [fastify.authenticate] }
@@ -12,6 +12,11 @@ const complianceRoutes: FastifyPluginAsync = async (fastify) => {
 
     fastify.get('/expiry-alerts', { ...auth, schema: { tags: ['Compliance'] } }, async (request, reply) => {
         const data = await getExpiryAlerts(request.user.tenantId)
+        return reply.send({ data })
+    })
+
+    fastify.get('/report', { ...auth, schema: { tags: ['Compliance'] } }, async (request, reply) => {
+        const data = await getComplianceReport(request.user.tenantId)
         return reply.send({ data })
     })
 }

@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt'
 import { eq, and } from 'drizzle-orm'
 import crypto from 'node:crypto'
 import { db } from '../../db/index.js'
-import { users, refreshTokens, tenants } from '../../db/schema/index.js'
+import { users, refreshTokens, tenants, passwordResetTokens } from '../../db/schema/index.js'
 import type { FastifyInstance } from 'fastify'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -122,4 +122,73 @@ export async function refreshAccessToken(fastify: AnyFastify, rawToken: string) 
 export async function revokeRefreshToken(rawToken: string) {
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
     await db.delete(refreshTokens).where(eq(refreshTokens.tokenHash, tokenHash))
+}
+
+/**
+ * Issue a password reset token for the given email.
+ * Always returns success-shaped result to avoid email enumeration.
+ * In dev (NODE_ENV !== 'production') the raw token is returned for testing.
+ */
+export async function requestPasswordReset(email: string) {
+    const [user] = await db
+        .select()
+        .from(users)
+        .where(and(eq(users.email, email.toLowerCase()), eq(users.isActive, true)))
+        .limit(1)
+
+    if (!user) return { sent: true, devToken: null as string | null }
+
+    const rawToken = crypto.randomBytes(32).toString('hex')
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+    const expiresAt = new Date()
+    expiresAt.setHours(expiresAt.getHours() + 1)
+
+    await db.insert(passwordResetTokens).values({ userId: user.id, tokenHash, expiresAt })
+
+    // TODO: send email via provider; for now expose token in dev for testing.
+    const devToken = process.env.NODE_ENV === 'production' ? null : rawToken
+    return { sent: true, devToken }
+}
+
+export async function resetPasswordWithToken(rawToken: string, newPassword: string) {
+    if (!rawToken || newPassword.length < 8) return { ok: false, reason: 'invalid_input' as const }
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+
+    const [record] = await db
+        .select()
+        .from(passwordResetTokens)
+        .where(eq(passwordResetTokens.tokenHash, tokenHash))
+        .limit(1)
+
+    if (!record) return { ok: false, reason: 'invalid_token' as const }
+    if (record.usedAt) return { ok: false, reason: 'token_used' as const }
+    if (record.expiresAt < new Date()) return { ok: false, reason: 'token_expired' as const }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    await db.update(users)
+        .set({ passwordHash, updatedAt: new Date() } as any)
+        .where(eq(users.id, record.userId))
+    await db.update(passwordResetTokens)
+        .set({ usedAt: new Date() } as any)
+        .where(eq(passwordResetTokens.id, record.id))
+    // Invalidate all refresh tokens for the user.
+    await db.delete(refreshTokens).where(eq(refreshTokens.userId, record.userId))
+
+    return { ok: true as const }
+}
+
+export async function changePassword(userId: string, currentPassword: string, newPassword: string) {
+    if (newPassword.length < 8) return { ok: false, reason: 'weak_password' as const }
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+    if (!user) return { ok: false, reason: 'not_found' as const }
+
+    const match = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!match) return { ok: false, reason: 'invalid_current' as const }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    await db.update(users)
+        .set({ passwordHash, updatedAt: new Date() } as any)
+        .where(eq(users.id, user.id))
+
+    return { ok: true as const }
 }
