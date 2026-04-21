@@ -10,7 +10,7 @@ export function AppLayout() {
       <AppSidebar />
       <SidebarInset>
         <SiteHeader />
-        <main className="flex flex-1 flex-col gap-4 p-5 overflow-y-auto animate-fade-in">
+        <main className="flex flex-1 flex-col gap-4 p-4 sm:p-5 lg:p-6 overflow-y-auto animate-fade-in">
           <Outlet />
         </main>
       </SidebarInset>

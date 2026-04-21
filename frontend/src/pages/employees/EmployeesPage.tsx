@@ -1,18 +1,42 @@
 import React, { useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { MoreHorizontal, UserPlus, Download, Eye, Edit2, Mail, Trash2, Users, UserCheck, Clock, Star } from 'lucide-react'
+import {
+  MoreHorizontal,
+  UserPlus,
+  Download,
+  Eye,
+  Edit2,
+  Mail,
+  Trash2,
+  Users,
+  Clock,
+  Star,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
-import { Badge, Avatar, AvatarFallback, Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/primitives'
+import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { useEmployees } from '@/hooks/useEmployees'
 import type { Employee } from '@/types'
 
-const statusVariant: Record<string, 'success' | 'warning' | 'destructive' | 'info' | 'secondary'> = {
+const statusVariant: Record<
+  string,
+  'success' | 'warning' | 'destructive' | 'info' | 'secondary'
+> = {
   active: 'success',
   probation: 'warning',
   onboarding: 'info',
@@ -21,7 +45,13 @@ const statusVariant: Record<string, 'success' | 'warning' | 'destructive' | 'inf
   visa_expired: 'destructive',
 }
 
-function ActionMenu({ employee, onDelete }: { employee: Employee; onDelete: (e: Employee) => void }) {
+function ActionMenu({
+  employee,
+  onDelete,
+}: {
+  employee: Employee
+  onDelete: (e: Employee) => void
+}) {
   const navigate = useNavigate()
   return (
     <DropdownMenu>
@@ -35,16 +65,19 @@ function ActionMenu({ employee, onDelete }: { employee: Employee; onDelete: (e: 
           <Eye className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           View Profile
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => { }}>
+        <DropdownMenuItem>
           <Edit2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           Edit Details
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => { }}>
+        <DropdownMenuItem>
           <Mail className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           Send Email
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => onDelete(employee)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+        <DropdownMenuItem
+          onClick={() => onDelete(employee)}
+          className="text-destructive focus:text-destructive focus:bg-destructive/10"
+        >
           <Trash2 className="h-3.5 w-3.5 mr-2" />
           Terminate
         </DropdownMenuItem>
@@ -66,7 +99,10 @@ export function EmployeesPage() {
 
   const handleDelete = () => {
     if (!deleteTarget) return
-    toast.success('Termination initiated', `${deleteTarget.fullName}'s exit workflow has started.`)
+    toast.success(
+      'Termination initiated',
+      `${deleteTarget.fullName}'s exit workflow has started.`,
+    )
     setDeleteTarget(null)
   }
 
@@ -80,12 +116,12 @@ export function EmployeesPage() {
           className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
         >
           <Avatar className="h-8 w-8 shrink-0">
-            <AvatarFallback className="text-[10px] font-semibold bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+            <AvatarFallback className="text-[10px] font-semibold bg-primary text-primary-foreground">
               {getInitials(e.fullName)}
             </AvatarFallback>
           </Avatar>
-          <div>
-            <p className="font-semibold text-sm text-foreground">{e.fullName}</p>
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-foreground truncate">{e.fullName}</p>
             <p className="text-[11px] text-muted-foreground">{e.employeeNo}</p>
           </div>
         </button>
@@ -125,10 +161,23 @@ export function EmployeesPage() {
       header: 'Visa Expiry',
       cell: ({ row: { original: e } }) => {
         if (!e.visaExpiry) return <span className="text-xs text-muted-foreground">—</span>
-        const days = Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000)
+        const days = Math.ceil(
+          (new Date(e.visaExpiry).getTime() - Date.now()) / 86400000,
+        )
         return (
           <div>
-            <p className={cn('text-xs font-semibold', days < 0 ? 'text-red-600' : days < 30 ? 'text-red-500' : days < 90 ? 'text-amber-600' : 'text-emerald-600')}>
+            <p
+              className={cn(
+                'text-xs font-semibold',
+                days < 0
+                  ? 'text-destructive'
+                  : days < 30
+                    ? 'text-destructive'
+                    : days < 90
+                      ? 'text-warning'
+                      : 'text-success',
+              )}
+            >
               {days < 0 ? 'Expired' : `${days}d left`}
             </p>
             <p className="text-[10px] text-muted-foreground">{formatDate(e.visaExpiry)}</p>
@@ -154,40 +203,49 @@ export function EmployeesPage() {
     {
       id: 'actions',
       header: '',
-      cell: ({ row }) => <ActionMenu employee={row.original} onDelete={setDeleteTarget} />,
+      cell: ({ row }) => (
+        <ActionMenu employee={row.original} onDelete={setDeleteTarget} />
+      ),
       size: 44,
     },
   ]
 
   return (
     <PageWrapper>
-      {/* Summary strip */}
+      <PageHeader
+        title="Employees"
+        description="All active employees, onboarding, probation and terminated records."
+        actions={
+          <>
+            <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}>
+              Export
+            </Button>
+            <Button size="sm" leftIcon={<UserPlus className="h-3.5 w-3.5" />}>
+              Add Employee
+            </Button>
+          </>
+        }
+      />
+
+      {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCardCompact label="Active" value={active} icon={Users} color="green" />
         <KpiCardCompact label="Onboarding" value={onboarding} icon={UserPlus} color="blue" />
         <KpiCardCompact label="Probation" value={probation} icon={Clock} color="amber" />
-        <KpiCardCompact label="Emiratis" value={emiratis} icon={Star} color="purple" />
+        <KpiCardCompact label="Emiratis" value={emiratis} icon={Star} color="cyan" />
       </div>
 
       {/* Table card */}
-      <Card className="overflow-hidden">
-        <div className="p-5 pb-4 border-b border-border">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base font-bold">All Employees</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">{employees.length} total records</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}>
-                Export
-              </Button>
-              <Button size="sm" leftIcon={<UserPlus className="h-3.5 w-3.5" />}>
-                Add Employee
-              </Button>
-            </div>
+      <Card>
+        <CardHeader className="flex-row items-start sm:items-center justify-between gap-3 flex-wrap">
+          <div>
+            <CardTitle className="text-base">All Employees</CardTitle>
+            <CardDescription className="mt-0.5">
+              {employees.length} total records
+            </CardDescription>
           </div>
-        </div>
-        <div className="p-5 pt-4">
+        </CardHeader>
+        <CardContent>
           <DataTable
             columns={columns}
             data={employees}
@@ -196,12 +254,12 @@ export function EmployeesPage() {
             pageSize={8}
             emptyMessage="No employees found."
           />
-        </div>
+        </CardContent>
       </Card>
 
       <ConfirmDialog
         open={!!deleteTarget}
-        onOpenChange={open => !open && setDeleteTarget(null)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="Terminate Employee"
         description={`Are you sure you want to initiate termination for ${deleteTarget?.fullName}? This will start the exit workflow and visa cancellation process.`}
         confirmLabel="Terminate"
