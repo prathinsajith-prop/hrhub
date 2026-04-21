@@ -1,8 +1,6 @@
-// @ts-nocheck
-import type { FastifyPluginAsync } from 'fastify/types/plugin.js'
-import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, calculateGratuity } from './payroll.service.js'
+import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, calculateGratuity, generateWpsSif } from './payroll.service.js'
 
-const payrollRoutes: FastifyPluginAsync = async (fastify) => {
+export default async function(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
     const hrOnly = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
 
@@ -70,6 +68,21 @@ const payrollRoutes: FastifyPluginAsync = async (fastify) => {
         const gratuity = calculateGratuity(Number(basicSalary), Number(yearsOfService))
         return reply.send({ data: { gratuity, basicSalary: Number(basicSalary), yearsOfService: Number(yearsOfService) } })
     })
+
+    // GET /api/v1/payroll/:id/wps-sif — download WPS Salary Information File
+    fastify.get('/:id/wps-sif', {
+        ...auth,
+        schema: { tags: ['Payroll'] },
+    }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const result = await generateWpsSif(request.user.tenantId, id)
+        if (!result) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Payroll run not found or has no payslips.' })
+        }
+        return reply
+            .header('Content-Type', 'text/plain; charset=utf-8')
+            .header('Content-Disposition', `attachment; filename="${result.filename}"`)
+            .send(result.content)
+    })
 }
 
-export default payrollRoutes

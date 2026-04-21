@@ -1,8 +1,6 @@
-// @ts-nocheck
-import type { FastifyPluginAsync } from 'fastify/types/plugin.js'
 import { listVisas, getVisa, createVisa, updateVisa, advanceVisaStep, softDeleteVisa } from './visa.service.js'
 
-const visaRoutes: FastifyPluginAsync = async (fastify) => {
+export default async function(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/', { ...auth, schema: { tags: ['Visa'] } }, async (request, reply) => {
@@ -70,4 +68,3 @@ const visaRoutes: FastifyPluginAsync = async (fastify) => {
     })
 }
 
-export default visaRoutes

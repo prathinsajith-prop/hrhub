@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Bell, Search, Menu, Check } from 'lucide-react'
 import { cn, formatDate, getInitials } from '@/lib/utils'

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { CreditCard, CheckCircle2, Clock, AlertTriangle, Play, FileDown, Send, TrendingUp } from 'lucide-react'
+import { CreditCard, CheckCircle2, Clock, Play, FileDown, Send, TrendingUp } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, CardHeader, CardTitle, CardContent } from '@/components/ui/primitives'
@@ -9,10 +9,30 @@ import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { formatCurrency, formatDate, cn } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
 import { usePayrollRuns } from '@/hooks/usePayroll'
 import { usePayrollTrend } from '@/hooks/useDashboard'
+import { useAuthStore } from '@/store/authStore'
 import type { PayrollRun } from '@/types'
+
+async function downloadWpsSif(payrollRunId: string, token: string | null) {
+  const res = await fetch(`/api/v1/payroll/${payrollRunId}/wps-sif`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) {
+    throw new Error('WPS SIF generation failed')
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition') ?? ''
+  const match = disposition.match(/filename="(.+?)"/)
+  const filename = match ? match[1] : 'WPS_SIF.sif'
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 const statusConfig: Record<string, { variant: any; label: string; icon: React.ElementType }> = {
   draft: { variant: 'secondary', label: 'Draft', icon: Clock },
@@ -20,6 +40,39 @@ const statusConfig: Record<string, { variant: any; label: string; icon: React.El
   approved: { variant: 'success', label: 'Approved', icon: CheckCircle2 },
   wps_submitted: { variant: 'info', label: 'WPS Submitted', icon: Send },
   paid: { variant: 'success', label: 'Paid', icon: CheckCircle2 },
+}
+
+function SifActionCell({ payroll: p }: { payroll: PayrollRun }) {
+  const { accessToken } = useAuthStore()
+  const [loading, setLoading] = useState(false)
+
+  const handleSif = async () => {
+    setLoading(true)
+    try {
+      await downloadWpsSif(p.id, accessToken)
+      toast.success('WPS SIF downloaded', 'Salary information file is ready.')
+    } catch {
+      toast.error('Download failed', 'No payslips found for this run.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex gap-1">
+      {(p.status === 'approved' || p.status === 'wps_submitted' || p.status === 'paid') && (
+        <Button size="sm" variant="outline" loading={loading} leftIcon={<FileDown className="h-3 w-3" />} className="h-7 text-xs" onClick={handleSif}>
+          WPS SIF
+        </Button>
+      )}
+      {p.status === 'approved' && (
+        <Button size="sm" variant="outline" leftIcon={<Send className="h-3 w-3" />} className="h-7 text-xs"
+          onClick={() => toast.info('WPS submission', 'Upload the SIF file to the MOHRE WPS portal.')}>
+          Submit
+        </Button>
+      )}
+    </div>
+  )
 }
 
 const columns: ColumnDef<PayrollRun>[] = [
@@ -71,15 +124,7 @@ const columns: ColumnDef<PayrollRun>[] = [
     id: 'actions',
     header: '',
     cell: ({ row: { original: p } }) => (
-      <div className="flex gap-1">
-        {p.status === 'draft' && (
-          <Button size="sm" leftIcon={<Play className="h-3 w-3" />} className="h-7 text-xs">Run Payroll</Button>
-        )}
-        {p.status === 'approved' && (
-          <Button size="sm" variant="outline" leftIcon={<Send className="h-3 w-3" />} className="h-7 text-xs">Submit WPS</Button>
-        )}
-        <Button size="icon-sm" variant="ghost"><FileDown className="h-3.5 w-3.5" /></Button>
-      </div>
+      <SifActionCell payroll={p} />
     ),
   },
 ]
@@ -134,12 +179,12 @@ export function PayrollPage() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      < div className="grid grid-cols-2 sm:grid-cols-4 gap-3" >
         <KpiCardCompact label="Last Net Payroll" value={lastRun ? formatCurrency(Number((lastRun as any).totalNet)) : '—'} icon={CreditCard} color="blue" />
         <KpiCardCompact label="WPS Compliance" value={`${wpsPct}%`} icon={CheckCircle2} color="green" />
         <KpiCardCompact label="Pending Run" value={draftLabel} icon={Clock} color="amber" />
         <KpiCardCompact label="YTD Payroll" value={ytdNet > 0 ? formatCurrency(ytdNet) : '—'} icon={TrendingUp} color="purple" />
-      </div>
+      </div >
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Chart */}
@@ -224,6 +269,6 @@ export function PayrollPage() {
         onConfirm={handleRunPayroll}
         variant="warning"
       />
-    </PageWrapper>
+    </PageWrapper >
   )
 }

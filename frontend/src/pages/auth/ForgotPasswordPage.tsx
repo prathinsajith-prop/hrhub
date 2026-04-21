@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { api } from '@/lib/api'
-import { toast } from '@/components/ui/overlays'
 import { cn } from '@/lib/utils'
 
 const schema = z.object({

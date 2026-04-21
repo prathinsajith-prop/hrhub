@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Seed database with demo data matching the frontend mock data.
  * Run: npm run db:seed

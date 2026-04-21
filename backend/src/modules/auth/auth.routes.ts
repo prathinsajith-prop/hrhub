@@ -1,8 +1,6 @@
-// @ts-nocheck
-import type { FastifyPluginAsync } from 'fastify/types/plugin.js'
 import { loginUser, refreshAccessToken, revokeRefreshToken, requestPasswordReset, resetPasswordWithToken, changePassword } from './auth.service.js'
 
-const authRoutes: FastifyPluginAsync = async (fastify) => {
+export default async function(fastify: any): Promise<void> {
     // POST /api/v1/auth/login
     fastify.post('/login', {
         config: {
@@ -161,4 +159,3 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     })
 }
 
-export default authRoutes

@@ -4,7 +4,7 @@ import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog'
 import * as ToastPrimitive from '@radix-ui/react-toast'
 import { X, AlertTriangle, CheckCircle2, Info, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Button, buttonVariants } from './button'
+import { buttonVariants } from './button'
 
 // ─── Dialog ──────────────────────────────────────────────────────────────────
 const Dialog = DialogPrimitive.Root

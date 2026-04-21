@@ -1,11 +1,9 @@
-// @ts-nocheck
-import type { FastifyPluginAsync } from 'fastify/types/plugin.js'
 import {
     listEmployees, getEmployee, createEmployee,
     updateEmployee, archiveEmployee, getExpiringVisas,
 } from './employees.service.js'
 
-const employeesRoutes: FastifyPluginAsync = async (fastify) => {
+export default async function(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     // GET /api/v1/employees
@@ -100,4 +98,3 @@ const employeesRoutes: FastifyPluginAsync = async (fastify) => {
     })
 }
 
-export default employeesRoutes

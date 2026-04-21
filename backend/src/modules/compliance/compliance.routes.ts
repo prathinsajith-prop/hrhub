@@ -1,8 +1,6 @@
-// @ts-nocheck
-import type { FastifyPluginAsync } from 'fastify/types/plugin.js'
 import { getEmiratisationMetrics, getExpiryAlerts, getComplianceReport } from './compliance.service.js'
 
-const complianceRoutes: FastifyPluginAsync = async (fastify) => {
+export default async function(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/emiratisation', { ...auth, schema: { tags: ['Compliance'] } }, async (request, reply) => {
@@ -21,4 +19,3 @@ const complianceRoutes: FastifyPluginAsync = async (fastify) => {
     })
 }
 
-export default complianceRoutes

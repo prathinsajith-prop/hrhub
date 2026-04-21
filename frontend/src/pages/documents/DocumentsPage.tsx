@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
 import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
@@ -7,10 +7,11 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Card } from '@/components/ui/primitives'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, ConfirmDialog, toast } from '@/components/ui/overlays'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
 import { ImageUpload } from '@/components/ui/form-controls'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectLabel, SelectGroup } from '@/components/ui/form-controls'
 import { Label, Input } from '@/components/ui/primitives'
+import { api } from '@/lib/api'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
 import { useDocuments } from '@/hooks/useDocuments'
 import { useEmployees } from '@/hooks/useEmployees'
@@ -39,16 +40,38 @@ function ExpiryCell({ date }: { date?: string }) {
 function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [employeeId, setEmployeeId] = useState('')
+  const [category, setCategory] = useState('')
+  const [expiryDate, setExpiryDate] = useState('')
+  const [saving, setSaving] = useState(false)
   const { data: empData } = useEmployees({ limit: 100 })
   const employees = (empData?.data as any[]) ?? []
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!employeeId) { toast.warning('Employee required', 'Please select an employee.'); return }
     if (!uploadedFile) { toast.warning('No file selected', 'Please select a document to upload.'); return }
-    toast.success('Document uploaded', `${uploadedFile.name} has been uploaded and is under review.`)
-    onOpenChange(false)
-    setUploadedFile(null)
-    setEmployeeId('')
+    if (!category) { toast.warning('Category required', 'Please select a document category.'); return }
+
+    setSaving(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', uploadedFile)
+      fd.append('employeeId', employeeId)
+      fd.append('category', category)
+      fd.append('docType', uploadedFile.name)
+      if (expiryDate) fd.append('expiryDate', expiryDate)
+
+      await api.upload('/documents/upload', fd)
+      toast.success('Document uploaded', `${uploadedFile.name} is under review.`)
+      onOpenChange(false)
+      setUploadedFile(null)
+      setEmployeeId('')
+      setCategory('')
+      setExpiryDate('')
+    } catch {
+      toast.error('Upload failed', 'Could not upload the document. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -77,26 +100,27 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Document Category</Label>
-              <Select>
+              <Label>Document Category *</Label>
+              <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
                     <SelectLabel>Identity</SelectLabel>
-                    <SelectItem value="passport">Passport</SelectItem>
-                    <SelectItem value="eid">Emirates ID</SelectItem>
+                    <SelectItem value="identity">Passport / EID</SelectItem>
                   </SelectGroup>
                   <SelectGroup>
                     <SelectLabel>Visa</SelectLabel>
-                    <SelectItem value="residence_visa">Residence Visa</SelectItem>
-                    <SelectItem value="entry_permit">Entry Permit</SelectItem>
-                    <SelectItem value="labour_card">Labour Card</SelectItem>
+                    <SelectItem value="visa">Residence Visa / Entry Permit</SelectItem>
                   </SelectGroup>
                   <SelectGroup>
                     <SelectLabel>Employment</SelectLabel>
-                    <SelectItem value="contract">Employment Contract</SelectItem>
-                    <SelectItem value="offer_letter">Offer Letter</SelectItem>
-                    <SelectItem value="noc">NOC Letter</SelectItem>
+                    <SelectItem value="employment">Contract / Offer Letter / NOC</SelectItem>
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Other</SelectLabel>
+                    <SelectItem value="compliance">Compliance</SelectItem>
+                    <SelectItem value="financial">Financial</SelectItem>
+                    <SelectItem value="qualification">Qualification</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -105,11 +129,11 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
           <div className="space-y-1.5">
             <Label>Expiry Date (if applicable)</Label>
-            <Input type="date" />
+            <Input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Document File</Label>
+            <Label>Document File *</Label>
             <ImageUpload
               variant="document"
               accept=".pdf,.jpg,.jpeg,.png"
@@ -122,7 +146,7 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} leftIcon={<Upload className="h-3.5 w-3.5" />}>Upload Document</Button>
+          <Button onClick={handleSave} loading={saving} leftIcon={<Upload className="h-3.5 w-3.5" />}>Upload Document</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

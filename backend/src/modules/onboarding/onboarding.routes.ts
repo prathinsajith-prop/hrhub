@@ -1,8 +1,6 @@
-// @ts-nocheck
-import type { FastifyPluginAsync } from 'fastify/types/plugin.js'
 import { getChecklist, updateStep, listChecklists } from './onboarding.service.js'
 
-const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
+export default async function(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/', { ...auth, schema: { tags: ['Onboarding'] } }, async (request, reply) => {
@@ -39,4 +37,3 @@ const onboardingRoutes: FastifyPluginAsync = async (fastify) => {
     })
 }
 
-export default onboardingRoutes

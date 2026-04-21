@@ -5,8 +5,11 @@ import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import jwt from '@fastify/jwt'
+import multipart from '@fastify/multipart'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
+import { createReadStream, existsSync, mkdirSync } from 'fs'
+import { join } from 'path'
 
 import { loadEnv } from './config/env.js'
 import authenticatePlugin from './plugins/authenticate.js'
@@ -25,6 +28,10 @@ import dashboardRoutes from './modules/dashboard/dashboard.routes.js'
 async function bootstrap() {
     const env = loadEnv()
 
+    // Ensure uploads directory exists
+    const uploadsDir = join(process.cwd(), 'uploads')
+    if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true })
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const app: any = (Fastify as any)({
         logger: {
@@ -38,6 +45,9 @@ async function bootstrap() {
     // Security
     await app.register(helmet, { contentSecurityPolicy: false })
     await app.register(rateLimit, { max: 200, timeWindow: '1 minute' })
+
+    // Multipart (file uploads — max 10 MB)
+    await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } })
 
     // CORS
     await app.register(cors, {
@@ -84,6 +94,23 @@ async function bootstrap() {
 
     // Health check
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
+
+    // File download route for uploaded documents
+    app.get('/uploads/:filename', {
+        preHandler: [app.authenticate],
+    }, async (request: any, reply: any) => {
+        const { filename } = request.params as { filename: string }
+        // Prevent path traversal attacks
+        if (filename.includes('..') || filename.includes('/')) {
+            return reply.code(400).send({ error: 'Invalid filename' })
+        }
+        const filePath = join(uploadsDir, filename)
+        if (!existsSync(filePath)) {
+            return reply.code(404).send({ error: 'File not found' })
+        }
+        const stream = createReadStream(filePath)
+        return reply.send(stream)
+    })
 
     // Global error handler
     app.setErrorHandler((error, _request, reply) => {

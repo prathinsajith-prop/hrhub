@@ -1,6 +1,6 @@
-import { eq, and, ilike, or, count, desc, asc } from 'drizzle-orm'
+import { eq, and, ilike, or, count, desc, asc, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/index.js'
-import { employees } from '../../db/schema/index.js'
+import { employees, entities } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 
 type Employee = InferSelectModel<typeof employees>
@@ -61,8 +61,12 @@ export async function listEmployees(params: ListEmployeesParams) {
 
 export async function getEmployee(tenantId: string, id: string) {
     const [row] = await db
-        .select()
+        .select({
+            ...getTableColumns(employees),
+            entityName: entities.entityName,
+        })
         .from(employees)
+        .leftJoin(entities, eq(employees.entityId, entities.id))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .limit(1)
 
@@ -102,10 +106,10 @@ export async function getExpiringVisas(tenantId: string, daysAhead = 90) {
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() + daysAhead)
 
-    return db
+    const rows = await db
         .select({
             id: employees.id,
-            fullName: employees.firstName,
+            firstName: employees.firstName,
             lastName: employees.lastName,
             visaExpiry: employees.visaExpiry,
             visaStatus: employees.visaStatus,
@@ -120,4 +124,6 @@ export async function getExpiringVisas(tenantId: string, daysAhead = 90) {
         )
         .orderBy(asc(employees.visaExpiry))
         .limit(50)
+
+    return rows.map(r => ({ ...r, fullName: `${r.firstName} ${r.lastName}` }))
 }

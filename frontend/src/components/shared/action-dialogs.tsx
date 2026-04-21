@@ -7,7 +7,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { useCreateJob } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
-import { useEmployees } from '@/hooks/useEmployees'
+import { useCreateEmployee, useEmployees } from '@/hooks/useEmployees'
 
 // ─── New Job Dialog ─────────────────────────────────────────────────────────
 export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -266,6 +266,124 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                     <Button onClick={submit} loading={createLeave.isPending}>Submit Request</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// ─── Add Employee Dialog ────────────────────────────────────────────────────
+export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+    const [firstName, setFirstName] = useState('')
+    const [lastName, setLastName] = useState('')
+    const [email, setEmail] = useState('')
+    const [phone, setPhone] = useState('')
+    const [department, setDepartment] = useState('')
+    const [designation, setDesignation] = useState('')
+    const [nationality, setNationality] = useState('')
+    const [joinDate, setJoinDate] = useState(new Date().toISOString().split('T')[0])
+    const [basicSalary, setBasicSalary] = useState(0)
+    const [emiratisationCategory, setEmiratisationCategory] = useState('expat')
+    const createEmployee = useCreateEmployee()
+
+    const reset = () => {
+        setFirstName(''); setLastName(''); setEmail(''); setPhone('')
+        setDepartment(''); setDesignation(''); setNationality('')
+        setJoinDate(new Date().toISOString().split('T')[0])
+        setBasicSalary(0); setEmiratisationCategory('expat')
+    }
+
+    const submit = () => {
+        if (!firstName || !lastName || !joinDate) {
+            toast.warning('Missing fields', 'First name, last name and join date are required.')
+            return
+        }
+        // Generate employee number: EMP-YYYYMM-XXXX
+        const empNo = `EMP-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(1000 + Math.random() * 9000)}`
+        createEmployee.mutate(
+            {
+                firstName, lastName, email: email || undefined, phone: phone || undefined,
+                department: department || undefined, designation: designation || undefined,
+                nationality: nationality || undefined, joinDate, basicSalary: basicSalary || undefined,
+                totalSalary: basicSalary || undefined, emiratisationCategory: emiratisationCategory as any,
+                employeeNo: empNo, status: 'onboarding',
+            } as any,
+            {
+                onSuccess: () => {
+                    toast.success('Employee added', `${firstName} ${lastName} has been onboarded.`)
+                    onOpenChange(false)
+                    reset()
+                },
+                onError: (err: any) => toast.error('Failed to add employee', err?.message ?? 'Please try again.'),
+            },
+        )
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent size="lg">
+                <DialogHeader>
+                    <DialogTitle>Add New Employee</DialogTitle>
+                </DialogHeader>
+                <DialogBody className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>First Name *</Label>
+                            <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Ahmed" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Last Name *</Label>
+                            <Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Al Mansouri" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>Work Email</Label>
+                            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ahmed@company.ae" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Mobile</Label>
+                            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+971 50 000 0000" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>Department</Label>
+                            <Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Sales" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Designation / Title</Label>
+                            <Input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="e.g. Sales Manager" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>Nationality</Label>
+                            <Input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder="e.g. Emirati" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Join Date *</Label>
+                            <Input type="date" value={joinDate} onChange={(e) => setJoinDate(e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Category</Label>
+                            <Select value={emiratisationCategory} onValueChange={setEmiratisationCategory}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="expat">Expat</SelectItem>
+                                    <SelectItem value="emirati">Emirati</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Basic Salary (AED)</Label>
+                        <Input type="number" min={0} value={basicSalary} onChange={(e) => setBasicSalary(Number(e.target.value))} placeholder="0.00" />
+                    </div>
+                </DialogBody>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button onClick={submit} loading={createEmployee.isPending}>Add Employee</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

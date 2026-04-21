@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
   MoreHorizontal,
@@ -31,6 +31,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { useEmployees } from '@/hooks/useEmployees'
+import { AddEmployeeDialog } from '@/components/shared/action-dialogs'
 import type { Employee } from '@/types'
 
 const statusVariant: Record<
@@ -91,6 +92,7 @@ export function EmployeesPage() {
   const { data: empData } = useEmployees({ limit: 50 })
   const employees: Employee[] = (empData?.data as Employee[]) ?? []
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
 
   const active = employees.filter((e: any) => e.status === 'active').length
   const onboarding = employees.filter((e: any) => e.status === 'onboarding').length
@@ -220,7 +222,7 @@ export function EmployeesPage() {
             <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}>
               Export
             </Button>
-            <Button size="sm" leftIcon={<UserPlus className="h-3.5 w-3.5" />}>
+            <Button size="sm" leftIcon={<UserPlus className="h-3.5 w-3.5" />} onClick={() => setAddOpen(true)}>
               Add Employee
             </Button>
           </>
@@ -296,6 +298,8 @@ export function EmployeesPage() {
         onConfirm={handleDelete}
         variant="destructive"
       />
+
+      <AddEmployeeDialog open={addOpen} onOpenChange={setAddOpen} />
     </PageWrapper>
   )
 }

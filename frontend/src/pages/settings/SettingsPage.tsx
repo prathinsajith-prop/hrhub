@@ -5,7 +5,6 @@ import {
     Bell,
     Shield,
     Globe,
-    Palette,
     Save,
     ChevronRight,
     Mail,
@@ -24,13 +23,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
+import { api } from '@/lib/api'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 
@@ -323,6 +322,36 @@ function NotificationsTab() {
 
 // ─── Security Tab ─────────────────────────────────────────────────────────────
 function SecurityTab() {
+    const [currentPw, setCurrentPw] = useState('')
+    const [newPw, setNewPw] = useState('')
+    const [confirmPw, setConfirmPw] = useState('')
+    const [saving, setSaving] = useState(false)
+
+    const handleUpdatePassword = async () => {
+        if (!currentPw || !newPw || !confirmPw) {
+            toast.warning('Missing fields', 'Please fill in all password fields.')
+            return
+        }
+        if (newPw !== confirmPw) {
+            toast.warning('Passwords do not match', 'New password and confirmation must match.')
+            return
+        }
+        if (newPw.length < 8) {
+            toast.warning('Password too short', 'New password must be at least 8 characters.')
+            return
+        }
+        setSaving(true)
+        try {
+            await api.post('/auth/change-password', { currentPassword: currentPw, newPassword: newPw })
+            toast.success('Password updated', 'Your password has been changed successfully.')
+            setCurrentPw(''); setNewPw(''); setConfirmPw('')
+        } catch (err: any) {
+            toast.error('Update failed', err?.message ?? 'Current password may be incorrect.')
+        } finally {
+            setSaving(false)
+        }
+    }
+
     return (
         <div className="space-y-6">
             <Card>
@@ -335,19 +364,19 @@ function SecurityTab() {
                 <CardContent className="space-y-4">
                     <div className="space-y-1.5">
                         <Label htmlFor="current_password">Current Password</Label>
-                        <Input id="current_password" type="password" placeholder="••••••••" />
+                        <Input id="current_password" type="password" placeholder="••••••••" value={currentPw} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentPw(e.target.value)} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <Label htmlFor="new_password">New Password</Label>
-                            <Input id="new_password" type="password" placeholder="Min. 8 characters" />
+                            <Input id="new_password" type="password" placeholder="Min. 8 characters" value={newPw} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPw(e.target.value)} />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="confirm_password">Confirm New Password</Label>
-                            <Input id="confirm_password" type="password" placeholder="Repeat new password" />
+                            <Input id="confirm_password" type="password" placeholder="Repeat new password" value={confirmPw} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPw(e.target.value)} />
                         </div>
                     </div>
-                    <Button size="sm" onClick={() => toast.success('Password updated', 'Your password has been changed successfully.')}>
+                    <Button size="sm" onClick={handleUpdatePassword} loading={saving}>
                         Update Password
                     </Button>
                 </CardContent>

@@ -272,7 +272,7 @@ export function EmployeeDetailPage() {
                       <InfoRow label="Employee No." value={e.employeeNo} icon={Hash} />
                       <InfoRow label="Designation" value={e.designation} icon={Briefcase} />
                       <InfoRow label="Department" value={e.department} icon={Building2} />
-                      <InfoRow label="Company" value={e.companyName ?? e.entityName} icon={Building2} />
+                      <InfoRow label="Company" value={e.entityName ?? '—'} icon={Building2} />
                       <InfoRow label="Contract Type" value={e.contractType} />
                       <InfoRow label="Work Location" value={e.workLocation} icon={MapPin} />
                     </div>

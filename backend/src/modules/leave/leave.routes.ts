@@ -1,8 +1,6 @@
-// @ts-nocheck
-import type { FastifyPluginAsync } from 'fastify/types/plugin.js'
 import { listLeaveRequests, createLeaveRequest, approveLeave, cancelLeave } from './leave.service.js'
 
-const leaveRoutes: FastifyPluginAsync = async (fastify) => {
+export default async function(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
@@ -60,4 +58,3 @@ const leaveRoutes: FastifyPluginAsync = async (fastify) => {
     })
 }
 
-export default leaveRoutes

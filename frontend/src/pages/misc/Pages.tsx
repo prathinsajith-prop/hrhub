@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Calendar, Clock, CheckCircle2, XCircle, Plus } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'

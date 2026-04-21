@@ -1,8 +1,6 @@
-// @ts-nocheck
-import type { FastifyPluginAsync } from 'fastify/types/plugin.js'
 import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, softDeleteApplication } from './recruitment.service.js'
 
-const recruitmentRoutes: FastifyPluginAsync = async (fastify) => {
+export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     // GET /api/v1/jobs
@@ -45,7 +43,7 @@ const recruitmentRoutes: FastifyPluginAsync = async (fastify) => {
         },
     }, async (request, reply) => {
         const body = request.body as Record<string, unknown>
-        const job = await createJob(request.user.tenantId, { ...body as never, postedBy: request.user.id })
+        const job = await createJob(request.user.tenantId, { ...(body as object), postedBy: request.user.id } as any)
         return reply.code(201).send({ data: job })
     })
 
@@ -121,4 +119,3 @@ const recruitmentRoutes: FastifyPluginAsync = async (fastify) => {
     })
 }
 
-export default recruitmentRoutes

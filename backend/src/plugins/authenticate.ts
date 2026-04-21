@@ -1,20 +1,17 @@
-// @ts-nocheck
 import fp from 'fastify-plugin'
-import type { FastifyPluginAsync } from 'fastify/types/plugin.js'
-import type { FastifyRequest, FastifyReply } from 'fastify'
 import type { JwtPayload, RequestUser } from '../types/index.js'
 import { db } from '../db/index.js'
 import { users } from '../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
 
-const authenticatePlugin: FastifyPluginAsync = async (fastify) => {
+async function authenticatePlugin(fastify: any): Promise<void> {
     /**
      * Decorate request with `authenticate` preHandler.
      * Usage: { preHandler: fastify.authenticate }
      */
-    fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
+    fastify.decorate('authenticate', async (request: any, reply: any) => {
         try {
-            const payload = await request.jwtVerify<JwtPayload>()
+            const payload = await (request.jwtVerify as any)() as JwtPayload
 
             const [user] = await db
                 .select({
@@ -50,7 +47,7 @@ const authenticatePlugin: FastifyPluginAsync = async (fastify) => {
      * Usage: { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
      */
     fastify.decorate('requireRole', (...roles: RequestUser['role'][]) => {
-        return async (request: FastifyRequest, reply: FastifyReply) => {
+        return async (request: any, reply: any) => {
             if (!request.user) {
                 return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Authentication required' })
             }
@@ -59,13 +56,6 @@ const authenticatePlugin: FastifyPluginAsync = async (fastify) => {
             }
         }
     })
-}
-
-declare module 'fastify' {
-    interface FastifyInstance {
-        authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
-        requireRole: (...roles: RequestUser['role'][]) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>
-    }
 }
 
 export default fp(authenticatePlugin, { name: 'authenticate' })

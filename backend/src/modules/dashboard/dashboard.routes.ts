@@ -1,8 +1,6 @@
-// @ts-nocheck
-import type { FastifyPluginAsync } from 'fastify/types/plugin.js'
 import { getDashboardKPIs, getRecentNotifications, getPayrollTrend, getNationalityBreakdown, getDeptHeadcount, getEmiratisationStatus } from './dashboard.service.js'
 
-const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
+export default async function(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/kpis', { ...auth, schema: { tags: ['Dashboard'] } }, async (request, reply) => {
@@ -37,4 +35,3 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
     })
 }
 
-export default dashboardRoutes
