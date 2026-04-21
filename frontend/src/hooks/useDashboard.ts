@@ -9,6 +9,22 @@ interface KPIs {
     expiringVisas: number
 }
 
+export interface PayrollTrendPoint {
+    month: string
+    amount: number
+}
+
+export interface NationalityPoint {
+    name: string
+    value: number
+    color: string
+}
+
+export interface DeptHeadcountPoint {
+    dept: string
+    count: number
+}
+
 export function useDashboardKPIs() {
     return useQuery({
         queryKey: ['dashboard', 'kpis'],
@@ -20,5 +36,26 @@ export function useNotifications(limit = 10) {
     return useQuery({
         queryKey: ['dashboard', 'notifications', limit],
         queryFn: () => api.get<{ data: unknown[] }>(`/dashboard/notifications?limit=${limit}`).then(r => r.data),
+    })
+}
+
+export function usePayrollTrend() {
+    return useQuery({
+        queryKey: ['dashboard', 'payroll-trend'],
+        queryFn: () => api.get<{ data: PayrollTrendPoint[] }>('/dashboard/payroll-trend').then(r => r.data),
+    })
+}
+
+export function useNationalityBreakdown() {
+    return useQuery({
+        queryKey: ['dashboard', 'nationality-breakdown'],
+        queryFn: () => api.get<{ data: NationalityPoint[] }>('/dashboard/nationality-breakdown').then(r => r.data),
+    })
+}
+
+export function useDeptHeadcount() {
+    return useQuery({
+        queryKey: ['dashboard', 'dept-headcount'],
+        queryFn: () => api.get<{ data: DeptHeadcountPoint[] }>('/dashboard/dept-headcount').then(r => r.data),
     })
 }
