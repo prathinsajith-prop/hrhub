@@ -1,24 +1,26 @@
-import React, { useState } from 'react'
-import { Plus, Briefcase, Users, Clock, TrendingUp, MoreHorizontal, Star, MapPin, DollarSign } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, Badge, Avatar, AvatarFallback } from '@/components/ui/primitives'
+import { useState } from 'react'
+import { Plus, Briefcase, Users, Clock, TrendingUp, Star, DollarSign } from 'lucide-react'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Tabs } from '@/components/ui/form-controls'
 import { DataTable } from '@/components/ui/data-table'
-import { KpiCardCompact } from '@/components/ui/kpi-card'
-import { PageWrapper } from '@/components/layout/PageWrapper'
+import { KPICard } from '@/components/ui/kpi-card'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
 import { useJobs, useApplications, useUpdateApplicationStage } from '@/hooks/useRecruitment'
 import { toast } from '@/components/ui/overlays'
 import type { Candidate, ApplicationStage } from '@/types'
 import type { ColumnDef } from '@tanstack/react-table'
 
-const stages: { id: ApplicationStage; label: string; color: string }[] = [
-  { id: 'received', label: 'Received', color: 'bg-slate-100 border-slate-200' },
-  { id: 'screening', label: 'Screening', color: 'bg-blue-50 border-blue-200' },
-  { id: 'interview', label: 'Interview', color: 'bg-violet-50 border-violet-200' },
-  { id: 'assessment', label: 'Assessment', color: 'bg-amber-50 border-amber-200' },
-  { id: 'offer', label: 'Offer', color: 'bg-emerald-50 border-emerald-200' },
-  { id: 'pre_boarding', label: 'Pre-boarding', color: 'bg-teal-50 border-teal-200' },
+const stages: { id: ApplicationStage; label: string; bgClass: string }[] = [
+  { id: 'received', label: 'Received', bgClass: 'bg-muted/50 border-border' },
+  { id: 'screening', label: 'Screening', bgClass: 'bg-info/5 border-info/20' },
+  { id: 'interview', label: 'Interview', bgClass: 'bg-warning/5 border-warning/20' },
+  { id: 'assessment', label: 'Assessment', bgClass: 'bg-primary/5 border-primary/20' },
+  { id: 'offer', label: 'Offer', bgClass: 'bg-success/5 border-success/20' },
+  { id: 'pre_boarding', label: 'Pre-boarding', bgClass: 'bg-accent/50 border-accent' },
 ]
 
 function CandidateCard({ candidate, onMove }: { candidate: Candidate; onMove: (id: string, stage: ApplicationStage) => void }) {
@@ -26,19 +28,19 @@ function CandidateCard({ candidate, onMove }: { candidate: Candidate; onMove: (i
   const nextStage = stages[stageIdx + 1]
 
   return (
-    <div className="bg-card rounded-xl border border-border p-3 shadow-sm hover:shadow-md transition-shadow card-hover">
+    <div className="bg-card rounded-xl border border-border p-3 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <Avatar className="h-7 w-7 shrink-0">
-            <AvatarFallback className="text-[10px]">{getInitials(candidate.name)}</AvatarFallback>
+            <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{getInitials(candidate.name)}</AvatarFallback>
           </Avatar>
           <div>
-            <p className="text-xs font-semibold">{candidate.name}</p>
+            <p className="text-xs font-semibold text-foreground">{candidate.name}</p>
             <p className="text-[10px] text-muted-foreground">{candidate.nationality}</p>
           </div>
         </div>
         <div className="flex items-center gap-0.5">
-          <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
+          <Star className="h-3 w-3 text-warning fill-warning" />
           <span className="text-[10px] font-medium">{candidate.score}</span>
         </div>
       </div>
@@ -59,7 +61,7 @@ function CandidateCard({ candidate, onMove }: { candidate: Candidate; onMove: (i
           className="w-full text-[10px] h-6"
           onClick={() => onMove(candidate.id, nextStage.id)}
         >
-          Move to {nextStage.label} →
+          Move to {nextStage.label} &rarr;
         </Button>
       )}
     </div>
@@ -72,8 +74,8 @@ const jobColumns: ColumnDef<any>[] = [
     header: 'Position',
     cell: ({ row: { original: j } }) => (
       <div>
-        <p className="font-medium text-sm">{j.title}</p>
-        <p className="text-[11px] text-muted-foreground">{j.department} · {j.location}</p>
+        <p className="font-medium text-sm text-foreground">{j.title}</p>
+        <p className="text-[11px] text-muted-foreground">{j.department} &middot; {j.location}</p>
       </div>
     ),
   },
@@ -82,8 +84,16 @@ const jobColumns: ColumnDef<any>[] = [
     header: 'Status',
     cell: ({ getValue }) => {
       const s = getValue() as string
-      const v = s === 'open' ? 'success' : s === 'on_hold' ? 'warning' : 'secondary'
-      return <Badge variant={v as any} className="capitalize text-[11px]">{s.replace('_', ' ')}</Badge>
+      const config: Record<string, string> = {
+        open: 'bg-success/10 text-success border-success/20',
+        on_hold: 'bg-warning/10 text-warning border-warning/20',
+        closed: 'bg-muted text-muted-foreground',
+      }
+      return (
+        <Badge variant="outline" className={cn('capitalize text-[11px]', config[s] || config.closed)}>
+          {s.replace('_', ' ')}
+        </Badge>
+      )
     },
   },
   { accessorKey: 'openings', header: 'Openings', cell: ({ getValue }) => <span className="text-sm font-medium">{getValue() as number}</span> },
@@ -92,10 +102,10 @@ const jobColumns: ColumnDef<any>[] = [
     id: 'salary',
     header: 'Salary Range',
     cell: ({ row: { original: j } }) => (
-      <span className="text-xs">{formatCurrency(j.minSalary)} – {formatCurrency(j.maxSalary)}</span>
+      <span className="text-xs text-muted-foreground">{formatCurrency(j.minSalary)} – {formatCurrency(j.maxSalary)}</span>
     ),
   },
-  { accessorKey: 'closingDate', header: 'Closing', cell: ({ getValue }) => <span className="text-xs">{formatDate(getValue() as string)}</span> },
+  { accessorKey: 'closingDate', header: 'Closing', cell: ({ getValue }) => <span className="text-xs text-muted-foreground">{formatDate(getValue() as string)}</span> },
 ]
 
 export function RecruitmentPage() {
@@ -115,14 +125,30 @@ export function RecruitmentPage() {
     })
   }
 
+  const openJobs = jobs.filter((j: any) => j.status === 'open').length
+  const inInterview = candidates.filter((c: any) => c.stage === 'interview').length
+  const inOffer = candidates.filter((c: any) => c.stage === 'offer' || c.stage === 'pre_boarding').length
+
   return (
-    <PageWrapper>
+    <div className="space-y-6">
+      <PageHeader
+        title="Recruitment"
+        description="Manage job postings and track candidates through the hiring pipeline"
+        actions={
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">New Job</span>
+            <span className="sm:hidden">Add</span>
+          </Button>
+        }
+      />
+
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCardCompact label="Open Positions" value={jobs.filter((j: any) => j.status === 'open').length} icon={Briefcase} color="blue" />
-        <KpiCardCompact label="Total Applicants" value={candidates.length} icon={Users} color="purple" />
-        <KpiCardCompact label="In Interview" value={candidates.filter((c: any) => c.stage === 'interview').length} icon={Clock} color="amber" />
-        <KpiCardCompact label="Offer Stage" value={candidates.filter((c: any) => c.stage === 'offer' || c.stage === 'pre_boarding').length} icon={TrendingUp} color="green" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPICard label="Open Positions" value={openJobs} icon={Briefcase} variant="primary" />
+        <KPICard label="Total Applicants" value={candidates.length} icon={Users} variant="info" />
+        <KPICard label="In Interview" value={inInterview} icon={Clock} variant="warning" />
+        <KPICard label="Offer Stage" value={inOffer} icon={TrendingUp} variant="success" />
       </div>
 
       <Tabs
@@ -132,27 +158,28 @@ export function RecruitmentPage() {
         ]}
         activeTab={activeTab}
         onChange={setActiveTab}
+        className="border-b-0"
       />
 
       {activeTab === 'pipeline' && (
-        <div className="overflow-x-auto pb-4">
+        <div className="overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
           <div className="flex gap-3 min-w-max">
             {stages.map(stage => {
               const stageCandidates = candidates.filter((c: any) => c.stage === stage.id)
               return (
-                <div key={stage.id} className={cn('w-52 rounded-xl border p-3 space-y-2', stage.color)}>
+                <div key={stage.id} className={cn('w-56 rounded-xl border p-3 space-y-2', stage.bgClass)}>
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold">{stage.label}</p>
-                    <span className="h-5 w-5 rounded-full bg-card text-[10px] font-bold flex items-center justify-center border border-current/20">
+                    <p className="text-xs font-semibold text-foreground">{stage.label}</p>
+                    <span className="h-5 w-5 rounded-full bg-background text-[10px] font-bold flex items-center justify-center border border-border shadow-sm">
                       {stageCandidates.length}
                     </span>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-[60vh] overflow-y-auto">
                     {stageCandidates.map(c => (
                       <CandidateCard key={c.id} candidate={c} onMove={moveCandidate} />
                     ))}
                     {stageCandidates.length === 0 && (
-                      <div className="border-2 border-dashed border-current/20 rounded-lg py-6 text-center">
+                      <div className="border-2 border-dashed border-border rounded-lg py-6 text-center">
                         <p className="text-[10px] text-muted-foreground">No candidates</p>
                       </div>
                     )}
@@ -165,7 +192,7 @@ export function RecruitmentPage() {
       )}
 
       {activeTab === 'jobs' && (
-        <Card className="p-5">
+        <Card className="p-4 sm:p-5">
           <DataTable
             columns={jobColumns}
             data={jobs}
@@ -173,11 +200,16 @@ export function RecruitmentPage() {
             searchPlaceholder="Search jobs..."
             pageSize={8}
             toolbar={
-              <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}>New Job</Button>
+              <Button size="sm" className="gap-1.5">
+                <Plus className="h-3.5 w-3.5" />
+                New Job
+              </Button>
             }
           />
         </Card>
       )}
-    </PageWrapper>
+    </div>
   )
 }
+
+export default RecruitmentPage

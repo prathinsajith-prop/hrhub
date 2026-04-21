@@ -2,131 +2,137 @@ import React from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+/**
+ * Supported semantic tones for KPI cards. We keep a few color names for
+ * backwards compatibility, but all styling is now driven off a small set
+ * of design tokens (primary, accent, success, destructive, info) — no
+ * hard-coded hex colors, and no purple/violet.
+ */
 export type KpiColor = 'blue' | 'purple' | 'amber' | 'red' | 'green' | 'cyan'
 
-const topBorderClass: Record<KpiColor, string> = {
-    blue: 'kpi-card-blue',
-    purple: 'kpi-card-purple',
-    amber: 'kpi-card-amber',
-    red: 'kpi-card-red',
-    green: 'kpi-card-green',
-    cyan: 'kpi-card-cyan',
+type Tone = {
+  accent: string // top border color (uses token-based border utilities)
+  icon: string // icon container bg + fg
 }
 
-const iconBgClass: Record<KpiColor, string> = {
-    blue: 'bg-blue-50 text-blue-600',
-    purple: 'bg-purple-50 text-purple-600',
-    amber: 'bg-amber-50 text-amber-600',
-    red: 'bg-red-50 text-red-600',
-    green: 'bg-emerald-50 text-emerald-600',
-    cyan: 'bg-cyan-50 text-cyan-600',
+const toneMap: Record<KpiColor, Tone> = {
+  blue: { accent: 'border-t-primary', icon: 'bg-primary/10 text-primary' },
+  cyan: { accent: 'border-t-info', icon: 'bg-info/10 text-info' },
+  green: { accent: 'border-t-success', icon: 'bg-success/10 text-success' },
+  amber: { accent: 'border-t-warning', icon: 'bg-warning/10 text-warning' },
+  red: { accent: 'border-t-destructive', icon: 'bg-destructive/10 text-destructive' },
+  /* Legacy "purple" slot is mapped to the accent (amber) tone to stay
+     on-brand and avoid purple usage per design guidelines. */
+  purple: { accent: 'border-t-accent', icon: 'bg-accent/15 text-accent-foreground' },
 }
 
 export interface KpiCardProps {
-    label: string
-    value: string | number | undefined | null
-    sub?: string
-    icon: React.ElementType
-    color?: KpiColor
-    /** Percentage change vs previous period — positive = up, negative = down */
-    trend?: number
-    loading?: boolean
-    onClick?: () => void
-    className?: string
+  label: string
+  value: string | number | undefined | null
+  sub?: string
+  icon: React.ElementType
+  color?: KpiColor
+  /** Percentage change vs previous period — positive = up, negative = down */
+  trend?: number
+  loading?: boolean
+  onClick?: () => void
+  className?: string
 }
 
 export function KpiCard({
-    label,
-    value,
-    sub,
-    icon: Icon,
-    color = 'blue',
-    trend,
-    loading = false,
-    onClick,
-    className,
+  label,
+  value,
+  sub,
+  icon: Icon,
+  color = 'blue',
+  trend,
+  loading = false,
+  onClick,
+  className,
 }: KpiCardProps) {
-    const Wrapper = onClick ? 'button' : 'div'
+  const Wrapper = onClick ? 'button' : 'div'
+  const tone = toneMap[color] ?? toneMap.blue
 
-    return (
-        <Wrapper
-            onClick={onClick}
+  return (
+    <Wrapper
+      onClick={onClick}
+      className={cn(
+        'rounded-xl bg-card p-5 border border-border border-t-2 text-left w-full card-hover',
+        tone.accent,
+        onClick && 'cursor-pointer hover:border-primary/40',
+        className,
+      )}
+    >
+      {loading ? (
+        <div className="space-y-2 animate-pulse">
+          <div className="h-2.5 bg-muted rounded w-2/3" />
+          <div className="h-7 bg-muted rounded w-1/2" />
+          <div className="h-2 bg-muted rounded w-3/4" />
+        </div>
+      ) : (
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">
+              {label}
+            </p>
+            <p className="text-2xl font-bold mt-1.5 mb-0.5 text-foreground font-display">
+              {value ?? '—'}
+            </p>
+            {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
+            {trend !== undefined && (
+              <div
+                className={cn(
+                  'flex items-center gap-1 mt-1.5 text-[11px] font-medium',
+                  trend >= 0 ? 'text-success' : 'text-destructive',
+                )}
+              >
+                {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                {Math.abs(trend)}% vs last month
+              </div>
+            )}
+          </div>
+          <div
             className={cn(
-                'rounded-xl bg-card p-5 card-hover border border-border border-t-0 text-left w-full',
-                topBorderClass[color],
-                onClick && 'cursor-pointer',
-                className,
+              'h-9 w-9 rounded-lg flex items-center justify-center shrink-0',
+              tone.icon,
             )}
-        >
-            {loading ? (
-                <div className="space-y-2 animate-pulse">
-                    <div className="h-2.5 bg-muted rounded w-2/3" />
-                    <div className="h-7 bg-muted rounded w-1/2" />
-                    <div className="h-2 bg-muted rounded w-3/4" />
-                </div>
-            ) : (
-                <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">
-                            {label}
-                        </p>
-                        <p className="text-2xl font-bold mt-1.5 mb-0.5 text-foreground font-display">
-                            {value ?? '—'}
-                        </p>
-                        {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
-                        {trend !== undefined && (
-                            <div
-                                className={cn(
-                                    'flex items-center gap-1 mt-1.5 text-[11px] font-medium',
-                                    trend >= 0 ? 'text-emerald-600' : 'text-red-500',
-                                )}
-                            >
-                                {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                                {Math.abs(trend)}% vs last month
-                            </div>
-                        )}
-                    </div>
-                    <div
-                        className={cn(
-                            'h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ml-2',
-                            iconBgClass[color],
-                        )}
-                    >
-                        <Icon className="h-4 w-4" />
-                    </div>
-                </div>
-            )}
-        </Wrapper>
-    )
+          >
+            <Icon className="h-4 w-4" />
+          </div>
+        </div>
+      )}
+    </Wrapper>
+  )
 }
 
-/** Compact version used in pages like Employees/Recruitment with a bg-muted icon */
+/** Compact horizontal KPI card — used on list pages (Employees, Visa, etc.) */
 export interface KpiCardCompactProps {
-    label: string
-    value: string | number | undefined | null
-    icon: React.ElementType
-    color?: KpiColor
-    className?: string
+  label: string
+  value: string | number | undefined | null
+  icon: React.ElementType
+  color?: KpiColor
+  className?: string
 }
 
 export function KpiCardCompact({ label, value, icon: Icon, color = 'blue', className }: KpiCardCompactProps) {
-    return (
-        <div
-            className={cn(
-                'rounded-xl bg-card p-4 flex items-center gap-3 card-hover border border-border border-t-0',
-                topBorderClass[color],
-                className,
-            )}
-        >
-            <div className="h-9 w-9 rounded-xl bg-muted flex items-center justify-center shrink-0">
-                <Icon className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div>
-                <p className="text-xl font-bold leading-tight font-display">
-                    {value ?? '—'}
-                </p>
-                <p className="text-[11px] text-muted-foreground">{label}</p>
-            </div>
-        </div>
-    )
+  const tone = toneMap[color] ?? toneMap.blue
+  return (
+    <div
+      className={cn(
+        'rounded-xl bg-card p-4 flex items-center gap-3 card-hover border border-border border-t-2',
+        tone.accent,
+        className,
+      )}
+    >
+      <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center shrink-0', tone.icon)}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xl font-bold leading-tight font-display truncate">
+          {value ?? '—'}
+        </p>
+        <p className="text-[11px] text-muted-foreground truncate">{label}</p>
+      </div>
+    </div>
+  )
 }
