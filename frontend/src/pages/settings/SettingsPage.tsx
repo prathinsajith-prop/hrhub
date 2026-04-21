@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
 import { PageWrapper } from '@/components/layout/PageWrapper'
+import { PageHeader } from '@/components/layout/PageHeader'
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 const mockUsers = [
@@ -408,11 +409,11 @@ function SecurityTab() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function SettingsPage() {
     return (
-        <PageWrapper className="page-enter max-w-4xl">
-            <div>
-                <h1 className="text-2xl font-bold">Settings</h1>
-                <p className="text-sm text-muted-foreground mt-1">Manage your company profile, users, and preferences</p>
-            </div>
+        <PageWrapper width="narrow">
+            <PageHeader
+                title="Settings"
+                description="Manage your company profile, users, and preferences"
+            />
 
             <Tabs defaultValue="company">
                 <TabsList className="w-full justify-start border-b rounded-none bg-transparent p-0 h-auto gap-0">

@@ -4,6 +4,7 @@ import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Tr
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { PageWrapper } from '@/components/layout/PageWrapper'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Card } from '@/components/ui/primitives'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, ConfirmDialog, toast } from '@/components/ui/overlays'
@@ -192,6 +193,16 @@ export function DocumentsPage() {
 
   return (
     <PageWrapper>
+      <PageHeader
+        title="Document Centre"
+        description="Manage and track all company documents"
+        actions={
+          <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setUploadOpen(true)}>
+            Upload Document
+          </Button>
+        }
+      />
+
       {/* Alert */}
       {(expiring + expired) > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
@@ -217,14 +228,23 @@ export function DocumentsPage() {
           searchKey="docType"
           searchPlaceholder="Search documents..."
           pageSize={8}
+          enableSelection
+          getRowId={(row: any) => String(row.id)}
           toolbar={
+            <Button variant="outline" size="sm">Bulk Upload</Button>
+          }
+          bulkActions={(selected) => (
             <>
-              <Button variant="outline" size="sm">Bulk Upload</Button>
-              <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setUploadOpen(true)}>
-                Upload Document
+              <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}
+                onClick={() => toast.success(`Downloading ${selected.length} documents`)}>
+                Download
+              </Button>
+              <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                onClick={() => toast.warning(`${selected.length} documents archived`)}>
+                Archive
               </Button>
             </>
-          }
+          )}
         />
       </Card>
       <UploadDocumentDialog open={uploadOpen} onOpenChange={setUploadOpen} />

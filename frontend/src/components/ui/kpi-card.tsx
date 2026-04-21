@@ -119,19 +119,19 @@ export function KpiCardCompact({ label, value, icon: Icon, color = 'blue', class
   return (
     <div
       className={cn(
-        'rounded-xl bg-card p-4 flex items-center gap-3 card-hover border border-border border-t-2',
+        'rounded-xl bg-card p-4 flex items-center justify-between gap-3 card-hover border border-border border-t-2',
         tone.accent,
         className,
       )}
     >
-      <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center shrink-0', tone.icon)}>
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xl font-bold leading-tight font-display truncate">
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
+        <p className="text-2xl font-bold leading-tight font-display tabular-figures truncate mt-1">
           {value ?? '—'}
         </p>
-        <p className="text-[11px] text-muted-foreground truncate">{label}</p>
+      </div>
+      <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center shrink-0', tone.icon)}>
+        <Icon className="h-4 w-4" />
       </div>
     </div>
   )

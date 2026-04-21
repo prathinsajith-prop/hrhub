@@ -7,6 +7,7 @@ import { Badge, Card, CardHeader, CardTitle, CardContent } from '@/components/ui
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { usePayrollRuns } from '@/hooks/usePayroll'
@@ -102,6 +103,11 @@ export function PayrollPage() {
 
   return (
     <PageWrapper>
+      <PageHeader
+        title="Payroll & WPS"
+        description="Salary processing and WPS compliance"
+      />
+
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCardCompact label="Last Net Payroll" value={formatCurrency(4742000)} icon={CreditCard} color="blue" />
@@ -155,9 +161,19 @@ export function PayrollPage() {
           data={payrollRuns}
           pageSize={5}
           emptyMessage="No payroll runs found."
+          enableSelection
+          getRowId={(row: any) => String(row.id)}
           toolbar={
             <Button variant="outline" size="sm" leftIcon={<FileDown className="h-3.5 w-3.5" />}>Export WPS</Button>
           }
+          bulkActions={(selected) => (
+            <>
+              <Button variant="outline" size="sm" leftIcon={<FileDown className="h-3.5 w-3.5" />}
+                onClick={() => toast.success(`Exporting ${selected.length} payroll runs`)}>
+                Export Selected
+              </Button>
+            </>
+          )}
         />
       </Card>
 

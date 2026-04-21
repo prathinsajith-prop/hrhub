@@ -59,3 +59,20 @@ export function useDeptHeadcount() {
         queryFn: () => api.get<{ data: DeptHeadcountPoint[] }>('/dashboard/dept-headcount').then(r => r.data),
     })
 }
+
+export interface EmiratisationStatus {
+    currentRatio: number
+    targetRatio: number
+    gap: number
+    emiratis: number
+    totalActive: number
+    required: number
+    progress: number
+}
+
+export function useEmiratisation() {
+    return useQuery({
+        queryKey: ['dashboard', 'emiratisation'],
+        queryFn: () => api.get<{ data: EmiratisationStatus }>('/dashboard/emiratisation').then(r => r.data),
+    })
+}

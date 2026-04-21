@@ -1,12 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
 
 /* ─── Design Tokens ───────────────────────────────────────────────────────── */
 :root {
-  --font-display: 'Syne', ui-sans-serif, system-ui, sans-serif;
-  --font-body: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Inter Tight', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* Surfaces & text */
   --background: 220 24% 97%;
@@ -62,8 +62,8 @@
 
 /* ─── Tailwind 4 theme mapping ────────────────────────────────────────────── */
 @theme inline {
-  --font-family-sans: var(--font-body);
-  --font-family-display: var(--font-display);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -111,41 +111,46 @@
 }
 
 /* ─── Base ───────────────────────────────────────────────────────────────── */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+@layer base {
 
-* {
-  margin: 0;
-  padding: 0;
-  border-color: hsl(var(--border));
-}
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
 
-html {
-  background-color: hsl(var(--background));
-}
+  * {
+    margin: 0;
+    padding: 0;
+    border-color: hsl(var(--border));
+  }
 
-body {
-  font-family: var(--font-body);
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-size: 14px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-}
+  html {
+    background-color: hsl(var(--background));
+  }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-family: var(--font-display);
-  letter-spacing: -0.01em;
+  body {
+    font-family: var(--font-body);
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-size: 14px;
+    line-height: 1.55;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.018em;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+  }
 }
 
 /* ─── Scrollbar ───────────────────────────────────────────────────────────── */
@@ -225,6 +230,12 @@ h6 {
 /* ─── Utilities ───────────────────────────────────────────────────────────── */
 .font-display {
   font-family: var(--font-display);
+  letter-spacing: -0.022em;
+}
+
+.tabular-figures {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum', 'cv02', 'cv03';
 }
 
 .table-row-hover:hover {

@@ -9,11 +9,14 @@ import {
   type ColumnDef,
   type SortingState,
   type ColumnFiltersState,
+  type RowSelectionState,
+  type Row,
 } from '@tanstack/react-table'
-import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from 'lucide-react'
+import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
 import { Input } from './primitives'
+import { Checkbox } from './checkbox'
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -25,6 +28,12 @@ interface DataTableProps<TData, TValue> {
   emptyMessage?: string
   onRowClick?: (row: TData) => void
   isLoading?: boolean
+  /** Enable per-row checkbox selection */
+  enableSelection?: boolean
+  /** Render bulk action buttons. Receives the selected rows. */
+  bulkActions?: (selected: TData[]) => React.ReactNode
+  /** Stable identifier for each row (defaults to tanstack-generated id). */
+  getRowId?: (row: TData, index: number) => string
 }
 
 export function DataTable<TData, TValue>({
@@ -37,14 +46,51 @@ export function DataTable<TData, TValue>({
   emptyMessage = 'No results found.',
   onRowClick,
   isLoading,
+  enableSelection = false,
+  bulkActions,
+  getRowId,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = React.useState('')
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
+
+  const selectionColumn: ColumnDef<TData, TValue> = React.useMemo(
+    () => ({
+      id: '__select__',
+      size: 36,
+      enableSorting: false,
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() ? 'indeterminate' : false)
+          }
+          onCheckedChange={value => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all on page"
+          onClick={e => e.stopPropagation()}
+        />
+      ),
+      cell: ({ row }: { row: Row<TData> }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={value => row.toggleSelected(!!value)}
+          aria-label="Select row"
+          onClick={e => e.stopPropagation()}
+        />
+      ),
+    }),
+    [],
+  )
+
+  const allColumns = React.useMemo(
+    () => (enableSelection ? [selectionColumn, ...columns] : columns),
+    [columns, enableSelection, selectionColumn],
+  )
 
   const table = useReactTable({
     data,
-    columns,
+    columns: allColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -52,9 +98,18 @@ export function DataTable<TData, TValue>({
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
-    state: { sorting, columnFilters, globalFilter },
+    onRowSelectionChange: setRowSelection,
+    enableRowSelection: enableSelection,
+    getRowId,
+    state: { sorting, columnFilters, globalFilter, rowSelection },
     initialState: { pagination: { pageSize } },
   })
+
+  const selectedRows = React.useMemo(
+    () => table.getSelectedRowModel().rows.map(r => r.original),
+    [table, rowSelection], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const selectedCount = selectedRows.length
 
   return (
     <div className="space-y-3">
@@ -76,10 +131,33 @@ export function DataTable<TData, TValue>({
         {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}
       </div>
 
+      {/* Bulk action bar */}
+      {enableSelection && selectedCount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+          <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+            <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
+              {selectedCount}
+            </span>
+            <span>selected</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => table.resetRowSelection()}
+            >
+              <X className="h-3 w-3 mr-1" /> Clear
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            {bulkActions ? bulkActions(selectedRows) : null}
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-max min-w-full text-sm">
             <thead>
               {table.getHeaderGroups().map(headerGroup => (
                 <tr key={headerGroup.id} className="border-b border-border bg-muted/50">
@@ -117,7 +195,7 @@ export function DataTable<TData, TValue>({
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="border-b border-border/50">
-                    {columns.map((_, j) => (
+                    {allColumns.map((_, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 bg-muted rounded animate-pulse" />
                       </td>
@@ -130,7 +208,8 @@ export function DataTable<TData, TValue>({
                     key={row.id}
                     className={cn(
                       'border-b border-border/40 bg-card transition-colors last:border-0',
-                      onRowClick && 'cursor-pointer hover:bg-muted/50'
+                      onRowClick && 'cursor-pointer hover:bg-muted/50',
+                      row.getIsSelected() && 'bg-primary/5 hover:bg-primary/10',
                     )}
                     onClick={() => onRowClick?.(row.original)}
                   >
@@ -143,7 +222,7 @@ export function DataTable<TData, TValue>({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={columns.length} className="h-32 text-center text-muted-foreground">
+                  <td colSpan={allColumns.length} className="h-32 text-center text-muted-foreground">
                     {emptyMessage}
                   </td>
                 </tr>

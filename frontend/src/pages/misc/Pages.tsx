@@ -8,6 +8,7 @@ import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { formatDate, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useLeaveRequests, useApproveLeave } from '@/hooks/useLeave'
 import { useOnboardingChecklists } from '@/hooks/useOnboarding'
 import type { LeaveRequest } from '@/types'
@@ -93,6 +94,14 @@ export function LeavePage() {
 
   return (
     <PageWrapper>
+      <PageHeader
+        title="Leave Management"
+        description="Review and manage employee leave requests"
+        actions={
+          <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}>Apply Leave</Button>
+        }
+      />
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCardCompact label="Pending" value={leaves.filter((l: any) => l.status === 'pending').length} icon={Clock} color="amber" />
         <KpiCardCompact label="Approved" value={leaves.filter((l: any) => l.status === 'approved').length} icon={CheckCircle2} color="green" />
@@ -107,7 +116,21 @@ export function LeavePage() {
           searchKey="employeeName"
           searchPlaceholder="Search by employee..."
           pageSize={8}
-          toolbar={<Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}>Apply Leave</Button>}
+          toolbar={undefined}
+          enableSelection
+          getRowId={(row: any) => String(row.id)}
+          bulkActions={(selected) => (
+            <>
+              <Button variant="outline" size="sm" leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                onClick={() => toast.success(`${selected.length} leave requests approved`)}>
+                Approve
+              </Button>
+              <Button variant="destructive" size="sm" leftIcon={<XCircle className="h-3.5 w-3.5" />}
+                onClick={() => toast.error(`${selected.length} leave requests rejected`)}>
+                Reject
+              </Button>
+            </>
+          )}
         />
       </Card>
 
@@ -149,12 +172,21 @@ export function OnboardingPage() {
   const checklists = (onboardingList as any[]) ?? []
   const checklist = checklists[0]
   if (!checklist) {
-    return <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
-      No active onboarding checklists
-    </div>
+    return (
+      <PageWrapper>
+        <PageHeader title="Onboarding" description="Track new hire onboarding progress and checklists" />
+        <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
+          No active onboarding checklists
+        </div>
+      </PageWrapper>
+    )
   }
   return (
     <PageWrapper>
+      <PageHeader
+        title="Onboarding"
+        description="Track new hire onboarding progress and checklists"
+      />
       <Card className="p-5">
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -205,6 +237,11 @@ export function CompliancePage() {
 
   return (
     <PageWrapper>
+      <PageHeader
+        title="Compliance"
+        description="UAE labour law and regulatory compliance dashboard"
+      />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="p-6 flex flex-col items-center justify-center text-center">
           <div className={cn('text-5xl font-bold mb-2 font-display', overall >= 95 ? 'text-emerald-600' : overall >= 80 ? 'text-amber-600' : 'text-red-600')}>
@@ -242,6 +279,11 @@ export function CompliancePage() {
 export function ReportsPage() {
   return (
     <PageWrapper>
+      <PageHeader
+        title="Reports"
+        description="Advanced analytics and business intelligence"
+      />
+
       <div className="flex flex-col items-center justify-center h-64 text-center">
         <div className="h-16 w-16 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
           <Calendar className="h-8 w-8 text-blue-500" />

@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import type { Notification } from '@/types'
-import { mockNotifications } from '@/data/mock'
 
 interface UIState {
   sidebarOpen: boolean
@@ -8,6 +7,7 @@ interface UIState {
   unreadCount: number
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
+  setNotifications: (n: Notification[]) => void
   markNotificationRead: (id: string) => void
   markAllRead: () => void
   addNotification: (n: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void
@@ -15,8 +15,10 @@ interface UIState {
 
 export const useUIStore = create<UIState>()((set, get) => ({
   sidebarOpen: true,
-  notifications: mockNotifications,
-  unreadCount: mockNotifications.filter(n => !n.read).length,
+  notifications: [],
+  unreadCount: 0,
+  setNotifications: (notifications) =>
+    set({ notifications, unreadCount: notifications.filter(n => !n.read).length }),
   toggleSidebar: () => set(s => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   markNotificationRead: (id) => {

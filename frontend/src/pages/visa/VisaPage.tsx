@@ -231,6 +231,20 @@ export function VisaPage() {
             searchKey="employeeName"
             searchPlaceholder="Search by employee..."
             pageSize={8}
+            enableSelection
+            getRowId={(row: any) => String(row.id)}
+            bulkActions={(selected) => (
+              <>
+                <Button variant="outline" size="sm" leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
+                  onClick={() => toast.success(`Renewal initiated for ${selected.length} visas`)}>
+                  Renew
+                </Button>
+                <Button variant="outline" size="sm"
+                  onClick={() => toast.success(`Exporting ${selected.length} visa records`)}>
+                  Export
+                </Button>
+              </>
+            )}
             toolbar={
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="gap-1.5"

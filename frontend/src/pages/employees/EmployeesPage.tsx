@@ -253,6 +253,36 @@ export function EmployeesPage() {
             searchPlaceholder="Search by name, ID..."
             pageSize={8}
             emptyMessage="No employees found."
+            enableSelection
+            getRowId={(row: any) => String(row.id)}
+            bulkActions={(selected) => (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<Download className="h-3.5 w-3.5" />}
+                  onClick={() => toast.success(`Exported ${selected.length} employees to CSV`)}
+                >
+                  Export
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<Mail className="h-3.5 w-3.5" />}
+                  onClick={() => toast.info(`Email composed to ${selected.length} recipients`)}
+                >
+                  Email
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                  onClick={() => toast.warning(`${selected.length} employees queued for termination review`)}
+                >
+                  Terminate
+                </Button>
+              </>
+            )}
           />
         </CardContent>
       </Card>

@@ -37,8 +37,9 @@ import type { KpiColor } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'
-import { useDashboardKPIs, useNotifications, usePayrollTrend, useNationalityBreakdown, useDeptHeadcount } from '@/hooks/useDashboard'
+import { useDashboardKPIs, useNotifications, usePayrollTrend, useNationalityBreakdown, useDeptHeadcount, useEmiratisation } from '@/hooks/useDashboard'
 import { useVisas } from '@/hooks/useVisa'
+import { useNavigate } from 'react-router-dom'
 
 /* Token-driven chart palette — keep chart colors in sync with globals.css. */
 const CHART_COLORS = {
@@ -105,12 +106,14 @@ const tooltipStyle: React.CSSProperties = {
 }
 
 export function DashboardPage() {
+  const navigate = useNavigate()
   const { data: kpis } = useDashboardKPIs()
   const { data: notifications } = useNotifications(20)
   const { data: visaData } = useVisas({ limit: 10 })
   const { data: payrollTrendRaw } = usePayrollTrend()
   const { data: nationalityRaw } = useNationalityBreakdown()
   const { data: deptRaw } = useDeptHeadcount()
+  const { data: emiratisation } = useEmiratisation()
 
   const payrollTrend = payrollTrendRaw ?? []
   const nationalityData = (nationalityRaw ?? []).map((d, i) => ({
@@ -151,7 +154,7 @@ export function DashboardPage() {
               </span>
             )}
           </p>
-          <button className="ml-auto text-xs font-medium text-warning-foreground hover:underline shrink-0">
+          <button onClick={() => navigate('/notifications')} className="ml-auto text-xs font-medium text-warning-foreground hover:underline shrink-0">
             View all
           </button>
         </div>
@@ -331,7 +334,7 @@ export function DashboardPage() {
                 <CardTitle>Active Visa Cases</CardTitle>
                 <CardDescription>Current processing status</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs">
+              <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/visa')}>
                 View all
                 <ArrowUpRight className="h-3 w-3 ml-1" />
               </Button>
@@ -401,41 +404,49 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-4 pt-2">
             <div className="text-center pb-1">
-              <p className="text-4xl font-bold font-display text-foreground">1.8%</p>
+              <p className="text-4xl font-bold font-display text-foreground">
+                {emiratisation ? `${emiratisation.currentRatio}%` : '—'}
+              </p>
               <p className="text-xs text-muted-foreground mt-0.5">Current Emirati ratio</p>
             </div>
             <div className="space-y-1.5">
               <div className="flex justify-between text-[11px]">
-                <span className="text-muted-foreground">Progress to 2% target</span>
-                <span className="font-semibold">90%</span>
+                <span className="text-muted-foreground">Progress to {emiratisation?.targetRatio ?? 2}% target</span>
+                <span className="font-semibold">{emiratisation?.progress ?? 0}%</span>
               </div>
               <div className="h-2 rounded-full bg-muted overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-success transition-all"
-                  style={{ width: '90%' }}
+                  className={cn('h-full rounded-full transition-all',
+                    (emiratisation?.progress ?? 0) >= 100 ? 'bg-success' : 'bg-warning',
+                  )}
+                  style={{ width: `${Math.min(100, emiratisation?.progress ?? 0)}%` }}
                 />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-xs">
               <div className="p-2.5 rounded-xl bg-muted">
-                <p className="text-base font-bold text-success font-display">3</p>
+                <p className="text-base font-bold text-success font-display">{emiratisation?.emiratis ?? 0}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Emiratis</p>
               </div>
               <div className="p-2.5 rounded-xl bg-muted">
-                <p className="text-base font-bold font-display">2.0%</p>
+                <p className="text-base font-bold font-display">{emiratisation?.targetRatio ?? 2}%</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Target</p>
               </div>
-              <div className="p-2.5 rounded-xl bg-destructive/10">
-                <p className="text-base font-bold text-destructive font-display">-0.2%</p>
+              <div className={cn('p-2.5 rounded-xl', (emiratisation?.gap ?? 0) < 0 ? 'bg-destructive/10' : 'bg-success/10')}>
+                <p className={cn('text-base font-bold font-display', (emiratisation?.gap ?? 0) < 0 ? 'text-destructive' : 'text-success')}>
+                  {emiratisation ? `${emiratisation.gap > 0 ? '+' : ''}${emiratisation.gap}%` : '—'}
+                </p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">Gap</p>
               </div>
             </div>
-            <div className="flex items-start gap-2 bg-warning/10 border border-warning/20 rounded-xl p-3">
-              <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
-              <p className="text-[11px] text-warning-foreground leading-relaxed">
-                Below 2% target. Penalty risk: AED 1,000/month per missing Emirati hire.
-              </p>
-            </div>
+            {emiratisation && emiratisation.gap < 0 && (
+              <div className="flex items-start gap-2 bg-warning/10 border border-warning/20 rounded-xl p-3">
+                <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
+                <p className="text-[11px] text-warning-foreground leading-relaxed">
+                  Below {emiratisation.targetRatio}% target. {emiratisation.required > 0 && `Hire ${emiratisation.required} more Emirati${emiratisation.required > 1 ? 's' : ''} to comply.`} Penalty risk: AED 1,000/month per missing Emirati hire.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

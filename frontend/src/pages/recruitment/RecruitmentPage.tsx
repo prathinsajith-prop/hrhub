@@ -199,12 +199,26 @@ export function RecruitmentPage() {
             searchKey="title"
             searchPlaceholder="Search jobs..."
             pageSize={8}
+            enableSelection
+            getRowId={(row: any) => String(row.id)}
             toolbar={
               <Button size="sm" className="gap-1.5">
                 <Plus className="h-3.5 w-3.5" />
                 New Job
               </Button>
             }
+            bulkActions={(selected) => (
+              <>
+                <Button variant="outline" size="sm"
+                  onClick={() => toast.success(`${selected.length} job listings closed`)}>
+                  Close
+                </Button>
+                <Button variant="outline" size="sm"
+                  onClick={() => toast.success(`${selected.length} jobs duplicated`)}>
+                  Duplicate
+                </Button>
+              </>
+            )}
           />
         </Card>
       )}

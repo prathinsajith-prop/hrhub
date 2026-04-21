@@ -113,3 +113,45 @@ export async function getDeptHeadcount(tenantId: string) {
         count: Number(r.count),
     }))
 }
+
+export async function getEmiratisationStatus(tenantId: string) {
+    // MOHRE target ratio (default 2% — actual quota varies by company size & sector).
+    const targetRatio = 2.0
+
+    const [{ total }] = await db
+        .select({ total: count() })
+        .from(employees)
+        .where(and(
+            eq(employees.tenantId, tenantId),
+            eq(employees.isArchived, false),
+            eq(employees.status, 'active'),
+        ))
+
+    const [{ emiratis }] = await db
+        .select({ emiratis: count() })
+        .from(employees)
+        .where(and(
+            eq(employees.tenantId, tenantId),
+            eq(employees.isArchived, false),
+            eq(employees.status, 'active'),
+            eq(employees.emiratisationCategory, 'emirati'),
+        ))
+
+    const totalNum = Number(total)
+    const emiratisNum = Number(emiratis)
+    const currentRatio = totalNum > 0 ? Number(((emiratisNum / totalNum) * 100).toFixed(2)) : 0
+    const gap = Number((currentRatio - targetRatio).toFixed(2))
+    const required = Math.max(0, Math.ceil((targetRatio / 100) * totalNum) - emiratisNum)
+
+    return {
+        currentRatio,
+        targetRatio,
+        gap,
+        emiratis: emiratisNum,
+        totalActive: totalNum,
+        required,
+        progress: targetRatio > 0
+            ? Math.min(100, Math.round((currentRatio / targetRatio) * 100))
+            : 100,
+    }
+}
