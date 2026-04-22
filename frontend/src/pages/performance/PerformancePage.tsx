@@ -180,7 +180,7 @@ export function PerformancePage() {
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label>Review Date</Label>
-                                <Input type="date" value={form.reviewDate} onChange={e => set('reviewDate', e.target.value)} />
+                                <Input type="date" value={form.reviewDate} max={new Date().toISOString().split('T')[0]} onChange={e => set('reviewDate', e.target.value)} />
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Overall Rating: {form.overallRating}/5</Label>

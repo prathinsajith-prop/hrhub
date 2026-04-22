@@ -230,11 +230,11 @@ export function ExitPage() {
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Exit Date</Label>
-                                    <Input type="date" value={form.exitDate} onChange={e => set('exitDate', e.target.value)} />
+                                    <Input type="date" value={form.exitDate} min={new Date().toISOString().split('T')[0]} onChange={e => set('exitDate', e.target.value)} />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Last Working Day</Label>
-                                    <Input type="date" value={form.lastWorkingDay} onChange={e => set('lastWorkingDay', e.target.value)} />
+                                    <Input type="date" value={form.lastWorkingDay} min={form.exitDate || new Date().toISOString().split('T')[0]} onChange={e => set('lastWorkingDay', e.target.value)} />
                                 </div>
                             </div>
                             <div className="space-y-1.5">

@@ -108,6 +108,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
     const [visaType, setVisaType] = useState('employment_new')
     const [urgencyLevel, setUrgencyLevel] = useState('normal')
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
+    const today = new Date().toISOString().split('T')[0]
     const { data: empData } = useEmployees({ limit: 100 })
     const employees = (empData?.data as any[]) ?? []
     const createVisa = useCreateVisa()
@@ -176,7 +177,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
                     </div>
                     <div className="space-y-1.5">
                         <Label>Start Date</Label>
-                        <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                        <Input type="date" value={startDate} min={today} onChange={(e) => setStartDate(e.target.value)} />
                     </div>
                 </DialogBody>
                 <DialogFooter>
@@ -195,6 +196,7 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
     const [startDate, setStartDate] = useState('')
     const [endDate, setEndDate] = useState('')
     const [reason, setReason] = useState('')
+    const today = new Date().toISOString().split('T')[0]
     const { data: empData } = useEmployees({ limit: 100 })
     const employees = (empData?.data as any[]) ?? []
     const createLeave = useCreateLeave()
@@ -202,6 +204,10 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
     const submit = () => {
         if (!employeeId || !startDate || !endDate) {
             toast.warning('Missing fields', 'Employee and dates are required.')
+            return
+        }
+        if (endDate < startDate) {
+            toast.warning('Invalid dates', 'End date must be on or after start date.')
             return
         }
         const days = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1)
@@ -253,11 +259,11 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Start Date *</Label>
-                            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                            <Input type="date" value={startDate} min={today} onChange={(e) => setStartDate(e.target.value)} />
                         </div>
                         <div className="space-y-1.5">
                             <Label>End Date *</Label>
-                            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                            <Input type="date" value={endDate} min={startDate || today} onChange={(e) => setEndDate(e.target.value)} />
                         </div>
                     </div>
                     <div className="space-y-1.5">
@@ -442,7 +448,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Date of Birth</Label>
-                                    <Input type="date" value={form.dateOfBirth} onChange={set('dateOfBirth')} />
+                                    <Input type="date" value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} min="1950-01-01" onChange={set('dateOfBirth')} />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Gender</Label>
@@ -503,7 +509,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Join Date *</Label>
-                                    <Input type="date" value={form.joinDate} onChange={set('joinDate')} />
+                                    <Input type="date" value={form.joinDate} min="1970-01-01" onChange={set('joinDate')} />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -638,7 +644,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                     )}
                 </DialogFooter>
             </DialogContent>
-        </Dialog>
+        </Dialog >
     )
 }
 
@@ -748,7 +754,7 @@ export function EditEmployeeDialog({
                                 <div className="space-y-1.5"><Label>Last Name *</Label><Input value={form.lastName} onChange={set('lastName')} /></div>
                             </div>
                             <div className="grid grid-cols-3 gap-3">
-                                <div className="space-y-1.5"><Label>Date of Birth</Label><Input type="date" value={form.dateOfBirth} onChange={set('dateOfBirth')} /></div>
+                                <div className="space-y-1.5"><Label>Date of Birth</Label><Input type="date" value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} min="1950-01-01" onChange={set('dateOfBirth')} /></div>
                                 <div className="space-y-1.5">
                                     <Label>Gender</Label>
                                     <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v }))}>
@@ -788,7 +794,7 @@ export function EditEmployeeDialog({
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Employee No</Label><Input value={form.employeeNo} onChange={set('employeeNo')} /></div>
-                                <div className="space-y-1.5"><Label>Join Date *</Label><Input type="date" value={form.joinDate} onChange={set('joinDate')} /></div>
+                                <div className="space-y-1.5"><Label>Join Date *</Label><Input type="date" value={form.joinDate} min="1970-01-01" onChange={set('joinDate')} /></div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Department</Label><Input value={form.department} onChange={set('department')} /></div>

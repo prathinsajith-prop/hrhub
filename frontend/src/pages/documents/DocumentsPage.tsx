@@ -130,7 +130,7 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
           <div className="space-y-1.5">
             <Label>Expiry Date (if applicable)</Label>
-            <Input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+            <Input type="date" value={expiryDate} min={new Date().toISOString().split('T')[0]} onChange={(e) => setExpiryDate(e.target.value)} />
           </div>
 
           <div className="space-y-1.5">

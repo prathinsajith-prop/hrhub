@@ -5,6 +5,8 @@ import {
 import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSchema } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { db } from '../../db/index.js'
+import { entities } from '../../db/schema/index.js'
+import { eq } from 'drizzle-orm'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -52,7 +54,20 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Employees'] },
     }, async (request, reply) => {
         const body = validate(createEmployeeSchema, request.body)
-        const employee = await createEmployee(request.user.tenantId, body as never)
+        // Auto-generate employeeNo if not provided
+        const employeeNo = body.employeeNo ?? `EMP-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(1000 + Math.random() * 9000)}`
+        // Resolve entityId — use provided value or fall back to the tenant's first entity
+        let entityId = body.entityId
+        if (!entityId) {
+            const [defaultEntity] = await db
+                .select({ id: entities.id })
+                .from(entities)
+                .where(eq(entities.tenantId, request.user.tenantId))
+                .limit(1)
+            if (!defaultEntity) return reply.code(400).send({ error: 'No entity found for this tenant. Please set up an entity first.' })
+            entityId = defaultEntity.id
+        }
+        const employee = await createEmployee(request.user.tenantId, { ...body, employeeNo, entityId } as never)
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,
