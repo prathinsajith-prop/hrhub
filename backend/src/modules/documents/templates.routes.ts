@@ -23,7 +23,7 @@ export async function templateRoutes(fastify: any): Promise<void> {
         if (!name || !templateType || !body) {
             return reply.code(400).send({ error: 'name, templateType, and body are required' })
         }
-        const row = await createTemplate(request.user.tenantId, request.user.sub, { name, templateType, body, variables })
+        const row = await createTemplate(request.user.tenantId, request.user.id, { name, templateType, body, variables })
         return reply.code(201).send({ data: row })
     })
 
@@ -60,7 +60,7 @@ export async function templateRoutes(fastify: any): Promise<void> {
     fastify.post('/:id/versions', adminAuth, async (request: any, reply: any) => {
         const { s3Key, fileName, fileSize, notes } = request.body as any
         if (!s3Key || !fileName) return reply.code(400).send({ error: 's3Key and fileName are required' })
-        const row = await addDocumentVersion(request.user.tenantId, request.params.id, request.user.sub, { s3Key, fileName, fileSize, notes })
+        const row = await addDocumentVersion(request.user.tenantId, request.params.id, request.user.id, { s3Key, fileName, fileSize, notes })
         return reply.code(201).send({ data: row })
     })
 }

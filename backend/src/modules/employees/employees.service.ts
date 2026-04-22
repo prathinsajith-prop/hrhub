@@ -1,4 +1,4 @@
-import { eq, and, ilike, or, count, desc, asc, getTableColumns, sql } from 'drizzle-orm'
+import { eq, and, ilike, desc, asc, getTableColumns, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, entities } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
@@ -28,36 +28,41 @@ export async function listEmployees(params: ListEmployeesParams) {
     if (department) conditions.push(eq(employees.department, department))
     if (search) {
         const trimmed = search.trim()
-        conditions.push(
-            or(
-                // Full name search (handles "John Doe" style queries)
-                sql`(${employees.firstName} || ' ' || ${employees.lastName}) ILIKE ${'%' + trimmed + '%'}`,
-                ilike(employees.email, `%${trimmed}%`),
-                ilike(employees.employeeNo, `%${trimmed}%`),
-                ilike(employees.designation, `%${trimmed}%`),
-            )!
-        )
+        // Sanitise and build a prefix-aware tsquery — each word gets :* for partial match
+        const words = trimmed.split(/\s+/).filter(Boolean).map(w => w.replace(/[^a-zA-Z0-9\u00C0-\u024F\u0600-\u06FF]/g, ''))
+        if (words.length > 0) {
+            const tsQuery = words.join(' & ') + ':*'
+            conditions.push(
+                sql`to_tsvector('simple',
+                    coalesce(${employees.firstName},'') || ' ' ||
+                    coalesce(${employees.lastName},'')  || ' ' ||
+                    coalesce(${employees.email},'')     || ' ' ||
+                    coalesce(${employees.employeeNo},'') || ' ' ||
+                    coalesce(${employees.designation},'')
+                ) @@ to_tsquery('simple', ${tsQuery})`
+            )
+        } else {
+            // Fall back to ILIKE for employee number if input is all non-word chars
+            conditions.push(ilike(employees.employeeNo, `%${trimmed}%`))
+        }
     }
 
-    const [{ total }] = await db
-        .select({ total: count() })
-        .from(employees)
-        .where(and(...conditions))
-
     const rows = await db
-        .select()
+        .select({ ...getTableColumns(employees), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
         .from(employees)
         .where(and(...conditions))
         .orderBy(asc(employees.firstName))
         .limit(limit)
         .offset(offset)
 
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+
     return {
         data: rows.map(withFullName),
-        total: Number(total),
+        total,
         limit,
         offset,
-        hasMore: offset + limit < Number(total),
+        hasMore: offset + limit < total,
     }
 }
 
@@ -142,8 +147,18 @@ export async function getOrgChart(tenantId: string) {
         status: employees.status,
     }).from(employees).where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false)))
 
-    // Build tree
+    // Build tree with cycle detection — max depth 15 to guard against circular reportingTo
     const map = new Map(rows.map(r => [r.id, { ...r, fullName: `${r.firstName} ${r.lastName}`, children: [] as any[] }]))
+    const visited = new Set<string>()
+
+    function buildNode(id: string, depth = 0): any {
+        if (visited.has(id) || depth > 15) return null
+        visited.add(id)
+        const node = map.get(id)
+        if (!node) return null
+        return { ...node, children: node.children.map((c: any) => buildNode(c.id, depth + 1)).filter(Boolean) }
+    }
+
     const roots: any[] = []
     for (const node of map.values()) {
         if (node.reportingTo && map.has(node.reportingTo)) {
@@ -152,5 +167,5 @@ export async function getOrgChart(tenantId: string) {
             roots.push(node)
         }
     }
-    return roots
+    return roots.map(r => buildNode(r.id)).filter(Boolean)
 }

@@ -1,4 +1,5 @@
 import { listVisas, getVisa, createVisa, updateVisa, advanceVisaStep, softDeleteVisa, cancelVisa, recalcVisaUrgency } from './visa.service.js'
+import { recordActivity } from '../audit/audit.service.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -34,6 +35,18 @@ export default async function (fastify: any): Promise<void> {
     }, async (request, reply) => {
         const body = request.body as Record<string, unknown>
         const visa = await createVisa(request.user.tenantId, body as never)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'visa',
+            entityId: visa.id,
+            entityName: `Visa - ${visa.visaType ?? 'application'}`,
+            action: 'create',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(201).send({ data: visa })
     })
 
@@ -44,6 +57,17 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const updated = await updateVisa(request.user.tenantId, id, request.body as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Visa application not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'visa',
+            entityId: id,
+            action: 'update',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send({ data: updated })
     })
 
@@ -54,6 +78,18 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const updated = await advanceVisaStep(request.user.tenantId, id)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Visa application not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'visa',
+            entityId: id,
+            entityName: `Visa step → ${updated.currentStep ?? 'next'}`,
+            action: 'approve',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send({ data: updated })
     })
 
@@ -64,6 +100,17 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const deleted = await softDeleteVisa(request.user.tenantId, id)
         if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Visa application not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'visa',
+            entityId: id,
+            action: 'delete',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(204).send()
     })
 
@@ -81,6 +128,18 @@ export default async function (fastify: any): Promise<void> {
         const { reason } = (request.body as any) ?? {}
         const updated = await cancelVisa(request.user.tenantId, id, reason as string | undefined)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Visa application not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'visa',
+            entityId: id,
+            action: 'reject',
+            metadata: reason ? { reason } : undefined,
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send({ data: updated })
     })
 

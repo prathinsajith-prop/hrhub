@@ -5,6 +5,8 @@ export interface JwtPayload {
     sub: string       // user id
     tenantId: string
     role: UserRole
+    name: string      // embedded at login — avoids DB lookup in authenticate plugin
+    email: string     // embedded at login
     iat?: number
     exp?: number
 }

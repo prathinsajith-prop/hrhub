@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -62,6 +63,7 @@ function InfoRow({
 }
 
 export function EmployeeDetailPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: employee, isLoading } = useEmployee(id!)
@@ -92,9 +94,9 @@ export function EmployeeDetailPage() {
       <PageWrapper>
         <Card>
           <CardContent className="flex flex-col items-center justify-center h-64 gap-3">
-            <p className="text-muted-foreground">Employee not found</p>
+            <p className="text-muted-foreground">{t('employees.noEmployees')}</p>
             <Button variant="outline" size="sm" onClick={() => navigate('/employees')}>
-              Back to Employees
+              {t('common.back')}
             </Button>
           </CardContent>
         </Card>

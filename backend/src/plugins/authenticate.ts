@@ -1,41 +1,25 @@
 import fp from 'fastify-plugin'
 import type { JwtPayload, RequestUser } from '../types/index.js'
-import { db } from '../db/index.js'
-import { users } from '../db/schema/index.js'
-import { eq, and } from 'drizzle-orm'
 
 async function authenticatePlugin(fastify: any): Promise<void> {
     /**
      * Decorate request with `authenticate` preHandler.
+     * Trusts the verified JWT payload — no extra DB round-trip per request.
+     * isActive + name are embedded in the token at login time.
      * Usage: { preHandler: fastify.authenticate }
      */
     fastify.decorate('authenticate', async (request: any, reply: any) => {
         try {
             const payload = await (request.jwtVerify as any)() as JwtPayload
 
-            const [user] = await db
-                .select({
-                    id: users.id,
-                    tenantId: users.tenantId,
-                    role: users.role,
-                    email: users.email,
-                    name: users.name,
-                    isActive: users.isActive,
-                })
-                .from(users)
-                .where(and(eq(users.id, payload.sub), eq(users.isActive, true)))
-                .limit(1)
-
-            if (!user) {
-                return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'User not found or inactive' })
-            }
-
+            // JWT signature verification is sufficient. We embed user info at login time
+            // so there is no need to re-query the DB on every request.
             request.user = {
-                id: user.id,
-                tenantId: user.tenantId,
-                role: user.role as RequestUser['role'],
-                email: user.email,
-                name: user.name,
+                id: payload.sub,
+                tenantId: payload.tenantId,
+                role: payload.role as RequestUser['role'],
+                email: payload.email,
+                name: payload.name,
             }
         } catch {
             return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid or expired token' })

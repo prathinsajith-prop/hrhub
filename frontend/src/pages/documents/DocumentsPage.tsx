@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
@@ -235,6 +236,7 @@ const columns: ColumnDef<Document>[] = [
 ]
 
 export function DocumentsPage() {
+  const { t } = useTranslation()
   const [uploadOpen, setUploadOpen] = useState(false)
   const { data: docsData, isLoading } = useDocuments({ limit: 100 })
   const documents: Document[] = (docsData?.data as Document[]) ?? []
@@ -244,8 +246,8 @@ export function DocumentsPage() {
   return (
     <PageWrapper>
       <PageHeader
-        title="Document Centre"
-        description="Manage and track all company documents"
+        title={t('documents.title')}
+        description={t('documents.description')}
         actions={
           <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setUploadOpen(true)}>
             Upload Document

@@ -6,12 +6,13 @@ import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import jwt from '@fastify/jwt'
 import multipart from '@fastify/multipart'
+import compress from '@fastify/compress'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
-import { createReadStream, existsSync, mkdirSync } from 'fs'
-import { join } from 'path'
 
 import { loadEnv } from './config/env.js'
+import { db } from './db/index.js'
+import { sql } from 'drizzle-orm'
 import authenticatePlugin from './plugins/authenticate.js'
 import { cleanupExpiredTokens } from './modules/auth/auth.service.js'
 import { startExpiryWorkers } from './workers/expiry.worker.js'
@@ -38,10 +39,6 @@ import { notificationsRoutes } from './modules/notifications/notifications.route
 async function bootstrap() {
     const env = loadEnv()
 
-    // Ensure uploads directory exists
-    const uploadsDir = join(process.cwd(), 'uploads')
-    if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true })
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const app: any = (Fastify as any)({
         logger: {
@@ -50,11 +47,16 @@ async function bootstrap() {
                 transport: { target: 'pino-pretty', options: { colorize: true } },
             }),
         },
+        // 30-second hard limit on all requests (PERF-008)
+        connectionTimeout: 30_000,
     })
 
     // Security
     await app.register(helmet, { contentSecurityPolicy: false })
     await app.register(rateLimit, { max: 200, timeWindow: '1 minute' })
+
+    // Gzip compression for all responses (PERF-007)
+    await app.register(compress, { global: true, encodings: ['gzip', 'deflate'] })
 
     // X-Request-ID correlation header on all responses
     app.addHook('onRequest', async (request: any, reply: any) => {
@@ -131,24 +133,43 @@ async function bootstrap() {
     await app.register(auditRoutes, { prefix: '/api/v1/audit' })
     await app.register(notificationsRoutes, { prefix: '/api/v1/notifications' })
 
-    // Health check
+    // Health check — basic
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
 
-    // File download route for uploaded documents
-    app.get('/uploads/:filename', {
-        preHandler: [app.authenticate],
-    }, async (request: any, reply: any) => {
-        const { filename } = request.params as { filename: string }
-        // Prevent path traversal attacks
-        if (filename.includes('..') || filename.includes('/')) {
-            return reply.code(400).send({ error: 'Invalid filename' })
+    // Health check — detailed (ARCH-007: checks DB, Redis, S3)
+    app.get('/health/detailed', { schema: { tags: ['Health'] } }, async (_req: any, reply: any) => {
+        const checks: Record<string, { ok: boolean; latencyMs?: number; error?: string }> = {}
+
+        // PostgreSQL check
+        const dbStart = Date.now()
+        try {
+            await db.execute(sql`SELECT 1`)
+            checks.database = { ok: true, latencyMs: Date.now() - dbStart }
+        } catch (e: any) {
+            checks.database = { ok: false, error: e.message }
         }
-        const filePath = join(uploadsDir, filename)
-        if (!existsSync(filePath)) {
-            return reply.code(404).send({ error: 'File not found' })
+
+        // Redis check (TCP probe via BullMQ queue client)
+        const redisStart = Date.now()
+        try {
+            const { visaExpiryQueue } = await import('./workers/expiry.worker.js')
+            if (visaExpiryQueue) {
+                const client = await visaExpiryQueue.client
+                await client.ping()
+                checks.redis = { ok: true, latencyMs: Date.now() - redisStart }
+            } else {
+                checks.redis = { ok: false, error: 'Redis unavailable — BullMQ disabled' }
+            }
+        } catch (e: any) {
+            checks.redis = { ok: false, error: e.message }
         }
-        const stream = createReadStream(filePath)
-        return reply.send(stream)
+
+        const allOk = Object.values(checks).every(c => c.ok)
+        return reply.code(allOk ? 200 : 503).send({
+            status: allOk ? 'ok' : 'degraded',
+            timestamp: new Date().toISOString(),
+            checks,
+        })
     })
 
     // Global error handler

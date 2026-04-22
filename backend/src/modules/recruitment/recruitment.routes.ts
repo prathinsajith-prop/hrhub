@@ -1,4 +1,5 @@
 import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, softDeleteApplication } from './recruitment.service.js'
+import { recordActivity } from '../audit/audit.service.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -44,6 +45,18 @@ export default async function (fastify: any): Promise<void> {
     }, async (request, reply) => {
         const body = request.body as Record<string, unknown>
         const job = await createJob(request.user.tenantId, { ...(body as object), postedBy: request.user.id } as any)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'job',
+            entityId: job.id,
+            entityName: job.title,
+            action: 'create',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(201).send({ data: job })
     })
 
@@ -55,6 +68,18 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const updated = await updateJob(request.user.tenantId, id, request.body as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'job',
+            entityId: id,
+            entityName: updated.title,
+            action: 'update',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send({ data: updated })
     })
 
@@ -66,6 +91,17 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const deleted = await softDeleteJob(request.user.tenantId, id)
         if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'job',
+            entityId: id,
+            action: 'delete',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(204).send()
     })
 
@@ -104,6 +140,19 @@ export default async function (fastify: any): Promise<void> {
         const { stage } = request.body as { stage: string }
         const updated = await updateApplicationStage(request.user.tenantId, id, stage)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'application',
+            entityId: id,
+            entityName: `${(updated as any).candidateName ?? updated.name ?? 'Candidate'} → ${stage}`,
+            action: 'update',
+            metadata: { stage },
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send({ data: updated })
     })
 

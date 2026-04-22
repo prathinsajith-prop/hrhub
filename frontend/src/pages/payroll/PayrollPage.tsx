@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import { CreditCard, CheckCircle2, Clock, Play, FileDown, Send, TrendingUp } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
@@ -138,6 +139,7 @@ const columns: ColumnDef<PayrollRun>[] = [
 ]
 
 export function PayrollPage() {
+  const { t } = useTranslation()
   const [runConfirmOpen, setRunConfirmOpen] = useState(false)
   const { data: payrollData, isLoading } = usePayrollRuns({ year: new Date().getFullYear() })
   const { data: trendRaw } = usePayrollTrend()
@@ -195,8 +197,8 @@ export function PayrollPage() {
   return (
     <PageWrapper>
       <PageHeader
-        title="Payroll & WPS"
-        description="Salary processing and WPS compliance"
+        title={t('payroll.title')}
+        description={t('payroll.description')}
       />
 
       {/* KPIs */}

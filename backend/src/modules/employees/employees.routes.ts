@@ -4,6 +4,7 @@ import {
 } from './employees.service.js'
 import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSchema } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { db } from '../../db/index.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -54,8 +55,8 @@ export default async function (fastify: any): Promise<void> {
         const employee = await createEmployee(request.user.tenantId, body as never)
         recordActivity({
             tenantId: request.user.tenantId,
-            userId: request.user.sub,
-            actorName: `${(request.user as any).firstName ?? ''} ${(request.user as any).lastName ?? ''}`.trim(),
+            userId: request.user.id,
+            actorName: request.user.name,
             actorRole: request.user.role,
             entityType: 'employee',
             entityId: employee.id,
@@ -78,8 +79,8 @@ export default async function (fastify: any): Promise<void> {
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
         recordActivity({
             tenantId: request.user.tenantId,
-            userId: request.user.sub,
-            actorName: `${(request.user as any).firstName ?? ''} ${(request.user as any).lastName ?? ''}`.trim(),
+            userId: request.user.id,
+            actorName: request.user.name,
             actorRole: request.user.role,
             entityType: 'employee',
             entityId: updated.id,
@@ -101,8 +102,8 @@ export default async function (fastify: any): Promise<void> {
         if (!archived) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
         recordActivity({
             tenantId: request.user.tenantId,
-            userId: request.user.sub,
-            actorName: `${(request.user as any).firstName ?? ''} ${(request.user as any).lastName ?? ''}`.trim(),
+            userId: request.user.id,
+            actorName: request.user.name,
             actorRole: request.user.role,
             entityType: 'employee',
             entityId: archived.id,
@@ -127,15 +128,28 @@ export default async function (fastify: any): Promise<void> {
         if (rows.length > 500) {
             return reply.code(400).send({ error: 'Max 500 employees per import' })
         }
-        const results = await Promise.allSettled(
-            rows.map((row) => createEmployee(request.user.tenantId, row as never))
-        )
-        const created = results.filter(r => r.status === 'fulfilled').length
-        const failed = results.filter(r => r.status === 'rejected').length
-        const errors = results
-            .map((r, i) => r.status === 'rejected' ? { row: i + 1, error: (r as PromiseRejectedResult).reason?.message } : null)
-            .filter(Boolean)
-        return reply.code(201).send({ created, failed, errors })
+        const results: { row: number; error: string }[] = []
+        let created = 0
+
+        // Wrap all inserts in a transaction — if any fail, everything rolls back (BUG-010)
+        try {
+            await db.transaction(async (tx) => {
+                for (let i = 0; i < rows.length; i++) {
+                    try {
+                        await createEmployee(request.user.tenantId, rows[i] as never)
+                        created++
+                    } catch (e: any) {
+                        results.push({ row: i + 1, error: e.message ?? 'Unknown error' })
+                        throw e // Abort transaction on first error
+                    }
+                }
+            })
+        } catch {
+            // Transaction rolled back — return error info
+        }
+
+        const failed = rows.length - created
+        return reply.code(created > 0 || failed === 0 ? 201 : 400).send({ created, failed, errors: results })
     })
 }
 

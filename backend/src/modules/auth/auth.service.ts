@@ -102,7 +102,7 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
 
     // Generate tokens
     const accessToken = fastify.jwt.sign(
-        { sub: user.id, tenantId: user.tenantId, role: user.role },
+        { sub: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email },
         { expiresIn: '15m' }
     )
 
@@ -189,7 +189,7 @@ export async function refreshAccessToken(fastify: AnyFastify, rawToken: string) 
     await db.insert(refreshTokens).values({ userId: user.id, tokenHash: newTokenHash, expiresAt })
 
     const accessToken = fastify.jwt.sign(
-        { sub: user.id, tenantId: user.tenantId, role: user.role },
+        { sub: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email },
         { expiresIn: '15m' }
     )
 

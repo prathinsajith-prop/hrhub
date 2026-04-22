@@ -1,4 +1,4 @@
-import { eq, and, count, desc, isNull } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { visaApplications } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
@@ -11,14 +11,14 @@ export async function listVisas(tenantId: string, params: { status?: string; urg
     if (status) conditions.push(eq(visaApplications.status, status as never))
     if (urgencyLevel) conditions.push(eq(visaApplications.urgencyLevel, urgencyLevel as never))
 
-    const [{ total }] = await db.select({ total: count() }).from(visaApplications).where(and(...conditions))
-
-    const data = await db.select().from(visaApplications)
+    const rows = await db.select({ ...getTableColumns(visaApplications), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+        .from(visaApplications)
         .where(and(...conditions))
         .orderBy(desc(visaApplications.updatedAt))
         .limit(limit).offset(offset)
 
-    return { data, total: Number(total), limit, offset, hasMore: offset + limit < Number(total) }
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    return { data: rows, total, limit, offset, hasMore: offset + limit < total }
 }
 
 export async function getVisa(tenantId: string, id: string) {

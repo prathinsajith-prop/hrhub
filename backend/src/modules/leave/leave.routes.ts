@@ -30,8 +30,8 @@ export default async function (fastify: any): Promise<void> {
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Leave request not found or already processed' })
         recordActivity({
             tenantId: request.user.tenantId,
-            userId: request.user.sub,
-            actorName: `${(request.user as any).firstName ?? ''} ${(request.user as any).lastName ?? ''}`.trim(),
+            userId: request.user.id,
+            actorName: request.user.name,
             actorRole: request.user.role,
             entityType: 'leave',
             entityId: id,

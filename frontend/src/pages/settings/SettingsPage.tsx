@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
     Building2,
     Users,
@@ -562,9 +563,10 @@ function LoginHistoryCard() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function SettingsPage() {
+    const { t } = useTranslation()
     return (
         <PageWrapper width="narrow">
-            <PageHeader title="Settings" description="Manage your company profile, users, and preferences" />
+            <PageHeader title={t('settings.title')} description={t('settings.description')} />
             <Tabs defaultValue="company">
                 <TabsList className="w-full justify-start border-b rounded-none bg-transparent p-0 h-auto gap-0">
                     {[

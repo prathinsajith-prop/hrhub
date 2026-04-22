@@ -1,4 +1,4 @@
-import { eq, and, ilike, count, asc, desc, isNull } from 'drizzle-orm'
+import { eq, and, ilike, asc, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { recruitmentJobs, jobApplications } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
@@ -12,14 +12,14 @@ export async function listJobs(tenantId: string, params: { status?: string; depa
     if (status) conditions.push(eq(recruitmentJobs.status, status as never))
     if (department) conditions.push(eq(recruitmentJobs.department, department))
 
-    const [{ total }] = await db.select({ total: count() }).from(recruitmentJobs).where(and(...conditions))
-
-    const data = await db.select().from(recruitmentJobs)
+    const rows = await db.select({ ...getTableColumns(recruitmentJobs), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+        .from(recruitmentJobs)
         .where(and(...conditions))
         .orderBy(desc(recruitmentJobs.createdAt))
         .limit(limit).offset(offset)
 
-    return { data, total: Number(total), limit, offset, hasMore: offset + limit < Number(total) }
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    return { data: rows, total, limit, offset, hasMore: offset + limit < total }
 }
 
 export async function getJob(tenantId: string, id: string) {
@@ -56,14 +56,14 @@ export async function listApplications(tenantId: string, params: { jobId?: strin
     if (jobId) conditions.push(eq(jobApplications.jobId, jobId))
     if (stage) conditions.push(eq(jobApplications.stage, stage as never))
 
-    const [{ total }] = await db.select({ total: count() }).from(jobApplications).where(and(...conditions))
-
-    const data = await db.select().from(jobApplications)
+    const rows = await db.select({ ...getTableColumns(jobApplications), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+        .from(jobApplications)
         .where(and(...conditions))
         .orderBy(desc(jobApplications.createdAt))
         .limit(limit).offset(offset)
 
-    return { data, total: Number(total), limit, offset, hasMore: offset + limit < Number(total) }
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    return { data: rows, total, limit, offset, hasMore: offset + limit < total }
 }
 
 export async function createApplication(tenantId: string, jobId: string, data: Omit<NewApplication, 'tenantId' | 'jobId' | 'id'>) {

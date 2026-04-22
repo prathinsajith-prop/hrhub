@@ -9,7 +9,7 @@ export async function auditRoutes(fastify: any): Promise<void> {
         const tenantId = request.user.tenantId
         // Non-admins can only see their own history
         const role = request.user.role
-        const resolvedUserId = ['hr_manager', 'super_admin'].includes(role) ? userId : request.user.sub
+        const resolvedUserId = ['hr_manager', 'super_admin'].includes(role) ? userId : request.user.id
         const data = await getLoginHistory(tenantId, resolvedUserId, Number(limit))
         return reply.send({ data })
     })

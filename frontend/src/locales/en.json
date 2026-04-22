@@ -111,7 +111,19 @@
     "english": "English",
     "arabic": "العربية",
     "current": "Current",
-    "na": "—"
+    "na": "—",
+    "savedSuccess": "Saved successfully",
+    "saveFailed": "Failed to save",
+    "cancelled": "Cancelled successfully",
+    "confirmCancel": "Are you sure you want to cancel?",
+    "progress": "Progress",
+    "priority": "Priority",
+    "details": "Details",
+    "startDate": "Start Date",
+    "completed": "Completed",
+    "inProgress": "In Progress",
+    "pending": "Pending",
+    "steps": "steps"
   },
   "dashboard": {
     "title": "Dashboard",

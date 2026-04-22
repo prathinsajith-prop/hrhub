@@ -1,6 +1,6 @@
-import { eq, and, count, desc, gte, lte, inArray } from 'drizzle-orm'
+import { eq, and, desc, gte, lte, inArray, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/index.js'
-import { payrollRuns, payslips, employees } from '../../db/schema/index.js'
+import { payrollRuns, payslips, employees, tenants } from '../../db/schema/index.js'
 import { leaveRequests } from '../../db/schema/leave.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
@@ -11,14 +11,14 @@ export async function listPayrollRuns(tenantId: string, params: { year?: number;
     const conditions = [eq(payrollRuns.tenantId, tenantId)]
     if (year) conditions.push(eq(payrollRuns.year, year))
 
-    const [{ total }] = await db.select({ total: count() }).from(payrollRuns).where(and(...conditions))
-
-    const data = await db.select().from(payrollRuns)
+    const rows = await db.select({ ...getTableColumns(payrollRuns), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+        .from(payrollRuns)
         .where(and(...conditions))
         .orderBy(desc(payrollRuns.year), desc(payrollRuns.month))
         .limit(limit).offset(offset)
 
-    return { data, total: Number(total), limit, offset, hasMore: offset + limit < Number(total) }
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    return { data: rows, total, limit, offset, hasMore: offset + limit < total }
 }
 
 export async function getPayrollRun(tenantId: string, id: string) {
@@ -72,6 +72,7 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
         transportAllowance: employees.transportAllowance,
         otherAllowances: employees.otherAllowances,
         joinDate: employees.joinDate,
+        contractEndDate: employees.contractEndDate,
     }).from(employees)
         .where(and(
             eq(employees.tenantId, tenantId),
@@ -132,15 +133,20 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
         const transport = Number(emp.transportAllowance ?? 0)
         const other = Number(emp.otherAllowances ?? 0)
 
-        // Prorated pay: apply if employee joined mid-month or was terminated mid-month
+        // Prorated pay: apply if employee joined OR had contract end mid-month
         let workedDays = daysInMonth
         const joinDate = emp.joinDate ? new Date(emp.joinDate) : null
+        const contractEndDate = emp.contractEndDate ? new Date(emp.contractEndDate) : null
         const monthStart = new Date(run.year, run.month - 1, 1)
         const monthEnd = new Date(run.year, run.month - 1, daysInMonth)
 
         if (joinDate && joinDate > monthStart && joinDate <= monthEnd) {
             // Joined mid-month: only count from join day (prorated pay)
             workedDays = daysInMonth - joinDate.getDate() + 1
+        }
+        // Terminated mid-month: count only up to contract end date
+        if (contractEndDate && contractEndDate >= monthStart && contractEndDate < monthEnd) {
+            workedDays = Math.min(workedDays, contractEndDate.getDate())
         }
 
         const prorateRatio = workedDays / daysInMonth
@@ -174,24 +180,34 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
         }
     })
 
-    // Delete any existing payslips for this run (idempotent)
-    await db.delete(payslips).where(eq(payslips.payrollRunId, payrollRunId))
+    if (payslipValues.length === 0) {
+        await db.update(payrollRuns)
+            .set({ status: 'draft', updatedAt: new Date() } as any)
+            .where(eq(payrollRuns.id, payrollRunId))
+        return false
+    }
 
-    // Insert all payslips in one batch
-    await db.insert(payslips).values(payslipValues)
+    // Atomically replace payslips and finalize the run (BUG-003)
+    await db.transaction(async (tx) => {
+        // Delete any existing payslips for this run (idempotent)
+        await tx.delete(payslips).where(eq(payslips.payrollRunId, payrollRunId))
 
-    // Update payroll run totals + status
-    await db.update(payrollRuns)
-        .set({
-            status: 'approved',
-            totalEmployees: activeEmps.length,
-            totalGross: String(totalGross.toFixed(2)),
-            totalDeductions: String(totalDeductions.toFixed(2)),
-            totalNet: String(totalNet.toFixed(2)),
-            processedDate: new Date().toISOString().split('T')[0],
-            updatedAt: new Date(),
-        } as any)
-        .where(eq(payrollRuns.id, payrollRunId))
+        // Insert all payslips in one batch
+        await tx.insert(payslips).values(payslipValues)
+
+        // Update payroll run totals + status
+        await tx.update(payrollRuns)
+            .set({
+                status: 'approved',
+                totalEmployees: activeEmps.length,
+                totalGross: String(totalGross.toFixed(2)),
+                totalDeductions: String(totalDeductions.toFixed(2)),
+                totalNet: String(totalNet.toFixed(2)),
+                processedDate: new Date().toISOString().split('T')[0],
+                updatedAt: new Date(),
+            } as any)
+            .where(eq(payrollRuns.id, payrollRunId))
+    })
 
     return true
 }
@@ -260,7 +276,7 @@ export async function generateWpsSif(tenantId: string, payrollRunId: string): Pr
     const slips = await getPayslips(tenantId, payrollRunId)
     if (slips.length === 0) return null
 
-    // Fetch employee details for each payslip
+    // Fetch employee details only for employees in this payroll run
     const empIds = slips.map(s => s.employeeId)
     const empRows = await db
         .select({
@@ -273,7 +289,11 @@ export async function generateWpsSif(tenantId: string, payrollRunId: string): Pr
             labourCardNumber: employees.labourCardNumber,
         })
         .from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false)))
+        .where(and(
+            eq(employees.tenantId, tenantId),
+            eq(employees.isArchived, false),
+            inArray(employees.id, empIds),
+        ))
 
     const empMap = new Map(empRows.map(e => [e.id, e]))
 
@@ -360,7 +380,8 @@ export async function getPayslipById(tenantId: string, payslipId: string) {
         daysWorked: payslips.daysWorked,
         totalDeductions: payslips.deductions,
         // Employee fields
-        employeeName: employees.firstName,
+        firstName: employees.firstName,
+        lastName: employees.lastName,
         employeeNo: employees.employeeNo,
         designation: employees.designation,
         department: employees.department,
@@ -374,8 +395,7 @@ export async function getPayslipById(tenantId: string, payslipId: string) {
 
     if (!slip) return null
 
-    // Get tenant name
-    const { tenants } = await import('../../db/schema/index.js')
+    // Get tenant details for payslip PDF
     const empRow = await db.select({ tenantId: employees.tenantId })
         .from(employees).where(eq(employees.id, slip.employeeId)).limit(1)
     let tenantName = 'Company'
@@ -386,8 +406,7 @@ export async function getPayslipById(tenantId: string, payslipId: string) {
         if (tenant) { tenantName = tenant.name; tradeLicenseNo = tenant.tradeLicenseNo }
     }
 
-    // Reconstruct fullName from firstName (column aliased as employeeName)
-    const firstName = slip.employeeName ?? ''
-    return { ...slip, employeeName: `${firstName}`, tenantName, tradeLicenseNo }
+    const employeeName = `${slip.firstName} ${slip.lastName}`
+    return { ...slip, employeeName, tenantName, tradeLicenseNo }
 }
 

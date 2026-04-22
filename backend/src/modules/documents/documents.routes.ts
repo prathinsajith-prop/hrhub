@@ -1,12 +1,9 @@
-import { createWriteStream, existsSync, mkdirSync } from 'fs'
-import { join } from 'path'
-import { pipeline } from 'stream/promises'
-import { randomUUID } from 'crypto'
 import { listDocuments, getDocument, createDocument, updateDocument, verifyDocument, getExpiringDocuments, softDeleteDocument } from './documents.service.js'
 import { generateUploadUrl, generateDownloadUrl, buildS3Key } from '../../plugins/s3.js'
 import { templateRoutes } from './templates.routes.js'
+import { recordActivity } from '../audit/audit.service.js'
 
-export default async function(fastify: any): Promise<void> {
+export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     // Register template routes as sub-plugin
@@ -52,6 +49,18 @@ export default async function(fastify: any): Promise<void> {
     }, async (request, reply) => {
         const body = request.body as Record<string, unknown>
         const doc = await createDocument(request.user.tenantId, request.user.id, body as never)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'document',
+            entityId: doc.id,
+            entityName: doc.fileName ?? doc.docType,
+            action: 'create',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(201).send({ data: doc })
     })
 
@@ -59,6 +68,18 @@ export default async function(fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const updated = await updateDocument(request.user.tenantId, id, request.body as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Document not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'document',
+            entityId: id,
+            entityName: updated.fileName ?? updated.docType,
+            action: 'update',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send({ data: updated })
     })
 
@@ -69,6 +90,18 @@ export default async function(fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const updated = await verifyDocument(request.user.tenantId, id, request.user.id)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Document not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'document',
+            entityId: id,
+            entityName: updated.fileName ?? updated.docType,
+            action: 'approve',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send({ data: updated })
     })
 
@@ -79,60 +112,18 @@ export default async function(fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const deleted = await softDeleteDocument(request.user.tenantId, id)
         if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Document not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'document',
+            entityId: id,
+            action: 'delete',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(204).send()
-    })
-
-    // POST /api/v1/documents/upload — multipart file upload
-    fastify.post('/upload', {
-        preHandler: [fastify.authenticate],
-        schema: { tags: ['Documents'] },
-    }, async (request, reply) => {
-        const uploadsDir = join(process.cwd(), 'uploads')
-        if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true })
-
-        const parts = request.parts()
-        let fileBuffer: Buffer | null = null
-        let originalName = 'document'
-        const fields: Record<string, string> = {}
-
-        for await (const part of parts) {
-            if (part.type === 'file') {
-                originalName = part.filename ?? 'document'
-                const chunks: Buffer[] = []
-                for await (const chunk of part.file) {
-                    chunks.push(chunk as Buffer)
-                }
-                fileBuffer = Buffer.concat(chunks)
-            } else {
-                fields[part.fieldname] = part.value as string
-            }
-        }
-
-        if (!fileBuffer) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'No file uploaded' })
-        }
-
-        // Save file with a unique name to prevent collisions
-        const ext = originalName.includes('.') ? originalName.split('.').pop() : 'bin'
-        const storedName = `${randomUUID()}.${ext}`
-        const filePath = join(uploadsDir, storedName)
-        await pipeline(
-            (async function* () { yield fileBuffer! })(),
-            createWriteStream(filePath),
-        )
-
-        const doc = await createDocument(request.user.tenantId, request.user.id, {
-            category: (fields.category ?? 'employment') as any,
-            docType: fields.docType ?? originalName,
-            fileName: originalName,
-            s3Key: `/uploads/${storedName}`,
-            fileSize: fileBuffer.byteLength,
-            expiryDate: fields.expiryDate ?? null,
-            employeeId: fields.employeeId ?? null,
-            status: 'under_review',
-        } as any)
-
-        return reply.code(201).send({ data: doc })
     })
 
     // POST /api/v1/documents/upload-url — generate presigned S3 PUT URL
@@ -156,11 +147,6 @@ export default async function(fastify: any): Promise<void> {
         const doc = await getDocument(request.user.tenantId, id)
         if (!doc) return reply.code(404).send({ message: 'Document not found' })
         if (!doc.s3Key) return reply.code(400).send({ message: 'No file stored for this document' })
-
-        // If it's a local upload (legacy /uploads/ prefix), return as-is
-        if (doc.s3Key.startsWith('/uploads/')) {
-            return reply.send({ data: { downloadUrl: doc.s3Key } })
-        }
         const downloadUrl = await generateDownloadUrl(doc.s3Key)
         return reply.send({ data: { downloadUrl } })
     })

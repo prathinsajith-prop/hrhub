@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, CheckCircle2, Clock, AlertTriangle, XCircle, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -54,6 +55,7 @@ function UrgencyIcon({ level }: { level: string }) {
 }
 
 export function VisaDetailPage() {
+    const { t } = useTranslation()
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const { data, isLoading } = useVisas({ limit: 100 })
@@ -66,7 +68,7 @@ export function VisaDetailPage() {
     if (isLoading) {
         return (
             <PageWrapper>
-                <PageHeader title="Visa Application" description="Loading..." />
+                <PageHeader title={t('visa.title')} description={t('common.loading')} />
                 <div className="grid grid-cols-1 gap-4">
                     {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}
                 </div>
@@ -77,12 +79,12 @@ export function VisaDetailPage() {
     if (!visa) {
         return (
             <PageWrapper>
-                <PageHeader title="Visa Application" description="Not found" />
+                <PageHeader title={t('visa.title')} description={t('errors.notFound')} />
                 <div className="flex flex-col items-center gap-4 py-16">
                     <XCircle className="h-12 w-12 text-muted-foreground" />
-                    <p className="text-muted-foreground">Visa application not found.</p>
+                    <p className="text-muted-foreground">{t('visa.noVisa')}</p>
                     <Button variant="outline" onClick={() => navigate('/visa')}>
-                        <ArrowLeft className="h-4 w-4 mr-2" /> Back to Visa List
+                        <ArrowLeft className="h-4 w-4 mr-2" /> {t('common.back')}
                     </Button>
                 </div>
             </PageWrapper>
@@ -95,16 +97,16 @@ export function VisaDetailPage() {
 
     function handleAdvance() {
         advanceStep.mutate(visa!.id, {
-            onSuccess: () => toast.success('Step advanced successfully'),
-            onError: () => toast.error('Failed to advance step'),
+            onSuccess: () => toast.success(t('common.savedSuccess')),
+            onError: () => toast.error(t('common.saveFailed')),
         })
     }
 
     function handleCancel() {
-        if (!confirm('Are you sure you want to cancel this visa application?')) return
+        if (!confirm(t('common.confirmCancel'))) return
         cancelVisa.mutate({ id: visa!.id }, {
-            onSuccess: () => { toast.success('Visa application cancelled'); navigate('/visa') },
-            onError: () => toast.error('Failed to cancel visa'),
+            onSuccess: () => { toast.success(t('common.cancelled')); navigate('/visa') },
+            onError: () => toast.error(t('common.saveFailed')),
         })
     }
 
@@ -125,14 +127,14 @@ export function VisaDetailPage() {
                 <div className="lg:col-span-1 space-y-4">
                     <Card className="p-5 space-y-4">
                         <div className="flex items-center justify-between">
-                            <h3 className="font-semibold text-sm">Status</h3>
+                            <h3 className="font-semibold text-sm">{t('common.status')}</h3>
                             <Badge variant="outline" className={statusStyles[visa.status]}>
                                 {statusLabel[visa.status]}
                             </Badge>
                         </div>
                         <div className="space-y-1">
                             <div className="flex items-center justify-between text-sm">
-                                <span className="text-muted-foreground">Progress</span>
+                                <span className="text-muted-foreground">{t('common.progress')}</span>
                                 <span className="font-medium">{visa.currentStep}/{visa.totalSteps} steps</span>
                             </div>
                             <Progress value={progress} className="h-2" />
@@ -140,20 +142,20 @@ export function VisaDetailPage() {
                         </div>
                         <div className="flex items-center gap-2 text-sm">
                             <UrgencyIcon level={visa.urgencyLevel} />
-                            <span className="capitalize font-medium">{visa.urgencyLevel} Priority</span>
+                            <span className="capitalize font-medium">{visa.urgencyLevel} {t('common.priority')}</span>
                         </div>
                     </Card>
 
                     <Card className="p-5 space-y-3">
-                        <h3 className="font-semibold text-sm">Details</h3>
+                        <h3 className="font-semibold text-sm">{t('common.details')}</h3>
                         <dl className="space-y-2 text-sm">
                             <div className="flex justify-between">
-                                <dt className="text-muted-foreground">Start Date</dt>
+                                <dt className="text-muted-foreground">{t('common.startDate')}</dt>
                                 <dd className="font-medium">{formatDate(visa.startDate)}</dd>
                             </div>
                             {visa.expiryDate && (
                                 <div className="flex justify-between">
-                                    <dt className="text-muted-foreground">Expiry Date</dt>
+                                    <dt className="text-muted-foreground">{t('visa.expiryDate')}</dt>
                                     <dd className="font-medium">{formatDate(visa.expiryDate)}</dd>
                                 </div>
                             )}
@@ -180,7 +182,7 @@ export function VisaDetailPage() {
                                     onClick={handleAdvance}
                                     disabled={advanceStep.isPending}
                                 >
-                                    {advanceStep.isPending ? 'Advancing...' : 'Advance to Next Step'}
+                                    {advanceStep.isPending ? t('common.loading') : 'Advance to Next Step'}
                                 </Button>
                             )}
                             <Button
@@ -231,7 +233,7 @@ export function VisaDetailPage() {
                                             {label}
                                         </p>
                                         <p className="text-xs text-muted-foreground mt-0.5">
-                                            {done ? 'Completed' : current ? 'In Progress' : pending ? 'Pending' : ''}
+                                            {done ? t('common.completed') : current ? t('common.inProgress') : pending ? t('common.pending') : ''}
                                         </p>
                                     </div>
                                 </div>

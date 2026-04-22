@@ -35,7 +35,7 @@ export function ChartAreaInteractive() {
                 width={48}
               />
               <Tooltip
-                formatter={(value: number) => [formatCurrency(value), 'Net Payroll']}
+                formatter={(value) => [formatCurrency(Number(value)), 'Net Payroll']}
                 contentStyle={{ fontSize: 12, borderRadius: 8 }}
               />
               <Area

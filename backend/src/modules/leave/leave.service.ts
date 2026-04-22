@@ -1,4 +1,4 @@
-import { eq, and, count, desc, isNull, gte, lte, inArray } from 'drizzle-orm'
+import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { leaveRequests } from '../../db/schema/index.js'
 import { employees } from '../../db/schema/employees.js'
@@ -13,14 +13,14 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
     if (status) conditions.push(eq(leaveRequests.status, status as never))
     if (leaveType) conditions.push(eq(leaveRequests.leaveType, leaveType as never))
 
-    const [{ total }] = await db.select({ total: count() }).from(leaveRequests).where(and(...conditions))
-
-    const data = await db.select().from(leaveRequests)
+    const rows = await db.select({ ...getTableColumns(leaveRequests), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+        .from(leaveRequests)
         .where(and(...conditions))
         .orderBy(desc(leaveRequests.createdAt))
         .limit(limit).offset(offset)
 
-    return { data, total: Number(total), limit, offset, hasMore: offset + limit < Number(total) }
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    return { data: rows, total, limit, offset, hasMore: offset + limit < total }
 }
 
 export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRequest, 'tenantId' | 'id'>) {

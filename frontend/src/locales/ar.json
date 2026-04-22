@@ -111,7 +111,19 @@
     "english": "English",
     "arabic": "العربية",
     "current": "الحالي",
-    "na": "—"
+    "na": "—",
+    "savedSuccess": "تم الحفظ بنجاح",
+    "saveFailed": "فشل الحفظ",
+    "cancelled": "تم الإلغاء بنجاح",
+    "confirmCancel": "هل أنت متأكد أنك تريد الإلغاء؟",
+    "progress": "التقدم",
+    "priority": "الأولوية",
+    "details": "التفاصيل",
+    "startDate": "تاريخ البدء",
+    "completed": "مكتمل",
+    "inProgress": "قيد التنفيذ",
+    "pending": "قيد الانتظار",
+    "steps": "خطوات"
   },
   "dashboard": {
     "title": "لوحة التحكم",

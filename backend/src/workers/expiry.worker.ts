@@ -1,7 +1,7 @@
 import { Queue, Worker } from 'bullmq'
 import { db } from '../db/index.js'
-import { employees, notifications, documents } from '../db/schema/index.js'
-import { and, eq, lt, lte, gte, ne } from 'drizzle-orm'
+import { employees, notifications, documents, users } from '../db/schema/index.js'
+import { and, eq, lt, lte, gte, ne, or } from 'drizzle-orm'
 import { loadEnv } from '../config/env.js'
 import { sendEmail, emailVisaExpiry } from '../lib/email.js'
 
@@ -87,17 +87,18 @@ async function runVisaExpiryCheck() {
                 severity,
             )
 
-            // Send email to HR managers
+            // Send email to HR managers and PRO officers only (not all active employees)
             try {
                 const hrManagers = await db.select({
-                    name: employees.firstName,
-                    email: employees.workEmail,
-                }).from(employees)
+                    name: users.name,
+                    email: users.email,
+                }).from(users)
                     .where(and(
-                        eq(employees.tenantId, emp.tenantId),
-                        eq(employees.status, 'active'),
+                        eq(users.tenantId, emp.tenantId),
+                        eq(users.isActive, true),
+                        or(eq(users.role, 'hr_manager'), eq(users.role, 'pro_officer')),
                     ))
-                    .limit(3)
+                    .limit(5)
 
                 for (const manager of hrManagers) {
                     if (manager.email) {

@@ -9,7 +9,12 @@ export default async function (fastify: any): Promise<void> {
             rateLimit: {
                 max: 10,
                 timeWindow: '15 minutes',
-                keyGenerator: (request: any) => request.ip,
+                // Key on email (account) when provided, fall back to IP
+                keyGenerator: (request: any) => {
+                    const body = request.body as { email?: string } | null
+                    const email = body?.email?.toLowerCase()?.trim()
+                    return email ? `login:${email}` : request.ip
+                },
                 errorResponseBuilder: (_req: any, context: any) => ({
                     statusCode: 429,
                     error: 'Too Many Requests',
@@ -162,7 +167,7 @@ export default async function (fastify: any): Promise<void> {
         preHandler: [fastify.authenticate],
     }, async (request, reply) => {
         const { currentPassword, newPassword } = validate(changePasswordSchema, request.body)
-        const userId = (request.user as any).sub ?? (request.user as any).id
+        const userId = request.user.id
         const result = await changePassword(userId, currentPassword, newPassword)
         if (!result.ok) {
             const message =

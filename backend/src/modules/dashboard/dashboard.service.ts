@@ -1,4 +1,4 @@
-import { eq, and, count, desc, gte, lte, sql } from 'drizzle-orm'
+import { eq, and, count, desc, gte, lte, sql, or, isNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, recruitmentJobs, visaApplications, leaveRequests, notifications, payrollRuns, onboardingChecklists, onboardingSteps } from '../../db/schema/index.js'
 
@@ -44,8 +44,12 @@ export async function getDashboardKPIs(tenantId: string) {
 }
 
 export async function getRecentNotifications(tenantId: string, userId: string, limit = 5) {
+    // Return both tenant-wide (userId = null) and user-specific notifications
     return db.select().from(notifications)
-        .where(and(eq(notifications.tenantId, tenantId), eq(notifications.userId, userId)))
+        .where(and(
+            eq(notifications.tenantId, tenantId),
+            or(eq(notifications.userId, userId), isNull(notifications.userId)),
+        ))
         .orderBy(desc(notifications.createdAt))
         .limit(limit)
 }

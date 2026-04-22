@@ -1,5 +1,6 @@
 import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, getPayslipsWithEmployees, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
 import { generatePayslipPdf } from '../../lib/pdf.js'
+import { recordActivity } from '../audit/audit.service.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -39,6 +40,18 @@ export default async function (fastify: any): Promise<void> {
             })
         }
         const updatedRun = await getPayrollRun(request.user.tenantId, id)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'payroll_run',
+            entityId: id,
+            entityName: updatedRun ? `Payroll ${updatedRun.month}/${updatedRun.year}` : id,
+            action: 'approve',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send({ data: updatedRun })
     })
 
@@ -58,6 +71,18 @@ export default async function (fastify: any): Promise<void> {
     }, async (request, reply) => {
         const body = request.body as Record<string, unknown>
         const run = await createPayrollRun(request.user.tenantId, body as never)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'payroll_run',
+            entityId: run.id,
+            entityName: `Payroll ${run.month}/${run.year}`,
+            action: 'create',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(201).send({ data: run })
     })
 
@@ -115,6 +140,18 @@ export default async function (fastify: any): Promise<void> {
         if (!updated) {
             return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Payroll run not found.' })
         }
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'payroll_run',
+            entityId: id,
+            entityName: `Payroll ${updated.month}/${updated.year} - WPS Submitted`,
+            action: 'submit',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send({ data: updated })
     })
 

@@ -1,4 +1,4 @@
-import { eq, and, count, desc, lte, isNull } from 'drizzle-orm'
+import { eq, and, desc, lte, isNull, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { documents } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
@@ -12,14 +12,14 @@ export async function listDocuments(tenantId: string, params: { employeeId?: str
     if (category) conditions.push(eq(documents.category, category as never))
     if (status) conditions.push(eq(documents.status, status as never))
 
-    const [{ total }] = await db.select({ total: count() }).from(documents).where(and(...conditions))
-
-    const data = await db.select().from(documents)
+    const rows = await db.select({ ...getTableColumns(documents), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+        .from(documents)
         .where(and(...conditions))
         .orderBy(desc(documents.createdAt))
         .limit(limit).offset(offset)
 
-    return { data, total: Number(total), limit, offset, hasMore: offset + limit < Number(total) }
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    return { data: rows, total, limit, offset, hasMore: offset + limit < total }
 }
 
 export async function getDocument(tenantId: string, id: string) {

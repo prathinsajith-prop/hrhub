@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -52,6 +53,7 @@ function getMonthRange(offset = 0) {
 }
 
 export function AttendancePage() {
+    const { t } = useTranslation()
     const [monthOffset, setMonthOffset] = useState(0)
     const [filterEmployee, setFilterEmployee] = useState('')
 
@@ -122,7 +124,7 @@ export function AttendancePage() {
                         <Button variant="outline" size="sm" onClick={() => setMonthOffset(o => o - 1)}>&lsaquo;</Button>
                         <span className="text-sm font-medium min-w-[140px] text-center">{label}</span>
                         <Button variant="outline" size="sm" onClick={() => setMonthOffset(o => Math.min(0, o + 1))} disabled={monthOffset === 0}>&rsaquo;</Button>
-                        <Button variant="ghost" size="sm" onClick={() => setMonthOffset(0)} disabled={monthOffset === 0}>Current</Button>
+                        <Button variant="ghost" size="sm" onClick={() => setMonthOffset(0)} disabled={monthOffset === 0}>{t('attendance.currentMonth')}</Button>
                     </div>
                 }
             />
@@ -137,14 +139,14 @@ export function AttendancePage() {
                 ))}
                 <Card className="p-3 text-center">
                     <p className="text-xl font-bold text-primary">{summary.totalHours.toFixed(0)}h</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Total Hours</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{t('attendance.totalHours')}</p>
                 </Card>
             </div>
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
                 <Card>
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">Status Distribution</CardTitle></CardHeader>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">{t('attendance.statusDistribution')}</CardTitle></CardHeader>
                     <CardContent>
                         {pieData.length === 0 ? (
                             <p className="text-xs text-muted-foreground text-center py-8">No data</p>
@@ -162,7 +164,7 @@ export function AttendancePage() {
                     </CardContent>
                 </Card>
                 <Card className="lg:col-span-2">
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">Daily Attendance Trend</CardTitle></CardHeader>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">{t('attendance.dailyTrend')}</CardTitle></CardHeader>
                     <CardContent>
                         {dailyData.length === 0 ? (
                             <p className="text-xs text-muted-foreground text-center py-8">No data</p>
@@ -187,14 +189,14 @@ export function AttendancePage() {
             {/* Hours by employee bar chart */}
             {empSummary.length > 0 && (
                 <Card className="mb-6">
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">Hours Worked by Employee</CardTitle></CardHeader>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">{t('attendance.hoursByEmployee')}</CardTitle></CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={180}>
                             <BarChart data={empSummary.slice(0, 15)} margin={{ left: -20, right: 8 }}>
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                                 <YAxis tick={{ fontSize: 10 }} />
-                                <Tooltip formatter={(v: number) => `${v.toFixed(1)}h`} />
+                                <Tooltip formatter={(v) => `${Number(v).toFixed(1)}h`} />
                                 <Bar dataKey="hours" fill="#3b82f6" name="Regular" radius={[4, 4, 0, 0]} />
                                 <Bar dataKey="ot" fill="#a855f7" name="Overtime" radius={[4, 4, 0, 0]} />
                             </BarChart>
@@ -207,11 +209,11 @@ export function AttendancePage() {
             <Card className="p-4 mb-4">
                 <div className="flex flex-wrap gap-3 items-end">
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Filter by Employee</Label>
+                        <Label className="text-xs">{t('attendance.filterByEmployee')}</Label>
                         <Select value={filterEmployee} onValueChange={setFilterEmployee}>
-                            <SelectTrigger className="w-52"><SelectValue placeholder="All employees" /></SelectTrigger>
+                            <SelectTrigger className="w-52"><SelectValue placeholder={t('attendance.allEmployees')} /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">All employees</SelectItem>
+                                <SelectItem value="">{t('attendance.allEmployees')}</SelectItem>
                                 {empList.map((e: any) => (
                                     <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
                                 ))}
@@ -232,21 +234,21 @@ export function AttendancePage() {
             ) : list.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-16">
                     <CalendarDays className="h-10 w-10 text-muted-foreground" />
-                    <p className="text-muted-foreground text-sm">No attendance records for {label}.</p>
+                    <p className="text-muted-foreground text-sm">{t('attendance.noRecords')} — {label}.</p>
                 </div>
             ) : (
                 <div className="rounded-lg border overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead className="bg-muted/50">
                             <tr>
-                                <th className="text-left px-4 py-3 font-medium">Date</th>
-                                <th className="text-left px-4 py-3 font-medium">Employee</th>
-                                <th className="text-left px-4 py-3 font-medium">Status</th>
-                                <th className="text-left px-4 py-3 font-medium">Punch In</th>
-                                <th className="text-left px-4 py-3 font-medium">Punch Out</th>
-                                <th className="text-right px-4 py-3 font-medium">Hours</th>
-                                <th className="text-right px-4 py-3 font-medium">OT</th>
-                                <th className="text-left px-4 py-3 font-medium">Notes</th>
+                                <th className="text-left px-4 py-3 font-medium">{t('common.date')}</th>
+                                <th className="text-left px-4 py-3 font-medium">{t('employees.fullName')}</th>
+                                <th className="text-left px-4 py-3 font-medium">{t('common.status')}</th>
+                                <th className="text-left px-4 py-3 font-medium">{t('attendance.punchIn')}</th>
+                                <th className="text-left px-4 py-3 font-medium">{t('attendance.punchOut')}</th>
+                                <th className="text-right px-4 py-3 font-medium">{t('attendance.hoursWorked')}</th>
+                                <th className="text-right px-4 py-3 font-medium">{t('attendance.overtime')}</th>
+                                <th className="text-left px-4 py-3 font-medium">{t('common.notes')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">

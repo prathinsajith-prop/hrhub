@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, User, Mail, Phone, Globe, Briefcase, DollarSign, Star, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -35,6 +36,7 @@ const stageStyles: Record<ApplicationStage, string> = {
 const stageOrder: ApplicationStage[] = ['received', 'screening', 'interview', 'assessment', 'offer', 'pre_boarding']
 
 export function CandidateProfilePage() {
+    const { t } = useTranslation()
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const { data, isLoading } = useApplications({ limit: 200 })
@@ -46,7 +48,7 @@ export function CandidateProfilePage() {
     if (isLoading) {
         return (
             <PageWrapper>
-                <PageHeader title="Candidate Profile" description="Loading..." />
+                <PageHeader title={t('recruitment.candidates')} description={t('common.loading')} />
                 <div className="grid grid-cols-1 gap-4">
                     {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}
                 </div>
