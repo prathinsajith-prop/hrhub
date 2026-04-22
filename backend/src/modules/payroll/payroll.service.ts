@@ -328,3 +328,52 @@ export async function generateWpsSif(tenantId: string, payrollRunId: string): Pr
 
     return { content, filename }
 }
+
+export async function getPayslipById(tenantId: string, payslipId: string) {
+    const [slip] = await db.select({
+        id: payslips.id,
+        payrollRunId: payslips.payrollRunId,
+        employeeId: payslips.employeeId,
+        month: payrollRuns.month,
+        year: payrollRuns.year,
+        basicSalary: payslips.basicSalary,
+        housingAllowance: payslips.housingAllowance,
+        transportAllowance: payslips.transportAllowance,
+        otherAllowances: payslips.otherAllowances,
+        grossSalary: payslips.grossSalary,
+        deductions: payslips.deductions,
+        netSalary: payslips.netSalary,
+        daysWorked: payslips.daysWorked,
+        totalDeductions: payslips.deductions,
+        // Employee fields
+        employeeName: employees.firstName,
+        employeeNo: employees.employeeNo,
+        designation: employees.designation,
+        department: employees.department,
+        bankName: employees.bankName,
+        iban: employees.iban,
+    }).from(payslips)
+        .innerJoin(employees, eq(payslips.employeeId, employees.id))
+        .innerJoin(payrollRuns, eq(payslips.payrollRunId, payrollRuns.id))
+        .where(and(eq(payslips.id, payslipId), eq(payslips.tenantId, tenantId)))
+        .limit(1)
+
+    if (!slip) return null
+
+    // Get tenant name
+    const { tenants } = await import('../../db/schema/index.js')
+    const empRow = await db.select({ tenantId: employees.tenantId })
+        .from(employees).where(eq(employees.id, slip.employeeId)).limit(1)
+    let tenantName = 'Company'
+    let tradeLicenseNo: string | undefined
+    if (empRow[0]) {
+        const [tenant] = await db.select({ name: tenants.name, tradeLicenseNo: tenants.tradeLicenseNo })
+            .from(tenants).where(eq(tenants.id, empRow[0].tenantId)).limit(1)
+        if (tenant) { tenantName = tenant.name; tradeLicenseNo = tenant.tradeLicenseNo }
+    }
+
+    // Reconstruct fullName from firstName (column aliased as employeeName)
+    const firstName = slip.employeeName ?? ''
+    return { ...slip, employeeName: `${firstName}`, tenantName, tradeLicenseNo }
+}
+

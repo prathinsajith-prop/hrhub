@@ -1,9 +1,9 @@
 import {
     listEmployees, getEmployee, createEmployee,
-    updateEmployee, archiveEmployee, getExpiringVisas,
+    updateEmployee, archiveEmployee, getExpiringVisas, getOrgChart,
 } from './employees.service.js'
 
-export default async function(fastify: any): Promise<void> {
+export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     // GET /api/v1/employees
@@ -20,6 +20,11 @@ export default async function(fastify: any): Promise<void> {
         })
 
         return reply.send(result)
+    })
+
+    // GET /api/v1/employees/org-chart
+    fastify.get('/org-chart', { ...auth, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
+        return reply.send(await getOrgChart(request.user.tenantId))
     })
 
     // GET /api/v1/employees/expiring-visas
@@ -95,6 +100,30 @@ export default async function(fastify: any): Promise<void> {
         const archived = await archiveEmployee(request.user.tenantId, id)
         if (!archived) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
         return reply.code(204).send()
+    })
+
+    // POST /api/v1/employees/bulk-import
+    // Body: { employees: Array<{firstName, lastName, email, employeeNo, joinDate, entityId, department?, designation?, basicSalary?}> }
+    fastify.post('/bulk-import', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Employees'] },
+    }, async (request: any, reply: any) => {
+        const { employees: rows } = request.body as { employees: Record<string, string>[] }
+        if (!Array.isArray(rows) || rows.length === 0) {
+            return reply.code(400).send({ error: 'employees array is required' })
+        }
+        if (rows.length > 500) {
+            return reply.code(400).send({ error: 'Max 500 employees per import' })
+        }
+        const results = await Promise.allSettled(
+            rows.map((row) => createEmployee(request.user.tenantId, row as never))
+        )
+        const created = results.filter(r => r.status === 'fulfilled').length
+        const failed = results.filter(r => r.status === 'rejected').length
+        const errors = results
+            .map((r, i) => r.status === 'rejected' ? { row: i + 1, error: (r as PromiseRejectedResult).reason?.message } : null)
+            .filter(Boolean)
+        return reply.code(201).send({ created, failed, errors })
     })
 }
 

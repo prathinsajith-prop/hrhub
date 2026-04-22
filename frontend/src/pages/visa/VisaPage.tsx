@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Plane, Clock, AlertTriangle, CheckCircle2, Plus, RefreshCw, Eye } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
@@ -168,6 +169,7 @@ const columns: ColumnDef<VisaApplication>[] = [
 function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
   const [open, setOpen] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
+  const navigate = useNavigate()
   const advanceStep = useAdvanceVisaStep()
   const cancelVisa = useCancelVisa()
   const urgencyStyles: Record<string, string> = {
@@ -251,6 +253,9 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
           {/* Actions */}
           {!isCancelled && (
             <div className="mt-6 space-y-3">
+              <Button variant="outline" className="w-full" onClick={() => { setOpen(false); navigate(`/visa/${v.id}`) }}>
+                View Full Details
+              </Button>
               {!isDone && (
                 <Button
                   className="w-full"

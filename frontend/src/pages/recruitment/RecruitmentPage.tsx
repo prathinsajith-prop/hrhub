@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Plus, Briefcase, Users, Clock, TrendingUp, Star, DollarSign } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Briefcase, Users, Clock, TrendingUp, Star, DollarSign, Eye } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -28,6 +29,7 @@ const stages: { id: ApplicationStage; label: string; bgClass: string }[] = [
 function CandidateCard({ candidate, onMove }: { candidate: Candidate; onMove: (id: string, stage: ApplicationStage) => void }) {
   const stageIdx = stages.findIndex(s => s.id === candidate.stage)
   const nextStage = stages[stageIdx + 1]
+  const navigate = useNavigate()
 
   return (
     <div className="bg-card rounded-xl border border-border p-3 shadow-sm hover:shadow-md transition-shadow">
@@ -66,6 +68,14 @@ function CandidateCard({ candidate, onMove }: { candidate: Candidate; onMove: (i
           Move to {nextStage.label} &rarr;
         </Button>
       )}
+      <Button
+        size="sm"
+        variant="ghost"
+        className="w-full text-[10px] h-6 mt-1"
+        onClick={() => navigate(`/recruitment/candidates/${candidate.id}`)}
+      >
+        <Eye className="h-3 w-3 mr-1" /> View Profile
+      </Button>
     </div>
   )
 }

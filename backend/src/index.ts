@@ -14,6 +14,7 @@ import { join } from 'path'
 import { loadEnv } from './config/env.js'
 import authenticatePlugin from './plugins/authenticate.js'
 import { cleanupExpiredTokens } from './modules/auth/auth.service.js'
+import { startExpiryWorkers } from './workers/expiry.worker.js'
 
 import authRoutes from './modules/auth/auth.routes.js'
 import employeesRoutes from './modules/employees/employees.routes.js'
@@ -27,6 +28,11 @@ import complianceRoutes from './modules/compliance/compliance.routes.js'
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js'
 import reportsRoutes from './modules/reports/reports.routes.js'
 import settingsRoutes from './modules/settings/settings.routes.js'
+import { exitRoutes } from './modules/exit/exit.routes.js'
+import { interviewRoutes } from './modules/recruitment/interview.routes.js'
+import { performanceRoutes } from './modules/performance/performance.routes.js'
+import { attendanceRoutes } from './modules/attendance/attendance.routes.js'
+import { auditRoutes } from './modules/audit/audit.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -117,6 +123,11 @@ async function bootstrap() {
     await app.register(dashboardRoutes, { prefix: '/api/v1/dashboard' })
     await app.register(reportsRoutes, { prefix: '/api/v1/reports' })
     await app.register(settingsRoutes, { prefix: '/api/v1/settings' })
+    await app.register(exitRoutes, { prefix: '/api/v1' })
+    await app.register(interviewRoutes, { prefix: '/api/v1' })
+    await app.register(performanceRoutes, { prefix: '/api/v1' })
+    await app.register(attendanceRoutes, { prefix: '/api/v1' })
+    await app.register(auditRoutes, { prefix: '/api/v1/audit' })
 
     // Health check
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
@@ -162,6 +173,9 @@ async function bootstrap() {
     }, SIX_HOURS)
     // Run once on startup
     cleanupExpiredTokens().catch((e) => app.log.warn('Initial token cleanup skipped: %s', e))
+
+    // Start background workers (expiry alerts via BullMQ)
+    await startExpiryWorkers()
 }
 
 bootstrap().catch((err) => {

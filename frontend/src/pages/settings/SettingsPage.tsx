@@ -14,6 +14,11 @@ import {
     Key,
     Trash2,
     Plus,
+    Monitor,
+    Smartphone,
+    LogIn,
+    LogOut,
+    XCircle,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -31,6 +36,7 @@ import { api } from '@/lib/api'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useCompanySettings, useUpdateCompanySettings, useTenantUsers } from '@/hooks/useSettings'
+import { useLoginHistory } from '@/hooks/useAudit'
 import type { CompanySettings } from '@/hooks/useSettings'
 
 const roles = [
@@ -186,6 +192,9 @@ function CompanyTab() {
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 function UsersTab() {
     const { data: tenantUsers, isLoading } = useTenantUsers()
+    const [showInvite, setShowInvite] = useState(false)
+    const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'hr_manager' })
+    const [inviting, setInviting] = useState(false)
 
     const getRoleStyle = (role: string) => roles.find((r) => r.id === role)?.color ?? 'bg-gray-50 text-gray-600'
     const getRoleLabel = (role: string) => roles.find((r) => r.id === role)?.label ?? role.replace(/_/g, ' ')
@@ -201,15 +210,65 @@ function UsersTab() {
         return `${Math.floor(days / 7)}w ago`
     }
 
+    async function handleInvite(e: React.FormEvent) {
+        e.preventDefault()
+        if (!inviteForm.name || !inviteForm.email) return
+        setInviting(true)
+        try {
+            await api.post('/settings/users/invite', inviteForm)
+            toast.success(`Invitation sent to ${inviteForm.email}`)
+            setShowInvite(false)
+            setInviteForm({ name: '', email: '', role: 'hr_manager' })
+        } catch {
+            toast.error('Failed to send invitation')
+        } finally {
+            setInviting(false)
+        }
+    }
+
     return (
         <div className="space-y-6">
+            {showInvite && (
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Invite Team Member</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleInvite} className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="invite-name">Full Name</Label>
+                                    <Input id="invite-name" value={inviteForm.name} onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))} placeholder="Jane Smith" required />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="invite-email">Email Address</Label>
+                                    <Input id="invite-email" type="email" value={inviteForm.email} onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))} placeholder="jane@company.com" required />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="invite-role">Role</Label>
+                                <select id="invite-role" value={inviteForm.role} onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value }))} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background">
+                                    <option value="hr_manager">HR Manager</option>
+                                    <option value="pro_officer">PRO Officer</option>
+                                    <option value="dept_head">Department Head</option>
+                                    <option value="employee">Employee</option>
+                                </select>
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                                <Button type="button" variant="outline" onClick={() => setShowInvite(false)}>Cancel</Button>
+                                <Button type="submit" disabled={inviting}>{inviting ? 'Sending…' : 'Send Invitation'}</Button>
+                            </div>
+                        </form>
+                    </CardContent>
+                </Card>
+            )}
             <Card>
                 <CardHeader className="pb-4 flex flex-row items-center justify-between">
                     <CardTitle className="text-base flex items-center gap-2">
                         <Users className="h-4 w-4 text-primary" />
                         Team Members
                     </CardTitle>
-                    <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}>Invite User</Button>
+                    <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setShowInvite(true)}>Invite User</Button>
                 </CardHeader>
                 <CardContent className="p-0">
                     {isLoading ? (
@@ -442,7 +501,62 @@ function SecurityTab() {
                     </div>
                 </CardContent>
             </Card>
+            <LoginHistoryCard />
         </div>
+    )
+}
+
+function LoginHistoryCard() {
+    const { data, isLoading } = useLoginHistory({ limit: 20 })
+    const history = Array.isArray(data) ? data : []
+
+    const eventIcon = (type: string) => {
+        if (type === 'login') return <LogIn className="h-3.5 w-3.5 text-green-600" />
+        if (type === 'logout') return <LogOut className="h-3.5 w-3.5 text-gray-500" />
+        if (type === 'failed_login') return <XCircle className="h-3.5 w-3.5 text-red-500" />
+        return <Shield className="h-3.5 w-3.5 text-blue-500" />
+    }
+
+    const deviceIcon = (type: string) => {
+        if (type === 'mobile' || type === 'tablet') return <Smartphone className="h-3.5 w-3.5 text-muted-foreground" />
+        return <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+    }
+
+    return (
+        <Card>
+            <CardHeader className="pb-4">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-primary" />
+                    Login History
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                {isLoading ? (
+                    <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-12 rounded bg-muted animate-pulse" />)}</div>
+                ) : history.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-6">No login history found.</p>
+                ) : (
+                    <div className="divide-y text-sm">
+                        {history.map((h: any) => (
+                            <div key={h.id} className="flex items-start justify-between py-2.5 gap-3">
+                                <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                                    {eventIcon(h.eventType)}
+                                    {deviceIcon(h.deviceType)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-medium capitalize">{h.eventType.replace('_', ' ')}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{h.browser} on {h.os} · {h.ipAddress ?? 'unknown IP'}</p>
+                                    {h.failureReason && <p className="text-xs text-red-500">{h.failureReason.replace('_', ' ')}</p>}
+                                </div>
+                                <div className="text-xs text-muted-foreground whitespace-nowrap">
+                                    {new Date(h.createdAt).toLocaleString('en-AE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     )
 }
 

@@ -1,4 +1,5 @@
-import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, getPayslipsWithEmployees, runPayroll, calculateGratuity, generateWpsSif } from './payroll.service.js'
+import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, getPayslipsWithEmployees, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
+import { generatePayslipPdf } from '../../lib/pdf.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -115,6 +116,44 @@ export default async function (fastify: any): Promise<void> {
             return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Payroll run not found.' })
         }
         return reply.send({ data: updated })
+    })
+
+    // GET /api/v1/payroll/payslips/:payslipId/download — download payslip PDF
+    fastify.get('/payslips/:payslipId/download', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const { payslipId } = request.params as { payslipId: string }
+        const payslip = await getPayslipById(request.user.tenantId, payslipId)
+        if (!payslip) return reply.code(404).send({ message: 'Payslip not found' })
+        const pdfBuffer = await generatePayslipPdf({
+            employee: {
+                name: payslip.employeeName ?? 'Employee',
+                employeeNo: payslip.employeeNo ?? '',
+                designation: payslip.designation,
+                department: payslip.department,
+                bankName: payslip.bankName,
+                iban: payslip.iban,
+            },
+            company: {
+                name: payslip.tenantName ?? 'Company',
+                tradeLicenseNo: payslip.tradeLicenseNo,
+            },
+            payslip: {
+                month: payslip.month,
+                year: payslip.year,
+                basicSalary: Number(payslip.basicSalary ?? 0),
+                housingAllowance: Number(payslip.housingAllowance ?? 0),
+                transportAllowance: Number(payslip.transportAllowance ?? 0),
+                otherAllowances: Number(payslip.otherAllowances ?? 0),
+                grossSalary: Number(payslip.grossSalary ?? 0),
+                totalDeductions: Number(payslip.totalDeductions ?? 0),
+                netSalary: Number(payslip.netSalary ?? 0),
+                daysWorked: payslip.daysWorked,
+                leaveDeduction: Number(payslip.deductions ?? 0),
+            },
+        })
+        return reply
+            .header('Content-Type', 'application/pdf')
+            .header('Content-Disposition', `attachment; filename="payslip-${payslipId}.pdf"`)
+            .send(pdfBuffer)
     })
 }
 

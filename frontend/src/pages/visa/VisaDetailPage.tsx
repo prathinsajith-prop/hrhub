@@ -1,0 +1,245 @@
+import { useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, CheckCircle2, Clock, AlertTriangle, XCircle, FileText } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
+import { PageWrapper } from '@/components/layout/PageWrapper'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { Skeleton } from '@/components/ui/skeleton'
+import { formatDate, cn } from '@/lib/utils'
+import { useVisas, useAdvanceVisaStep, useCancelVisa } from '@/hooks/useVisa'
+import { toast } from '@/components/ui/overlays'
+import type { VisaApplication, VisaStatus } from '@/types'
+
+const statusLabel: Record<VisaStatus, string> = {
+    not_started: 'Not Started',
+    entry_permit: 'Entry Permit',
+    medical_pending: 'Medical',
+    eid_pending: 'EID Pending',
+    stamping: 'Stamping',
+    active: 'Active',
+    expiring_soon: 'Expiring Soon',
+    expired: 'Expired',
+    cancelled: 'Cancelled',
+}
+
+const statusStyles: Record<VisaStatus, string> = {
+    not_started: 'bg-muted text-muted-foreground',
+    entry_permit: 'bg-info/10 text-info border-info/20',
+    medical_pending: 'bg-warning/10 text-warning border-warning/20',
+    eid_pending: 'bg-warning/10 text-warning border-warning/20',
+    stamping: 'bg-info/10 text-info border-info/20',
+    active: 'bg-success/10 text-success border-success/20',
+    expiring_soon: 'bg-warning/10 text-warning border-warning/20',
+    expired: 'bg-destructive/10 text-destructive border-destructive/20',
+    cancelled: 'bg-muted text-muted-foreground',
+}
+
+const visaSteps = [
+    'Entry Permit Application',
+    'Entry Permit Approval',
+    'Employee Entry to UAE',
+    'Medical Fitness Test',
+    'Emirates ID Biometrics',
+    'Visa Stamping',
+    'Labour Card Issuance',
+    'Completion',
+]
+
+function UrgencyIcon({ level }: { level: string }) {
+    if (level === 'critical') return <AlertTriangle className="h-4 w-4 text-destructive" />
+    if (level === 'urgent') return <Clock className="h-4 w-4 text-warning" />
+    return <CheckCircle2 className="h-4 w-4 text-success" />
+}
+
+export function VisaDetailPage() {
+    const { id } = useParams<{ id: string }>()
+    const navigate = useNavigate()
+    const { data, isLoading } = useVisas({ limit: 100 })
+    const advanceStep = useAdvanceVisaStep()
+    const cancelVisa = useCancelVisa()
+
+    const visas = (data?.data ?? []) as VisaApplication[]
+    const visa = visas.find((v) => v.id === id)
+
+    if (isLoading) {
+        return (
+            <PageWrapper>
+                <PageHeader title="Visa Application" description="Loading..." />
+                <div className="grid grid-cols-1 gap-4">
+                    {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}
+                </div>
+            </PageWrapper>
+        )
+    }
+
+    if (!visa) {
+        return (
+            <PageWrapper>
+                <PageHeader title="Visa Application" description="Not found" />
+                <div className="flex flex-col items-center gap-4 py-16">
+                    <XCircle className="h-12 w-12 text-muted-foreground" />
+                    <p className="text-muted-foreground">Visa application not found.</p>
+                    <Button variant="outline" onClick={() => navigate('/visa')}>
+                        <ArrowLeft className="h-4 w-4 mr-2" /> Back to Visa List
+                    </Button>
+                </div>
+            </PageWrapper>
+        )
+    }
+
+    const isDone = visa.currentStep >= visa.totalSteps
+    const isCancelled = visa.status === 'cancelled' || visa.status === 'expired'
+    const progress = Math.round((visa.currentStep / visa.totalSteps) * 100)
+
+    function handleAdvance() {
+        advanceStep.mutate(visa!.id, {
+            onSuccess: () => toast.success('Step advanced successfully'),
+            onError: () => toast.error('Failed to advance step'),
+        })
+    }
+
+    function handleCancel() {
+        if (!confirm('Are you sure you want to cancel this visa application?')) return
+        cancelVisa.mutate({ id: visa!.id }, {
+            onSuccess: () => { toast.success('Visa application cancelled'); navigate('/visa') },
+            onError: () => toast.error('Failed to cancel visa'),
+        })
+    }
+
+    return (
+        <PageWrapper>
+            <PageHeader
+                title={visa.employeeName}
+                description={`${visa.visaType.replace(/_/g, ' ')} · Application ID: ${visa.id.slice(0, 8).toUpperCase()}`}
+                actions={
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/visa')}>
+                        <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                    </Button>
+                }
+            />
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left: Summary */}
+                <div className="lg:col-span-1 space-y-4">
+                    <Card className="p-5 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-semibold text-sm">Status</h3>
+                            <Badge variant="outline" className={statusStyles[visa.status]}>
+                                {statusLabel[visa.status]}
+                            </Badge>
+                        </div>
+                        <div className="space-y-1">
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Progress</span>
+                                <span className="font-medium">{visa.currentStep}/{visa.totalSteps} steps</span>
+                            </div>
+                            <Progress value={progress} className="h-2" />
+                            <p className="text-xs text-muted-foreground">{progress}% complete</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                            <UrgencyIcon level={visa.urgencyLevel} />
+                            <span className="capitalize font-medium">{visa.urgencyLevel} Priority</span>
+                        </div>
+                    </Card>
+
+                    <Card className="p-5 space-y-3">
+                        <h3 className="font-semibold text-sm">Details</h3>
+                        <dl className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <dt className="text-muted-foreground">Start Date</dt>
+                                <dd className="font-medium">{formatDate(visa.startDate)}</dd>
+                            </div>
+                            {visa.expiryDate && (
+                                <div className="flex justify-between">
+                                    <dt className="text-muted-foreground">Expiry Date</dt>
+                                    <dd className="font-medium">{formatDate(visa.expiryDate)}</dd>
+                                </div>
+                            )}
+                            {visa.mohreRef && (
+                                <div className="flex justify-between">
+                                    <dt className="text-muted-foreground">MOHRE Ref</dt>
+                                    <dd className="font-medium font-mono text-xs">{visa.mohreRef}</dd>
+                                </div>
+                            )}
+                            {visa.gdfrRef && (
+                                <div className="flex justify-between">
+                                    <dt className="text-muted-foreground">GDRFA Ref</dt>
+                                    <dd className="font-medium font-mono text-xs">{visa.gdfrRef}</dd>
+                                </div>
+                            )}
+                        </dl>
+                    </Card>
+
+                    {!isCancelled && (
+                        <div className="space-y-2">
+                            {!isDone && (
+                                <Button
+                                    className="w-full"
+                                    onClick={handleAdvance}
+                                    disabled={advanceStep.isPending}
+                                >
+                                    {advanceStep.isPending ? 'Advancing...' : 'Advance to Next Step'}
+                                </Button>
+                            )}
+                            <Button
+                                variant="outline"
+                                className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
+                                onClick={handleCancel}
+                                disabled={cancelVisa.isPending}
+                            >
+                                Cancel Application
+                            </Button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Right: Timeline */}
+                <Card className="lg:col-span-2 p-6">
+                    <div className="flex items-center gap-2 mb-6">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <h3 className="font-semibold">Visa Process Timeline</h3>
+                    </div>
+                    <div className="space-y-4">
+                        {Array.from({ length: visa.totalSteps }).map((_, i) => {
+                            const done = i < visa.currentStep - 1
+                            const current = i === visa.currentStep - 1
+                            const pending = i > visa.currentStep - 1
+                            const label = visaSteps[i] || `Step ${i + 1}`
+
+                            return (
+                                <div key={i} className="flex gap-4">
+                                    <div className="flex flex-col items-center">
+                                        <div className={cn(
+                                            'h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2',
+                                            done ? 'bg-success border-success text-success-foreground' :
+                                                current ? 'bg-primary border-primary text-primary-foreground' :
+                                                    'bg-card border-border text-muted-foreground'
+                                        )}>
+                                            {done ? '✓' : i + 1}
+                                        </div>
+                                        {i < visa.totalSteps - 1 && (
+                                            <div className={cn('w-0.5 flex-1 min-h-[24px] mt-1', done ? 'bg-success' : 'bg-border')} />
+                                        )}
+                                    </div>
+                                    <div className="pb-4 flex-1">
+                                        <p className={cn(
+                                            'font-medium text-sm',
+                                            done ? 'text-success' : current ? 'text-primary' : 'text-muted-foreground'
+                                        )}>
+                                            {label}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {done ? 'Completed' : current ? 'In Progress' : pending ? 'Pending' : ''}
+                                        </p>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </Card>
+            </div>
+        </PageWrapper>
+    )
+}

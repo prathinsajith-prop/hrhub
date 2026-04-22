@@ -14,6 +14,9 @@ import {
   SettingsIcon,
   HelpCircleIcon,
   BuildingIcon,
+  ClipboardListIcon,
+  GitBranchIcon,
+  ClockIcon,
 } from "lucide-react"
 import { NavUser } from "@/components/nav-user"
 import {
@@ -40,6 +43,7 @@ const navGroups = [
     label: "People",
     items: [
       { title: "Employees", url: "/employees", icon: UsersIcon },
+      { title: "Org Chart", url: "/org-chart", icon: GitBranchIcon },
       { title: "Recruitment", url: "/recruitment", icon: BriefcaseIcon },
       { title: "Onboarding", url: "/onboarding", icon: UserPlusIcon },
     ],
@@ -57,12 +61,14 @@ const navGroups = [
     items: [
       { title: "Payroll", url: "/payroll", icon: BanknoteIcon },
       { title: "Leave", url: "/leave", icon: CalendarCheckIcon },
+      { title: "Attendance", url: "/attendance", icon: ClockIcon },
     ],
   },
   {
     label: "Insights",
     items: [
       { title: "Reports", url: "/reports", icon: BarChart3Icon },
+      { title: "Audit Log", url: "/audit", icon: ClipboardListIcon },
     ],
   },
 ]

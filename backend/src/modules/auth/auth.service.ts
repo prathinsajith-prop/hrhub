@@ -3,6 +3,9 @@ import { eq, and, lt } from 'drizzle-orm'
 import crypto from 'node:crypto'
 import { db } from '../../db/index.js'
 import { users, refreshTokens, tenants, passwordResetTokens } from '../../db/schema/index.js'
+import { sendEmail, passwordResetEmail } from '../../plugins/email.js'
+import { loadEnv } from '../../config/env.js'
+import { recordLoginEvent } from '../audit/audit.service.js'
 import type { FastifyInstance } from 'fastify'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -11,6 +14,8 @@ type AnyFastify = FastifyInstance<any, any, any, any, any>
 export interface LoginInput {
     email: string
     password: string
+    ipAddress?: string
+    userAgent?: string
 }
 
 export async function loginUser(fastify: AnyFastify, input: LoginInput) {
@@ -21,11 +26,30 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         .limit(1)
 
     if (!user) {
+        // Record failed attempt without userId
+        recordLoginEvent({
+            email: input.email.toLowerCase(),
+            eventType: 'failed_login',
+            success: false,
+            ipAddress: input.ipAddress,
+            userAgent: input.userAgent,
+            failureReason: 'user_not_found',
+        }).catch(() => { })
         return null
     }
 
     const passwordMatch = await bcrypt.compare(input.password, user.passwordHash)
     if (!passwordMatch) {
+        recordLoginEvent({
+            tenantId: user.tenantId,
+            userId: user.id,
+            email: user.email,
+            eventType: 'failed_login',
+            success: false,
+            ipAddress: input.ipAddress,
+            userAgent: input.userAgent,
+            failureReason: 'wrong_password',
+        }).catch(() => { })
         return null
     }
 
@@ -55,6 +79,18 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
 
     // Update last login
     await db.update(users).set({ lastLoginAt: new Date() } as any).where(eq(users.id, user.id))
+
+    // Record successful login event
+    recordLoginEvent({
+        tenantId: user.tenantId,
+        userId: user.id,
+        email: user.email,
+        eventType: 'login',
+        success: true,
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
+        sessionRef: tokenHash.slice(0, 8),
+    }).catch(() => { })
 
     return {
         accessToken,
@@ -145,9 +181,12 @@ export async function requestPasswordReset(email: string) {
 
     await db.insert(passwordResetTokens).values({ userId: user.id, tokenHash, expiresAt })
 
-    // TODO: send email via provider; for now expose token in dev for testing.
-    const devToken = process.env.NODE_ENV === 'production' ? null : rawToken
-    return { sent: true, devToken }
+    const env = loadEnv()
+    const resetUrl = `${env.APP_URL}/reset-password?token=${rawToken}`
+    const emailTmpl = passwordResetEmail({ name: user.name, resetUrl, expiresInMinutes: 60 })
+    await sendEmail({ ...emailTmpl, to: user.email })
+
+    return { sent: true, devToken: null as string | null }
 }
 
 export async function resetPasswordWithToken(rawToken: string, newPassword: string) {

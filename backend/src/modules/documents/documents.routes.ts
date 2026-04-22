@@ -3,9 +3,14 @@ import { join } from 'path'
 import { pipeline } from 'stream/promises'
 import { randomUUID } from 'crypto'
 import { listDocuments, getDocument, createDocument, updateDocument, verifyDocument, getExpiringDocuments, softDeleteDocument } from './documents.service.js'
+import { generateUploadUrl, generateDownloadUrl, buildS3Key } from '../../plugins/s3.js'
+import { templateRoutes } from './templates.routes.js'
 
 export default async function(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
+
+    // Register template routes as sub-plugin
+    await fastify.register(templateRoutes)
 
     fastify.get('/', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {
         const { employeeId, category, status, limit = '20', offset = '0' } = request.query as Record<string, string>
@@ -128,6 +133,36 @@ export default async function(fastify: any): Promise<void> {
         } as any)
 
         return reply.code(201).send({ data: doc })
+    })
+
+    // POST /api/v1/documents/upload-url — generate presigned S3 PUT URL
+    fastify.post('/upload-url', {
+        preHandler: [fastify.authenticate],
+        schema: { tags: ['Documents'] },
+    }, async (request, reply) => {
+        const { fileName, contentType, employeeId, category } = request.body as Record<string, string>
+        if (!fileName || !contentType) {
+            return reply.code(400).send({ message: 'fileName and contentType are required' })
+        }
+        const folder = employeeId ? `employees/${employeeId}/documents` : 'documents'
+        const s3Key = buildS3Key(request.user.tenantId, folder, fileName)
+        const uploadUrl = await generateUploadUrl(s3Key, contentType)
+        return reply.send({ data: { uploadUrl, s3Key, category } })
+    })
+
+    // GET /api/v1/documents/:id/download-url — generate presigned S3 GET URL
+    fastify.get('/:id/download-url', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const doc = await getDocument(request.user.tenantId, id)
+        if (!doc) return reply.code(404).send({ message: 'Document not found' })
+        if (!doc.s3Key) return reply.code(400).send({ message: 'No file stored for this document' })
+
+        // If it's a local upload (legacy /uploads/ prefix), return as-is
+        if (doc.s3Key.startsWith('/uploads/')) {
+            return reply.send({ data: { downloadUrl: doc.s3Key } })
+        }
+        const downloadUrl = await generateDownloadUrl(doc.s3Key)
+        return reply.send({ data: { downloadUrl } })
     })
 }
 

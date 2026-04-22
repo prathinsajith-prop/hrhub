@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS "exit_requests" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE CASCADE,
+    "employee_id" uuid NOT NULL REFERENCES "employees"("id"),
+    "exit_type" text NOT NULL,
+    "exit_date" date NOT NULL,
+    "last_working_day" date NOT NULL,
+    "reason" text,
+    "notice_period_days" numeric(5, 0) DEFAULT '30' NOT NULL,
+    "status" text DEFAULT 'pending' NOT NULL,
+    "gratuity_amount" numeric(12, 2),
+    "leave_encashment_amount" numeric(12, 2),
+    "unpaid_salary_amount" numeric(12, 2),
+    "deductions" numeric(12, 2) DEFAULT '0',
+    "total_settlement" numeric(12, 2),
+    "settlement_paid" boolean DEFAULT false,
+    "settlement_paid_date" date,
+    "approved_by" uuid,
+    "notes" text,
+    "created_at" timestamp DEFAULT now() NOT NULL,
+    "updated_at" timestamp DEFAULT now() NOT NULL
+);

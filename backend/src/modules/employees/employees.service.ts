@@ -127,3 +127,28 @@ export async function getExpiringVisas(tenantId: string, daysAhead = 90) {
 
     return rows.map(r => ({ ...r, fullName: `${r.firstName} ${r.lastName}` }))
 }
+
+export async function getOrgChart(tenantId: string) {
+    const rows = await db.select({
+        id: employees.id,
+        firstName: employees.firstName,
+        lastName: employees.lastName,
+        designation: employees.designation,
+        department: employees.department,
+        reportingTo: employees.reportingTo,
+        avatarUrl: employees.avatarUrl,
+        status: employees.status,
+    }).from(employees).where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false)))
+
+    // Build tree
+    const map = new Map(rows.map(r => [r.id, { ...r, fullName: `${r.firstName} ${r.lastName}`, children: [] as any[] }]))
+    const roots: any[] = []
+    for (const node of map.values()) {
+        if (node.reportingTo && map.has(node.reportingTo)) {
+            map.get(node.reportingTo)!.children.push(node)
+        } else {
+            roots.push(node)
+        }
+    }
+    return roots
+}

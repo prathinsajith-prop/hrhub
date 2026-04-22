@@ -10,7 +10,6 @@ import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 
 const loginSchema = z.object({
@@ -40,7 +39,6 @@ export function LoginPage() {
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: 'admin@hrhub.ae', password: 'Admin@12345' },
   })
 
   const onSubmit = async (data: LoginForm) => {
@@ -192,25 +190,6 @@ export function LoginPage() {
           Sign In
         </Button>
       </form>
-
-      <Separator className="my-5" />
-
-      <div className="rounded-xl p-4 bg-primary/5 border border-primary/15">
-        <p className="text-[11px] font-semibold text-primary mb-2 flex items-center gap-1.5">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
-          Demo Credentials
-        </p>
-        <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-          <span className="text-[11px] text-muted-foreground">Email</span>
-          <span className="text-[11px] font-mono font-semibold text-foreground">
-            admin@hrhub.ae
-          </span>
-          <span className="text-[11px] text-muted-foreground">Password</span>
-          <span className="text-[11px] font-mono font-semibold text-foreground">
-            Admin@12345
-          </span>
-        </div>
-      </div>
 
       <p className="mt-5 text-center text-sm text-muted-foreground">
         {"Don't have an account? "}

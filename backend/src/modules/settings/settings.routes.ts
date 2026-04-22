@@ -1,4 +1,4 @@
-import { getCompanySettings, updateCompanySettings, listTenantUsers } from './settings.service.js'
+import { getCompanySettings, updateCompanySettings, listTenantUsers, inviteUser } from './settings.service.js'
 
 export default async function settingsRoutes(fastify: any): Promise<void> {
     const hrAdmin = {
@@ -32,5 +32,15 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     fastify.get('/users', hrAdmin, async (request: any, reply: any) => {
         const data = await listTenantUsers(request.user.tenantId)
         return reply.send({ data })
+    })
+
+    // POST /settings/users/invite — invite a new user by email
+    fastify.post('/users/invite', hrAdmin, async (request: any, reply: any) => {
+        const { name, email, role } = request.body as { name: string; email: string; role: string }
+        if (!name || !email || !role) {
+            return reply.code(400).send({ message: 'name, email and role are required' })
+        }
+        await inviteUser(request.user.tenantId, { name, email, role })
+        return reply.send({ message: 'Invitation sent' })
     })
 }

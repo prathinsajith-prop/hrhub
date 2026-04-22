@@ -1,6 +1,7 @@
 import { loginUser, refreshAccessToken, revokeRefreshToken, requestPasswordReset, resetPasswordWithToken, changePassword } from './auth.service.js'
+import { recordLoginEvent } from '../audit/audit.service.js'
 
-export default async function(fastify: any): Promise<void> {
+export default async function (fastify: any): Promise<void> {
     // POST /api/v1/auth/login
     fastify.post('/login', {
         config: {
@@ -28,8 +29,10 @@ export default async function(fastify: any): Promise<void> {
         },
     }, async (request, reply) => {
         const { email, password } = request.body as { email: string; password: string }
+        const ipAddress = (request as any).ip ?? request.headers['x-forwarded-for'] as string
+        const userAgent = request.headers['user-agent']
 
-        const result = await loginUser(fastify, { email, password })
+        const result = await loginUser(fastify, { email, password, ipAddress, userAgent })
         if (!result) {
             return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid email or password' })
         }
@@ -65,6 +68,18 @@ export default async function(fastify: any): Promise<void> {
     }, async (request, reply) => {
         const { refreshToken } = request.body as { refreshToken?: string }
         if (refreshToken) await revokeRefreshToken(refreshToken)
+        // Record logout
+        const u = (request as any).user
+        if (u?.sub) {
+            recordLoginEvent({
+                tenantId: u.tenantId,
+                userId: u.sub,
+                eventType: 'logout',
+                success: true,
+                ipAddress: (request as any).ip ?? request.headers['x-forwarded-for'] as string,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.code(204).send()
     })
 
