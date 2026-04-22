@@ -43,7 +43,7 @@ describe('Payslip gross calculation', () => {
     })
 
     it('handles fractional amounts (fils)', () => {
-        expect(calcGross(10_000.5, 2_999.75, 0, 0)).toBeCloseTo(12_999.25, 2)
+        expect(calcGross(10_000.5, 2_999.75, 0, 0)).toBeCloseTo(13_000.25, 2)
     })
 })
 

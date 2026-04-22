@@ -76,3 +76,15 @@ export function useEmiratisation() {
         queryFn: () => api.get<{ data: EmiratisationStatus }>('/dashboard/emiratisation').then(r => r.data),
     })
 }
+
+export interface OnboardingSummary {
+    active: number
+    overdue: number
+}
+
+export function useOnboardingSummary() {
+    return useQuery({
+        queryKey: ['dashboard', 'onboarding-summary'],
+        queryFn: () => api.get<{ data: OnboardingSummary }>('/dashboard/onboarding-summary').then(r => r.data),
+    })
+}

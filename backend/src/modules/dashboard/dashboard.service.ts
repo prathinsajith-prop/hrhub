@@ -1,6 +1,6 @@
 import { eq, and, count, desc, gte, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
-import { employees, recruitmentJobs, visaApplications, leaveRequests, notifications, payrollRuns } from '../../db/schema/index.js'
+import { employees, recruitmentJobs, visaApplications, leaveRequests, notifications, payrollRuns, onboardingChecklists, onboardingSteps } from '../../db/schema/index.js'
 
 export async function getDashboardKPIs(tenantId: string) {
     const [{ totalEmployees }] = await db.select({ totalEmployees: count() }).from(employees)
@@ -154,4 +154,26 @@ export async function getEmiratisationStatus(tenantId: string) {
             ? Math.min(100, Math.round((currentRatio / targetRatio) * 100))
             : 100,
     }
+}
+
+export async function getOnboardingSummary(tenantId: string) {
+    const [{ active }] = await db
+        .select({ active: count() })
+        .from(onboardingChecklists)
+        .where(eq(onboardingChecklists.tenantId, tenantId))
+
+    const today = new Date().toISOString().split('T')[0]
+    const [{ overdue }] = await db
+        .select({ overdue: count() })
+        .from(onboardingSteps)
+        .innerJoin(onboardingChecklists, eq(onboardingSteps.checklistId, onboardingChecklists.id))
+        .where(
+            and(
+                eq(onboardingChecklists.tenantId, tenantId),
+                eq(onboardingSteps.status, 'overdue'),
+                sql`${onboardingSteps.dueDate} < ${today}`,
+            )
+        )
+
+    return { active: Number(active), overdue: Number(overdue) }
 }

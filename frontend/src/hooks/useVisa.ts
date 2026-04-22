@@ -31,3 +31,20 @@ export function useAdvanceVisaStep() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['visa'] }),
     })
 }
+
+export function useCancelVisa() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+            api.post(`/visa/${id}/cancel`, { reason }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['visa'] }),
+    })
+}
+
+export function useRecalcVisaUrgency() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: () => api.post<{ data: { updated: number } }>('/visa/recalc-urgency', {}).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['visa'] }),
+    })
+}

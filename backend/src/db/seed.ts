@@ -4,6 +4,7 @@
  */
 import 'dotenv/config'
 import bcrypt from 'bcrypt'
+import { eq } from 'drizzle-orm'
 import { db } from './index.js'
 import {
     tenants, entities, users, employees,
@@ -15,6 +16,17 @@ import {
 
 async function seed() {
     console.log('🌱 Seeding database...')
+
+    // ── Idempotency guard ──────────────────────────────────
+    const existing = await db.select({ id: tenants.id })
+        .from(tenants)
+        .where(eq(tenants.tradeLicenseNo, 'DED-2019-12345'))
+        .limit(1)
+
+    if (existing.length > 0) {
+        console.log('Database already seeded (tenant DED-2019-12345 exists). Skipping.')
+        process.exit(0)
+    }
 
     // ── Tenant ──────────────────────────────────────────────
     const [tenant] = await db.insert(tenants).values({

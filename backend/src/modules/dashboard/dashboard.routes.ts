@@ -1,6 +1,6 @@
-import { getDashboardKPIs, getRecentNotifications, getPayrollTrend, getNationalityBreakdown, getDeptHeadcount, getEmiratisationStatus } from './dashboard.service.js'
+import { getDashboardKPIs, getRecentNotifications, getPayrollTrend, getNationalityBreakdown, getDeptHeadcount, getEmiratisationStatus, getOnboardingSummary } from './dashboard.service.js'
 
-export default async function(fastify: any): Promise<void> {
+export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/kpis', { ...auth, schema: { tags: ['Dashboard'] } }, async (request, reply) => {
@@ -31,6 +31,11 @@ export default async function(fastify: any): Promise<void> {
 
     fastify.get('/emiratisation', { ...auth, schema: { tags: ['Dashboard'] } }, async (request, reply) => {
         const data = await getEmiratisationStatus(request.user.tenantId)
+        return reply.send({ data })
+    })
+
+    fastify.get('/onboarding-summary', { ...auth, schema: { tags: ['Dashboard'] } }, async (request, reply) => {
+        const data = await getOnboardingSummary(request.user.tenantId)
         return reply.send({ data })
     })
 }

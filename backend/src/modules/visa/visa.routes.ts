@@ -1,6 +1,6 @@
-import { listVisas, getVisa, createVisa, updateVisa, advanceVisaStep, softDeleteVisa } from './visa.service.js'
+import { listVisas, getVisa, createVisa, updateVisa, advanceVisaStep, softDeleteVisa, cancelVisa, recalcVisaUrgency } from './visa.service.js'
 
-export default async function(fastify: any): Promise<void> {
+export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/', { ...auth, schema: { tags: ['Visa'] } }, async (request, reply) => {
@@ -65,6 +65,31 @@ export default async function(fastify: any): Promise<void> {
         const deleted = await softDeleteVisa(request.user.tenantId, id)
         if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Visa application not found' })
         return reply.code(204).send()
+    })
+
+    fastify.post('/:id/cancel', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'pro_officer', 'super_admin')],
+        schema: {
+            tags: ['Visa'],
+            body: {
+                type: 'object',
+                properties: { reason: { type: 'string' } },
+            },
+        },
+    }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const { reason } = (request.body as any) ?? {}
+        const updated = await cancelVisa(request.user.tenantId, id, reason as string | undefined)
+        if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Visa application not found' })
+        return reply.send({ data: updated })
+    })
+
+    fastify.post('/recalc-urgency', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'pro_officer', 'super_admin')],
+        schema: { tags: ['Visa'] },
+    }, async (request, reply) => {
+        const result = await recalcVisaUrgency(request.user.tenantId)
+        return reply.send({ data: result })
     })
 }
 

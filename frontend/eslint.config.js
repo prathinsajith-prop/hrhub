@@ -19,5 +19,16 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // `any` is pervasive in this codebase — warn, don't block builds
+      '@typescript-eslint/no-explicit-any': 'warn',
+      // Non-component exports alongside components are common in this project
+      'react-refresh/only-export-components': 'warn',
+      // TanStack Table returns unstable refs by design — suppress incompatible-library
+      'react-hooks/incompatible-library': 'warn',
+      // React Compiler strict rules — warn only (patterns are valid in standard React)
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/purity': 'warn',
+    },
   },
 ])

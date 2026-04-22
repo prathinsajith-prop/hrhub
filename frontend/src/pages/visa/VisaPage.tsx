@@ -11,7 +11,7 @@ import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatDate, cn } from '@/lib/utils'
-import { useVisas } from '@/hooks/useVisa'
+import { useVisas, useAdvanceVisaStep, useCancelVisa, useRecalcVisaUrgency } from '@/hooks/useVisa'
 import type { VisaApplication, VisaStatus } from '@/types'
 import { toast } from '@/components/ui/overlays'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -167,11 +167,31 @@ const columns: ColumnDef<VisaApplication>[] = [
 
 function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
   const [open, setOpen] = useState(false)
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  const advanceStep = useAdvanceVisaStep()
+  const cancelVisa = useCancelVisa()
   const urgencyStyles: Record<string, string> = {
     critical: 'text-destructive',
     urgent: 'text-warning',
     normal: 'text-muted-foreground',
   }
+  const isDone = v.currentStep >= v.totalSteps
+  const isCancelled = v.status === 'cancelled' || v.status === 'expired'
+
+  function handleAdvance() {
+    advanceStep.mutate(v.id, {
+      onSuccess: () => toast.success('Step advanced'),
+      onError: () => toast.error('Failed to advance step'),
+    })
+  }
+
+  function handleCancel() {
+    cancelVisa.mutate({ id: v.id }, {
+      onSuccess: () => { toast.success('Visa cancelled'); setConfirmCancel(false); setOpen(false) },
+      onError: () => toast.error('Failed to cancel visa'),
+    })
+  }
+
   return (
     <>
       <Button
@@ -227,6 +247,48 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
               </div>
             )}
           </div>
+
+          {/* Actions */}
+          {!isCancelled && (
+            <div className="mt-6 space-y-3">
+              {!isDone && (
+                <Button
+                  className="w-full"
+                  onClick={handleAdvance}
+                  disabled={advanceStep.isPending}
+                >
+                  {advanceStep.isPending ? 'Advancing…' : 'Advance Step'}
+                </Button>
+              )}
+              {!confirmCancel ? (
+                <Button
+                  variant="outline"
+                  className="w-full text-destructive border-destructive/40 hover:bg-destructive/10"
+                  onClick={() => setConfirmCancel(true)}
+                >
+                  Cancel Visa
+                </Button>
+              ) : (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-3">
+                  <p className="text-xs text-destructive font-medium">Confirm visa cancellation? This cannot be undone.</p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="flex-1"
+                      onClick={handleCancel}
+                      disabled={cancelVisa.isPending}
+                    >
+                      {cancelVisa.isPending ? 'Cancelling…' : 'Confirm Cancel'}
+                    </Button>
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => setConfirmCancel(false)}>
+                      Keep
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </SheetContent>
       </Sheet>
     </>
@@ -237,6 +299,7 @@ export function VisaPage() {
   const [activeTab, setActiveTab] = useState('all')
   const [newAppOpen, setNewAppOpen] = useState(false)
   const { data: visaData, isLoading } = useVisas({ limit: 50 })
+  const recalcUrgency = useRecalcVisaUrgency()
   const visaApplications: VisaApplication[] = (visaData?.data as VisaApplication[]) ?? []
 
   const filtered = activeTab === 'all' ? visaApplications :
@@ -255,11 +318,26 @@ export function VisaPage() {
         title="Visa Management"
         description="Track visa applications, renewals, and compliance status"
         actions={
-          <Button className="gap-2" onClick={() => setNewAppOpen(true)}>
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">New Application</span>
-            <span className="sm:hidden">Add</span>
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => recalcUrgency.mutate(undefined, {
+                onSuccess: (r) => toast.success(`Urgency updated for ${(r as any).data?.updated ?? 0} visa(s)`),
+                onError: () => toast.error('Recalculation failed'),
+              })}
+              disabled={recalcUrgency.isPending}
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5', recalcUrgency.isPending && 'animate-spin')} />
+              <span className="hidden sm:inline">Recalc Urgency</span>
+            </Button>
+            <Button className="gap-2" onClick={() => setNewAppOpen(true)}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">New Application</span>
+              <span className="sm:hidden">Add</span>
+            </Button>
+          </div>
         }
       />
 

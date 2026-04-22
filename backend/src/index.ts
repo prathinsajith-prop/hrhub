@@ -26,6 +26,7 @@ import onboardingRoutes from './modules/onboarding/onboarding.routes.js'
 import complianceRoutes from './modules/compliance/compliance.routes.js'
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js'
 import reportsRoutes from './modules/reports/reports.routes.js'
+import settingsRoutes from './modules/settings/settings.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -115,6 +116,7 @@ async function bootstrap() {
     await app.register(complianceRoutes, { prefix: '/api/v1/compliance' })
     await app.register(dashboardRoutes, { prefix: '/api/v1/dashboard' })
     await app.register(reportsRoutes, { prefix: '/api/v1/reports' })
+    await app.register(settingsRoutes, { prefix: '/api/v1/settings' })
 
     // Health check
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))

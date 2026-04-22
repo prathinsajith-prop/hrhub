@@ -38,7 +38,7 @@ import type { KpiColor } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'
-import { useDashboardKPIs, useNotifications, usePayrollTrend, useNationalityBreakdown, useDeptHeadcount, useEmiratisation } from '@/hooks/useDashboard'
+import { useDashboardKPIs, useNotifications, usePayrollTrend, useNationalityBreakdown, useDeptHeadcount, useEmiratisation, useOnboardingSummary } from '@/hooks/useDashboard'
 import { useVisas } from '@/hooks/useVisa'
 import { useNavigate } from 'react-router-dom'
 
@@ -115,6 +115,7 @@ export function DashboardPage() {
   const { data: nationalityRaw, isLoading: natLoading } = useNationalityBreakdown()
   const { data: deptRaw, isLoading: deptLoading } = useDeptHeadcount()
   const { data: emiratisation, isLoading: emirLoading } = useEmiratisation()
+  const { data: onboardingSummary, isLoading: onboardingLoading } = useOnboardingSummary()
 
   const payrollTrend = payrollTrendRaw ?? []
   const nationalityData = (nationalityRaw ?? []).map((d, i) => ({
@@ -513,6 +514,49 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Onboarding Summary */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Onboarding</CardTitle>
+              <CardDescription>Employee onboarding status</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/onboarding')}>
+              View all
+              <ArrowUpRight className="h-3 w-3 ml-1" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {onboardingLoading ? (
+            <div className="flex gap-4">
+              <Skeleton className="h-16 flex-1 rounded-xl" />
+              <Skeleton className="h-16 flex-1 rounded-xl" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-primary/5 border border-primary/10 p-4 text-center">
+                <p className="text-3xl font-bold font-display text-primary">{onboardingSummary?.active ?? 0}</p>
+                <p className="text-xs text-muted-foreground mt-1">Active Checklists</p>
+              </div>
+              <div className={cn('rounded-xl border p-4 text-center',
+                (onboardingSummary?.overdue ?? 0) > 0
+                  ? 'bg-destructive/5 border-destructive/20'
+                  : 'bg-muted border-transparent'
+              )}>
+                <p className={cn('text-3xl font-bold font-display',
+                  (onboardingSummary?.overdue ?? 0) > 0 ? 'text-destructive' : 'text-foreground'
+                )}>
+                  {onboardingSummary?.overdue ?? 0}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">Overdue Steps</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </PageWrapper>
   )
 }

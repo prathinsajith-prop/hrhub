@@ -63,3 +63,69 @@ export async function advanceVisaStep(tenantId: string, id: string) {
 
     return row
 }
+
+export async function cancelVisa(tenantId: string, id: string, reason?: string) {
+    const [row] = await db.update(visaApplications)
+        .set({ status: 'cancelled', notes: reason ?? null, updatedAt: new Date() } as any)
+        .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)))
+        .returning()
+    return row ?? null
+}
+
+/**
+ * Derives urgency level purely from expiry date (no side-effects).
+ * critical  → expires within 30 days or already expired
+ * urgent    → expires in 31-90 days
+ * normal    → expires in >90 days or no expiry date set
+ */
+export function calcUrgencyLevel(expiryDate: string | null | undefined): 'normal' | 'urgent' | 'critical' {
+    if (!expiryDate) return 'normal'
+    const today = new Date()
+    const expiry = new Date(expiryDate)
+    const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysLeft <= 30) return 'critical'
+    if (daysLeft <= 90) return 'urgent'
+    return 'normal'
+}
+
+/**
+ * Recalculates and persists urgency_level for all active visa applications
+ * belonging to a tenant. Returns the number of records updated.
+ */
+export async function recalcVisaUrgency(tenantId: string): Promise<{ updated: number }> {
+    const active = await db.select({
+        id: visaApplications.id,
+        expiryDate: visaApplications.expiryDate,
+        currentUrgency: visaApplications.urgencyLevel,
+        status: visaApplications.status,
+    })
+        .from(visaApplications)
+        .where(and(
+            eq(visaApplications.tenantId, tenantId),
+            isNull(visaApplications.deletedAt),
+        ))
+
+    let updated = 0
+    for (const visa of active) {
+        // Don't touch cancelled / expired applications
+        if (visa.status === 'cancelled' || visa.status === 'expired') continue
+
+        const newUrgency = calcUrgencyLevel(visa.expiryDate)
+        const newStatus = newUrgency === 'critical' && visa.expiryDate
+            ? (new Date(visa.expiryDate) < new Date() ? 'expired' : 'expiring_soon')
+            : undefined
+
+        if (newUrgency !== visa.currentUrgency || newStatus) {
+            await db.update(visaApplications)
+                .set({
+                    urgencyLevel: newUrgency,
+                    ...(newStatus ? { status: newStatus } : {}),
+                    updatedAt: new Date(),
+                } as any)
+                .where(eq(visaApplications.id, visa.id))
+            updated++
+        }
+    }
+
+    return { updated }
+}

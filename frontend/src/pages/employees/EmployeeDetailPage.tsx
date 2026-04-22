@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { useEmployee } from '@/hooks/useEmployees'
+import { useDocuments } from '@/hooks/useDocuments'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 
 const statusVariant: Record<string, any> = {
@@ -64,6 +65,7 @@ export function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: employee, isLoading } = useEmployee(id!)
+  const { data: docsResult, isLoading: docsLoading } = useDocuments({ employeeId: id })
 
   const e = employee as any
 
@@ -100,6 +102,7 @@ export function EmployeeDetailPage() {
     )
   }
 
+  // eslint-disable-next-line react-hooks/purity
   const visaDays = e.visaExpiry
     ? Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000)
     : null
@@ -348,11 +351,43 @@ export function EmployeeDetailPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-center py-10 text-muted-foreground">
-                    <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm font-medium">No documents uploaded</p>
-                    <p className="text-xs mt-1">Upload contracts, certificates, and ID documents</p>
-                  </div>
+                  {docsLoading ? (
+                    <div className="space-y-2">
+                      {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-12 w-full" />
+                      ))}
+                    </div>
+                  ) : (docsResult?.data as unknown[] | undefined ?? []).length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm font-medium">No documents uploaded</p>
+                      <p className="text-xs mt-1">Upload contracts, certificates, and ID documents</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {(docsResult?.data as Array<{ id: string; name: string; category: string; status: string; createdAt: string }> ?? []).map((doc) => (
+                        <div key={doc.id} className="flex items-center justify-between py-3">
+                          <div className="flex items-center gap-3">
+                            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium">{doc.name}</p>
+                              <p className="text-xs text-muted-foreground capitalize">
+                                {doc.category?.replace(/_/g, ' ')} · {formatDate(doc.createdAt)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={doc.status === 'verified' ? 'success' : doc.status === 'expired' ? 'destructive' : 'secondary'} className="text-[10px] capitalize">
+                              {doc.status}
+                            </Badge>
+                            <Button variant="ghost" size="icon-sm">
+                              <Download className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>

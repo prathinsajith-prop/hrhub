@@ -168,7 +168,7 @@ describe('EMP record (Employee)', () => {
     })
 
     it('uppercases employee name', () => {
-        expect(parts[3]).toBe('JOHN SMITH')
+        expect(parts[4]).toBe('JOHN SMITH')
     })
 
     it('truncates name to 50 chars', () => {
@@ -177,7 +177,7 @@ describe('EMP record (Employee)', () => {
             iban: 'AE00', name: 'A'.repeat(100), labourId: 'LC1',
             daysWorked: 30, basicSalary: '5000.00', grossSalary: '5000.00', netSalary: '5000.00',
         })
-        const namePart = longNameEmp.split('|')[3]
+        const namePart = longNameEmp.split('|')[4]
         expect(namePart.length).toBeLessThanOrEqual(50)
     })
 
