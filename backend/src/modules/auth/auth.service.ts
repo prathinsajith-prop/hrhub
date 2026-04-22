@@ -11,6 +11,11 @@ import type { FastifyInstance } from 'fastify'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyFastify = FastifyInstance<any, any, any, any, any>
 
+/** Max consecutive failures before lockout */
+const MAX_FAILED_ATTEMPTS = 5
+/** Lockout duration in minutes */
+const LOCKOUT_MINUTES = 15
+
 export interface LoginInput {
     email: string
     password: string
@@ -26,7 +31,6 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         .limit(1)
 
     if (!user) {
-        // Record failed attempt without userId
         recordLoginEvent({
             email: input.email.toLowerCase(),
             eventType: 'failed_login',
@@ -38,8 +42,9 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         return null
     }
 
-    const passwordMatch = await bcrypt.compare(input.password, user.passwordHash)
-    if (!passwordMatch) {
+    // Check account lockout
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+        const minutesLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000)
         recordLoginEvent({
             tenantId: user.tenantId,
             userId: user.id,
@@ -48,10 +53,46 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
             success: false,
             ipAddress: input.ipAddress,
             userAgent: input.userAgent,
-            failureReason: 'wrong_password',
+            failureReason: 'account_locked',
+        }).catch(() => { })
+        throw Object.assign(new Error(`Account locked. Try again in ${minutesLeft} minute(s).`), { statusCode: 423 })
+    }
+
+    const passwordMatch = await bcrypt.compare(input.password, user.passwordHash)
+    if (!passwordMatch) {
+        const newCount = (user.failedLoginCount ?? 0) + 1
+        const shouldLock = newCount >= MAX_FAILED_ATTEMPTS
+        const lockedUntil = shouldLock
+            ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000)
+            : null
+
+        await db
+            .update(users)
+            .set({
+                failedLoginCount: newCount,
+                ...(lockedUntil !== null ? { lockedUntil } : {}),
+                updatedAt: new Date(),
+            })
+            .where(eq(users.id, user.id))
+
+        recordLoginEvent({
+            tenantId: user.tenantId,
+            userId: user.id,
+            email: user.email,
+            eventType: 'failed_login',
+            success: false,
+            ipAddress: input.ipAddress,
+            userAgent: input.userAgent,
+            failureReason: shouldLock ? 'account_now_locked' : 'wrong_password',
         }).catch(() => { })
         return null
     }
+
+    // Successful auth — reset failure counter
+    await db
+        .update(users)
+        .set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date(), updatedAt: new Date() })
+        .where(eq(users.id, user.id))
 
     const [tenant] = await db
         .select()
@@ -78,7 +119,7 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
     })
 
     // Update last login
-    await db.update(users).set({ lastLoginAt: new Date() } as any).where(eq(users.id, user.id))
+    // (lastLoginAt already set in the lockout-reset update above)
 
     // Record successful login event
     recordLoginEvent({

@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, boolean, timestamp, numeric, date, index } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { pgTable, uuid, text, boolean, timestamp, numeric, date, index, uniqueIndex, check } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
 import { tenants, entities } from './tenants'
 
 export const employees = pgTable('employees', {
@@ -58,12 +58,30 @@ export const employees = pgTable('employees', {
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-    tenantIdx: index('idx_employees_tenant').on(t.tenantId),
-    entityIdx: index('idx_employees_entity').on(t.entityId),
-    statusIdx: index('idx_employees_status').on(t.status),
-    visaExpiryIdx: index('idx_employees_visa_expiry').on(t.visaExpiry),
-}))
+}, (t) => [
+    // Lookup indexes
+    index('idx_employees_tenant').on(t.tenantId),
+    index('idx_employees_entity').on(t.entityId),
+    index('idx_employees_status').on(t.status),
+    index('idx_employees_visa_expiry').on(t.visaExpiry),
+    // Composite indexes for common query patterns
+    index('idx_employees_tenant_status').on(t.tenantId, t.status),
+    index('idx_employees_tenant_dept').on(t.tenantId, t.department),
+    index('idx_employees_passport_expiry').on(t.tenantId, t.passportExpiry),
+    index('idx_employees_eid_expiry').on(t.tenantId, t.emiratesIdExpiry),
+    // Partial index: active (non-archived) employees — most common query
+    index('idx_employees_active').on(t.tenantId).where(sql`${t.isArchived} = false`),
+    // Unique employee number per tenant
+    uniqueIndex('idx_employees_no_tenant').on(t.tenantId, t.employeeNo),
+    // Unique email per tenant (where email is provided)
+    uniqueIndex('idx_employees_email_tenant').on(t.tenantId, t.email).where(sql`${t.email} IS NOT NULL`),
+    // Data integrity checks
+    check('chk_employees_salary_positive', sql`${t.basicSalary} IS NULL OR ${t.basicSalary} >= 0`),
+    check('chk_employees_total_gte_basic', sql`${t.totalSalary} IS NULL OR ${t.basicSalary} IS NULL OR ${t.totalSalary} >= ${t.basicSalary}`),
+    check('chk_employees_gender', sql`${t.gender} IN ('male', 'female')`),
+    check('chk_employees_contract_after_join', sql`${t.contractEndDate} IS NULL OR ${t.contractEndDate} >= ${t.joinDate}`),
+    check('chk_employees_probation_after_join', sql`${t.probationEndDate} IS NULL OR ${t.probationEndDate} >= ${t.joinDate}`),
+])
 
 export const employeesRelations = relations(employees, ({ one }) => ({
     tenant: one(tenants, { fields: [employees.tenantId], references: [tenants.id] }),

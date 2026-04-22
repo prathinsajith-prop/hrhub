@@ -1,4 +1,6 @@
 import { listLeaveRequests, createLeaveRequest, approveLeave, cancelLeave, getLeaveBalance } from './leave.service.js'
+import { validate, createLeaveSchema, leaveActionSchema } from '../../lib/validation.js'
+import { recordActivity } from '../audit/audit.service.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -11,42 +13,33 @@ export default async function (fastify: any): Promise<void> {
 
     fastify.post('/', {
         ...auth,
-        schema: {
-            tags: ['Leave'],
-            body: {
-                type: 'object',
-                required: ['employeeId', 'leaveType', 'startDate', 'endDate', 'days'],
-                properties: {
-                    employeeId: { type: 'string', format: 'uuid' },
-                    leaveType: { type: 'string' },
-                    startDate: { type: 'string' },
-                    endDate: { type: 'string' },
-                    days: { type: 'integer', minimum: 1 },
-                    reason: { type: 'string' },
-                },
-            },
-        },
+        schema: { tags: ['Leave'] },
     }, async (request, reply) => {
-        const body = request.body as Record<string, unknown>
+        const body = validate(createLeaveSchema, request.body)
         const leave = await createLeaveRequest(request.user.tenantId, body as never)
         return reply.code(201).send({ data: leave })
     })
 
     fastify.post('/:id/approve', {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')],
-        schema: {
-            tags: ['Leave'],
-            body: {
-                type: 'object',
-                required: ['approved'],
-                properties: { approved: { type: 'boolean' } },
-            },
-        },
+        schema: { tags: ['Leave'] },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        const { approved } = request.body as { approved: boolean }
+        const { approved, notes } = validate(leaveActionSchema, request.body)
         const updated = await approveLeave(request.user.tenantId, id, request.user.id, approved)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Leave request not found or already processed' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.sub,
+            actorName: `${(request.user as any).firstName ?? ''} ${(request.user as any).lastName ?? ''}`.trim(),
+            actorRole: request.user.role,
+            entityType: 'leave',
+            entityId: id,
+            action: approved ? 'approve' : 'reject',
+            metadata: notes ? { notes } : undefined,
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send({ data: updated })
     })
 

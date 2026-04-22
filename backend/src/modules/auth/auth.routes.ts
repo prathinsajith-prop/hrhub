@@ -1,5 +1,6 @@
 import { loginUser, refreshAccessToken, revokeRefreshToken, requestPasswordReset, resetPasswordWithToken, changePassword } from './auth.service.js'
 import { recordLoginEvent } from '../audit/audit.service.js'
+import { validate, loginSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema } from '../../lib/validation.js'
 
 export default async function (fastify: any): Promise<void> {
     // POST /api/v1/auth/login
@@ -28,7 +29,7 @@ export default async function (fastify: any): Promise<void> {
             },
         },
     }, async (request, reply) => {
-        const { email, password } = request.body as { email: string; password: string }
+        const { email, password } = validate(loginSchema, request.body)
         const ipAddress = (request as any).ip ?? request.headers['x-forwarded-for'] as string
         const userAgent = request.headers['user-agent']
 
@@ -105,7 +106,7 @@ export default async function (fastify: any): Promise<void> {
             },
         },
     }, async (request, reply) => {
-        const { email } = request.body as { email: string }
+        const { email } = validate(forgotPasswordSchema, request.body)
         const result = await requestPasswordReset(email)
         // Always 200 to avoid email enumeration; expose dev token only outside production.
         return reply.send({
@@ -133,7 +134,7 @@ export default async function (fastify: any): Promise<void> {
             },
         },
     }, async (request, reply) => {
-        const { token, password } = request.body as { token: string; password: string }
+        const { token, password } = validate(resetPasswordSchema, request.body)
         const result = await resetPasswordWithToken(token, password)
         if (!result.ok) {
             const message =
@@ -160,7 +161,7 @@ export default async function (fastify: any): Promise<void> {
         },
         preHandler: [fastify.authenticate],
     }, async (request, reply) => {
-        const { currentPassword, newPassword } = request.body as { currentPassword: string; newPassword: string }
+        const { currentPassword, newPassword } = validate(changePasswordSchema, request.body)
         const userId = (request.user as any).sub ?? (request.user as any).id
         const result = await changePassword(userId, currentPassword, newPassword)
         if (!result.ok) {

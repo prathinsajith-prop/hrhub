@@ -2,21 +2,23 @@ import {
     listEmployees, getEmployee, createEmployee,
     updateEmployee, archiveEmployee, getExpiringVisas, getOrgChart,
 } from './employees.service.js'
+import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSchema } from '../../lib/validation.js'
+import { recordActivity } from '../audit/audit.service.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     // GET /api/v1/employees
     fastify.get('/', { ...auth, schema: { tags: ['Employees'] } }, async (request, reply) => {
-        const { search, status, department, limit = '20', offset = '0' } = request.query as Record<string, string>
+        const query = validate(listEmployeesSchema, request.query)
 
         const result = await listEmployees({
             tenantId: request.user.tenantId,
-            search,
-            status: status as never,
-            department,
-            limit: Math.min(Number(limit), 100),
-            offset: Number(offset),
+            search: query.search,
+            status: query.status,
+            department: query.department,
+            limit: query.limit,
+            offset: query.offset,
         })
 
         return reply.send(result)
@@ -46,36 +48,22 @@ export default async function (fastify: any): Promise<void> {
     fastify.post('/', {
         ...auth,
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
-        schema: {
-            tags: ['Employees'],
-            body: {
-                type: 'object',
-                required: ['entityId', 'employeeNo', 'firstName', 'lastName', 'joinDate'],
-                properties: {
-                    entityId: { type: 'string', format: 'uuid' },
-                    employeeNo: { type: 'string' },
-                    firstName: { type: 'string' },
-                    lastName: { type: 'string' },
-                    email: { type: 'string', format: 'email' },
-                    phone: { type: 'string' },
-                    nationality: { type: 'string' },
-                    passportNo: { type: 'string' },
-                    emiratesId: { type: 'string' },
-                    dateOfBirth: { type: 'string' },
-                    gender: { type: 'string', enum: ['male', 'female'] },
-                    department: { type: 'string' },
-                    designation: { type: 'string' },
-                    joinDate: { type: 'string' },
-                    basicSalary: { type: 'number' },
-                    totalSalary: { type: 'number' },
-                    passportExpiry: { type: 'string' },
-                    emiratisationCategory: { type: 'string', enum: ['emirati', 'expat'] },
-                },
-            },
-        },
+        schema: { tags: ['Employees'] },
     }, async (request, reply) => {
-        const body = request.body as Record<string, unknown>
+        const body = validate(createEmployeeSchema, request.body)
         const employee = await createEmployee(request.user.tenantId, body as never)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.sub,
+            actorName: `${(request.user as any).firstName ?? ''} ${(request.user as any).lastName ?? ''}`.trim(),
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: employee.id,
+            entityName: employee.fullName,
+            action: 'create',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(201).send({ data: employee })
     })
 
@@ -85,9 +73,21 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Employees'] },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        const body = request.body as Record<string, unknown>
+        const body = validate(updateEmployeeSchema, request.body)
         const updated = await updateEmployee(request.user.tenantId, id, body as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.sub,
+            actorName: `${(request.user as any).firstName ?? ''} ${(request.user as any).lastName ?? ''}`.trim(),
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: updated.id,
+            entityName: `${updated.firstName} ${updated.lastName}`,
+            action: 'update',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send({ data: updated })
     })
 
@@ -99,6 +99,18 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const archived = await archiveEmployee(request.user.tenantId, id)
         if (!archived) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.sub,
+            actorName: `${(request.user as any).firstName ?? ''} ${(request.user as any).lastName ?? ''}`.trim(),
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: archived.id,
+            entityName: `${archived.firstName} ${archived.lastName}`,
+            action: 'delete',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(204).send()
     })
 

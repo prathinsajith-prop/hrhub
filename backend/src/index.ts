@@ -33,6 +33,7 @@ import { interviewRoutes } from './modules/recruitment/interview.routes.js'
 import { performanceRoutes } from './modules/performance/performance.routes.js'
 import { attendanceRoutes } from './modules/attendance/attendance.routes.js'
 import { auditRoutes } from './modules/audit/audit.routes.js'
+import { notificationsRoutes } from './modules/notifications/notifications.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -128,6 +129,7 @@ async function bootstrap() {
     await app.register(performanceRoutes, { prefix: '/api/v1' })
     await app.register(attendanceRoutes, { prefix: '/api/v1' })
     await app.register(auditRoutes, { prefix: '/api/v1/audit' })
+    await app.register(notificationsRoutes, { prefix: '/api/v1/notifications' })
 
     // Health check
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
@@ -150,13 +152,14 @@ async function bootstrap() {
     })
 
     // Global error handler
-    app.setErrorHandler((error, _request, reply) => {
-        app.log.error(error)
-        const statusCode = error.statusCode ?? 500
+    app.setErrorHandler((error: any, _request: any, reply: any) => {
+        const statusCode: number = error.statusCode ?? 500
+        if (statusCode >= 500) app.log.error(error)
         reply.code(statusCode).send({
             statusCode,
-            error: error.name ?? 'Internal Server Error',
+            error: error.name ?? 'Error',
             message: statusCode < 500 ? error.message : 'Internal server error',
+            ...(error.validationErrors ? { validationErrors: error.validationErrors } : {}),
         })
     })
 

@@ -1,5 +1,5 @@
 import { BellIcon, SearchIcon } from 'lucide-react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
@@ -18,7 +18,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 import { cn } from '@/lib/utils'
-import { useNotifications } from '@/hooks/useDashboard'
+import { useNotificationsList, useUnreadCount, useMarkNotificationRead } from '@/hooks/useNotifications'
 
 const routeMeta: Record<string, { title: string; parent?: string }> = {
   '/dashboard': { title: 'Dashboard' },
@@ -40,13 +40,15 @@ const routeMeta: Record<string, { title: string; parent?: string }> = {
  */
 export function SiteHeader() {
   const location = useLocation()
+  const navigate = useNavigate()
   const segments = location.pathname.split('/').filter(Boolean)
   const rootPath = segments.length ? `/${segments[0]}` : '/dashboard'
   const rootMeta = routeMeta[rootPath] ?? { title: 'HRHub' }
   const isDetail = segments.length > 1
-  const { data: notifData } = useNotifications(10)
-  const notifications = (notifData as any[]) ?? []
-  const unreadCount = notifications.length
+  const { data: notifData } = useNotificationsList({ limit: 8 })
+  const { data: unreadCount = 0 } = useUnreadCount()
+  const markRead = useMarkNotificationRead()
+  const notifications = notifData?.data ?? []
 
   return (
     <header
@@ -130,25 +132,40 @@ export function SiteHeader() {
             <div className="divide-y divide-border max-h-72 overflow-y-auto">
               {notifications.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-6">No new notifications</p>
-              ) : notifications.slice(0, 8).map((n: any, i: number) => (
-                <div key={n.id ?? i} className="flex gap-3 p-3 hover:bg-muted/50 cursor-pointer">
+              ) : notifications.slice(0, 8).map((n, i: number) => (
+                <div
+                  key={n.id ?? i}
+                  className={cn(
+                    'flex gap-3 p-3 cursor-pointer transition-colors hover:bg-muted/50',
+                    !n.isRead && 'bg-muted/20',
+                  )}
+                  onClick={() => { if (!n.isRead) markRead.mutate(n.id) }}
+                >
                   <div
                     className={cn(
                       'mt-1 h-2 w-2 rounded-full shrink-0',
-                      n.type === 'warning' && 'bg-warning',
-                      n.type === 'info' && 'bg-info',
-                      (!n.type || n.type === 'default') && 'bg-primary',
+                      n.type === 'warning' && 'bg-amber-500',
+                      n.type === 'error' && 'bg-red-500',
+                      n.type === 'success' && 'bg-emerald-500',
+                      n.type === 'info' && 'bg-blue-500',
                     )}
                   />
-                  <div>
-                    <p className="text-xs font-medium">{n.title ?? n.message}</p>
-                    <p className="text-[11px] text-muted-foreground">{n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ''}</p>
+                  <div className="min-w-0">
+                    <p className={cn('text-xs', !n.isRead ? 'font-semibold' : 'font-medium')}>{n.title}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{n.message}</p>
+                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">{n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ''}</p>
                   </div>
+                  {!n.isRead && <span className="ml-auto mt-1 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
                 </div>
               ))}
             </div>
             <div className="p-2 border-t border-border">
-              <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-xs text-muted-foreground"
+                onClick={() => navigate('/notifications')}
+              >
                 View all notifications
               </Button>
             </div>

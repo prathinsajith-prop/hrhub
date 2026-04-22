@@ -51,7 +51,14 @@ export function LoginPage() {
       })
       const json = await res.json()
       if (!res.ok) {
-        toast.error('Login failed', json?.message ?? 'Invalid credentials')
+        if (res.status === 423) {
+          // Account locked — show specific message with time remaining
+          toast.error('Account locked', json?.message ?? 'Too many failed attempts. Try again later.')
+        } else if (res.status === 429) {
+          toast.error('Too many attempts', json?.message ?? 'Please wait before trying again.')
+        } else {
+          toast.error('Login failed', json?.message ?? 'Invalid email or password.')
+        }
         return
       }
       const { user, tenant, accessToken, refreshToken } = json.data

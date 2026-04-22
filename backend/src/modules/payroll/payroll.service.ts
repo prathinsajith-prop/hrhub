@@ -71,6 +71,7 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
         housingAllowance: employees.housingAllowance,
         transportAllowance: employees.transportAllowance,
         otherAllowances: employees.otherAllowances,
+        joinDate: employees.joinDate,
     }).from(employees)
         .where(and(
             eq(employees.tenantId, tenantId),
@@ -130,7 +131,20 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
         const housing = Number(emp.housingAllowance ?? 0)
         const transport = Number(emp.transportAllowance ?? 0)
         const other = Number(emp.otherAllowances ?? 0)
-        const gross = basic + housing + transport + other
+
+        // Prorated pay: apply if employee joined mid-month or was terminated mid-month
+        let workedDays = daysInMonth
+        const joinDate = emp.joinDate ? new Date(emp.joinDate) : null
+        const monthStart = new Date(run.year, run.month - 1, 1)
+        const monthEnd = new Date(run.year, run.month - 1, daysInMonth)
+
+        if (joinDate && joinDate > monthStart && joinDate <= monthEnd) {
+            // Joined mid-month: only count from join day (prorated pay)
+            workedDays = daysInMonth - joinDate.getDate() + 1
+        }
+
+        const prorateRatio = workedDays / daysInMonth
+        const gross = (basic + housing + transport + other) * prorateRatio
 
         const dailyRate = basic / 30
         const leave = leaveByEmp.get(emp.id)
@@ -147,14 +161,14 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
             payrollRunId,
             employeeId: emp.id,
             tenantId,
-            basicSalary: String(basic.toFixed(2)),
-            housingAllowance: String(housing.toFixed(2)),
-            transportAllowance: String(transport.toFixed(2)),
-            otherAllowances: String(other.toFixed(2)),
+            basicSalary: String((basic * prorateRatio).toFixed(2)),
+            housingAllowance: String((housing * prorateRatio).toFixed(2)),
+            transportAllowance: String((transport * prorateRatio).toFixed(2)),
+            otherAllowances: String((other * prorateRatio).toFixed(2)),
             grossSalary: String(gross.toFixed(2)),
             deductions: String(deductions.toFixed(2)),
             netSalary: String(net.toFixed(2)),
-            daysWorked: daysInMonth - (leave?.unpaid ?? 0),
+            daysWorked: workedDays - (leave?.unpaid ?? 0),
             overtime: '0',
             commission: '0',
         }

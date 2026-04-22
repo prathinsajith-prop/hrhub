@@ -1,37 +1,45 @@
-import { eq, and, count, desc, gte, sql } from 'drizzle-orm'
+import { eq, and, count, desc, gte, lte, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, recruitmentJobs, visaApplications, leaveRequests, notifications, payrollRuns, onboardingChecklists, onboardingSteps } from '../../db/schema/index.js'
 
 export async function getDashboardKPIs(tenantId: string) {
-    const [{ totalEmployees }] = await db.select({ totalEmployees: count() }).from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false)))
+    const today = new Date()
+    const todayStr = today.toISOString().split('T')[0]
+    const in90 = new Date(today); in90.setDate(in90.getDate() + 90)
+    const cutoffStr = in90.toISOString().split('T')[0]
 
-    const [{ openJobs }] = await db.select({ openJobs: count() }).from(recruitmentJobs)
-        .where(and(eq(recruitmentJobs.tenantId, tenantId), eq(recruitmentJobs.status, 'open')))
-
-    const [{ activeVisas }] = await db.select({ activeVisas: count() }).from(visaApplications)
-        .where(and(eq(visaApplications.tenantId, tenantId), eq(visaApplications.status, 'entry_permit')))
-    const [{ pendingLeave }] = await db.select({ pendingLeave: count() }).from(leaveRequests)
-        .where(and(eq(leaveRequests.tenantId, tenantId), eq(leaveRequests.status, 'pending')))
-
-    // Expiring visas in next 90 days
-    const today = new Date().toISOString().split('T')[0]
-    const in90 = new Date(); in90.setDate(in90.getDate() + 90)
-    const cutoff = in90.toISOString().split('T')[0]
-
-    const expiringVisas = await db.select().from(employees)
-        .where(and(
-            eq(employees.tenantId, tenantId),
-            eq(employees.isArchived, false),
-        ))
-        .then(rows => rows.filter(e => e.visaExpiry && e.visaExpiry >= today && e.visaExpiry <= cutoff).length)
+    // Run all 5 count queries in parallel — avoids 5 sequential round-trips
+    const [
+        [{ totalEmployees }],
+        [{ openJobs }],
+        [{ activeVisas }],
+        [{ pendingLeave }],
+        [{ expiringVisas }],
+    ] = await Promise.all([
+        db.select({ totalEmployees: count() }).from(employees)
+            .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false))),
+        db.select({ openJobs: count() }).from(recruitmentJobs)
+            .where(and(eq(recruitmentJobs.tenantId, tenantId), eq(recruitmentJobs.status, 'open'))),
+        db.select({ activeVisas: count() }).from(visaApplications)
+            .where(and(eq(visaApplications.tenantId, tenantId), eq(visaApplications.status, 'entry_permit'))),
+        db.select({ pendingLeave: count() }).from(leaveRequests)
+            .where(and(eq(leaveRequests.tenantId, tenantId), eq(leaveRequests.status, 'pending'))),
+        // Filter expiring visas in SQL — no full-table fetch
+        db.select({ expiringVisas: count() }).from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                gte(employees.visaExpiry, todayStr),
+                lte(employees.visaExpiry, cutoffStr),
+            )),
+    ])
 
     return {
         totalEmployees: Number(totalEmployees),
         openJobs: Number(openJobs),
         activeVisas: Number(activeVisas),
         pendingLeave: Number(pendingLeave),
-        expiringVisas,
+        expiringVisas: Number(expiringVisas),
     }
 }
 
@@ -118,24 +126,17 @@ export async function getEmiratisationStatus(tenantId: string) {
     // MOHRE target ratio (default 2% — actual quota varies by company size & sector).
     const targetRatio = 2.0
 
-    const [{ total }] = await db
-        .select({ total: count() })
-        .from(employees)
-        .where(and(
-            eq(employees.tenantId, tenantId),
-            eq(employees.isArchived, false),
-            eq(employees.status, 'active'),
-        ))
-
-    const [{ emiratis }] = await db
-        .select({ emiratis: count() })
-        .from(employees)
-        .where(and(
-            eq(employees.tenantId, tenantId),
-            eq(employees.isArchived, false),
-            eq(employees.status, 'active'),
-            eq(employees.emiratisationCategory, 'emirati'),
-        ))
+    const [[{ total }], [{ emiratis }]] = await Promise.all([
+        db.select({ total: count() }).from(employees)
+            .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), eq(employees.status, 'active'))),
+        db.select({ emiratis: count() }).from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                eq(employees.status, 'active'),
+                eq(employees.emiratisationCategory, 'emirati'),
+            )),
+    ])
 
     const totalNum = Number(total)
     const emiratisNum = Number(emiratis)

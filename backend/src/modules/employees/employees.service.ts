@@ -1,4 +1,4 @@
-import { eq, and, ilike, or, count, desc, asc, getTableColumns } from 'drizzle-orm'
+import { eq, and, ilike, or, count, desc, asc, getTableColumns, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, entities } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
@@ -27,12 +27,14 @@ export async function listEmployees(params: ListEmployeesParams) {
     if (status) conditions.push(eq(employees.status, status))
     if (department) conditions.push(eq(employees.department, department))
     if (search) {
+        const trimmed = search.trim()
         conditions.push(
             or(
-                ilike(employees.firstName, `%${search}%`),
-                ilike(employees.lastName, `%${search}%`),
-                ilike(employees.email, `%${search}%`),
-                ilike(employees.employeeNo, `%${search}%`)
+                // Full name search (handles "John Doe" style queries)
+                sql`(${employees.firstName} || ' ' || ${employees.lastName}) ILIKE ${'%' + trimmed + '%'}`,
+                ilike(employees.email, `%${trimmed}%`),
+                ilike(employees.employeeNo, `%${trimmed}%`),
+                ilike(employees.designation, `%${trimmed}%`),
             )!
         )
     }
