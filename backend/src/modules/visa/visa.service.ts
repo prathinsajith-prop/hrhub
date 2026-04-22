@@ -1,4 +1,5 @@
 import { eq, and, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
+import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { visaApplications } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
@@ -30,7 +31,7 @@ export async function getVisa(tenantId: string, id: string) {
 
 export async function softDeleteVisa(tenantId: string, id: string) {
     const [row] = await db.update(visaApplications)
-        .set({ deletedAt: new Date(), updatedAt: new Date() } as any)
+        .set(withTimestamp({ deletedAt: new Date() }))
         .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)))
         .returning()
     return row ?? null
@@ -43,7 +44,7 @@ export async function createVisa(tenantId: string, data: Omit<NewVisa, 'tenantId
 
 export async function updateVisa(tenantId: string, id: string, data: Partial<NewVisa>) {
     const [row] = await db.update(visaApplications)
-        .set({ ...data, updatedAt: new Date() } as any)
+        .set(withTimestamp(data))
         .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId)))
         .returning()
     return row ?? null
@@ -84,7 +85,7 @@ export async function advanceVisaStep(tenantId: string, id: string) {
     const mappedStatus = STEP_TO_STATUS[newStep] ?? visa.status
 
     const [row] = await db.update(visaApplications)
-        .set({ currentStep: newStep, status: mappedStatus, updatedAt: new Date() } as any)
+        .set(withTimestamp({ currentStep: newStep, status: mappedStatus }))
         .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId)))
         .returning()
 
@@ -105,7 +106,7 @@ export async function cancelVisa(tenantId: string, id: string, reason?: string) 
         : visa.notes
 
     const [row] = await db.update(visaApplications)
-        .set({ status: 'cancelled', notes: mergedNotes, updatedAt: new Date() } as any)
+        .set(withTimestamp({ status: 'cancelled' as const, notes: mergedNotes }))
         .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)))
         .returning()
     return row ?? null
@@ -156,11 +157,10 @@ export async function recalcVisaUrgency(tenantId: string): Promise<{ updated: nu
 
         if (newUrgency !== visa.currentUrgency || newStatus) {
             await db.update(visaApplications)
-                .set({
+                .set(withTimestamp({
                     urgencyLevel: newUrgency,
                     ...(newStatus ? { status: newStatus } : {}),
-                    updatedAt: new Date(),
-                } as any)
+                }))
                 .where(eq(visaApplications.id, visa.id))
             updated++
         }

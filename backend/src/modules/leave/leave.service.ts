@@ -1,4 +1,5 @@
 import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns } from 'drizzle-orm'
+import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { leaveRequests } from '../../db/schema/index.js'
 import { employees } from '../../db/schema/employees.js'
@@ -43,7 +44,7 @@ export async function approveLeave(tenantId: string, id: string, approvedBy: str
 
 export async function cancelLeave(tenantId: string, id: string) {
     const [row] = await db.update(leaveRequests)
-        .set({ status: 'cancelled', updatedAt: new Date() } as any)
+        .set(withTimestamp({ status: 'cancelled' as const }))
         .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId)))
         .returning()
     return row ?? null
@@ -51,7 +52,7 @@ export async function cancelLeave(tenantId: string, id: string) {
 
 export async function softDeleteLeaveRequest(tenantId: string, id: string) {
     const [row] = await db.update(leaveRequests)
-        .set({ deletedAt: new Date(), updatedAt: new Date() } as any)
+        .set(withTimestamp({ deletedAt: new Date() }))
         .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId), isNull(leaveRequests.deletedAt)))
         .returning()
     return row ?? null

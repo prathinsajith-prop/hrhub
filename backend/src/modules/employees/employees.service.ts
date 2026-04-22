@@ -1,4 +1,5 @@
 import { eq, and, ilike, desc, asc, getTableColumns, sql } from 'drizzle-orm'
+import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { employees, entities } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
@@ -92,7 +93,7 @@ export async function createEmployee(tenantId: string, data: Omit<NewEmployee, '
 export async function updateEmployee(tenantId: string, id: string, data: Partial<NewEmployee>) {
     const [row] = await db
         .update(employees)
-        .set({ ...data, updatedAt: new Date() } as any)
+        .set(withTimestamp(data))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .returning()
 
@@ -102,7 +103,7 @@ export async function updateEmployee(tenantId: string, id: string, data: Partial
 export async function archiveEmployee(tenantId: string, id: string) {
     const [row] = await db
         .update(employees)
-        .set({ isArchived: true, status: 'terminated', updatedAt: new Date() } as any)
+        .set(withTimestamp({ isArchived: true, status: 'terminated' as const }))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .returning()
 

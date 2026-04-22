@@ -1,6 +1,6 @@
 /**
- * Email service — uses Nodemailer with SMTP (Mailpit in dev, real SMTP in prod).
- * Falls back gracefully if SMTP is unavailable.
+ * Email service — supports SMTP (Mailpit in dev, real SMTP in prod) and Resend.
+ * Provider is selected by EMAIL_PROVIDER env var (smtp | resend).
  */
 import nodemailer from 'nodemailer'
 import { loadEnv } from '../config/env.js'
@@ -10,13 +10,22 @@ let transporter: nodemailer.Transporter | null = null
 function getTransporter(): nodemailer.Transporter {
     if (transporter) return transporter
     const env = loadEnv()
-    transporter = nodemailer.createTransport({
-        host: env.SMTP_HOST,
-        port: env.SMTP_PORT,
-        secure: env.SMTP_PORT === 465,
-        auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
-        tls: { rejectUnauthorized: env.NODE_ENV === 'production' },
-    })
+    if (env.EMAIL_PROVIDER === 'resend') {
+        transporter = nodemailer.createTransport({
+            host: 'smtp.resend.com',
+            port: 465,
+            secure: true,
+            auth: { user: 'resend', pass: env.RESEND_API_KEY },
+        })
+    } else {
+        transporter = nodemailer.createTransport({
+            host: env.SMTP_HOST,
+            port: env.SMTP_PORT,
+            secure: env.SMTP_PORT === 465,
+            auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
+            tls: { rejectUnauthorized: env.NODE_ENV === 'production' },
+        })
+    }
     return transporter
 }
 

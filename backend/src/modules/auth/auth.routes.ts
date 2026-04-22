@@ -1,4 +1,4 @@
-import { loginUser, refreshAccessToken, revokeRefreshToken, requestPasswordReset, resetPasswordWithToken, changePassword } from './auth.service.js'
+import { loginUser, refreshAccessToken, revokeRefreshToken, requestPasswordReset, resetPasswordWithToken, changePassword, completeMfaLogin, registerTenant } from './auth.service.js'
 import { setupTotp, verifyAndEnableTotp, disableTotp, getTotpStatus } from './twofa.service.js'
 import { recordLoginEvent } from '../audit/audit.service.js'
 import { validate, loginSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema } from '../../lib/validation.js'
@@ -43,8 +43,42 @@ export default async function (fastify: any): Promise<void> {
         if (!result) {
             return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid email or password' })
         }
-
+        // 2FA required — send challenge token only
+        if ('requiresMfa' in result) {
+            return reply.send({ data: result })
+        }
         return reply.send({ data: result })
+    })
+
+    // POST /api/v1/auth/register — create new tenant + super_admin
+    fastify.post('/register', {
+        config: {
+            rateLimit: { max: 5, timeWindow: '15 minutes', keyGenerator: (r: any) => r.ip },
+        },
+        schema: {
+            tags: ['Auth'],
+            body: {
+                type: 'object',
+                required: ['name', 'email', 'password', 'company'],
+                properties: {
+                    name: { type: 'string', minLength: 2 },
+                    email: { type: 'string', format: 'email' },
+                    password: { type: 'string', minLength: 8 },
+                    company: { type: 'string', minLength: 2 },
+                },
+            },
+        },
+    }, async (request, reply) => {
+        const { name, email, password, company } = request.body as { name: string; email: string; password: string; company: string }
+        const result = await registerTenant({ name, email, password, company })
+        if (!result.ok) {
+            const reason = (result as { ok: false; reason: string }).reason
+            if (reason === 'email_taken') {
+                return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'An account with this email already exists.' })
+            }
+            return reply.code(500).send({ statusCode: 500, error: 'Internal Server Error', message: 'Registration failed.' })
+        }
+        return reply.code(201).send({ data: { ok: true } })
     })
 
     // POST /api/v1/auth/refresh
@@ -182,6 +216,42 @@ export default async function (fastify: any): Promise<void> {
 
     // ── 2FA / TOTP routes ────────────────────────────────────────────────
     const auth = { preHandler: [fastify.authenticate] }
+
+    // POST /api/v1/auth/2fa/challenge — complete login when 2FA is enabled (no auth required)
+    fastify.post('/2fa/challenge', {
+        config: {
+            rateLimit: { max: 10, timeWindow: '15 minutes', keyGenerator: (r: any) => r.ip },
+        },
+        schema: {
+            tags: ['Auth'],
+            body: {
+                type: 'object',
+                required: ['mfaToken', 'code'],
+                properties: {
+                    mfaToken: { type: 'string' },
+                    code: { type: 'string', minLength: 6, maxLength: 6 },
+                },
+            },
+        },
+    }, async (request: any, reply: any) => {
+        const { mfaToken, code } = request.body as { mfaToken: string; code: string }
+        let payload: any
+        try {
+            payload = fastify.jwt.verify(mfaToken)
+        } catch {
+            return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid or expired MFA session.' })
+        }
+        if (payload?.purpose !== 'mfa-pending') {
+            return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid MFA token.' })
+        }
+        const ipAddress = request.ip ?? request.headers['x-forwarded-for'] as string
+        const userAgent = request.headers['user-agent']
+        const result = await completeMfaLogin(fastify, payload.sub, code, { ipAddress, userAgent })
+        if (!result) {
+            return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid or expired MFA code.' })
+        }
+        return reply.send({ data: result })
+    })
 
     // GET /api/v1/auth/2fa/status
     fastify.get('/2fa/status', auth, async (request: any, reply: any) => {

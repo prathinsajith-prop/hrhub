@@ -1,4 +1,5 @@
 import { eq, and, ilike, asc, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
+import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { recruitmentJobs, jobApplications } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
@@ -31,7 +32,7 @@ export async function getJob(tenantId: string, id: string) {
 
 export async function softDeleteJob(tenantId: string, id: string) {
     const [row] = await db.update(recruitmentJobs)
-        .set({ deletedAt: new Date(), updatedAt: new Date() } as any)
+        .set(withTimestamp({ deletedAt: new Date() }))
         .where(and(eq(recruitmentJobs.id, id), eq(recruitmentJobs.tenantId, tenantId), isNull(recruitmentJobs.deletedAt)))
         .returning()
     return row ?? null
@@ -44,7 +45,7 @@ export async function createJob(tenantId: string, data: Omit<NewJob, 'tenantId' 
 
 export async function updateJob(tenantId: string, id: string, data: Partial<NewJob>) {
     const [row] = await db.update(recruitmentJobs)
-        .set({ ...data, updatedAt: new Date() } as any)
+        .set(withTimestamp(data))
         .where(and(eq(recruitmentJobs.id, id), eq(recruitmentJobs.tenantId, tenantId)))
         .returning()
     return row ?? null
@@ -73,7 +74,7 @@ export async function createApplication(tenantId: string, jobId: string, data: O
 
 export async function updateApplicationStage(tenantId: string, id: string, stage: string) {
     const [row] = await db.update(jobApplications)
-        .set({ stage: stage as never, updatedAt: new Date() } as any)
+        .set(withTimestamp({ stage } as Record<string, unknown>))
         .where(and(eq(jobApplications.id, id), eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
         .returning()
     return row ?? null
@@ -81,7 +82,7 @@ export async function updateApplicationStage(tenantId: string, id: string, stage
 
 export async function softDeleteApplication(tenantId: string, id: string) {
     const [row] = await db.update(jobApplications)
-        .set({ deletedAt: new Date(), updatedAt: new Date() } as any)
+        .set(withTimestamp({ deletedAt: new Date() }))
         .where(and(eq(jobApplications.id, id), eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
         .returning()
     return row ?? null

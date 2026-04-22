@@ -1,4 +1,5 @@
 import { eq, and, desc, lte, isNull, sql, getTableColumns } from 'drizzle-orm'
+import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { documents } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
@@ -31,7 +32,7 @@ export async function getDocument(tenantId: string, id: string) {
 
 export async function softDeleteDocument(tenantId: string, id: string) {
     const [row] = await db.update(documents)
-        .set({ deletedAt: new Date(), updatedAt: new Date() } as any)
+        .set(withTimestamp({ deletedAt: new Date() }))
         .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId), isNull(documents.deletedAt)))
         .returning()
     return row ?? null
@@ -44,7 +45,7 @@ export async function createDocument(tenantId: string, uploadedBy: string, data:
 
 export async function updateDocument(tenantId: string, id: string, data: Partial<NewDocument>) {
     const [row] = await db.update(documents)
-        .set({ ...data, updatedAt: new Date() } as any)
+        .set(withTimestamp(data))
         .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId)))
         .returning()
     return row ?? null
@@ -52,7 +53,7 @@ export async function updateDocument(tenantId: string, id: string, data: Partial
 
 export async function verifyDocument(tenantId: string, id: string, verifiedBy: string) {
     const [row] = await db.update(documents)
-        .set({ verified: true, verifiedBy, verifiedAt: new Date(), status: 'valid', updatedAt: new Date() } as any)
+        .set(withTimestamp({ verified: true, verifiedBy, verifiedAt: new Date(), status: 'valid' as const }))
         .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId)))
         .returning()
     return row ?? null

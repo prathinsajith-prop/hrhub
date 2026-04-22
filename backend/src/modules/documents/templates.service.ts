@@ -1,4 +1,5 @@
 import { eq, and, desc } from 'drizzle-orm'
+import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { documentTemplates, documentVersions, documents } from '../../db/schema/index.js'
 
@@ -130,7 +131,7 @@ export async function createTemplate(tenantId: string, createdBy: string, data: 
 
 export async function updateTemplate(tenantId: string, id: string, data: Partial<{ name: string; body: string; variables: string[]; isActive: boolean }>) {
     const [row] = await db.update(documentTemplates)
-        .set({ ...data, updatedAt: new Date() } as any)
+        .set(withTimestamp(data))
         .where(and(eq(documentTemplates.id, id), eq(documentTemplates.tenantId, tenantId)))
         .returning()
     return row ?? null
@@ -138,7 +139,7 @@ export async function updateTemplate(tenantId: string, id: string, data: Partial
 
 export async function deleteTemplate(tenantId: string, id: string) {
     const [row] = await db.update(documentTemplates)
-        .set({ isActive: false, updatedAt: new Date() } as any)
+        .set(withTimestamp({ isActive: false }))
         .where(and(eq(documentTemplates.id, id), eq(documentTemplates.tenantId, tenantId)))
         .returning()
     return row ?? null

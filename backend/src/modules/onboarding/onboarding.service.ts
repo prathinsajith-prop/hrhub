@@ -1,4 +1,5 @@
 import { eq, and } from 'drizzle-orm'
+import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { onboardingChecklists, onboardingSteps } from '../../db/schema/index.js'
 
@@ -24,7 +25,7 @@ export async function updateStep(tenantId: string, checklistId: string, stepId: 
     if (!checklist) return null
 
     const [step] = await db.update(onboardingSteps)
-        .set({ ...(data as any) })
+        .set(data as Record<string, unknown>)
         .where(and(eq(onboardingSteps.id, stepId), eq(onboardingSteps.checklistId, checklistId)))
         .returning()
 
@@ -38,7 +39,7 @@ export async function updateStep(tenantId: string, checklistId: string, stepId: 
     const progress = Math.round((completedCount / allSteps.length) * 100)
 
     await db.update(onboardingChecklists)
-        .set({ progress, updatedAt: new Date() } as any)
+        .set(withTimestamp({ progress }))
         .where(eq(onboardingChecklists.id, checklistId))
 
     return { step, progress }

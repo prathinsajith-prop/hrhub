@@ -3,6 +3,7 @@ import { db } from '../../db/index.js'
 import { payrollRuns, payslips, employees, tenants } from '../../db/schema/index.js'
 import { leaveRequests } from '../../db/schema/leave.js'
 import type { InferInsertModel } from 'drizzle-orm'
+import { withTimestamp } from '../../lib/db-helpers.js'
 
 type NewPayrollRun = InferInsertModel<typeof payrollRuns>
 
@@ -35,7 +36,7 @@ export async function createPayrollRun(tenantId: string, data: Omit<NewPayrollRu
 
 export async function updatePayrollRun(tenantId: string, id: string, data: Partial<NewPayrollRun>) {
     const [row] = await db.update(payrollRuns)
-        .set({ ...data, updatedAt: new Date() } as any)
+        .set(withTimestamp(data))
         .where(and(eq(payrollRuns.id, id), eq(payrollRuns.tenantId, tenantId)))
         .returning()
     return row ?? null
@@ -59,7 +60,7 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
 
     // Mark as processing immediately
     await db.update(payrollRuns)
-        .set({ status: 'processing', updatedAt: new Date() } as any)
+        .set(withTimestamp({ status: 'processing' as const }))
         .where(eq(payrollRuns.id, payrollRunId))
 
     // Fetch all active + probation employees for tenant
@@ -83,7 +84,7 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
     if (activeEmps.length === 0) {
         // Revert to draft if no employees
         await db.update(payrollRuns)
-            .set({ status: 'draft', updatedAt: new Date() } as any)
+            .set(withTimestamp({ status: 'draft' as const }))
             .where(eq(payrollRuns.id, payrollRunId))
         return false
     }
@@ -182,7 +183,7 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
 
     if (payslipValues.length === 0) {
         await db.update(payrollRuns)
-            .set({ status: 'draft', updatedAt: new Date() } as any)
+            .set(withTimestamp({ status: 'draft' as const }))
             .where(eq(payrollRuns.id, payrollRunId))
         return false
     }
@@ -197,15 +198,14 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
 
         // Update payroll run totals + status
         await tx.update(payrollRuns)
-            .set({
-                status: 'approved',
+            .set(withTimestamp({
+                status: 'approved' as const,
                 totalEmployees: activeEmps.length,
                 totalGross: String(totalGross.toFixed(2)),
                 totalDeductions: String(totalDeductions.toFixed(2)),
                 totalNet: String(totalNet.toFixed(2)),
                 processedDate: new Date().toISOString().split('T')[0],
-                updatedAt: new Date(),
-            } as any)
+            }))
             .where(eq(payrollRuns.id, payrollRunId))
     })
 
@@ -387,26 +387,19 @@ export async function getPayslipById(tenantId: string, payslipId: string) {
         department: employees.department,
         bankName: employees.bankName,
         iban: employees.iban,
+        // Tenant fields (joined in a single query — no N+1)
+        tenantName: tenants.name,
+        tradeLicenseNo: tenants.tradeLicenseNo,
     }).from(payslips)
         .innerJoin(employees, eq(payslips.employeeId, employees.id))
         .innerJoin(payrollRuns, eq(payslips.payrollRunId, payrollRuns.id))
+        .leftJoin(tenants, eq(tenants.id, payslips.tenantId))
         .where(and(eq(payslips.id, payslipId), eq(payslips.tenantId, tenantId)))
         .limit(1)
 
     if (!slip) return null
 
-    // Get tenant details for payslip PDF
-    const empRow = await db.select({ tenantId: employees.tenantId })
-        .from(employees).where(eq(employees.id, slip.employeeId)).limit(1)
-    let tenantName = 'Company'
-    let tradeLicenseNo: string | undefined
-    if (empRow[0]) {
-        const [tenant] = await db.select({ name: tenants.name, tradeLicenseNo: tenants.tradeLicenseNo })
-            .from(tenants).where(eq(tenants.id, empRow[0].tenantId)).limit(1)
-        if (tenant) { tenantName = tenant.name; tradeLicenseNo = tenant.tradeLicenseNo }
-    }
-
     const employeeName = `${slip.firstName} ${slip.lastName}`
-    return { ...slip, employeeName, tenantName, tradeLicenseNo }
+    return { ...slip, employeeName }
 }
 

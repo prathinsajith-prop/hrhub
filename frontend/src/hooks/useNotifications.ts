@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 export interface Notification {
     id: string
@@ -60,8 +61,17 @@ export function useMarkAllRead() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: () => api.post<{ data: { markedRead: number } }>('/notifications/mark-all-read', {}),
-        onSuccess: () => {
+        onSuccess: (res) => {
             qc.invalidateQueries({ queryKey: ['notifications'] })
+            const count = res?.data?.markedRead ?? 0
+            if (count > 0) {
+                toast.success('All notifications marked as read', `${count} notification${count === 1 ? '' : 's'} updated.`)
+            } else {
+                toast.info('You\u2019re all caught up', 'No unread notifications to mark.')
+            }
+        },
+        onError: () => {
+            toast.error('Could not mark as read', 'Please try again in a moment.')
         },
     })
 }

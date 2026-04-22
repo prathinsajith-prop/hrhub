@@ -6,6 +6,8 @@ import { users, refreshTokens, tenants, passwordResetTokens } from '../../db/sch
 import { sendEmail, passwordResetEmail } from '../../plugins/email.js'
 import { loadEnv } from '../../config/env.js'
 import { recordLoginEvent } from '../audit/audit.service.js'
+import { verifyTotpCode } from './twofa.service.js'
+import { withTimestamp } from '../../lib/db-helpers.js'
 import type { FastifyInstance } from 'fastify'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,42 +96,42 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         .set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date(), updatedAt: new Date() })
         .where(eq(users.id, user.id))
 
-    const [tenant] = await db
-        .select()
-        .from(tenants)
-        .where(eq(tenants.id, user.tenantId))
-        .limit(1)
+    // If 2FA is enabled, return a short-lived MFA challenge token instead of real tokens
+    if (user.twoFaEnabled) {
+        const mfaToken = fastify.jwt.sign(
+            { sub: user.id, purpose: 'mfa-pending' },
+            { expiresIn: '5m' }
+        )
+        return { requiresMfa: true as const, mfaToken }
+    }
 
-    // Generate tokens
+    return issueTokens(fastify, user, input)
+}
+
+type UserRow = { id: string; name: string; email: string; role: string; tenantId: string; entityId: string | null; department: string | null; avatarUrl: string | null }
+
+async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ipAddress?: string; userAgent?: string }) {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, user.tenantId)).limit(1)
+
     const accessToken = fastify.jwt.sign(
         { sub: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email },
         { expiresIn: '15m' }
     )
-
     const rawRefreshToken = crypto.randomBytes(48).toString('hex')
     const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex')
-
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 7)
 
-    await db.insert(refreshTokens).values({
-        userId: user.id,
-        tokenHash,
-        expiresAt,
-    })
+    await db.insert(refreshTokens).values({ userId: user.id, tokenHash, expiresAt })
 
-    // Update last login
-    // (lastLoginAt already set in the lockout-reset update above)
-
-    // Record successful login event
     recordLoginEvent({
         tenantId: user.tenantId,
         userId: user.id,
         email: user.email,
         eventType: 'login',
         success: true,
-        ipAddress: input.ipAddress,
-        userAgent: input.userAgent,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
         sessionRef: tokenHash.slice(0, 8),
     }).catch(() => { })
 
@@ -155,6 +157,63 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
             logoUrl: tenant.logoUrl,
         } : null,
     }
+}
+
+/**
+ * Complete a 2FA login challenge — verifies the TOTP code and issues real tokens.
+ * Call this after the user has been issued a `mfa-pending` JWT from loginUser.
+ */
+export async function completeMfaLogin(
+    fastify: AnyFastify,
+    userId: string,
+    totpCode: string,
+    meta: { ipAddress?: string; userAgent?: string }
+) {
+    const isValid = await verifyTotpCode(userId, totpCode)
+    if (!isValid) return null
+
+    const [user] = await db
+        .select()
+        .from(users)
+        .where(and(eq(users.id, userId), eq(users.isActive, true)))
+        .limit(1)
+    if (!user) return null
+
+    return issueTokens(fastify, user, meta)
+}
+
+/**
+ * Register a new tenant + super_admin user in a single transaction.
+ */
+export async function registerTenant(input: { name: string; email: string; password: string; company: string }) {
+    const [existing] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, input.email.toLowerCase()))
+        .limit(1)
+    if (existing) return { ok: false, reason: 'email_taken' as const }
+
+    const passwordHash = await bcrypt.hash(input.password, 10)
+
+    return db.transaction(async (tx) => {
+        const [tenant] = await tx.insert(tenants).values({
+            name: input.company,
+            tradeLicenseNo: `PENDING-${crypto.randomBytes(8).toString('hex')}`,
+            jurisdiction: 'mainland',
+            industryType: 'general',
+            subscriptionPlan: 'starter',
+        }).returning()
+
+        await tx.insert(users).values({
+            tenantId: tenant.id,
+            name: input.name,
+            email: input.email.toLowerCase(),
+            passwordHash,
+            role: 'super_admin',
+        })
+
+        return { ok: true as const }
+    })
 }
 
 export async function refreshAccessToken(fastify: AnyFastify, rawToken: string) {
@@ -246,10 +305,10 @@ export async function resetPasswordWithToken(rawToken: string, newPassword: stri
 
     const passwordHash = await bcrypt.hash(newPassword, 10)
     await db.update(users)
-        .set({ passwordHash, updatedAt: new Date() } as any)
+        .set(withTimestamp({ passwordHash }))
         .where(eq(users.id, record.userId))
     await db.update(passwordResetTokens)
-        .set({ usedAt: new Date() } as any)
+        .set({ usedAt: new Date() })
         .where(eq(passwordResetTokens.id, record.id))
     // Invalidate all refresh tokens for the user.
     await db.delete(refreshTokens).where(eq(refreshTokens.userId, record.userId))
@@ -267,7 +326,7 @@ export async function changePassword(userId: string, currentPassword: string, ne
 
     const passwordHash = await bcrypt.hash(newPassword, 10)
     await db.update(users)
-        .set({ passwordHash, updatedAt: new Date() } as any)
+        .set(withTimestamp({ passwordHash }))
         .where(eq(users.id, user.id))
 
     return { ok: true as const }

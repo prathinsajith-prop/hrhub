@@ -52,7 +52,18 @@ async function bootstrap() {
     })
 
     // Security
-    await app.register(helmet, { contentSecurityPolicy: false })
+    await app.register(helmet, {
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: ["'none'"],
+                objectSrc: ["'none'"],
+                frameAncestors: ["'none'"],
+                imgSrc: ["'self'", 'data:', env.S3_PUBLIC_URL],
+                connectSrc: ["'self'"],
+            },
+        },
+    })
     await app.register(rateLimit, { max: 200, timeWindow: '1 minute' })
 
     // Gzip compression for all responses (PERF-007)
