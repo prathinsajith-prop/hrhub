@@ -358,5 +358,130 @@
     "sessionExpired": "انتهت جلستك. يرجى تسجيل الدخول مجدداً.",
     "networkError": "خطأ في الشبكة. يرجى التحقق من اتصالك.",
     "backToHome": "العودة إلى الصفحة الرئيسية"
+  },
+  "onboarding": {
+    "title": "الإلحاق الوظيفي",
+    "description": "تتبع تقدم إلحاق الموظفين الجدد وقوائم المهام",
+    "newHire": "موظف جديد",
+    "checklist": "قائمة المهام",
+    "progress": "التقدم",
+    "tasksDone": "المهام المكتملة",
+    "tasksRemaining": "المهام المتبقية",
+    "dueDate": "تاريخ الاستحقاق",
+    "assignedTo": "مُسند إلى",
+    "noOnboarding": "لا توجد سجلات إلحاق",
+    "startOnboarding": "بدء الإلحاق",
+    "completeTask": "إتمام المهمة",
+    "status": {
+      "pending": "قيد الانتظار",
+      "in_progress": "قيد التنفيذ",
+      "completed": "مكتمل",
+      "overdue": "متأخر"
+    }
+  },
+  "compliance": {
+    "title": "الامتثال",
+    "description": "إدارة امتثال قانون العمل الإماراتي وأهداف التوطين",
+    "emiratisation": "التوطين",
+    "emiratisationTarget": "هدف التوطين",
+    "emiratisationRate": "نسبة التوطين",
+    "labourQuota": "الحصة العمالية",
+    "workPermit": "تصريح العمل",
+    "mohreStatus": "حالة وزارة الموارد البشرية",
+    "wpsCompliance": "امتثال WPS",
+    "violations": "المخالفات",
+    "noViolations": "لا توجد مشكلات امتثال",
+    "compliant": "ملتزم",
+    "nonCompliant": "غير ملتزم",
+    "underReview": "قيد المراجعة",
+    "deadline": "الموعد النهائي",
+    "authority": "الجهة"
+  },
+  "performance": {
+    "title": "تقييمات الأداء",
+    "description": "إدارة تقييمات أداء الموظفين ومؤشرات الأداء",
+    "addReview": "إضافة تقييم",
+    "reviewPeriod": "فترة التقييم",
+    "rating": "التقييم",
+    "reviewer": "المقيّم",
+    "goals": "الأهداف",
+    "achievements": "الإنجازات",
+    "areas": "مجالات التحسين",
+    "overallRating": "التقييم الإجمالي",
+    "noReviews": "لا توجد تقييمات أداء",
+    "status": {
+      "draft": "مسودة",
+      "submitted": "مقدّم",
+      "approved": "موافق عليه",
+      "acknowledged": "مُقرّ به"
+    },
+    "ratings": {
+      "outstanding": "متميز",
+      "exceeds": "يتجاوز التوقعات",
+      "meets": "يلبي التوقعات",
+      "below": "دون التوقعات",
+      "unsatisfactory": "غير مرضٍ"
+    }
+  },
+  "notifications": {
+    "title": "الإشعارات",
+    "description": "تنبيهاتك وإشعارات النظام",
+    "markAllRead": "تعليم الكل كمقروء",
+    "showUnreadOnly": "غير المقروءة فقط",
+    "showAll": "عرض الكل",
+    "noNotifications": "لا توجد إشعارات",
+    "noUnread": "لا توجد إشعارات جديدة",
+    "viewAll": "عرض جميع الإشعارات",
+    "unreadCount": "{{count}} غير مقروء",
+    "types": {
+      "info": "معلومة",
+      "warning": "تحذير",
+      "error": "تنبيه",
+      "success": "نجاح"
+    }
+  },
+  "reports": {
+    "title": "التقارير",
+    "description": "التحليلات والتصدير وتقارير الامتثال",
+    "generateReport": "إنشاء تقرير",
+    "reportType": "نوع التقرير",
+    "dateRange": "نطاق التاريخ",
+    "exportCsv": "تصدير CSV",
+    "exportPdf": "تصدير PDF",
+    "headcount": "تقرير الأعداد",
+    "payrollSummary": "ملخص الرواتب",
+    "leaveUtilisation": "استخدام الإجازات",
+    "turnover": "تقرير دوران العمالة",
+    "emiratisation": "تقرير التوطين",
+    "noReports": "لا توجد تقارير"
+  },
+  "exit": {
+    "title": "إدارة المغادرة",
+    "description": "إدارة إجراءات إنهاء خدمة الموظفين",
+    "addExit": "تسجيل مغادرة",
+    "exitType": "نوع المغادرة",
+    "exitDate": "تاريخ المغادرة",
+    "reason": "السبب",
+    "noticePeriod": "فترة الإشعار",
+    "clearance": "حالة التخليص",
+    "gratuity": "مكافأة نهاية الخدمة",
+    "finalSettlement": "التسوية النهائية",
+    "noExits": "لا توجد سجلات مغادرة",
+    "types": {
+      "resignation": "استقالة",
+      "termination": "إنهاء خدمة",
+      "contract_end": "انتهاء عقد",
+      "retirement": "تقاعد"
+    }
+  },
+  "orgChart": {
+    "title": "الهيكل التنظيمي",
+    "description": "تصور هيكل مؤسستك وخطوط الإبلاغ",
+    "department": "القسم",
+    "reportingTo": "يرفع إلى",
+    "directReports": "التقارير المباشرة",
+    "noData": "لا تتوفر بيانات تنظيمية",
+    "expand": "توسيع الكل",
+    "collapse": "طي الكل"
   }
 }

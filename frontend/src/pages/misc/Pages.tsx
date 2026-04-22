@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Calendar, Clock, CheckCircle2, XCircle, Plus, Download, BarChart3, Users, Shield } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
@@ -109,6 +110,7 @@ const leaveTypeColor: Record<string, string> = {
 }
 
 export function LeavePage() {
+  const { t } = useTranslation()
   const { data: leaveData, isLoading: leaveLoading } = useLeaveRequests({ limit: 50 })
   const leaves: LeaveRequest[] = (leaveData?.data as LeaveRequest[]) ?? []
   const approveLeave = useApproveLeave()
@@ -174,8 +176,8 @@ export function LeavePage() {
   return (
     <PageWrapper>
       <PageHeader
-        title="Leave Management"
-        description="Review and manage employee leave requests"
+        title={t('leave.title')}
+        description={t('leave.description')}
         actions={
           <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setApplyOpen(true)}>Apply Leave</Button>
         }
@@ -308,6 +310,7 @@ export function LeavePage() {
 
 // ─── Onboarding Page ──────────────────────────────────────────────────────────
 export function OnboardingPage() {
+  const { t } = useTranslation()
   const { data: onboardingList, isLoading: onboardingLoading } = useOnboardingChecklists()
   const checklists = (onboardingList as any[]) ?? []
   const [completingStep, setCompletingStep] = useState<{ checklistId: string; step: any } | null>(null)
@@ -343,7 +346,7 @@ export function OnboardingPage() {
 
   return (
     <PageWrapper>
-      <PageHeader title="Onboarding" description="Track new hire onboarding progress and checklists" />
+      <PageHeader title={t('onboarding.title')} description={t('onboarding.description')} />
 
       {onboardingLoading ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -459,6 +462,7 @@ export function OnboardingPage() {
 
 // ─── Compliance Page ──────────────────────────────────────────────────────────
 export function CompliancePage() {
+  const { t } = useTranslation()
   const { data: report, isLoading } = useComplianceReport()
   const checks = report?.checks ?? []
   const overall = report?.overall ?? 0
@@ -466,8 +470,8 @@ export function CompliancePage() {
   return (
     <PageWrapper>
       <PageHeader
-        title="Compliance"
-        description="UAE labour law and regulatory compliance dashboard"
+        title={t('compliance.title')}
+        description={t('compliance.description')}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -521,6 +525,7 @@ export function CompliancePage() {
 
 // ─── Reports Page ─────────────────────────────────────────────────────────────
 export function ReportsPage() {
+  const { t } = useTranslation()
   const { data: headcount, isLoading: hcLoading } = useHeadcountReport()
   const { data: payrollSummary, isLoading: prLoading } = usePayrollSummaryReport()
   const { data: visaExpiry, isLoading: veLoading } = useVisaExpiryReport(90)
@@ -539,8 +544,8 @@ export function ReportsPage() {
   return (
     <PageWrapper>
       <PageHeader
-        title="Reports"
-        description="Headcount, payroll and visa analytics"
+        title={t('reports.title')}
+        description={t('reports.description')}
       />
 
       <Tabs defaultValue="headcount">

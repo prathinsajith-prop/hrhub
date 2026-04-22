@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Plus, Briefcase, Users, Clock, TrendingUp, Star, DollarSign, Eye } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -121,6 +122,7 @@ const jobColumns: ColumnDef<any>[] = [
 ]
 
 export function RecruitmentPage() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('pipeline')
   const [jobDialogOpen, setJobDialogOpen] = useState(false)
   const [closeConfirm, setCloseConfirm] = useState<string[] | null>(null)
@@ -146,8 +148,8 @@ export function RecruitmentPage() {
   return (
     <PageWrapper>
       <PageHeader
-        title="Recruitment"
-        description="Manage job postings and track candidates through the hiring pipeline"
+        title={t('recruitment.title')}
+        description={t('recruitment.description')}
         actions={
           <Button className="gap-2" onClick={() => setJobDialogOpen(true)}>
             <Plus className="h-4 w-4" />

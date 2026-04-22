@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Plane, Clock, AlertTriangle, CheckCircle2, Plus, RefreshCw, Eye } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
@@ -301,6 +302,7 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
 }
 
 export function VisaPage() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('all')
   const [newAppOpen, setNewAppOpen] = useState(false)
   const { data: visaData, isLoading } = useVisas({ limit: 50 })
@@ -320,8 +322,8 @@ export function VisaPage() {
   return (
     <PageWrapper>
       <PageHeader
-        title="Visa Management"
-        description="Track visa applications, renewals, and compliance status"
+        title={t('visa.title')}
+        description={t('visa.description')}
         actions={
           <div className="flex gap-2">
             <Button

@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
+import { useTranslation } from 'react-i18next'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -90,6 +91,7 @@ function ActionMenu({
 }
 
 export function EmployeesPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { data: empData, isLoading } = useEmployees({ limit: 50 })
   const employees: Employee[] = (empData?.data as Employee[]) ?? []
@@ -218,8 +220,8 @@ export function EmployeesPage() {
   return (
     <PageWrapper>
       <PageHeader
-        title="Employees"
-        description="All active employees, onboarding, probation and terminated records."
+        title={t('employees.title')}
+        description={t('employees.description')}
         actions={
           <>
             <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}>

@@ -358,5 +358,130 @@
     "sessionExpired": "Your session has expired. Please sign in again.",
     "networkError": "Network error. Please check your connection.",
     "backToHome": "Back to Home"
+  },
+  "onboarding": {
+    "title": "Onboarding",
+    "description": "Track new hire onboarding progress and checklists",
+    "newHire": "New Hire",
+    "checklist": "Checklist",
+    "progress": "Progress",
+    "tasksDone": "Tasks Done",
+    "tasksRemaining": "Tasks Remaining",
+    "dueDate": "Due Date",
+    "assignedTo": "Assigned To",
+    "noOnboarding": "No onboarding records found",
+    "startOnboarding": "Start Onboarding",
+    "completeTask": "Complete Task",
+    "status": {
+      "pending": "Pending",
+      "in_progress": "In Progress",
+      "completed": "Completed",
+      "overdue": "Overdue"
+    }
+  },
+  "compliance": {
+    "title": "Compliance",
+    "description": "Manage UAE labour law compliance and Emiratisation targets",
+    "emiratisation": "Emiratisation",
+    "emiratisationTarget": "Emiratisation Target",
+    "emiratisationRate": "Emiratisation Rate",
+    "labourQuota": "Labour Quota",
+    "workPermit": "Work Permit",
+    "mohreStatus": "MOHRE Status",
+    "wpsCompliance": "WPS Compliance",
+    "violations": "Violations",
+    "noViolations": "No compliance issues found",
+    "compliant": "Compliant",
+    "nonCompliant": "Non-Compliant",
+    "underReview": "Under Review",
+    "deadline": "Deadline",
+    "authority": "Authority"
+  },
+  "performance": {
+    "title": "Performance Reviews",
+    "description": "Manage employee performance reviews and KPIs",
+    "addReview": "Add Review",
+    "reviewPeriod": "Review Period",
+    "rating": "Rating",
+    "reviewer": "Reviewer",
+    "goals": "Goals",
+    "achievements": "Achievements",
+    "areas": "Areas for Improvement",
+    "overallRating": "Overall Rating",
+    "noReviews": "No performance reviews found",
+    "status": {
+      "draft": "Draft",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "acknowledged": "Acknowledged"
+    },
+    "ratings": {
+      "outstanding": "Outstanding",
+      "exceeds": "Exceeds Expectations",
+      "meets": "Meets Expectations",
+      "below": "Below Expectations",
+      "unsatisfactory": "Unsatisfactory"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "description": "Your alerts and system notifications",
+    "markAllRead": "Mark All as Read",
+    "showUnreadOnly": "Unread only",
+    "showAll": "Show all",
+    "noNotifications": "No notifications",
+    "noUnread": "You're all caught up!",
+    "viewAll": "View all notifications",
+    "unreadCount": "{{count}} unread",
+    "types": {
+      "info": "Info",
+      "warning": "Warning",
+      "error": "Alert",
+      "success": "Success"
+    }
+  },
+  "reports": {
+    "title": "Reports",
+    "description": "Analytics, exports and compliance reports",
+    "generateReport": "Generate Report",
+    "reportType": "Report Type",
+    "dateRange": "Date Range",
+    "exportCsv": "Export CSV",
+    "exportPdf": "Export PDF",
+    "headcount": "Headcount Report",
+    "payrollSummary": "Payroll Summary",
+    "leaveUtilisation": "Leave Utilisation",
+    "turnover": "Turnover Report",
+    "emiratisation": "Emiratisation Report",
+    "noReports": "No reports available"
+  },
+  "exit": {
+    "title": "Exit Management",
+    "description": "Manage employee offboarding and exit processes",
+    "addExit": "Record Exit",
+    "exitType": "Exit Type",
+    "exitDate": "Exit Date",
+    "reason": "Reason",
+    "noticePeriod": "Notice Period",
+    "clearance": "Clearance Status",
+    "gratuity": "Gratuity",
+    "finalSettlement": "Final Settlement",
+    "noExits": "No exit records found",
+    "types": {
+      "resignation": "Resignation",
+      "termination": "Termination",
+      "contract_end": "Contract End",
+      "retirement": "Retirement"
+    }
+  },
+  "orgChart": {
+    "title": "Org Chart",
+    "description": "Visualize your organizational structure and reporting lines",
+    "department": "Department",
+    "reportingTo": "Reporting To",
+    "directReports": "Direct Reports",
+    "noData": "No organizational data available",
+    "expand": "Expand All",
+    "collapse": "Collapse All"
   }
 }

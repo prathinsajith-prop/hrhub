@@ -107,6 +107,7 @@ const defaultForm: InitiateForm = {
 }
 
 export function ExitPage() {
+    const { t } = useTranslation()
     const { data: exits, isLoading } = useExitRequests()
     const { data: employees } = useEmployees({ limit: 200 })
     const initiate = useInitiateExit()
@@ -142,8 +143,8 @@ export function ExitPage() {
     return (
         <PageWrapper>
             <PageHeader
-                title="Exit Management"
-                description="Manage employee offboarding and final settlement calculations"
+                title={t('exit.title')}
+                description={t('exit.description')}
                 actions={
                     <Button onClick={() => { setShowDialog(true); setStep('form') }}>
                         <LogOut className="h-4 w-4 mr-2" /> Initiate Exit

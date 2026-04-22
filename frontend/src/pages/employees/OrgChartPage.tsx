@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { PageWrapper } from '@/components/layout/PageWrapper'
+import { useTranslation } from 'react-i18next'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/card'
 import { Users } from 'lucide-react'
@@ -45,6 +46,7 @@ function OrgCard({ node, depth = 0 }: { node: OrgNode; depth?: number }) {
 }
 
 export function OrgChartPage() {
+    const { t } = useTranslation()
     const { data: roots, isLoading } = useQuery({
         queryKey: ['org-chart'],
         queryFn: () => api.get<OrgNode[]>('/employees/org-chart'),
@@ -55,8 +57,8 @@ export function OrgChartPage() {
     return (
         <PageWrapper>
             <PageHeader
-                title="Org Chart"
-                description="Visual organizational hierarchy of your company"
+                title={t('orgChart.title')}
+                description={t('orgChart.description')}
             />
 
             {isLoading && <p className="text-muted-foreground text-sm">Loading org chart...</p>}

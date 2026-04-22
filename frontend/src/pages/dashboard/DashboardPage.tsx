@@ -31,6 +31,7 @@ import {
   CardDescription,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCard } from '@/components/ui/kpi-card'
@@ -107,6 +108,7 @@ const tooltipStyle: React.CSSProperties = {
 }
 
 export function DashboardPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { data: kpis, isLoading: kpisLoading } = useDashboardKPIs()
   const { data: notifications } = useNotifications(20)
@@ -134,8 +136,8 @@ export function DashboardPage() {
   return (
     <PageWrapper>
       <PageHeader
-        title="Dashboard"
-        description="Overview of your workforce, payroll, and compliance across all entities."
+        title={t('dashboard.title')}
+        description={t('dashboard.description')}
       />
 
       {/* Urgent alerts banner */}

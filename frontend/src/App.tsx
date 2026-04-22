@@ -1,5 +1,6 @@
-import React, { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import React, { lazy, Suspense, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Toaster } from '@/components/ui/overlays'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -42,6 +43,48 @@ function PageLoader() {
   )
 }
 
+// Maps route paths to translation keys (format: "section.title")
+const PAGE_TITLE_MAP: Record<string, string> = {
+  '/login': 'auth.signIn',
+  '/register': 'auth.signUp',
+  '/forgot-password': 'auth.forgotPassword',
+  '/reset-password': 'auth.resetPassword',
+  '/dashboard': 'dashboard.title',
+  '/employees': 'employees.title',
+  '/recruitment': 'recruitment.title',
+  '/onboarding': 'onboarding.title',
+  '/visa': 'visa.title',
+  '/documents': 'documents.title',
+  '/payroll': 'payroll.title',
+  '/leave': 'leave.title',
+  '/compliance': 'compliance.title',
+  '/reports': 'reports.title',
+  '/settings': 'settings.title',
+  '/exit': 'exit.title',
+  '/attendance': 'attendance.title',
+  '/performance': 'performance.title',
+  '/org-chart': 'orgChart.title',
+  '/audit': 'audit.title',
+  '/notifications': 'notifications.title',
+  '/my/login-history': 'loginHistory.title',
+}
+
+function TitleManager() {
+  const location = useLocation()
+  const { t } = useTranslation()
+
+  useEffect(() => {
+    const path = location.pathname
+    // Exact match first, then prefix match (e.g. /employees/123)
+    const key = PAGE_TITLE_MAP[path] ??
+      Object.entries(PAGE_TITLE_MAP).find(([k]) => path.startsWith(k + '/') && k !== '/')?.[1]
+    const pageTitle = key ? t(key) : null
+    document.title = pageTitle ? `${pageTitle} | HRHub` : 'HRHub'
+  }, [location.pathname, t])
+
+  return null
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
   if (!isAuthenticated) return <Navigate to="/login" replace />
@@ -51,6 +94,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <TitleManager />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />

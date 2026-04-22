@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/card'
@@ -25,6 +26,7 @@ const ACTION_COLORS: Record<string, string> = {
 const ENTITY_TYPES = ['employee', 'leave', 'payroll', 'visa', 'document', 'recruitment', 'onboarding', 'compliance', 'user', 'tenant']
 
 export function AuditLogPage() {
+    const { t } = useTranslation()
     const [entityType, setEntityType] = useState('')
     const [search, setSearch] = useState('')
 
@@ -45,7 +47,7 @@ export function AuditLogPage() {
 
     return (
         <PageWrapper>
-            <PageHeader title="Activity Log" description="Full audit trail of all actions across the system" />
+            <PageHeader title={t('audit.title')} description={t('audit.description')} />
 
             <Card className="p-4 mb-4">
                 <div className="flex flex-wrap gap-3 items-end">

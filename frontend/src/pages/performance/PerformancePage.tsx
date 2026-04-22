@@ -69,6 +69,7 @@ const defaultForm: ReviewForm = {
 }
 
 export function PerformancePage() {
+    const { t } = useTranslation()
     const { data: reviews, isLoading } = usePerformanceReviews()
     const { data: employees } = useEmployees({ limit: 200 })
     const createReview = useCreateReview()
@@ -93,8 +94,8 @@ export function PerformancePage() {
     return (
         <PageWrapper>
             <PageHeader
-                title="Performance Reviews"
-                description="Manage employee performance evaluations and KPI tracking"
+                title={t('performance.title')}
+                description={t('performance.description')}
                 actions={
                     <Button onClick={() => setShowDialog(true)}>
                         <Plus className="h-4 w-4 mr-2" /> New Review
