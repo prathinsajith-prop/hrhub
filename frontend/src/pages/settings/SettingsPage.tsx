@@ -36,7 +36,7 @@ import { useAuthStore } from '@/store/authStore'
 import { api } from '@/lib/api'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { useCompanySettings, useUpdateCompanySettings, useTenantUsers } from '@/hooks/useSettings'
+import { useCompanySettings, useUpdateCompanySettings, useTenantUsers, useTwoFaStatus, useTwoFaSetup, useTwoFaVerify, useTwoFaDisable, useIpAllowlist, useUpdateIpAllowlist } from '@/hooks/useSettings'
 import { useLoginHistory } from '@/hooks/useAudit'
 import type { CompanySettings } from '@/hooks/useSettings'
 
@@ -465,8 +465,6 @@ function SecurityTab() {
                     {[
                         { id: 'session_timeout', label: 'Auto Session Timeout', desc: 'Log out after 30 minutes of inactivity', defaultChecked: true },
                         { id: 'audit_log', label: 'Audit Logging', desc: 'Track all admin actions and changes', defaultChecked: true },
-                        { id: 'mfa', label: 'Two-Factor Authentication', desc: 'Require 2FA for all admin accounts (coming soon)', defaultChecked: false },
-                        { id: 'ip_whitelist', label: 'IP Allowlist', desc: 'Restrict logins to specific IP ranges (coming soon)', defaultChecked: false },
                     ].map((policy) => (
                         <div key={policy.id} className="flex items-center justify-between py-3.5">
                             <div>
@@ -478,6 +476,8 @@ function SecurityTab() {
                     ))}
                 </CardContent>
             </Card>
+            <TwoFactorCard />
+            <IpAllowlistCard />
             <Card className="border-destructive/30">
                 <CardHeader className="pb-4">
                     <CardTitle className="text-base flex items-center gap-2 text-destructive">
@@ -504,6 +504,229 @@ function SecurityTab() {
             </Card>
             <LoginHistoryCard />
         </div>
+    )
+}
+
+// ─── Two-Factor Authentication Card ──────────────────────────────────────────
+function TwoFactorCard() {
+    const { data: status, isLoading } = useTwoFaStatus()
+    const setup = useTwoFaSetup()
+    const verify = useTwoFaVerify()
+    const disable = useTwoFaDisable()
+
+    const [step, setStep] = useState<'idle' | 'setup' | 'disable'>('idle')
+    const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+    const [secret, setSecret] = useState<string | null>(null)
+    const [token, setToken] = useState('')
+
+    const enabled = status?.enabled ?? false
+
+    const handleSetup = async () => {
+        try {
+            const result = await setup.mutateAsync()
+            setQrDataUrl(result.qrDataUrl)
+            setSecret(result.secret)
+            setStep('setup')
+        } catch {
+            toast.error('Setup failed', 'Could not generate 2FA setup.')
+        }
+    }
+
+    const handleVerify = async () => {
+        if (token.length !== 6) { toast.warning('Invalid code', 'Enter the 6-digit code from your authenticator app.'); return }
+        try {
+            await verify.mutateAsync(token)
+            toast.success('2FA enabled', 'Two-factor authentication is now active.')
+            setStep('idle'); setToken(''); setQrDataUrl(null); setSecret(null)
+        } catch {
+            toast.error('Verification failed', 'The code was incorrect. Please try again.')
+        }
+    }
+
+    const handleDisable = async () => {
+        if (token.length !== 6) { toast.warning('Invalid code', 'Enter the 6-digit code from your authenticator app.'); return }
+        try {
+            await disable.mutateAsync(token)
+            toast.success('2FA disabled', 'Two-factor authentication has been turned off.')
+            setStep('idle'); setToken('')
+        } catch {
+            toast.error('Verification failed', 'The code was incorrect. Please try again.')
+        }
+    }
+
+    return (
+        <Card>
+            <CardHeader className="pb-4">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-primary" />
+                    Two-Factor Authentication
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {isLoading ? (
+                    <Skeleton className="h-8 w-full" />
+                ) : (
+                    <>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium">Authenticator App (TOTP)</p>
+                                <p className="text-xs text-muted-foreground">Use Google Authenticator, Authy, or any TOTP app.</p>
+                            </div>
+                            <Badge variant={enabled ? 'default' : 'secondary'}>{enabled ? 'Enabled' : 'Disabled'}</Badge>
+                        </div>
+                        {step === 'idle' && (
+                            <div className="pt-1">
+                                {enabled ? (
+                                    <Button variant="outline" size="sm" onClick={() => setStep('disable')}>
+                                        Disable 2FA
+                                    </Button>
+                                ) : (
+                                    <Button size="sm" onClick={handleSetup} loading={setup.isPending}>
+                                        Enable 2FA
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                        {step === 'setup' && qrDataUrl && (
+                            <div className="space-y-4 pt-1">
+                                <p className="text-sm text-muted-foreground">Scan this QR code with your authenticator app, then enter the 6-digit code to confirm.</p>
+                                <div className="flex justify-center">
+                                    <img src={qrDataUrl} alt="2FA QR Code" className="rounded-lg border p-2 w-48 h-48" />
+                                </div>
+                                {secret && (
+                                    <div className="rounded-md bg-muted p-3 text-center">
+                                        <p className="text-xs text-muted-foreground mb-1">Manual entry key:</p>
+                                        <p className="text-sm font-mono font-semibold tracking-widest break-all">{secret}</p>
+                                    </div>
+                                )}
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="totp_token">Verification Code</Label>
+                                    <Input
+                                        id="totp_token"
+                                        placeholder="000000"
+                                        maxLength={6}
+                                        value={token}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value.replace(/\D/g, ''))}
+                                        className="text-center tracking-[0.5em] text-lg font-mono w-36"
+                                    />
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button size="sm" onClick={handleVerify} loading={verify.isPending}>Confirm & Enable</Button>
+                                    <Button size="sm" variant="ghost" onClick={() => { setStep('idle'); setToken(''); setQrDataUrl(null); setSecret(null) }}>Cancel</Button>
+                                </div>
+                            </div>
+                        )}
+                        {step === 'disable' && (
+                            <div className="space-y-4 pt-1">
+                                <p className="text-sm text-muted-foreground">Enter your current 6-digit authenticator code to disable 2FA.</p>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="disable_token">Verification Code</Label>
+                                    <Input
+                                        id="disable_token"
+                                        placeholder="000000"
+                                        maxLength={6}
+                                        value={token}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value.replace(/\D/g, ''))}
+                                        className="text-center tracking-[0.5em] text-lg font-mono w-36"
+                                    />
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button size="sm" variant="destructive" onClick={handleDisable} loading={disable.isPending}>Disable 2FA</Button>
+                                    <Button size="sm" variant="ghost" onClick={() => { setStep('idle'); setToken('') }}>Cancel</Button>
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
+// ─── IP Allowlist Card ────────────────────────────────────────────────────────
+function IpAllowlistCard() {
+    const { data, isLoading } = useIpAllowlist()
+    const updateList = useUpdateIpAllowlist()
+    const [newEntry, setNewEntry] = useState('')
+    const list: string[] = data?.ipAllowlist ?? []
+
+    const isValidCidr = (val: string) =>
+        /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(val.trim())
+
+    const handleAdd = async () => {
+        const trimmed = newEntry.trim()
+        if (!isValidCidr(trimmed)) { toast.warning('Invalid entry', 'Enter a valid IP address or CIDR range (e.g. 192.168.1.0/24).'); return }
+        if (list.includes(trimmed)) { toast.warning('Duplicate', 'This IP/range is already in the allowlist.'); return }
+        try {
+            await updateList.mutateAsync([...list, trimmed])
+            setNewEntry('')
+            toast.success('IP added', `${trimmed} added to allowlist.`)
+        } catch {
+            toast.error('Update failed', 'Could not update IP allowlist.')
+        }
+    }
+
+    const handleRemove = async (ip: string) => {
+        try {
+            await updateList.mutateAsync(list.filter((x) => x !== ip))
+            toast.success('IP removed', `${ip} removed from allowlist.`)
+        } catch {
+            toast.error('Update failed', 'Could not update IP allowlist.')
+        }
+    }
+
+    return (
+        <Card>
+            <CardHeader className="pb-4">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-primary" />
+                    IP Allowlist
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                    Restrict access to specific IP addresses or CIDR ranges. Leave empty to allow all IPs.
+                </p>
+                {isLoading ? (
+                    <Skeleton className="h-20 w-full" />
+                ) : (
+                    <>
+                        {list.length === 0 ? (
+                            <p className="text-sm text-muted-foreground italic">No restrictions — all IPs are allowed.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {list.map((ip) => (
+                                    <div key={ip} className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/30">
+                                        <span className="text-sm font-mono">{ip}</span>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                            onClick={() => handleRemove(ip)}
+                                            disabled={updateList.isPending}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <div className="flex gap-2 pt-1">
+                            <Input
+                                placeholder="e.g. 192.168.1.0/24"
+                                value={newEntry}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEntry(e.target.value)}
+                                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') handleAdd() }}
+                                className="font-mono"
+                            />
+                            <Button size="sm" onClick={handleAdd} loading={updateList.isPending} leftIcon={<Plus className="h-3.5 w-3.5" />}>
+                                Add
+                            </Button>
+                        </div>
+                    </>
+                )}
+            </CardContent>
+        </Card>
     )
 }
 

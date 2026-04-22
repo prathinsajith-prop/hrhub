@@ -1,5 +1,7 @@
-import { BellIcon, SearchIcon, LogOut, Settings, User, Building2, ChevronRight } from 'lucide-react'
+import { useState } from 'react'
+import { BellIcon, SearchIcon, LogOut, Settings, User, Building2, ChevronRight, Languages } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
@@ -29,6 +31,8 @@ import {
 import { cn } from '@/lib/utils'
 import { useNotificationsList, useUnreadCount, useMarkNotificationRead } from '@/hooks/useNotifications'
 import { useAuthStore } from '@/store/authStore'
+import { GlobalSearch } from '@/components/GlobalSearch'
+import { applyLanguageDirection } from '@/lib/i18n'
 
 const routeMeta: Record<string, { title: string; parent?: string }> = {
   '/dashboard': { title: 'Dashboard' },
@@ -51,6 +55,8 @@ const routeMeta: Record<string, { title: string; parent?: string }> = {
 export function SiteHeader() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { i18n } = useTranslation()
+  const [searchOpen, setSearchOpen] = useState(false)
   const segments = location.pathname.split('/').filter(Boolean)
   const rootPath = segments.length ? `/${segments[0]}` : '/dashboard'
   const rootMeta = routeMeta[rootPath] ?? { title: 'HRHub' }
@@ -121,6 +127,7 @@ export function SiteHeader() {
           variant="outline"
           size="sm"
           className="hidden md:flex gap-2 text-muted-foreground w-52 justify-start font-normal"
+          onClick={() => setSearchOpen(true)}
         >
           <SearchIcon className="size-3.5" />
           <span className="text-xs">Search anything...</span>
@@ -128,9 +135,11 @@ export function SiteHeader() {
             &#8984;K
           </kbd>
         </Button>
-        <Button variant="outline" size="icon-sm" className="md:hidden" aria-label="Search">
+        <Button variant="outline" size="icon-sm" className="md:hidden" aria-label="Search" onClick={() => setSearchOpen(true)}>
           <SearchIcon className="h-4 w-4" />
         </Button>
+
+        <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
 
         {/* Notifications */}
         <Popover>
@@ -191,6 +200,31 @@ export function SiteHeader() {
             </div>
           </PopoverContent>
         </Popover>
+
+        {/* Language Toggle */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="Switch language">
+              <Languages className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-36">
+            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Language</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className={cn('gap-2 cursor-pointer', i18n.language === 'en' && 'font-semibold text-primary')}
+              onClick={() => { i18n.changeLanguage('en'); applyLanguageDirection('en') }}
+            >
+              🇬🇧 English
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className={cn('gap-2 cursor-pointer', i18n.language === 'ar' && 'font-semibold text-primary')}
+              onClick={() => { i18n.changeLanguage('ar'); applyLanguageDirection('ar') }}
+            >
+              🇦🇪 العربية
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Profile dropdown */}
         <DropdownMenu>

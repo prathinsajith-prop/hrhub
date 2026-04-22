@@ -1,4 +1,7 @@
 import { getCompanySettings, updateCompanySettings, listTenantUsers, inviteUser } from './settings.service.js'
+import { db } from '../../db/index.js'
+import { tenants } from '../../db/schema/index.js'
+import { eq } from 'drizzle-orm'
 
 export default async function settingsRoutes(fastify: any): Promise<void> {
     const hrAdmin = {
@@ -47,10 +50,10 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     // ── IP Allowlist routes ──────────────────────────────────────────────
     // GET /settings/ip-allowlist
     fastify.get('/ip-allowlist', hrAdmin, async (request: any, reply: any) => {
-        const [tenant] = await (await import('../../db/index.js')).db
-            .select({ ipAllowlist: (await import('../../db/schema/index.js')).tenants.ipAllowlist })
-            .from((await import('../../db/schema/index.js')).tenants)
-            .where((await import('drizzle-orm')).eq((await import('../../db/schema/index.js')).tenants.id, request.user.tenantId))
+        const [tenant] = await db
+            .select({ ipAllowlist: tenants.ipAllowlist })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
             .limit(1)
         return reply.send({ data: { ipAllowlist: tenant?.ipAllowlist ?? [] } })
     })
@@ -67,9 +70,6 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         if (invalid.length > 0) {
             return reply.code(400).send({ error: `Invalid IP/CIDR entries: ${invalid.join(', ')}` })
         }
-        const { db } = await import('../../db/index.js')
-        const { tenants } = await import('../../db/schema/index.js')
-        const { eq } = await import('drizzle-orm')
         const [updated] = await db
             .update(tenants)
             .set({ ipAllowlist: ipAllowlist.map(s => s.trim()), updatedAt: new Date() })

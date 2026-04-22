@@ -60,6 +60,8 @@ export const api = {
         request<T>(path, { method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined }),
     patch: <T>(path: string, body?: unknown) =>
         request<T>(path, { method: 'PATCH', body: body !== undefined ? JSON.stringify(body) : undefined }),
+    put: <T>(path: string, body?: unknown) =>
+        request<T>(path, { method: 'PUT', body: body !== undefined ? JSON.stringify(body) : undefined }),
     delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
     upload: <T>(path: string, formData: FormData) => {
         // Do NOT set Content-Type — browser must set it with the multipart boundary

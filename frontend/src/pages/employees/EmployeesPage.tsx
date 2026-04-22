@@ -31,7 +31,7 @@ import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { useEmployees } from '@/hooks/useEmployees'
+import { useEmployees, useArchiveEmployee } from '@/hooks/useEmployees'
 import { AddEmployeeDialog, EditEmployeeDialog } from '@/components/shared/action-dialogs'
 import type { Employee } from '@/types'
 
@@ -98,6 +98,7 @@ export function EmployeesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
   const [editTarget, setEditTarget] = useState<Employee | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const archiveEmployee = useArchiveEmployee()
 
   const active = employees.filter((e: any) => e.status === 'active').length
   const onboarding = employees.filter((e: any) => e.status === 'onboarding').length
@@ -106,11 +107,16 @@ export function EmployeesPage() {
 
   const handleDelete = () => {
     if (!deleteTarget) return
-    toast.success(
-      'Termination initiated',
-      `${deleteTarget.fullName}'s exit workflow has started.`,
-    )
-    setDeleteTarget(null)
+    archiveEmployee.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        toast.success('Termination initiated', `${deleteTarget.fullName}'s record has been archived.`)
+        setDeleteTarget(null)
+      },
+      onError: () => {
+        toast.error('Failed', 'Could not archive employee. Please try again.')
+        setDeleteTarget(null)
+      },
+    })
   }
 
   const columns: ColumnDef<Employee>[] = [

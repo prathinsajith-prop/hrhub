@@ -46,3 +46,54 @@ export function useTenantUsers() {
             api.get<{ data: TenantUser[] }>('/settings/users').then((r) => r.data),
     })
 }
+
+// ── 2FA hooks ────────────────────────────────────────────────────────────────
+export function useTwoFaStatus() {
+    return useQuery({
+        queryKey: ['2fa', 'status'],
+        queryFn: () => api.get<{ data: { enabled: boolean } }>('/auth/2fa/status').then((r) => r.data),
+    })
+}
+
+export function useTwoFaSetup() {
+    return useMutation({
+        mutationFn: () =>
+            api.post<{ data: { qrDataUrl: string; secret: string } }>('/auth/2fa/setup', {}).then((r) => r.data),
+    })
+}
+
+export function useTwoFaVerify() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (token: string) =>
+            api.post<{ data: { enabled: boolean } }>('/auth/2fa/verify', { token }).then((r) => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['2fa', 'status'] }),
+    })
+}
+
+export function useTwoFaDisable() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (token: string) =>
+            api.post<{ data: { enabled: boolean } }>('/auth/2fa/disable', { token }).then((r) => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['2fa', 'status'] }),
+    })
+}
+
+// ── IP Allowlist hooks ────────────────────────────────────────────────────────
+export function useIpAllowlist() {
+    return useQuery({
+        queryKey: ['settings', 'ip-allowlist'],
+        queryFn: () => api.get<{ data: { ipAllowlist: string[] } }>('/settings/ip-allowlist').then((r) => r.data),
+    })
+}
+
+export function useUpdateIpAllowlist() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (ipAllowlist: string[]) =>
+            api.put<{ data: { ipAllowlist: string[] } }>('/settings/ip-allowlist', { ipAllowlist }).then((r) => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'ip-allowlist'] }),
+    })
+}
+
