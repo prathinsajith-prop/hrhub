@@ -31,56 +31,58 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useAuthStore } from "@/store/authStore"
-
-const navGroups = [
-  {
-    label: "Overview",
-    items: [
-      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboardIcon },
-    ],
-  },
-  {
-    label: "People",
-    items: [
-      { title: "Employees", url: "/employees", icon: UsersIcon },
-      { title: "Org Chart", url: "/org-chart", icon: GitBranchIcon },
-      { title: "Recruitment", url: "/recruitment", icon: BriefcaseIcon },
-      { title: "Onboarding", url: "/onboarding", icon: UserPlusIcon },
-    ],
-  },
-  {
-    label: "Compliance",
-    items: [
-      { title: "Visa & PRO", url: "/visa", icon: IdCardIcon },
-      { title: "Documents", url: "/documents", icon: FolderOpenIcon },
-      { title: "Compliance", url: "/compliance", icon: ShieldCheckIcon },
-    ],
-  },
-  {
-    label: "Finance",
-    items: [
-      { title: "Payroll", url: "/payroll", icon: BanknoteIcon },
-      { title: "Leave", url: "/leave", icon: CalendarCheckIcon },
-      { title: "Attendance", url: "/attendance", icon: ClockIcon },
-    ],
-  },
-  {
-    label: "Insights",
-    items: [
-      { title: "Reports", url: "/reports", icon: BarChart3Icon },
-      { title: "Audit Log", url: "/audit", icon: ClipboardListIcon },
-    ],
-  },
-]
-
-const navSecondary = [
-  { title: "Settings", url: "/settings", icon: SettingsIcon },
-  { title: "Help", url: "/help", icon: HelpCircleIcon },
-]
+import { useTranslation } from "react-i18next"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user, tenant } = useAuthStore()
   const location = useLocation()
+  const { t } = useTranslation()
+
+  const navGroups = [
+    {
+      label: t('nav.overview'),
+      items: [
+        { title: t('nav.dashboard'), url: "/dashboard", icon: LayoutDashboardIcon },
+      ],
+    },
+    {
+      label: t('nav.people'),
+      items: [
+        { title: t('nav.employees'), url: "/employees", icon: UsersIcon },
+        { title: t('nav.orgChart'), url: "/org-chart", icon: GitBranchIcon },
+        { title: t('nav.recruitment'), url: "/recruitment", icon: BriefcaseIcon },
+        { title: t('nav.onboarding'), url: "/onboarding", icon: UserPlusIcon },
+      ],
+    },
+    {
+      label: t('nav.complianceGroup'),
+      items: [
+        { title: t('nav.visa'), url: "/visa", icon: IdCardIcon },
+        { title: t('nav.documents'), url: "/documents", icon: FolderOpenIcon },
+        { title: t('nav.compliance'), url: "/compliance", icon: ShieldCheckIcon },
+      ],
+    },
+    {
+      label: t('nav.finance'),
+      items: [
+        { title: t('nav.payroll'), url: "/payroll", icon: BanknoteIcon },
+        { title: t('nav.leave'), url: "/leave", icon: CalendarCheckIcon },
+        { title: t('nav.attendance'), url: "/attendance", icon: ClockIcon },
+      ],
+    },
+    {
+      label: t('nav.insights'),
+      items: [
+        { title: t('nav.reports'), url: "/reports", icon: BarChart3Icon },
+        { title: t('nav.auditLog'), url: "/audit", icon: ClipboardListIcon },
+      ],
+    },
+  ]
+
+  const navSecondary = [
+    { title: t('nav.settings'), url: "/settings", icon: SettingsIcon },
+    { title: t('nav.help'), url: "/help", icon: HelpCircleIcon },
+  ]
 
   const userData = {
     name: user?.name ?? "HR Admin",

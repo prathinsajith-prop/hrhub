@@ -4,6 +4,8 @@ import {
   MoreVerticalIcon,
   SettingsIcon,
   UserCircleIcon,
+  ShieldIcon,
+  GlobeIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -23,6 +25,8 @@ import {
 } from "@/components/ui/sidebar"
 import { useAuthStore } from "@/store/authStore"
 import { useNavigate } from "react-router-dom"
+import { useTranslation } from "react-i18next"
+import { applyLanguageDirection } from "@/lib/i18n"
 
 export function NavUser({
   user,
@@ -32,6 +36,7 @@ export function NavUser({
   const { isMobile } = useSidebar()
   const { logout } = useAuthStore()
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
 
   const initials = user.name
     .split(" ")
@@ -44,6 +49,14 @@ export function NavUser({
     logout()
     navigate("/login")
   }
+
+  const toggleLanguage = () => {
+    const next = i18n.language === 'ar' ? 'en' : 'ar'
+    i18n.changeLanguage(next)
+    applyLanguageDirection(next)
+  }
+
+  const isArabic = i18n.language === 'ar'
 
   return (
     <SidebarMenu>
@@ -93,26 +106,35 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/settings')}>
                 <UserCircleIcon className="size-4" />
-                Profile
+                {t('profile.myProfile')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/my/login-history')}>
+                <ShieldIcon className="size-4" />
+                {t('auth.myLoginHistory')}
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <BellIcon className="size-4" />
-                Notifications
+                {t('profile.notifications')}
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/settings')}>
                 <SettingsIcon className="size-4" />
-                Settings
+                {t('nav.settings')}
               </DropdownMenuItem>
             </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={toggleLanguage}>
+              <GlobeIcon className="size-4" />
+              <span>{isArabic ? 'Switch to English' : 'التبديل إلى العربية'}</span>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleLogout}
               className="text-destructive focus:text-destructive"
             >
               <LogOutIcon className="size-4" />
-              Log out
+              {t('auth.signOut')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

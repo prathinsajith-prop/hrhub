@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700;800&family=Cairo:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -240,4 +240,47 @@
 
 .table-row-hover:hover {
   background: hsl(var(--muted) / 0.5);
+}
+
+/* ─── RTL & Arabic Language Support ─────────────────────────────────────── */
+:root[lang="ar"],
+html.rtl {
+  --font-display: 'Cairo', 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Cairo', 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+html[dir="rtl"] body {
+  font-family: 'Cairo', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  text-align: right;
+}
+
+/* Flip margins and paddings for RTL logical properties */
+html[dir="rtl"] .ml-auto {
+  margin-left: unset;
+  margin-right: auto;
+}
+
+html[dir="rtl"] .mr-auto {
+  margin-right: unset;
+  margin-left: auto;
+}
+
+/* Sidebar flips to right in RTL */
+html[dir="rtl"] [data-sidebar="sidebar"] {
+  right: 0;
+  left: auto;
+  border-right: none;
+  border-left: 1px solid hsl(var(--border));
+}
+
+/* Ensure all numbers/codes stay LTR inside RTL context */
+html[dir="rtl"] .font-mono,
+html[dir="rtl"] [class*="tabular"] {
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+/* RTL-safe flex row reversal — charts/tables remain LTR */
+html[dir="rtl"] .recharts-wrapper {
+  direction: ltr;
 }

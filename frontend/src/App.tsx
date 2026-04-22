@@ -21,6 +21,7 @@ import { AttendancePage } from '@/pages/attendance/AttendancePage'
 import { PerformancePage } from '@/pages/performance/PerformancePage'
 import { OrgChartPage } from '@/pages/employees/OrgChartPage'
 import { AuditLogPage } from '@/pages/misc/AuditLogPage'
+import { LoginHistoryPage } from '@/pages/misc/LoginHistoryPage'
 import { Toaster } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
 
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="performance" element={<PerformancePage />} />
           <Route path="org-chart" element={<OrgChartPage />} />
           <Route path="audit" element={<AuditLogPage />} />
+          <Route path="my/login-history" element={<LoginHistoryPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
