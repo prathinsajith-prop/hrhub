@@ -19,11 +19,11 @@ function getRedisConnection() {
 
 const connection = getRedisConnection()
 
-// ─── Queue definitions ────────────────────────────────────────────────────────
-export const visaExpiryQueue = new Queue('visa-expiry', { connection })
-export const documentExpiryQueue = new Queue('document-expiry', { connection })
-export const contractExpiryQueue = new Queue('contract-expiry', { connection })
-export const passportExpiryQueue = new Queue('passport-expiry', { connection })
+// ─── Queue definitions (lazy — created inside startExpiryWorkers) ─────────────
+export let visaExpiryQueue: Queue | null = null
+export let documentExpiryQueue: Queue | null = null
+export let contractExpiryQueue: Queue | null = null
+export let passportExpiryQueue: Queue | null = null
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function daysFromNow(days: number): Date {
@@ -238,7 +238,30 @@ async function runPassportExpiryCheck() {
 
 // ─── Scheduler: Register all daily workers ────────────────────────────────────
 export async function startExpiryWorkers() {
+    // Test Redis availability first with a quick probe
+    const { createConnection } = await import('net')
+    const redisAvailable = await new Promise<boolean>((resolve) => {
+        const env = loadEnv()
+        const url = new URL(env.REDIS_URL)
+        const socket = createConnection({ host: url.hostname, port: Number(url.port ?? 6379) })
+        socket.setTimeout(1000)
+        socket.on('connect', () => { socket.destroy(); resolve(true) })
+        socket.on('error', () => { socket.destroy(); resolve(false) })
+        socket.on('timeout', () => { socket.destroy(); resolve(false) })
+    })
+
+    if (!redisAvailable) {
+        console.warn('⚠️  Redis unavailable — BullMQ workers disabled (expiry alerts will not run)')
+        return
+    }
+
     try {
+        // Lazily create queues so Redis connection errors are catchable
+        visaExpiryQueue = new Queue('visa-expiry', { connection })
+        documentExpiryQueue = new Queue('document-expiry', { connection })
+        contractExpiryQueue = new Queue('contract-expiry', { connection })
+        passportExpiryQueue = new Queue('passport-expiry', { connection })
+
         // Enqueue recurring daily jobs at 06:00 UAE time (UTC+4 = 02:00 UTC)
         await visaExpiryQueue.upsertJobScheduler('daily-visa-check', { pattern: '0 2 * * *' }, { name: 'visa-expiry' })
         await documentExpiryQueue.upsertJobScheduler('daily-doc-check', { pattern: '0 2 * * *' }, { name: 'document-expiry' })
