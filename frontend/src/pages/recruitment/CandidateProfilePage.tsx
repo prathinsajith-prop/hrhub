@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, User, Mail, Phone, Globe, Briefcase, DollarSign, Star, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,6 +9,10 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import { useApplications, useUpdateApplicationStage } from '@/hooks/useRecruitment'
 import { toast } from '@/components/ui/overlays'
@@ -41,6 +46,7 @@ export function CandidateProfilePage() {
     const navigate = useNavigate()
     const { data, isLoading } = useApplications({ limit: 200 })
     const updateStage = useUpdateApplicationStage()
+    const [rejectOpen, setRejectOpen] = useState(false)
 
     const candidates = (data?.data ?? []) as Candidate[]
     const candidate = candidates.find((c) => c.id === id)
@@ -86,7 +92,6 @@ export function CandidateProfilePage() {
     }
 
     function handleReject() {
-        if (!confirm('Mark this candidate as rejected?')) return
         updateStage.mutate(
             { id: candidate!.id, stage: 'rejected' },
             {
@@ -180,7 +185,7 @@ export function CandidateProfilePage() {
                             <Button
                                 variant="outline"
                                 className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
-                                onClick={handleReject}
+                                onClick={() => setRejectOpen(true)}
                                 disabled={updateStage.isPending}
                             >
                                 Reject Candidate
@@ -261,6 +266,27 @@ export function CandidateProfilePage() {
                     </Tabs>
                 </div>
             </div>
+
+            <AlertDialog open={rejectOpen} onOpenChange={setRejectOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Reject this candidate?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will move <strong>{candidate.name}</strong> to the rejected stage. You can still
+                            view their profile and history afterwards.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={handleReject}
+                        >
+                            Reject Candidate
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </PageWrapper>
     )
 }

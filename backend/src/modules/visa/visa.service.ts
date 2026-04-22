@@ -49,15 +49,42 @@ export async function updateVisa(tenantId: string, id: string, data: Partial<New
     return row ?? null
 }
 
+/**
+ * Step → Status mapping for the standard 8-step UAE work-visa workflow.
+ * Keep in sync with `visaSteps` in the frontend (VisaPage / VisaDetailPage).
+ *   1 Entry Permit Application
+ *   2 Entry Permit Approval
+ *   3 Employee Entry to UAE
+ *   4 Medical Fitness Test
+ *   5 Emirates ID Biometrics
+ *   6 Visa Stamping
+ *   7 Labour Card Issuance
+ *   8 Completion
+ */
+const STEP_TO_STATUS: Record<number, 'entry_permit' | 'medical_pending' | 'eid_pending' | 'stamping' | 'active'> = {
+    1: 'entry_permit',
+    2: 'entry_permit',
+    3: 'entry_permit',
+    4: 'medical_pending',
+    5: 'eid_pending',
+    6: 'stamping',
+    7: 'stamping',
+    8: 'active',
+}
+
 export async function advanceVisaStep(tenantId: string, id: string) {
     const visa = await getVisa(tenantId, id)
     if (!visa) return null
 
-    const newStep = Math.min(visa.currentStep + 1, visa.totalSteps)
-    const newStatus = newStep === visa.totalSteps ? 'active' : visa.status
+    // Don't advance terminal states.
+    if (visa.status === 'cancelled' || visa.status === 'expired') return visa
+    if (visa.currentStep >= visa.totalSteps) return visa
+
+    const newStep = visa.currentStep + 1
+    const mappedStatus = STEP_TO_STATUS[newStep] ?? visa.status
 
     const [row] = await db.update(visaApplications)
-        .set({ currentStep: newStep, status: newStatus, updatedAt: new Date() } as any)
+        .set({ currentStep: newStep, status: mappedStatus, updatedAt: new Date() } as any)
         .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId)))
         .returning()
 
@@ -65,8 +92,20 @@ export async function advanceVisaStep(tenantId: string, id: string) {
 }
 
 export async function cancelVisa(tenantId: string, id: string, reason?: string) {
+    const visa = await getVisa(tenantId, id)
+    if (!visa) return null
+    if (visa.status === 'cancelled') return visa
+
+    // Preserve existing notes; append a cancellation note if a reason was supplied.
+    const cancellationNote = reason?.trim()
+        ? `[Cancelled ${new Date().toISOString().slice(0, 10)}] ${reason.trim()}`
+        : null
+    const mergedNotes = cancellationNote
+        ? (visa.notes ? `${visa.notes}\n${cancellationNote}` : cancellationNote)
+        : visa.notes
+
     const [row] = await db.update(visaApplications)
-        .set({ status: 'cancelled', notes: reason ?? null, updatedAt: new Date() } as any)
+        .set({ status: 'cancelled', notes: mergedNotes, updatedAt: new Date() } as any)
         .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)))
         .returning()
     return row ?? null

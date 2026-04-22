@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, Languages, Check } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, Languages, Check, ChevronRight } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -24,32 +24,28 @@ import { useNotificationsList, useUnreadCount, useMarkNotificationRead, useMarkA
 import { useAuthStore } from '@/store/authStore'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { applyLanguageDirection } from '@/lib/i18n'
+import { ROOT_NAV_LABELS, ROUTES } from '@/lib/routes'
 
-const routeMeta: Record<string, string> = {
-  '/dashboard': 'navigation.dashboard',
-  '/employees': 'navigation.employees',
-  '/recruitment': 'navigation.recruitment',
-  '/onboarding': 'navigation.onboarding',
-  '/visa': 'navigation.visa',
-  '/documents': 'navigation.documents',
-  '/payroll': 'navigation.payroll',
-  '/leave': 'navigation.leave',
-  '/attendance': 'navigation.attendance',
-  '/exit': 'navigation.exit',
-  '/compliance': 'navigation.compliance',
-  '/reports': 'navigation.reports',
-  '/audit': 'audit.title',
-  '/login-history': 'loginHistory.title',
-  '/notifications': 'profile.notifications',
-  '/settings': 'navigation.settings',
-  '/help': 'navigation.help',
+/** Humanise a URL segment as a fallback label (kebab/snake → Title Case). */
+function humaniseSegment(seg: string): string {
+  const decoded = decodeURIComponent(seg)
+  // UUIDs and long opaque IDs become "Details"
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded)) return 'Details'
+  if (/^\d+$/.test(decoded) || decoded.length > 24) return 'Details'
+  return decoded
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 /**
  * Global application header.
- * Layout (LTR): [sidebar trigger] · [page title] ────── [search] [lang] [notifications] [profile]
- * Layout (RTL): mirrored automatically via flex direction inheritance.
- * Sticky, translucent backdrop, fully responsive.
+ *
+ * Layout (LTR):  [☰] | Home › Section › Detail   ────  [search] [lang] [bell] [avatar]
+ * Layout (RTL): full mirror via flex + logical CSS.
+ *
+ * - Icon buttons use `outline` variant for a clearer affordance.
+ * - Breadcrumb is generated from `useLocation()`; root segment is translated
+ *   via `ROOT_LABELS`, deeper segments humanised.
  */
 export function SiteHeader() {
   const location = useLocation()
@@ -57,11 +53,23 @@ export function SiteHeader() {
   const { t, i18n } = useTranslation()
   const [searchOpen, setSearchOpen] = useState(false)
 
-  const segments = location.pathname.split('/').filter(Boolean)
-  const rootPath = segments.length ? `/${segments[0]}` : '/dashboard'
-  const titleKey = routeMeta[rootPath]
-  const pageTitle = titleKey ? t(titleKey, { defaultValue: 'HRHub' }) : 'HRHub'
-  const isDetail = segments.length > 1
+  const crumbs = useMemo(() => {
+    const segments = location.pathname.split('/').filter(Boolean)
+    if (segments.length === 0) return [] as { href: string; label: string; isLast: boolean }[]
+    const detailsLabel = t('common.details', { defaultValue: 'Details' })
+    return segments.map((seg, idx) => {
+      const href = '/' + segments.slice(0, idx + 1).join('/')
+      const isRoot = idx === 0
+      const labelKey = isRoot ? ROOT_NAV_LABELS[seg] : undefined
+      const humanised = humaniseSegment(seg)
+      const label = labelKey
+        ? t(labelKey, { defaultValue: humanised })
+        : humanised === 'Details'
+          ? detailsLabel
+          : humanised
+      return { href, label, isLast: idx === segments.length - 1 }
+    })
+  }, [location.pathname, t])
 
   const { data: notifData } = useNotificationsList({ limit: 8 })
   const { data: unreadCount = 0 } = useUnreadCount()
@@ -71,18 +79,20 @@ export function SiteHeader() {
   const { user, tenant, logout } = useAuthStore()
 
   const initials = user?.name
-    ? user.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+    ? user.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
     : 'U'
 
   function handleLogout() {
     logout()
-    navigate('/login', { replace: true })
+    navigate(ROUTES.login, { replace: true })
   }
 
   function changeLang(lang: 'en' | 'ar') {
     i18n.changeLanguage(lang)
     applyLanguageDirection(lang)
   }
+
+  const iconBtn = 'h-9 w-9 border-border bg-background hover:bg-muted'
 
   return (
     <header
@@ -91,37 +101,62 @@ export function SiteHeader() {
         'bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70',
       )}
     >
-      {/* Left: sidebar trigger + page title */}
-      <SidebarTrigger className="-ms-1 text-foreground" aria-label={t('common.toggleMenu', { defaultValue: 'Toggle menu' })} />
+      <SidebarTrigger
+        className="-ms-1 text-foreground"
+        aria-label={t('common.toggleMenu', { defaultValue: 'Toggle menu' })}
+      />
       <Separator orientation="vertical" className="h-5" />
-      <div className="flex items-center gap-2 min-w-0">
-        <Link
-          to={rootPath}
-          className="text-sm font-semibold text-foreground hover:text-primary transition-colors truncate"
-        >
-          {pageTitle}
-        </Link>
-        {isDetail && (
-          <>
-            <span className="text-muted-foreground text-xs select-none">/</span>
-            <span className="text-sm text-muted-foreground truncate">
-              {t('common.details', { defaultValue: 'Details' })}
-            </span>
-          </>
-        )}
-      </div>
+
+      {/* Breadcrumb */}
+      <nav
+        aria-label={t('common.breadcrumb', { defaultValue: 'Breadcrumb' })}
+        className="flex items-center min-w-0 flex-1"
+      >
+        <ol className="flex items-center gap-1.5 min-w-0 text-sm">
+          {crumbs.map((c, idx) => (
+            <li key={c.href} className="flex items-center gap-1.5 min-w-0">
+              {idx > 0 && (
+                <ChevronRight
+                  className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0"
+                  data-rtl-flip
+                  aria-hidden="true"
+                />
+              )}
+              {c.isLast ? (
+                <span
+                  className="font-semibold text-foreground truncate"
+                  aria-current="page"
+                  title={c.label}
+                >
+                  {c.label}
+                </span>
+              ) : (
+                <Link
+                  to={c.href}
+                  className="text-muted-foreground hover:text-foreground transition-colors truncate"
+                  title={c.label}
+                >
+                  {c.label}
+                </Link>
+              )}
+            </li>
+          ))}
+        </ol>
+      </nav>
 
       {/* Right: actions */}
-      <div className="ms-auto flex items-center gap-1.5">
+      <div className="ms-auto flex items-center gap-2">
         {/* Search — desktop pill */}
         <Button
           variant="outline"
           size="sm"
-          className="hidden md:flex gap-2 text-muted-foreground w-56 h-9 ps-3 pe-2 justify-start font-normal hover:bg-muted/50"
+          className="hidden md:flex gap-2 text-muted-foreground w-56 h-9 ps-3 pe-2 justify-start font-normal border-border bg-background hover:bg-muted"
           onClick={() => setSearchOpen(true)}
         >
           <SearchIcon className="size-3.5 shrink-0" />
-          <span className="text-xs flex-1 text-start">{t('search.placeholder', { defaultValue: 'Search anything…' })}</span>
+          <span className="text-xs flex-1 text-start">
+            {t('search.placeholder', { defaultValue: 'Search anything…' })}
+          </span>
           <kbd className="ms-auto pointer-events-none inline-flex h-5 select-none items-center gap-0.5 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium">
             <span className="text-[10px]">⌘</span>K
           </kbd>
@@ -129,9 +164,9 @@ export function SiteHeader() {
 
         {/* Search — mobile icon */}
         <Button
-          variant="ghost"
+          variant="outline"
           size="icon"
-          className="md:hidden h-9 w-9"
+          className={cn('md:hidden', iconBtn)}
           aria-label={t('search.placeholder', { defaultValue: 'Search' })}
           onClick={() => setSearchOpen(true)}
         >
@@ -143,7 +178,12 @@ export function SiteHeader() {
         {/* Language */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={t('common.switchLanguage', { defaultValue: 'Switch language' })}>
+            <Button
+              variant="outline"
+              size="icon"
+              className={iconBtn}
+              aria-label={t('common.switchLanguage', { defaultValue: 'Switch language' })}
+            >
               <Languages className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -173,9 +213,9 @@ export function SiteHeader() {
         <Popover>
           <PopoverTrigger asChild>
             <Button
-              variant="ghost"
+              variant="outline"
               size="icon"
-              className="relative h-9 w-9"
+              className={cn('relative', iconBtn)}
               aria-label={t('profile.notifications', { defaultValue: 'Notifications' })}
             >
               <BellIcon className="size-4" />
@@ -246,7 +286,7 @@ export function SiteHeader() {
                 variant="ghost"
                 size="sm"
                 className="w-full text-xs"
-                onClick={() => navigate('/notifications')}
+                onClick={() => navigate(ROUTES.notifications)}
               >
                 {t('notifications.viewAll', { defaultValue: 'View all notifications' })}
               </Button>
@@ -259,49 +299,61 @@ export function SiteHeader() {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ms-1"
+              className="flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ms-1"
               aria-label={t('common.userMenu', { defaultValue: 'User menu' })}
             >
-              <Avatar className="h-8 w-8 border border-border">
+              <Avatar className="h-9 w-9 border border-border">
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                   {initials}
                 </AvatarFallback>
               </Avatar>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuLabel className="pb-2 pt-2">
-              <p className="text-sm font-semibold leading-tight truncate">{user?.name ?? 'User'}</p>
-              <p className="text-xs text-muted-foreground font-normal truncate mt-0.5">{user?.email}</p>
-              {tenant && (
-                <div className="flex items-center gap-1.5 mt-2 px-2 py-1 rounded-md bg-muted/60">
-                  <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <p className="text-[11px] text-muted-foreground truncate">{tenant.name}</p>
-                </div>
-              )}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/settings')} className="gap-2 cursor-pointer">
-              <UserIcon className="h-4 w-4" />
-              {t('profile.settings', { defaultValue: 'Profile & Settings' })}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/notifications')} className="gap-2 cursor-pointer">
-              <BellIcon className="h-4 w-4" />
-              {t('profile.notifications', { defaultValue: 'Notifications' })}
-              {unreadCount > 0 && (
-                <span className="ms-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={handleLogout}
-              className="gap-2 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
-            >
-              <LogOut className="h-4 w-4" />
-              {t('profile.signOut', { defaultValue: 'Sign Out' })}
-            </DropdownMenuItem>
+
+          <DropdownMenuContent align="end" sideOffset={8} className="w-72 p-0">
+            {/* Identity card */}
+            <div className="flex items-center gap-3 p-4 bg-muted/40 border-b border-border">
+              <Avatar className="h-11 w-11 border border-border">
+                <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold leading-tight truncate">{user?.name ?? 'User'}</p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{user?.email}</p>
+                {tenant && (
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <p className="text-[11px] text-muted-foreground truncate">{tenant.name}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Menu actions */}
+            <div className="p-1.5">
+              <DropdownMenuItem onClick={() => navigate(ROUTES.settings)} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
+                <UserIcon className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">{t('profile.settings', { defaultValue: 'Profile & Settings' })}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate(ROUTES.notifications)} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
+                <BellIcon className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">{t('profile.notifications', { defaultValue: 'Notifications' })}</span>
+                {unreadCount > 0 && (
+                  <span className="ms-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="my-1.5" />
+              <DropdownMenuItem
+                onClick={handleLogout}
+                className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md text-destructive focus:text-destructive focus:bg-destructive/10"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="text-sm font-medium">{t('auth.signOut', { defaultValue: 'Sign Out' })}</span>
+              </DropdownMenuItem>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

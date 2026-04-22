@@ -103,8 +103,13 @@ export function VisaDetailPage() {
     }
 
     function handleCancel() {
-        if (!confirm(t('common.confirmCancel'))) return
-        cancelVisa.mutate({ id: visa!.id }, {
+        const reason = window.prompt(
+            'Please provide a reason for cancelling this visa application (optional):',
+            '',
+        )
+        // `null` means the user dismissed the prompt — abort. Empty string is allowed.
+        if (reason === null) return
+        cancelVisa.mutate({ id: visa!.id, reason: reason.trim() || undefined }, {
             onSuccess: () => { toast.success(t('common.cancelled')); navigate('/visa') },
             onError: () => toast.error(t('common.saveFailed')),
         })
