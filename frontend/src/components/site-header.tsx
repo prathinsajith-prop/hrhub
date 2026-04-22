@@ -1,9 +1,18 @@
-import { BellIcon, SearchIcon } from 'lucide-react'
+import { BellIcon, SearchIcon, LogOut, Settings, User, Building2, ChevronRight } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Popover,
   PopoverContent,
@@ -19,6 +28,7 @@ import {
 } from '@/components/ui/breadcrumb'
 import { cn } from '@/lib/utils'
 import { useNotificationsList, useUnreadCount, useMarkNotificationRead } from '@/hooks/useNotifications'
+import { useAuthStore } from '@/store/authStore'
 
 const routeMeta: Record<string, { title: string; parent?: string }> = {
   '/dashboard': { title: 'Dashboard' },
@@ -49,6 +59,16 @@ export function SiteHeader() {
   const { data: unreadCount = 0 } = useUnreadCount()
   const markRead = useMarkNotificationRead()
   const notifications = notifData?.data ?? []
+  const { user, tenant, logout } = useAuthStore()
+
+  const initials = user?.name
+    ? user.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+    : 'U'
+
+  function handleLogout() {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <header
@@ -171,6 +191,45 @@ export function SiteHeader() {
             </div>
           </PopoverContent>
         </Popover>
+
+        {/* Profile dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label="User menu">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuLabel className="pb-1">
+              <p className="text-sm font-semibold leading-tight">{user?.name ?? 'User'}</p>
+              <p className="text-xs text-muted-foreground font-normal truncate">{user?.email}</p>
+              {tenant && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <p className="text-xs text-muted-foreground truncate">{tenant.name}</p>
+                </div>
+              )}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate('/settings')} className="gap-2 cursor-pointer">
+              <User className="h-4 w-4" />
+              Profile &amp; Settings
+              <ChevronRight className="h-3 w-3 ml-auto text-muted-foreground" />
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={handleLogout}
+              className="gap-2 cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )

@@ -1,4 +1,5 @@
 import { loginUser, refreshAccessToken, revokeRefreshToken, requestPasswordReset, resetPasswordWithToken, changePassword } from './auth.service.js'
+import { setupTotp, verifyAndEnableTotp, disableTotp, getTotpStatus } from './twofa.service.js'
 import { recordLoginEvent } from '../audit/audit.service.js'
 import { validate, loginSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema } from '../../lib/validation.js'
 
@@ -177,6 +178,39 @@ export default async function (fastify: any): Promise<void> {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message })
         }
         return reply.send({ data: { ok: true } })
+    })
+
+    // ── 2FA / TOTP routes ────────────────────────────────────────────────
+    const auth = { preHandler: [fastify.authenticate] }
+
+    // GET /api/v1/auth/2fa/status
+    fastify.get('/2fa/status', auth, async (request: any, reply: any) => {
+        const status = await getTotpStatus(request.user.id)
+        return reply.send({ data: status })
+    })
+
+    // POST /api/v1/auth/2fa/setup — generate secret + QR code
+    fastify.post('/2fa/setup', auth, async (request: any, reply: any) => {
+        const result = await setupTotp(request.user.id)
+        return reply.send({ data: { qrDataUrl: result.qrDataUrl, secret: result.secret } })
+    })
+
+    // POST /api/v1/auth/2fa/verify — confirm token to activate 2FA
+    fastify.post('/2fa/verify', auth, async (request: any, reply: any) => {
+        const { token } = request.body as { token: string }
+        if (!token) return reply.code(400).send({ error: 'token is required' })
+        const ok = await verifyAndEnableTotp(request.user.id, token)
+        if (!ok) return reply.code(400).send({ error: 'Invalid or expired token' })
+        return reply.send({ data: { enabled: true } })
+    })
+
+    // POST /api/v1/auth/2fa/disable — disable 2FA (requires current TOTP token)
+    fastify.post('/2fa/disable', auth, async (request: any, reply: any) => {
+        const { token } = request.body as { token: string }
+        if (!token) return reply.code(400).send({ error: 'token is required' })
+        const ok = await disableTotp(request.user.id, token)
+        if (!ok) return reply.code(400).send({ error: 'Invalid token or 2FA not enabled' })
+        return reply.send({ data: { enabled: false } })
     })
 }
 

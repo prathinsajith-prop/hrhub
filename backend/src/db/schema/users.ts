@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, boolean, timestamp, index, integer } from 'drizzle-orm/pg-core'
+import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { tenants } from './tenants'
 
@@ -18,6 +19,9 @@ export const users = pgTable('users', {
     // Account lockout — incremented on every failed login, reset on success
     failedLoginCount: integer('failed_login_count').notNull().default(0),
     lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    // TOTP two-factor authentication
+    totpSecret: text('totp_secret'),
+    twoFaEnabled: boolean('two_fa_enabled').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({

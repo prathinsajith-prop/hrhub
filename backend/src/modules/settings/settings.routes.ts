@@ -43,4 +43,38 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         await inviteUser(request.user.tenantId, { name, email, role })
         return reply.send({ message: 'Invitation sent' })
     })
+
+    // ── IP Allowlist routes ──────────────────────────────────────────────
+    // GET /settings/ip-allowlist
+    fastify.get('/ip-allowlist', hrAdmin, async (request: any, reply: any) => {
+        const [tenant] = await (await import('../../db/index.js')).db
+            .select({ ipAllowlist: (await import('../../db/schema/index.js')).tenants.ipAllowlist })
+            .from((await import('../../db/schema/index.js')).tenants)
+            .where((await import('drizzle-orm')).eq((await import('../../db/schema/index.js')).tenants.id, request.user.tenantId))
+            .limit(1)
+        return reply.send({ data: { ipAllowlist: tenant?.ipAllowlist ?? [] } })
+    })
+
+    // PUT /settings/ip-allowlist
+    fastify.put('/ip-allowlist', hrAdmin, async (request: any, reply: any) => {
+        const { ipAllowlist } = request.body as { ipAllowlist: string[] }
+        if (!Array.isArray(ipAllowlist)) {
+            return reply.code(400).send({ error: 'ipAllowlist must be an array' })
+        }
+        // Basic CIDR/IP validation
+        const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/
+        const invalid = ipAllowlist.filter(ip => !cidrRegex.test(ip.trim()))
+        if (invalid.length > 0) {
+            return reply.code(400).send({ error: `Invalid IP/CIDR entries: ${invalid.join(', ')}` })
+        }
+        const { db } = await import('../../db/index.js')
+        const { tenants } = await import('../../db/schema/index.js')
+        const { eq } = await import('drizzle-orm')
+        const [updated] = await db
+            .update(tenants)
+            .set({ ipAllowlist: ipAllowlist.map(s => s.trim()), updatedAt: new Date() })
+            .where(eq(tenants.id, request.user.tenantId))
+            .returning({ ipAllowlist: tenants.ipAllowlist })
+        return reply.send({ data: { ipAllowlist: updated?.ipAllowlist ?? [] } })
+    })
 }

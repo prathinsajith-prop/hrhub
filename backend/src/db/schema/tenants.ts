@@ -12,6 +12,7 @@ export const tenants = pgTable('tenants', {
     subscriptionPlan: text('subscription_plan').notNull().default('starter')
         .$type<'starter' | 'growth' | 'enterprise'>(),
     logoUrl: text('logo_url'),
+    ipAllowlist: text('ip_allowlist').array().default([]),
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
