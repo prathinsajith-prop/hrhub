@@ -10,7 +10,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { formatCurrency } from '@/lib/utils'
-import { usePayrollRuns } from '@/hooks/usePayroll'
+import { usePayrollRuns, useRunPayroll, useSubmitWps } from '@/hooks/usePayroll'
 import { usePayrollTrend } from '@/hooks/useDashboard'
 import { useAuthStore } from '@/store/authStore'
 import type { PayrollRun } from '@/types'
@@ -45,6 +45,7 @@ const statusConfig: Record<string, { variant: any; label: string; icon: React.El
 function SifActionCell({ payroll: p }: { payroll: PayrollRun }) {
   const { accessToken } = useAuthStore()
   const [loading, setLoading] = useState(false)
+  const submitWps = useSubmitWps()
 
   const handleSif = async () => {
     setLoading(true)
@@ -58,6 +59,13 @@ function SifActionCell({ payroll: p }: { payroll: PayrollRun }) {
     }
   }
 
+  const handleSubmitWps = () => {
+    submitWps.mutate(p.id, {
+      onSuccess: () => toast.success('WPS submitted', `Reference: ${p.wpsFileRef ?? 'generated'}. Status updated to WPS Submitted.`),
+      onError: () => toast.error('Submission failed', 'Could not mark this payroll run as WPS submitted.'),
+    })
+  }
+
   return (
     <div className="flex gap-1">
       {(p.status === 'approved' || p.status === 'wps_submitted' || p.status === 'paid') && (
@@ -66,8 +74,8 @@ function SifActionCell({ payroll: p }: { payroll: PayrollRun }) {
         </Button>
       )}
       {p.status === 'approved' && (
-        <Button size="sm" variant="outline" leftIcon={<Send className="h-3 w-3" />} className="h-7 text-xs"
-          onClick={() => toast.info('WPS submission', 'Upload the SIF file to the MOHRE WPS portal.')}>
+        <Button size="sm" variant="outline" loading={submitWps.isPending} leftIcon={<Send className="h-3 w-3" />} className="h-7 text-xs"
+          onClick={handleSubmitWps}>
           Submit
         </Button>
       )}
@@ -131,8 +139,9 @@ const columns: ColumnDef<PayrollRun>[] = [
 
 export function PayrollPage() {
   const [runConfirmOpen, setRunConfirmOpen] = useState(false)
-  const { data: payrollData } = usePayrollRuns({ year: new Date().getFullYear() })
+  const { data: payrollData, isLoading } = usePayrollRuns({ year: new Date().getFullYear() })
   const { data: trendRaw } = usePayrollTrend()
+  const runPayroll = useRunPayroll()
   const payrollRuns: PayrollRun[] = (payrollData?.data as PayrollRun[]) ?? []
 
   // Build gross/net chart from backend trend (which returns { month, amount } in millions)
@@ -167,8 +176,20 @@ export function PayrollPage() {
       setRunConfirmOpen(false)
       return
     }
-    toast.success('Payroll processing started', `${draftLabel} payroll is being calculated for ${(draftRun as any).totalEmployees ?? 0} employees.`)
-    setRunConfirmOpen(false)
+    runPayroll.mutate((draftRun as any).id, {
+      onSuccess: (result) => {
+        const updated = result as any
+        toast.success(
+          'Payroll processed',
+          `${updated?.totalEmployees ?? 0} payslips calculated. Total net: AED ${Number(updated?.totalNet ?? 0).toLocaleString()}.`,
+        )
+        setRunConfirmOpen(false)
+      },
+      onError: (err: any) => {
+        toast.error('Payroll failed', err?.message ?? 'Could not process payroll. Check employee salary data.')
+        setRunConfirmOpen(false)
+      },
+    })
   }
 
   return (
@@ -239,7 +260,7 @@ export function PayrollPage() {
         <DataTable
           columns={columns}
           data={payrollRuns}
-          pageSize={5}
+          isLoading={isLoading}
           emptyMessage="No payroll runs found."
           enableSelection
           getRowId={(row: any) => String(row.id)}
@@ -259,12 +280,12 @@ export function PayrollPage() {
 
       <ConfirmDialog
         open={runConfirmOpen}
-        onOpenChange={setRunConfirmOpen}
+        onOpenChange={(o) => { if (!runPayroll.isPending) setRunConfirmOpen(o) }}
         title={`Run ${draftLabel} Payroll`}
         description={draftRun
-          ? `This will calculate salaries for ${(draftRun as any).totalEmployees ?? 0} employees totalling approximately ${formatCurrency(Number((draftRun as any).totalNet ?? 0))} net. Confirm to proceed with payroll run.`
+          ? `This will calculate payslips for all active employees and mark the run as approved. Estimated net: ${formatCurrency(Number((draftRun as any).totalNet ?? 0))}.`
           : 'There is no draft run to process.'}
-        confirmLabel="Run Payroll"
+        confirmLabel={runPayroll.isPending ? 'Processing…' : 'Run Payroll'}
         cancelLabel="Cancel"
         onConfirm={handleRunPayroll}
         variant="warning"

@@ -32,3 +32,19 @@ export function useApproveLeave() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['leave'] }),
     })
 }
+
+export interface LeaveBalanceEntry { entitled: number; taken: number; pending: number; available: number }
+export interface LeaveBalance {
+    employeeId: string
+    year: number
+    monthsOfService: number
+    balance: Record<string, LeaveBalanceEntry>
+}
+
+export function useLeaveBalance(employeeId: string | undefined, year = new Date().getFullYear()) {
+    return useQuery({
+        queryKey: ['leave-balance', employeeId, year],
+        queryFn: () => api.get<{ data: LeaveBalance }>(`/leave/balance/${employeeId}?year=${year}`).then(r => r.data),
+        enabled: !!employeeId,
+    })
+}

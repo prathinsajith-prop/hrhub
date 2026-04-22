@@ -31,7 +31,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { useEmployees } from '@/hooks/useEmployees'
-import { AddEmployeeDialog } from '@/components/shared/action-dialogs'
+import { AddEmployeeDialog, EditEmployeeDialog } from '@/components/shared/action-dialogs'
 import type { Employee } from '@/types'
 
 const statusVariant: Record<
@@ -49,9 +49,11 @@ const statusVariant: Record<
 function ActionMenu({
   employee,
   onDelete,
+  onEdit,
 }: {
   employee: Employee
   onDelete: (e: Employee) => void
+  onEdit: (e: Employee) => void
 }) {
   const navigate = useNavigate()
   return (
@@ -66,7 +68,7 @@ function ActionMenu({
           <Eye className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           View Profile
         </DropdownMenuItem>
-        <DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onEdit(employee)}>
           <Edit2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           Edit Details
         </DropdownMenuItem>
@@ -89,9 +91,10 @@ function ActionMenu({
 
 export function EmployeesPage() {
   const navigate = useNavigate()
-  const { data: empData } = useEmployees({ limit: 50 })
+  const { data: empData, isLoading } = useEmployees({ limit: 50 })
   const employees: Employee[] = (empData?.data as Employee[]) ?? []
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
+  const [editTarget, setEditTarget] = useState<Employee | null>(null)
   const [addOpen, setAddOpen] = useState(false)
 
   const active = employees.filter((e: any) => e.status === 'active').length
@@ -206,7 +209,7 @@ export function EmployeesPage() {
       id: 'actions',
       header: '',
       cell: ({ row }) => (
-        <ActionMenu employee={row.original} onDelete={setDeleteTarget} />
+        <ActionMenu employee={row.original} onDelete={setDeleteTarget} onEdit={setEditTarget} />
       ),
       size: 44,
     },
@@ -231,10 +234,10 @@ export function EmployeesPage() {
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCardCompact label="Active" value={active} icon={Users} color="green" />
-        <KpiCardCompact label="Onboarding" value={onboarding} icon={UserPlus} color="blue" />
-        <KpiCardCompact label="Probation" value={probation} icon={Clock} color="amber" />
-        <KpiCardCompact label="Emiratis" value={emiratis} icon={Star} color="cyan" />
+        <KpiCardCompact label="Active" value={active} icon={Users} color="green" loading={isLoading} />
+        <KpiCardCompact label="Onboarding" value={onboarding} icon={UserPlus} color="blue" loading={isLoading} />
+        <KpiCardCompact label="Probation" value={probation} icon={Clock} color="amber" loading={isLoading} />
+        <KpiCardCompact label="Emiratis" value={emiratis} icon={Star} color="cyan" loading={isLoading} />
       </div>
 
       {/* Table card */}
@@ -251,6 +254,7 @@ export function EmployeesPage() {
           <DataTable
             columns={columns}
             data={employees}
+            isLoading={isLoading}
             searchKey="fullName"
             searchPlaceholder="Search by name, ID..."
             pageSize={8}
@@ -300,6 +304,13 @@ export function EmployeesPage() {
       />
 
       <AddEmployeeDialog open={addOpen} onOpenChange={setAddOpen} />
+      {editTarget && (
+        <EditEmployeeDialog
+          open={!!editTarget}
+          onOpenChange={(open) => !open && setEditTarget(null)}
+          employee={editTarget}
+        />
+      )}
     </PageWrapper>
   )
 }

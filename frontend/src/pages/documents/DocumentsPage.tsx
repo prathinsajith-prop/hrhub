@@ -236,7 +236,7 @@ const columns: ColumnDef<Document>[] = [
 
 export function DocumentsPage() {
   const [uploadOpen, setUploadOpen] = useState(false)
-  const { data: docsData } = useDocuments({ limit: 100 })
+  const { data: docsData, isLoading } = useDocuments({ limit: 100 })
   const documents: Document[] = (docsData?.data as Document[]) ?? []
   const expiring = documents.filter((d: any) => d.status === 'expiring_soon').length
   const expired = documents.filter((d: any) => d.status === 'expired').length
@@ -275,7 +275,7 @@ export function DocumentsPage() {
         <DataTable
           columns={columns}
           data={documents}
-          searchKey="docType"
+          isLoading={isLoading}
           searchPlaceholder="Search documents..."
           pageSize={8}
           enableSelection

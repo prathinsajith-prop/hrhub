@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, lt } from 'drizzle-orm'
 import crypto from 'node:crypto'
 import { db } from '../../db/index.js'
 import { users, refreshTokens, tenants, passwordResetTokens } from '../../db/schema/index.js'
@@ -191,4 +191,14 @@ export async function changePassword(userId: string, currentPassword: string, ne
         .where(eq(users.id, user.id))
 
     return { ok: true as const }
+}
+
+/**
+ * Task 2.8 — Delete expired refresh tokens and password reset tokens.
+ * Run periodically (every 6 hours) to keep the tokens table lean.
+ */
+export async function cleanupExpiredTokens(): Promise<void> {
+    const now = new Date()
+    await db.delete(refreshTokens).where(lt(refreshTokens.expiresAt, now))
+    await db.delete(passwordResetTokens).where(lt(passwordResetTokens.expiresAt, now))
 }

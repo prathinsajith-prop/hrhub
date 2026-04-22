@@ -13,6 +13,26 @@ export function usePayrollRuns(params: { year?: number; limit?: number; offset?:
     })
 }
 
+export function usePayrollRun(id: string | undefined) {
+    return useQuery({
+        queryKey: ['payroll-run', id],
+        queryFn: () => api.get<{ data: unknown }>(`/payroll/${id}`).then(r => r.data),
+        enabled: !!id,
+        refetchInterval: (query) => {
+            const run = query.state.data as any
+            return run?.status === 'processing' ? 3000 : false
+        },
+    })
+}
+
+export function useRunPayroll() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (runId: string) => api.post<{ data: unknown }>(`/payroll/${runId}/run`, {}).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll'] }),
+    })
+}
+
 export function usePayslips(runId: string) {
     return useQuery({
         queryKey: ['payroll', runId, 'payslips'],
@@ -33,6 +53,14 @@ export function useUpdatePayrollRun(id: string) {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (data: unknown) => api.patch(`/payroll/${id}`, data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll'] }),
+    })
+}
+
+export function useSubmitWps() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (runId: string) => api.post<{ data: unknown }>(`/payroll/${runId}/submit-wps`, {}).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll'] }),
     })
 }

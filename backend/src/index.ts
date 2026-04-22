@@ -13,6 +13,7 @@ import { join } from 'path'
 
 import { loadEnv } from './config/env.js'
 import authenticatePlugin from './plugins/authenticate.js'
+import { cleanupExpiredTokens } from './modules/auth/auth.service.js'
 
 import authRoutes from './modules/auth/auth.routes.js'
 import employeesRoutes from './modules/employees/employees.routes.js'
@@ -24,6 +25,7 @@ import leaveRoutes from './modules/leave/leave.routes.js'
 import onboardingRoutes from './modules/onboarding/onboarding.routes.js'
 import complianceRoutes from './modules/compliance/compliance.routes.js'
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js'
+import reportsRoutes from './modules/reports/reports.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -45,6 +47,27 @@ async function bootstrap() {
     // Security
     await app.register(helmet, { contentSecurityPolicy: false })
     await app.register(rateLimit, { max: 200, timeWindow: '1 minute' })
+
+    // X-Request-ID correlation header on all responses
+    app.addHook('onRequest', async (request: any, reply: any) => {
+        const reqId = (request.headers['x-request-id'] as string) || crypto.randomUUID()
+        reply.header('X-Request-ID', reqId)
+        request.requestId = reqId
+    })
+
+    // Task 2.3 — Reject mutating requests with wrong Content-Type
+    app.addHook('preValidation', async (request: any, reply: any) => {
+        if (['POST', 'PATCH', 'PUT'].includes(request.method) && request.body !== undefined) {
+            const ct: string = request.headers['content-type'] ?? ''
+            if (!ct.includes('application/json') && !ct.includes('multipart/form-data')) {
+                return reply.code(415).send({
+                    statusCode: 415,
+                    error: 'Unsupported Media Type',
+                    message: 'Content-Type must be application/json or multipart/form-data',
+                })
+            }
+        }
+    })
 
     // Multipart (file uploads — max 10 MB)
     await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } })
@@ -91,6 +114,7 @@ async function bootstrap() {
     await app.register(onboardingRoutes, { prefix: '/api/v1/onboarding' })
     await app.register(complianceRoutes, { prefix: '/api/v1/compliance' })
     await app.register(dashboardRoutes, { prefix: '/api/v1/dashboard' })
+    await app.register(reportsRoutes, { prefix: '/api/v1/reports' })
 
     // Health check
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
@@ -128,6 +152,14 @@ async function bootstrap() {
     if (env.NODE_ENV !== 'production') {
         app.log.info(`Swagger docs at http://${env.HOST}:${env.PORT}/docs`)
     }
+
+    // Task 2.8 — Expired token cleanup every 6 hours
+    const SIX_HOURS = 6 * 60 * 60 * 1000
+    setInterval(() => {
+        cleanupExpiredTokens().catch((e) => app.log.error('Token cleanup failed: %s', e))
+    }, SIX_HOURS)
+    // Run once on startup
+    cleanupExpiredTokens().catch((e) => app.log.warn('Initial token cleanup skipped: %s', e))
 }
 
 bootstrap().catch((err) => {

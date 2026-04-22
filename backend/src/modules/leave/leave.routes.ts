@@ -1,6 +1,6 @@
-import { listLeaveRequests, createLeaveRequest, approveLeave, cancelLeave } from './leave.service.js'
+import { listLeaveRequests, createLeaveRequest, approveLeave, cancelLeave, getLeaveBalance } from './leave.service.js'
 
-export default async function(fastify: any): Promise<void> {
+export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
@@ -55,6 +55,22 @@ export default async function(fastify: any): Promise<void> {
         const updated = await cancelLeave(request.user.tenantId, id)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Leave request not found' })
         return reply.send({ data: updated })
+    })
+
+    // GET /leave/balance/:employeeId?year=2025
+    fastify.get('/balance/:employeeId', {
+        ...auth,
+        schema: {
+            tags: ['Leave'],
+            params: { type: 'object', properties: { employeeId: { type: 'string', format: 'uuid' } }, required: ['employeeId'] },
+            querystring: { type: 'object', properties: { year: { type: 'integer' } } },
+        },
+    }, async (request, reply) => {
+        const { employeeId } = request.params as { employeeId: string }
+        const { year = new Date().getFullYear() } = request.query as { year?: number }
+        const balance = await getLeaveBalance(request.user.tenantId, employeeId, Number(year))
+        if (!balance) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+        return reply.send({ data: balance })
     })
 }
 

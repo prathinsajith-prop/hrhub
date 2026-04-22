@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCard } from '@/components/ui/kpi-card'
 import type { KpiColor } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -107,13 +108,13 @@ const tooltipStyle: React.CSSProperties = {
 
 export function DashboardPage() {
   const navigate = useNavigate()
-  const { data: kpis } = useDashboardKPIs()
+  const { data: kpis, isLoading: kpisLoading } = useDashboardKPIs()
   const { data: notifications } = useNotifications(20)
-  const { data: visaData } = useVisas({ limit: 10 })
-  const { data: payrollTrendRaw } = usePayrollTrend()
-  const { data: nationalityRaw } = useNationalityBreakdown()
-  const { data: deptRaw } = useDeptHeadcount()
-  const { data: emiratisation } = useEmiratisation()
+  const { data: visaData, isLoading: visasLoading } = useVisas({ limit: 10 })
+  const { data: payrollTrendRaw, isLoading: trendLoading } = usePayrollTrend()
+  const { data: nationalityRaw, isLoading: natLoading } = useNationalityBreakdown()
+  const { data: deptRaw, isLoading: deptLoading } = useDeptHeadcount()
+  const { data: emiratisation, isLoading: emirLoading } = useEmiratisation()
 
   const payrollTrend = payrollTrendRaw ?? []
   const nationalityData = (nationalityRaw ?? []).map((d, i) => ({
@@ -154,7 +155,7 @@ export function DashboardPage() {
               </span>
             )}
           </p>
-          <button onClick={() => navigate('/notifications')} className="ml-auto text-xs font-medium text-warning-foreground hover:underline shrink-0">
+          <button onClick={() => navigate('/visa')} className="ml-auto text-xs font-medium text-warning-foreground hover:underline shrink-0">
             View all
           </button>
         </div>
@@ -171,6 +172,7 @@ export function DashboardPage() {
             icon={icon}
             color={color}
             trend={change}
+            loading={kpisLoading}
           />
         ))}
       </div>
@@ -186,11 +188,13 @@ export function DashboardPage() {
                 <CardDescription>Monthly total payroll in AED millions</CardDescription>
               </div>
               <div className="text-right">
-                <p className="text-xl font-bold font-display">
-                  {payrollTrend.length > 0
-                    ? `AED ${payrollTrend[payrollTrend.length - 1].amount}M`
-                    : '—'}
-                </p>
+                {trendLoading ? <Skeleton className="h-7 w-24" /> : (
+                  <p className="text-xl font-bold font-display">
+                    {payrollTrend.length > 0
+                      ? `AED ${payrollTrend[payrollTrend.length - 1].amount}M`
+                      : '—'}
+                  </p>
+                )}
                 <p className="text-[11px] text-success font-medium flex items-center gap-1 justify-end">
                   <TrendingUp className="h-3 w-3" /> Latest month
                 </p>
@@ -198,43 +202,54 @@ export function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={payrollTrend} margin={{ top: 8, right: 4, bottom: 0, left: -20 }}>
-                <defs>
-                  <linearGradient id="payrollGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 11, fill: CHART_COLORS.axis }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: CHART_COLORS.axis }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `${v}M`}
-                />
-                <Tooltip
-                  formatter={(v: any) => [`AED ${v}M`, 'Payroll']}
-                  contentStyle={tooltipStyle}
-                  cursor={{ stroke: CHART_COLORS.primary, strokeWidth: 1, strokeDasharray: '3 3' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="amount"
-                  stroke={CHART_COLORS.primary}
-                  strokeWidth={2}
-                  fill="url(#payrollGrad)"
-                  dot={{ r: 3, fill: 'hsl(var(--card))', stroke: CHART_COLORS.primary, strokeWidth: 2 }}
-                  activeDot={{ r: 5, fill: CHART_COLORS.primary }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {trendLoading ? (
+              <div className="h-[220px] flex flex-col gap-3 pt-4">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-5/6" />
+                <Skeleton className="h-3 w-4/6" />
+                <Skeleton className="h-3 w-5/6" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-4/6" />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={payrollTrend} margin={{ top: 8, right: 4, bottom: 0, left: -20 }}>
+                  <defs>
+                    <linearGradient id="payrollGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 11, fill: CHART_COLORS.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: CHART_COLORS.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `${v}M`}
+                  />
+                  <Tooltip
+                    formatter={(v: any) => [`AED ${v}M`, 'Payroll']}
+                    contentStyle={tooltipStyle}
+                    cursor={{ stroke: CHART_COLORS.primary, strokeWidth: 1, strokeDasharray: '3 3' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="amount"
+                    stroke={CHART_COLORS.primary}
+                    strokeWidth={2}
+                    fill="url(#payrollGrad)"
+                    dot={{ r: 3, fill: 'hsl(var(--card))', stroke: CHART_COLORS.primary, strokeWidth: 2 }}
+                    activeDot={{ r: 5, fill: CHART_COLORS.primary }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -242,44 +257,53 @@ export function DashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle>Workforce Nationality</CardTitle>
-            <CardDescription>{totalNat} total employees</CardDescription>
+            <CardDescription>{natLoading ? ' ' : `${totalNat} total employees`}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex justify-center mb-3">
-              <ResponsiveContainer width="100%" height={140}>
-                <PieChart>
-                  <Pie
-                    data={nationalityData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={42}
-                    outerRadius={64}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {nationalityData.map((entry, i) => (
-                      <Cell key={i} fill={entry.fill} stroke="none" />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v: any) => [v, 'Employees']} contentStyle={tooltipStyle} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <ul className="space-y-2">
-              {nationalityData.map((d) => (
-                <li key={d.name} className="flex items-center gap-2 text-xs">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full shrink-0"
-                    style={{ background: d.fill }}
-                  />
-                  <span className="flex-1 text-foreground">{d.name}</span>
-                  <span className="font-semibold text-foreground">{d.value}</span>
-                  <span className="text-muted-foreground w-8 text-right">
-                    {Math.round((d.value / totalNat) * 100)}%
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {natLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-[140px] w-full rounded-xl" />
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-center mb-3">
+                  <ResponsiveContainer width="100%" height={140}>
+                    <PieChart>
+                      <Pie
+                        data={nationalityData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={42}
+                        outerRadius={64}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {nationalityData.map((entry, i) => (
+                          <Cell key={i} fill={entry.fill} stroke="none" />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: any) => [v, 'Employees']} contentStyle={tooltipStyle} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <ul className="space-y-2">
+                  {nationalityData.map((d) => (
+                    <li key={d.name} className="flex items-center gap-2 text-xs">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full shrink-0"
+                        style={{ background: d.fill }}
+                      />
+                      <span className="flex-1 text-foreground">{d.name}</span>
+                      <span className="font-semibold text-foreground">{d.value}</span>
+                      <span className="text-muted-foreground w-8 text-right">
+                        {Math.round((d.value / totalNat) * 100)}%
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -292,37 +316,48 @@ export function DashboardPage() {
             <CardTitle>Headcount by Department</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <ResponsiveContainer width="100%" height={230}>
-              <BarChart
-                data={departmentData}
-                layout="vertical"
-                margin={{ left: 0, right: 8, top: 0, bottom: 0 }}
-              >
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  dataKey="dept"
-                  type="category"
-                  tick={{ fontSize: 11, fill: CHART_COLORS.axis }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={72}
-                />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={14}>
-                  {departmentData.map((_, i) => (
-                    <Cell
-                      key={i}
-                      fill={i === 0 ? CHART_COLORS.primary : 'hsl(var(--primary) / 0.25)'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {deptLoading ? (
+              <div className="space-y-3 pt-2">
+                {[80, 60, 45, 70, 55, 40].map((w, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <Skeleton className="h-3 w-16 shrink-0" />
+                    <Skeleton className="h-4 rounded" style={{ width: `${w}%` }} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={230}>
+                <BarChart
+                  data={departmentData}
+                  layout="vertical"
+                  margin={{ left: 0, right: 8, top: 0, bottom: 0 }}
+                >
+                  <XAxis
+                    type="number"
+                    tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    dataKey="dept"
+                    type="category"
+                    tick={{ fontSize: 11, fill: CHART_COLORS.axis }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={72}
+                  />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={14}>
+                    {departmentData.map((_, i) => (
+                      <Cell
+                        key={i}
+                        fill={i === 0 ? CHART_COLORS.primary : 'hsl(var(--primary) / 0.25)'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -341,57 +376,71 @@ export function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3.5 pt-0">
-            {visaList.slice(0, 5).map((v: any) => {
-              const name = v.employee
-                ? `${v.employee.firstName ?? ''} ${v.employee.lastName ?? ''}`.trim()
-                : v.employeeName ?? 'Unknown'
-              const pct = v.totalSteps ? Math.round((v.currentStep / v.totalSteps) * 100) : 0
-              const barClass =
-                v.urgencyLevel === 'critical'
-                  ? 'bg-destructive'
-                  : v.urgencyLevel === 'urgent'
-                    ? 'bg-warning'
-                    : 'bg-primary'
-              return (
-                <div key={v.id} className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-foreground truncate">{name}</p>
-                      <p className="text-[10px] text-muted-foreground capitalize">
-                        {(v.visaType ?? '').replace(/_/g, ' ')}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={
-                        v.urgencyLevel === 'critical'
-                          ? 'destructive'
-                          : v.urgencyLevel === 'urgent'
-                            ? 'warning'
-                            : 'info'
-                      }
-                      className="text-[10px] h-5 capitalize shrink-0"
-                    >
-                      {v.urgencyLevel}
-                    </Badge>
+            {visasLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className="flex justify-between">
+                    <Skeleton className="h-3 w-28" />
+                    <Skeleton className="h-4 w-14 rounded-full" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className={cn('h-full rounded-full transition-all', barClass)}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] text-muted-foreground shrink-0 w-8 text-right">
-                      {pct}%
-                    </span>
-                  </div>
+                  <Skeleton className="h-1.5 w-full rounded-full" />
                 </div>
-              )
-            })}
-            {visaList.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-6">
-                No active visa cases
-              </p>
+              ))
+            ) : (
+              <>
+                {visaList.slice(0, 5).map((v: any) => {
+                  const name = v.employee
+                    ? `${v.employee.firstName ?? ''} ${v.employee.lastName ?? ''}`.trim()
+                    : v.employeeName ?? 'Unknown'
+                  const pct = v.totalSteps ? Math.round((v.currentStep / v.totalSteps) * 100) : 0
+                  const barClass =
+                    v.urgencyLevel === 'critical'
+                      ? 'bg-destructive'
+                      : v.urgencyLevel === 'urgent'
+                        ? 'bg-warning'
+                        : 'bg-primary'
+                  return (
+                    <div key={v.id} className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-foreground truncate">{name}</p>
+                          <p className="text-[10px] text-muted-foreground capitalize">
+                            {(v.visaType ?? '').replace(/_/g, ' ')}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={
+                            v.urgencyLevel === 'critical'
+                              ? 'destructive'
+                              : v.urgencyLevel === 'urgent'
+                                ? 'warning'
+                                : 'info'
+                          }
+                          className="text-[10px] h-5 capitalize shrink-0"
+                        >
+                          {v.urgencyLevel}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={cn('h-full rounded-full transition-all', barClass)}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground shrink-0 w-8 text-right">
+                          {pct}%
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {visaList.length === 0 && !visasLoading && (
+                  <p className="text-xs text-muted-foreground text-center py-6">
+                    No active visa cases
+                  </p>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -403,49 +452,63 @@ export function DashboardPage() {
             <CardDescription>MOHRE compliance tracking</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-2">
-            <div className="text-center pb-1">
-              <p className="text-4xl font-bold font-display text-foreground">
-                {emiratisation ? `${emiratisation.currentRatio}%` : '—'}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">Current Emirati ratio</p>
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-[11px]">
-                <span className="text-muted-foreground">Progress to {emiratisation?.targetRatio ?? 2}% target</span>
-                <span className="font-semibold">{emiratisation?.progress ?? 0}%</span>
+            {emirLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-12 w-24 mx-auto rounded-xl" />
+                <Skeleton className="h-2 w-full rounded-full" />
+                <div className="grid grid-cols-3 gap-2">
+                  <Skeleton className="h-16 rounded-xl" />
+                  <Skeleton className="h-16 rounded-xl" />
+                  <Skeleton className="h-16 rounded-xl" />
+                </div>
               </div>
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div
-                  className={cn('h-full rounded-full transition-all',
-                    (emiratisation?.progress ?? 0) >= 100 ? 'bg-success' : 'bg-warning',
-                  )}
-                  style={{ width: `${Math.min(100, emiratisation?.progress ?? 0)}%` }}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="p-2.5 rounded-xl bg-muted">
-                <p className="text-base font-bold text-success font-display">{emiratisation?.emiratis ?? 0}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Emiratis</p>
-              </div>
-              <div className="p-2.5 rounded-xl bg-muted">
-                <p className="text-base font-bold font-display">{emiratisation?.targetRatio ?? 2}%</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Target</p>
-              </div>
-              <div className={cn('p-2.5 rounded-xl', (emiratisation?.gap ?? 0) < 0 ? 'bg-destructive/10' : 'bg-success/10')}>
-                <p className={cn('text-base font-bold font-display', (emiratisation?.gap ?? 0) < 0 ? 'text-destructive' : 'text-success')}>
-                  {emiratisation ? `${emiratisation.gap > 0 ? '+' : ''}${emiratisation.gap}%` : '—'}
-                </p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Gap</p>
-              </div>
-            </div>
-            {emiratisation && emiratisation.gap < 0 && (
-              <div className="flex items-start gap-2 bg-warning/10 border border-warning/20 rounded-xl p-3">
-                <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
-                <p className="text-[11px] text-warning-foreground leading-relaxed">
-                  Below {emiratisation.targetRatio}% target. {emiratisation.required > 0 && `Hire ${emiratisation.required} more Emirati${emiratisation.required > 1 ? 's' : ''} to comply.`} Penalty risk: AED 1,000/month per missing Emirati hire.
-                </p>
-              </div>
+            ) : (
+              <>
+                <div className="text-center pb-1">
+                  <p className="text-4xl font-bold font-display text-foreground">
+                    {emiratisation ? `${emiratisation.currentRatio}%` : '—'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Current Emirati ratio</p>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-muted-foreground">Progress to {emiratisation?.targetRatio ?? 2}% target</span>
+                    <span className="font-semibold">{emiratisation?.progress ?? 0}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={cn('h-full rounded-full transition-all',
+                        (emiratisation?.progress ?? 0) >= 100 ? 'bg-success' : 'bg-warning',
+                      )}
+                      style={{ width: `${Math.min(100, emiratisation?.progress ?? 0)}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="p-2.5 rounded-xl bg-muted">
+                    <p className="text-base font-bold text-success font-display">{emiratisation?.emiratis ?? 0}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Emiratis</p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-muted">
+                    <p className="text-base font-bold font-display">{emiratisation?.targetRatio ?? 2}%</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Target</p>
+                  </div>
+                  <div className={cn('p-2.5 rounded-xl', (emiratisation?.gap ?? 0) < 0 ? 'bg-destructive/10' : 'bg-success/10')}>
+                    <p className={cn('text-base font-bold font-display', (emiratisation?.gap ?? 0) < 0 ? 'text-destructive' : 'text-success')}>
+                      {emiratisation ? `${emiratisation.gap > 0 ? '+' : ''}${emiratisation.gap}%` : '—'}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Gap</p>
+                  </div>
+                </div>
+                {emiratisation && emiratisation.gap < 0 && (
+                  <div className="flex items-start gap-2 bg-warning/10 border border-warning/20 rounded-xl p-3">
+                    <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-warning-foreground leading-relaxed">
+                      Below {emiratisation.targetRatio}% target. {emiratisation.required > 0 && `Hire ${emiratisation.required} more Emirati${emiratisation.required > 1 ? 's' : ''} to comply.`} Penalty risk: AED 1,000/month per missing Emirati hire.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

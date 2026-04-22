@@ -18,6 +18,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 import { cn } from '@/lib/utils'
+import { useNotifications } from '@/hooks/useDashboard'
 
 const routeMeta: Record<string, { title: string; parent?: string }> = {
   '/dashboard': { title: 'Dashboard' },
@@ -43,6 +44,9 @@ export function SiteHeader() {
   const rootPath = segments.length ? `/${segments[0]}` : '/dashboard'
   const rootMeta = routeMeta[rootPath] ?? { title: 'HRHub' }
   const isDetail = segments.length > 1
+  const { data: notifData } = useNotifications(10)
+  const notifications = (notifData as any[]) ?? []
+  const unreadCount = notifications.length
 
   return (
     <header
@@ -111,34 +115,34 @@ export function SiteHeader() {
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
               <BellIcon className="size-4" />
-              <Badge className="absolute -right-0.5 -top-0.5 h-4 min-w-4 px-1 flex items-center justify-center text-[9px]">
-                3
-              </Badge>
+              {unreadCount > 0 && (
+                <Badge className="absolute -right-0.5 -top-0.5 h-4 min-w-4 px-1 flex items-center justify-center text-[9px]">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Badge>
+              )}
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-80 p-0">
             <div className="p-3 border-b border-border">
               <p className="text-sm font-semibold">Notifications</p>
-              <p className="text-xs text-muted-foreground">3 unread messages</p>
+              <p className="text-xs text-muted-foreground">{unreadCount} unread</p>
             </div>
-            <div className="divide-y divide-border">
-              {[
-                { title: '3 visa documents expiring', time: '2h ago', tone: 'warning' as const },
-                { title: 'Payroll run due tomorrow', time: '5h ago', tone: 'info' as const },
-                { title: 'New hire onboarding pending', time: '1d ago', tone: 'default' as const },
-              ].map((n, i) => (
-                <div key={i} className="flex gap-3 p-3 hover:bg-muted/50 cursor-pointer">
+            <div className="divide-y divide-border max-h-72 overflow-y-auto">
+              {notifications.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-6">No new notifications</p>
+              ) : notifications.slice(0, 8).map((n: any, i: number) => (
+                <div key={n.id ?? i} className="flex gap-3 p-3 hover:bg-muted/50 cursor-pointer">
                   <div
                     className={cn(
                       'mt-1 h-2 w-2 rounded-full shrink-0',
-                      n.tone === 'warning' && 'bg-warning',
-                      n.tone === 'info' && 'bg-info',
-                      n.tone === 'default' && 'bg-primary',
+                      n.type === 'warning' && 'bg-warning',
+                      n.type === 'info' && 'bg-info',
+                      (!n.type || n.type === 'default') && 'bg-primary',
                     )}
                   />
                   <div>
-                    <p className="text-xs font-medium">{n.title}</p>
-                    <p className="text-[11px] text-muted-foreground">{n.time}</p>
+                    <p className="text-xs font-medium">{n.title ?? n.message}</p>
+                    <p className="text-[11px] text-muted-foreground">{n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ''}</p>
                   </div>
                 </div>
               ))}

@@ -1,0 +1,34 @@
+import { getHeadcountReport, getPayrollSummaryReport, getVisaExpiryReport } from './reports.service.js'
+
+export default async function (fastify: any): Promise<void> {
+    // GET /api/v1/reports/headcount
+    fastify.get('/headcount', {
+        schema: { tags: ['Reports'] },
+        preHandler: [fastify.authenticate],
+    }, async (request: any, reply: any) => {
+        const tenantId = request.user.tenantId
+        const data = await getHeadcountReport(tenantId)
+        return reply.send({ data })
+    })
+
+    // GET /api/v1/reports/payroll-summary
+    fastify.get('/payroll-summary', {
+        schema: { tags: ['Reports'] },
+        preHandler: [fastify.authenticate],
+    }, async (request: any, reply: any) => {
+        const tenantId = request.user.tenantId
+        const data = await getPayrollSummaryReport(tenantId)
+        return reply.send({ data })
+    })
+
+    // GET /api/v1/reports/visa-expiry
+    fastify.get('/visa-expiry', {
+        schema: { tags: ['Reports'] },
+        preHandler: [fastify.authenticate],
+    }, async (request: any, reply: any) => {
+        const tenantId = request.user.tenantId
+        const days = Number((request.query as any).days ?? 90)
+        const data = await getVisaExpiryReport(tenantId, days)
+        return reply.send({ data })
+    })
+}

@@ -1,6 +1,6 @@
-import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, calculateGratuity, generateWpsSif } from './payroll.service.js'
+import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, getPayslipsWithEmployees, runPayroll, calculateGratuity, generateWpsSif } from './payroll.service.js'
 
-export default async function(fastify: any): Promise<void> {
+export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
     const hrOnly = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
 
@@ -19,8 +19,26 @@ export default async function(fastify: any): Promise<void> {
 
     fastify.get('/:id/payslips', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        const data = await getPayslips(request.user.tenantId, id)
+        const data = await getPayslipsWithEmployees(request.user.tenantId, id)
         return reply.send({ data })
+    })
+
+    // POST /api/v1/payroll/:id/run — run payroll calculation for a draft run
+    fastify.post('/:id/run', {
+        ...hrOnly,
+        schema: { tags: ['Payroll'] },
+    }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const ok = await runPayroll(request.user.tenantId, id)
+        if (!ok) {
+            return reply.code(422).send({
+                statusCode: 422,
+                error: 'Unprocessable Entity',
+                message: 'Payroll run not found, not in draft status, or no active employees.',
+            })
+        }
+        const updatedRun = await getPayrollRun(request.user.tenantId, id)
+        return reply.send({ data: updatedRun })
     })
 
     fastify.post('/', {
@@ -83,6 +101,20 @@ export default async function(fastify: any): Promise<void> {
             .header('Content-Type', 'text/plain; charset=utf-8')
             .header('Content-Disposition', `attachment; filename="${result.filename}"`)
             .send(result.content)
+    })
+
+    // POST /api/v1/payroll/:id/submit-wps — mark run as WPS-submitted (Task 8.5)
+    fastify.post('/:id/submit-wps', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const bankRef = `WPS-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}`
+        const updated = await updatePayrollRun(request.user.tenantId, id, {
+            status: 'wps_submitted',
+            wpsFileRef: bankRef,
+        } as any)
+        if (!updated) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Payroll run not found.' })
+        }
+        return reply.send({ data: updated })
     })
 }
 

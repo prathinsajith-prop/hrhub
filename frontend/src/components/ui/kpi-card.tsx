@@ -111,10 +111,11 @@ export interface KpiCardCompactProps {
   value: string | number | undefined | null
   icon: React.ElementType
   color?: KpiColor
+  loading?: boolean
   className?: string
 }
 
-export function KpiCardCompact({ label, value, icon: Icon, color = 'blue', className }: KpiCardCompactProps) {
+export function KpiCardCompact({ label, value, icon: Icon, color = 'blue', loading = false, className }: KpiCardCompactProps) {
   const tone = toneMap[color] ?? toneMap.blue
   return (
     <div
@@ -124,12 +125,19 @@ export function KpiCardCompact({ label, value, icon: Icon, color = 'blue', class
         className,
       )}
     >
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
-        <p className="text-2xl font-bold leading-tight font-display tabular-figures truncate mt-1">
-          {value ?? '—'}
-        </p>
-      </div>
+      {loading ? (
+        <div className="space-y-2 animate-pulse flex-1">
+          <div className="h-2 bg-muted rounded w-1/2" />
+          <div className="h-7 bg-muted rounded w-2/3" />
+        </div>
+      ) : (
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
+          <p className="text-2xl font-bold leading-tight font-display tabular-figures truncate mt-1">
+            {value ?? '—'}
+          </p>
+        </div>
+      )}
       <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center shrink-0', tone.icon)}>
         <Icon className="h-4 w-4" />
       </div>

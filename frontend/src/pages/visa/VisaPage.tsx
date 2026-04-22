@@ -14,6 +14,7 @@ import { formatDate, cn } from '@/lib/utils'
 import { useVisas } from '@/hooks/useVisa'
 import type { VisaApplication, VisaStatus } from '@/types'
 import { toast } from '@/components/ui/overlays'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { NewVisaApplicationDialog } from '@/components/shared/action-dialogs'
 
 const statusLabel: Record<VisaStatus, string> = {
@@ -158,24 +159,84 @@ const columns: ColumnDef<VisaApplication>[] = [
     id: 'actions',
     header: '',
     cell: ({ row: { original: v } }) => (
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-8 w-8"
-        aria-label="View visa details"
-        onClick={() => toast.info('Visa details', `Opening ${(v as any).employeeName ?? 'case'} — detail view coming in the next release.`)}
-      >
-        <Eye className="h-3.5 w-3.5" />
-      </Button>
+      <VisaDetailButton visa={v} />
     ),
     size: 40,
   },
 ]
 
+function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
+  const [open, setOpen] = useState(false)
+  const urgencyStyles: Record<string, string> = {
+    critical: 'text-destructive',
+    urgent: 'text-warning',
+    normal: 'text-muted-foreground',
+  }
+  return (
+    <>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-8 w-8"
+        aria-label="View visa details"
+        onClick={() => setOpen(true)}
+      >
+        <Eye className="h-3.5 w-3.5" />
+      </Button>
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader className="mb-4">
+            <SheetTitle>{v.employeeName}</SheetTitle>
+            <p className="text-sm text-muted-foreground capitalize">{v.visaType.replace(/_/g, ' ')}</p>
+          </SheetHeader>
+
+          {/* Priority badge */}
+          {(v as any).urgencyLevel !== 'normal' && (
+            <div className={cn('text-xs font-semibold mb-4', urgencyStyles[(v as any).urgencyLevel ?? 'normal'])}>
+              ⚠ {((v as any).urgencyLevel as string).toUpperCase()} PRIORITY
+            </div>
+          )}
+
+          {/* Full timeline */}
+          <VisaTimeline application={v} />
+
+          {/* Government references */}
+          <div className="mt-4 space-y-3">
+            {v.expiryDate && (
+              <div className="rounded-lg border border-border p-3 space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Visa Expiry</p>
+                <p className="text-sm font-semibold">{formatDate(v.expiryDate)}</p>
+              </div>
+            )}
+            {((v as any).mohreRef || (v as any).gdfrRef) && (
+              <div className="rounded-lg border border-border p-3 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Government References</p>
+                {(v as any).mohreRef && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">MOHRE Ref</span>
+                    <span className="font-mono text-xs font-medium">{(v as any).mohreRef}</span>
+                  </div>
+                )}
+                {(v as any).gdfrRef && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">GDRFA Ref</span>
+                    <span className="font-mono text-xs font-medium">{(v as any).gdfrRef}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
+  )
+}
+
 export function VisaPage() {
   const [activeTab, setActiveTab] = useState('all')
   const [newAppOpen, setNewAppOpen] = useState(false)
-  const { data: visaData } = useVisas({ limit: 50 })
+  const { data: visaData, isLoading } = useVisas({ limit: 50 })
   const visaApplications: VisaApplication[] = (visaData?.data as VisaApplication[]) ?? []
 
   const filtered = activeTab === 'all' ? visaApplications :
@@ -237,7 +298,7 @@ export function VisaPage() {
           <DataTable
             columns={columns}
             data={filtered}
-            searchKey="employeeName"
+            isLoading={isLoading}
             searchPlaceholder="Search by employee..."
             pageSize={8}
             enableSelection
