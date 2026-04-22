@@ -3,7 +3,7 @@ import { db } from '../db/index.js'
 import { employees, notifications, documents, users } from '../db/schema/index.js'
 import { and, eq, lt, lte, gte, ne, or } from 'drizzle-orm'
 import { loadEnv } from '../config/env.js'
-import { sendEmail, emailVisaExpiry } from '../lib/email.js'
+import { sendEmail, visaExpiryAlertEmail } from '../plugins/email.js'
 
 function getRedisConnection() {
     const env = loadEnv()
@@ -102,11 +102,15 @@ async function runVisaExpiryCheck() {
 
                 for (const manager of hrManagers) {
                     if (manager.email) {
-                        await sendEmail({
-                            to: manager.email,
-                            subject: `⚠️ Visa Expiry Alert: ${name} — ${days} days`,
-                            html: emailVisaExpiry(manager.name ?? 'HR Manager', name, visaType, expiryDate, days),
+                        const emailOpts = visaExpiryAlertEmail({
+                            recipientName: manager.name ?? 'HR Manager',
+                            employeeName: name,
+                            visaType,
+                            expiryDate,
+                            daysRemaining: days,
+                            actionUrl: '',
                         })
+                        await sendEmail({ ...emailOpts, to: manager.email })
                     }
                 }
             } catch { /* email errors non-fatal */ }

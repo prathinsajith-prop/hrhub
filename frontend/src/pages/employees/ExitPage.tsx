@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useExitRequests, useInitiateExit, useApproveExit, useMarkSettlementPaid, useSettlementPreview, type ExitRequest } from '@/hooks/useExit'
 import { useEmployees } from '@/hooks/useEmployees'
 import { LogOut, DollarSign, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const statusConfig: Record<string, { label: string; color: string }> = {
     pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
@@ -173,8 +174,27 @@ export function ExitPage() {
             </div>
 
             {isLoading && (
-                <div className="flex items-center justify-center py-16">
-                    <Clock className="h-6 w-6 text-muted-foreground animate-spin" />
+                <div className="space-y-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="rounded-xl border p-5 space-y-4">
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="space-y-1.5 flex-1">
+                                    <Skeleton className="h-5 w-44" />
+                                    <Skeleton className="h-3 w-32" />
+                                </div>
+                                <Skeleton className="h-6 w-20 rounded-full" />
+                            </div>
+                            <div className="flex gap-6">
+                                <Skeleton className="h-4 w-28" />
+                                <Skeleton className="h-4 w-24" />
+                                <Skeleton className="h-4 w-20" />
+                            </div>
+                            <div className="flex gap-2">
+                                <Skeleton className="h-8 w-24 rounded-md" />
+                                <Skeleton className="h-8 w-20 rounded-md" />
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
 

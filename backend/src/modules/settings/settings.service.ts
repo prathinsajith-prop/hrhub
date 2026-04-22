@@ -3,7 +3,7 @@ import { db } from '../../db/index.js'
 import { tenants, users, passwordResetTokens } from '../../db/schema/index.js'
 import { randomBytes, createHash } from 'crypto'
 import { hash } from 'bcrypt'
-import { sendEmail, emailUserInvite } from '../../lib/email.js'
+import { sendEmail, inviteUserEmail } from '../../plugins/email.js'
 import { loadEnv } from '../../config/env.js'
 
 export async function getCompanySettings(tenantId: string) {
@@ -98,9 +98,6 @@ export async function inviteUser(tenantId: string, data: { name: string; email: 
     await db.insert(passwordResetTokens).values({ userId: user.id, tokenHash, expiresAt })
 
     const inviteUrl = `${env.APP_URL}/reset-password?token=${rawToken}`
-    await sendEmail({
-        to: data.email,
-        subject: `You've been invited to HRHub`,
-        html: emailUserInvite(data.name, 'HRHub', data.role, inviteUrl),
-    })
+    const emailOpts = inviteUserEmail({ inviteeName: data.name, workspaceName: 'HRHub', role: data.role, inviteUrl })
+    await sendEmail({ ...emailOpts, to: data.email })
 }

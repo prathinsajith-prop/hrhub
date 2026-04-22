@@ -16,8 +16,8 @@ export default async function (fastify: any): Promise<void> {
     await fastify.register(templateRoutes)
 
     fastify.get('/', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {
-        const { employeeId, category, status, limit = '20', offset = '0' } = request.query as Record<string, string>
-        const result = await listDocuments(request.user.tenantId, { employeeId, category, status, limit: Number(limit), offset: Number(offset) })
+        const { employeeId, category, status, limit = '20', offset = '0', after } = request.query as Record<string, string>
+        const result = await listDocuments(request.user.tenantId, { employeeId, category, status, limit: Number(limit), offset: Number(offset), after })
         return reply.send(result)
     })
 

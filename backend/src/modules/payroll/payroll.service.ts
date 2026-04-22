@@ -4,6 +4,7 @@ import { payrollRuns, payslips, employees, tenants } from '../../db/schema/index
 import { leaveRequests } from '../../db/schema/leave.js'
 import type { InferInsertModel } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
+import { cacheDel } from '../../lib/redis.js'
 
 type NewPayrollRun = InferInsertModel<typeof payrollRuns>
 
@@ -209,6 +210,7 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
             .where(eq(payrollRuns.id, payrollRunId))
     })
 
+    await cacheDel(`dashboard:kpis:${tenantId}`)
     return true
 }
 

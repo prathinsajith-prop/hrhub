@@ -1,5 +1,6 @@
-import { eq, and, ilike, desc, asc, getTableColumns, sql } from 'drizzle-orm'
-import { withTimestamp } from '../../lib/db-helpers.js'
+import { eq, and, ilike, desc, asc, getTableColumns, sql, or, lt } from 'drizzle-orm'
+import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
+import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
 import { employees, entities } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
@@ -18,10 +19,11 @@ export interface ListEmployeesParams {
     department?: string
     limit: number
     offset: number
+    after?: string // cursor: base64url-encoded { c: createdAt, i: id }
 }
 
 export async function listEmployees(params: ListEmployeesParams) {
-    const { tenantId, search, status, department, limit, offset } = params
+    const { tenantId, search, status, department, limit, offset, after } = params
 
     const conditions = [eq(employees.tenantId, tenantId), eq(employees.isArchived, false)]
 
@@ -48,22 +50,51 @@ export async function listEmployees(params: ListEmployeesParams) {
         }
     }
 
+    // Cursor-based pagination (keyset) — takes priority over offset when 'after' is provided
+    const cursor = after ? decodeCursor(after) : null
+    if (cursor) {
+        const cursorDate = new Date(cursor.c)
+        conditions.push(
+            or(
+                lt(employees.createdAt, cursorDate),
+                and(eq(employees.createdAt, cursorDate), lt(employees.id, cursor.i))
+            )!
+        )
+    }
+
+    const pageSize = limit + 1 // fetch one extra to determine hasMore
     const rows = await db
-        .select({ ...getTableColumns(employees), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+        .select(getTableColumns(employees))
         .from(employees)
         .where(and(...conditions))
-        .orderBy(asc(employees.firstName))
-        .limit(limit)
-        .offset(offset)
+        .orderBy(desc(employees.createdAt), desc(employees.id))
+        .limit(cursor ? pageSize : limit)
+        .offset(cursor ? 0 : offset)
 
-    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    const hasMore = cursor ? rows.length > limit : false
+    const pageRows = cursor ? rows.slice(0, limit) : rows
+    const lastRow = pageRows.at(-1)
+    const nextCursor = (cursor && hasMore && lastRow)
+        ? encodeCursor(lastRow.createdAt, lastRow.id)
+        : undefined
+
+    // When using offset mode, get total count separately
+    let total = 0
+    if (!cursor) {
+        const [countRow] = await db
+            .select({ count: sql<number>`COUNT(*)`.as('count') })
+            .from(employees)
+            .where(and(...conditions))
+        total = Number(countRow?.count ?? 0)
+    }
 
     return {
-        data: rows.map(withFullName),
-        total,
+        data: pageRows.map(withFullName),
+        total: cursor ? undefined : total,
         limit,
-        offset,
-        hasMore: offset + limit < total,
+        offset: cursor ? undefined : offset,
+        hasMore: cursor ? hasMore : offset + limit < total,
+        nextCursor,
     }
 }
 
@@ -86,7 +117,7 @@ export async function createEmployee(tenantId: string, data: Omit<NewEmployee, '
         .insert(employees)
         .values({ ...data, tenantId })
         .returning()
-
+    await cacheDel(`dashboard:kpis:${tenantId}`)
     return withFullName(row)
 }
 
@@ -106,7 +137,7 @@ export async function archiveEmployee(tenantId: string, id: string) {
         .set(withTimestamp({ isArchived: true, status: 'terminated' as const }))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .returning()
-
+    await cacheDel(`dashboard:kpis:${tenantId}`)
     return row ?? null
 }
 

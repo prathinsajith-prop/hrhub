@@ -25,6 +25,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const eventConfig = {
     login: { icon: LogInIcon, variant: 'default' as const, labelKey: 'loginHistory.login' },
@@ -106,7 +107,28 @@ export function LoginHistoryPage() {
                 </CardHeader>
                 <CardContent className="p-0">
                     {isLoading ? (
-                        <div className="py-16 text-center text-muted-foreground">{t('common.loading')}</div>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    {[120, 100, 90, 80, 100, 100, 110].map((w, i) => (
+                                        <TableHead key={i}><Skeleton className="h-4" style={{ width: w }} /></TableHead>
+                                    ))}
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {Array.from({ length: 8 }).map((_, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell><Skeleton className="h-5 w-24 rounded-full" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-14" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-24 font-mono" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     ) : filtered.length === 0 ? (
                         <div className="py-16 text-center text-muted-foreground">{t('loginHistory.noHistory')}</div>
                     ) : (

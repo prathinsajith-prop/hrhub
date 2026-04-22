@@ -13,6 +13,7 @@ import {
 import { useAttendance, type AttendanceRecord } from '@/hooks/useAttendance'
 import { useEmployees } from '@/hooks/useEmployees'
 import { Clock, CalendarDays } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const STATUS_COLORS: Record<string, string> = {
     present: '#22c55e',
@@ -228,8 +229,25 @@ export function AttendancePage() {
 
             {/* Punch history table */}
             {isLoading ? (
-                <div className="flex items-center justify-center py-16">
-                    <Clock className="h-6 w-6 animate-spin text-muted-foreground" />
+                <div className="rounded-lg border overflow-hidden">
+                    {/* Skeleton header */}
+                    <div className="flex gap-4 px-4 py-3 bg-muted/50">
+                        {[60, 140, 80, 90, 90, 70, 70, 80].map((w, i) => (
+                            <Skeleton key={i} className="h-4" style={{ width: w }} />
+                        ))}
+                    </div>
+                    {Array.from({ length: 8 }).map((_, i) => (
+                        <div key={i} className="flex gap-4 px-4 py-3.5 border-t">
+                            <Skeleton className="h-4 w-20" />
+                            <Skeleton className="h-4 w-36" />
+                            <Skeleton className="h-5 w-16 rounded-full" />
+                            <Skeleton className="h-4 w-16" />
+                            <Skeleton className="h-4 w-16" />
+                            <Skeleton className="h-4 w-14" />
+                            <Skeleton className="h-4 w-12" />
+                            <Skeleton className="h-4 w-24" />
+                        </div>
+                    ))}
                 </div>
             ) : list.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-16">

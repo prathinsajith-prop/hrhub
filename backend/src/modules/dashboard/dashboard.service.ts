@@ -1,8 +1,15 @@
 import { eq, and, count, desc, gte, lte, sql, or, isNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, recruitmentJobs, visaApplications, leaveRequests, notifications, payrollRuns, onboardingChecklists, onboardingSteps } from '../../db/schema/index.js'
+import { cacheGet, cacheSet } from '../../lib/redis.js'
+
+const KPI_TTL_SECONDS = 120 // 2-minute TTL
 
 export async function getDashboardKPIs(tenantId: string) {
+    const cacheKey = `dashboard:kpis:${tenantId}`
+    const cached = await cacheGet<ReturnType<typeof getDashboardKPIs>>(cacheKey)
+    if (cached) return cached
+
     const today = new Date()
     const todayStr = today.toISOString().split('T')[0]
     const in90 = new Date(today); in90.setDate(in90.getDate() + 90)
@@ -34,13 +41,16 @@ export async function getDashboardKPIs(tenantId: string) {
             )),
     ])
 
-    return {
+    const result = {
         totalEmployees: Number(totalEmployees),
         openJobs: Number(openJobs),
         activeVisas: Number(activeVisas),
         pendingLeave: Number(pendingLeave),
         expiringVisas: Number(expiringVisas),
     }
+
+    await cacheSet(cacheKey, result, KPI_TTL_SECONDS)
+    return result
 }
 
 export async function getRecentNotifications(tenantId: string, userId: string, limit = 5) {

@@ -4,6 +4,7 @@ import { type ColumnDef } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
 import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus, ShieldCheck } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -323,10 +324,24 @@ export function DocumentsPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCardCompact label="Total Documents" value={documents.length} icon={FileText} color="blue" />
-        <KpiCardCompact label="Valid" value={documents.filter((d: any) => d.status === 'valid').length} icon={CheckCircle2} color="green" />
-        <KpiCardCompact label="Expiring Soon" value={expiring} icon={AlertTriangle} color="amber" />
-        <KpiCardCompact label="Under Review" value={documents.filter((d: any) => d.status === 'under_review').length} icon={Clock} color="purple" />
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-xl border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-7 w-7 rounded-lg" />
+              </div>
+              <Skeleton className="h-7 w-10" />
+            </div>
+          ))
+        ) : (
+          <>
+            <KpiCardCompact label="Total Documents" value={documents.length} icon={FileText} color="blue" />
+            <KpiCardCompact label="Valid" value={documents.filter((d: any) => d.status === 'valid').length} icon={CheckCircle2} color="green" />
+            <KpiCardCompact label="Expiring Soon" value={expiring} icon={AlertTriangle} color="amber" />
+            <KpiCardCompact label="Under Review" value={documents.filter((d: any) => d.status === 'under_review').length} icon={Clock} color="purple" />
+          </>
+        )}
       </div>
 
       <Card className="p-5">

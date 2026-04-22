@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, ArrowRight, Users, FileCheck, Shield, Zap } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, Users, FileCheck, Shield, Zap, ShieldCheck } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/components/ui/overlays'
 import { cn } from '@/lib/utils'
@@ -11,6 +11,80 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { AuthLayout } from '@/components/layout/AuthLayout'
+
+const OTP_LENGTH = 6
+
+function OtpInput({ onComplete }: { onComplete: (code: string) => void }) {
+  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''))
+  const refs = useRef<(HTMLInputElement | null)[]>([])
+
+  const focus = (i: number) => refs.current[i]?.focus()
+
+  const handleChange = useCallback((i: number, val: string) => {
+    const char = val.replace(/\D/g, '').slice(-1)
+    setDigits(prev => {
+      const next = [...prev]
+      next[i] = char
+      if (char && i < OTP_LENGTH - 1) setTimeout(() => focus(i + 1), 0)
+      const full = next.join('')
+      if (full.length === OTP_LENGTH && !next.includes('')) onComplete(full)
+      return next
+    })
+  }, [onComplete])
+
+  const handleKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (digits[i]) {
+        setDigits(prev => { const n = [...prev]; n[i] = ''; return n })
+      } else if (i > 0) {
+        focus(i - 1)
+        setDigits(prev => { const n = [...prev]; n[i - 1] = ''; return n })
+      }
+    } else if (e.key === 'ArrowLeft' && i > 0) {
+      focus(i - 1)
+    } else if (e.key === 'ArrowRight' && i < OTP_LENGTH - 1) {
+      focus(i + 1)
+    }
+  }
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH)
+    if (!pasted) return
+    const next = Array(OTP_LENGTH).fill('')
+    pasted.split('').forEach((c, idx) => { next[idx] = c })
+    setDigits(next)
+    const focusIdx = Math.min(pasted.length, OTP_LENGTH - 1)
+    setTimeout(() => focus(focusIdx), 0)
+    if (pasted.length === OTP_LENGTH) onComplete(pasted)
+  }
+
+  return (
+    <div className="flex gap-2.5 justify-center" onPaste={handlePaste}>
+      {digits.map((d, i) => (
+        <input
+          key={i}
+          ref={el => { refs.current[i] = el }}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={1}
+          autoComplete={i === 0 ? 'one-time-code' : 'off'}
+          autoFocus={i === 0}
+          value={d}
+          onChange={e => handleChange(i, e.target.value)}
+          onKeyDown={e => handleKeyDown(i, e)}
+          className={cn(
+            'h-14 w-11 rounded-xl border-2 bg-background text-center text-xl font-bold font-mono',
+            'transition-all duration-150 outline-none',
+            'focus:border-primary focus:ring-2 focus:ring-primary/20',
+            d ? 'border-primary/60 bg-primary/5 text-foreground' : 'border-input text-foreground',
+          )}
+        />
+      ))}
+    </div>
+  )
+}
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -36,10 +110,20 @@ export function LoginPage() {
   const { login } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  // MFA challenge state
+  const [mfaStep, setMfaStep] = useState(false)
+  const [mfaToken, setMfaToken] = useState('')
+  const [mfaLoading, setMfaLoading] = useState(false)
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   })
+
+  const completeLogin = (data: { user: any; tenant: any; accessToken: string; refreshToken: string }) => {
+    login(data.user, data.tenant, data.accessToken, data.refreshToken)
+    toast.success(`Welcome back, ${data.user.name}!`, 'Redirecting to your dashboard.')
+    navigate('/dashboard')
+  }
 
   const onSubmit = async (data: LoginForm) => {
     setLoading(true)
@@ -52,7 +136,6 @@ export function LoginPage() {
       const json = await res.json()
       if (!res.ok) {
         if (res.status === 423) {
-          // Account locked — show specific message with time remaining
           toast.error('Account locked', json?.message ?? 'Too many failed attempts. Try again later.')
         } else if (res.status === 429) {
           toast.error('Too many attempts', json?.message ?? 'Please wait before trying again.')
@@ -61,16 +144,41 @@ export function LoginPage() {
         }
         return
       }
-      const { user, tenant, accessToken, refreshToken } = json.data
-      login(user, tenant, accessToken, refreshToken)
-      toast.success(`Welcome back, ${user.name}!`, 'Redirecting to your dashboard.')
-      navigate('/dashboard')
+      // 2FA challenge — show TOTP input
+      if (json.data?.requiresMfa) {
+        setMfaToken(json.data.mfaToken)
+        setMfaStep(true)
+        return
+      }
+      completeLogin(json.data)
     } catch {
       toast.error('Login failed', 'Network error. Please check your connection.')
     } finally {
       setLoading(false)
     }
   }
+
+  const onMfaComplete = useCallback(async (code: string) => {
+    if (code.length !== OTP_LENGTH) return
+    setMfaLoading(true)
+    try {
+      const res = await fetch('/api/v1/auth/2fa/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mfaToken, code }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error('Invalid code', json?.message ?? 'The code is incorrect or expired. Try again.')
+        return
+      }
+      completeLogin(json.data)
+    } catch {
+      toast.error('Verification failed', 'Network error. Please try again.')
+    } finally {
+      setMfaLoading(false)
+    }
+  }, [mfaToken])
 
   return (
     <AuthLayout
@@ -125,96 +233,146 @@ export function LoginPage() {
       {/* Heading */}
       <div className="mb-7">
         <h2 className="text-2xl font-bold text-foreground mb-1.5 font-display">
-          Welcome back
+          {mfaStep ? 'Verify your identity' : 'Welcome back'}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Sign in to your workspace to continue.
+          {mfaStep
+            ? 'Enter the 6-digit code from your authenticator app to continue.'
+            : 'Sign in to your workspace to continue.'}
         </p>
       </div>
 
-      {/* Form */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Work Email</Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@company.ae"
-            {...register('email')}
-            aria-invalid={!!errors.email}
-            className={cn(errors.email && 'border-destructive focus-visible:ring-destructive')}
-          />
-          {errors.email && (
-            <p className="text-xs text-destructive">{errors.email.message}</p>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            <Link
-              to="/forgot-password"
-              className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
-            >
-              Forgot password?
-            </Link>
+      {/* MFA challenge */}
+      {mfaStep ? (
+        <div className="space-y-6">
+          {/* Icon badge */}
+          <div className="flex flex-col items-center gap-3 py-2">
+            <div className="relative">
+              <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-inner">
+                <ShieldCheck className="h-8 w-8 text-primary" />
+              </div>
+              <span className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-background border-2 border-border flex items-center justify-center">
+                <span className="block h-2 w-2 rounded-full bg-green-500" />
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground text-center max-w-[200px] leading-relaxed">
+              Open your <span className="font-medium text-foreground">authenticator app</span> and enter the current code
+            </p>
           </div>
-          <div className="relative">
+
+          {/* OTP digit boxes */}
+          <OtpInput onComplete={onMfaComplete} />
+
+          {/* Loading / verifying indicator */}
+          {mfaLoading && (
+            <div className="flex items-center justify-center gap-2 text-sm text-primary">
+              <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+              Verifying…
+            </div>
+          )}
+
+          {/* Info text */}
+          <p className="text-center text-xs text-muted-foreground">
+            Codes refresh every 30 seconds. Make sure your device clock is accurate.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => { setMfaStep(false); setMfaToken('') }}
+            className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center"
+          >
+            ← Back to login
+          </button>
+        </div>
+      ) : (
+        /* Login form */
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Work Email</Label>
             <Input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              placeholder="••••••••"
-              {...register('password')}
-              aria-invalid={!!errors.password}
-              className={cn(
-                'pr-10',
-                errors.password && 'border-destructive focus-visible:ring-destructive',
-              )}
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@company.ae"
+              {...register('email')}
+              aria-invalid={!!errors.email}
+              className={cn(errors.email && 'border-destructive focus-visible:ring-destructive')}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              tabIndex={-1}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
+            {errors.email && (
+              <p className="text-xs text-destructive">{errors.email.message}</p>
+            )}
           </div>
-          {errors.password && (
-            <p className="text-xs text-destructive">{errors.password.message}</p>
-          )}
-        </div>
 
-        <Button
-          type="submit"
-          className="w-full font-semibold"
-          loading={loading}
-          rightIcon={!loading ? <ArrowRight className="h-4 w-4" /> : undefined}
-        >
-          Sign In
-        </Button>
-      </form>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link
+                to="/forgot-password"
+                className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                Forgot password?
+              </Link>
+            </div>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                placeholder="••••••••"
+                {...register('password')}
+                aria-invalid={!!errors.password}
+                className={cn(
+                  'pr-10',
+                  errors.password && 'border-destructive focus-visible:ring-destructive',
+                )}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {errors.password && (
+              <p className="text-xs text-destructive">{errors.password.message}</p>
+            )}
+          </div>
 
-      <p className="mt-5 text-center text-sm text-muted-foreground">
-        {"Don't have an account? "}
-        <Link to="/register" className="text-primary font-medium hover:underline">
-          Create account
-        </Link>
-      </p>
+          <Button
+            type="submit"
+            className="w-full font-semibold"
+            loading={loading}
+            rightIcon={!loading ? <ArrowRight className="h-4 w-4" /> : undefined}
+          >
+            Sign In
+          </Button>
+        </form>
+      )} {/* end mfaStep conditional */}
 
-      <p className="mt-3 text-center text-[11px] text-muted-foreground/70">
-        By signing in you agree to our{' '}
-        <a href="#" className="text-primary/80 hover:underline">
-          Terms
-        </a>{' '}
-        &amp;{' '}
-        <a href="#" className="text-primary/80 hover:underline">
-          Privacy Policy
-        </a>
-      </p>
+      {!mfaStep && (
+        <>
+          <p className="mt-5 text-center text-sm text-muted-foreground">
+            {"Don't have an account? "}
+            <Link to="/register" className="text-primary font-medium hover:underline">
+              Create account
+            </Link>
+          </p>
+
+          <p className="mt-3 text-center text-[11px] text-muted-foreground/70">
+            By signing in you agree to our{' '}
+            <a href="#" className="text-primary/80 hover:underline">
+              Terms
+            </a>{' '}
+            &amp;{' '}
+            <a href="#" className="text-primary/80 hover:underline">
+              Privacy Policy
+            </a>
+          </p>
+        </>
+      )}
     </AuthLayout>
   )
 }

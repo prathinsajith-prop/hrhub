@@ -4,6 +4,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { useTranslation } from 'react-i18next'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Users } from 'lucide-react'
 interface OrgNode {
     id: string
@@ -61,7 +62,38 @@ export function OrgChartPage() {
                 description={t('orgChart.description')}
             />
 
-            {isLoading && <p className="text-muted-foreground text-sm">Loading org chart...</p>}
+            {isLoading && (
+                <div className="flex gap-8 justify-center">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="flex flex-col items-center gap-4">
+                            <div className="rounded-xl border p-4 w-48 space-y-3">
+                                <div className="flex items-center gap-3">
+                                    <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+                                    <div className="space-y-1.5 flex-1">
+                                        <Skeleton className="h-4 w-28" />
+                                        <Skeleton className="h-3 w-20" />
+                                    </div>
+                                </div>
+                                <Skeleton className="h-3 w-full" />
+                            </div>
+                            <div className="w-px h-6 bg-border" />
+                            <div className="flex gap-3">
+                                {Array.from({ length: 2 }).map((_, j) => (
+                                    <div key={j} className="rounded-xl border p-3 w-36 space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                                            <div className="space-y-1">
+                                                <Skeleton className="h-3 w-20" />
+                                                <Skeleton className="h-2.5 w-14" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {!isLoading && list.length === 0 && (
                 <div className="flex flex-col items-center gap-3 py-16">

@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { usePerformanceReviews, useCreateReview, useUpdateReview, type PerformanceReview } from '@/hooks/usePerformance'
 import { useEmployees } from '@/hooks/useEmployees'
 import { Star, TrendingUp, Plus } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const statusConfig: Record<string, { label: string; color: string }> = {
     draft: { label: 'Draft', color: 'bg-gray-100 text-gray-700 border-gray-200' },
@@ -111,7 +112,30 @@ export function PerformancePage() {
                 ))}
             </div>
 
-            {isLoading && <p className="text-muted-foreground text-sm">Loading...</p>}
+            {isLoading && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="rounded-xl border p-5 space-y-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="space-y-1.5 flex-1">
+                                    <Skeleton className="h-4 w-40" />
+                                    <Skeleton className="h-3 w-32" />
+                                    <div className="flex gap-1 mt-2">
+                                        {Array.from({ length: 5 }).map((_, j) => <Skeleton key={j} className="h-4 w-4 rounded" />)}
+                                    </div>
+                                </div>
+                                <Skeleton className="h-5 w-20 rounded-full" />
+                            </div>
+                            {['Quality', 'Productivity', 'Teamwork', 'Attendance', 'Initiative'].map(label => (
+                                <div key={label} className="flex items-center gap-3">
+                                    <Skeleton className="h-3 w-20 shrink-0" />
+                                    <Skeleton className="h-2 flex-1 rounded-full" />
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {!isLoading && filtered.length === 0 && (
                 <div className="flex flex-col items-center gap-3 py-16">

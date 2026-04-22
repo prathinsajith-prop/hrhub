@@ -10,6 +10,7 @@ import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency } from '@/lib/utils'
 import { usePayrollRuns, useRunPayroll, useSubmitWps } from '@/hooks/usePayroll'
 import { usePayrollTrend } from '@/hooks/useDashboard'
@@ -222,10 +223,24 @@ export function PayrollPage() {
 
       {/* KPIs */}
       < div className="grid grid-cols-2 sm:grid-cols-4 gap-3" >
-        <KpiCardCompact label="Last Net Payroll" value={lastRun ? formatCurrency(Number((lastRun as any).totalNet)) : '—'} icon={CreditCard} color="blue" />
-        <KpiCardCompact label="WPS Compliance" value={`${wpsPct}%`} icon={CheckCircle2} color="green" />
-        <KpiCardCompact label="Pending Run" value={draftLabel} icon={Clock} color="amber" />
-        <KpiCardCompact label="YTD Payroll" value={ytdNet > 0 ? formatCurrency(ytdNet) : '—'} icon={TrendingUp} color="purple" />
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-xl border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-7 w-7 rounded-lg" />
+              </div>
+              <Skeleton className="h-7 w-28" />
+            </div>
+          ))
+        ) : (
+          <>
+            <KpiCardCompact label="Last Net Payroll" value={lastRun ? formatCurrency(Number((lastRun as any).totalNet)) : '—'} icon={CreditCard} color="blue" />
+            <KpiCardCompact label="WPS Compliance" value={`${wpsPct}%`} icon={CheckCircle2} color="green" />
+            <KpiCardCompact label="Pending Run" value={draftLabel} icon={Clock} color="amber" />
+            <KpiCardCompact label="YTD Payroll" value={ytdNet > 0 ? formatCurrency(ytdNet) : '—'} icon={TrendingUp} color="purple" />
+          </>
+        )}
       </div >
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

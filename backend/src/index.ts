@@ -16,6 +16,7 @@ import { sql } from 'drizzle-orm'
 import authenticatePlugin from './plugins/authenticate.js'
 import { cleanupExpiredTokens } from './modules/auth/auth.service.js'
 import { startExpiryWorkers } from './workers/expiry.worker.js'
+import { startPayrollWorker } from './workers/payroll.worker.js'
 
 import authRoutes from './modules/auth/auth.routes.js'
 import employeesRoutes from './modules/employees/employees.routes.js'
@@ -209,8 +210,9 @@ async function bootstrap() {
     // Run once on startup
     cleanupExpiredTokens().catch((e) => app.log.warn('Initial token cleanup skipped: %s', e))
 
-    // Start background workers (expiry alerts via BullMQ)
+    // Start background workers (expiry alerts + async payroll via BullMQ)
     await startExpiryWorkers()
+    await startPayrollWorker()
 }
 
 bootstrap().catch((err) => {

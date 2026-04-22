@@ -1,5 +1,6 @@
 import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
+import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
 import { leaveRequests } from '../../db/schema/index.js'
 import { employees } from '../../db/schema/employees.js'
@@ -30,15 +31,16 @@ export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRe
 }
 
 export async function approveLeave(tenantId: string, id: string, approvedBy: string, approved: boolean) {
+    const status = approved ? ('approved' as const) : ('rejected' as const)
     const [row] = await db.update(leaveRequests)
-        .set({
-            status: approved ? 'approved' : 'rejected',
+        .set(withTimestamp({
+            status,
             approvedBy,
             approvedAt: new Date(),
-            updatedAt: new Date(),
-        } as any)
+        }))
         .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId), eq(leaveRequests.status, 'pending')))
         .returning()
+    if (row) await cacheDel(`dashboard:kpis:${tenantId}`)
     return row ?? null
 }
 

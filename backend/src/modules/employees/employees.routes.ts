@@ -22,6 +22,7 @@ export default async function (fastify: any): Promise<void> {
             department: query.department,
             limit: query.limit,
             offset: query.offset,
+            after: query.after,
         })
 
         return reply.send(result)

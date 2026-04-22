@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs } from '@/components/ui/form-controls'
 import { DataTable } from '@/components/ui/data-table'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
@@ -126,8 +127,9 @@ export function RecruitmentPage() {
   const [activeTab, setActiveTab] = useState('pipeline')
   const [jobDialogOpen, setJobDialogOpen] = useState(false)
   const [closeConfirm, setCloseConfirm] = useState<string[] | null>(null)
-  const { data: jobsData } = useJobs({ limit: 50 })
-  const { data: appsData } = useApplications({ limit: 100 })
+  const { data: jobsData, isLoading: jobsLoading } = useJobs({ limit: 50 })
+  const { data: appsData, isLoading: appsLoading } = useApplications({ limit: 100 })
+  const isLoading = jobsLoading || appsLoading
   const updateStage = useUpdateApplicationStage()
   const updateJob = useUpdateJob()
   const createJob = useCreateJob()
@@ -163,10 +165,24 @@ export function RecruitmentPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCardCompact label="Open Positions" value={openJobs} icon={Briefcase} color="blue" />
-        <KpiCardCompact label="Total Applicants" value={candidates.length} icon={Users} color="cyan" />
-        <KpiCardCompact label="In Interview" value={inInterview} icon={Clock} color="amber" />
-        <KpiCardCompact label="Offer Stage" value={inOffer} icon={TrendingUp} color="green" />
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-xl border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-7 w-7 rounded-lg" />
+              </div>
+              <Skeleton className="h-7 w-16" />
+            </div>
+          ))
+        ) : (
+          <>
+            <KpiCardCompact label="Open Positions" value={openJobs} icon={Briefcase} color="blue" />
+            <KpiCardCompact label="Total Applicants" value={candidates.length} icon={Users} color="cyan" />
+            <KpiCardCompact label="In Interview" value={inInterview} icon={Clock} color="amber" />
+            <KpiCardCompact label="Offer Stage" value={inOffer} icon={TrendingUp} color="green" />
+          </>
+        )}
       </div>
 
       <Tabs

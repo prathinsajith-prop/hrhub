@@ -1,6 +1,7 @@
 import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, getPayslipsWithEmployees, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
 import { generatePayslipPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { enqueuePayrollRun, getPayrollQueue } from '../../workers/payroll.worker.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -25,12 +26,42 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data })
     })
 
-    // POST /api/v1/payroll/:id/run — run payroll calculation for a draft run
+    // POST /api/v1/payroll/:id/run — enqueue payroll calculation (async via BullMQ when Redis available)
     fastify.post('/:id/run', {
         ...hrOnly,
         schema: { tags: ['Payroll'] },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
+
+        // Verify the run exists and is in draft status before enqueuing
+        const run = await getPayrollRun(request.user.tenantId, id)
+        if (!run || run.status !== 'draft') {
+            return reply.code(422).send({
+                statusCode: 422,
+                error: 'Unprocessable Entity',
+                message: 'Payroll run not found or not in draft status.',
+            })
+        }
+
+        // If BullMQ worker is available, enqueue and return jobId immediately
+        if (getPayrollQueue()) {
+            const jobId = await enqueuePayrollRun(request.user.tenantId, id)
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'payroll_run',
+                entityId: id,
+                entityName: `Payroll ${run.month}/${run.year}`,
+                action: 'approve',
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+            return reply.code(202).send({ data: { jobId, status: 'processing' } })
+        }
+
+        // Fallback: run synchronously when Redis is unavailable
         const ok = await runPayroll(request.user.tenantId, id)
         if (!ok) {
             return reply.code(422).send({

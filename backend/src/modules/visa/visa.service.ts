@@ -1,25 +1,60 @@
-import { eq, and, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
-import { withTimestamp } from '../../lib/db-helpers.js'
+import { eq, and, desc, isNull, sql, getTableColumns, or, lt } from 'drizzle-orm'
+import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { visaApplications } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewVisa = InferInsertModel<typeof visaApplications>
 
-export async function listVisas(tenantId: string, params: { status?: string; urgencyLevel?: string; limit: number; offset: number }) {
-    const { status, urgencyLevel, limit, offset } = params
+export async function listVisas(tenantId: string, params: { status?: string; urgencyLevel?: string; limit: number; offset: number; after?: string }) {
+    const { status, urgencyLevel, limit, offset, after } = params
     const conditions = [eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)]
     if (status) conditions.push(eq(visaApplications.status, status as never))
     if (urgencyLevel) conditions.push(eq(visaApplications.urgencyLevel, urgencyLevel as never))
 
-    const rows = await db.select({ ...getTableColumns(visaApplications), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+    const cursor = after ? decodeCursor(after) : null
+    if (cursor) {
+        const cursorDate = new Date(cursor.c)
+        conditions.push(
+            or(
+                lt(visaApplications.createdAt, cursorDate),
+                and(eq(visaApplications.createdAt, cursorDate), lt(visaApplications.id, cursor.i))
+            )!
+        )
+    }
+
+    const pageSize = limit + 1
+    const rows = await db.select(getTableColumns(visaApplications))
         .from(visaApplications)
         .where(and(...conditions))
-        .orderBy(desc(visaApplications.updatedAt))
-        .limit(limit).offset(offset)
+        .orderBy(desc(visaApplications.createdAt), desc(visaApplications.id))
+        .limit(cursor ? pageSize : limit)
+        .offset(cursor ? 0 : offset)
 
-    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
-    return { data: rows, total, limit, offset, hasMore: offset + limit < total }
+    const hasMore = cursor ? rows.length > limit : false
+    const pageRows = cursor ? rows.slice(0, limit) : rows
+    const lastRow = pageRows.at(-1)
+    const nextCursor = (cursor && hasMore && lastRow)
+        ? encodeCursor(lastRow.createdAt, lastRow.id)
+        : undefined
+
+    let total = 0
+    if (!cursor) {
+        const [countRow] = await db
+            .select({ count: sql<number>`COUNT(*)`.as('count') })
+            .from(visaApplications)
+            .where(and(...conditions))
+        total = Number(countRow?.count ?? 0)
+    }
+
+    return {
+        data: pageRows,
+        total: cursor ? undefined : total,
+        limit,
+        offset: cursor ? undefined : offset,
+        hasMore: cursor ? hasMore : offset + limit < total,
+        nextCursor,
+    }
 }
 
 export async function getVisa(tenantId: string, id: string) {

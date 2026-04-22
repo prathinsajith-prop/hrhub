@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Plane, Clock, AlertTriangle, CheckCircle2, Plus, RefreshCw, Eye } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -386,10 +387,24 @@ export function VisaPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCardCompact label="Active Visas" value={activeCount} icon={CheckCircle2} color="green" />
-        <KpiCardCompact label="In Processing" value={processingCount} icon={Clock} color="cyan" />
-        <KpiCardCompact label="Critical" value={criticalCount} icon={AlertTriangle} color="red" />
-        <KpiCardCompact label="Expiring 30d" value={expiringCount} icon={Plane} color="amber" />
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-xl border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-7 w-7 rounded-lg" />
+              </div>
+              <Skeleton className="h-7 w-12" />
+            </div>
+          ))
+        ) : (
+          <>
+            <KpiCardCompact label="Active Visas" value={activeCount} icon={CheckCircle2} color="green" />
+            <KpiCardCompact label="In Processing" value={processingCount} icon={Clock} color="cyan" />
+            <KpiCardCompact label="Critical" value={criticalCount} icon={AlertTriangle} color="red" />
+            <KpiCardCompact label="Expiring 30d" value={expiringCount} icon={Plane} color="amber" />
+          </>
+        )}
       </div>
 
       <Tabs
