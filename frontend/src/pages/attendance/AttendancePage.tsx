@@ -210,10 +210,10 @@ export function AttendancePage() {
                 <div className="flex flex-wrap gap-3 items-end">
                     <div className="space-y-1.5">
                         <Label className="text-xs">{t('attendance.filterByEmployee')}</Label>
-                        <Select value={filterEmployee} onValueChange={setFilterEmployee}>
+                        <Select value={filterEmployee || '__all__'} onValueChange={(v) => setFilterEmployee(v === '__all__' ? '' : v)}>
                             <SelectTrigger className="w-52"><SelectValue placeholder={t('attendance.allEmployees')} /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">{t('attendance.allEmployees')}</SelectItem>
+                                <SelectItem value="__all__">{t('attendance.allEmployees')}</SelectItem>
                                 {empList.map((e: any) => (
                                     <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
                                 ))}

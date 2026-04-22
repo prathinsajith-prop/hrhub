@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
@@ -13,7 +13,7 @@ import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatDate, cn } from '@/lib/utils'
-import { useVisas, useAdvanceVisaStep, useCancelVisa, useRecalcVisaUrgency } from '@/hooks/useVisa'
+import { useVisas, useAdvanceVisaStep, useCancelVisa, useRecalcVisaUrgency, useUpdateVisa } from '@/hooks/useVisa'
 import type { VisaApplication, VisaStatus } from '@/types'
 import { toast } from '@/components/ui/overlays'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -307,7 +307,43 @@ export function VisaPage() {
   const [newAppOpen, setNewAppOpen] = useState(false)
   const { data: visaData, isLoading } = useVisas({ limit: 50 })
   const recalcUrgency = useRecalcVisaUrgency()
+  const updateVisa = useUpdateVisa()
   const visaApplications: VisaApplication[] = (visaData?.data as VisaApplication[]) ?? []
+
+  const handleBulkRenew = useCallback(async (selected: VisaApplication[]) => {
+    try {
+      await Promise.all(selected.map(v =>
+        updateVisa.mutateAsync({ id: v.id, data: { visaType: 'employment_renewal', status: 'not_started', currentStep: 1 } })
+      ))
+      toast.success(`${selected.length} visa(s) queued for renewal`, 'Each visa has been reset to employment renewal status.')
+    } catch {
+      toast.error('Renewal failed', 'Some visas could not be updated. Please try again.')
+    }
+  }, [updateVisa])
+
+  const handleBulkExport = useCallback((selected: VisaApplication[]) => {
+    const headers = ['Employee', 'Visa Type', 'Status', 'Current Step', 'Total Steps', 'Urgency', 'Expiry Date', 'MOHRE Ref', 'GDRFA Ref']
+    const rows = selected.map(v => [
+      v.employeeName ?? '',
+      v.visaType.replace(/_/g, ' '),
+      v.status.replace(/_/g, ' '),
+      String(v.currentStep),
+      String(v.totalSteps),
+      (v as any).urgencyLevel ?? '',
+      v.expiryDate ? formatDate(v.expiryDate) : '',
+      (v as any).mohreRef ?? '',
+      (v as any).gdfrRef ?? '',
+    ])
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `visa_export_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${selected.length} visa records`)
+  }, [])
 
   const filtered = activeTab === 'all' ? visaApplications :
     activeTab === 'critical' ? visaApplications.filter((v: any) => v.urgencyLevel === 'critical') :
@@ -391,11 +427,12 @@ export function VisaPage() {
             bulkActions={(selected) => (
               <>
                 <Button variant="outline" size="sm" leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
-                  onClick={() => toast.success(`Renewal initiated for ${selected.length} visas`)}>
+                  onClick={() => handleBulkRenew(selected as VisaApplication[])}
+                  disabled={updateVisa.isPending}>
                   Renew
                 </Button>
                 <Button variant="outline" size="sm"
-                  onClick={() => toast.success(`Exporting ${selected.length} visa records`)}>
+                  onClick={() => handleBulkExport(selected as VisaApplication[])}>
                   Export
                 </Button>
               </>

@@ -12,7 +12,7 @@ import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
-import { useJobs, useApplications, useUpdateApplicationStage } from '@/hooks/useRecruitment'
+import { useJobs, useApplications, useUpdateApplicationStage, useUpdateJob, useCreateJob } from '@/hooks/useRecruitment'
 import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import { NewJobDialog } from '@/components/shared/action-dialogs'
 import type { Candidate, ApplicationStage } from '@/types'
@@ -129,6 +129,8 @@ export function RecruitmentPage() {
   const { data: jobsData } = useJobs({ limit: 50 })
   const { data: appsData } = useApplications({ limit: 100 })
   const updateStage = useUpdateApplicationStage()
+  const updateJob = useUpdateJob()
+  const createJob = useCreateJob()
   const jobs: any[] = (jobsData?.data as any[]) ?? []
   const candidates: Candidate[] = (appsData?.data as Candidate[]) ?? []
 
@@ -230,7 +232,27 @@ export function RecruitmentPage() {
                   Close
                 </Button>
                 <Button variant="outline" size="sm"
-                  onClick={() => toast.info(`Duplicate queued for ${selected.length} jobs`, 'This will create editable draft copies.')}>
+                  onClick={async () => {
+                    try {
+                      await Promise.all(selected.map((r: any) => createJob.mutateAsync({
+                        title: `${r.title} (Copy)`,
+                        department: r.department,
+                        location: r.location,
+                        type: r.type,
+                        status: 'draft',
+                        openings: r.openings,
+                        minSalary: r.minSalary,
+                        maxSalary: r.maxSalary,
+                        description: r.description,
+                        requirements: r.requirements,
+                        closingDate: r.closingDate,
+                      })))
+                      toast.success(`${selected.length} job(s) duplicated`, 'Draft copies created.')
+                    } catch {
+                      toast.error('Duplicate failed', 'Could not duplicate selected jobs.')
+                    }
+                  }}
+                  disabled={createJob.isPending}>
                   Duplicate
                 </Button>
               </>
@@ -247,9 +269,15 @@ export function RecruitmentPage() {
         description="Closing these jobs will stop accepting new applications. Existing candidates remain in the pipeline."
         confirmLabel="Close jobs"
         variant="warning"
-        onConfirm={() => {
-          toast.success(`${closeConfirm?.length ?? 0} jobs closed`, 'They are now read-only.')
-          setCloseConfirm(null)
+        onConfirm={async () => {
+          try {
+            await Promise.all((closeConfirm ?? []).map(id => updateJob.mutateAsync({ id, data: { status: 'closed' } })))
+            toast.success(`${closeConfirm?.length ?? 0} jobs closed`, 'They are now read-only.')
+          } catch {
+            toast.error('Failed to close jobs', 'Some jobs could not be updated.')
+          } finally {
+            setCloseConfirm(null)
+          }
         }}
       />
     </PageWrapper>

@@ -141,6 +141,8 @@ const columns: ColumnDef<PayrollRun>[] = [
 export function PayrollPage() {
   const { t } = useTranslation()
   const [runConfirmOpen, setRunConfirmOpen] = useState(false)
+  const [wpsExporting, setWpsExporting] = useState(false)
+  const { accessToken } = useAuthStore()
   const { data: payrollData, isLoading } = usePayrollRuns({ year: new Date().getFullYear() })
   const { data: trendRaw } = usePayrollTrend()
   const runPayroll = useRunPayroll()
@@ -171,6 +173,23 @@ export function PayrollPage() {
   const draftLabel = draftRun
     ? new Date((draftRun as any).year, (draftRun as any).month - 1).toLocaleDateString('en-AE', { month: 'short', year: 'numeric' })
     : '—'
+
+  const handleExportWps = async () => {
+    const targetRun = payrollRuns.find((r: any) => r.status === 'approved' || r.status === 'wps_submitted' || r.status === 'paid')
+    if (!targetRun) {
+      toast.warning('No approved run', 'Approve a payroll run first before exporting WPS SIF.')
+      return
+    }
+    setWpsExporting(true)
+    try {
+      await downloadWpsSif((targetRun as any).id, accessToken)
+      toast.success('WPS SIF exported', 'Salary information file downloaded.')
+    } catch {
+      toast.error('Export failed', 'Could not generate WPS SIF file.')
+    } finally {
+      setWpsExporting(false)
+    }
+  }
 
   const handleRunPayroll = () => {
     if (!draftRun) {
@@ -267,7 +286,8 @@ export function PayrollPage() {
           enableSelection
           getRowId={(row: any) => String(row.id)}
           toolbar={
-            <Button variant="outline" size="sm" leftIcon={<FileDown className="h-3.5 w-3.5" />}>Export WPS</Button>
+            <Button variant="outline" size="sm" leftIcon={<FileDown className="h-3.5 w-3.5" />}
+              loading={wpsExporting} onClick={handleExportWps}>Export WPS</Button>
           }
           bulkActions={(selected) => (
             <>

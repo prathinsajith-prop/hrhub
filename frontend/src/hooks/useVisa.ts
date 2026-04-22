@@ -48,3 +48,12 @@ export function useRecalcVisaUrgency() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['visa'] }),
     })
 }
+
+export function useUpdateVisa() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
+            api.patch<{ data: unknown }>(`/visa/${id}`, data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['visa'] }),
+    })
+}

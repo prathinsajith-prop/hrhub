@@ -39,3 +39,11 @@ export function useUpdateApplicationStage() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['applications'] }),
     })
 }
+
+export function useUpdateJob() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => api.patch(`/jobs/${id}`, data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['jobs'] }),
+    })
+}

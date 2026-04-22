@@ -38,3 +38,11 @@ export function useVerifyDocument() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
     })
 }
+
+export function useDeleteDocument() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (id: string) => api.delete(`/documents/${id}`),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+    })
+}

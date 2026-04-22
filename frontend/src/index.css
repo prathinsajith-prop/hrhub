@@ -251,36 +251,25 @@ html.rtl {
 
 html[dir="rtl"] body {
   font-family: 'Cairo', 'Inter', ui-sans-serif, system-ui, sans-serif;
-  text-align: right;
 }
 
-/* Flip margins and paddings for RTL logical properties */
-html[dir="rtl"] .ml-auto {
-  margin-left: unset;
-  margin-right: auto;
-}
-
-html[dir="rtl"] .mr-auto {
-  margin-right: unset;
-  margin-left: auto;
-}
-
-/* Sidebar flips to right in RTL */
-html[dir="rtl"] [data-sidebar="sidebar"] {
-  right: 0;
-  left: auto;
-  border-right: none;
-  border-left: 1px solid hsl(var(--border));
-}
-
-/* Ensure all numbers/codes stay LTR inside RTL context */
+/* Numbers, code, monospace stay LTR inside RTL context */
 html[dir="rtl"] .font-mono,
-html[dir="rtl"] [class*="tabular"] {
+html[dir="rtl"] [class*="tabular"],
+html[dir="rtl"] kbd,
+html[dir="rtl"] code,
+html[dir="rtl"] pre {
   direction: ltr;
   unicode-bidi: embed;
 }
 
-/* RTL-safe flex row reversal — charts/tables remain LTR */
-html[dir="rtl"] .recharts-wrapper {
+/* Charts and recharts remain LTR for axis/legend correctness */
+html[dir="rtl"] .recharts-wrapper,
+html[dir="rtl"] .recharts-surface {
   direction: ltr;
+}
+
+/* Lucide icons that imply direction (chevrons, arrows) flip in RTL */
+html[dir="rtl"] [data-rtl-flip] {
+  transform: scaleX(-1);
 }

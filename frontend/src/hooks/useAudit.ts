@@ -41,7 +41,7 @@ export function useLoginHistory(params: { userId?: string; limit?: number } = {}
     if (params.limit) qs.set('limit', String(params.limit))
     return useQuery({
         queryKey: ['login-history', params],
-        queryFn: () => api.get<LoginHistoryRecord[]>(`/audit/login-history?${qs}`),
+        queryFn: () => api.get<{ data: LoginHistoryRecord[] }>(`/audit/login-history?${qs}`).then(r => r.data),
     })
 }
 
@@ -50,6 +50,6 @@ export function useActivityLogs(params: { entityType?: string; entityId?: string
     Object.entries(params).forEach(([k, v]) => v !== undefined && qs.set(k, String(v)))
     return useQuery({
         queryKey: ['activity-logs', params],
-        queryFn: () => api.get<ActivityLog[]>(`/audit/activity?${qs}`),
+        queryFn: () => api.get<{ data: ActivityLog[] }>(`/audit/activity?${qs}`).then(r => r.data),
     })
 }

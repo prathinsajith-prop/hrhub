@@ -147,19 +147,20 @@ export function DashboardPage() {
           className="flex items-center gap-3 px-4 py-3 rounded-xl border border-warning/30 bg-warning/10 animate-fade-fast"
         >
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-          <p className="text-sm text-warning-foreground">
+          <p className="text-sm text-warning-foreground" dir="auto">
             <span className="font-semibold">
-              {urgentAlerts.length} action{urgentAlerts.length > 1 ? 's' : ''} required:{' '}
+              {t('dashboard.alertsRequired', { count: urgentAlerts.length, defaultValue: `${urgentAlerts.length} action${urgentAlerts.length > 1 ? 's' : ''} required:` })}
             </span>
-            {urgentAlerts[0]?.title}
+            {' '}
+            <span dir="auto">{urgentAlerts[0]?.title}</span>
             {urgentAlerts.length > 1 && (
               <span className="text-warning-foreground/80">
-                {' '}and {urgentAlerts.length - 1} more
+                {' '}{t('dashboard.alertsMore', { count: urgentAlerts.length - 1, defaultValue: `and ${urgentAlerts.length - 1} more` })}
               </span>
             )}
           </p>
-          <button onClick={() => navigate('/visa')} className="ml-auto text-xs font-medium text-warning-foreground hover:underline shrink-0">
-            View all
+          <button onClick={() => navigate('/visa')} className="ms-auto text-xs font-medium text-warning-foreground hover:underline shrink-0">
+            {t('common.viewAll', { defaultValue: 'View all' })}
           </button>
         </div>
       )}

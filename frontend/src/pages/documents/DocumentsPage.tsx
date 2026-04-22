@@ -1,20 +1,21 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
-import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus, ShieldCheck } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Card } from '@/components/ui/primitives'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast, ConfirmDialog } from '@/components/ui/overlays'
 import { ImageUpload } from '@/components/ui/form-controls'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectLabel, SelectGroup } from '@/components/ui/form-controls'
 import { Label, Input } from '@/components/ui/primitives'
 import { api } from '@/lib/api'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
-import { useDocuments } from '@/hooks/useDocuments'
+import { useDocuments, useVerifyDocument, useDeleteDocument } from '@/hooks/useDocuments'
 import { useEmployees } from '@/hooks/useEmployees'
 import type { Document, DocStatus } from '@/types'
 
@@ -46,6 +47,7 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   const [saving, setSaving] = useState(false)
   const { data: empData } = useEmployees({ limit: 100 })
   const employees = (empData?.data as any[]) ?? []
+  const qc = useQueryClient()
 
   const handleSave = async () => {
     if (!employeeId) { toast.warning('Employee required', 'Please select an employee.'); return }
@@ -62,6 +64,7 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
       if (expiryDate) fd.append('expiryDate', expiryDate)
 
       await api.upload('/documents/upload', fd)
+      await qc.invalidateQueries({ queryKey: ['documents'] })
       toast.success('Document uploaded', `${uploadedFile.name} is under review.`)
       onOpenChange(false)
       setUploadedFile(null)
@@ -154,94 +157,147 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   )
 }
 
-const columns: ColumnDef<Document>[] = [
-  {
-    accessorKey: 'docType',
-    header: 'Document',
-    cell: ({ row: { original: d } }) => (
-      <div className="flex items-center gap-2.5">
-        <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-          <FileText className="h-4 w-4 text-blue-600" />
+const columns = (
+  onView: (d: Document) => void,
+  onDelete: (d: Document) => void,
+  onVerify: (d: Document) => void,
+): ColumnDef<Document>[] => [
+    {
+      accessorKey: 'docType',
+      header: 'Document',
+      cell: ({ row: { original: d } }) => (
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+            <FileText className="h-4 w-4 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">{d.docType}</p>
+            <p className="text-[10px] text-muted-foreground capitalize">{d.category}</p>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-medium">{d.docType}</p>
-          <p className="text-[10px] text-muted-foreground capitalize">{d.category}</p>
-        </div>
-      </div>
-    ),
-    size: 200,
-  },
-  {
-    accessorKey: 'employeeName',
-    header: 'Employee',
-    cell: ({ getValue }) => <span className="text-sm">{getValue() as string || '—'}</span>,
-  },
-  {
-    accessorKey: 'status',
-    header: 'Status',
-    cell: ({ getValue }) => {
-      const s = getValue() as DocStatus
-      const { variant, label } = statusBadge[s]
-      return <Badge variant={variant} className="text-[11px]">{label}</Badge>
+      ),
+      size: 200,
     },
-  },
-  {
-    accessorKey: 'expiryDate',
-    header: 'Expiry',
-    cell: ({ getValue }) => <ExpiryCell date={getValue() as string | undefined} />,
-  },
-  {
-    accessorKey: 'verified',
-    header: 'Verified',
-    cell: ({ getValue }) => getValue()
-      ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-      : <Clock className="h-4 w-4 text-amber-400" />,
-    size: 80,
-  },
-  {
-    accessorKey: 'uploadedAt',
-    header: 'Uploaded',
-    cell: ({ getValue, row }) => (
-      <div>
-        <p className="text-xs">{formatDate(getValue() as string)}</p>
-        <p className="text-[10px] text-muted-foreground">by {row.original.uploadedBy}</p>
-      </div>
-    ),
-  },
-  {
-    id: 'actions',
-    header: '',
-    cell: ({ row: { original: d } }) => (
-      <div className="flex items-center gap-1">
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="View document"
-          onClick={() => toast.info('Preview', `Opening ${d.docType} — preview coming soon.`)}
-        >
-          <Eye className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Download document"
-          onClick={() => toast.success('Download started', `${d.fileName ?? d.docType} is being downloaded.`)}
-        >
-          <Download className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-    ),
-    size: 70,
-  },
-]
+    {
+      accessorKey: 'employeeName',
+      header: 'Employee',
+      cell: ({ getValue }) => <span className="text-sm">{getValue() as string || '—'}</span>,
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ getValue }) => {
+        const s = getValue() as DocStatus
+        const { variant, label } = statusBadge[s]
+        return <Badge variant={variant} className="text-[11px]">{label}</Badge>
+      },
+    },
+    {
+      accessorKey: 'expiryDate',
+      header: 'Expiry',
+      cell: ({ getValue }) => <ExpiryCell date={getValue() as string | undefined} />,
+    },
+    {
+      accessorKey: 'verified',
+      header: 'Verified',
+      cell: ({ getValue }) => getValue()
+        ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+        : <Clock className="h-4 w-4 text-amber-400" />,
+      size: 80,
+    },
+    {
+      accessorKey: 'uploadedAt',
+      header: 'Uploaded',
+      cell: ({ getValue, row }) => (
+        <div>
+          <p className="text-xs">{formatDate(getValue() as string)}</p>
+          <p className="text-[10px] text-muted-foreground">by {row.original.uploadedBy}</p>
+        </div>
+      ),
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row: { original: d } }) => (
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="View / download document"
+            onClick={() => onView(d)}
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Download document"
+            onClick={() => onView(d)}
+          >
+            <Download className="h-3.5 w-3.5" />
+          </Button>
+          {(d.status === 'under_review' || d.status === 'pending_upload') && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Verify document"
+              onClick={() => onVerify(d)}
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+            </Button>
+          )}
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Delete document"
+            className="text-destructive hover:text-destructive"
+            onClick={() => onDelete(d)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
+      size: 110,
+    },
+  ]
 
 export function DocumentsPage() {
   const { t } = useTranslation()
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
   const { data: docsData, isLoading } = useDocuments({ limit: 100 })
   const documents: Document[] = (docsData?.data as Document[]) ?? []
   const expiring = documents.filter((d: any) => d.status === 'expiring_soon').length
   const expired = documents.filter((d: any) => d.status === 'expired').length
+  const verifyDoc = useVerifyDocument()
+  const deleteDoc = useDeleteDocument()
+
+  const handleView = (d: Document) => {
+    window.open(`/api/v1/documents/${d.id}/file`, '_blank')
+  }
+
+  const handleVerify = (d: Document) => {
+    verifyDoc.mutate(d.id, {
+      onSuccess: () => toast.success('Document verified', `${d.docType} has been marked as valid.`),
+      onError: () => toast.error('Verification failed', 'Could not verify this document.'),
+    })
+  }
+
+  const handleDelete = () => {
+    if (!deleteTarget) return
+    deleteDoc.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        toast.success('Document archived', `${deleteTarget.docType} has been removed.`)
+        setDeleteTarget(null)
+      },
+      onError: () => {
+        toast.error('Delete failed', 'Could not archive this document.')
+        setDeleteTarget(null)
+      },
+    })
+  }
+
+  const cols = columns(handleView, (d) => setDeleteTarget(d), handleVerify)
 
   return (
     <PageWrapper>
@@ -275,7 +331,7 @@ export function DocumentsPage() {
 
       <Card className="p-5">
         <DataTable
-          columns={columns}
+          columns={cols}
           data={documents}
           isLoading={isLoading}
           searchPlaceholder="Search documents..."
@@ -287,17 +343,7 @@ export function DocumentsPage() {
               variant="outline"
               size="sm"
               leftIcon={<Upload className="h-3.5 w-3.5" />}
-              onClick={() => {
-                const input = document.createElement('input')
-                input.type = 'file'
-                input.multiple = true
-                input.accept = '.pdf,.jpg,.jpeg,.png'
-                input.onchange = () => {
-                  const count = input.files?.length ?? 0
-                  if (count > 0) toast.success(`${count} file${count === 1 ? '' : 's'} queued`, 'Bulk upload started \u2014 documents will appear once processed.')
-                }
-                input.click()
-              }}
+              onClick={() => setUploadOpen(true)}
             >
               Bulk Upload
             </Button>
@@ -305,11 +351,17 @@ export function DocumentsPage() {
           bulkActions={(selected) => (
             <>
               <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}
-                onClick={() => toast.success(`Downloading ${selected.length} document${selected.length === 1 ? '' : 's'}`, 'Check your downloads folder.')}>
+                onClick={() => {
+                  selected.forEach((row: any) => window.open(`/api/v1/documents/${row.id}/file`, '_blank'))
+                }}>
                 Download
               </Button>
               <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                onClick={() => toast.warning(`${selected.length} document${selected.length === 1 ? '' : 's'} archived`)}>
+                onClick={() => {
+                  Promise.all(selected.map((row: any) => api.delete(`/documents/${row.id}`))).then(() => {
+                    toast.warning(`${selected.length} document${selected.length === 1 ? '' : 's'} archived`)
+                  })
+                }}>
                 Archive
               </Button>
             </>
@@ -317,6 +369,15 @@ export function DocumentsPage() {
         />
       </Card>
       <UploadDocumentDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="Archive document?"
+        description={`This will remove "${deleteTarget?.docType ?? ''}" from the system. This action cannot be undone.`}
+        confirmLabel={deleteDoc.isPending ? 'Archiving…' : 'Archive'}
+        variant="destructive"
+        onConfirm={handleDelete}
+      />
     </PageWrapper>
   )
 }

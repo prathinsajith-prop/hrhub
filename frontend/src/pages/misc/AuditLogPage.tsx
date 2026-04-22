@@ -65,10 +65,10 @@ export function AuditLogPage() {
                     </div>
                     <div className="space-y-1.5">
                         <Label className="text-xs">Entity Type</Label>
-                        <Select value={entityType} onValueChange={setEntityType}>
+                        <Select value={entityType || '__all__'} onValueChange={(v) => setEntityType(v === '__all__' ? '' : v)}>
                             <SelectTrigger className="w-44"><SelectValue placeholder="All types" /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">All types</SelectItem>
+                                <SelectItem value="__all__">All types</SelectItem>
                                 {ENTITY_TYPES.map(t => (
                                     <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
                                 ))}
