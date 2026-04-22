@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     Building2,
@@ -36,7 +36,7 @@ import { api } from '@/lib/api'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useCompanySettings, useUpdateCompanySettings, useTenantUsers, useTwoFaStatus, useTwoFaSetup, useTwoFaVerify, useTwoFaDisable, useIpAllowlist, useUpdateIpAllowlist } from '@/hooks/useSettings'
-import { useLoginHistory } from '@/hooks/useAudit'
+import { useInfiniteLoginHistory } from '@/hooks/useAudit'
 import type { CompanySettings } from '@/hooks/useSettings'
 
 const roles = [
@@ -115,78 +115,77 @@ function CompanyTab() {
     }
 
     return (
-        <div className="space-y-8">
-            {/* Identity strip — clean, no nested card */}
-            <div className="flex items-center gap-4 pb-6 border-b">
-                <div className="h-14 w-14 rounded-xl bg-primary flex items-center justify-center text-primary-foreground text-lg font-semibold shrink-0">
-                    {(company?.name ?? tenant?.name ?? 'HR').slice(0, 2).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                    <p className="font-semibold truncate">{company?.name ?? tenant?.name ?? 'HRHub Demo Company'}</p>
-                    <p className="text-sm text-muted-foreground capitalize truncate">
-                        {company?.jurisdiction ?? 'UAE'}
-                        {company?.industryType ? ` · ${company.industryType.replace(/_/g, ' ')}` : ''}
-                    </p>
-                </div>
-                <Badge variant="secondary" className="capitalize shrink-0">
-                    {company?.subscriptionPlan ?? 'free'} plan
-                </Badge>
-            </div>
-
-            {/* Company details — section, not a card */}
-            <section className="space-y-4">
-                <div>
-                    <h3 className="text-sm font-semibold flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                        Company Profile
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">Legal name, license, and jurisdiction details</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="company_name">Company Name</Label>
-                        <Input id="company_name" value={form.name ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('name', e.target.value)} />
+        <div className="space-y-5">
+            {/* Card 1: Identity strip + Company Profile */}
+            <SettingsCard>
+                <div className="flex items-center gap-4 pb-5 border-b">
+                    <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center text-primary-foreground text-base font-semibold shrink-0">
+                        {(company?.name ?? tenant?.name ?? 'HR').slice(0, 2).toUpperCase()}
                     </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="trade_license">Trade License No.</Label>
-                        <Input id="trade_license" value={form.tradeLicenseNo ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('tradeLicenseNo', e.target.value)} />
+                    <div className="min-w-0 flex-1">
+                        <p className="font-semibold truncate">{company?.name ?? tenant?.name ?? 'HRHub Demo Company'}</p>
+                        <p className="text-sm text-muted-foreground capitalize truncate">
+                            {company?.jurisdiction ?? 'UAE'}
+                            {company?.industryType ? ` · ${company.industryType.replace(/_/g, ' ')}` : ''}
+                        </p>
                     </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="jurisdiction">Jurisdiction</Label>
-                        <Input id="jurisdiction" value={form.jurisdiction ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('jurisdiction', e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="industry">Industry Type</Label>
-                        <Input id="industry" value={form.industryType ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('industryType', e.target.value)} />
-                    </div>
+                    <Badge variant="secondary" className="capitalize shrink-0">
+                        {company?.subscriptionPlan ?? 'free'} plan
+                    </Badge>
                 </div>
-            </section>
-
-            {/* Regional — section */}
-            <section className="space-y-4 pt-2 border-t">
-                <div className="pt-6">
-                    <h3 className="text-sm font-semibold flex items-center gap-2">
-                        <Globe className="h-4 w-4 text-muted-foreground" />
-                        Regional Settings
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">Defaults applied across the workspace</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[
-                        { id: 'timezone', label: 'Time Zone', value: 'Asia/Dubai (UTC+4)' },
-                        { id: 'currency', label: 'Currency', value: 'AED – UAE Dirham' },
-                        { id: 'date_format', label: 'Date Format', value: 'DD/MM/YYYY' },
-                    ].map((f) => (
-                        <div key={f.id} className="space-y-1.5">
-                            <Label htmlFor={f.id}>{f.label}</Label>
-                            <Input id={f.id} defaultValue={f.value} readOnly className="bg-muted/40" />
+                <div className="pt-5 space-y-4">
+                    <div>
+                        <h3 className="text-sm font-semibold">Company Profile</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">Legal name, license, and jurisdiction details</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="company_name">Company Name</Label>
+                            <Input id="company_name" value={form.name ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('name', e.target.value)} />
                         </div>
-                    ))}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="trade_license">Trade License No.</Label>
+                            <Input id="trade_license" value={form.tradeLicenseNo ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('tradeLicenseNo', e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="jurisdiction">Jurisdiction</Label>
+                            <Input id="jurisdiction" value={form.jurisdiction ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('jurisdiction', e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="industry">Industry Type</Label>
+                            <Input id="industry" value={form.industryType ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('industryType', e.target.value)} />
+                        </div>
+                    </div>
                 </div>
-            </section>
+            </SettingsCard>
 
-            {/* Sticky save bar */}
-            <div className="flex justify-end pt-4 border-t">
+            {/* Card 2: Regional Settings */}
+            <SettingsCard>
+                <div className="space-y-4">
+                    <div>
+                        <h3 className="text-sm font-semibold flex items-center gap-2">
+                            <Globe className="h-4 w-4 text-muted-foreground" />
+                            Regional Settings
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">Defaults applied across the workspace</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {[
+                            { id: 'timezone', label: 'Time Zone', value: 'Asia/Dubai (UTC+4)' },
+                            { id: 'currency', label: 'Currency', value: 'AED – UAE Dirham' },
+                            { id: 'date_format', label: 'Date Format', value: 'DD/MM/YYYY' },
+                        ].map((f) => (
+                            <div key={f.id} className="space-y-1.5">
+                                <Label htmlFor={f.id}>{f.label}</Label>
+                                <Input id={f.id} defaultValue={f.value} readOnly className="bg-muted/40" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </SettingsCard>
+
+            {/* Save bar — outside the cards */}
+            <div className="flex justify-end pt-2">
                 <Button onClick={handleSave} loading={updateCompany.isPending} leftIcon={saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />} variant={saved ? 'success' : 'default'}>
                     {saved ? 'Saved!' : 'Save Changes'}
                 </Button>
@@ -195,7 +194,16 @@ function CompanyTab() {
     )
 }
 
-// ─── Section helper — title + optional action + divider, no nested card ─────
+// ─── Reusable settings card wrapper ──────────────────────────────────────────────
+function SettingsCard({ children, className }: { children: React.ReactNode; className?: string }) {
+    return (
+        <div className={cn('rounded-xl border bg-card shadow-sm p-6', className)}>
+            {children}
+        </div>
+    )
+}
+
+// ─── Section helper — renders a card with title + optional action ─────────────
 function Section({ icon: Icon, title, description, action, children, className }: {
     icon: React.ComponentType<{ className?: string }>
     title: string
@@ -205,19 +213,21 @@ function Section({ icon: Icon, title, description, action, children, className }
     className?: string
 }) {
     return (
-        <section className={cn('space-y-4', className)}>
-            <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h3 className="text-sm font-semibold flex items-center gap-2">
-                        <Icon className="h-4 w-4 text-muted-foreground" />
-                        {title}
-                    </h3>
-                    {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+        <SettingsCard className={className}>
+            <div className="space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-semibold flex items-center gap-2">
+                            <Icon className="h-4 w-4 text-muted-foreground" />
+                            {title}
+                        </h3>
+                        {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+                    </div>
+                    {action && <div className="shrink-0">{action}</div>}
                 </div>
-                {action && <div className="shrink-0">{action}</div>}
+                {children}
             </div>
-            {children}
-        </section>
+        </SettingsCard>
     )
 }
 
@@ -259,38 +269,40 @@ function UsersTab() {
     }
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-5">
             {showInvite && (
-                <div className="rounded-lg border bg-muted/30 p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold">Invite Team Member</h3>
-                        <Button variant="ghost" size="sm" onClick={() => setShowInvite(false)}>Cancel</Button>
+                <SettingsCard className="bg-muted/30">
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold">Invite Team Member</h3>
+                            <Button variant="ghost" size="sm" onClick={() => setShowInvite(false)}>Cancel</Button>
+                        </div>
+                        <form onSubmit={handleInvite} className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="invite-name">Full Name</Label>
+                                    <Input id="invite-name" value={inviteForm.name} onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))} placeholder="Jane Smith" required />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="invite-email">Email Address</Label>
+                                    <Input id="invite-email" type="email" value={inviteForm.email} onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))} placeholder="jane@company.com" required />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="invite-role">Role</Label>
+                                <select id="invite-role" value={inviteForm.role} onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value }))} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background">
+                                    <option value="hr_manager">HR Manager</option>
+                                    <option value="pro_officer">PRO Officer</option>
+                                    <option value="dept_head">Department Head</option>
+                                    <option value="employee">Employee</option>
+                                </select>
+                            </div>
+                            <div className="flex justify-end">
+                                <Button type="submit" disabled={inviting}>{inviting ? 'Sending…' : 'Send Invitation'}</Button>
+                            </div>
+                        </form>
                     </div>
-                    <form onSubmit={handleInvite} className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="invite-name">Full Name</Label>
-                                <Input id="invite-name" value={inviteForm.name} onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))} placeholder="Jane Smith" required />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="invite-email">Email Address</Label>
-                                <Input id="invite-email" type="email" value={inviteForm.email} onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))} placeholder="jane@company.com" required />
-                            </div>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="invite-role">Role</Label>
-                            <select id="invite-role" value={inviteForm.role} onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value }))} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background">
-                                <option value="hr_manager">HR Manager</option>
-                                <option value="pro_officer">PRO Officer</option>
-                                <option value="dept_head">Department Head</option>
-                                <option value="employee">Employee</option>
-                            </select>
-                        </div>
-                        <div className="flex justify-end">
-                            <Button type="submit" disabled={inviting}>{inviting ? 'Sending…' : 'Send Invitation'}</Button>
-                        </div>
-                    </form>
-                </div>
+                </SettingsCard>
             )}
 
             <Section
@@ -352,27 +364,25 @@ function UsersTab() {
                 )}
             </Section>
 
-            <div className="border-t pt-8">
-                <Section
-                    icon={Shield}
-                    title="Roles & Permissions"
-                    description="What each role is allowed to do in the workspace"
-                >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {roles.map((role) => (
-                            <div key={role.id} className="flex items-start gap-3 p-3.5 rounded-lg border hover:border-primary/30 hover:bg-muted/30 transition-colors">
-                                <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', role.color)}>
-                                    <UserCircle className="h-4 w-4" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold">{role.label}</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">{role.desc}</p>
-                                </div>
+            <Section
+                icon={Shield}
+                title="Roles & Permissions"
+                description="What each role is allowed to do in the workspace"
+            >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {roles.map((role) => (
+                        <div key={role.id} className="flex items-start gap-3 p-3.5 rounded-lg border hover:border-primary/30 hover:bg-muted/30 transition-colors">
+                            <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', role.color)}>
+                                <UserCircle className="h-4 w-4" />
                             </div>
-                        ))}
-                    </div>
-                </Section>
-            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold">{role.label}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">{role.desc}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </Section>
         </div>
     )
 }
@@ -389,48 +399,50 @@ function NotificationsTab() {
     const toggle = (key: string) => setSettings((prev) => ({ ...prev, [key]: !prev[key] }))
 
     return (
-        <div className="space-y-10">
-            {notifGroups.map((group, idx) => (
-                <section key={group.title} className={cn('space-y-3', idx > 0 && 'pt-8 border-t')}>
-                    <div className="flex items-center justify-between gap-4">
-                        <div>
-                            <h3 className="text-sm font-semibold">{group.title}</h3>
-                            <p className="text-xs text-muted-foreground mt-0.5">Choose how you'd like to be notified</p>
-                        </div>
-                        <div className="flex items-center gap-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                            <span className="w-12 text-center">Email</span>
-                            <span className="w-12 text-center">Push</span>
-                        </div>
-                    </div>
-                    <div className="divide-y border rounded-lg overflow-hidden">
-                        {group.items.map((item) => (
-                            <div key={item.id} className="flex items-center gap-4 px-4 py-3">
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium leading-tight">{item.label}</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
-                                </div>
-                                <div className="flex items-center gap-3 shrink-0">
-                                    <div className="w-12 flex justify-center">
-                                        <Switch
-                                            checked={settings[`${item.id}_email`]}
-                                            onCheckedChange={() => toggle(`${item.id}_email`)}
-                                            aria-label={`${item.label} — Email`}
-                                        />
-                                    </div>
-                                    <div className="w-12 flex justify-center">
-                                        <Switch
-                                            checked={settings[`${item.id}_push`]}
-                                            onCheckedChange={() => toggle(`${item.id}_push`)}
-                                            aria-label={`${item.label} — Push`}
-                                        />
-                                    </div>
-                                </div>
+        <div className="space-y-5">
+            {notifGroups.map((group) => (
+                <SettingsCard key={group.title}>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-sm font-semibold">{group.title}</h3>
+                                <p className="text-xs text-muted-foreground mt-0.5">Choose how you'd like to be notified</p>
                             </div>
-                        ))}
+                            <div className="flex items-center gap-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                <span className="w-12 text-center">Email</span>
+                                <span className="w-12 text-center">Push</span>
+                            </div>
+                        </div>
+                        <div className="divide-y border rounded-lg overflow-hidden">
+                            {group.items.map((item) => (
+                                <div key={item.id} className="flex items-center gap-4 px-4 py-3">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium leading-tight">{item.label}</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <div className="w-12 flex justify-center">
+                                            <Switch
+                                                checked={settings[`${item.id}_email`]}
+                                                onCheckedChange={() => toggle(`${item.id}_email`)}
+                                                aria-label={`${item.label} — Email`}
+                                            />
+                                        </div>
+                                        <div className="w-12 flex justify-center">
+                                            <Switch
+                                                checked={settings[`${item.id}_push`]}
+                                                onCheckedChange={() => toggle(`${item.id}_push`)}
+                                                aria-label={`${item.label} — Push`}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </section>
+                </SettingsCard>
             ))}
-            <div className="flex justify-end pt-4 border-t">
+            <div className="flex justify-end pt-2">
                 <Button onClick={() => toast.success('Preferences saved', 'Your notification settings have been updated.')} leftIcon={<Save className="h-4 w-4" />}>
                     Save Preferences
                 </Button>
@@ -462,7 +474,7 @@ function SecurityTab() {
     }
 
     return (
-        <div className="space-y-10">
+        <div className="space-y-5">
             <Section
                 icon={Key}
                 title="Password"
@@ -489,56 +501,53 @@ function SecurityTab() {
                 </div>
             </Section>
 
-            <div className="border-t pt-8">
-                <Section
-                    icon={Shield}
-                    title="Security Policies"
-                    description="Workspace-wide protection rules"
-                >
-                    <div className="divide-y border rounded-lg overflow-hidden">
-                        {[
-                            { id: 'session_timeout', label: 'Auto Session Timeout', desc: 'Log out after 30 minutes of inactivity', defaultChecked: true },
-                            { id: 'audit_log', label: 'Audit Logging', desc: 'Track all admin actions and changes', defaultChecked: true },
-                        ].map((policy) => (
-                            <div key={policy.id} className="flex items-center justify-between px-4 py-3.5">
-                                <div>
-                                    <p className="text-sm font-medium">{policy.label}</p>
-                                    <p className="text-xs text-muted-foreground">{policy.desc}</p>
-                                </div>
-                                <Switch defaultChecked={policy.defaultChecked} aria-label={policy.label} />
+            <Section
+                icon={Shield}
+                title="Security Policies"
+                description="Workspace-wide protection rules"
+            >
+                <div className="divide-y border rounded-lg overflow-hidden">
+                    {[
+                        { id: 'session_timeout', label: 'Auto Session Timeout', desc: 'Log out after 30 minutes of inactivity', defaultChecked: true },
+                        { id: 'audit_log', label: 'Audit Logging', desc: 'Track all admin actions and changes', defaultChecked: true },
+                    ].map((policy) => (
+                        <div key={policy.id} className="flex items-center justify-between px-4 py-3.5">
+                            <div>
+                                <p className="text-sm font-medium">{policy.label}</p>
+                                <p className="text-xs text-muted-foreground">{policy.desc}</p>
                             </div>
-                        ))}
-                    </div>
-                </Section>
-            </div>
-
-            <div className="border-t pt-8"><TwoFactorCard /></div>
-            <div className="border-t pt-8"><IpAllowlistCard /></div>
-
-            <div className="border-t pt-8">
-                <Section
-                    icon={AlertCircle}
-                    title="Danger Zone"
-                    description="Irreversible workspace actions"
-                >
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20 bg-destructive/5">
-                            <div className="min-w-0">
-                                <p className="text-sm font-medium">Export All Data</p>
-                                <p className="text-xs text-muted-foreground">Download a complete export of your company data</p>
-                            </div>
-                            <Button variant="outline" size="sm" leftIcon={<FileText className="h-3.5 w-3.5" />} className="shrink-0">Export</Button>
+                            <Switch defaultChecked={policy.defaultChecked} aria-label={policy.label} />
                         </div>
-                        <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20 bg-destructive/5">
-                            <div className="min-w-0">
-                                <p className="text-sm font-medium text-destructive">Delete Account</p>
-                                <p className="text-xs text-muted-foreground">Permanently delete this workspace and all data</p>
-                            </div>
-                            <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />} className="shrink-0">Delete</Button>
+                    ))}
+                </div>
+            </Section>
+
+            <TwoFactorCard />
+            <IpAllowlistCard />
+
+            <Section
+                icon={AlertCircle}
+                title="Danger Zone"
+                description="Irreversible workspace actions"
+                className="border-destructive/30"
+            >
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20 bg-destructive/5">
+                        <div className="min-w-0">
+                            <p className="text-sm font-medium">Export All Data</p>
+                            <p className="text-xs text-muted-foreground">Download a complete export of your company data</p>
                         </div>
+                        <Button variant="outline" size="sm" leftIcon={<FileText className="h-3.5 w-3.5" />} className="shrink-0">Export</Button>
                     </div>
-                </Section>
-            </div>
+                    <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20 bg-destructive/5">
+                        <div className="min-w-0">
+                            <p className="text-sm font-medium text-destructive">Delete Account</p>
+                            <p className="text-xs text-muted-foreground">Permanently delete this workspace and all data</p>
+                        </div>
+                        <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />} className="shrink-0">Delete</Button>
+                    </div>
+                </div>
+            </Section>
         </div>
     )
 }
@@ -737,7 +746,7 @@ function IpAllowlistCard() {
     const list: string[] = data?.ipAllowlist ?? []
 
     const isValidCidr = (val: string) =>
-        /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(val.trim())
+        /^(\d{1, 3}\.){3}\d{1, 3}(\/\d{1, 2})?$/.test(val.trim())
 
     const handleAdd = async () => {
         const trimmed = newEntry.trim()
@@ -811,8 +820,28 @@ function IpAllowlistCard() {
 }
 
 function LoginHistoryCard() {
-    const { data, isLoading } = useLoginHistory({ limit: 20 })
-    const history = Array.isArray(data) ? data : []
+    const {
+        data,
+        isLoading,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+    } = useInfiniteLoginHistory({ pageSize: 10 })
+    const history = (data?.pages.flat() ?? []) as any[]
+
+    const sentinelRef = useRef<HTMLDivElement | null>(null)
+    useEffect(() => {
+        const el = sentinelRef.current
+        if (!el || !hasNextPage) return
+        const obs = new IntersectionObserver(
+            (entries) => {
+                if (entries[0]?.isIntersecting && !isFetchingNextPage) fetchNextPage()
+            },
+            { rootMargin: '120px' },
+        )
+        obs.observe(el)
+        return () => obs.disconnect()
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
     const eventIcon = (type: string) => {
         if (type === 'login') return <LogIn className="h-3.5 w-3.5 text-green-600" />
@@ -837,23 +866,32 @@ function LoginHistoryCard() {
             ) : history.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-10 border rounded-lg">No login history found.</p>
             ) : (
-                <div className="divide-y border rounded-lg overflow-hidden text-sm">
-                    {history.map((h: any) => (
-                        <div key={h.id} className="flex items-start justify-between px-4 py-3 gap-3 hover:bg-muted/30 transition-colors">
-                            <div className="flex items-center gap-2 shrink-0 mt-0.5">
-                                {eventIcon(h.eventType)}
-                                {deviceIcon(h.deviceType)}
+                <div className="border rounded-lg overflow-hidden">
+                    <div className="max-h-[480px] overflow-y-auto divide-y text-sm">
+                        {history.map((h: any) => (
+                            <div key={h.id} className="flex items-start justify-between px-4 py-3 gap-3 hover:bg-muted/30 transition-colors">
+                                <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                                    {eventIcon(h.eventType)}
+                                    {deviceIcon(h.deviceType)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-medium capitalize">{h.eventType.replace('_', ' ')}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{h.browser} on {h.os} · {h.ipAddress ?? 'unknown IP'}</p>
+                                    {h.failureReason && <p className="text-xs text-red-500">{h.failureReason.replace('_', ' ')}</p>}
+                                </div>
+                                <div className="text-xs text-muted-foreground whitespace-nowrap">
+                                    {new Date(h.createdAt).toLocaleString('en-AE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="font-medium capitalize">{h.eventType.replace('_', ' ')}</p>
-                                <p className="text-xs text-muted-foreground truncate">{h.browser} on {h.os} · {h.ipAddress ?? 'unknown IP'}</p>
-                                {h.failureReason && <p className="text-xs text-red-500">{h.failureReason.replace('_', ' ')}</p>}
-                            </div>
-                            <div className="text-xs text-muted-foreground whitespace-nowrap">
-                                {new Date(h.createdAt).toLocaleString('en-AE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </div>
+                        ))}
+                        <div ref={sentinelRef} className="py-3 text-center text-xs text-muted-foreground">
+                            {isFetchingNextPage
+                                ? 'Loading more…'
+                                : hasNextPage
+                                    ? 'Scroll to load more'
+                                    : history.length > 0 ? 'You\u2019ve reached the end' : ''}
                         </div>
-                    ))}
+                    </div>
                 </div>
             )}
         </Section>
@@ -899,34 +937,36 @@ export function SettingsPage() {
                     ))}
                 </TabsList>
 
-                {/* ─── Desktop: sticky vertical nav rail with descriptions ───── */}
+                {/* ─── Desktop: sticky vertical nav rail in its own card ───── */}
                 <aside className="hidden lg:block sticky top-20 self-start">
-                    <TabsList className="flex flex-col items-stretch h-auto bg-transparent p-0 gap-0.5">
-                        {tabs.map((tab) => (
-                            <TabsTrigger
-                                key={tab.value}
-                                value={tab.value}
-                                className="group justify-start gap-3 px-3 py-2.5 h-auto rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none transition-colors"
-                            >
-                                <tab.icon className="h-4 w-4 shrink-0 text-muted-foreground group-data-[state=active]:text-primary" />
-                                <div className="flex flex-col items-start min-w-0 text-start">
-                                    <span className="text-sm leading-tight">{tab.label}</span>
-                                    <span className="text-[11px] text-muted-foreground/80 group-data-[state=active]:text-muted-foreground leading-tight mt-0.5 truncate max-w-[180px]">
-                                        {tab.desc}
-                                    </span>
-                                </div>
-                            </TabsTrigger>
-                        ))}
-                    </TabsList>
+                    <div className="rounded-xl border bg-card shadow-sm p-3">
+                        <TabsList className="flex flex-col items-stretch h-auto bg-transparent p-0 gap-0.5 w-full">
+                            {tabs.map((tab) => (
+                                <TabsTrigger
+                                    key={tab.value}
+                                    value={tab.value}
+                                    className="group justify-start gap-3 px-3 py-2.5 h-auto rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none transition-colors"
+                                >
+                                    <tab.icon className="h-4 w-4 shrink-0 text-muted-foreground group-data-[state=active]:text-primary" />
+                                    <div className="flex flex-col items-start min-w-0 text-start">
+                                        <span className="text-sm leading-tight">{tab.label}</span>
+                                        <span className="text-[11px] text-muted-foreground/80 group-data-[state=active]:text-muted-foreground leading-tight mt-0.5 truncate max-w-[180px]">
+                                            {tab.desc}
+                                        </span>
+                                    </div>
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                    </div>
                 </aside>
 
-                {/* ─── Content: full width of right column, capped for readability ─── */}
-                <div className="pt-6 lg:pt-0 max-w-2xl">
+                {/* ─── Content: full width, no width cap ─── */}
+                <div className="pt-6 lg:pt-0">
                     <TabsContent value="company" className="mt-0"><CompanyTab /></TabsContent>
-                    <TabsContent value="users" className="mt-0 max-w-3xl"><UsersTab /></TabsContent>
+                    <TabsContent value="users" className="mt-0"><UsersTab /></TabsContent>
                     <TabsContent value="notifications" className="mt-0"><NotificationsTab /></TabsContent>
                     <TabsContent value="security" className="mt-0"><SecurityTab /></TabsContent>
-                    <TabsContent value="activity" className="mt-0 max-w-3xl"><ActivityTab /></TabsContent>
+                    <TabsContent value="activity" className="mt-0"><ActivityTab /></TabsContent>
                 </div>
             </Tabs>
         </PageWrapper>

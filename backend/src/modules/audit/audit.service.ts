@@ -71,13 +71,14 @@ export async function recordLoginEvent(params: RecordLoginParams): Promise<void>
     } as any)
 }
 
-export async function getLoginHistory(tenantId: string, userId?: string, limit = 50) {
+export async function getLoginHistory(tenantId: string, userId?: string, limit = 50, offset = 0) {
     const conditions = [eq(loginHistory.tenantId, tenantId)]
     if (userId) conditions.push(eq(loginHistory.userId, userId))
     return db.select().from(loginHistory)
         .where(and(...conditions))
         .orderBy(desc(loginHistory.createdAt))
         .limit(Math.min(limit, 200))
+        .offset(Math.max(offset, 0))
 }
 
 export interface RecordActivityParams {

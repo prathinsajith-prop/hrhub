@@ -549,14 +549,23 @@ export function ReportsPage() {
       />
 
       <Tabs defaultValue="headcount">
-        <TabsList className="mb-4">
-          <TabsTrigger value="headcount" className="gap-2">
+        <TabsList className="inline-flex h-auto rounded-xl border bg-card p-1 shadow-sm gap-1 mb-5">
+          <TabsTrigger
+            value="headcount"
+            className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors"
+          >
             <Users className="h-4 w-4" /> Headcount
           </TabsTrigger>
-          <TabsTrigger value="payroll" className="gap-2">
+          <TabsTrigger
+            value="payroll"
+            className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors"
+          >
             <BarChart3 className="h-4 w-4" /> Payroll Summary
           </TabsTrigger>
-          <TabsTrigger value="visa" className="gap-2">
+          <TabsTrigger
+            value="visa"
+            className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors"
+          >
             <Shield className="h-4 w-4" /> Visa Expiry
           </TabsTrigger>
         </TabsList>
