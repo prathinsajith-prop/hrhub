@@ -18,6 +18,43 @@ import { apiErrorToFieldMap } from '@/lib/api'
 import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, jobPostSchema, visaApplicationSchema, leaveRequestSchema, documentMetaSchema, zodToFieldErrors } from '@/lib/schemas'
 import type { Employee } from '@/types'
 
+// Reporting-manager picker: searchable employee dropdown writing the chosen
+// employee's id (UUID) into `reportingTo`. `excludeId` removes the employee
+// being edited from the list to prevent self-reporting cycles.
+function ManagerPicker({
+    value,
+    onChange,
+    excludeId,
+}: {
+    value: string
+    onChange: (id: string, name: string) => void
+    excludeId?: string
+}) {
+    const { data } = useEmployees({ limit: 1000 })
+    const employees = (data?.data ?? []) as Employee[]
+    const options = employees.filter((e) => e.id !== excludeId)
+    return (
+        <Select
+            value={value || 'none'}
+            onValueChange={(v) => {
+                if (v === 'none') return onChange('', '')
+                const picked = options.find((e) => e.id === v)
+                onChange(v, picked ? `${picked.firstName} ${picked.lastName}` : '')
+            }}
+        >
+            <SelectTrigger><SelectValue placeholder="Select manager" /></SelectTrigger>
+            <SelectContent>
+                <SelectItem value="none">— No manager (top-level) —</SelectItem>
+                {options.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                        {e.firstName} {e.lastName}{e.designation ? ` · ${e.designation}` : ''}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    )
+}
+
 // ─── New Job Dialog ─────────────────────────────────────────────────────────
 export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
     const [title, setTitle] = useState('')
@@ -309,6 +346,7 @@ interface EmpForm {
     contractType: string
     workLocation: string
     managerName: string
+    reportingTo: string
     gradeLevel: string
     status: string
     // Step 3 — Salary
@@ -326,7 +364,7 @@ const EMPTY_FORM: EmpForm = {
     firstName: '', lastName: '', dateOfBirth: '', gender: 'male', nationality: '', passportNo: '',
     mobileNo: '', personalEmail: '', maritalStatus: 'single', emergencyContact: '',
     employeeNo: '', department: '', designation: '', joinDate: new Date().toISOString().split('T')[0],
-    contractType: 'permanent', workLocation: '', managerName: '', gradeLevel: '', status: 'onboarding',
+    contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevel: '', status: 'onboarding',
     basicSalary: '', housingAllowance: '', transportAllowance: '', otherAllowances: '',
     paymentMethod: 'bank_transfer', bankName: '', iban: '', emiratisationCategory: 'expat',
 }
@@ -419,6 +457,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 contractType: (form.contractType as any) || undefined,
                 workLocation: form.workLocation || undefined,
                 managerName: form.managerName || undefined,
+                reportingTo: form.reportingTo || null,
                 gradeLevel: form.gradeLevel || undefined,
                 status: form.status as any,
                 basicSalary: basic || undefined,
@@ -573,7 +612,10 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Reporting Manager</Label>
-                                    <Input value={form.managerName} onChange={set('managerName')} placeholder="Manager name" />
+                                    <ManagerPicker
+                                        value={form.reportingTo}
+                                        onChange={(id, name) => setForm((f) => ({ ...f, reportingTo: id, managerName: name }))}
+                                    />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Grade Level</Label>
@@ -702,6 +744,7 @@ export function EditEmployeeDialog({
         contractType: employee.contractType ?? 'permanent',
         workLocation: employee.workLocation ?? '',
         managerName: employee.managerName ?? '',
+        reportingTo: employee.reportingTo ?? '',
         gradeLevel: employee.gradeLevel ?? '',
         status: employee.status ?? 'active',
         basicSalary: String(employee.basicSalary ?? ''),
@@ -768,6 +811,7 @@ export function EditEmployeeDialog({
                 contractType: (form.contractType as any) || undefined,
                 workLocation: form.workLocation || undefined,
                 managerName: form.managerName || undefined,
+                reportingTo: form.reportingTo || null,
                 gradeLevel: form.gradeLevel || undefined,
                 status: form.status as any,
                 basicSalary: basic || undefined,
@@ -871,7 +915,7 @@ export function EditEmployeeDialog({
                                 <div className="space-y-1.5"><Label>Work Location</Label><Input value={form.workLocation} onChange={set('workLocation')} /></div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Reporting Manager</Label><Input value={form.managerName} onChange={set('managerName')} /></div>
+                                <div className="space-y-1.5"><Label>Reporting Manager</Label><ManagerPicker value={form.reportingTo} excludeId={employee.id} onChange={(id, name) => setForm((f) => ({ ...f, reportingTo: id, managerName: name }))} /></div>
                                 <div className="space-y-1.5"><Label>Grade Level</Label><Input value={form.gradeLevel} onChange={set('gradeLevel')} /></div>
                             </div>
                             <div className="space-y-1.5">

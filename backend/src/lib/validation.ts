@@ -72,6 +72,7 @@ const employeeBaseSchema = z.object({
     maritalStatus: z.enum(['single', 'married', 'divorced', 'widowed']).optional(),
     gradeLevel: z.string().max(50).optional(),
     managerName: z.string().max(150).optional(),
+    reportingTo: z.string().uuid().nullable().optional(),
     labourCardNumber: z.string().max(50).optional(),
     bankName: z.string().max(150).optional(),
     iban: z.string().max(34).optional(),

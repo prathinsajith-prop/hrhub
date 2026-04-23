@@ -44,7 +44,10 @@ export function useCreateEmployee() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (data: Partial<Employee>) => api.post<{ data: Employee }>('/employees', data).then(r => r.data),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['employees'] })
+            qc.invalidateQueries({ queryKey: ['org-chart'] })
+        },
     })
 }
 
@@ -55,6 +58,7 @@ export function useUpdateEmployee(id: string) {
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['employees'] })
             qc.invalidateQueries({ queryKey: ['employees', id] })
+            qc.invalidateQueries({ queryKey: ['org-chart'] })
         },
     })
 }

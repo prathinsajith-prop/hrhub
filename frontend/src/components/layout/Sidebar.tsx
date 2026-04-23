@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Briefcase, FileText, CreditCard,
   Calendar, Shield, LogOut, ChevronLeft, ChevronRight,
-  UserCheck, Plane, BarChart3
+  UserCheck, Plane, BarChart3, Network, CalendarDays, Clock, Star, UserMinus, Activity, Settings as SettingsIcon
 } from 'lucide-react'
 import { cn, getInitials } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
@@ -13,14 +13,17 @@ const navGroups = [
     label: 'Main',
     items: [
       { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/calendar', icon: CalendarDays, label: 'Calendar' },
     ]
   },
   {
     label: 'People',
     items: [
       { to: '/employees', icon: Users, label: 'Employees' },
+      { to: '/org-chart', icon: Network, label: 'Org Chart' },
       { to: '/recruitment', icon: Briefcase, label: 'Recruitment' },
       { to: '/onboarding', icon: UserCheck, label: 'Onboarding' },
+      { to: '/exit', icon: UserMinus, label: 'Exit & Offboarding' },
     ]
   },
   {
@@ -35,6 +38,8 @@ const navGroups = [
     items: [
       { to: '/payroll', icon: CreditCard, label: 'Payroll & WPS' },
       { to: '/leave', icon: Calendar, label: 'Leave Management' },
+      { to: '/attendance', icon: Clock, label: 'Attendance' },
+      { to: '/performance', icon: Star, label: 'Performance' },
     ]
   },
   {
@@ -42,6 +47,13 @@ const navGroups = [
     items: [
       { to: '/compliance', icon: Shield, label: 'Compliance' },
       { to: '/reports', icon: BarChart3, label: 'Reports' },
+      { to: '/audit', icon: Activity, label: 'Audit Log' },
+    ]
+  },
+  {
+    label: 'Workspace',
+    items: [
+      { to: '/settings', icon: SettingsIcon, label: 'Settings' },
     ]
   },
 ]
