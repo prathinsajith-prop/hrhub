@@ -31,6 +31,10 @@ const envSchema = z.object({
     REDIS_URL: z.string().default('redis://:hrhub_redis_secret@localhost:6379'),
     // App
     APP_URL: z.string().url().default('http://localhost:5174'),
+    // Observability (optional). If SENTRY_DSN is set, the error handler
+    // will forward 5xx errors — requires `@sentry/node` package.
+    SENTRY_DSN: z.string().default(''),
+    LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).optional(),
 })
 
 export type Env = z.infer<typeof envSchema>

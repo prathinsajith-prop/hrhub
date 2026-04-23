@@ -28,6 +28,7 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.6",
+    "@sentry/node": "^10.49.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.76.0",
     "dotenv": "^17.4.2",

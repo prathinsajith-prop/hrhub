@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Textarea } from '@/components/ui/textarea'
 import { formatDate, formatCurrency, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -447,7 +448,7 @@ export function OnboardingPage() {
             {stepStatus === 'completed' && (
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Completion Date</label>
-                <Input type="date" value={stepDate} onChange={e => setStepDate(e.target.value)} className="h-9" />
+                <DatePicker value={stepDate} onChange={setStepDate} className="h-9" />
               </div>
             )}
             <div className="space-y-1">

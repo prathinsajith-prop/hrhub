@@ -1,7 +1,7 @@
 import { eq, and, desc, isNull, sql, getTableColumns, or, lt } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
-import { visaApplications } from '../../db/schema/index.js'
+import { visaApplications, employees } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewVisa = InferInsertModel<typeof visaApplications>
@@ -24,8 +24,13 @@ export async function listVisas(tenantId: string, params: { status?: string; urg
     }
 
     const pageSize = limit + 1
-    const rows = await db.select(getTableColumns(visaApplications))
+    const rows = await db.select({
+        ...getTableColumns(visaApplications),
+        employeeName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.lastName}, '')`.as('employee_name'),
+        employeeNo: employees.employeeNo,
+    })
         .from(visaApplications)
+        .leftJoin(employees, eq(employees.id, visaApplications.employeeId))
         .where(and(...conditions))
         .orderBy(desc(visaApplications.createdAt), desc(visaApplications.id))
         .limit(cursor ? pageSize : limit)
@@ -58,7 +63,13 @@ export async function listVisas(tenantId: string, params: { status?: string; urg
 }
 
 export async function getVisa(tenantId: string, id: string) {
-    const [row] = await db.select().from(visaApplications)
+    const [row] = await db.select({
+        ...getTableColumns(visaApplications),
+        employeeName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.lastName}, '')`.as('employee_name'),
+        employeeNo: employees.employeeNo,
+    })
+        .from(visaApplications)
+        .leftJoin(employees, eq(employees.id, visaApplications.employeeId))
         .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)))
         .limit(1)
     return row ?? null

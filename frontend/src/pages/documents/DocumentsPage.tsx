@@ -13,6 +13,7 @@ import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast, ConfirmDialog } from '@/components/ui/overlays'
 import { ImageUpload } from '@/components/ui/form-controls'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectLabel, SelectGroup } from '@/components/ui/form-controls'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label, Input } from '@/components/ui/primitives'
 import { api } from '@/lib/api'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
@@ -135,7 +136,7 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
           <div className="space-y-1.5">
             <Label>Expiry Date (if applicable)</Label>
-            <Input type="date" value={expiryDate} min={new Date().toISOString().split('T')[0]} onChange={(e) => setExpiryDate(e.target.value)} />
+            <DatePicker value={expiryDate} min={new Date().toISOString().split('T')[0]} onChange={setExpiryDate} />
           </div>
 
           <div className="space-y-1.5">

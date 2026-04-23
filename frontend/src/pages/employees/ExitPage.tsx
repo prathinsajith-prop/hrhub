@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -250,11 +251,11 @@ export function ExitPage() {
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Exit Date</Label>
-                                    <Input type="date" value={form.exitDate} min={new Date().toISOString().split('T')[0]} onChange={e => set('exitDate', e.target.value)} />
+                                    <DatePicker value={form.exitDate} min={new Date().toISOString().split('T')[0]} onChange={v => set('exitDate', v)} />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Last Working Day</Label>
-                                    <Input type="date" value={form.lastWorkingDay} min={form.exitDate || new Date().toISOString().split('T')[0]} onChange={e => set('lastWorkingDay', e.target.value)} />
+                                    <DatePicker value={form.lastWorkingDay} min={form.exitDate || new Date().toISOString().split('T')[0]} onChange={v => set('lastWorkingDay', v)} />
                                 </div>
                             </div>
                             <div className="space-y-1.5">

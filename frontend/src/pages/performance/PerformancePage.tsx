@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -204,7 +205,7 @@ export function PerformancePage() {
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label>Review Date</Label>
-                                <Input type="date" value={form.reviewDate} max={new Date().toISOString().split('T')[0]} onChange={e => set('reviewDate', e.target.value)} />
+                                <DatePicker value={form.reviewDate} max={new Date().toISOString().split('T')[0]} onChange={v => set('reviewDate', v)} />
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Overall Rating: {form.overallRating}/5</Label>

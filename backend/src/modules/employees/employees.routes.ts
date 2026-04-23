@@ -1,6 +1,7 @@
 import {
     listEmployees, getEmployee, createEmployee,
     updateEmployee, archiveEmployee, getExpiringVisas, getOrgChart,
+    generateNextEmployeeNo,
 } from './employees.service.js'
 import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSchema } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
@@ -40,6 +41,12 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data })
     })
 
+    // GET /api/v1/employees/next-employee-no — preview the next auto-generated number
+    fastify.get('/next-employee-no', { ...auth, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
+        const employeeNo = await generateNextEmployeeNo(request.user.tenantId)
+        return reply.send({ data: { employeeNo } })
+    })
+
     // GET /api/v1/employees/:id
     fastify.get('/:id', { ...auth, schema: { tags: ['Employees'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
@@ -55,8 +62,6 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Employees'] },
     }, async (request, reply) => {
         const body = validate(createEmployeeSchema, request.body)
-        // Auto-generate employeeNo if not provided
-        const employeeNo = body.employeeNo ?? `EMP-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(1000 + Math.random() * 9000)}`
         // Resolve entityId — use provided value or fall back to the tenant's first entity
         let entityId = body.entityId
         if (!entityId) {
@@ -68,7 +73,25 @@ export default async function (fastify: any): Promise<void> {
             if (!defaultEntity) return reply.code(400).send({ error: 'No entity found for this tenant. Please set up an entity first.' })
             entityId = defaultEntity.id
         }
-        const employee = await createEmployee(request.user.tenantId, { ...body, employeeNo, entityId } as never)
+
+        // Auto-generate employeeNo when not supplied. Retry on the rare race
+        // where two concurrent creates land on the same sequence number — the
+        // (tenant_id, employee_no) unique index will reject the loser.
+        let employee
+        let lastErr: unknown = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const employeeNo = body.employeeNo ?? (await generateNextEmployeeNo(request.user.tenantId))
+            try {
+                employee = await createEmployee(request.user.tenantId, { ...body, employeeNo, entityId } as never)
+                break
+            } catch (e: any) {
+                // PostgreSQL unique_violation = 23505
+                const code = e?.cause?.code ?? e?.code
+                if (code === '23505' && !body.employeeNo) { lastErr = e; continue }
+                throw e
+            }
+        }
+        if (!employee) throw lastErr ?? new Error('Failed to generate employee number')
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,
@@ -150,9 +173,12 @@ export default async function (fastify: any): Promise<void> {
         // Wrap all inserts in a transaction — if any fail, everything rolls back (BUG-010)
         try {
             await db.transaction(async (tx) => {
+                void tx
                 for (let i = 0; i < rows.length; i++) {
                     try {
-                        await createEmployee(request.user.tenantId, rows[i] as never)
+                        const row = rows[i]
+                        const employeeNo = row.employeeNo || await generateNextEmployeeNo(request.user.tenantId)
+                        await createEmployee(request.user.tenantId, { ...row, employeeNo } as never)
                         created++
                     } catch (e: any) {
                         results.push({ row: i + 1, error: e.message ?? 'Unknown error' })

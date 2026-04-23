@@ -40,6 +40,22 @@ import { notificationsRoutes } from './modules/notifications/notifications.route
 async function bootstrap() {
     const env = loadEnv()
 
+    // Sentry — optional. Initialized as early as possible so instrumentation
+    // sees route handlers and background workers.
+    if (env.SENTRY_DSN) {
+        try {
+            const Sentry = await import('@sentry/node')
+            Sentry.init({
+                dsn: env.SENTRY_DSN,
+                environment: env.NODE_ENV,
+                tracesSampleRate: env.NODE_ENV === 'production' ? 0.1 : 0,
+            })
+                ; (globalThis as any).Sentry = Sentry
+        } catch (e) {
+            console.warn('Sentry init skipped:', (e as Error).message)
+        }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const app: any = (Fastify as any)({
         logger: {
@@ -145,6 +161,11 @@ async function bootstrap() {
 
         if (statusCode >= 500) {
             app.log.error(error)
+            // Forward 5xx to Sentry when configured
+            if (env.SENTRY_DSN) {
+                const Sentry = (globalThis as any).Sentry
+                try { Sentry?.captureException?.(error) } catch { /* ignore */ }
+            }
             message = 'Internal server error'
             name = 'InternalServerError'
         }
@@ -233,6 +254,20 @@ async function bootstrap() {
     // Start background workers (expiry alerts + async payroll via BullMQ)
     await startExpiryWorkers()
     await startPayrollWorker()
+
+    // Graceful shutdown — flush in-flight requests, close DB/Redis connections
+    const shutdown = async (signal: string) => {
+        app.log.info(`Received ${signal}, shutting down gracefully...`)
+        try {
+            await app.close()
+            app.log.info('HTTP server closed')
+        } catch (e) {
+            app.log.error('Error during shutdown: %s', e)
+        }
+        process.exit(0)
+    }
+    process.on('SIGTERM', () => { void shutdown('SIGTERM') })
+    process.on('SIGINT', () => { void shutdown('SIGINT') })
 }
 
 bootstrap().catch((err) => {

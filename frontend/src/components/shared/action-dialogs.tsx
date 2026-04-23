@@ -5,6 +5,7 @@ import { Label, Input } from '@/components/ui/primitives'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
+import { DatePicker } from '@/components/ui/date-picker'
 import { useCreateJob, useUpdateJob } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
@@ -184,7 +185,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
                     </div>
                     <div className="space-y-1.5">
                         <Label>Start Date</Label>
-                        <Input type="date" value={startDate} min={today} onChange={(e) => setStartDate(e.target.value)} />
+                        <DatePicker value={startDate} min={today} onChange={setStartDate} />
                     </div>
                 </DialogBody>
                 <DialogFooter>
@@ -263,11 +264,11 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Start Date *</Label>
-                            <Input type="date" value={startDate} min={today} onChange={(e) => setStartDate(e.target.value)} />
+                            <DatePicker value={startDate} min={today} onChange={setStartDate} />
                         </div>
                         <div className="space-y-1.5">
                             <Label>End Date *</Label>
-                            <Input type="date" value={endDate} min={startDate || today} onChange={(e) => setEndDate(e.target.value)} />
+                            <DatePicker value={endDate} min={startDate || today} onChange={setEndDate} />
                         </div>
                     </div>
                     <div className="space-y-1.5">
@@ -364,6 +365,10 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
 
     const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
+        if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
+    }
+    const setDate = (field: keyof EmpForm) => (value: string) => {
+        setForm(f => ({ ...f, [field]: value }))
         if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
     }
 
@@ -469,7 +474,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                             </div>
                             <div className="grid grid-cols-3 gap-3">
                                 <FormField label="Date of Birth" error={errors.dateOfBirth}>
-                                    <Input type="date" value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} min="1950-01-01" onChange={set('dateOfBirth')} aria-invalid={!!errors.dateOfBirth} className={errors.dateOfBirth ? 'border-destructive' : ''} />
+                                    <DatePicker value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} min="1950-01-01" onChange={setDate('dateOfBirth')} aria-invalid={!!errors.dateOfBirth} className={errors.dateOfBirth ? 'border-destructive' : ''} />
                                 </FormField>
                                 <div className="space-y-1.5">
                                     <Label>Gender</Label>
@@ -534,7 +539,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <Input value={form.employeeNo} onChange={set('employeeNo')} placeholder="EMP-2604-1234" />
                                 </FormField>
                                 <FormField label="Join Date" required error={errors.joinDate}>
-                                    <Input type="date" value={form.joinDate} min="1970-01-01" onChange={set('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
+                                    <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -714,6 +719,10 @@ export function EditEmployeeDialog({
         setForm(f => ({ ...f, [field]: e.target.value }))
         if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
     }
+    const setDate = (field: keyof EmpForm) => (value: string) => {
+        setForm(f => ({ ...f, [field]: value }))
+        if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
+    }
 
     const close = () => { onOpenChange(false); setTimeout(() => { setStep(1); setErrors({}) }, 300) }
 
@@ -800,7 +809,7 @@ export function EditEmployeeDialog({
                                 <div className="space-y-1.5"><Label>Last Name *</Label><Input value={form.lastName} onChange={set('lastName')} /></div>
                             </div>
                             <div className="grid grid-cols-3 gap-3">
-                                <div className="space-y-1.5"><Label>Date of Birth</Label><Input type="date" value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} min="1950-01-01" onChange={set('dateOfBirth')} /></div>
+                                <div className="space-y-1.5"><Label>Date of Birth</Label><DatePicker value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} min="1950-01-01" onChange={setDate('dateOfBirth')} /></div>
                                 <div className="space-y-1.5">
                                     <Label>Gender</Label>
                                     <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v }))}>
@@ -840,7 +849,7 @@ export function EditEmployeeDialog({
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Employee No</Label><Input value={form.employeeNo} onChange={set('employeeNo')} /></div>
-                                <div className="space-y-1.5"><Label>Join Date *</Label><Input type="date" value={form.joinDate} min="1970-01-01" onChange={set('joinDate')} /></div>
+                                <div className="space-y-1.5"><Label>Join Date *</Label><DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} /></div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Department</Label><Input value={form.department} onChange={set('department')} /></div>
@@ -1128,7 +1137,7 @@ export function EditDocumentDialog({
                     </div>
                     <div className="space-y-1.5">
                         <Label>Expiry Date</Label>
-                        <Input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+                        <DatePicker value={expiryDate} onChange={setExpiryDate} />
                     </div>
                 </DialogBody>
                 <DialogFooter>

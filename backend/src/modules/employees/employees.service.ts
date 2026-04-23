@@ -121,6 +121,28 @@ export async function createEmployee(tenantId: string, data: Omit<NewEmployee, '
     return withFullName(row)
 }
 
+/**
+ * Generate the next sequential employee number for a tenant.
+ * Format: `EMP-00001`, `EMP-00002`, ... — scoped to the tenant and ignoring
+ * any manually-assigned non-numeric IDs. Uses the largest existing numeric
+ * suffix so gaps never collapse. The `(tenant_id, employee_no)` unique index
+ * backs this with a retry on conflict at the route layer.
+ */
+export async function generateNextEmployeeNo(tenantId: string): Promise<string> {
+    const [row] = await db
+        .select({
+            // Extract the trailing integer from EMP-NNNNN (or similar) per tenant.
+            max: sql<number>`COALESCE(MAX(
+                CAST(NULLIF(REGEXP_REPLACE(${employees.employeeNo}, '\\D', '', 'g'), '') AS INTEGER)
+            ), 0)`,
+        })
+        .from(employees)
+        .where(eq(employees.tenantId, tenantId))
+
+    const next = (row?.max ?? 0) + 1
+    return `EMP-${String(next).padStart(5, '0')}`
+}
+
 export async function updateEmployee(tenantId: string, id: string, data: Partial<NewEmployee>) {
     const [row] = await db
         .update(employees)

@@ -80,6 +80,21 @@ export async function updateApplicationStage(tenantId: string, id: string, stage
     return row ?? null
 }
 
+export async function updateApplication(tenantId: string, id: string, data: Partial<NewApplication>) {
+    const [row] = await db.update(jobApplications)
+        .set(withTimestamp(data as Record<string, unknown>))
+        .where(and(eq(jobApplications.id, id), eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
+        .returning()
+    return row ?? null
+}
+
+export async function getApplication(tenantId: string, id: string) {
+    const [row] = await db.select().from(jobApplications)
+        .where(and(eq(jobApplications.id, id), eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
+        .limit(1)
+    return row ?? null
+}
+
 export async function softDeleteApplication(tenantId: string, id: string) {
     const [row] = await db.update(jobApplications)
         .set(withTimestamp({ deletedAt: new Date() }))

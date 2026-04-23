@@ -40,6 +40,30 @@ export function useUpdateApplicationStage() {
     })
 }
 
+export function useUpdateApplication() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
+            api.patch(`/applications/${id}`, data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['applications'] }),
+    })
+}
+
+export function useConvertCandidateToEmployee() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data?: Record<string, unknown> }) =>
+            api.post<{ data: { employee: { id: string; employeeNo: string }; application: unknown } }>(
+                `/applications/${id}/convert-to-employee`,
+                data ?? {},
+            ),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['applications'] })
+            qc.invalidateQueries({ queryKey: ['employees'] })
+        },
+    })
+}
+
 export function useUpdateJob() {
     const qc = useQueryClient()
     return useMutation({
