@@ -18,6 +18,7 @@ import { api } from '@/lib/api'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
 import { useDocuments, useVerifyDocument, useDeleteDocument } from '@/hooks/useDocuments'
 import { useEmployees } from '@/hooks/useEmployees'
+import { EditDocumentDialog } from '@/components/shared/action-dialogs'
 import type { Document, DocStatus } from '@/types'
 
 const statusBadge: Record<DocStatus, { variant: any; label: string }> = {
@@ -162,6 +163,7 @@ const columns = (
   onView: (d: Document) => void,
   onDelete: (d: Document) => void,
   onVerify: (d: Document) => void,
+  onEdit: (d: Document) => void,
 ): ColumnDef<Document>[] => [
     {
       accessorKey: 'docType',
@@ -242,7 +244,7 @@ const columns = (
             variant="ghost"
             aria-label="Edit document"
             className="text-muted-foreground hover:text-foreground"
-            onClick={() => toast.info('Edit document', `Edit metadata for "${d.fileName}" will open here.`)}
+            onClick={() => onEdit(d)}
           >
             <Edit2 className="h-3.5 w-3.5" />
           </Button>
@@ -274,6 +276,7 @@ const columns = (
 export function DocumentsPage() {
   const { t } = useTranslation()
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<Document | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
   const { data: docsData, isLoading } = useDocuments({ limit: 100 })
   const documents: Document[] = (docsData?.data as Document[]) ?? []
@@ -307,7 +310,7 @@ export function DocumentsPage() {
     })
   }
 
-  const cols = columns(handleView, (d) => setDeleteTarget(d), handleVerify)
+  const cols = columns(handleView, (d) => setDeleteTarget(d), handleVerify, (d) => setEditTarget(d))
 
   return (
     <PageWrapper>
@@ -393,6 +396,13 @@ export function DocumentsPage() {
         />
       </Card>
       <UploadDocumentDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+      {editTarget && (
+        <EditDocumentDialog
+          open={!!editTarget}
+          onOpenChange={(o) => !o && setEditTarget(null)}
+          document={editTarget}
+        />
+      )}
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(o) => !o && setDeleteTarget(null)}

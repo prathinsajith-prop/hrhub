@@ -193,7 +193,7 @@ function ImageUpload({
           )}
         </div>
         {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
-      {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && <p className="text-xs text-destructive">{error}</p>}
         <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
       </div>
     )
@@ -246,33 +246,94 @@ interface TabsProps {
   activeTab: string
   onChange: (id: string) => void
   className?: string
+  /** Visual style: 'underline' (default, used in page tabs) or 'pill' (segmented control). */
+  variant?: 'underline' | 'pill'
 }
 
-function Tabs({ tabs, activeTab, onChange, className }: TabsProps) {
+function Tabs({ tabs, activeTab, onChange, className, variant = 'underline' }: TabsProps) {
+  if (variant === 'pill') {
+    return (
+      <div
+        className={cn(
+          'inline-flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/60',
+          className,
+        )}
+        role="tablist"
+      >
+        {tabs.map((tab) => {
+          const active = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={active}
+              onClick={() => onChange(tab.id)}
+              className={cn(
+                'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap',
+                active
+                  ? 'bg-card text-foreground shadow-sm ring-1 ring-border/80'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {tab.icon}
+              {tab.label}
+              {tab.badge !== undefined && tab.badge > 0 && (
+                <span
+                  className={cn(
+                    'ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold',
+                    active
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted-foreground/15 text-muted-foreground',
+                  )}
+                >
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
-    <div className={cn('flex border-b border-border overflow-x-auto', className)} role="tablist">
-      {tabs.map(tab => (
-        <button
-          key={tab.id}
-          role="tab"
-          aria-selected={activeTab === tab.id}
-          onClick={() => onChange(tab.id)}
-          className={cn(
-            'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-            activeTab === tab.id
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-          )}
-        >
-          {tab.icon}
-          {tab.label}
-          {tab.badge !== undefined && tab.badge > 0 && (
-            <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground px-1">
-              {tab.badge}
-            </span>
-          )}
-        </button>
-      ))}
+    <div
+      className={cn('flex items-center gap-1 border-b border-border overflow-x-auto', className)}
+      role="tablist"
+    >
+      {tabs.map((tab) => {
+        const active = activeTab === tab.id
+        return (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(tab.id)}
+            className={cn(
+              'relative flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap',
+              'after:pointer-events-none after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:transition-all',
+              active
+                ? 'text-primary after:bg-primary after:inset-x-0'
+                : 'text-muted-foreground hover:text-foreground after:bg-transparent',
+            )}
+          >
+            {tab.icon}
+            {tab.label}
+            {tab.badge !== undefined && tab.badge > 0 && (
+              <span
+                className={cn(
+                  'ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold',
+                  active
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted-foreground/15 text-muted-foreground',
+                )}
+              >
+                {tab.badge}
+              </span>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }

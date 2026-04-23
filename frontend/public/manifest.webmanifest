@@ -1,0 +1,22 @@
+{
+  "name": "HRHub — UAE HR Platform",
+  "short_name": "HRHub",
+  "description": "UAE HR, payroll, visa & compliance platform.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "lang": "en-AE",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

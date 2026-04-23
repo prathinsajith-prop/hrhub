@@ -49,14 +49,14 @@
   --chart-4: 38 92% 50%;
   --chart-5: 220 12% 55%;
 
-  /* Sidebar (dark navy) */
-  --sidebar: 228 38% 8%;
-  --sidebar-foreground: 220 20% 75%;
-  --sidebar-primary: 221 83% 60%;
+  /* Sidebar (light, matching design reference) */
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 222 20% 28%;
+  --sidebar-primary: 221 83% 53%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 228 30% 14%;
-  --sidebar-accent-foreground: 220 20% 92%;
-  --sidebar-border: 228 25% 14%;
+  --sidebar-accent: 221 83% 96%;
+  --sidebar-accent-foreground: 221 83% 45%;
+  --sidebar-border: 220 16% 92%;
   --sidebar-ring: 221 83% 53%;
 }
 

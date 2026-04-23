@@ -31,6 +31,14 @@ export function useCreateDocument() {
     })
 }
 
+export function useUpdateDocument(id: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: Record<string, unknown>) => api.patch(`/documents/${id}`, data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+    })
+}
+
 export function useVerifyDocument() {
     const qc = useQueryClient()
     return useMutation({

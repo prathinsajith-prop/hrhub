@@ -15,7 +15,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
 import { useJobs, useApplications, useUpdateApplicationStage, useUpdateJob, useCreateJob } from '@/hooks/useRecruitment'
 import { toast, ConfirmDialog } from '@/components/ui/overlays'
-import { NewJobDialog } from '@/components/shared/action-dialogs'
+import { NewJobDialog, EditJobDialog } from '@/components/shared/action-dialogs'
 import type { Candidate, ApplicationStage } from '@/types'
 import type { ColumnDef } from '@tanstack/react-table'
 
@@ -82,7 +82,7 @@ function CandidateCard({ candidate, onMove }: { candidate: Candidate; onMove: (i
   )
 }
 
-const jobColumns: ColumnDef<any>[] = [
+const buildJobColumns = (onEdit: (job: any) => void): ColumnDef<any>[] => [
   {
     accessorKey: 'title',
     header: 'Position',
@@ -129,7 +129,7 @@ const jobColumns: ColumnDef<any>[] = [
         variant="ghost"
         aria-label="Edit job"
         className="text-muted-foreground hover:text-foreground"
-        onClick={() => toast.info('Edit job', `Edit flow for “${j.title}” will open here.`)}
+        onClick={() => onEdit(j)}
       >
         <Edit2 className="h-3.5 w-3.5" />
       </Button>
@@ -142,6 +142,7 @@ export function RecruitmentPage() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('pipeline')
   const [jobDialogOpen, setJobDialogOpen] = useState(false)
+  const [editJob, setEditJob] = useState<any | null>(null)
   const [closeConfirm, setCloseConfirm] = useState<string[] | null>(null)
   const { data: jobsData, isLoading: jobsLoading } = useJobs({ limit: 50 })
   const { data: appsData, isLoading: appsLoading } = useApplications({ limit: 100 })
@@ -151,6 +152,7 @@ export function RecruitmentPage() {
   const createJob = useCreateJob()
   const jobs: any[] = (jobsData?.data as any[]) ?? []
   const candidates: Candidate[] = (appsData?.data as Candidate[]) ?? []
+  const jobColumns = buildJobColumns((j) => setEditJob(j))
 
   const moveCandidate = (id: string, newStage: ApplicationStage) => {
     const c = candidates.find((c: any) => c.id === id)
@@ -294,6 +296,13 @@ export function RecruitmentPage() {
       )}
 
       <NewJobDialog open={jobDialogOpen} onOpenChange={setJobDialogOpen} />
+      {editJob && (
+        <EditJobDialog
+          open={!!editJob}
+          onOpenChange={(o) => !o && setEditJob(null)}
+          job={editJob}
+        />
+      )}
       <ConfirmDialog
         open={!!closeConfirm}
         onOpenChange={(o) => !o && setCloseConfirm(null)}

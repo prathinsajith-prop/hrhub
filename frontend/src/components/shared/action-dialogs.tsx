@@ -5,10 +5,12 @@ import { Label, Input } from '@/components/ui/primitives'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
-import { useCreateJob } from '@/hooks/useRecruitment'
+import { useCreateJob, useUpdateJob } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useEmployees } from '@/hooks/useEmployees'
+import { useUpdateDocument } from '@/hooks/useDocuments'
+import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import type { Employee } from '@/types'
 
 // ─── New Job Dialog ─────────────────────────────────────────────────────────
@@ -476,7 +478,11 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Nationality</Label>
-                                    <Input value={form.nationality} onChange={set('nationality')} placeholder="e.g. Emirati" />
+                                    <CountrySelect
+                                        value={resolveCountryIso(form.nationality)}
+                                        onChange={(iso) => setForm((f) => ({ ...f, nationality: countryNameFromIso(iso) }))}
+                                        placeholder="Select nationality"
+                                    />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Passport No</Label>
@@ -486,7 +492,11 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Mobile</Label>
-                                    <Input value={form.mobileNo} onChange={set('mobileNo')} placeholder="+971 50 000 0000" />
+                                    <PhoneInput
+                                        value={form.mobileNo}
+                                        onChange={(v) => setForm((f) => ({ ...f, mobileNo: v }))}
+                                        defaultCountry={resolveCountryIso(form.nationality) ?? 'AE'}
+                                    />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Personal Email</Label>
@@ -779,11 +789,11 @@ export function EditEmployeeDialog({
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Nationality</Label><Input value={form.nationality} onChange={set('nationality')} /></div>
+                                <div className="space-y-1.5"><Label>Nationality</Label><CountrySelect value={resolveCountryIso(form.nationality)} onChange={(iso) => setForm((f) => ({ ...f, nationality: countryNameFromIso(iso) }))} placeholder="Select" /></div>
                                 <div className="space-y-1.5"><Label>Passport No</Label><Input value={form.passportNo} onChange={set('passportNo')} /></div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Mobile</Label><Input value={form.mobileNo} onChange={set('mobileNo')} /></div>
+                                <div className="space-y-1.5"><Label>Mobile</Label><PhoneInput value={form.mobileNo} onChange={(v) => setForm((f) => ({ ...f, mobileNo: v }))} defaultCountry={resolveCountryIso(form.nationality) ?? 'AE'} /></div>
                                 <div className="space-y-1.5"><Label>Personal Email</Label><Input type="email" value={form.personalEmail} onChange={set('personalEmail')} /></div>
                             </div>
                             <div className="space-y-1.5"><Label>Emergency Contact</Label><Input value={form.emergencyContact} onChange={set('emergencyContact')} /></div>
@@ -891,6 +901,201 @@ export function EditEmployeeDialog({
                     ) : (
                         <Button onClick={submit} loading={updateEmployee.isPending}>Save Changes</Button>
                     )}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// ─── Edit Job Dialog ────────────────────────────────────────────────────────
+export function EditJobDialog({
+    open,
+    onOpenChange,
+    job,
+}: {
+    open: boolean
+    onOpenChange: (o: boolean) => void
+    job: { id: string; title?: string; department?: string; location?: string | null; type?: string; openings?: number; minSalary?: number | string | null; maxSalary?: number | string | null; description?: string | null; status?: string }
+}) {
+    const [title, setTitle] = useState(job.title ?? '')
+    const [department, setDepartment] = useState(job.department ?? '')
+    const [location, setLocation] = useState(job.location ?? '')
+    const [type, setType] = useState(job.type ?? 'full_time')
+    const [openings, setOpenings] = useState(job.openings ?? 1)
+    const [minSalary, setMinSalary] = useState(Number(job.minSalary ?? 0))
+    const [maxSalary, setMaxSalary] = useState(Number(job.maxSalary ?? 0))
+    const [description, setDescription] = useState(job.description ?? '')
+    const [status, setStatus] = useState(job.status ?? 'open')
+    const updateJob = useUpdateJob()
+
+    const submit = () => {
+        if (!title || !department) {
+            toast.warning('Missing fields', 'Title and department are required.')
+            return
+        }
+        updateJob.mutate(
+            { id: job.id, data: { title, department, location: location || null, type, openings, minSalary, maxSalary, description: description || null, status } },
+            {
+                onSuccess: () => {
+                    toast.success('Job updated', `${title} has been saved.`)
+                    onOpenChange(false)
+                },
+                onError: (err: any) => toast.error('Failed to update job', err?.message ?? 'Please try again.'),
+            },
+        )
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent size="md">
+                <DialogHeader>
+                    <DialogTitle>Edit Job</DialogTitle>
+                </DialogHeader>
+                <DialogBody className="space-y-3">
+                    <div className="space-y-1.5">
+                        <Label>Job Title *</Label>
+                        <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>Department *</Label>
+                            <Input value={department} onChange={(e) => setDepartment(e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Location</Label>
+                            <Input value={location ?? ''} onChange={(e) => setLocation(e.target.value)} />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>Type</Label>
+                            <Select value={type} onValueChange={setType}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="full_time">Full-time</SelectItem>
+                                    <SelectItem value="part_time">Part-time</SelectItem>
+                                    <SelectItem value="contract">Contract</SelectItem>
+                                    <SelectItem value="internship">Internship</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Openings</Label>
+                            <Input type="number" min={1} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Status</Label>
+                            <Select value={status} onValueChange={setStatus}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="open">Open</SelectItem>
+                                    <SelectItem value="paused">Paused</SelectItem>
+                                    <SelectItem value="closed">Closed</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>Min Salary (AED)</Label>
+                            <Input type="number" min={0} value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Max Salary (AED)</Label>
+                            <Input type="number" min={0} value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} />
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Description</Label>
+                        <Textarea value={description ?? ''} onChange={(e) => setDescription(e.target.value)} rows={3} />
+                    </div>
+                </DialogBody>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button onClick={submit} loading={updateJob.isPending}>Save Changes</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// ─── Edit Document Dialog ───────────────────────────────────────────────────
+export function EditDocumentDialog({
+    open,
+    onOpenChange,
+    document: doc,
+}: {
+    open: boolean
+    onOpenChange: (o: boolean) => void
+    document: { id: string; fileName?: string | null; category?: string; docType?: string; expiryDate?: string | null }
+}) {
+    const [fileName, setFileName] = useState(doc.fileName ?? '')
+    const [category, setCategory] = useState(doc.category ?? '')
+    const [docType, setDocType] = useState(doc.docType ?? '')
+    const [expiryDate, setExpiryDate] = useState(doc.expiryDate ? String(doc.expiryDate).slice(0, 10) : '')
+    const updateDoc = useUpdateDocument(doc.id)
+
+    const submit = () => {
+        if (!category || !docType) {
+            toast.warning('Missing fields', 'Category and document type are required.')
+            return
+        }
+        updateDoc.mutate(
+            {
+                fileName: fileName || undefined,
+                category,
+                docType,
+                expiryDate: expiryDate || undefined,
+            },
+            {
+                onSuccess: () => {
+                    toast.success('Document updated', 'Changes have been saved.')
+                    onOpenChange(false)
+                },
+                onError: (err: any) => toast.error('Failed to update document', err?.message ?? 'Please try again.'),
+            },
+        )
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent size="sm">
+                <DialogHeader>
+                    <DialogTitle>Edit Document</DialogTitle>
+                </DialogHeader>
+                <DialogBody className="space-y-3">
+                    <div className="space-y-1.5">
+                        <Label>File Name</Label>
+                        <Input value={fileName} onChange={(e) => setFileName(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>Category *</Label>
+                            <Select value={category} onValueChange={setCategory}>
+                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="personal">Personal</SelectItem>
+                                    <SelectItem value="visa">Visa</SelectItem>
+                                    <SelectItem value="contract">Contract</SelectItem>
+                                    <SelectItem value="certificate">Certificate</SelectItem>
+                                    <SelectItem value="payroll">Payroll</SelectItem>
+                                    <SelectItem value="other">Other</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Document Type *</Label>
+                            <Input value={docType} onChange={(e) => setDocType(e.target.value)} placeholder="e.g. passport" />
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Expiry Date</Label>
+                        <Input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+                    </div>
+                </DialogBody>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button onClick={submit} loading={updateDoc.isPending}>Save Changes</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

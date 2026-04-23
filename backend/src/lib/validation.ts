@@ -110,8 +110,26 @@ export const createEmployeeSchema = employeeBaseSchema
         { message: 'Probation end date must be on or after join date', path: ['probationEndDate'] }
     )
 
-// updateEmployeeSchema — all fields optional, no cross-field refinement needed
-export const updateEmployeeSchema = employeeBaseSchema.partial().omit({ entityId: true })
+// updateEmployeeSchema — all fields optional, still enforces salary/date refinements
+export const updateEmployeeSchema = employeeBaseSchema
+    .partial()
+    .omit({ entityId: true })
+    .refine(
+        d => !d.totalSalary || !d.basicSalary || d.totalSalary >= d.basicSalary,
+        { message: 'totalSalary must be >= basicSalary', path: ['totalSalary'] }
+    )
+    .refine(
+        d => !d.dateOfBirth || d.dateOfBirth < new Date().toISOString().split('T')[0],
+        { message: 'Date of birth must be in the past', path: ['dateOfBirth'] }
+    )
+    .refine(
+        d => !d.contractEndDate || !d.joinDate || d.contractEndDate >= d.joinDate,
+        { message: 'Contract end date must be on or after join date', path: ['contractEndDate'] }
+    )
+    .refine(
+        d => !d.probationEndDate || !d.joinDate || d.probationEndDate >= d.joinDate,
+        { message: 'Probation end date must be on or after join date', path: ['probationEndDate'] }
+    )
 
 export const listEmployeesSchema = paginationSchema.extend({
     search: z.string().max(100).optional(),

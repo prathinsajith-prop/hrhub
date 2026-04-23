@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Calendar, Clock, CheckCircle2, XCircle, Plus, Download, BarChart3, Users, Shield, Edit2 } from 'lucide-react'
+import { Calendar, Clock, CheckCircle2, XCircle, Plus, Download, BarChart3, Users, Shield } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
@@ -173,15 +173,6 @@ export function LeavePage() {
                 </Button>
               </>
             )}
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              className="text-muted-foreground hover:text-foreground"
-              aria-label="Edit leave request"
-              onClick={() => toast.info('Edit leave', `Edit flow for ${l.employeeName}'s ${l.leaveType} request will open here.`)}
-            >
-              <Edit2 className="h-4 w-4" />
-            </Button>
           </div>
         )
       },
