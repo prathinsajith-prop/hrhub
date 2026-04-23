@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -151,6 +151,7 @@ export function EmployeeDetailPage() {
           <Card>
             <CardContent className="p-5 flex flex-col items-center text-center">
               <Avatar className="h-20 w-20 mb-3">
+                {e.avatarUrl && <AvatarImage src={e.avatarUrl} alt={e.fullName} />}
                 <AvatarFallback className="text-xl font-bold bg-primary text-primary-foreground">
                   {getInitials(e.fullName)}
                 </AvatarFallback>

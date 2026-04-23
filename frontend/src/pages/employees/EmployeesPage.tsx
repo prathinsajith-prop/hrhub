@@ -16,7 +16,7 @@ import { useNavigate } from 'react-router-dom'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
   DropdownMenu,
@@ -129,6 +129,7 @@ export function EmployeesPage() {
           className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
         >
           <Avatar className="h-8 w-8 shrink-0">
+            {e.avatarUrl && <AvatarImage src={e.avatarUrl} alt={e.fullName} />}
             <AvatarFallback className="text-[10px] font-semibold bg-primary text-primary-foreground">
               {getInitials(e.fullName)}
             </AvatarFallback>

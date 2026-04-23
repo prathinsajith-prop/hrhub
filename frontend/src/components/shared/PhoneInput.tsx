@@ -113,6 +113,10 @@ export interface CountrySelectProps {
     disabled?: boolean
     id?: string
     name?: string
+    /** Compact trigger: show only flag + calling code (for phone prefix pickers). */
+    compact?: boolean
+    /** Error state for red border. */
+    invalid?: boolean
 }
 
 export function CountrySelect({
@@ -123,6 +127,8 @@ export function CountrySelect({
     disabled,
     id,
     name,
+    compact,
+    invalid,
 }: CountrySelectProps) {
     const [open, setOpen] = useState(false)
     const [query, setQuery] = useState('')
@@ -168,14 +174,23 @@ export function CountrySelect({
                     'flex w-full h-10 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm',
                     'hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     'disabled:cursor-not-allowed disabled:opacity-50',
+                    invalid && 'border-destructive focus-visible:ring-destructive/40',
+                    compact && 'px-2.5 gap-1.5',
                 )}
             >
                 {selected ? (
-                    <>
-                        <FlagImg iso2={selected.iso2} size={20} />
-                        <span className="truncate text-left flex-1">{selected.name}</span>
-                        <span className="text-xs text-muted-foreground">{selected.callingCode}</span>
-                    </>
+                    compact ? (
+                        <>
+                            <FlagImg iso2={selected.iso2} size={20} />
+                            <span className="text-sm font-medium tabular-nums">{selected.callingCode}</span>
+                        </>
+                    ) : (
+                        <>
+                            <FlagImg iso2={selected.iso2} size={20} />
+                            <span className="truncate text-left flex-1">{selected.name}</span>
+                            <span className="text-xs text-muted-foreground">{selected.callingCode}</span>
+                        </>
+                    )
                 ) : (
                     <span className="text-muted-foreground flex-1 text-left">{placeholder}</span>
                 )}
@@ -183,7 +198,10 @@ export function CountrySelect({
             </button>
 
             {open && (
-                <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-lg">
+                <div className={cn(
+                    'absolute z-50 mt-1 rounded-md border border-border bg-popover shadow-lg',
+                    compact ? 'left-0 w-[280px]' : 'w-full',
+                )}>
                     <div className="p-2 border-b border-border">
                         <div className="relative">
                             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -249,16 +267,18 @@ export interface PhoneInputProps {
     name?: string
     disabled?: boolean
     className?: string
+    /** Error state for red border. */
+    invalid?: boolean
     /** Called with validation details whenever the input changes. */
     onValidate?: (res: { isValid: boolean; country: string; internationalFormat?: string }) => void
 }
 
 export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(function PhoneInput(
-    { value = '', onChange, defaultCountry = 'AE', placeholder = '50 123 4567', id, name, disabled, className, onValidate },
+    { value = '', onChange, defaultCountry = 'AE', placeholder = '50 123 4567', id, name, disabled, className, invalid, onValidate },
     ref,
 ) {
     // Derive country + national digits from the current value.
-    const { iso2, nationalDigits, callingCode } = useMemo(() => {
+    const { iso2, nationalDigits } = useMemo(() => {
         const trimmed = value.trim()
         if (trimmed) {
             try {
@@ -269,11 +289,9 @@ export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(function
                 } | null
                 const parsedIso = parsed?.country?.iso?.alpha2
                 if (parsedIso) {
-                    const opt = ALL_COUNTRIES.find((c) => c.iso2 === parsedIso)
                     return {
                         iso2: parsedIso,
                         nationalDigits: (parsed?.nationalNumber ?? '').replace(/\D/g, ''),
-                        callingCode: opt?.callingCode ?? parsed?.callingCode ?? '',
                     }
                 }
             } catch {
@@ -289,12 +307,11 @@ export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(function
                 return {
                     iso2: hit.iso2,
                     nationalDigits: digits.startsWith(ccDigits) ? digits.slice(ccDigits.length) : digits,
-                    callingCode: hit.callingCode,
                 }
             }
         }
         const fallback = ALL_COUNTRIES.find((c) => c.iso2 === defaultCountry) ?? ALL_COUNTRIES[0]
-        return { iso2: fallback.iso2, nationalDigits: value.replace(/\D/g, ''), callingCode: fallback.callingCode }
+        return { iso2: fallback.iso2, nationalDigits: value.replace(/\D/g, '') }
     }, [value, defaultCountry])
 
     const emit = (newIso2: string, digits: string) => {
@@ -330,17 +347,16 @@ export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(function
 
     return (
         <div className={cn('flex items-stretch gap-2', className)}>
-            <div className="w-[170px] shrink-0">
+            <div className="shrink-0">
                 <CountrySelect
                     value={iso2}
                     onChange={(code) => emit(code, nationalDigits)}
                     disabled={disabled}
+                    compact
+                    invalid={invalid}
                 />
             </div>
             <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
-                    {callingCode}
-                </span>
                 <Input
                     ref={ref}
                     id={id}
@@ -352,7 +368,7 @@ export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(function
                     placeholder={placeholder}
                     value={nationalDigits}
                     onChange={(e) => emit(iso2, e.target.value)}
-                    className="pl-14"
+                    className={cn(invalid && 'border-destructive focus-visible:ring-destructive/40')}
                 />
             </div>
         </div>

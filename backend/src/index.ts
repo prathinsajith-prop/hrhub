@@ -216,39 +216,6 @@ async function bootstrap() {
         })
     })
 
-    // Global error handler
-    app.setErrorHandler((error: any, _request: any, reply: any) => {
-        let statusCode: number = error.statusCode ?? 500
-        let message: string = error.message ?? 'Internal server error'
-        let name: string = error.name ?? 'Error'
-
-        // PostgreSQL / Drizzle constraint violations → return user-friendly 400
-        // SQLSTATE 23xxx = integrity constraint, 22xxx = data exception, 23514 = check_violation
-        const pgCode: string | undefined = error?.cause?.code ?? error?.code
-        if (pgCode && /^(22|23)/.test(pgCode)) {
-            statusCode = 400
-            name = 'ValidationError'
-            if (pgCode === '23505') message = 'Duplicate value — that record already exists.'
-            else if (pgCode === '23503') message = 'Referenced record not found.'
-            else if (pgCode === '23514') message = 'One or more fields violate a business rule (e.g. totalSalary must be ≥ basicSalary).'
-            else if (pgCode === '23502') message = 'A required field is missing.'
-            else message = 'The submitted data is invalid.'
-        }
-
-        if (statusCode >= 500) {
-            app.log.error(error)
-            message = 'Internal server error'
-            name = 'InternalServerError'
-        }
-
-        return reply.code(statusCode).send({
-            statusCode,
-            error: name,
-            message,
-            ...(error.validationErrors ? { validationErrors: error.validationErrors } : {}),
-        })
-    })
-
     await app.listen({ port: env.PORT, host: env.HOST })
     app.log.info(`HRHub API running on http://${env.HOST}:${env.PORT}`)
     if (env.NODE_ENV !== 'production') {

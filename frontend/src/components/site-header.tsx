@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, Languages, Check, ChevronRight } from 'lucide-react'
+import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -23,7 +22,6 @@ import { cn } from '@/lib/utils'
 import { useNotificationsList, useUnreadCount, useMarkNotificationRead, useMarkAllRead } from '@/hooks/useNotifications'
 import { useAuthStore } from '@/store/authStore'
 import { GlobalSearch } from '@/components/GlobalSearch'
-import { applyLanguageDirection } from '@/lib/i18n'
 import { ROOT_NAV_LABELS, ROUTES } from '@/lib/routes'
 
 /** Humanise a URL segment as a fallback label (kebab/snake → Title Case). */
@@ -85,11 +83,6 @@ export function SiteHeader() {
   function handleLogout() {
     logout()
     navigate(ROUTES.login, { replace: true })
-  }
-
-  function changeLang(lang: 'en' | 'ar') {
-    i18n.changeLanguage(lang)
-    applyLanguageDirection(lang)
   }
 
   const iconBtn = 'h-9 w-9 border-border bg-background hover:bg-muted'
@@ -174,40 +167,6 @@ export function SiteHeader() {
         </Button>
 
         <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
-
-        {/* Language */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              className={iconBtn}
-              aria-label={t('common.switchLanguage', { defaultValue: 'Switch language' })}
-            >
-              <Languages className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-              {t('common.language', { defaultValue: 'Language' })}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="gap-2 cursor-pointer justify-between"
-              onClick={() => changeLang('en')}
-            >
-              <span>English</span>
-              {i18n.language === 'en' && <Check className="h-3.5 w-3.5 text-primary" />}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="gap-2 cursor-pointer justify-between"
-              onClick={() => changeLang('ar')}
-            >
-              <span>العربية</span>
-              {i18n.language === 'ar' && <Check className="h-3.5 w-3.5 text-primary" />}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
 
         {/* Notifications */}
         <Popover>

@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs } from '@/components/ui/form-controls'
-import { KpiCardCompact } from '@/components/ui/kpi-card'
+import { KpiCard } from '@/components/shared/KpiCard'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatDate, cn } from '@/lib/utils'
@@ -417,10 +417,10 @@ export function VisaPage() {
           ))
         ) : (
           <>
-            <KpiCardCompact label="Active Visas" value={activeCount} icon={CheckCircle2} color="green" />
-            <KpiCardCompact label="In Processing" value={processingCount} icon={Clock} color="cyan" />
-            <KpiCardCompact label="Critical" value={criticalCount} icon={AlertTriangle} color="red" />
-            <KpiCardCompact label="Expiring 30d" value={expiringCount} icon={Plane} color="amber" />
+            <KpiCard label="Active Visas" value={activeCount} hint="All active visas" icon={<CheckCircle2 className="h-5 w-5" />} tone="emerald" />
+            <KpiCard label="In Processing" value={processingCount} hint="Applications" icon={<Clock className="h-5 w-5" />} tone="blue" trend={{ label: '20%', direction: 'up' }} />
+            <KpiCard label="Critical" value={criticalCount} hint="Require attention" icon={<AlertTriangle className="h-5 w-5" />} tone="rose" />
+            <KpiCard label="Expiring 30d" value={expiringCount} hint="Expiring soon" icon={<Plane className="h-5 w-5" />} tone="amber" />
           </>
         )}
       </div>

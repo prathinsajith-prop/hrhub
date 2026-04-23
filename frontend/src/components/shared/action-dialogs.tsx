@@ -11,6 +11,9 @@ import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useEmployees } from '@/hooks/useEmployees'
 import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
+import { FormField } from '@/components/shared/FormField'
+import { apiErrorToFieldMap } from '@/lib/api'
+import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, zodToFieldErrors } from '@/lib/schemas'
 import type { Employee } from '@/types'
 
 // ─── New Job Dialog ─────────────────────────────────────────────────────────
@@ -357,27 +360,34 @@ function StepIndicator({ step }: { step: Step }) {
 export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
     const [step, setStep] = useState<Step>(1)
     const [form, setForm] = useState<EmpForm>(EMPTY_FORM)
+    const [errors, setErrors] = useState<Record<string, string>>({})
     const createEmployee = useCreateEmployee()
 
-    const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) =>
+    const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
+        if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
+    }
 
-    const close = () => { onOpenChange(false); setTimeout(() => { setStep(1); setForm(EMPTY_FORM) }, 300) }
+    const close = () => { onOpenChange(false); setTimeout(() => { setStep(1); setForm(EMPTY_FORM); setErrors({}) }, 300) }
 
     const validateStep1 = () => {
-        if (!form.firstName.trim() || !form.lastName.trim()) {
-            toast.warning('Missing fields', 'First name and last name are required.')
-            return false
-        }
-        return true
+        const { ok, errors: errs } = zodToFieldErrors(employeeStep1Schema, {
+            firstName: form.firstName,
+            lastName: form.lastName,
+            personalEmail: form.personalEmail,
+            mobileNo: form.mobileNo,
+            dateOfBirth: form.dateOfBirth,
+        })
+        setErrors(errs)
+        if (!ok) toast.warning('Fix the highlighted fields', 'Please correct the errors before continuing.')
+        return ok
     }
 
     const validateStep2 = () => {
-        if (!form.joinDate) {
-            toast.warning('Missing fields', 'Join date is required.')
-            return false
-        }
-        return true
+        const { ok, errors: errs } = zodToFieldErrors(employeeStep2Schema, { joinDate: form.joinDate })
+        setErrors(errs)
+        if (!ok) toast.warning('Fix the highlighted fields', 'Please correct the errors before continuing.')
+        return ok
     }
 
     const submit = () => {
@@ -421,7 +431,20 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                     toast.success('Employee added', `${form.firstName} ${form.lastName} has been onboarded.`)
                     close()
                 },
-                onError: (err: any) => toast.error('Failed to add employee', err?.message ?? 'Please try again.'),
+                onError: (err: any) => {
+                    const fieldErrors = apiErrorToFieldMap(err)
+                    if (Object.keys(fieldErrors).length) {
+                        setErrors(fieldErrors)
+                        // Jump to the step that contains the first errored field
+                        const step1Fields = ['firstName', 'lastName', 'dateOfBirth', 'gender', 'maritalStatus', 'nationality', 'passportNo', 'mobileNo', 'personalEmail', 'emergencyContact']
+                        const step3Fields = ['basicSalary', 'housingAllowance', 'transportAllowance', 'otherAllowances', 'totalSalary', 'paymentMethod', 'bankName', 'iban', 'emiratisationCategory']
+                        const keys = Object.keys(fieldErrors)
+                        if (keys.some(k => step1Fields.includes(k))) setStep(1)
+                        else if (keys.some(k => step3Fields.includes(k))) setStep(3)
+                        else setStep(2)
+                    }
+                    toast.error('Failed to add employee', err?.message ?? 'Please try again.')
+                },
             },
         )
     }
@@ -438,20 +461,17 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                     {step === 1 && (
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>First Name *</Label>
-                                    <Input value={form.firstName} onChange={set('firstName')} placeholder="Ahmed" />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label>Last Name *</Label>
-                                    <Input value={form.lastName} onChange={set('lastName')} placeholder="Al Mansouri" />
-                                </div>
+                                <FormField label="First Name" required error={errors.firstName}>
+                                    <Input value={form.firstName} onChange={set('firstName')} placeholder="Ahmed" aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />
+                                </FormField>
+                                <FormField label="Last Name" required error={errors.lastName}>
+                                    <Input value={form.lastName} onChange={set('lastName')} placeholder="Al Mansouri" aria-invalid={!!errors.lastName} className={errors.lastName ? 'border-destructive' : ''} />
+                                </FormField>
                             </div>
                             <div className="grid grid-cols-3 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Date of Birth</Label>
-                                    <Input type="date" value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} min="1950-01-01" onChange={set('dateOfBirth')} />
-                                </div>
+                                <FormField label="Date of Birth" error={errors.dateOfBirth}>
+                                    <Input type="date" value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} min="1950-01-01" onChange={set('dateOfBirth')} aria-invalid={!!errors.dateOfBirth} className={errors.dateOfBirth ? 'border-destructive' : ''} />
+                                </FormField>
                                 <div className="space-y-1.5">
                                     <Label>Gender</Label>
                                     <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v }))}>
@@ -490,37 +510,33 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Mobile</Label>
+                                <FormField label="Mobile" error={errors.mobileNo}>
                                     <PhoneInput
                                         value={form.mobileNo}
-                                        onChange={(v) => setForm((f) => ({ ...f, mobileNo: v }))}
+                                        onChange={(v) => { setForm((f) => ({ ...f, mobileNo: v })); if (errors.mobileNo) setErrors(prev => { const n = { ...prev }; delete n.mobileNo; return n }) }}
                                         defaultCountry={resolveCountryIso(form.nationality) ?? 'AE'}
+                                        invalid={!!errors.mobileNo}
                                     />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label>Personal Email</Label>
-                                    <Input type="email" value={form.personalEmail} onChange={set('personalEmail')} placeholder="ahmed@gmail.com" />
-                                </div>
+                                </FormField>
+                                <FormField label="Personal Email" error={errors.personalEmail}>
+                                    <Input type="email" value={form.personalEmail} onChange={set('personalEmail')} placeholder="ahmed@gmail.com" aria-invalid={!!errors.personalEmail} className={errors.personalEmail ? 'border-destructive' : ''} />
+                                </FormField>
                             </div>
-                            <div className="space-y-1.5">
-                                <Label>Emergency Contact</Label>
+                            <FormField label="Emergency Contact" error={errors.emergencyContact}>
                                 <Input value={form.emergencyContact} onChange={set('emergencyContact')} placeholder="Name — +971 50 000 0000" />
-                            </div>
+                            </FormField>
                         </div>
                     )}
 
                     {step === 2 && (
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Employee No</Label>
-                                    <Input value={form.employeeNo} onChange={set('employeeNo')} placeholder="Auto-generated if blank" />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label>Join Date *</Label>
-                                    <Input type="date" value={form.joinDate} min="1970-01-01" onChange={set('joinDate')} />
-                                </div>
+                                <FormField label="Employee No" error={errors.employeeNo} hint="Auto-generated if blank">
+                                    <Input value={form.employeeNo} onChange={set('employeeNo')} placeholder="EMP-2604-1234" />
+                                </FormField>
+                                <FormField label="Join Date" required error={errors.joinDate}>
+                                    <Input type="date" value={form.joinDate} min="1970-01-01" onChange={set('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
+                                </FormField>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
@@ -692,22 +708,39 @@ export function EditEmployeeDialog({
         iban: employee.iban ?? '',
         emiratisationCategory: employee.emiratisationCategory ?? 'expat',
     })
+    const [errors, setErrors] = useState<Record<string, string>>({})
     const updateEmployee = useUpdateEmployee(employee.id)
 
-    const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) =>
+    const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
+        if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
+    }
 
-    const close = () => { onOpenChange(false); setTimeout(() => setStep(1), 300) }
+    const close = () => { onOpenChange(false); setTimeout(() => { setStep(1); setErrors({}) }, 300) }
 
     const submit = () => {
-        if (!form.firstName.trim() || !form.lastName.trim()) {
-            toast.warning('Missing fields', 'First name and last name are required.')
-            return
-        }
         const basic = parseFloat(form.basicSalary) || 0
         const housing = parseFloat(form.housingAllowance) || 0
         const transport = parseFloat(form.transportAllowance) || 0
         const other = parseFloat(form.otherAllowances) || 0
+        const total = basic + housing + transport + other
+
+        const step1 = zodToFieldErrors(employeeStep1Schema, {
+            firstName: form.firstName,
+            lastName: form.lastName,
+            personalEmail: form.personalEmail,
+            mobileNo: form.mobileNo,
+            dateOfBirth: form.dateOfBirth,
+        })
+        const step2 = zodToFieldErrors(employeeStep2Schema, { joinDate: form.joinDate })
+        const salary = zodToFieldErrors(employeeSalaryRuleSchema, { basicSalary: basic, totalSalary: total })
+
+        const e = { ...step1.errors, ...step2.errors, ...salary.errors }
+        if (Object.keys(e).length) {
+            setErrors(e)
+            toast.warning('Fix the highlighted fields', 'Please correct the errors before saving.')
+            return
+        }
         updateEmployee.mutate(
             {
                 firstName: form.firstName, lastName: form.lastName,
@@ -743,7 +776,11 @@ export function EditEmployeeDialog({
                     toast.success('Employee updated', `${form.firstName} ${form.lastName} has been updated.`)
                     close()
                 },
-                onError: (err: any) => toast.error('Failed to update employee', err?.message ?? 'Please try again.'),
+                onError: (err: any) => {
+                    const fieldErrors = apiErrorToFieldMap(err)
+                    if (Object.keys(fieldErrors).length) setErrors(fieldErrors)
+                    toast.error('Failed to update employee', err?.message ?? 'Please try again.')
+                },
             },
         )
     }

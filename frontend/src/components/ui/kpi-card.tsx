@@ -105,7 +105,11 @@ export function KpiCard({
   )
 }
 
-/** Compact horizontal KPI card — used on list pages (Employees, Visa, etc.) */
+/** Compact horizontal KPI card — delegates to the shared modern KpiCard
+ *  so the entire app gets the new design while keeping the legacy API.
+ */
+import { KpiCard as ModernKpiCard } from '@/components/shared/KpiCard'
+
 export interface KpiCardCompactProps {
   label: string
   value: string | number | undefined | null
@@ -113,34 +117,36 @@ export interface KpiCardCompactProps {
   color?: KpiColor
   loading?: boolean
   className?: string
+  hint?: string
 }
 
-export function KpiCardCompact({ label, value, icon: Icon, color = 'blue', loading = false, className }: KpiCardCompactProps) {
-  const tone = toneMap[color] ?? toneMap.blue
-  return (
-    <div
-      className={cn(
-        'rounded-xl bg-card p-4 flex items-center justify-between gap-3 card-hover border border-border border-t-2',
-        tone.accent,
-        className,
-      )}
-    >
-      {loading ? (
-        <div className="space-y-2 animate-pulse flex-1">
-          <div className="h-2 bg-muted rounded w-1/2" />
-          <div className="h-7 bg-muted rounded w-2/3" />
-        </div>
-      ) : (
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{label}</p>
-          <p className="text-2xl font-bold leading-tight font-display tabular-figures truncate mt-1">
-            {value ?? '—'}
-          </p>
-        </div>
-      )}
-      <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center shrink-0', tone.icon)}>
-        <Icon className="h-4 w-4" />
+const colorToTone: Record<KpiColor, 'blue' | 'emerald' | 'amber' | 'rose' | 'primary' | 'violet'> = {
+  blue: 'blue',
+  green: 'emerald',
+  amber: 'amber',
+  red: 'rose',
+  cyan: 'blue',
+  purple: 'violet',
+}
+
+export function KpiCardCompact({ label, value, icon: Icon, color = 'blue', loading = false, className, hint }: KpiCardCompactProps) {
+  if (loading) {
+    return (
+      <div className={cn('rounded-xl bg-card p-5 border border-border animate-pulse space-y-3', className)}>
+        <div className="h-3 bg-muted rounded w-1/2" />
+        <div className="h-8 bg-muted rounded w-2/3" />
+        <div className="h-2 bg-muted rounded w-3/4" />
       </div>
-    </div>
+    )
+  }
+  return (
+    <ModernKpiCard
+      label={label}
+      value={value ?? '—'}
+      hint={hint}
+      icon={<Icon className="h-5 w-5" />}
+      tone={colorToTone[color] ?? 'primary'}
+      className={className}
+    />
   )
 }
