@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs } from '@/components/ui/form-controls'
 import { KpiCard } from '@/components/shared/KpiCard'
+import { InitialsAvatar } from '@/components/shared/Avatar'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatDate, cn } from '@/lib/utils'
@@ -69,8 +70,9 @@ function VisaTimeline({ application }: { application: VisaApplication }) {
       </div>
       <div className="space-y-2">
         {Array.from({ length: application.totalSteps }).map((_, i) => {
-          const done = i < application.currentStep - 1
-          const current = i === application.currentStep - 1
+          const allDone = application.status === 'active'
+          const done = allDone || i < application.currentStep - 1
+          const current = !allDone && i === application.currentStep - 1
           const label = visaSteps[i] || `Step ${i + 1}`
           return (
             <div key={i} className="flex items-center gap-3">
@@ -103,7 +105,19 @@ const columns: ColumnDef<VisaApplication>[] = [
   {
     accessorKey: 'employeeName',
     header: 'Employee',
-    cell: ({ getValue }) => <span className="font-medium text-sm text-foreground">{getValue() as string}</span>,
+    cell: ({ row: { original: v } }) => (
+      <div className="flex items-center gap-2.5 min-w-0">
+        <InitialsAvatar name={v.employeeName || '—'} src={v.employeeAvatarUrl} size="sm" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium truncate">{v.employeeName || '—'}</p>
+          {(v.employeeNo || v.employeeDepartment) && (
+            <p className="text-[11px] text-muted-foreground truncate">
+              {v.employeeNo}{v.employeeNo && v.employeeDepartment ? ' · ' : ''}{v.employeeDepartment}
+            </p>
+          )}
+        </div>
+      </div>
+    ),
   },
   {
     accessorKey: 'visaType',
@@ -198,12 +212,15 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
     normal: 'text-muted-foreground',
   }
   const isDone = v.currentStep >= v.totalSteps
+  const isActivated = v.status === 'active'
   const isCancelled = v.status === 'cancelled' || v.status === 'expired'
+  const currentLabel = visaSteps[v.currentStep - 1] ?? `Step ${v.currentStep}`
+  const advanceLabel = isDone ? 'Complete & activate visa' : `Mark "${currentLabel}" complete`
 
   function handleAdvance() {
     advanceStep.mutate(v.id, {
-      onSuccess: () => toast.success('Step advanced'),
-      onError: () => toast.error('Failed to advance step'),
+      onSuccess: () => toast.success(isDone ? 'Visa activated' : `Marked "${currentLabel}" complete`),
+      onError: () => toast.error(isDone ? 'Failed to activate visa' : 'Failed to advance step'),
     })
   }
 
@@ -276,13 +293,13 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
               <Button variant="outline" className="w-full" onClick={() => { setOpen(false); navigate(`/visa/${v.id}`) }}>
                 View Full Details
               </Button>
-              {!isDone && (
+              {!isActivated && (
                 <Button
                   className="w-full"
                   onClick={handleAdvance}
                   disabled={advanceStep.isPending}
                 >
-                  {advanceStep.isPending ? 'Advancing…' : 'Advance Step'}
+                  {advanceStep.isPending ? (isDone ? 'Activating…' : 'Advancing…') : advanceLabel}
                 </Button>
               )}
               {!confirmCancel ? (

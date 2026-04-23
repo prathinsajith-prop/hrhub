@@ -24,8 +24,15 @@ function Calendar({
             classNames={{
                 months: 'flex flex-col sm:flex-row gap-4',
                 month: 'flex flex-col gap-4',
-                month_caption: 'flex justify-center pt-1 relative items-center',
+                month_caption: 'flex justify-center pt-1 relative items-center h-9',
                 caption_label: 'text-sm font-medium',
+                // ── Dropdown caption (captionLayout="dropdown" / "dropdown-buttons")
+                dropdowns: 'flex items-center justify-center gap-2 w-full',
+                dropdown_root: 'relative inline-flex items-center',
+                dropdown:
+                    'absolute inset-0 z-10 w-full h-full opacity-0 cursor-pointer',
+                months_dropdown: '',
+                years_dropdown: '',
                 nav: 'flex items-center gap-1',
                 button_previous: cn(
                     buttonVariants({ variant: 'outline' }),
@@ -56,6 +63,50 @@ function Calendar({
                 Chevron: ({ orientation, className: cls, ...rest }) => {
                     const Icon = orientation === 'left' ? ChevronLeft : ChevronRight
                     return <Icon className={cn('size-4', cls)} {...rest} />
+                },
+                // Render the dropdowns as styled "chip" labels with the
+                // native <select> overlaid invisibly so they remain accessible.
+                MonthsDropdown: ({ value, options, onChange }) => {
+                    const current = options?.find((o) => o.value === value)
+                    return (
+                        <span className="relative inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-xs font-medium hover:bg-accent">
+                            {current?.label ?? ''}
+                            <ChevronRight className="size-3 rotate-90 opacity-60" />
+                            <select
+                                value={value}
+                                onChange={onChange}
+                                className="absolute inset-0 cursor-pointer opacity-0"
+                                aria-label="Month"
+                            >
+                                {options?.map((o) => (
+                                    <option key={o.value} value={o.value} disabled={o.disabled}>
+                                        {o.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </span>
+                    )
+                },
+                YearsDropdown: ({ value, options, onChange }) => {
+                    const current = options?.find((o) => o.value === value)
+                    return (
+                        <span className="relative inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-xs font-medium hover:bg-accent">
+                            {current?.label ?? ''}
+                            <ChevronRight className="size-3 rotate-90 opacity-60" />
+                            <select
+                                value={value}
+                                onChange={onChange}
+                                className="absolute inset-0 cursor-pointer opacity-0"
+                                aria-label="Year"
+                            >
+                                {options?.map((o) => (
+                                    <option key={o.value} value={o.value} disabled={o.disabled}>
+                                        {o.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </span>
+                    )
                 },
             }}
             {...props}

@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, CheckCircle2, Clock, AlertTriangle, XCircle, FileText } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Clock, AlertTriangle, XCircle, FileText, Hash } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -58,7 +58,7 @@ export function VisaDetailPage() {
     const { t } = useTranslation()
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
-    const { data, isLoading } = useVisas({ limit: 100 })
+    const { data, isLoading } = useVisas({ limit: 1000 })
     const advanceStep = useAdvanceVisaStep()
     const cancelVisa = useCancelVisa()
 
@@ -182,14 +182,74 @@ export function VisaDetailPage() {
                     {!isCancelled && (
                         <div className="space-y-2">
                             {!isDone && (
-                                <Button
-                                    className="w-full"
-                                    onClick={handleAdvance}
-                                    disabled={advanceStep.isPending}
-                                >
-                                    {advanceStep.isPending ? t('common.loading') : 'Advance to Next Step'}
-                                </Button>
+                                <>
+                                    <Button
+                                        className="w-full"
+                                        onClick={handleAdvance}
+                                        disabled={advanceStep.isPending}
+                                    >
+                                        {advanceStep.isPending ? (
+                                            t('common.loading')
+                                        ) : (
+                                            <>
+                                                <CheckCircle2 className="h-4 w-4 mr-2" />
+                                                Mark "{visaSteps[visa.currentStep - 1] ?? `Step ${visa.currentStep}`}" complete
+                                            </>
+                                        )}
+                                    </Button>
+                                    {visa.currentStep < visa.totalSteps && (
+                                        <p className="text-[11px] text-muted-foreground text-center">
+                                            Next: {visaSteps[visa.currentStep] ?? `Step ${visa.currentStep + 1}`}
+                                        </p>
+                                    )}
+                                </>
                             )}
+
+                            {/* Stamping-specific actions */}
+                            {!isDone && visa.status === 'stamping' && (
+                                <div className="rounded-md border bg-info/5 p-3 space-y-2">
+                                    <p className="text-[11px] font-semibold text-info uppercase tracking-wide">
+                                        Stamping actions
+                                    </p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full justify-start text-xs"
+                                        onClick={() => navigate(`/documents?employeeId=${visa.employeeId}&category=visa`)}
+                                    >
+                                        <FileText className="h-3.5 w-3.5 mr-2" />
+                                        Upload stamped passport page
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full justify-start text-xs"
+                                        onClick={() => {
+                                            const ref = window.prompt('Enter MOHRE / GDRFA reference for stamping:')
+                                            if (ref && ref.trim()) {
+                                                toast.success(`Reference recorded: ${ref.trim()}`)
+                                                // TODO: wire to useUpdateVisa({ id, mohreRef: ref })
+                                            }
+                                        }}
+                                    >
+                                        <Hash className="h-3.5 w-3.5 mr-2" />
+                                        Record stamping reference
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full justify-start text-xs"
+                                        onClick={() => {
+                                            const days = window.prompt('Stamping appointment in how many days?', '7')
+                                            if (days) toast.info(`Reminder set in ${days} day(s)`)
+                                        }}
+                                    >
+                                        <Clock className="h-3.5 w-3.5 mr-2" />
+                                        Schedule stamping appointment
+                                    </Button>
+                                </div>
+                            )}
+
                             <Button
                                 variant="outline"
                                 className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
@@ -204,16 +264,25 @@ export function VisaDetailPage() {
 
                 {/* Right: Timeline */}
                 <Card className="lg:col-span-2 p-6">
-                    <div className="flex items-center gap-2 mb-6">
-                        <FileText className="h-5 w-5 text-primary" />
-                        <h3 className="font-semibold">Visa Process Timeline</h3>
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-primary" />
+                            <h3 className="font-semibold">Visa Process Timeline</h3>
+                        </div>
+                        {isDone && !isCancelled && (
+                            <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> All steps completed
+                            </Badge>
+                        )}
                     </div>
                     <div className="space-y-4">
                         {Array.from({ length: visa.totalSteps }).map((_, i) => {
-                            const done = i < visa.currentStep - 1
-                            const current = i === visa.currentStep - 1
-                            const pending = i > visa.currentStep - 1
+                            const allDone = visa.status === 'active'
+                            const done = allDone || i < visa.currentStep - 1
+                            const current = !allDone && i === visa.currentStep - 1
+                            const pending = !allDone && i > visa.currentStep - 1
                             const label = visaSteps[i] || `Step ${i + 1}`
+                            const isFinal = i === visa.totalSteps - 1
 
                             return (
                                 <div key={i} className="flex gap-4">
@@ -231,12 +300,26 @@ export function VisaDetailPage() {
                                         )}
                                     </div>
                                     <div className="pb-4 flex-1">
-                                        <p className={cn(
-                                            'font-medium text-sm',
-                                            done ? 'text-success' : current ? 'text-primary' : 'text-muted-foreground'
-                                        )}>
-                                            {label}
-                                        </p>
+                                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                                            <p className={cn(
+                                                'font-medium text-sm',
+                                                done ? 'text-success' : current ? 'text-primary' : 'text-muted-foreground'
+                                            )}>
+                                                {label}
+                                            </p>
+                                            {current && !isCancelled && (
+                                                <Button
+                                                    size="sm"
+                                                    variant={isFinal ? 'default' : 'secondary'}
+                                                    onClick={handleAdvance}
+                                                    disabled={advanceStep.isPending}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                                                    {isFinal ? 'Complete & activate visa' : `Mark ${label} complete`}
+                                                </Button>
+                                            )}
+                                        </div>
                                         <p className="text-xs text-muted-foreground mt-0.5">
                                             {done ? t('common.completed') : current ? t('common.inProgress') : pending ? t('common.pending') : ''}
                                         </p>

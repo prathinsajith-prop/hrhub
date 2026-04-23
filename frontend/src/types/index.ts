@@ -7,6 +7,7 @@ export interface User {
   email: string
   role: UserRole
   avatar?: string
+  avatarUrl?: string
   tenantId: string
   entityId?: string
   department?: string
@@ -155,6 +156,9 @@ export interface VisaApplication {
   id: string
   employeeId: string
   employeeName: string
+  employeeAvatarUrl?: string | null
+  employeeDepartment?: string | null
+  employeeNo?: string | null
   visaType: VisaType
   status: VisaStatus
   currentStep: number
@@ -174,6 +178,9 @@ export interface Document {
   id: string
   employeeId?: string
   employeeName?: string
+  employeeNo?: string
+  employeeAvatarUrl?: string
+  employeeDepartment?: string
   category: DocCategory
   docType: string
   fileName: string
@@ -224,6 +231,8 @@ export interface LeaveRequest {
   id: string
   employeeId: string
   employeeName: string
+  employeeAvatarUrl?: string | null
+  employeeDepartment?: string | null
   leaveType: LeaveType
   startDate: string
   endDate: string

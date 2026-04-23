@@ -1,11 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, User, Mail, Phone, Globe, Briefcase, DollarSign, Star, XCircle, UserPlus, Save } from 'lucide-react'
+import { ArrowLeft, User, Mail, Phone, Globe, Briefcase, DollarSign, Star, XCircle, UserPlus, Save, Edit2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -21,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { cn } from '@/lib/utils'
 import { useApplications, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee } from '@/hooks/useRecruitment'
 import { toast } from '@/components/ui/overlays'
+import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import type { Candidate, ApplicationStage } from '@/types'
 
 const stageLabel: Record<ApplicationStage, string> = {
@@ -54,14 +56,18 @@ export function CandidateProfilePage() {
     const updateApplication = useUpdateApplication()
     const convertToEmployee = useConvertCandidateToEmployee()
     const [rejectOpen, setRejectOpen] = useState(false)
+    const [rejectNote, setRejectNote] = useState('')
+    const [editOpen, setEditOpen] = useState(false)
     const [convertOpen, setConvertOpen] = useState(false)
     const [convertForm, setConvertForm] = useState({
         joinDate: new Date().toISOString().slice(0, 10),
         designation: '',
         department: '',
         basicSalary: '',
+        note: '',
     })
     const [notesDraft, setNotesDraft] = useState('')
+    const [newNote, setNewNote] = useState('')
 
     const candidates = (data?.data ?? []) as Candidate[]
     const candidate = candidates.find((c) => c.id === id)
@@ -111,12 +117,39 @@ export function CandidateProfilePage() {
         }
     }
 
+    function appendNoteEntry(existing: string | undefined, label: string, body: string): string {
+        const stamp = new Date().toISOString().replace('T', ' ').slice(0, 16)
+        const entry = `[${stamp}] ${label}: ${body.trim()}`
+        return existing && existing.trim().length > 0 ? `${existing.trim()}\n${entry}` : entry
+    }
+
     function handleReject() {
-        updateStage.mutate(
-            { id: candidate!.id, stage: 'rejected' },
+        if (!candidate) return
+        const trimmed = rejectNote.trim()
+        if (!trimmed) {
+            toast.error('Reason required', 'Please add a rejection note before continuing.')
+            return
+        }
+        const merged = appendNoteEntry(candidate.notes, 'Rejected', trimmed)
+        // Save the note first, then update the stage so the reason is preserved.
+        updateApplication.mutate(
+            { id: candidate.id, data: { notes: merged } },
             {
-                onSuccess: () => { toast.success('Candidate rejected'); navigate('/recruitment') },
-                onError: () => toast.error('Failed to update stage'),
+                onSuccess: () => {
+                    updateStage.mutate(
+                        { id: candidate.id, stage: 'rejected' },
+                        {
+                            onSuccess: () => {
+                                setRejectOpen(false)
+                                setRejectNote('')
+                                toast.success('Candidate rejected')
+                                navigate('/recruitment')
+                            },
+                            onError: () => toast.error('Failed to update stage'),
+                        },
+                    )
+                },
+                onError: () => toast.error('Failed to save rejection note'),
             },
         )
     }
@@ -132,27 +165,60 @@ export function CandidateProfilePage() {
         )
     }
 
+    function handleAppendNote() {
+        if (!candidate) return
+        const trimmed = newNote.trim()
+        if (!trimmed) return
+        const merged = appendNoteEntry(candidate.notes, 'Note', trimmed)
+        updateApplication.mutate(
+            { id: candidate.id, data: { notes: merged } },
+            {
+                onSuccess: () => {
+                    toast.success('Note added')
+                    setNewNote('')
+                    setNotesDraft(merged)
+                },
+                onError: () => toast.error('Failed to add note'),
+            },
+        )
+    }
+
     function handleConvertSubmit() {
         if (!candidate) return
-        convertToEmployee.mutate(
+        const trimmedNote = convertForm.note.trim()
+        if (!trimmedNote) {
+            toast.error('Note required', 'Please add a conversion note before creating the employee record.')
+            return
+        }
+        const merged = appendNoteEntry(candidate.notes, 'Converted', trimmedNote)
+        // Save the note first so it survives even if conversion fails.
+        updateApplication.mutate(
+            { id: candidate.id, data: { notes: merged } },
             {
-                id: candidate.id,
-                data: {
-                    joinDate: convertForm.joinDate || undefined,
-                    designation: convertForm.designation || undefined,
-                    department: convertForm.department || undefined,
-                    basicSalary: convertForm.basicSalary ? Number(convertForm.basicSalary) : undefined,
+                onSuccess: () => {
+                    convertToEmployee.mutate(
+                        {
+                            id: candidate.id,
+                            data: {
+                                joinDate: convertForm.joinDate || undefined,
+                                designation: convertForm.designation || undefined,
+                                department: convertForm.department || undefined,
+                                basicSalary: convertForm.basicSalary ? Number(convertForm.basicSalary) : undefined,
+                            },
+                        },
+                        {
+                            onSuccess: (res) => {
+                                setConvertOpen(false)
+                                const empNo = (res as any)?.data?.employee?.employeeNo
+                                toast.success('Candidate converted', empNo ? `Employee ${empNo} created.` : 'Employee created.')
+                                const empId = (res as any)?.data?.employee?.id
+                                if (empId) navigate(`/employees/${empId}`)
+                            },
+                            onError: (err: any) => toast.error('Conversion failed', err?.message ?? 'Could not create employee.'),
+                        },
+                    )
                 },
-            },
-            {
-                onSuccess: (res) => {
-                    setConvertOpen(false)
-                    const empNo = (res as any)?.data?.employee?.employeeNo
-                    toast.success('Candidate converted', empNo ? `Employee ${empNo} created.` : 'Employee created.')
-                    const empId = (res as any)?.data?.employee?.id
-                    if (empId) navigate(`/employees/${empId}`)
-                },
-                onError: (err: any) => toast.error('Conversion failed', err?.message ?? 'Could not create employee.'),
+                onError: () => toast.error('Failed to save conversion note'),
             },
         )
     }
@@ -167,9 +233,14 @@ export function CandidateProfilePage() {
                 title={candidate.name}
                 description={`Applied ${candidate.appliedDate ? new Date(candidate.appliedDate).toLocaleDateString() : ''}`}
                 actions={
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/recruitment')}>
-                        <ArrowLeft className="h-4 w-4 mr-2" /> Back
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                            <Edit2 className="h-4 w-4 mr-2" /> Edit
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => navigate('/recruitment')}>
+                            <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                        </Button>
+                    </div>
                 }
             />
 
@@ -318,29 +389,91 @@ export function CandidateProfilePage() {
                             </Card>
                         </TabsContent>
 
-                        <TabsContent value="notes" className="mt-4">
+                        <TabsContent value="notes" className="mt-4 space-y-4">
                             <Card className="p-6 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="font-semibold text-sm">Recruiter Notes</h3>
+                                <h3 className="font-semibold text-sm">Add a note</h3>
+                                <Textarea
+                                    value={newNote}
+                                    onChange={(e) => setNewNote(e.target.value)}
+                                    placeholder="Interview feedback, screening summary, references checked, etc."
+                                    rows={3}
+                                />
+                                <div className="flex justify-end">
                                     <Button
                                         size="sm"
+                                        onClick={handleAppendNote}
+                                        disabled={updateApplication.isPending || !newNote.trim()}
+                                    >
+                                        <Save className="h-3.5 w-3.5 mr-1.5" />
+                                        {updateApplication.isPending ? 'Saving…' : 'Add Note'}
+                                    </Button>
+                                </div>
+                            </Card>
+
+                            <Card className="p-6 space-y-3">
+                                <h3 className="font-semibold text-sm">Notes history</h3>
+                                {(() => {
+                                    const raw = (candidate.notes ?? '').trim()
+                                    if (!raw) {
+                                        return <p className="text-xs text-muted-foreground">No notes yet.</p>
+                                    }
+                                    // Split on lines beginning with [YYYY-MM-DD HH:mm] markers; keep legacy text as one entry.
+                                    const entryRegex = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\]\s*(?:([^:]+):\s*)?(.*)$/
+                                    const lines = raw.split(/\r?\n/)
+                                    const entries: { stamp?: string; label?: string; text: string }[] = []
+                                    let buf: { stamp?: string; label?: string; text: string } | null = null
+                                    for (const line of lines) {
+                                        const m = line.match(entryRegex)
+                                        if (m) {
+                                            if (buf) entries.push(buf)
+                                            buf = { stamp: m[1], label: m[2]?.trim(), text: m[3] }
+                                        } else if (buf) {
+                                            buf.text += `\n${line}`
+                                        } else {
+                                            buf = { text: line }
+                                        }
+                                    }
+                                    if (buf) entries.push(buf)
+                                    return (
+                                        <ol className="space-y-3">
+                                            {entries.slice().reverse().map((e, i) => (
+                                                <li key={i} className="border-l-2 border-border pl-3 py-1">
+                                                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                                        {e.stamp && <span>{e.stamp}</span>}
+                                                        {e.label && (
+                                                            <Badge variant="outline" className="text-[10px] py-0 h-4">{e.label}</Badge>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm whitespace-pre-wrap mt-1">{e.text}</p>
+                                                </li>
+                                            ))}
+                                        </ol>
+                                    )
+                                })()}
+                            </Card>
+
+                            <Card className="p-6 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="font-semibold text-sm">Raw notes (advanced)</h3>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
                                         onClick={handleSaveNotes}
                                         disabled={updateApplication.isPending || notesDraft === (candidate.notes ?? '')}
                                     >
                                         <Save className="h-3.5 w-3.5 mr-1.5" />
-                                        {updateApplication.isPending ? 'Saving…' : 'Save Notes'}
+                                        {updateApplication.isPending ? 'Saving…' : 'Save'}
                                     </Button>
                                 </div>
                                 <Textarea
                                     value={notesDraft}
                                     onChange={(e) => setNotesDraft(e.target.value)}
-                                    placeholder="Add interview feedback, screening notes, references checked, etc."
-                                    rows={10}
-                                    className="resize-y"
+                                    placeholder="Edit raw notes log."
+                                    rows={6}
+                                    className="resize-y font-mono text-xs"
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    Notes are private to recruiters and HR. Use this space for interview feedback,
-                                    rejection reasons, or pre-boarding follow-ups.
+                                <p className="text-[11px] text-muted-foreground">
+                                    Editing here lets you correct typos in older entries. Prefer the "Add a note" box above for new entries.
                                 </p>
                             </Card>
                         </TabsContent>
@@ -348,20 +481,38 @@ export function CandidateProfilePage() {
                 </div>
             </div>
 
-            <AlertDialog open={rejectOpen} onOpenChange={setRejectOpen}>
+            <EditCandidateDialog
+                candidate={candidate}
+                open={editOpen}
+                onOpenChange={setEditOpen}
+            />
+
+            <AlertDialog open={rejectOpen} onOpenChange={(v) => { setRejectOpen(v); if (!v) setRejectNote('') }}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Reject this candidate?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will move <strong>{candidate.name}</strong> to the rejected stage. You can still
-                            view their profile and history afterwards.
+                            This will move <strong>{candidate.name}</strong> to the rejected stage. A rejection
+                            reason is required and will be stored in the notes history.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
+                    <div className="space-y-2 py-2">
+                        <Label htmlFor="reject-note">Rejection reason *</Label>
+                        <Textarea
+                            id="reject-note"
+                            value={rejectNote}
+                            onChange={(e) => setRejectNote(e.target.value)}
+                            placeholder="e.g. Salary expectation outside range; weak technical screen; withdrew application…"
+                            rows={4}
+                            autoFocus
+                        />
+                    </div>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={handleReject}
+                            onClick={(e) => { e.preventDefault(); handleReject() }}
+                            disabled={!rejectNote.trim() || updateApplication.isPending || updateStage.isPending}
                         >
                             Reject Candidate
                         </AlertDialogAction>
@@ -405,19 +556,34 @@ export function CandidateProfilePage() {
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Basic Salary (AED)</Label>
-                                <Input
-                                    type="number"
-                                    inputMode="decimal"
+                                <NumericInput
                                     value={convertForm.basicSalary}
                                     onChange={(e) => setConvertForm((f) => ({ ...f, basicSalary: e.target.value }))}
                                     placeholder={candidate.expectedSalary?.toString() ?? '0'}
                                 />
                             </div>
                         </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="convert-note">Conversion note *</Label>
+                            <Textarea
+                                id="convert-note"
+                                value={convertForm.note}
+                                onChange={(e) => setConvertForm((f) => ({ ...f, note: e.target.value }))}
+                                placeholder="e.g. Offer accepted on 12 Apr; reporting to Engineering Manager."
+                                rows={3}
+                            />
+                            <p className="text-[11px] text-muted-foreground">
+                                This note will be appended to the candidate's notes history alongside the conversion timestamp.
+                            </p>
+                        </div>
                     </DialogBody>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setConvertOpen(false)}>Cancel</Button>
-                        <Button onClick={handleConvertSubmit} loading={convertToEmployee.isPending}>
+                        <Button
+                            onClick={handleConvertSubmit}
+                            loading={convertToEmployee.isPending || updateApplication.isPending}
+                            disabled={!convertForm.note.trim()}
+                        >
                             <UserPlus className="h-4 w-4 mr-2" /> Create Employee
                         </Button>
                     </DialogFooter>

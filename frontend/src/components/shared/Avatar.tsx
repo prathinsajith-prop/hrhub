@@ -1,8 +1,9 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 
 interface InitialsAvatarProps {
     name: string
+    src?: string | null
     className?: string
     size?: 'sm' | 'md' | 'lg'
 }
@@ -37,7 +38,22 @@ function initials(name: string): string {
     return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
 }
 
-function InitialsAvatarBase({ name, className, size = 'md' }: InitialsAvatarProps) {
+function InitialsAvatarBase({ name, src, className, size = 'md' }: InitialsAvatarProps) {
+    const [errored, setErrored] = useState(false)
+    if (src && !errored) {
+        return (
+            <img
+                src={src}
+                alt={name}
+                onError={() => setErrored(true)}
+                className={cn(
+                    'inline-block rounded-full object-cover shrink-0 ring-1 ring-border bg-muted',
+                    SIZE[size],
+                    className,
+                )}
+            />
+        )
+    }
     return (
         <span
             className={cn(

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
   MoreHorizontal,
@@ -73,7 +73,12 @@ function ActionMenu({
           <Edit2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           Edit Details
         </DropdownMenuItem>
-        <DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!employee.email}
+          onClick={() => {
+            if (employee.email) window.location.href = `mailto:${employee.email}`
+          }}
+        >
           <Mail className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           Send Email
         </DropdownMenuItem>
@@ -119,7 +124,7 @@ export function EmployeesPage() {
     })
   }
 
-  const columns: ColumnDef<Employee>[] = [
+  const columns: ColumnDef<Employee>[] = useMemo(() => [
     {
       id: 'employee',
       header: 'Employee',
@@ -222,7 +227,7 @@ export function EmployeesPage() {
       ),
       size: 44,
     },
-  ]
+  ], [navigate])
 
   return (
     <PageWrapper>

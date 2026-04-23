@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
@@ -16,6 +16,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { DataTable } from '@/components/ui/data-table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/overlays'
 import {
     StatusBadge, EmptyState, TableSkeleton, InitialsAvatar,
@@ -78,6 +81,7 @@ export function AttendancePage() {
     const [monthOffset, setMonthOffset] = useState(0)
     const [filterEmployee, setFilterEmployee] = useState('')
     const [filterStatus, setFilterStatus] = useState<'all' | AttendanceRecord['status']>('all')
+    const [editing, setEditing] = useState<AttendanceRecord | null>(null)
 
     const { start, end, label } = useMemo(() => getMonthRange(monthOffset), [monthOffset])
 
@@ -86,7 +90,7 @@ export function AttendancePage() {
         endDate: end,
         employeeId: filterEmployee || undefined,
     })
-    const { data: employeesData } = useEmployees({ limit: 200 })
+    const { data: employeesData } = useEmployees({ limit: 1000 })
     const upsert = useUpsertAttendance()
 
     const list = useMemo<AttendanceRecord[]>(
@@ -102,7 +106,7 @@ export function AttendancePage() {
 
     // O(1) employee lookup instead of empList.find() per row
     const empMap = useMemo(() => {
-        const m = new Map<string, { name: string; initials: string; department?: string }>()
+        const m = new Map<string, { name: string; initials: string; department?: string; avatarUrl?: string }>()
         for (const e of empList) {
             const fullName = (e.fullName as string | undefined)
                 ?? `${(e.firstName as string | undefined) ?? ''} ${(e.lastName as string | undefined) ?? ''}`.trim()
@@ -117,6 +121,7 @@ export function AttendancePage() {
                     .join('')
                     .toUpperCase() || '—',
                 department: e.department as string | undefined,
+                avatarUrl: (e.avatarUrl as string | undefined) ?? (e.photoUrl as string | undefined),
             })
         }
         return m
@@ -194,13 +199,9 @@ export function AttendancePage() {
 
     const handleEdit = useCallback(
         (rec: AttendanceRecord) => {
-            // Placeholder for edit modal — connected to useUpsertAttendance
-            toast.info(
-                'Edit attendance',
-                `Edit flow for ${empMap.get(rec.employeeId)?.name ?? 'employee'} on ${rec.date} will open here.`,
-            )
+            setEditing(rec)
         },
-        [empMap],
+        [],
     )
 
     const handleExport = useCallback(() => {
@@ -232,9 +233,6 @@ export function AttendancePage() {
         toast.success('Exported', `${filteredList.length} rows exported to CSV.`)
     }, [filteredList, empMap, start, end])
 
-    // Explicitly reference mutation to keep for future edit modal wiring
-    void upsert
-
     // ─── Columns ───────────────────────────────────────────────────
     const columns: ColumnDef<AttendanceRecord>[] = useMemo(() => [
         {
@@ -251,25 +249,31 @@ export function AttendancePage() {
         {
             id: 'employee',
             header: 'Employee',
-            accessorFn: (row) => empMap.get(row.employeeId)?.name ?? '—',
+            accessorFn: (row) => row.employeeName ?? empMap.get(row.employeeId)?.name ?? '—',
             cell: ({ row: { original: r } }) => {
                 const emp = empMap.get(r.employeeId)
+                const name = r.employeeName ?? emp?.name ?? '—'
+                const dept = r.employeeDepartment ?? emp?.department
+                const avatar = r.employeeAvatarUrl ?? emp?.avatarUrl
                 return (
                     <div className="flex items-center gap-2.5 min-w-0">
                         <InitialsAvatar
-                            name={emp?.name ?? '—'}
+                            name={name}
+                            src={avatar}
                             size="sm"
                         />
                         <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{emp?.name ?? '—'}</p>
-                            {emp?.department && (
-                                <p className="text-[11px] text-muted-foreground truncate">{emp.department}</p>
+                            <p className="text-sm font-medium truncate">{name}</p>
+                            {(r.employeeNo || dept) && (
+                                <p className="text-[11px] text-muted-foreground truncate">
+                                    {[r.employeeNo, dept].filter(Boolean).join(' · ')}
+                                </p>
                             )}
                         </div>
                     </div>
                 )
             },
-            size: 220,
+            size: 240,
         },
         {
             accessorKey: 'status',
@@ -641,6 +645,148 @@ export function AttendancePage() {
                     )}
                 </CardContent>
             </Card>
+
+            <EditAttendanceDialog
+                record={editing}
+                onClose={() => setEditing(null)}
+                employeeName={
+                    editing
+                        ? (editing.employeeName ?? empMap.get(editing.employeeId)?.name ?? '—')
+                        : ''
+                }
+                onSave={async (patch) => {
+                    if (!editing) return
+                    try {
+                        await upsert.mutateAsync({
+                            employeeId: editing.employeeId,
+                            date: editing.date,
+                            status: patch.status,
+                            checkIn: patch.checkIn || undefined,
+                            checkOut: patch.checkOut || undefined,
+                            notes: patch.notes || undefined,
+                        })
+                        toast.success('Attendance updated', `${editing.date} saved.`)
+                        setEditing(null)
+                    } catch (err: any) {
+                        toast.error('Update failed', err?.message ?? 'Could not save attendance.')
+                    }
+                }}
+                saving={upsert.isPending}
+            />
         </PageWrapper>
+    )
+}
+
+// ─── Edit Attendance Dialog ───────────────────────────────────────
+function toLocalDateTimeInput(iso?: string): string {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return ''
+    const tz = d.getTimezoneOffset() * 60000
+    return new Date(d.getTime() - tz).toISOString().slice(0, 16)
+}
+
+function EditAttendanceDialog({
+    record, onClose, employeeName, onSave, saving,
+}: {
+    record: AttendanceRecord | null
+    onClose: () => void
+    employeeName: string
+    onSave: (patch: { status: AttendanceRecord['status']; checkIn: string; checkOut: string; notes: string }) => void
+    saving: boolean
+}) {
+    const [status, setStatus] = useState<AttendanceRecord['status']>('present')
+    const [checkIn, setCheckIn] = useState('')
+    const [checkOut, setCheckOut] = useState('')
+    const [notes, setNotes] = useState('')
+
+    // Reset form when a new record is opened
+    useEffect(() => {
+        if (record) {
+            setStatus(record.status)
+            setCheckIn(toLocalDateTimeInput(record.checkIn))
+            setCheckOut(toLocalDateTimeInput(record.checkOut))
+            setNotes(record.notes ?? '')
+        }
+    }, [record])
+
+    return (
+        <Dialog open={!!record} onOpenChange={(o) => { if (!o) onClose() }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Edit attendance</DialogTitle>
+                    <p className="text-xs text-muted-foreground">
+                        {employeeName} · {record?.date}
+                    </p>
+                </DialogHeader>
+                <div className="space-y-3 py-2">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="att-status" className="text-xs">Status</Label>
+                        <Select value={status} onValueChange={(v) => setStatus(v as AttendanceRecord['status'])}>
+                            <SelectTrigger id="att-status" className="h-9">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="present">Present</SelectItem>
+                                <SelectItem value="absent">Absent</SelectItem>
+                                <SelectItem value="late">Late</SelectItem>
+                                <SelectItem value="half_day">Half Day</SelectItem>
+                                <SelectItem value="wfh">WFH</SelectItem>
+                                <SelectItem value="on_leave">On Leave</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="att-in" className="text-xs">Punch in</Label>
+                            <Input
+                                id="att-in"
+                                type="datetime-local"
+                                value={checkIn}
+                                onChange={(e) => setCheckIn(e.target.value)}
+                                className="h-9"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="att-out" className="text-xs">Punch out</Label>
+                            <Input
+                                id="att-out"
+                                type="datetime-local"
+                                value={checkOut}
+                                onChange={(e) => setCheckOut(e.target.value)}
+                                className="h-9"
+                            />
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="att-notes" className="text-xs">Notes</Label>
+                        <Input
+                            id="att-notes"
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            placeholder="Optional"
+                            className="h-9"
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>
+                        Cancel
+                    </Button>
+                    <Button
+                        size="sm"
+                        onClick={() => onSave({
+                            status,
+                            checkIn: checkIn ? new Date(checkIn).toISOString() : '',
+                            checkOut: checkOut ? new Date(checkOut).toISOString() : '',
+                            notes,
+                        })}
+                        disabled={saving}
+                    >
+                        {saving ? 'Saving…' : 'Save changes'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     )
 }

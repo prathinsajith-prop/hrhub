@@ -6,7 +6,10 @@ export async function getHeadcountReport(tenantId: string) {
     const all = await db
         .select({
             id: employees.id,
+            employeeNo: employees.employeeNo,
             fullName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
+            avatarUrl: employees.avatarUrl,
+            email: employees.email,
             department: employees.department,
             designation: employees.designation,
             nationality: employees.nationality,
@@ -79,7 +82,9 @@ export async function getVisaExpiryReport(tenantId: string, days = 90) {
     const expiring = await db
         .select({
             id: employees.id,
+            employeeNo: employees.employeeNo,
             fullName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
+            avatarUrl: employees.avatarUrl,
             department: employees.department,
             designation: employees.designation,
             nationality: employees.nationality,

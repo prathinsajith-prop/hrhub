@@ -29,6 +29,7 @@ const AuditLogPage = lazy(() => import('@/pages/misc/AuditLogPage').then(m => ({
 const LoginHistoryPage = lazy(() => import('@/pages/misc/LoginHistoryPage').then(m => ({ default: m.LoginHistoryPage })))
 const NotificationsPage = lazy(() => import('@/pages/misc/NotificationsPage').then(m => ({ default: m.NotificationsPage })))
 const NotFoundPage = lazy(() => import('@/pages/misc/NotFoundPage').then(m => ({ default: m.NotFoundPage })))
+const CalendarPage = lazy(() => import('@/pages/calendar/CalendarPage').then(m => ({ default: m.CalendarPage })))
 // Misc pages bundle
 const LeavePage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.LeavePage })))
 const OnboardingPage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.OnboardingPage })))
@@ -107,6 +108,7 @@ export default function App() {
             <Route path="employees" element={<EmployeesPage />} />
             <Route path="employees/:id" element={<EmployeeDetailPage />} />
             <Route path="recruitment" element={<RecruitmentPage />} />
+            <Route path="recruitment/candidates" element={<Navigate to="/recruitment" replace />} />
             <Route path="recruitment/candidates/:id" element={<CandidateProfilePage />} />
             <Route path="onboarding" element={<OnboardingPage />} />
             <Route path="visa" element={<VisaPage />} />
@@ -118,6 +120,7 @@ export default function App() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="exit" element={<ExitPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
             <Route path="attendance" element={<AttendancePage />} />
             <Route path="performance" element={<PerformancePage />} />
             <Route path="org-chart" element={<OrgChartPage />} />

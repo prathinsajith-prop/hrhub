@@ -12,7 +12,6 @@ import {
   ShieldCheckIcon,
   BarChart3Icon,
   SettingsIcon,
-  HelpCircleIcon,
   BuildingIcon,
   ClipboardListIcon,
   GitBranchIcon,
@@ -39,11 +38,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { t } = useTranslation()
 
-  const navGroups = [
+  // The sidebar re-renders on every route change because of useLocation().
+  // Memoize the static-shape nav config so we don't rebuild dozens of objects
+  // per navigation. The translation function reference changes only when
+  // language switches, so this list is genuinely stable in steady state.
+  const navGroups = React.useMemo(() => [
     {
       label: t('nav.overview'),
       items: [
         { title: t('nav.dashboard'), url: "/dashboard", icon: LayoutDashboardIcon },
+        { title: t('nav.calendar', { defaultValue: 'Calendar' }), url: "/calendar", icon: CalendarCheckIcon },
       ],
     },
     {
@@ -78,18 +82,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         { title: t('nav.auditLog'), url: "/audit", icon: ClipboardListIcon },
       ],
     },
-  ]
+  ], [t])
 
-  const navSecondary = [
+  const navSecondary = React.useMemo(() => [
     { title: t('nav.settings'), url: "/settings", icon: SettingsIcon },
-    { title: t('nav.help'), url: "/help", icon: HelpCircleIcon },
-  ]
+  ], [t])
 
-  const userData = {
+  const userData = React.useMemo(() => ({
     name: user?.name ?? "HR Admin",
     email: user?.email ?? "",
-    avatar: "",
-  }
+    avatar: user?.avatarUrl ?? "",
+  }), [user?.name, user?.email, user?.avatarUrl])
 
   return (
     <Sidebar collapsible="icon" {...props}>

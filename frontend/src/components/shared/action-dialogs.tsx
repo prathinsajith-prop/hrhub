@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
 import { Label, Input } from '@/components/ui/primitives'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
@@ -84,16 +85,16 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         </div>
                         <div className="space-y-1.5">
                             <Label>Openings</Label>
-                            <Input type="number" min={1} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
+                            <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Min Salary (AED)</Label>
-                            <Input type="number" min={0} value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} />
+                            <NumericInput value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} />
                         </div>
                     </div>
                     <div className="space-y-1.5">
                         <Label>Max Salary (AED)</Label>
-                        <Input type="number" min={0} value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} />
+                        <NumericInput value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} />
                     </div>
                     <div className="space-y-1.5">
                         <Label>Description</Label>
@@ -116,7 +117,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
     const [urgencyLevel, setUrgencyLevel] = useState('normal')
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
     const today = new Date().toISOString().split('T')[0]
-    const { data: empData } = useEmployees({ limit: 100 })
+    const { data: empData } = useEmployees({ limit: 1000 })
     const employees = (empData?.data as any[]) ?? []
     const createVisa = useCreateVisa()
 
@@ -205,7 +206,7 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
     const [endDate, setEndDate] = useState('')
     const [reason, setReason] = useState('')
     const today = new Date().toISOString().split('T')[0]
-    const { data: empData } = useEmployees({ limit: 100 })
+    const { data: empData } = useEmployees({ limit: 1000 })
     const employees = (empData?.data as any[]) ?? []
     const createLeave = useCreateLeave()
 
@@ -474,7 +475,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                             </div>
                             <div className="grid grid-cols-3 gap-3">
                                 <FormField label="Date of Birth" error={errors.dateOfBirth}>
-                                    <DatePicker value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} min="1950-01-01" onChange={setDate('dateOfBirth')} aria-invalid={!!errors.dateOfBirth} className={errors.dateOfBirth ? 'border-destructive' : ''} />
+                                    <DatePicker value={form.dateOfBirth} max={(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 10); return d.toISOString().split('T')[0] })()} min="1950-01-01" onChange={setDate('dateOfBirth')} aria-invalid={!!errors.dateOfBirth} className={errors.dateOfBirth ? 'border-destructive' : ''} />
                                 </FormField>
                                 <div className="space-y-1.5">
                                     <Label>Gender</Label>
@@ -598,21 +599,21 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Basic Salary (AED)</Label>
-                                    <Input type="number" min={0} value={form.basicSalary} onChange={set('basicSalary')} placeholder="0.00" />
+                                    <NumericInput value={form.basicSalary} onChange={set('basicSalary')} placeholder="0.00" />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Housing Allowance (AED)</Label>
-                                    <Input type="number" min={0} value={form.housingAllowance} onChange={set('housingAllowance')} placeholder="0.00" />
+                                    <NumericInput value={form.housingAllowance} onChange={set('housingAllowance')} placeholder="0.00" />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Transport Allowance (AED)</Label>
-                                    <Input type="number" min={0} value={form.transportAllowance} onChange={set('transportAllowance')} placeholder="0.00" />
+                                    <NumericInput value={form.transportAllowance} onChange={set('transportAllowance')} placeholder="0.00" />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Other Allowances (AED)</Label>
-                                    <Input type="number" min={0} value={form.otherAllowances} onChange={set('otherAllowances')} placeholder="0.00" />
+                                    <NumericInput value={form.otherAllowances} onChange={set('otherAllowances')} placeholder="0.00" />
                                 </div>
                             </div>
                             {(parseFloat(form.basicSalary) || 0) + (parseFloat(form.housingAllowance) || 0) + (parseFloat(form.transportAllowance) || 0) + (parseFloat(form.otherAllowances) || 0) > 0 && (
@@ -809,7 +810,7 @@ export function EditEmployeeDialog({
                                 <div className="space-y-1.5"><Label>Last Name *</Label><Input value={form.lastName} onChange={set('lastName')} /></div>
                             </div>
                             <div className="grid grid-cols-3 gap-3">
-                                <div className="space-y-1.5"><Label>Date of Birth</Label><DatePicker value={form.dateOfBirth} max={new Date().toISOString().split('T')[0]} min="1950-01-01" onChange={setDate('dateOfBirth')} /></div>
+                                <div className="space-y-1.5"><Label>Date of Birth</Label><DatePicker value={form.dateOfBirth} max={(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 10); return d.toISOString().split('T')[0] })()} min="1950-01-01" onChange={setDate('dateOfBirth')} /></div>
                                 <div className="space-y-1.5">
                                     <Label>Gender</Label>
                                     <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v }))}>
@@ -892,12 +893,12 @@ export function EditEmployeeDialog({
                     {step === 3 && (
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Basic Salary (AED)</Label><Input type="number" min={0} value={form.basicSalary} onChange={set('basicSalary')} /></div>
-                                <div className="space-y-1.5"><Label>Housing Allowance (AED)</Label><Input type="number" min={0} value={form.housingAllowance} onChange={set('housingAllowance')} /></div>
+                                <div className="space-y-1.5"><Label>Basic Salary (AED)</Label><NumericInput value={form.basicSalary} onChange={set('basicSalary')} /></div>
+                                <div className="space-y-1.5"><Label>Housing Allowance (AED)</Label><NumericInput value={form.housingAllowance} onChange={set('housingAllowance')} /></div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Transport Allowance (AED)</Label><Input type="number" min={0} value={form.transportAllowance} onChange={set('transportAllowance')} /></div>
-                                <div className="space-y-1.5"><Label>Other Allowances (AED)</Label><Input type="number" min={0} value={form.otherAllowances} onChange={set('otherAllowances')} /></div>
+                                <div className="space-y-1.5"><Label>Transport Allowance (AED)</Label><NumericInput value={form.transportAllowance} onChange={set('transportAllowance')} /></div>
+                                <div className="space-y-1.5"><Label>Other Allowances (AED)</Label><NumericInput value={form.otherAllowances} onChange={set('otherAllowances')} /></div>
                             </div>
                             {(parseFloat(form.basicSalary) || 0) + (parseFloat(form.housingAllowance) || 0) + (parseFloat(form.transportAllowance) || 0) + (parseFloat(form.otherAllowances) || 0) > 0 && (
                                 <div className="flex justify-between items-center px-3 py-2 bg-muted rounded-lg text-sm">
@@ -1027,7 +1028,7 @@ export function EditJobDialog({
                         </div>
                         <div className="space-y-1.5">
                             <Label>Openings</Label>
-                            <Input type="number" min={1} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
+                            <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Status</Label>
@@ -1044,11 +1045,11 @@ export function EditJobDialog({
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Min Salary (AED)</Label>
-                            <Input type="number" min={0} value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} />
+                            <NumericInput value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Max Salary (AED)</Label>
-                            <Input type="number" min={0} value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} />
+                            <NumericInput value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} />
                         </div>
                     </div>
                     <div className="space-y-1.5">

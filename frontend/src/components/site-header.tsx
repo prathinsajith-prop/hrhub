@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -262,6 +262,7 @@ export function SiteHeader() {
               aria-label={t('common.userMenu', { defaultValue: 'User menu' })}
             >
               <Avatar className="h-9 w-9 border border-border">
+                {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                   {initials}
                 </AvatarFallback>
@@ -273,6 +274,7 @@ export function SiteHeader() {
             {/* Identity card */}
             <div className="flex items-center gap-3 p-4 bg-muted/40 border-b border-border">
               <Avatar className="h-11 w-11 border border-border">
+                {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
                 <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
                   {initials}
                 </AvatarFallback>

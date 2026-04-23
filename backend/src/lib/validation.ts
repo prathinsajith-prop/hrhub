@@ -8,7 +8,7 @@ import { z } from 'zod'
 export const uuidSchema = z.string().uuid('Invalid UUID format')
 
 export const paginationSchema = z.object({
-    limit: z.coerce.number().int().min(1).max(100).default(20),
+    limit: z.coerce.number().int().min(1).max(1000).default(20),
     offset: z.coerce.number().int().min(0).default(0),
     after: z.string().optional(), // cursor for keyset pagination
 })
@@ -90,6 +90,7 @@ const employeeBaseSchema = z.object({
     workLocation: z.string().max(150).optional(),
     probationEndDate: dateField,
     contractEndDate: dateField,
+    avatarUrl: z.string().max(500).optional(),
 })
 
 export const createEmployeeSchema = employeeBaseSchema
@@ -98,8 +99,12 @@ export const createEmployeeSchema = employeeBaseSchema
         { message: 'totalSalary must be >= basicSalary', path: ['totalSalary'] }
     )
     .refine(
-        d => !d.dateOfBirth || d.dateOfBirth < new Date().toISOString().split('T')[0],
-        { message: 'Date of birth must be in the past', path: ['dateOfBirth'] }
+        d => {
+            if (!d.dateOfBirth) return true
+            const min = new Date(); min.setFullYear(min.getFullYear() - 10)
+            return d.dateOfBirth <= min.toISOString().split('T')[0]
+        },
+        { message: 'Employee must be at least 10 years old', path: ['dateOfBirth'] }
     )
     .refine(
         d => !d.contractEndDate || !d.joinDate || d.contractEndDate >= d.joinDate,
@@ -119,8 +124,12 @@ export const updateEmployeeSchema = employeeBaseSchema
         { message: 'totalSalary must be >= basicSalary', path: ['totalSalary'] }
     )
     .refine(
-        d => !d.dateOfBirth || d.dateOfBirth < new Date().toISOString().split('T')[0],
-        { message: 'Date of birth must be in the past', path: ['dateOfBirth'] }
+        d => {
+            if (!d.dateOfBirth) return true
+            const min = new Date(); min.setFullYear(min.getFullYear() - 10)
+            return d.dateOfBirth <= min.toISOString().split('T')[0]
+        },
+        { message: 'Employee must be at least 10 years old', path: ['dateOfBirth'] }
     )
     .refine(
         d => !d.contractEndDate || !d.joinDate || d.contractEndDate >= d.joinDate,

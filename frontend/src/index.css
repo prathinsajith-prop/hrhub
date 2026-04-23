@@ -326,3 +326,133 @@ html[dir="rtl"] .recharts-surface {
 html[dir="rtl"] [data-rtl-flip] {
   transform: scaleX(-1);
 }
+/* ─── FullCalendar theme — modern, flat, brand-aligned ──────────────────── */
+.hrhub-fullcalendar .fc {
+  --fc-border-color: hsl(var(--border));
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: hsl(var(--muted));
+  --fc-list-event-hover-bg-color: hsl(var(--accent));
+  --fc-today-bg-color: hsl(var(--primary) / 0.06);
+  --fc-now-indicator-color: hsl(var(--primary));
+  --fc-event-border-color: transparent;
+  font-family: var(--font-body);
+}
+.hrhub-fullcalendar .fc .fc-toolbar-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground));
+}
+.hrhub-fullcalendar .fc .fc-button {
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.32rem 0.7rem;
+  text-transform: capitalize;
+  box-shadow: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.hrhub-fullcalendar .fc .fc-button:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  border-color: hsl(var(--accent-foreground) / 0.3);
+}
+.hrhub-fullcalendar .fc .fc-button-primary:not(:disabled).fc-button-active,
+.hrhub-fullcalendar .fc .fc-button-primary:not(:disabled):active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+  box-shadow: none;
+}
+.hrhub-fullcalendar .fc .fc-button:focus,
+.hrhub-fullcalendar .fc .fc-button-primary:not(:disabled).fc-button-active:focus {
+  outline: 2px solid hsl(var(--ring) / 0.4);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+.hrhub-fullcalendar .fc .fc-col-header-cell {
+  background: hsl(var(--muted) / 0.5);
+  border-color: hsl(var(--border));
+}
+.hrhub-fullcalendar .fc .fc-col-header-cell-cushion {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: hsl(var(--muted-foreground));
+  padding: 0.5rem 0.4rem;
+}
+.hrhub-fullcalendar .fc .fc-daygrid-day-number {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  padding: 0.4rem 0.5rem 0;
+}
+.hrhub-fullcalendar .fc .fc-day-other .fc-daygrid-day-number {
+  color: hsl(var(--muted-foreground) / 0.55);
+}
+.hrhub-fullcalendar .fc .fc-day-today .fc-daygrid-day-number {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-radius: 9999px;
+  width: 1.55rem;
+  height: 1.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0.35rem 0.35rem 0;
+  font-weight: 700;
+  padding: 0;
+}
+.hrhub-fullcalendar .fc .fc-daygrid-day {
+  transition: background 0.15s;
+}
+.hrhub-fullcalendar .fc .fc-daygrid-day:hover {
+  background: hsl(var(--muted) / 0.6);
+}
+.hrhub-fullcalendar .fc-event {
+  border-radius: 6px;
+  padding: 1px 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  border-left: 3px solid;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+.hrhub-fullcalendar .fc-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px hsl(var(--foreground) / 0.08);
+}
+.hrhub-fullcalendar .fc-daygrid-event-dot { display: none; }
+.hrhub-fullcalendar .fc-list-day-cushion {
+  background: hsl(var(--muted) / 0.5) !important;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: hsl(var(--muted-foreground));
+}
+.hrhub-fullcalendar .fc-list-event-title,
+.hrhub-fullcalendar .fc-list-event-time {
+  font-size: 0.82rem;
+}
+.hrhub-fullcalendar .fc-scrollgrid {
+  border-radius: 8px;
+  overflow: hidden;
+}
+.hrhub-fullcalendar .fc-popover {
+  border-radius: 10px;
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 10px 30px hsl(var(--foreground) / 0.12);
+  overflow: hidden;
+}
+.hrhub-fullcalendar .fc-popover-header {
+  background: hsl(var(--muted));
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  font-size: 0.78rem;
+}

@@ -1,7 +1,7 @@
 import { eq, and, desc, lte, isNull, sql, getTableColumns, or, lt } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
-import { documents } from '../../db/schema/index.js'
+import { documents, employees } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewDocument = InferInsertModel<typeof documents>
@@ -25,8 +25,15 @@ export async function listDocuments(tenantId: string, params: { employeeId?: str
     }
 
     const pageSize = limit + 1
-    const rows = await db.select(getTableColumns(documents))
+    const rows = await db.select({
+        ...getTableColumns(documents),
+        employeeName: sql<string | null>`CASE WHEN ${employees.id} IS NULL THEN NULL ELSE ${employees.firstName} || ' ' || ${employees.lastName} END`,
+        employeeNo: employees.employeeNo,
+        employeeAvatarUrl: employees.avatarUrl,
+        employeeDepartment: employees.department,
+    })
         .from(documents)
+        .leftJoin(employees, eq(employees.id, documents.employeeId))
         .where(and(...conditions))
         .orderBy(desc(documents.createdAt), desc(documents.id))
         .limit(cursor ? pageSize : limit)

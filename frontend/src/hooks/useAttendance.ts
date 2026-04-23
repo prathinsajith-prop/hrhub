@@ -14,6 +14,10 @@ export interface AttendanceRecord {
     notes?: string
     createdAt: string
     updatedAt: string
+    employeeName?: string
+    employeeNo?: string
+    employeeDepartment?: string
+    employeeAvatarUrl?: string
 }
 
 export function useAttendance(params: { employeeId?: string; startDate?: string; endDate?: string; status?: string } = {}) {

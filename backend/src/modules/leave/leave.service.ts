@@ -15,8 +15,16 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
     if (status) conditions.push(eq(leaveRequests.status, status as never))
     if (leaveType) conditions.push(eq(leaveRequests.leaveType, leaveType as never))
 
-    const rows = await db.select({ ...getTableColumns(leaveRequests), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+    const rows = await db.select({
+        ...getTableColumns(leaveRequests),
+        employeeName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.lastName}, '')`.as('employee_name'),
+        employeeNo: employees.employeeNo,
+        employeeAvatarUrl: employees.avatarUrl,
+        employeeDepartment: employees.department,
+        totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
+    })
         .from(leaveRequests)
+        .leftJoin(employees, eq(employees.id, leaveRequests.employeeId))
         .where(and(...conditions))
         .orderBy(desc(leaveRequests.createdAt))
         .limit(limit).offset(offset)

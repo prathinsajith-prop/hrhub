@@ -13,6 +13,7 @@ export {
 export { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 export { Progress } from "@/components/ui/progress";
 export { Input } from "@/components/ui/input";
+export { NumericInput } from "@/components/ui/numeric-input";
 export { Label } from "@/components/ui/label";
 export { Textarea } from "@/components/ui/textarea";
 export { Separator } from "@/components/ui/separator";

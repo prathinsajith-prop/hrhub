@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
 import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus, ShieldCheck, Edit2 } from 'lucide-react'
@@ -14,12 +15,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { ImageUpload } from '@/components/ui/form-controls'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectLabel, SelectGroup } from '@/components/ui/form-controls'
 import { DatePicker } from '@/components/ui/date-picker'
-import { Label, Input } from '@/components/ui/primitives'
+import { Label } from '@/components/ui/primitives'
 import { api } from '@/lib/api'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
 import { useDocuments, useVerifyDocument, useDeleteDocument } from '@/hooks/useDocuments'
 import { useEmployees } from '@/hooks/useEmployees'
 import { EditDocumentDialog } from '@/components/shared/action-dialogs'
+import { InitialsAvatar } from '@/components/shared/Avatar'
+import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import type { Document, DocStatus } from '@/types'
 
 const statusBadge: Record<DocStatus, { variant: any; label: string }> = {
@@ -42,15 +45,23 @@ function ExpiryCell({ date }: { date?: string }) {
   )
 }
 
-function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+function UploadDocumentDialog({ open, onOpenChange, defaultEmployeeId, defaultCategory }: { open: boolean; onOpenChange: (o: boolean) => void; defaultEmployeeId?: string; defaultCategory?: string }) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [employeeId, setEmployeeId] = useState('')
-  const [category, setCategory] = useState('')
+  const [employeeId, setEmployeeId] = useState(defaultEmployeeId ?? '')
+  const [category, setCategory] = useState(defaultCategory ?? '')
   const [expiryDate, setExpiryDate] = useState('')
   const [saving, setSaving] = useState(false)
-  const { data: empData } = useEmployees({ limit: 100 })
+  const { data: empData } = useEmployees({ limit: 1000 })
   const employees = (empData?.data as any[]) ?? []
   const qc = useQueryClient()
+
+  // Sync defaults when reopened with new query params
+  useEffect(() => {
+    if (open) {
+      if (defaultEmployeeId) setEmployeeId(defaultEmployeeId)
+      if (defaultCategory) setCategory(defaultCategory)
+    }
+  }, [open, defaultEmployeeId, defaultCategory])
 
   const handleSave = async () => {
     if (!employeeId) { toast.warning('Employee required', 'Please select an employee.'); return }
@@ -165,6 +176,7 @@ const columns = (
   onDelete: (d: Document) => void,
   onVerify: (d: Document) => void,
   onEdit: (d: Document) => void,
+  onDownload: (d: Document) => void,
 ): ColumnDef<Document>[] => [
     {
       accessorKey: 'docType',
@@ -185,7 +197,23 @@ const columns = (
     {
       accessorKey: 'employeeName',
       header: 'Employee',
-      cell: ({ getValue }) => <span className="text-sm">{getValue() as string || '—'}</span>,
+      cell: ({ row: { original: d } }) => {
+        const name = d.employeeName || '—'
+        return (
+          <div className="flex items-center gap-2.5 min-w-0">
+            <InitialsAvatar name={name} src={d.employeeAvatarUrl} size="sm" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{name}</p>
+              {(d.employeeNo || d.employeeDepartment) && (
+                <p className="text-[11px] text-muted-foreground truncate">
+                  {[d.employeeNo, d.employeeDepartment].filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </div>
+          </div>
+        )
+      },
+      size: 220,
     },
     {
       accessorKey: 'status',
@@ -236,7 +264,7 @@ const columns = (
             size="icon-sm"
             variant="ghost"
             aria-label="Download document"
-            onClick={() => onView(d)}
+            onClick={() => onDownload(d)}
           >
             <Download className="h-3.5 w-3.5" />
           </Button>
@@ -276,9 +304,14 @@ const columns = (
 
 export function DocumentsPage() {
   const { t } = useTranslation()
-  const [uploadOpen, setUploadOpen] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const qpEmployee = searchParams.get('employeeId') ?? ''
+  const qpCategory = searchParams.get('category') ?? ''
+  const qpUpload = searchParams.get('upload') === '1' || !!qpEmployee || !!qpCategory
+  const [uploadOpen, setUploadOpen] = useState(qpUpload)
   const [editTarget, setEditTarget] = useState<Document | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
+  const [viewTarget, setViewTarget] = useState<Document | null>(null)
   const { data: docsData, isLoading } = useDocuments({ limit: 100 })
   const documents: Document[] = (docsData?.data as Document[]) ?? []
   const expiring = documents.filter((d: any) => d.status === 'expiring_soon').length
@@ -287,7 +320,23 @@ export function DocumentsPage() {
   const deleteDoc = useDeleteDocument()
 
   const handleView = (d: Document) => {
-    window.open(`/api/v1/documents/${d.id}/file`, '_blank')
+    setViewTarget(d)
+  }
+
+  const handleDownload = async (d: Document) => {
+    try {
+      const res = await api.get<{ data: { downloadUrl: string } }>(`/documents/${d.id}/download-url`)
+      const a = document.createElement('a')
+      a.href = res.data.downloadUrl
+      a.download = (d as any).fileName ?? d.docType ?? 'document'
+      a.target = '_blank'
+      a.rel = 'noopener'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } catch {
+      toast.error('Download failed', 'Could not download this document.')
+    }
   }
 
   const handleVerify = (d: Document) => {
@@ -311,7 +360,14 @@ export function DocumentsPage() {
     })
   }
 
-  const cols = columns(handleView, (d) => setDeleteTarget(d), handleVerify, (d) => setEditTarget(d))
+  // Build the table column definitions once per page mount. The handlers below
+  // capture stable setState/mutation references, so we use an empty dep array
+  // and silence the lint rule explicitly.
+  const cols = useMemo(
+    () => columns(handleView, (d) => setDeleteTarget(d), handleVerify, (d) => setEditTarget(d), handleDownload),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
 
   return (
     <PageWrapper>
@@ -379,8 +435,22 @@ export function DocumentsPage() {
           bulkActions={(selected) => (
             <>
               <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}
-                onClick={() => {
-                  selected.forEach((row: any) => window.open(`/api/v1/documents/${row.id}/file`, '_blank'))
+                onClick={async () => {
+                  for (const row of selected as any[]) {
+                    try {
+                      const res = await api.get<{ data: { downloadUrl: string } }>(`/documents/${row.id}/download-url`)
+                      const a = document.createElement('a')
+                      a.href = res.data.downloadUrl
+                      a.download = row.fileName ?? row.docType ?? 'document'
+                      a.target = '_blank'
+                      a.rel = 'noopener'
+                      document.body.appendChild(a)
+                      a.click()
+                      a.remove()
+                    } catch {
+                      // skip failures silently to avoid blocking the loop
+                    }
+                  }
                 }}>
                 Download
               </Button>
@@ -396,7 +466,21 @@ export function DocumentsPage() {
           )}
         />
       </Card>
-      <UploadDocumentDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+      <UploadDocumentDialog
+        open={uploadOpen}
+        onOpenChange={(o) => {
+          setUploadOpen(o)
+          if (!o && (qpEmployee || qpCategory || searchParams.get('upload'))) {
+            const next = new URLSearchParams(searchParams)
+            next.delete('employeeId')
+            next.delete('category')
+            next.delete('upload')
+            setSearchParams(next, { replace: true })
+          }
+        }}
+        defaultEmployeeId={qpEmployee || undefined}
+        defaultCategory={qpCategory || undefined}
+      />
       {editTarget && (
         <EditDocumentDialog
           open={!!editTarget}
@@ -412,6 +496,12 @@ export function DocumentsPage() {
         confirmLabel={deleteDoc.isPending ? 'Archiving…' : 'Archive'}
         variant="destructive"
         onConfirm={handleDelete}
+      />
+      <DocumentViewerDialog
+        open={!!viewTarget}
+        onOpenChange={(o) => !o && setViewTarget(null)}
+        documentId={viewTarget?.id ?? null}
+        fileName={(viewTarget as any)?.fileName ?? viewTarget?.docType}
       />
     </PageWrapper>
   )

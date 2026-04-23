@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -112,7 +112,7 @@ const defaultForm: InitiateForm = {
 export function ExitPage() {
     const { t } = useTranslation()
     const { data: exits, isLoading } = useExitRequests()
-    const { data: employees } = useEmployees({ limit: 200 })
+    const { data: employees } = useEmployees({ limit: 1000 })
     const initiate = useInitiateExit()
     const approve = useApproveExit()
     const markPaid = useMarkSettlementPaid()
@@ -260,7 +260,7 @@ export function ExitPage() {
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Notice Period (days)</Label>
-                                <Input type="number" value={form.noticePeriodDays} onChange={e => set('noticePeriodDays', Number(e.target.value))} />
+                                <NumericInput decimal={false} value={form.noticePeriodDays} onChange={e => set('noticePeriodDays', Number(e.target.value))} />
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Reason</Label>

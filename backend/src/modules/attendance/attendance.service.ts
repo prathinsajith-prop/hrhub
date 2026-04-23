@@ -62,7 +62,28 @@ export async function getAttendance(tenantId: string, params: {
     if (params.startDate) conditions.push(gte(attendanceRecords.date, params.startDate))
     if (params.endDate) conditions.push(lte(attendanceRecords.date, params.endDate))
 
-    return db.select().from(attendanceRecords).where(and(...conditions))
+    return db.select({
+        id: attendanceRecords.id,
+        tenantId: attendanceRecords.tenantId,
+        employeeId: attendanceRecords.employeeId,
+        date: attendanceRecords.date,
+        checkIn: attendanceRecords.checkIn,
+        checkOut: attendanceRecords.checkOut,
+        hoursWorked: attendanceRecords.hoursWorked,
+        overtimeHours: attendanceRecords.overtimeHours,
+        status: attendanceRecords.status,
+        notes: attendanceRecords.notes,
+        createdAt: attendanceRecords.createdAt,
+        updatedAt: attendanceRecords.updatedAt,
+        employeeName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.lastName}, '—')`,
+        employeeNo: employees.employeeNo,
+        employeeDepartment: employees.department,
+        employeeAvatarUrl: employees.avatarUrl,
+    })
+        .from(attendanceRecords)
+        .leftJoin(employees, eq(employees.id, attendanceRecords.employeeId))
+        .where(and(...conditions))
+        .orderBy(sql`${attendanceRecords.date} DESC, ${attendanceRecords.checkIn} DESC NULLS LAST`)
 }
 
 export async function upsertAttendance(tenantId: string, data: {

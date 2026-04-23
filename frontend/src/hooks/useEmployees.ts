@@ -66,3 +66,18 @@ export function useArchiveEmployee() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
     })
 }
+
+export function useUploadEmployeeAvatar(id: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: async (file: File) => {
+            const fd = new FormData()
+            fd.append('file', file)
+            return api.upload<{ data: { avatarUrl: string } }>(`/employees/${id}/avatar`, fd)
+        },
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['employees'] })
+            qc.invalidateQueries({ queryKey: ['employees', id] })
+        },
+    })
+}

@@ -118,13 +118,46 @@ export default async function (fastify: any): Promise<void> {
 
     // POST /api/v1/jobs/:id/applications
     fastify.post('/jobs/:id/applications', {
-        schema: { tags: ['Recruitment'] },
+        preHandler: [fastify.authenticate],
+        schema: {
+            tags: ['Recruitment'],
+            body: {
+                type: 'object',
+                required: ['name', 'email'],
+                properties: {
+                    name: { type: 'string', minLength: 1 },
+                    email: { type: 'string', format: 'email' },
+                    phone: { type: 'string' },
+                    nationality: { type: 'string' },
+                    experience: { type: 'integer', minimum: 0 },
+                    expectedSalary: { type: 'number', minimum: 0 },
+                    currentSalary: { type: 'number', minimum: 0 },
+                    resumeUrl: { type: 'string' },
+                    notes: { type: 'string' },
+                },
+                additionalProperties: false,
+            },
+        },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        const job = await getJob(request.user?.tenantId ?? '', id)
+        const tenantId = request.user.tenantId
+        const job = await getJob(tenantId, id)
         if (!job) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found' })
         const body = request.body as Record<string, unknown>
-        const application = await createApplication(job.tenantId, id, body as never)
+        // New applications always start at 'received' — stage transitions go through PATCH /stage.
+        const application = await createApplication(job.tenantId, id, { ...body, stage: 'received' } as never)
+        recordActivity({
+            tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'application',
+            entityId: application.id,
+            entityName: application.name,
+            action: 'create',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(201).send({ data: application })
     })
 
@@ -179,6 +212,8 @@ export default async function (fastify: any): Promise<void> {
             body: {
                 type: 'object',
                 properties: {
+                    name: { type: 'string', minLength: 1 },
+                    email: { type: 'string', format: 'email' },
                     notes: { type: 'string' },
                     score: { type: 'number' },
                     expectedSalary: { type: 'number' },

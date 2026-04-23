@@ -22,7 +22,14 @@ export const employeeStep1Schema = z.object({
     dateOfBirth: z
         .string()
         .trim()
-        .refine((v) => !v || new Date(v) < new Date(), 'Date of birth must be in the past')
+        .refine((v) => {
+            if (!v) return true
+            const dob = new Date(v)
+            if (isNaN(dob.getTime())) return false
+            const tenYearsAgo = new Date()
+            tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10)
+            return dob <= tenYearsAgo
+        }, 'Employee must be at least 10 years old')
         .optional()
         .or(z.literal('')),
 })

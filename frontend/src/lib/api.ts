@@ -44,8 +44,13 @@ async function request<T>(
     }
 
     const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
         ...(init.headers as Record<string, string>),
+    }
+
+    // Only set JSON Content-Type when actually sending a body — Fastify rejects
+    // empty-body requests that declare application/json (e.g. DELETE without body).
+    if (init.body != null && !headers['Content-Type'] && !headers['content-type']) {
+        headers['Content-Type'] = 'application/json'
     }
 
     if (accessToken) {

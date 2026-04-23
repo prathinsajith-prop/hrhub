@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/card'
@@ -73,13 +74,17 @@ const defaultForm: ReviewForm = {
 
 export function PerformancePage() {
     const { t } = useTranslation()
+    const [searchParams, setSearchParams] = useSearchParams()
+    const lockedEmployeeId = searchParams.get('employeeId') ?? ''
     const { data: reviews, isLoading } = usePerformanceReviews()
-    const { data: employees } = useEmployees({ limit: 200 })
+    const { data: employees } = useEmployees({ limit: 1000 })
     const createReview = useCreateReview()
     const updateReview = useUpdateReview()
 
-    const [showDialog, setShowDialog] = useState(false)
-    const [form, setForm] = useState<ReviewForm>(defaultForm)
+    const [showDialog, setShowDialog] = useState(!!lockedEmployeeId)
+    const [form, setForm] = useState<ReviewForm>(() =>
+        lockedEmployeeId ? { ...defaultForm, employeeId: lockedEmployeeId } : defaultForm,
+    )
     const [activeTab, setActiveTab] = useState<'all' | 'draft' | 'completed'>('all')
 
     const set = (k: keyof ReviewForm, v: string | number) => setForm(f => ({ ...f, [k]: v }))
@@ -88,6 +93,21 @@ export function PerformancePage() {
         await createReview.mutateAsync(form)
         setShowDialog(false)
         setForm(defaultForm)
+        if (lockedEmployeeId) {
+            const next = new URLSearchParams(searchParams)
+            next.delete('employeeId')
+            setSearchParams(next, { replace: true })
+        }
+    }
+
+    function handleDialogChange(open: boolean) {
+        setShowDialog(open)
+        if (!open && lockedEmployeeId) {
+            const next = new URLSearchParams(searchParams)
+            next.delete('employeeId')
+            setSearchParams(next, { replace: true })
+            setForm(defaultForm)
+        }
     }
 
     const empList = Array.isArray(employees) ? employees : (employees as any)?.data ?? []
@@ -179,7 +199,7 @@ export function PerformancePage() {
                 })}
             </div>
 
-            <Dialog open={showDialog} onOpenChange={setShowDialog}>
+            <Dialog open={showDialog} onOpenChange={handleDialogChange}>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>New Performance Review</DialogTitle>
@@ -188,7 +208,7 @@ export function PerformancePage() {
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label>Employee</Label>
-                                <Select value={form.employeeId} onValueChange={v => set('employeeId', v)}>
+                                <Select value={form.employeeId} onValueChange={v => set('employeeId', v)} disabled={!!lockedEmployeeId}>
                                     <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
                                     <SelectContent>
                                         {empList.map((e: any) => (
@@ -196,6 +216,9 @@ export function PerformancePage() {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {lockedEmployeeId && (
+                                    <p className="text-[11px] text-muted-foreground">Employee preselected from profile.</p>
+                                )}
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Period (e.g. 2024-Q2)</Label>
@@ -240,7 +263,7 @@ export function PerformancePage() {
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+                        <Button variant="outline" onClick={() => handleDialogChange(false)}>Cancel</Button>
                         <Button onClick={handleSubmit} disabled={createReview.isPending || !form.employeeId || !form.period}>
                             {createReview.isPending ? 'Saving...' : 'Save Review'}
                         </Button>

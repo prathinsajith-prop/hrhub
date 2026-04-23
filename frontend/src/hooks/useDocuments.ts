@@ -31,6 +31,22 @@ export function useCreateDocument() {
     })
 }
 
+export function useUploadDocument() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: async (input: { file: File; employeeId?: string; category: string; docType?: string; expiryDate?: string }) => {
+            const fd = new FormData()
+            fd.append('file', input.file)
+            if (input.employeeId) fd.append('employeeId', input.employeeId)
+            fd.append('category', input.category)
+            if (input.docType) fd.append('docType', input.docType)
+            if (input.expiryDate) fd.append('expiryDate', input.expiryDate)
+            return api.upload<{ data: unknown }>(`/documents/upload`, fd)
+        },
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+    })
+}
+
 export function useUpdateDocument(id: string) {
     const qc = useQueryClient()
     return useMutation({

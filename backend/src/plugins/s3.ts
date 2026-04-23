@@ -1,9 +1,10 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import fp from 'fastify-plugin'
 import { loadEnv } from '../config/env.js'
 
 let s3Client: S3Client | null = null
+let bucketEnsured = false
 
 export function getS3Client(): S3Client {
     if (s3Client) return s3Client
@@ -20,12 +21,49 @@ export function getS3Client(): S3Client {
     return s3Client
 }
 
+/** Ensure the configured bucket exists in MinIO/S3 — creates it on first call. */
+export async function ensureBucket(): Promise<void> {
+    if (bucketEnsured) return
+    const env = loadEnv()
+    const client = getS3Client()
+    try {
+        await client.send(new HeadBucketCommand({ Bucket: env.S3_BUCKET }))
+    } catch {
+        try {
+            await client.send(new CreateBucketCommand({ Bucket: env.S3_BUCKET }))
+        } catch (err: any) {
+            // Race or already-exists error — ignore
+            if (err?.name !== 'BucketAlreadyOwnedByYou' && err?.name !== 'BucketAlreadyExists') {
+                throw err
+            }
+        }
+    }
+    bucketEnsured = true
+}
+
+/** Direct server-side PUT (use for backend-streamed multipart uploads). */
+export async function uploadObject(
+    key: string,
+    body: Buffer | Uint8Array | string,
+    contentType: string,
+): Promise<void> {
+    const env = loadEnv()
+    await ensureBucket()
+    await getS3Client().send(new PutObjectCommand({
+        Bucket: env.S3_BUCKET,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+    }))
+}
+
 export async function generateUploadUrl(
     key: string,
     contentType: string,
     expiresIn = 300,
 ): Promise<string> {
     const env = loadEnv()
+    await ensureBucket()
     const command = new PutObjectCommand({
         Bucket: env.S3_BUCKET,
         Key: key,
@@ -55,6 +93,8 @@ const s3Plugin = fp(async (fastify) => {
         generateDownloadUrl,
         deleteObject,
         buildS3Key,
+        uploadObject,
+        ensureBucket,
     })
 })
 

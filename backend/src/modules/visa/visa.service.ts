@@ -28,6 +28,8 @@ export async function listVisas(tenantId: string, params: { status?: string; urg
         ...getTableColumns(visaApplications),
         employeeName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.lastName}, '')`.as('employee_name'),
         employeeNo: employees.employeeNo,
+        employeeAvatarUrl: employees.avatarUrl,
+        employeeDepartment: employees.department,
     })
         .from(visaApplications)
         .leftJoin(employees, eq(employees.id, visaApplications.employeeId))
@@ -67,6 +69,8 @@ export async function getVisa(tenantId: string, id: string) {
         ...getTableColumns(visaApplications),
         employeeName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.lastName}, '')`.as('employee_name'),
         employeeNo: employees.employeeNo,
+        employeeAvatarUrl: employees.avatarUrl,
+        employeeDepartment: employees.department,
     })
         .from(visaApplications)
         .leftJoin(employees, eq(employees.id, visaApplications.employeeId))

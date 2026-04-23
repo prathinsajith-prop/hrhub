@@ -109,7 +109,9 @@ function actionVerb(action: string): string {
 export function AuditLogPage() {
     const { t } = useTranslation()
     const [entityType, setEntityType] = useState('')
+    const [actionFilter, setActionFilter] = useState('')
     const [search, setSearch] = useState('')
+    const [dateRange, setDateRange] = useState<'today' | '7d' | '30d' | 'all'>('30d')
 
     const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteActivityLogs({
         entityType: entityType || undefined,
@@ -136,15 +138,30 @@ export function AuditLogPage() {
     }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
     const filtered = useMemo(() => {
-        if (!search) return logs
-        const q = search.toLowerCase()
-        return logs.filter(l =>
-            l.actorName?.toLowerCase().includes(q) ||
-            l.entityName?.toLowerCase().includes(q) ||
-            l.action.toLowerCase().includes(q) ||
-            l.entityType.toLowerCase().includes(q),
-        )
-    }, [logs, search])
+        const now = Date.now()
+        const rangeMs: Record<typeof dateRange, number | null> = {
+            today: 24 * 3600 * 1000,
+            '7d': 7 * 24 * 3600 * 1000,
+            '30d': 30 * 24 * 3600 * 1000,
+            all: null,
+        }
+        const cutoff = rangeMs[dateRange]
+        let result = logs
+        if (cutoff !== null) {
+            result = result.filter(l => now - new Date(l.createdAt).getTime() <= cutoff)
+        }
+        if (actionFilter) result = result.filter(l => l.action === actionFilter)
+        if (search) {
+            const q = search.toLowerCase()
+            result = result.filter(l =>
+                l.actorName?.toLowerCase().includes(q) ||
+                l.entityName?.toLowerCase().includes(q) ||
+                l.action.toLowerCase().includes(q) ||
+                l.entityType.toLowerCase().includes(q),
+            )
+        }
+        return result
+    }, [logs, search, actionFilter, dateRange])
 
     const grouped = useMemo(() => {
         const map = new Map<string, ActivityLog[]>()
@@ -169,7 +186,30 @@ export function AuditLogPage() {
         return { total: filtered.length, counts, actorCount: actors.size }
     }, [filtered])
 
-    const hasFilters = !!entityType || !!search
+    const hasFilters = !!entityType || !!search || !!actionFilter || dateRange !== '30d'
+
+    function exportCsv() {
+        const headers = ['Timestamp', 'Actor', 'Role', 'Action', 'Entity Type', 'Entity Name', 'Entity Id', 'IP']
+        const rows = filtered.map(l => [
+            new Date(l.createdAt).toISOString(),
+            l.actorName ?? '',
+            l.actorRole ?? '',
+            l.action,
+            l.entityType,
+            l.entityName ?? '',
+            l.entityId ?? '',
+            l.ipAddress ?? '',
+        ])
+        const escape = (s: string) => `"${String(s).replace(/"/g, '""')}"`
+        const csv = [headers, ...rows].map(r => r.map(escape).join(',')).join('\n')
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `activity-log-${new Date().toISOString().slice(0, 10)}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+    }
 
     return (
         <PageWrapper>
@@ -209,17 +249,49 @@ export function AuditLogPage() {
                                 ))}
                             </SelectContent>
                         </Select>
+                        <Select value={actionFilter || '__all__'} onValueChange={(v) => setActionFilter(v === '__all__' ? '' : v)}>
+                            <SelectTrigger className="h-9 w-40">
+                                <SelectValue placeholder="All actions" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__all__">All actions</SelectItem>
+                                {Object.keys(ACTION_META).map(a => (
+                                    <SelectItem key={a} value={a} className="capitalize">{a}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Button variant="outline" size="sm" className="h-9 gap-1" onClick={exportCsv}>
+                            <Download className="h-3.5 w-3.5" /> Export
+                        </Button>
                         {hasFilters && (
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-9 px-2 text-xs gap-1"
-                                onClick={() => { setSearch(''); setEntityType('') }}
+                                onClick={() => { setSearch(''); setEntityType(''); setActionFilter(''); setDateRange('30d') }}
                             >
                                 <X className="h-3.5 w-3.5" /> Clear
                             </Button>
                         )}
                     </div>
+                </div>
+                <div className="flex items-center gap-1 mt-3 pt-3 border-t">
+                    <span className="text-[11px] text-muted-foreground mr-2">Range:</span>
+                    {(['today', '7d', '30d', 'all'] as const).map(r => (
+                        <button
+                            key={r}
+                            type="button"
+                            onClick={() => setDateRange(r)}
+                            className={cn(
+                                'px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors',
+                                dateRange === r
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-muted-foreground hover:bg-muted',
+                            )}
+                        >
+                            {r === 'today' ? 'Today' : r === '7d' ? 'Last 7 days' : r === '30d' ? 'Last 30 days' : 'All time'}
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -242,7 +314,7 @@ export function AuditLogPage() {
                             </p>
                         </div>
                         {hasFilters && (
-                            <Button variant="outline" size="sm" onClick={() => { setSearch(''); setEntityType('') }}>
+                            <Button variant="outline" size="sm" onClick={() => { setSearch(''); setEntityType(''); setActionFilter(''); setDateRange('30d') }}>
                                 Clear filters
                             </Button>
                         )}

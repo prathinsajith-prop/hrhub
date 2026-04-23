@@ -11,6 +11,7 @@ interface AuthState {
   login: (user: User, tenant: Tenant, accessToken: string, refreshToken: string) => void
   logout: () => void
   refreshTokens: () => Promise<boolean>
+  setUser: (patch: Partial<User>) => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -23,6 +24,11 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       login: (user, tenant, accessToken, refreshToken) =>
         set({ user, tenant, isAuthenticated: true, accessToken, refreshToken }),
+      setUser: (patch) => {
+        const current = get().user
+        if (!current) return
+        set({ user: { ...current, ...patch } })
+      },
       logout: () => {
         // Fire-and-forget logout call
         const token = get().accessToken

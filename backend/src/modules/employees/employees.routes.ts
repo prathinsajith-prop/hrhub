@@ -8,7 +8,11 @@ import { recordActivity } from '../audit/audit.service.js'
 import { db } from '../../db/index.js'
 import { entities } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
-
+import { createWriteStream, existsSync, createReadStream } from 'node:fs'
+import { mkdir } from 'node:fs/promises'
+import { join, extname } from 'node:path'
+import { pipeline } from 'node:stream/promises'
+import { randomUUID } from 'node:crypto'
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
@@ -192,6 +196,67 @@ export default async function (fastify: any): Promise<void> {
 
         const failed = rows.length - created
         return reply.code(created > 0 || failed === 0 ? 201 : 400).send({ created, failed, errors: results })
+    })
+
+    // POST /api/v1/employees/:id/avatar — multipart upload of profile image
+    fastify.post('/:id/avatar', {
+        preHandler: [fastify.authenticate],
+        schema: { tags: ['Employees'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const part = await request.file()
+        if (!part) return reply.code(400).send({ message: 'No file provided' })
+
+        const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+        if (!allowed.includes(part.mimetype)) {
+            return reply.code(400).send({ message: 'Only JPEG, PNG, WEBP, or GIF images are allowed' })
+        }
+
+        const uploadsDir = join(new URL('../../../../uploads', import.meta.url).pathname, 'avatars')
+        if (!existsSync(uploadsDir)) await mkdir(uploadsDir, { recursive: true })
+
+        const ext = extname(part.filename) || '.jpg'
+        const savedName = `${id}-${randomUUID()}${ext}`
+        const filePath = join(uploadsDir, savedName)
+        await pipeline(part.file, createWriteStream(filePath))
+
+        const avatarUrl = `/api/v1/employees/avatars/${savedName}`
+        const updated = await updateEmployee(request.user.tenantId, id, { avatarUrl } as never)
+        if (!updated) return reply.code(404).send({ message: 'Employee not found' })
+
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: updated.id,
+            entityName: `${updated.firstName} ${updated.lastName}`,
+            action: 'update',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+
+        return reply.send({ data: { avatarUrl } })
+    })
+
+    // GET /api/v1/employees/avatars/:filename — serve avatar image (no auth required so <img src> works)
+    fastify.get('/avatars/:filename', { schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
+        const { filename } = request.params as { filename: string }
+        // Prevent directory traversal
+        if (filename.includes('/') || filename.includes('..') || filename.includes('\\')) {
+            return reply.code(400).send({ message: 'Invalid filename' })
+        }
+        const filePath = join(new URL('../../../../uploads', import.meta.url).pathname, 'avatars', filename)
+        if (!existsSync(filePath)) return reply.code(404).send({ message: 'Avatar not found' })
+        const ext = extname(filename).toLowerCase()
+        const mimeMap: Record<string, string> = {
+            '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+            '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif',
+        }
+        reply.header('Content-Type', mimeMap[ext] ?? 'application/octet-stream')
+        reply.header('Cache-Control', 'public, max-age=86400')
+        return reply.send(createReadStream(filePath))
     })
 }
 

@@ -19,6 +19,10 @@ import {
   Edit2,
   Clock,
   Download,
+  Eye,
+  Camera,
+  Loader2,
+  Plus,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -27,9 +31,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { useEmployee } from '@/hooks/useEmployees'
-import { useDocuments } from '@/hooks/useDocuments'
+import { useEmployee, useUploadEmployeeAvatar } from '@/hooks/useEmployees'
+import { useDocuments, useUploadDocument } from '@/hooks/useDocuments'
+import { usePerformanceReviews } from '@/hooks/usePerformance'
 import { PageWrapper } from '@/components/layout/PageWrapper'
+import { EditEmployeeDialog } from '@/components/shared/action-dialogs'
+import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
+import { toast } from 'sonner'
+import { api } from '@/lib/api'
 
 const statusVariant: Record<string, any> = {
   active: 'success',
@@ -68,8 +77,46 @@ export function EmployeeDetailPage() {
   const navigate = useNavigate()
   const { data: employee, isLoading } = useEmployee(id!)
   const { data: docsResult, isLoading: docsLoading } = useDocuments({ employeeId: id })
+  const { data: reviews, isLoading: reviewsLoading } = usePerformanceReviews(id)
+  const uploadAvatar = useUploadEmployeeAvatar(id!)
+  const uploadDoc = useUploadDocument()
+  const [editOpen, setEditOpen] = React.useState(false)
+  const [viewDoc, setViewDoc] = React.useState<{ id: string; fileName?: string } | null>(null)
+  const avatarInputRef = React.useRef<HTMLInputElement>(null)
+  const docInputRef = React.useRef<HTMLInputElement>(null)
 
   const e = employee as any
+
+  const handleAvatarChange = (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const file = ev.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be smaller than 5 MB')
+      return
+    }
+    uploadAvatar.mutate(file, {
+      onSuccess: () => toast.success('Profile image updated'),
+      onError: (err: any) => toast.error(err?.message ?? 'Upload failed'),
+    })
+    ev.target.value = ''
+  }
+
+  const handleDocChange = (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const file = ev.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File must be smaller than 10 MB')
+      return
+    }
+    uploadDoc.mutate(
+      { file, employeeId: id, category: 'other', docType: file.name },
+      {
+        onSuccess: () => toast.success('Document uploaded'),
+        onError: (err: any) => toast.error(err?.message ?? 'Upload failed'),
+      },
+    )
+    ev.target.value = ''
+  }
 
   if (isLoading) {
     return (
@@ -136,29 +183,93 @@ export function EmployeeDetailPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}>
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<Download className="h-3.5 w-3.5" />}
+            onClick={() => {
+              const rows: [string, string][] = [
+                ['Employee No', e.employeeNo ?? ''],
+                ['Full Name', e.fullName ?? ''],
+                ['Designation', e.designation ?? ''],
+                ['Department', e.department ?? ''],
+                ['Email', e.email ?? ''],
+                ['Phone', e.phone ?? ''],
+                ['Nationality', e.nationality ?? ''],
+                ['Status', e.status ?? ''],
+                ['Join Date', e.joinDate ?? ''],
+                ['Visa Expiry', e.visaExpiry ?? ''],
+                ['Passport No', e.passportNo ?? ''],
+                ['Emirates ID', e.emiratesId ?? ''],
+              ]
+              const csv = rows
+                .map(([k, v]) => `"${k}","${String(v).replace(/"/g, '""')}"`)
+                .join('\n')
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+              const a = document.createElement('a')
+              a.href = URL.createObjectURL(blob)
+              a.download = `employee-${e.employeeNo ?? e.id}.csv`
+              document.body.appendChild(a)
+              a.click()
+              a.remove()
+            }}
+          >
             Export
           </Button>
-          <Button size="sm" leftIcon={<Edit2 className="h-3.5 w-3.5" />}>
+          <Button size="sm" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditOpen(true)}>
             Edit
           </Button>
         </div>
       </div>
+
+      {editOpen && <EditEmployeeDialog open={editOpen} onOpenChange={setEditOpen} employee={e} />}
+      <input
+        ref={avatarInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="hidden"
+        onChange={handleAvatarChange}
+      />
+      <input ref={docInputRef} type="file" className="hidden" onChange={handleDocChange} />
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-5">
         {/* Sidebar profile card */}
         <div className="lg:col-span-1 space-y-4">
           <Card>
             <CardContent className="p-5 flex flex-col items-center text-center">
-              <Avatar className="h-20 w-20 mb-3">
-                {e.avatarUrl && <AvatarImage src={e.avatarUrl} alt={e.fullName} />}
-                <AvatarFallback className="text-xl font-bold bg-primary text-primary-foreground">
-                  {getInitials(e.fullName)}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative group mb-3">
+                <Avatar className="h-20 w-20">
+                  {e.avatarUrl && <AvatarImage src={e.avatarUrl} alt={e.fullName} />}
+                  <AvatarFallback className="text-xl font-bold bg-primary text-primary-foreground">
+                    {getInitials(e.fullName)}
+                  </AvatarFallback>
+                </Avatar>
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={uploadAvatar.isPending}
+                  className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition disabled:opacity-100"
+                  aria-label="Change profile image"
+                >
+                  {uploadAvatar.isPending ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Camera className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
               <h2 className="font-bold text-base font-display">{e.fullName}</h2>
               <p className="text-xs text-muted-foreground mt-0.5">{e.designation}</p>
               <p className="text-[11px] text-muted-foreground">{e.department}</p>
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadAvatar.isPending}
+                className="mt-3 text-[11px] text-primary hover:underline inline-flex items-center gap-1"
+              >
+                <Camera className="h-3 w-3" />
+                {e.avatarUrl ? 'Change photo' : 'Upload photo'}
+              </button>
 
               <div className="w-full mt-4 space-y-2">
                 {(e.workEmail ?? e.email) && (
@@ -348,8 +459,13 @@ export function EmployeeDetailPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">Employee Documents</CardTitle>
-                    <Button size="sm" leftIcon={<FileText className="h-3.5 w-3.5" />}>
-                      Upload
+                    <Button
+                      size="sm"
+                      leftIcon={uploadDoc.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                      onClick={() => docInputRef.current?.click()}
+                      disabled={uploadDoc.isPending}
+                    >
+                      {uploadDoc.isPending ? 'Uploading…' : 'Upload'}
                     </Button>
                   </div>
                 </CardHeader>
@@ -368,12 +484,12 @@ export function EmployeeDetailPage() {
                     </div>
                   ) : (
                     <div className="divide-y">
-                      {(docsResult?.data as Array<{ id: string; name: string; category: string; status: string; createdAt: string }> ?? []).map((doc) => (
+                      {(docsResult?.data as Array<{ id: string; fileName?: string; docType?: string; category: string; status: string; createdAt: string }> ?? []).map((doc) => (
                         <div key={doc.id} className="flex items-center justify-between py-3">
                           <div className="flex items-center gap-3">
                             <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                             <div>
-                              <p className="text-sm font-medium">{doc.name}</p>
+                              <p className="text-sm font-medium">{doc.fileName ?? doc.docType ?? 'Untitled'}</p>
                               <p className="text-xs text-muted-foreground capitalize">
                                 {doc.category?.replace(/_/g, ' ')} · {formatDate(doc.createdAt)}
                               </p>
@@ -383,7 +499,34 @@ export function EmployeeDetailPage() {
                             <Badge variant={doc.status === 'verified' ? 'success' : doc.status === 'expired' ? 'destructive' : 'secondary'} className="text-[10px] capitalize">
                               {doc.status}
                             </Badge>
-                            <Button variant="ghost" size="icon-sm">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="View document"
+                              onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Download document"
+                              onClick={async () => {
+                                try {
+                                  const res = await api.get<{ data: { downloadUrl: string } }>(`/documents/${doc.id}/download-url`)
+                                  const a = document.createElement('a')
+                                  a.href = res.data.downloadUrl
+                                  a.download = doc.fileName ?? doc.docType ?? 'document'
+                                  a.target = '_blank'
+                                  a.rel = 'noopener'
+                                  document.body.appendChild(a)
+                                  a.click()
+                                  a.remove()
+                                } catch {
+                                  toast.error('Download failed')
+                                }
+                              }}
+                            >
                               <Download className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -422,20 +565,91 @@ export function EmployeeDetailPage() {
             <TabsContent value="performance" className="mt-4">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Performance &amp; Notes</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Performance &amp; Notes</CardTitle>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      leftIcon={<Plus className="h-3.5 w-3.5" />}
+                      onClick={() => navigate(`/performance?employeeId=${id}`)}
+                    >
+                      New review
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-center py-10 text-muted-foreground">
-                    <Star className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm font-medium">No performance records yet</p>
-                    <p className="text-xs mt-1">Reviews and performance data will appear here</p>
-                  </div>
+                  {reviewsLoading ? (
+                    <div className="space-y-2">
+                      {[1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full" />)}
+                    </div>
+                  ) : !reviews || reviews.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Star className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm font-medium">No performance records yet</p>
+                      <p className="text-xs mt-1">Reviews and performance data will appear here</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {reviews.map((r) => (
+                        <div key={r.id} className="py-3 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">{r.period}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {r.reviewDate ? formatDate(r.reviewDate) : '—'}
+                              {r.overallRating != null && ` · ${r.overallRating}/5`}
+                            </p>
+                            {r.managerComments && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                {r.managerComments}
+                              </p>
+                            )}
+                          </div>
+                          <Badge
+                            variant={r.status === 'completed' ? 'success' : r.status === 'submitted' ? 'info' : 'secondary'}
+                            className="text-[10px] capitalize shrink-0"
+                          >
+                            {r.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
           </Tabs>
         </div>
       </div>
+
+      {/* Hidden file inputs */}
+      <input
+        ref={avatarInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="hidden"
+        onChange={handleAvatarChange}
+      />
+      <input
+        ref={docInputRef}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx"
+        className="hidden"
+        onChange={handleDocChange}
+      />
+
+      {editOpen && e && (
+        <EditEmployeeDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          employee={e}
+        />
+      )}
+      <DocumentViewerDialog
+        open={!!viewDoc}
+        onOpenChange={(o) => !o && setViewDoc(null)}
+        documentId={viewDoc?.id ?? null}
+        fileName={viewDoc?.fileName}
+      />
     </PageWrapper>
   )
 }

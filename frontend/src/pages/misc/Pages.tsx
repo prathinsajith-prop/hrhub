@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Calendar, Clock, CheckCircle2, XCircle, Plus, Download, BarChart3, Users, Shield } from 'lucide-react'
+import { Calendar, Clock, CheckCircle2, XCircle, Plus, Download, BarChart3, Users, Shield, UserPlus, UserMinus, AlertTriangle, PauseCircle } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
@@ -10,7 +10,6 @@ import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
-import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Textarea } from '@/components/ui/textarea'
 import { formatDate, formatCurrency, cn } from '@/lib/utils'
@@ -22,6 +21,7 @@ import { useOnboardingChecklists, useUpdateOnboardingStep } from '@/hooks/useOnb
 import { useComplianceReport } from '@/hooks/useCompliance'
 import { useHeadcountReport, usePayrollSummaryReport, useVisaExpiryReport } from '@/hooks/useReports'
 import { ApplyLeaveDialog } from '@/components/shared/action-dialogs'
+import { InitialsAvatar } from '@/components/shared/Avatar'
 import type { LeaveRequest } from '@/types'
 
 // ─── Leave Balance Panel ──────────────────────────────────────────────────────
@@ -30,9 +30,33 @@ const LEAVE_LABELS: Record<string, string> = {
   compassionate: 'Compassionate', hajj: 'Hajj', unpaid: 'Unpaid',
 }
 
+// Employee status → badge variant + icon (kept consistent with EmployeesPage)
+const EMPLOYEE_STATUS_META: Record<
+  string,
+  { variant: 'success' | 'warning' | 'destructive' | 'info' | 'secondary'; Icon: typeof CheckCircle2 }
+> = {
+  active: { variant: 'success', Icon: CheckCircle2 },
+  probation: { variant: 'warning', Icon: Clock },
+  onboarding: { variant: 'info', Icon: UserPlus },
+  suspended: { variant: 'destructive', Icon: PauseCircle },
+  terminated: { variant: 'secondary', Icon: UserMinus },
+  visa_expired: { variant: 'destructive', Icon: AlertTriangle },
+}
+
+function EmployeeStatusBadge({ status }: { status: string }) {
+  const meta = EMPLOYEE_STATUS_META[status] ?? { variant: 'secondary' as const, Icon: CheckCircle2 }
+  const { variant, Icon } = meta
+  return (
+    <Badge variant={variant} className="capitalize text-[11px] gap-1 inline-flex items-center">
+      <Icon className="h-3 w-3" />
+      {status.replace(/_/g, ' ')}
+    </Badge>
+  )
+}
+
 function LeaveBalancePanel() {
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>()
-  const { data: empData } = useEmployees({ limit: 100, status: 'active' })
+  const { data: empData } = useEmployees({ limit: 1000, status: 'active' })
   const employees = (empData?.data as any[]) ?? []
   const { data: balanceData, isLoading: balanceLoading } = useLeaveBalance(selectedEmployee)
   const balance = balanceData?.balance
@@ -120,11 +144,21 @@ export function LeavePage() {
   const [applyOpen, setApplyOpen] = useState(false)
   const [bulkAction, setBulkAction] = useState<{ ids: string[]; approve: boolean } | null>(null)
 
-  const columns: ColumnDef<LeaveRequest>[] = [
+  const columns: ColumnDef<LeaveRequest>[] = useMemo(() => [
     {
       accessorKey: 'employeeName',
       header: 'Employee',
-      cell: ({ getValue }) => <span className="font-medium text-sm">{getValue() as string}</span>,
+      cell: ({ row: { original: l } }) => (
+        <div className="flex items-center gap-2.5 min-w-0">
+          <InitialsAvatar name={l.employeeName || '—'} src={(l as any).employeeAvatarUrl} size="sm" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">{l.employeeName || '—'}</p>
+            {(l as any).employeeDepartment && (
+              <p className="text-[11px] text-muted-foreground truncate">{(l as any).employeeDepartment}</p>
+            )}
+          </div>
+        </div>
+      ),
     },
     {
       accessorKey: 'leaveType',
@@ -179,7 +213,7 @@ export function LeavePage() {
       },
       size: 110,
     },
-  ]
+  ], [])
 
   return (
     <PageWrapper>
@@ -660,10 +694,25 @@ export function ReportsPage() {
             <DataTable
               isLoading={hcLoading}
               columns={[
-                { accessorKey: 'fullName', header: 'Name', cell: ({ getValue }: any) => <span className="font-medium text-sm">{getValue()}</span> },
+                {
+                  id: 'employee',
+                  accessorKey: 'fullName',
+                  header: 'Employee',
+                  cell: ({ row: { original: e } }: any) => (
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <InitialsAvatar name={e.fullName || '—'} src={e.avatarUrl} size="sm" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{e.fullName}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {e.employeeNo}{e.employeeNo && e.designation ? ' · ' : ''}{e.designation}
+                        </p>
+                      </div>
+                    </div>
+                  ),
+                },
                 { accessorKey: 'department', header: 'Department', cell: ({ getValue }: any) => <span className="text-sm">{getValue() ?? '—'}</span> },
                 { accessorKey: 'nationality', header: 'Nationality', cell: ({ getValue }: any) => <span className="text-sm">{getValue() ?? '—'}</span> },
-                { accessorKey: 'status', header: 'Status', cell: ({ getValue }: any) => <Badge variant="secondary" className="capitalize text-[11px]">{(getValue() as string).replace('_', ' ')}</Badge> },
+                { accessorKey: 'status', header: 'Status', cell: ({ getValue }: any) => <EmployeeStatusBadge status={(getValue() as string) ?? ''} /> },
                 { accessorKey: 'joinDate', header: 'Join Date', cell: ({ getValue }: any) => <span className="text-sm">{formatDate(getValue() as string)}</span> },
               ]}
               data={headcount?.employees ?? []}
@@ -727,7 +776,22 @@ export function ReportsPage() {
             <DataTable
               isLoading={veLoading}
               columns={[
-                { accessorKey: 'fullName', header: 'Employee', cell: ({ getValue }: any) => <span className="font-medium text-sm">{getValue()}</span> },
+                {
+                  id: 'employee',
+                  accessorKey: 'fullName',
+                  header: 'Employee',
+                  cell: ({ row: { original: e } }: any) => (
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <InitialsAvatar name={e.fullName || '—'} src={e.avatarUrl} size="sm" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{e.fullName}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {e.employeeNo}{e.employeeNo && e.designation ? ' · ' : ''}{e.designation}
+                        </p>
+                      </div>
+                    </div>
+                  ),
+                },
                 { accessorKey: 'department', header: 'Department', cell: ({ getValue }: any) => <span className="text-sm">{getValue() ?? '—'}</span> },
                 { accessorKey: 'nationality', header: 'Nationality', cell: ({ getValue }: any) => <span className="text-sm">{getValue() ?? '—'}</span> },
                 { accessorKey: 'visaExpiry', header: 'Visa Expiry', cell: ({ getValue }: any) => <span className="text-sm">{formatDate(getValue() as string)}</span> },

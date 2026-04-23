@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/overlays'
@@ -190,6 +190,161 @@ function CompanyTab() {
                     {saved ? 'Saved!' : 'Save Changes'}
                 </Button>
             </div>
+        </div>
+    )
+}
+
+// ─── Profile Tab — current user avatar / name / department ────────────────────
+function ProfileTab() {
+    const { user, setUser } = useAuthStore()
+    const [name, setName] = useState(user?.name ?? '')
+    const [department, setDepartment] = useState(user?.department ?? '')
+    const [saving, setSaving] = useState(false)
+    const [saved, setSaved] = useState(false)
+    const [uploading, setUploading] = useState(false)
+    const fileRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => {
+        setName(user?.name ?? '')
+        setDepartment(user?.department ?? '')
+    }, [user?.id, user?.name, user?.department])
+
+    const initials = (user?.name ?? 'U')
+        .split(' ').filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase()
+
+    const handlePickFile = () => fileRef.current?.click()
+
+    const handleFile = async (file: File) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+        if (!allowed.includes(file.type)) {
+            toast.error('Unsupported file', 'Please choose a JPEG, PNG, WEBP, or GIF image.')
+            return
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('File too large', 'Maximum size is 5 MB.')
+            return
+        }
+        try {
+            setUploading(true)
+            const fd = new FormData()
+            fd.append('file', file)
+            const res = await api.upload<{ data: { avatarUrl: string } }>('/auth/me/avatar', fd)
+            // Cache-bust so the new image appears immediately
+            const fresh = `${res.data.avatarUrl}?t=${Date.now()}`
+            setUser({ avatarUrl: fresh })
+            toast.success('Profile photo updated')
+        } catch {
+            toast.error('Upload failed', 'Could not update your profile photo.')
+        } finally {
+            setUploading(false)
+            if (fileRef.current) fileRef.current.value = ''
+        }
+    }
+
+    const handleSave = async () => {
+        if (!name.trim()) {
+            toast.error('Name is required')
+            return
+        }
+        try {
+            setSaving(true)
+            const res = await api.patch<{ data: { name: string; department: string | null; avatarUrl: string | null } }>(
+                '/auth/me',
+                { name: name.trim(), department: department.trim() || null },
+            )
+            setUser({
+                name: res.data.name,
+                department: res.data.department ?? undefined,
+                avatarUrl: res.data.avatarUrl ?? undefined,
+            })
+            setSaved(true)
+            toast.success('Profile updated')
+            setTimeout(() => setSaved(false), 2000)
+        } catch {
+            toast.error('Save failed', 'Could not update your profile.')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div className="space-y-5">
+            <SettingsCard>
+                <div className="flex items-start gap-5 pb-5 border-b">
+                    <div className="relative">
+                        <Avatar className="h-20 w-20 border-2 border-border">
+                            {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
+                            <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
+                                {initials}
+                            </AvatarFallback>
+                        </Avatar>
+                        <button
+                            type="button"
+                            onClick={handlePickFile}
+                            disabled={uploading}
+                            className="absolute -bottom-1 -end-1 h-7 w-7 rounded-full bg-primary text-primary-foreground border-2 border-card shadow-sm flex items-center justify-center hover:bg-primary/90 disabled:opacity-50"
+                            aria-label="Change profile photo"
+                        >
+                            <UserCircle className="h-3.5 w-3.5" />
+                        </button>
+                        <input
+                            ref={fileRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            className="hidden"
+                            onChange={(e) => {
+                                const f = e.target.files?.[0]
+                                if (f) handleFile(f)
+                            }}
+                        />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold truncate">{user?.name ?? '—'}</p>
+                        <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                        <p className="text-[11px] text-muted-foreground capitalize mt-1">
+                            {(user?.role ?? '').replace(/_/g, ' ')}
+                            {user?.department ? ` · ${user.department}` : ''}
+                        </p>
+                        <div className="mt-3 flex items-center gap-2">
+                            <Button size="sm" variant="outline" onClick={handlePickFile} loading={uploading}>
+                                {user?.avatarUrl ? 'Change photo' : 'Upload photo'}
+                            </Button>
+                            <span className="text-[11px] text-muted-foreground">JPEG, PNG, WEBP, GIF · max 5 MB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-5">
+                    <div>
+                        <Label htmlFor="profile-name">Full Name</Label>
+                        <Input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} />
+                    </div>
+                    <div>
+                        <Label htmlFor="profile-email">Email</Label>
+                        <Input id="profile-email" value={user?.email ?? ''} disabled />
+                        <p className="text-[11px] text-muted-foreground mt-1">Contact an admin to change your email.</p>
+                    </div>
+                    <div>
+                        <Label htmlFor="profile-department">Department</Label>
+                        <Input id="profile-department" value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. People Operations" />
+                    </div>
+                    <div>
+                        <Label htmlFor="profile-role">Role</Label>
+                        <Input id="profile-role" value={(user?.role ?? '').replace(/_/g, ' ')} disabled className="capitalize" />
+                    </div>
+                </div>
+
+                <div className="flex justify-end pt-5">
+                    <Button
+                        onClick={handleSave}
+                        loading={saving}
+                        leftIcon={saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+                        variant={saved ? 'success' : 'default'}
+                    >
+                        {saved ? 'Saved!' : 'Save Changes'}
+                    </Button>
+                </div>
+            </SettingsCard>
         </div>
     )
 }
@@ -1022,6 +1177,7 @@ export function SettingsPage() {
     const { t } = useTranslation()
 
     const tabs = [
+        { value: 'profile', label: 'My Profile', icon: UserCircle, desc: 'Photo, name & department' },
         { value: 'company', label: 'Company', icon: Building2, desc: 'Profile, regional & legal info' },
         { value: 'users', label: 'Users & Roles', icon: Users, desc: 'Team members, permissions' },
         { value: 'notifications', label: 'Notifications', icon: Bell, desc: 'Email & push preferences' },
@@ -1038,7 +1194,7 @@ export function SettingsPage() {
             />
 
             <Tabs
-                defaultValue="company"
+                defaultValue="profile"
                 orientation="vertical"
                 className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-10 lg:items-start"
             >
@@ -1081,6 +1237,7 @@ export function SettingsPage() {
 
                 {/* ─── Content: full width, no width cap ─── */}
                 <div className="pt-6 lg:pt-0">
+                    <TabsContent value="profile" className="mt-0"><ProfileTab /></TabsContent>
                     <TabsContent value="company" className="mt-0"><CompanyTab /></TabsContent>
                     <TabsContent value="users" className="mt-0"><UsersTab /></TabsContent>
                     <TabsContent value="notifications" className="mt-0"><NotificationsTab /></TabsContent>

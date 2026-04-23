@@ -36,6 +36,42 @@ export function useUpdateApplicationStage() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: ({ id, stage }: { id: string; stage: string }) => api.patch(`/applications/${id}/stage`, { stage }),
+        // Optimistic update: patch the cached applications list immediately so the
+        // kanban column rerenders without waiting for the server round trip.
+        onMutate: async ({ id, stage }) => {
+            await qc.cancelQueries({ queryKey: ['applications'] })
+            const snapshots: { key: unknown; data: unknown }[] = []
+            const queries = qc.getQueriesData<{ data: Array<Record<string, unknown>>; total: number }>({ queryKey: ['applications'] })
+            for (const [key, data] of queries) {
+                if (!data?.data) continue
+                snapshots.push({ key, data })
+                qc.setQueryData(key, {
+                    ...data,
+                    data: data.data.map((row) => (row.id === id ? { ...row, stage } : row)),
+                })
+            }
+            return { snapshots }
+        },
+        onError: (_err, _vars, ctx) => {
+            // Roll back on failure and refetch authoritative state.
+            if (ctx?.snapshots) {
+                for (const snap of ctx.snapshots) {
+                    qc.setQueryData(snap.key as readonly unknown[], snap.data)
+                }
+            }
+            qc.invalidateQueries({ queryKey: ['applications'] })
+        },
+        // Note: we deliberately do NOT invalidate on success. The optimistic
+        // patch already reflects the truth, and a refetch would cause an
+        // extra network round trip plus a re-render flash on every drop.
+    })
+}
+
+export function useCreateApplication() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ jobId, data }: { jobId: string; data: Record<string, unknown> }) =>
+            api.post(`/jobs/${jobId}/applications`, data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['applications'] }),
     })
 }
