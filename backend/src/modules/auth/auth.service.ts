@@ -6,7 +6,7 @@ import { users, refreshTokens, tenants, passwordResetTokens } from '../../db/sch
 import { sendEmail, passwordResetEmail } from '../../plugins/email.js'
 import { loadEnv } from '../../config/env.js'
 import { recordLoginEvent } from '../audit/audit.service.js'
-import { verifyTotpCode } from './twofa.service.js'
+import { verifyTotpCode, verifyAndConsumeBackupCode } from './twofa.service.js'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import type { FastifyInstance } from 'fastify'
 
@@ -170,6 +170,29 @@ export async function completeMfaLogin(
     meta: { ipAddress?: string; userAgent?: string }
 ) {
     const isValid = await verifyTotpCode(userId, totpCode)
+    if (!isValid) return null
+
+    const [user] = await db
+        .select()
+        .from(users)
+        .where(and(eq(users.id, userId), eq(users.isActive, true)))
+        .limit(1)
+    if (!user) return null
+
+    return issueTokens(fastify, user, meta)
+}
+
+/**
+ * Complete a 2FA login challenge using a single-use backup recovery code.
+ * Used when the user has lost access to their authenticator app.
+ */
+export async function completeMfaLoginWithBackupCode(
+    fastify: AnyFastify,
+    userId: string,
+    backupCode: string,
+    meta: { ipAddress?: string; userAgent?: string }
+) {
+    const isValid = await verifyAndConsumeBackupCode(userId, backupCode)
     if (!isValid) return null
 
     const [user] = await db

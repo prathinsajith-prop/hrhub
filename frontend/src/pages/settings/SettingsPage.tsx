@@ -35,7 +35,7 @@ import { useAuthStore } from '@/store/authStore'
 import { api } from '@/lib/api'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { useCompanySettings, useUpdateCompanySettings, useTenantUsers, useTwoFaStatus, useTwoFaSetup, useTwoFaVerify, useTwoFaDisable, useIpAllowlist, useUpdateIpAllowlist } from '@/hooks/useSettings'
+import { useCompanySettings, useUpdateCompanySettings, useTenantUsers, useTwoFaStatus, useTwoFaSetup, useTwoFaVerify, useTwoFaDisable, useTwoFaRegenerateBackupCodes, useIpAllowlist, useUpdateIpAllowlist } from '@/hooks/useSettings'
 import { useInfiniteLoginHistory } from '@/hooks/useAudit'
 import type { CompanySettings } from '@/hooks/useSettings'
 
@@ -567,13 +567,17 @@ function TwoFactorCard() {
     const setup = useTwoFaSetup()
     const verify = useTwoFaVerify()
     const disable = useTwoFaDisable()
+    const regenerate = useTwoFaRegenerateBackupCodes()
 
-    const [step, setStep] = useState<'idle' | 'setup' | 'disable'>('idle')
+    const [step, setStep] = useState<'idle' | 'setup' | 'disable' | 'regenerate'>('idle')
     const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
     const [secret, setSecret] = useState<string | null>(null)
     const [token, setToken] = useState('')
+    // Plaintext backup codes returned ONCE after enable/regenerate. Cleared when user dismisses.
+    const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
 
     const enabled = status?.enabled ?? false
+    const backupRemaining = status?.backupCodesRemaining ?? 0
 
     const handleSetup = async () => {
         try {
@@ -589,9 +593,11 @@ function TwoFactorCard() {
     const handleVerify = async () => {
         if (token.length !== 6) { toast.warning('Invalid code', 'Enter the 6-digit code from your authenticator app.'); return }
         try {
-            await verify.mutateAsync(token)
+            const result = await verify.mutateAsync(token)
             toast.success('2FA enabled', 'Two-factor authentication is now active.')
             setStep('idle'); setToken(''); setQrDataUrl(null); setSecret(null)
+            // Show backup codes — user must save them now
+            if (result.backupCodes?.length) setBackupCodes(result.backupCodes)
         } catch {
             toast.error('Verification failed', 'The code was incorrect. Please try again.')
         }
@@ -608,12 +614,51 @@ function TwoFactorCard() {
         }
     }
 
+    const handleRegenerate = async () => {
+        if (token.length !== 6) { toast.warning('Invalid code', 'Enter the 6-digit code from your authenticator app.'); return }
+        try {
+            const result = await regenerate.mutateAsync(token)
+            toast.success('Backup codes regenerated', 'Old codes are now invalid. Save the new ones.')
+            setStep('idle'); setToken('')
+            setBackupCodes(result.backupCodes)
+        } catch {
+            toast.error('Regeneration failed', 'The code was incorrect. Please try again.')
+        }
+    }
+
     const copySecret = () => {
         if (!secret) return
         navigator.clipboard.writeText(secret).then(
             () => toast.success('Copied', 'Secret key copied to clipboard.'),
             () => toast.error('Copy failed', 'Could not copy secret key.'),
         )
+    }
+
+    const copyBackupCodes = () => {
+        if (!backupCodes) return
+        navigator.clipboard.writeText(backupCodes.join('\n')).then(
+            () => toast.success('Copied', 'All backup codes copied to clipboard.'),
+            () => toast.error('Copy failed', 'Could not copy codes.'),
+        )
+    }
+
+    const downloadBackupCodes = () => {
+        if (!backupCodes) return
+        const content = [
+            'HRHub — Two-Factor Authentication Backup Codes',
+            `Generated: ${new Date().toISOString()}`,
+            '',
+            'Each code can be used only once. Keep them somewhere safe.',
+            '',
+            ...backupCodes,
+        ].join('\n')
+        const blob = new Blob([content], { type: 'text/plain' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `hrhub-backup-codes-${new Date().toISOString().split('T')[0]}.txt`
+        a.click()
+        URL.revokeObjectURL(url)
     }
 
     const cancel = () => { setStep('idle'); setToken(''); setQrDataUrl(null); setSecret(null) }
@@ -654,6 +699,80 @@ function TwoFactorCard() {
                                     Set Up
                                 </Button>
                             )}
+                        </div>
+                    )}
+
+                    {/* Backup-codes status (only shown when 2FA is on and we're idle) */}
+                    {step === 'idle' && enabled && !backupCodes && (
+                        <div className="rounded-lg border border-border bg-muted/30 p-4 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <Key className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium leading-tight">Recovery Backup Codes</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        {backupRemaining > 0
+                                            ? `${backupRemaining} unused code${backupRemaining === 1 ? '' : 's'} remaining`
+                                            : 'No active codes — generate new ones to protect against device loss.'}
+                                    </p>
+                                </div>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => setStep('regenerate')} className="shrink-0">
+                                {backupRemaining > 0 ? 'Regenerate' : 'Generate'}
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* One-time display of plaintext backup codes */}
+                    {backupCodes && (
+                        <div className="space-y-3 rounded-lg border-2 border-amber-500/30 bg-amber-500/5 p-4">
+                            <div className="flex items-start gap-2">
+                                <Key className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold text-foreground">Save these codes now</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Each code can be used <span className="font-medium text-foreground">once</span> to sign in if you lose access to your authenticator. They will not be shown again.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 rounded-md border border-border bg-background p-3">
+                                {backupCodes.map((c) => (
+                                    <code key={c} className="text-sm font-mono text-foreground tracking-wider text-center py-1">
+                                        {c}
+                                    </code>
+                                ))}
+                            </div>
+                            <div className="flex gap-2 justify-end pt-1">
+                                <Button size="sm" variant="outline" onClick={copyBackupCodes}>Copy all</Button>
+                                <Button size="sm" variant="outline" onClick={downloadBackupCodes}>Download .txt</Button>
+                                <Button size="sm" onClick={() => setBackupCodes(null)}>I've saved them</Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 'regenerate' && (
+                        <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+                            <p className="text-sm text-foreground">
+                                Enter your current 6-digit code to generate a fresh set of backup codes. <span className="font-medium">All previous codes will stop working.</span>
+                            </p>
+                            <div className="space-y-2">
+                                <Label htmlFor="regen_token" className="text-xs">Verification Code</Label>
+                                <Input
+                                    id="regen_token"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    placeholder="000000"
+                                    maxLength={6}
+                                    value={token}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value.replace(/\D/g, ''))}
+                                    className="text-center tracking-[0.4em] text-base font-mono w-40"
+                                />
+                            </div>
+                            <div className="flex gap-2 justify-end pt-1">
+                                <Button size="sm" variant="ghost" onClick={() => { setStep('idle'); setToken('') }}>Cancel</Button>
+                                <Button size="sm" onClick={handleRegenerate} loading={regenerate.isPending} disabled={token.length !== 6}>
+                                    Generate New Codes
+                                </Button>
+                            </div>
                         </div>
                     )}
 

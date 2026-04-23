@@ -11,29 +11,44 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { AuthLayout } from '@/components/layout/AuthLayout'
+import type { User, Tenant } from '@/types'
 
 const OTP_LENGTH = 6
 
 function OtpInput({ onComplete }: { onComplete: (code: string) => void }) {
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''))
   const refs = useRef<(HTMLInputElement | null)[]>([])
+  // Guard against double-fire (React 19 StrictMode runs setState updaters twice in dev)
+  const submittedRef = useRef<string | null>(null)
 
   const focus = (i: number) => refs.current[i]?.focus()
 
+  const fireComplete = useCallback((code: string) => {
+    if (submittedRef.current === code) return
+    submittedRef.current = code
+    onComplete(code)
+  }, [onComplete])
+
   const handleChange = useCallback((i: number, val: string) => {
     const char = val.replace(/\D/g, '').slice(-1)
+    let nextDigits: string[] = []
     setDigits(prev => {
       const next = [...prev]
       next[i] = char
-      if (char && i < OTP_LENGTH - 1) setTimeout(() => focus(i + 1), 0)
-      const full = next.join('')
-      if (full.length === OTP_LENGTH && !next.includes('')) onComplete(full)
+      nextDigits = next
       return next
     })
-  }, [onComplete])
+    if (char && i < OTP_LENGTH - 1) setTimeout(() => focus(i + 1), 0)
+    // Fire OUTSIDE the setState updater so StrictMode double-invocation doesn't double-submit
+    queueMicrotask(() => {
+      const full = nextDigits.join('')
+      if (full.length === OTP_LENGTH && !nextDigits.includes('')) fireComplete(full)
+    })
+  }, [fireComplete])
 
   const handleKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace') {
+      submittedRef.current = null // clear guard on edit
       if (digits[i]) {
         setDigits(prev => { const n = [...prev]; n[i] = ''; return n })
       } else if (i > 0) {
@@ -56,7 +71,7 @@ function OtpInput({ onComplete }: { onComplete: (code: string) => void }) {
     setDigits(next)
     const focusIdx = Math.min(pasted.length, OTP_LENGTH - 1)
     setTimeout(() => focus(focusIdx), 0)
-    if (pasted.length === OTP_LENGTH) onComplete(pasted)
+    if (pasted.length === OTP_LENGTH) fireComplete(pasted)
   }
 
   return (
@@ -114,16 +129,19 @@ export function LoginPage() {
   const [mfaStep, setMfaStep] = useState(false)
   const [mfaToken, setMfaToken] = useState('')
   const [mfaLoading, setMfaLoading] = useState(false)
+  const [useBackupCode, setUseBackupCode] = useState(false)
+  const [backupCodeInput, setBackupCodeInput] = useState('')
+  const mfaInFlightRef = useRef(false)
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   })
 
-  const completeLogin = (data: { user: any; tenant: any; accessToken: string; refreshToken: string }) => {
-    login(data.user, data.tenant, data.accessToken, data.refreshToken)
+  const completeLogin = useCallback((data: { user: User; tenant: Tenant | null; accessToken: string; refreshToken: string }) => {
+    login(data.user, data.tenant as Tenant, data.accessToken, data.refreshToken)
     toast.success(`Welcome back, ${data.user.name}!`, 'Redirecting to your dashboard.')
     navigate('/dashboard')
-  }
+  }, [login, navigate])
 
   const onSubmit = async (data: LoginForm) => {
     setLoading(true)
@@ -160,6 +178,8 @@ export function LoginPage() {
 
   const onMfaComplete = useCallback(async (code: string) => {
     if (code.length !== OTP_LENGTH) return
+    if (mfaInFlightRef.current) return // prevent double-submit (StrictMode etc.)
+    mfaInFlightRef.current = true
     setMfaLoading(true)
     try {
       const res = await fetch('/api/v1/auth/2fa/challenge', {
@@ -177,8 +197,38 @@ export function LoginPage() {
       toast.error('Verification failed', 'Network error. Please try again.')
     } finally {
       setMfaLoading(false)
+      mfaInFlightRef.current = false
     }
-  }, [mfaToken])
+  }, [mfaToken, completeLogin])
+
+  const onBackupCodeSubmit = useCallback(async () => {
+    const code = backupCodeInput.trim()
+    if (code.length < 8) {
+      toast.warning('Invalid code', 'Backup codes are 10 characters (e.g. ABCDE-12345).')
+      return
+    }
+    if (mfaInFlightRef.current) return
+    mfaInFlightRef.current = true
+    setMfaLoading(true)
+    try {
+      const res = await fetch('/api/v1/auth/2fa/backup-challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mfaToken, code }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error('Invalid backup code', json?.message ?? 'The code is incorrect or already used.')
+        return
+      }
+      completeLogin(json.data)
+    } catch {
+      toast.error('Verification failed', 'Network error. Please try again.')
+    } finally {
+      setMfaLoading(false)
+      mfaInFlightRef.current = false
+    }
+  }, [backupCodeInput, mfaToken, completeLogin])
 
   return (
     <AuthLayout
@@ -237,7 +287,9 @@ export function LoginPage() {
         </h2>
         <p className="text-sm text-muted-foreground">
           {mfaStep
-            ? 'Enter the 6-digit code from your authenticator app to continue.'
+            ? (useBackupCode
+              ? 'Enter one of your saved single-use backup codes to continue.'
+              : 'Enter the 6-digit code from your authenticator app to continue.')
             : 'Sign in to your workspace to continue.'}
         </p>
       </div>
@@ -255,16 +307,42 @@ export function LoginPage() {
                 <span className="block h-2 w-2 rounded-full bg-green-500" />
               </span>
             </div>
-            <p className="text-xs text-muted-foreground text-center max-w-[200px] leading-relaxed">
-              Open your <span className="font-medium text-foreground">authenticator app</span> and enter the current code
+            <p className="text-xs text-muted-foreground text-center max-w-[220px] leading-relaxed">
+              {useBackupCode
+                ? <>Each code can only be used <span className="font-medium text-foreground">once</span>.</>
+                : <>Open your <span className="font-medium text-foreground">authenticator app</span> and enter the current code</>}
             </p>
           </div>
 
-          {/* OTP digit boxes */}
-          <OtpInput onComplete={onMfaComplete} />
+          {/* Code entry */}
+          {useBackupCode ? (
+            <div className="space-y-3">
+              <Input
+                autoFocus
+                inputMode="text"
+                autoComplete="one-time-code"
+                placeholder="ABCDE-12345"
+                value={backupCodeInput}
+                onChange={(e) => setBackupCodeInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === 'Enter') onBackupCodeSubmit() }}
+                className="text-center tracking-[0.3em] text-base font-mono"
+              />
+              <Button
+                type="button"
+                className="w-full"
+                onClick={onBackupCodeSubmit}
+                loading={mfaLoading}
+                disabled={backupCodeInput.trim().length < 8}
+              >
+                Verify backup code
+              </Button>
+            </div>
+          ) : (
+            <OtpInput onComplete={onMfaComplete} />
+          )}
 
           {/* Loading / verifying indicator */}
-          {mfaLoading && (
+          {!useBackupCode && mfaLoading && (
             <div className="flex items-center justify-center gap-2 text-sm text-primary">
               <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
               Verifying…
@@ -272,13 +350,24 @@ export function LoginPage() {
           )}
 
           {/* Info text */}
-          <p className="text-center text-xs text-muted-foreground">
-            Codes refresh every 30 seconds. Make sure your device clock is accurate.
-          </p>
+          {!useBackupCode && (
+            <p className="text-center text-xs text-muted-foreground">
+              Codes refresh every 30 seconds. Make sure your device clock is accurate.
+            </p>
+          )}
+
+          {/* Toggle TOTP ↔ backup code */}
+          <button
+            type="button"
+            onClick={() => { setUseBackupCode(v => !v); setBackupCodeInput('') }}
+            className="w-full text-sm text-primary hover:text-primary/80 font-medium transition-colors text-center"
+          >
+            {useBackupCode ? '← Use authenticator code instead' : 'Lost your device? Use a backup code →'}
+          </button>
 
           <button
             type="button"
-            onClick={() => { setMfaStep(false); setMfaToken('') }}
+            onClick={() => { setMfaStep(false); setMfaToken(''); setUseBackupCode(false); setBackupCodeInput('') }}
             className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center"
           >
             ← Back to login

@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, boolean, timestamp, index, integer } from 'drizzle-orm/pg-core'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import { tenants } from './tenants'
 
 export const users = pgTable('users', {
@@ -22,6 +22,8 @@ export const users = pgTable('users', {
     // TOTP two-factor authentication
     totpSecret: text('totp_secret'),
     twoFaEnabled: boolean('two_fa_enabled').notNull().default(false),
+    // Hashed (bcrypt) single-use recovery codes for MFA fallback. Empty array when none active.
+    twoFaBackupCodes: text('two_fa_backup_codes').array().notNull().default(sql`ARRAY[]::text[]`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({

@@ -1,5 +1,5 @@
-import { loginUser, refreshAccessToken, revokeRefreshToken, requestPasswordReset, resetPasswordWithToken, changePassword, completeMfaLogin, registerTenant } from './auth.service.js'
-import { setupTotp, verifyAndEnableTotp, disableTotp, getTotpStatus } from './twofa.service.js'
+import { loginUser, refreshAccessToken, revokeRefreshToken, requestPasswordReset, resetPasswordWithToken, changePassword, completeMfaLogin, completeMfaLoginWithBackupCode, registerTenant } from './auth.service.js'
+import { setupTotp, verifyAndEnableTotp, disableTotp, getTotpStatus, regenerateBackupCodes } from './twofa.service.js'
 import { recordLoginEvent } from '../audit/audit.service.js'
 import { validate, loginSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema } from '../../lib/validation.js'
 
@@ -269,9 +269,10 @@ export default async function (fastify: any): Promise<void> {
     fastify.post('/2fa/verify', auth, async (request: any, reply: any) => {
         const { token } = request.body as { token: string }
         if (!token) return reply.code(400).send({ error: 'token is required' })
-        const ok = await verifyAndEnableTotp(request.user.id, token)
-        if (!ok) return reply.code(400).send({ error: 'Invalid or expired token' })
-        return reply.send({ data: { enabled: true } })
+        const result = await verifyAndEnableTotp(request.user.id, token)
+        if (!result.enabled) return reply.code(400).send({ error: 'Invalid or expired token' })
+        // Return plaintext backup codes ONCE — user must save them now
+        return reply.send({ data: { enabled: true, backupCodes: result.backupCodes ?? [] } })
     })
 
     // POST /api/v1/auth/2fa/disable — disable 2FA (requires current TOTP token)
@@ -281,6 +282,52 @@ export default async function (fastify: any): Promise<void> {
         const ok = await disableTotp(request.user.id, token)
         if (!ok) return reply.code(400).send({ error: 'Invalid token or 2FA not enabled' })
         return reply.send({ data: { enabled: false } })
+    })
+
+    // POST /api/v1/auth/2fa/backup-codes/regenerate — issue a fresh set, invalidates old codes.
+    // Requires a valid TOTP code as proof of identity.
+    fastify.post('/2fa/backup-codes/regenerate', auth, async (request: any, reply: any) => {
+        const { token } = request.body as { token: string }
+        if (!token) return reply.code(400).send({ error: 'token is required' })
+        const codes = await regenerateBackupCodes(request.user.id, token)
+        if (!codes) return reply.code(400).send({ error: 'Invalid token or 2FA not enabled' })
+        return reply.send({ data: { backupCodes: codes } })
+    })
+
+    // POST /api/v1/auth/2fa/backup-challenge — complete login using a single-use backup code
+    fastify.post('/2fa/backup-challenge', {
+        config: {
+            rateLimit: { max: 10, timeWindow: '15 minutes', keyGenerator: (r: any) => r.ip },
+        },
+        schema: {
+            tags: ['Auth'],
+            body: {
+                type: 'object',
+                required: ['mfaToken', 'code'],
+                properties: {
+                    mfaToken: { type: 'string' },
+                    code: { type: 'string', minLength: 8, maxLength: 32 },
+                },
+            },
+        },
+    }, async (request: any, reply: any) => {
+        const { mfaToken, code } = request.body as { mfaToken: string; code: string }
+        let payload: any
+        try {
+            payload = fastify.jwt.verify(mfaToken)
+        } catch {
+            return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid or expired MFA session.' })
+        }
+        if (payload?.purpose !== 'mfa-pending') {
+            return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid MFA token.' })
+        }
+        const ipAddress = request.ip ?? request.headers['x-forwarded-for'] as string
+        const userAgent = request.headers['user-agent']
+        const result = await completeMfaLoginWithBackupCode(fastify, payload.sub, code, { ipAddress, userAgent })
+        if (!result) {
+            return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid backup code or already used.' })
+        }
+        return reply.send({ data: result })
     })
 }
 

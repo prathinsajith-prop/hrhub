@@ -51,7 +51,7 @@ export function useTenantUsers() {
 export function useTwoFaStatus() {
     return useQuery({
         queryKey: ['2fa', 'status'],
-        queryFn: () => api.get<{ data: { enabled: boolean } }>('/auth/2fa/status').then((r) => r.data),
+        queryFn: () => api.get<{ data: { enabled: boolean; backupCodesRemaining: number } }>('/auth/2fa/status').then((r) => r.data),
     })
 }
 
@@ -66,7 +66,7 @@ export function useTwoFaVerify() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (token: string) =>
-            api.post<{ data: { enabled: boolean } }>('/auth/2fa/verify', { token }).then((r) => r.data),
+            api.post<{ data: { enabled: boolean; backupCodes: string[] } }>('/auth/2fa/verify', { token }).then((r) => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['2fa', 'status'] }),
     })
 }
@@ -76,6 +76,15 @@ export function useTwoFaDisable() {
     return useMutation({
         mutationFn: (token: string) =>
             api.post<{ data: { enabled: boolean } }>('/auth/2fa/disable', { token }).then((r) => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['2fa', 'status'] }),
+    })
+}
+
+export function useTwoFaRegenerateBackupCodes() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (token: string) =>
+            api.post<{ data: { backupCodes: string[] } }>('/auth/2fa/backup-codes/regenerate', { token }).then((r) => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['2fa', 'status'] }),
     })
 }
