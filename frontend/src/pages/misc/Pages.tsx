@@ -37,7 +37,7 @@ function LeaveBalancePanel() {
   const balance = balanceData?.balance
 
   return (
-    <Card className="p-5">
+    <Card className="p-4">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <p className="text-sm font-semibold">Leave Balance Checker</p>
         <Select value={selectedEmployee ?? ''} onValueChange={setSelectedEmployee}>
@@ -213,7 +213,7 @@ export function LeavePage() {
         if (!hasAny) return null
         const entitlements: Record<string, number> = { annual: 30, sick: 45, maternity: 60, paternity: 5, compassionate: 5, hajj: 30, unpaid: 30 }
         return (
-          <Card className="p-5">
+          <Card className="p-4">
             <p className="text-sm font-semibold mb-4">Leave Utilisation — {thisYear}</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {types.filter(t => usedByType[t] || entitlements[t]).map(type => {
@@ -237,7 +237,7 @@ export function LeavePage() {
 
       <LeaveBalancePanel />
 
-      <Card className="p-5">
+      <Card className="p-4">
         <DataTable
           columns={columns}
           data={leaves}
@@ -372,7 +372,7 @@ export function OnboardingPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {checklists.map((checklist: any) => (
-            <Card key={checklist.id} className="p-5">
+            <Card key={checklist.id} className="p-4">
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h2 className="font-bold text-base">{checklist.employeeName}</h2>
@@ -492,7 +492,7 @@ export function CompliancePage() {
             {overall >= 95 ? 'Excellent' : overall >= 80 ? 'Needs Attention' : 'Critical'}
           </Badge>
         </Card>
-        <Card className="lg:col-span-2 p-5">
+        <Card className="lg:col-span-2 p-4">
           <h3 className="font-semibold mb-4 text-sm">Compliance Breakdown</h3>
           {isLoading ? (
             <div className="space-y-4">
@@ -587,7 +587,7 @@ export function ReportsPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="p-5">
+            <Card className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-sm">By Department</h3>
                 <Button size="sm" variant="outline" leftIcon={<Download className="h-3.5 w-3.5" />}
@@ -617,7 +617,7 @@ export function ReportsPage() {
               )}
             </Card>
 
-            <Card className="p-5">
+            <Card className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-sm">By Nationality (Top 15)</h3>
                 <Button size="sm" variant="outline" leftIcon={<Download className="h-3.5 w-3.5" />}
@@ -648,7 +648,7 @@ export function ReportsPage() {
             </Card>
           </div>
 
-          <Card className="p-5">
+          <Card className="p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-sm">Employee List</h3>
               <Button size="sm" variant="outline" leftIcon={<Download className="h-3.5 w-3.5" />}
@@ -682,7 +682,7 @@ export function ReportsPage() {
             <KpiCardCompact label="Avg Net/Run" value={formatCurrency(payrollSummary && payrollSummary.totalRuns > 0 ? payrollSummary.ytdNet / payrollSummary.totalRuns : 0)} icon={Users} color="cyan" loading={prLoading} />
           </div>
 
-          <Card className="p-5">
+          <Card className="p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-sm">Monthly Payroll History</h3>
               <Button size="sm" variant="outline" leftIcon={<Download className="h-3.5 w-3.5" />}
@@ -715,7 +715,7 @@ export function ReportsPage() {
             <KpiCardCompact label="Normal (61–90d)" value={visaExpiry?.normal ?? 0} icon={CheckCircle2} color="green" loading={veLoading} />
           </div>
 
-          <Card className="p-5">
+          <Card className="p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-sm">Expiring within 90 days</h3>
               <Button size="sm" variant="outline" leftIcon={<Download className="h-3.5 w-3.5" />}

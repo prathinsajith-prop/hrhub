@@ -31,6 +31,31 @@ export const employeeStep2Schema = z.object({
     joinDate: z.string().trim().min(1, 'Join date is required'),
 })
 
+export const jobPostSchema = z.object({
+    title: z.string().trim().min(1, 'Title is required').max(150),
+    department: z.string().trim().min(1, 'Department is required').max(100),
+})
+
+export const visaApplicationSchema = z.object({
+    employeeId: z.string().trim().min(1, 'Please select an employee'),
+})
+
+export const leaveRequestSchema = z
+    .object({
+        employeeId: z.string().trim().min(1, 'Please select an employee'),
+        startDate: z.string().trim().min(1, 'Start date is required'),
+        endDate: z.string().trim().min(1, 'End date is required'),
+    })
+    .refine(({ startDate, endDate }) => !startDate || !endDate || endDate >= startDate, {
+        message: 'End date must be on or after start date',
+        path: ['endDate'],
+    })
+
+export const documentMetaSchema = z.object({
+    category: z.string().trim().min(1, 'Category is required'),
+    type: z.string().trim().min(1, 'Document type is required'),
+})
+
 export const employeeSalaryRuleSchema = z
     .object({
         basicSalary: z.number().nonnegative().optional(),

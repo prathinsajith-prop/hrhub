@@ -17,7 +17,7 @@ const widthClass: Record<NonNullable<PageWrapperProps['width']>, string> = {
 
 export function PageWrapper({ children, className, width = 'default' }: PageWrapperProps) {
     return (
-        <div className={cn(widthClass[width], 'mx-auto w-full space-y-4 page-enter', className)}>
+        <div className={cn(widthClass[width], 'mx-auto w-full space-y-3 page-enter', className)}>
             {children}
         </div>
     )

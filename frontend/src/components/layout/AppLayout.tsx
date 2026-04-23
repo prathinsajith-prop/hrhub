@@ -12,7 +12,7 @@ export function AppLayout() {
       <AppSidebar side={isRtl ? 'right' : 'left'} />
       <SidebarInset>
         <SiteHeader />
-        <main className="flex flex-1 flex-col gap-4 px-3 py-3 sm:px-4 sm:py-4 lg:px-5 lg:py-4 overflow-y-auto animate-fade-in">
+        <main className="flex flex-1 flex-col gap-3 px-3 py-3 sm:px-4 sm:py-3 lg:px-5 lg:py-4 overflow-y-auto animate-fade-in">
           <Outlet />
         </main>
       </SidebarInset>

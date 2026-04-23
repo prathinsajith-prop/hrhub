@@ -13,7 +13,7 @@ import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { FormField } from '@/components/shared/FormField'
 import { apiErrorToFieldMap } from '@/lib/api'
-import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, zodToFieldErrors } from '@/lib/schemas'
+import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, jobPostSchema, visaApplicationSchema, leaveRequestSchema, documentMetaSchema, zodToFieldErrors } from '@/lib/schemas'
 import type { Employee } from '@/types'
 
 // ─── New Job Dialog ─────────────────────────────────────────────────────────
@@ -29,8 +29,9 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const createJob = useCreateJob()
 
     const submit = () => {
-        if (!title || !department) {
-            toast.warning('Missing fields', 'Title and department are required.')
+        const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
+        if (!ok) {
+            toast.warning('Missing fields', Object.values(errors)[0] ?? 'Please fill required fields.')
             return
         }
         createJob.mutate(
@@ -119,8 +120,9 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
     const createVisa = useCreateVisa()
 
     const submit = () => {
-        if (!employeeId) {
-            toast.warning('Employee required', 'Please select an employee.')
+        const { ok, errors } = zodToFieldErrors(visaApplicationSchema, { employeeId })
+        if (!ok) {
+            toast.warning('Employee required', Object.values(errors)[0] ?? 'Please select an employee.')
             return
         }
         createVisa.mutate(
@@ -207,12 +209,9 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
     const createLeave = useCreateLeave()
 
     const submit = () => {
-        if (!employeeId || !startDate || !endDate) {
-            toast.warning('Missing fields', 'Employee and dates are required.')
-            return
-        }
-        if (endDate < startDate) {
-            toast.warning('Invalid dates', 'End date must be on or after start date.')
+        const { ok, errors } = zodToFieldErrors(leaveRequestSchema, { employeeId, startDate, endDate })
+        if (!ok) {
+            toast.warning('Please review', Object.values(errors)[0] ?? 'Fix the highlighted fields.')
             return
         }
         const days = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1)
@@ -966,8 +965,9 @@ export function EditJobDialog({
     const updateJob = useUpdateJob()
 
     const submit = () => {
-        if (!title || !department) {
-            toast.warning('Missing fields', 'Title and department are required.')
+        const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
+        if (!ok) {
+            toast.warning('Missing fields', Object.values(errors)[0] ?? 'Please fill required fields.')
             return
         }
         updateJob.mutate(
@@ -1073,8 +1073,9 @@ export function EditDocumentDialog({
     const updateDoc = useUpdateDocument(doc.id)
 
     const submit = () => {
-        if (!category || !docType) {
-            toast.warning('Missing fields', 'Category and document type are required.')
+        const { ok, errors } = zodToFieldErrors(documentMetaSchema, { category, type: docType })
+        if (!ok) {
+            toast.warning('Missing fields', Object.values(errors)[0] ?? 'Please fill required fields.')
             return
         }
         updateDoc.mutate(
