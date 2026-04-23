@@ -105,6 +105,7 @@ function ImageUpload({
 }: ImageUploadProps) {
   const inputRef = React.useRef<HTMLInputElement>(null)
   const [preview, setPreview] = React.useState<string | null>(value || null)
+  const [fileName, setFileName] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [dragOver, setDragOver] = React.useState(false)
 
@@ -114,11 +115,22 @@ function ImageUpload({
       setError(`File too large. Max size is ${maxSizeMB}MB`)
       return
     }
+    setFileName(file.name)
+    const isImage = file.type.startsWith('image/')
+    if (!isImage) {
+      // For non-image files (PDFs, etc.) skip data URL conversion — just pass the file.
+      setPreview(null)
+      onChange?.(file, null)
+      return
+    }
     const reader = new FileReader()
     reader.onload = e => {
       const url = e.target?.result as string
       setPreview(url)
       onChange?.(file, url)
+    }
+    reader.onerror = () => {
+      setError('Could not read the file. Please try again.')
     }
     reader.readAsDataURL(file)
   }
@@ -133,6 +145,7 @@ function ImageUpload({
   const clear = (e: React.MouseEvent) => {
     e.stopPropagation()
     setPreview(null)
+    setFileName(null)
     onChange?.(null, null)
     if (inputRef.current) inputRef.current.value = ''
   }
@@ -177,8 +190,11 @@ function ImageUpload({
             <File className="h-5 w-5 text-blue-600" />
           </div>
           <div className="flex-1 min-w-0">
-            {preview ? (
-              <p className="text-sm font-medium text-foreground truncate">{label}</p>
+            {fileName ? (
+              <>
+                <p className="text-sm font-medium text-foreground truncate">{fileName}</p>
+                <p className="text-xs text-muted-foreground">Ready to upload — click to replace</p>
+              </>
             ) : (
               <>
                 <p className="text-sm font-medium text-foreground">{label}</p>
@@ -186,7 +202,7 @@ function ImageUpload({
               </>
             )}
           </div>
-          {preview && (
+          {fileName && (
             <button onClick={clear} className="shrink-0 h-6 w-6 rounded-full hover:bg-red-100 flex items-center justify-center transition-colors">
               <X className="h-3.5 w-3.5 text-red-500" />
             </button>

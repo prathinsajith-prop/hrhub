@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/sidebar"
 import { useAuthStore } from "@/store/authStore"
 import { useTranslation } from "react-i18next"
+import { cn } from "@/lib/utils"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user, tenant } = useAuthStore()
@@ -91,20 +92,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
+    <Sidebar collapsible="icon" {...props}>
       <SidebarHeader className="border-b border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild className="hover:bg-sidebar-accent">
+            <SidebarMenuButton
+              size="lg"
+              asChild
+              tooltip={tenant?.name ?? 'HRHub'}
+              className="hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
+            >
               <NavLink to="/dashboard">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shrink-0">
                   <BuildingIcon className="h-4 w-4 text-white" />
                 </div>
-                <div className="flex flex-col leading-none">
-                  <span className="text-sm font-bold text-sidebar-foreground">
+                <div className="flex flex-col leading-tight min-w-0 group-data-[collapsible=icon]:hidden">
+                  <span className="text-sm font-bold text-sidebar-foreground truncate">
                     {tenant?.name ?? "HRHub"}
                   </span>
-                  <span className="text-[10px] text-sidebar-foreground/50 uppercase tracking-widest">
+                  <span className="text-[10px] text-sidebar-foreground/50 uppercase tracking-widest truncate">
                     UAE HRM Platform
                   </span>
                 </div>
@@ -115,8 +121,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent className="gap-0 py-2">
-        {navGroups.map((group) => (
-          <SidebarGroup key={group.label}>
+        {navGroups.map((group, gi) => (
+          <SidebarGroup
+            key={group.label}
+            className={cn(
+              gi > 0 && 'group-data-[collapsible=icon]:border-t group-data-[collapsible=icon]:border-sidebar-border/60 group-data-[collapsible=icon]:mt-2 group-data-[collapsible=icon]:pt-2',
+            )}
+          >
             <SidebarGroupLabel className="text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40 px-3 mb-1">
               {group.label}
             </SidebarGroupLabel>

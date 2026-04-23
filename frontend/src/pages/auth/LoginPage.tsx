@@ -248,12 +248,12 @@ export function LoginPage() {
             {stats.map((s) => (
               <div
                 key={s.label}
-                className="rounded-xl p-4 bg-sidebar-accent/60 border border-sidebar-border"
+                className="rounded-xl p-4 bg-white/[0.04] border border-white/10 backdrop-blur-sm hover:bg-white/[0.07] transition-colors"
               >
-                <p className="text-2xl font-bold text-sidebar-accent-foreground font-display">
+                <p className="text-2xl font-bold font-display text-white">
                   {s.value}
                 </p>
-                <p className="text-[11px] text-sidebar-foreground/60 mt-0.5">{s.label}</p>
+                <p className="text-[11px] text-white/60 mt-0.5">{s.label}</p>
               </div>
             ))}
           </div>
@@ -263,14 +263,14 @@ export function LoginPage() {
             {features.map((f) => (
               <div
                 key={f.title}
-                className="flex items-start gap-3 rounded-xl p-3.5 bg-sidebar-accent/40 border border-sidebar-border"
+                className="flex items-start gap-3 rounded-xl p-3.5 bg-white/[0.03] border border-white/10 backdrop-blur-sm hover:bg-white/[0.06] hover:border-white/15 transition-colors"
               >
-                <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 bg-primary/15 text-primary">
+                <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 bg-primary/20 text-primary ring-1 ring-primary/30">
                   <f.icon className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-sidebar-accent-foreground">{f.title}</p>
-                  <p className="text-[11px] text-sidebar-foreground/60 mt-0.5 leading-relaxed">
+                  <p className="text-xs font-semibold text-white">{f.title}</p>
+                  <p className="text-[11px] text-white/60 mt-0.5 leading-relaxed">
                     {f.desc}
                   </p>
                 </div>

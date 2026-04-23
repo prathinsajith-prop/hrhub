@@ -28,23 +28,15 @@ export function AuthLayout({
   children,
 }: AuthLayoutProps) {
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-background">
+    <div className="min-h-screen grid lg:grid-cols-[3fr_2fr] bg-background">
       {/* ── Brand panel ── */}
       <aside
         className="hidden lg:flex flex-col justify-between relative overflow-hidden text-white bg-sidebar"
       >
-        {/* Layered brand gradient \u2014 matches sidebar, with depth */}
+        {/* Grid overlay — subtle texture only, no gradients */}
         <div
           aria-hidden
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              'radial-gradient(1100px 600px at -10% -10%, hsl(var(--primary) / 0.45) 0%, transparent 55%), radial-gradient(900px 500px at 110% 110%, hsl(199 89% 48% / 0.28) 0%, transparent 60%)',
-          }}
-        />
-        <div
-          aria-hidden
-          className="absolute inset-0 pointer-events-none opacity-[0.07]"
+          className="absolute inset-0 pointer-events-none opacity-[0.06]"
           style={{
             backgroundImage:
               'linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)',
@@ -53,8 +45,8 @@ export function AuthLayout({
         />
 
         {/* Logo */}
-        <header className="relative p-10">
-          <div className="flex items-center gap-3">
+        <header className="relative px-10 pt-10 xl:px-14">
+          <div className="mx-auto w-full max-w-2xl flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground">
               <BuildingIcon className="h-5 w-5" />
             </div>
@@ -70,25 +62,29 @@ export function AuthLayout({
         </header>
 
         {/* Hero */}
-        <div className="relative flex-1 flex flex-col justify-center px-10 pb-10 max-w-xl">
-          {heroEyebrow && (
-            <p className="text-xs font-semibold text-primary tracking-widest uppercase mb-3">
-              {heroEyebrow}
-            </p>
-          )}
-          <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-4 font-display text-balance">
-            {heroTitle}
-          </h1>
-          {heroSubtitle && (
-            <p className="text-white/70 text-[15px] leading-relaxed max-w-md mb-8 text-pretty">
-              {heroSubtitle}
-            </p>
-          )}
-          {heroContent}
+        <div className="relative flex-1 flex flex-col justify-center px-10 py-10 xl:px-14">
+          <div className="mx-auto w-full max-w-2xl">
+            {heroEyebrow && (
+              <p className="text-xs font-semibold text-primary tracking-widest uppercase mb-3">
+                {heroEyebrow}
+              </p>
+            )}
+            <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-4 font-display text-balance">
+              {heroTitle}
+            </h1>
+            {heroSubtitle && (
+              <p className="text-white/70 text-[15px] leading-relaxed max-w-md mb-8 text-pretty">
+                {heroSubtitle}
+              </p>
+            )}
+            {heroContent}
+          </div>
         </div>
 
-        <footer className="relative px-10 pb-8 text-[11px] text-white/40">
-          &copy; 2026 HRHub.ae &middot; Trusted by 500+ UAE companies &middot; ISO 27001
+        <footer className="relative px-10 pb-8 xl:px-14 text-[11px] text-white/40">
+          <div className="mx-auto w-full max-w-2xl">
+            &copy; 2026 HRHub.ae &middot; Trusted by 500+ UAE companies &middot; ISO 27001
+          </div>
         </footer>
       </aside>
 

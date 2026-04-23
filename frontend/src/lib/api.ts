@@ -80,17 +80,26 @@ export const api = {
     put: <T>(path: string, body?: unknown) =>
         request<T>(path, { method: 'PUT', body: body !== undefined ? JSON.stringify(body) : undefined }),
     delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
-    upload: <T>(path: string, formData: FormData) => {
+    upload: async <T>(path: string, formData: FormData, retry = true): Promise<T> => {
         // Do NOT set Content-Type — browser must set it with the multipart boundary
-        const { accessToken } = useAuthStore.getState() as { accessToken: string | null }
+        const { accessToken, refreshTokens } = useAuthStore.getState() as {
+            accessToken: string | null
+            refreshTokens: () => Promise<boolean>
+        }
         const headers: Record<string, string> = {}
         if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
-        return fetch(`${BASE}${path}`, { method: 'POST', body: formData, headers }).then(async (res) => {
-            if (!res.ok) {
-                const body = await res.json().catch(() => ({}))
-                throw new ApiError(res.status, body?.message ?? res.statusText, body)
-            }
-            return res.json() as Promise<T>
-        })
+        const res = await fetch(`${BASE}${path}`, { method: 'POST', body: formData, headers })
+        if (res.status === 401 && retry) {
+            const ok = await refreshTokens()
+            if (ok) return api.upload<T>(path, formData, false)
+            useAuthStore.getState().logout()
+            throw new ApiError(401, 'Session expired')
+        }
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new ApiError(res.status, (body as any)?.message ?? res.statusText, body)
+        }
+        if (res.status === 204) return undefined as T
+        return res.json() as Promise<T>
     },
 }
