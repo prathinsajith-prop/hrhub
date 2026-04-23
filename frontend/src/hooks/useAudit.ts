@@ -72,3 +72,24 @@ export function useActivityLogs(params: { entityType?: string; entityId?: string
         queryFn: () => api.get<{ data: ActivityLog[] }>(`/audit/activity?${qs}`).then(r => r.data),
     })
 }
+
+export function useInfiniteActivityLogs(params: { entityType?: string; entityId?: string; userId?: string; pageSize?: number } = {}) {
+    const pageSize = params.pageSize ?? 30
+    return useInfiniteQuery({
+        queryKey: ['activity-logs-infinite', params.entityType, params.entityId, params.userId, pageSize],
+        initialPageParam: 0,
+        queryFn: ({ pageParam }) => {
+            const qs = new URLSearchParams()
+            if (params.entityType) qs.set('entityType', params.entityType)
+            if (params.entityId) qs.set('entityId', params.entityId)
+            if (params.userId) qs.set('userId', params.userId)
+            qs.set('limit', String(pageSize))
+            qs.set('offset', String(pageParam))
+            return api.get<{ data: ActivityLog[] }>(`/audit/activity?${qs}`).then(r => r.data)
+        },
+        getNextPageParam: (lastPage, allPages) => {
+            if (!lastPage || lastPage.length < pageSize) return undefined
+            return allPages.reduce((sum, p) => sum + p.length, 0)
+        },
+    })
+}

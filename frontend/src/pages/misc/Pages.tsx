@@ -103,7 +103,7 @@ const leaveTypeColor: Record<string, string> = {
   annual: 'bg-blue-100 text-blue-700',
   sick: 'bg-red-100 text-red-700',
   maternity: 'bg-pink-100 text-pink-700',
-  paternity: 'bg-purple-100 text-purple-700',
+  paternity: 'bg-primary/10 text-primary',
   compassionate: 'bg-slate-100 text-slate-700',
   hajj: 'bg-emerald-100 text-emerald-700',
   unpaid: 'bg-gray-100 text-gray-600',

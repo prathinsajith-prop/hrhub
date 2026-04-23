@@ -32,7 +32,7 @@ const STATUS_COLORS: Record<AttendanceRecord['status'], string> = {
     half_day: '#eab308',
     late: '#f97316',
     wfh: '#3b82f6',
-    on_leave: '#a855f7',
+    on_leave: '#0ea5e9',
 }
 
 const STATUS_LABEL: Record<AttendanceRecord['status'], string> = {
@@ -325,7 +325,7 @@ export function AttendancePage() {
                 return (
                     <div className="text-right tabular-nums text-sm">
                         {n > 0 ? (
-                            <span className="text-purple-700 dark:text-purple-400 font-semibold">
+                            <span className="text-info font-semibold">
                                 {n.toFixed(1)}h
                             </span>
                         ) : '—'}
@@ -464,7 +464,7 @@ export function AttendancePage() {
                 <StatCard
                     label="Overtime"
                     value={`${summary.totalOT.toFixed(0)}h`}
-                    accent="#a855f7"
+                    accent="hsl(var(--info))"
                     icon={<TrendingUp className="h-4 w-4" />}
                 />
             </div>
@@ -567,8 +567,8 @@ export function AttendancePage() {
                                     }}
                                 />
                                 <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                                <Bar dataKey="hours" fill="#3b82f6" name="Regular" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="ot" fill="#a855f7" name="Overtime" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="hours" fill="hsl(var(--primary))" name="Regular" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="ot" fill="hsl(var(--info))" name="Overtime" radius={[4, 4, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </CardContent>

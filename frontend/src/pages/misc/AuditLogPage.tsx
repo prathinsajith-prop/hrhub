@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { SearchInput } from '@/components/shared'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { useActivityLogs, type ActivityLog } from '@/hooks/useAudit'
+import { useInfiniteActivityLogs, type ActivityLog } from '@/hooks/useAudit'
 import {
     ClipboardList,
     Plus,
@@ -38,7 +38,7 @@ const ACTION_META: Record<string, ActionMeta> = {
     delete: { icon: Trash2, tile: 'bg-red-100 text-red-700', pill: 'bg-red-50 text-red-700 ring-1 ring-red-200' },
     approve: { icon: CheckCircle2, tile: 'bg-emerald-100 text-emerald-700', pill: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' },
     reject: { icon: XCircle, tile: 'bg-red-100 text-red-700', pill: 'bg-red-50 text-red-700 ring-1 ring-red-200' },
-    submit: { icon: Send, tile: 'bg-violet-100 text-violet-700', pill: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200' },
+    submit: { icon: Send, tile: 'bg-primary/10 text-primary', pill: 'bg-primary/5 text-primary ring-1 ring-primary/20' },
     view: { icon: Eye, tile: 'bg-slate-100 text-slate-600', pill: 'bg-slate-50 text-slate-600 ring-1 ring-slate-200' },
     export: { icon: Download, tile: 'bg-amber-100 text-amber-700', pill: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' },
     import: { icon: Upload, tile: 'bg-indigo-100 text-indigo-700', pill: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200' },
@@ -110,12 +110,29 @@ export function AuditLogPage() {
     const [entityType, setEntityType] = useState('')
     const [search, setSearch] = useState('')
 
-    const { data, isLoading } = useActivityLogs({
+    const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteActivityLogs({
         entityType: entityType || undefined,
-        limit: 100,
+        pageSize: 30,
     })
 
-    const logs: ActivityLog[] = Array.isArray(data) ? data : []
+    const logs: ActivityLog[] = useMemo(() => {
+        const pages = data?.pages ?? []
+        return pages.flat()
+    }, [data])
+
+    // Infinite scroll sentinel
+    const sentinelRef = useRef<HTMLDivElement | null>(null)
+    useEffect(() => {
+        const el = sentinelRef.current
+        if (!el) return
+        const io = new IntersectionObserver((entries) => {
+            if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+                fetchNextPage()
+            }
+        }, { rootMargin: '200px' })
+        io.observe(el)
+        return () => io.disconnect()
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
     const filtered = useMemo(() => {
         if (!search) return logs
@@ -165,7 +182,7 @@ export function AuditLogPage() {
                 <StatTile label="Total events" value={stats.total} icon={Activity} tone="primary" />
                 <StatTile label="Created" value={stats.counts['create'] ?? 0} icon={Plus} tone="emerald" />
                 <StatTile label="Updated" value={stats.counts['update'] ?? 0} icon={Pencil} tone="blue" />
-                <StatTile label="Unique actors" value={stats.actorCount} icon={UserIcon} tone="violet" />
+                <StatTile label="Unique actors" value={stats.actorCount} icon={UserIcon} tone="primary" />
             </div>
 
             <div className="rounded-xl border bg-card shadow-sm p-3 mb-5">
@@ -248,6 +265,18 @@ export function AuditLogPage() {
                             </div>
                         </section>
                     ))}
+                    {/* Infinite scroll sentinel + status */}
+                    <div ref={sentinelRef} className="h-8" />
+                    {isFetchingNextPage && (
+                        <div className="flex justify-center py-4 text-xs text-muted-foreground">
+                            Loading more…
+                        </div>
+                    )}
+                    {!hasNextPage && filtered.length > 0 && (
+                        <div className="text-center py-4 text-[11px] text-muted-foreground/70">
+                            End of activity log
+                        </div>
+                    )}
                 </div>
             )}
         </PageWrapper>
@@ -264,7 +293,7 @@ function StatTile({ label, value, icon: Icon, tone }: {
         primary: 'bg-primary/10 text-primary',
         emerald: 'bg-emerald-100 text-emerald-700',
         blue: 'bg-blue-100 text-blue-700',
-        violet: 'bg-violet-100 text-violet-700',
+        violet: 'bg-primary/10 text-primary',
     }
     return (
         <div className="rounded-xl border bg-card shadow-sm p-4 flex items-center gap-3">
