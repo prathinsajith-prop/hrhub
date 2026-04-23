@@ -65,34 +65,42 @@ const NAT_FILLS = [
 ]
 
 const kpiCards: Array<{
-  label: string
+  labelKey: string
+  labelFallback: string
   key: string
-  sub: string
+  subKey: string
+  subFallback: string
   icon: React.ElementType
   color: KpiColor
   change?: number
 }> = [
     {
-      label: 'Total Employees',
+      labelKey: 'dashboard.totalEmployees',
+      labelFallback: 'Total Employees',
       key: 'totalEmployees',
-      sub: 'Active workforce',
+      subKey: 'dashboard.subActiveWorkforce',
+      subFallback: 'Active workforce',
       icon: Users,
       color: 'blue',
       change: 1.2,
     },
-    { label: 'Active Visas', key: 'activeVisas', sub: 'Processing now', icon: Plane, color: 'cyan' },
-    { label: 'Open Jobs', key: 'openJobs', sub: 'In pipeline', icon: Briefcase, color: 'amber' },
+    { labelKey: 'dashboard.activeVisas', labelFallback: 'Active Visas', key: 'activeVisas', subKey: 'dashboard.subProcessingNow', subFallback: 'Processing now', icon: Plane, color: 'cyan' },
+    { labelKey: 'dashboard.openJobs', labelFallback: 'Open Jobs', key: 'openJobs', subKey: 'dashboard.subInPipeline', subFallback: 'In pipeline', icon: Briefcase, color: 'amber' },
     {
-      label: 'Expiring Visas',
+      labelKey: 'dashboard.expiringVisas',
+      labelFallback: 'Expiring Visas',
       key: 'expiringVisas',
-      sub: 'Next 90 days',
+      subKey: 'dashboard.subNext90Days',
+      subFallback: 'Next 90 days',
       icon: FileText,
       color: 'red',
     },
     {
-      label: 'Pending Leave',
+      labelKey: 'dashboard.pendingLeave',
+      labelFallback: 'Pending Leave',
       key: 'pendingLeave',
-      sub: 'Awaiting approval',
+      subKey: 'dashboard.subAwaitingApproval',
+      subFallback: 'Awaiting approval',
       icon: CheckCircle2,
       color: 'green',
     },
@@ -166,13 +174,13 @@ export function DashboardPage() {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
-        {kpiCards.map(({ label, key, sub, icon, color, change }) => (
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        {kpiCards.map(({ labelKey, labelFallback, key, subKey, subFallback, icon, color, change }) => (
           <KpiCard
             key={key}
-            label={label}
+            label={t(labelKey, { defaultValue: labelFallback })}
             value={(kpis as any)?.[key]}
-            sub={sub}
+            sub={t(subKey, { defaultValue: subFallback })}
             icon={icon}
             color={color}
             trend={change}
@@ -188,8 +196,8 @@ export function DashboardPage() {
           <CardHeader className="pb-2">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <CardTitle>Payroll Cost Trend</CardTitle>
-                <CardDescription>Monthly total payroll in AED millions</CardDescription>
+                <CardTitle>{t('dashboard.payrollTrend', { defaultValue: 'Payroll Cost Trend' })}</CardTitle>
+                <CardDescription>{t('dashboard.payrollTrendDesc', { defaultValue: 'Monthly total payroll in AED millions' })}</CardDescription>
               </div>
               <div className="text-right">
                 {trendLoading ? <Skeleton className="h-7 w-24" /> : (
@@ -200,7 +208,7 @@ export function DashboardPage() {
                   </p>
                 )}
                 <p className="text-[11px] text-success font-medium flex items-center gap-1 justify-end">
-                  <TrendingUp className="h-3 w-3" /> Latest month
+                  <TrendingUp className="h-3 w-3" /> {t('dashboard.latestMonth', { defaultValue: 'Latest month' })}
                 </p>
               </div>
             </div>
@@ -260,8 +268,8 @@ export function DashboardPage() {
         {/* Nationality Donut */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle>Workforce Nationality</CardTitle>
-            <CardDescription>{natLoading ? ' ' : `${totalNat} total employees`}</CardDescription>
+            <CardTitle>{t('dashboard.workforceNationality', { defaultValue: 'Workforce Nationality' })}</CardTitle>
+            <CardDescription>{natLoading ? ' ' : t('dashboard.totalEmployeesCount', { count: totalNat, defaultValue: `${totalNat} total employees` })}</CardDescription>
           </CardHeader>
           <CardContent>
             {natLoading ? (
@@ -317,7 +325,7 @@ export function DashboardPage() {
         {/* Department bar chart */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle>Headcount by Department</CardTitle>
+            <CardTitle>{t('dashboard.headcountByDept', { defaultValue: 'Headcount by Department' })}</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             {deptLoading ? (
@@ -370,8 +378,8 @@ export function DashboardPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Active Visa Cases</CardTitle>
-                <CardDescription>Current processing status</CardDescription>
+                <CardTitle>{t('dashboard.activeVisaCases', { defaultValue: 'Active Visa Cases' })}</CardTitle>
+                <CardDescription>{t('dashboard.currentProcessingStatus', { defaultValue: 'Current processing status' })}</CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/visa')}>
                 View all
@@ -452,8 +460,8 @@ export function DashboardPage() {
         {/* Emiratisation */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle>Emiratisation Status</CardTitle>
-            <CardDescription>MOHRE compliance tracking</CardDescription>
+            <CardTitle>{t('dashboard.emiratisationStatus', { defaultValue: 'Emiratisation Status' })}</CardTitle>
+            <CardDescription>{t('dashboard.mohreCompliance', { defaultValue: 'MOHRE compliance tracking' })}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-2">
             {emirLoading ? (
@@ -523,8 +531,8 @@ export function DashboardPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Onboarding</CardTitle>
-              <CardDescription>Employee onboarding status</CardDescription>
+              <CardTitle>{t('dashboard.onboarding', { defaultValue: 'Onboarding' })}</CardTitle>
+              <CardDescription>{t('dashboard.onboardingDesc', { defaultValue: 'Employee onboarding status' })}</CardDescription>
             </div>
             <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/onboarding')}>
               View all

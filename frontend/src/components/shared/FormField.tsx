@@ -18,9 +18,18 @@ export interface FormFieldProps {
  */
 export function FormField({ label, required, error, hint, className, children, htmlFor }: FormFieldProps) {
     return (
-        <div className={cn('space-y-1.5', className)}>
+        <div
+            className={cn('space-y-1.5', className)}
+            data-invalid={error ? 'true' : undefined}
+        >
             {label && (
-                <Label htmlFor={htmlFor} className="flex items-center gap-1">
+                <Label
+                    htmlFor={htmlFor}
+                    className={cn(
+                        'flex items-center gap-1',
+                        error && 'text-destructive',
+                    )}
+                >
                     <span>{label}</span>
                     {required && <span className="text-destructive">*</span>}
                 </Label>

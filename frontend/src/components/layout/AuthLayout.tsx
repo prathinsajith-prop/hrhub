@@ -31,23 +31,23 @@ export function AuthLayout({
     <div className="min-h-screen grid lg:grid-cols-2 bg-background">
       {/* ── Brand panel ── */}
       <aside
-        className="hidden lg:flex flex-col justify-between relative overflow-hidden bg-sidebar text-sidebar-foreground"
+        className="hidden lg:flex flex-col justify-between relative overflow-hidden text-white bg-sidebar"
       >
-        {/* Subtle radial accent — token-based, analogous blue tones */}
+        {/* Layered brand gradient \u2014 matches sidebar, with depth */}
         <div
           aria-hidden
-          className="absolute -top-40 -left-40 h-[520px] w-[520px] rounded-full opacity-30 pointer-events-none"
+          className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              'radial-gradient(circle, hsl(var(--primary) / 0.4) 0%, transparent 65%)',
+              'radial-gradient(1100px 600px at -10% -10%, hsl(var(--primary) / 0.45) 0%, transparent 55%), radial-gradient(900px 500px at 110% 110%, hsl(199 89% 48% / 0.28) 0%, transparent 60%)',
           }}
         />
         <div
           aria-hidden
-          className="absolute inset-0 pointer-events-none opacity-[0.04]"
+          className="absolute inset-0 pointer-events-none opacity-[0.07]"
           style={{
             backgroundImage:
-              'linear-gradient(hsl(var(--sidebar-foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--sidebar-foreground)) 1px, transparent 1px)',
+              'linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)',
             backgroundSize: '44px 44px',
           }}
         />
@@ -59,10 +59,10 @@ export function AuthLayout({
               <BuildingIcon className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-lg font-bold text-sidebar-accent-foreground font-display">
+              <p className="text-lg font-bold text-white font-display">
                 HRHub.ae
               </p>
-              <p className="text-[11px] text-sidebar-foreground/60 tracking-wide">
+              <p className="text-[11px] text-white/60 tracking-wide">
                 UAE HR &amp; PRO Platform
               </p>
             </div>
@@ -76,18 +76,18 @@ export function AuthLayout({
               {heroEyebrow}
             </p>
           )}
-          <h1 className="text-4xl xl:text-5xl font-bold text-sidebar-accent-foreground leading-tight mb-4 font-display text-balance">
+          <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-4 font-display text-balance">
             {heroTitle}
           </h1>
           {heroSubtitle && (
-            <p className="text-sidebar-foreground/70 text-[15px] leading-relaxed max-w-md mb-8 text-pretty">
+            <p className="text-white/70 text-[15px] leading-relaxed max-w-md mb-8 text-pretty">
               {heroSubtitle}
             </p>
           )}
           {heroContent}
         </div>
 
-        <footer className="relative px-10 pb-8 text-[11px] text-sidebar-foreground/40">
+        <footer className="relative px-10 pb-8 text-[11px] text-white/40">
           &copy; 2026 HRHub.ae &middot; Trusted by 500+ UAE companies &middot; ISO 27001
         </footer>
       </aside>

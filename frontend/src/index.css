@@ -277,6 +277,24 @@
   background: hsl(var(--muted) / 0.5);
 }
 
+/* ─── Form field validation highlight ────────────────────────────────────── */
+/* When a FormField wrapper is marked data-invalid="true", tint borders on
+   common controls inside it (input, textarea, select trigger, etc.). This
+   covers third-party controls that don't forward aria-invalid. */
+[data-invalid="true"] input,
+[data-invalid="true"] textarea,
+[data-invalid="true"] [role="combobox"],
+[data-invalid="true"] button[data-slot="select-trigger"],
+[data-invalid="true"] .phone-input-trigger {
+  border-color: hsl(var(--destructive)) !important;
+}
+
+[data-invalid="true"] input:focus-visible,
+[data-invalid="true"] textarea:focus-visible,
+[data-invalid="true"] [role="combobox"]:focus-visible {
+  --tw-ring-color: hsl(var(--destructive) / 0.35);
+}
+
 /* ─── RTL & Arabic Language Support ─────────────────────────────────────── */
 :root[lang="ar"],
 html.rtl {

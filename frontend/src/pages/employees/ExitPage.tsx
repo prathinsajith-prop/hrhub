@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { useExitRequests, useInitiateExit, useApproveExit, useMarkSettlementPaid, useSettlementPreview, type ExitRequest } from '@/hooks/useExit'
 import { useEmployees } from '@/hooks/useEmployees'
-import { LogOut, DollarSign, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
+import { LogOut, DollarSign, CheckCircle2, AlertCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const statusConfig: Record<string, { label: string; color: string }> = {
