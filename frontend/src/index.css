@@ -50,15 +50,15 @@
   --chart-4: 38 92% 50%;
   --chart-5: 220 12% 55%;
 
-  /* Sidebar (light, matching design reference) */
-  --sidebar: 0 0% 100%;
-  --sidebar-foreground: 222 20% 28%;
-  --sidebar-primary: 221 83% 53%;
+  /* Sidebar — dark navy matching auth brand panel. Active items pop in primary blue. */
+  --sidebar: 222 47% 11%;
+  --sidebar-foreground: 210 20% 92%;
+  --sidebar-primary: 221 83% 60%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 221 83% 96%;
-  --sidebar-accent-foreground: 221 83% 45%;
-  --sidebar-border: 220 16% 92%;
-  --sidebar-ring: 221 83% 53%;
+  --sidebar-accent: 222 40% 18%;
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-border: 222 40% 18%;
+  --sidebar-ring: 221 83% 60%;
 }
 
 /* ─── Tailwind 4 theme mapping ────────────────────────────────────────────── */
