@@ -12,11 +12,11 @@ import {
   type RowSelectionState,
   type Row,
 } from '@tanstack/react-table'
-import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react'
+import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
-import { Input } from './primitives'
 import { Checkbox } from './checkbox'
+import { SearchInput } from '@/components/shared/SearchInput'
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -117,15 +117,12 @@ export function DataTable<TData, TValue>({
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-1">
           {searchKey !== undefined && (
-            <div className="relative flex-1 max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder={searchPlaceholder}
-                value={globalFilter}
-                onChange={e => setGlobalFilter(e.target.value)}
-                className="pl-9 h-8 text-xs"
-              />
-            </div>
+            <SearchInput
+              value={globalFilter}
+              onChange={setGlobalFilter}
+              placeholder={searchPlaceholder}
+              containerClassName="max-w-xs"
+            />
           )}
         </div>
         {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}

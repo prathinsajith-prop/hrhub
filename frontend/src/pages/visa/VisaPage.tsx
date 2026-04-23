@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plane, Clock, AlertTriangle, CheckCircle2, Plus, RefreshCw, Eye } from 'lucide-react'
+import { Plane, Clock, AlertTriangle, CheckCircle2, Plus, RefreshCw, Eye, Edit2 } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -162,11 +162,29 @@ const columns: ColumnDef<VisaApplication>[] = [
     id: 'actions',
     header: '',
     cell: ({ row: { original: v } }) => (
-      <VisaDetailButton visa={v} />
+      <VisaRowActions visa={v} />
     ),
-    size: 40,
+    size: 80,
   },
 ]
+
+function VisaRowActions({ visa: v }: { visa: VisaApplication }) {
+  const navigate = useNavigate()
+  return (
+    <div className="flex gap-0.5 justify-end">
+      <VisaDetailButton visa={v} />
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-8 w-8"
+        aria-label="Edit visa application"
+        onClick={() => navigate(`/visa/${v.id}`)}
+      >
+        <Edit2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  )
+}
 
 function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
   const [open, setOpen] = useState(false)

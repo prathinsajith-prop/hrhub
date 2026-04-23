@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Calendar, Clock, CheckCircle2, XCircle, Plus, Download, BarChart3, Users, Shield } from 'lucide-react'
+import { Calendar, Clock, CheckCircle2, XCircle, Plus, Download, BarChart3, Users, Shield, Edit2 } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
@@ -159,17 +159,33 @@ export function LeavePage() {
     {
       id: 'actions',
       header: '',
-      cell: ({ row }) => row.original.status === 'pending' ? (
-        <div className="flex gap-1">
-          <Button size="icon-sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => setApproveTarget(row.original)}>
-            <CheckCircle2 className="h-4 w-4" />
-          </Button>
-          <Button size="icon-sm" variant="ghost" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => setRejectTarget(row.original)}>
-            <XCircle className="h-4 w-4" />
-          </Button>
-        </div>
-      ) : null,
-      size: 80,
+      cell: ({ row }) => {
+        const l = row.original
+        return (
+          <div className="flex gap-1 justify-end">
+            {l.status === 'pending' && (
+              <>
+                <Button size="icon-sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => setApproveTarget(l)} aria-label="Approve">
+                  <CheckCircle2 className="h-4 w-4" />
+                </Button>
+                <Button size="icon-sm" variant="ghost" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => setRejectTarget(l)} aria-label="Reject">
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Edit leave request"
+              onClick={() => toast.info('Edit leave', `Edit flow for ${l.employeeName}'s ${l.leaveType} request will open here.`)}
+            >
+              <Edit2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )
+      },
+      size: 110,
     },
   ]
 

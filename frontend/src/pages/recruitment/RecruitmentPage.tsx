@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, Briefcase, Users, Clock, TrendingUp, Star, DollarSign, Eye } from 'lucide-react'
+import { Plus, Briefcase, Users, Clock, TrendingUp, Star, DollarSign, Eye, Edit2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -120,6 +120,22 @@ const jobColumns: ColumnDef<any>[] = [
     ),
   },
   { accessorKey: 'closingDate', header: 'Closing', cell: ({ getValue }) => <span className="text-xs text-muted-foreground">{formatDate(getValue() as string)}</span> },
+  {
+    id: 'actions',
+    header: '',
+    cell: ({ row: { original: j } }) => (
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Edit job"
+        className="text-muted-foreground hover:text-foreground"
+        onClick={() => toast.info('Edit job', `Edit flow for “${j.title}” will open here.`)}
+      >
+        <Edit2 className="h-3.5 w-3.5" />
+      </Button>
+    ),
+    size: 60,
+  },
 ]
 
 export function RecruitmentPage() {

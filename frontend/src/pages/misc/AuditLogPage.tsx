@@ -2,13 +2,12 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Input } from '@/components/ui/input'
+import { SearchInput } from '@/components/shared'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { useActivityLogs, type ActivityLog } from '@/hooks/useAudit'
 import {
     ClipboardList,
-    Search,
     Plus,
     Pencil,
     Trash2,
@@ -171,15 +170,14 @@ export function AuditLogPage() {
 
             <div className="rounded-xl border bg-card shadow-sm p-3 mb-5">
                 <div className="flex flex-wrap gap-2 items-center">
-                    <div className="relative flex-1 min-w-[220px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search by actor, entity, or action..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            className="pl-9 h-9 bg-muted/40 border-transparent focus-visible:bg-background"
-                        />
-                    </div>
+                    <SearchInput
+                        value={search}
+                        onChange={setSearch}
+                        placeholder="Search by actor, entity, or action..."
+                        size="md"
+                        containerClassName="flex-1 min-w-[220px]"
+                        className="bg-muted/40 border-transparent focus-visible:bg-background"
+                    />
                     <div className="flex items-center gap-2">
                         <SlidersHorizontal className="h-4 w-4 text-muted-foreground hidden md:block" />
                         <Select value={entityType || '__all__'} onValueChange={(v) => setEntityType(v === '__all__' ? '' : v)}>

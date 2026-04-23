@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
-import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus, ShieldCheck } from 'lucide-react'
+import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus, ShieldCheck, Edit2 } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -236,6 +236,15 @@ const columns = (
             onClick={() => onView(d)}
           >
             <Download className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Edit document"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={() => toast.info('Edit document', `Edit metadata for "${d.fileName}" will open here.`)}
+          >
+            <Edit2 className="h-3.5 w-3.5" />
           </Button>
           {(d.status === 'under_review' || d.status === 'pending_upload') && (
             <Button

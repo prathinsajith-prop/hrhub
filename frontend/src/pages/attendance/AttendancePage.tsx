@@ -1,21 +1,32 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { PageWrapper } from '@/components/layout/PageWrapper'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { type ColumnDef } from '@tanstack/react-table'
+import {
+    ChevronLeft, ChevronRight, CalendarDays, Clock, UserCheck, UserX,
+    AlarmClock, Home, CalendarOff, TrendingUp, Download, Edit2, RefreshCcw,
+} from 'lucide-react'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell, Legend, LineChart, Line,
 } from 'recharts'
-import { useAttendance, type AttendanceRecord } from '@/hooks/useAttendance'
-import { useEmployees } from '@/hooks/useEmployees'
-import { Clock, CalendarDays } from 'lucide-react'
-import { Skeleton } from '@/components/ui/skeleton'
 
-const STATUS_COLORS: Record<string, string> = {
+import { PageWrapper } from '@/components/layout/PageWrapper'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { DataTable } from '@/components/ui/data-table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toast } from '@/components/ui/overlays'
+import {
+    StatCard, StatusBadge, EmptyState, TableSkeleton, InitialsAvatar,
+    type StatusTone,
+} from '@/components/shared'
+import { useAttendance, useUpsertAttendance, type AttendanceRecord } from '@/hooks/useAttendance'
+import { useEmployees } from '@/hooks/useEmployees'
+
+// ─────────────────────────── Domain config ───────────────────────────────
+
+const STATUS_COLORS: Record<AttendanceRecord['status'], string> = {
     present: '#22c55e',
     absent: '#ef4444',
     half_day: '#eab308',
@@ -24,19 +35,25 @@ const STATUS_COLORS: Record<string, string> = {
     on_leave: '#a855f7',
 }
 
-const statusLabel: Record<string, string> = {
+const STATUS_LABEL: Record<AttendanceRecord['status'], string> = {
     present: 'Present', absent: 'Absent', half_day: 'Half Day',
     late: 'Late', wfh: 'WFH', on_leave: 'On Leave',
 }
 
-const statusBadge: Record<string, string> = {
-    present: 'bg-green-100 text-green-800',
-    absent: 'bg-red-100 text-red-800',
-    half_day: 'bg-yellow-100 text-yellow-800',
-    late: 'bg-orange-100 text-orange-800',
-    wfh: 'bg-blue-100 text-blue-800',
-    on_leave: 'bg-purple-100 text-purple-800',
+const STATUS_TONE: Record<AttendanceRecord['status'], StatusTone> = {
+    present: 'success',
+    absent: 'danger',
+    half_day: 'warning',
+    late: 'orange',
+    wfh: 'info',
+    on_leave: 'purple',
 }
+
+const STATUS_ORDER: AttendanceRecord['status'][] = [
+    'present', 'absent', 'late', 'wfh', 'half_day', 'on_leave',
+]
+
+// ─────────────────────────── Helpers ─────────────────────────────────────
 
 function fmtTime(ts: string | undefined) {
     if (!ts) return '—'
@@ -53,130 +70,472 @@ function getMonthRange(offset = 0) {
     return { start, end, label: d.toLocaleString('en-AE', { month: 'long', year: 'numeric' }) }
 }
 
+// ─────────────────────────── Page ────────────────────────────────────────
+
 export function AttendancePage() {
     const { t } = useTranslation()
     const [monthOffset, setMonthOffset] = useState(0)
     const [filterEmployee, setFilterEmployee] = useState('')
+    const [filterStatus, setFilterStatus] = useState<'all' | AttendanceRecord['status']>('all')
 
-    const { start, end, label } = getMonthRange(monthOffset)
+    const { start, end, label } = useMemo(() => getMonthRange(monthOffset), [monthOffset])
 
-    const { data: records, isLoading } = useAttendance({
+    const { data: records, isLoading, refetch, isFetching } = useAttendance({
         startDate: start,
         endDate: end,
         employeeId: filterEmployee || undefined,
     })
-    const { data: employees } = useEmployees({ limit: 200 })
+    const { data: employeesData } = useEmployees({ limit: 200 })
+    const upsert = useUpsertAttendance()
 
-    const list: AttendanceRecord[] = Array.isArray(records) ? records : []
-    const empList: any[] = Array.isArray(employees) ? employees : (employees as any)?.data ?? []
+    const list = useMemo<AttendanceRecord[]>(
+        () => (Array.isArray(records) ? records : []),
+        [records],
+    )
+    // employees response shape may be { data: [] } or []
+    const empList = useMemo<Array<Record<string, unknown> & { id: string }>>(() => {
+        if (Array.isArray(employeesData)) return employeesData as Array<Record<string, unknown> & { id: string }>
+        const maybe = (employeesData as { data?: unknown })?.data
+        return Array.isArray(maybe) ? (maybe as Array<Record<string, unknown> & { id: string }>) : []
+    }, [employeesData])
+
+    // O(1) employee lookup instead of empList.find() per row
+    const empMap = useMemo(() => {
+        const m = new Map<string, { name: string; initials: string; department?: string }>()
+        for (const e of empList) {
+            const fullName = (e.fullName as string | undefined)
+                ?? `${(e.firstName as string | undefined) ?? ''} ${(e.lastName as string | undefined) ?? ''}`.trim()
+            const name = fullName || '—'
+            m.set(e.id, {
+                name,
+                initials: name
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((s) => s[0])
+                    .join('')
+                    .toUpperCase() || '—',
+                department: e.department as string | undefined,
+            })
+        }
+        return m
+    }, [empList])
+
+    // Filter by status (client-side, since status filter not sent to API here)
+    const filteredList = useMemo(
+        () => (filterStatus === 'all' ? list : list.filter((r) => r.status === filterStatus)),
+        [list, filterStatus],
+    )
 
     const summary = useMemo(() => {
-        const counts: Record<string, number> = { present: 0, absent: 0, late: 0, wfh: 0, half_day: 0, on_leave: 0 }
+        const counts: Record<string, number> = {
+            present: 0, absent: 0, late: 0, wfh: 0, half_day: 0, on_leave: 0,
+        }
         let totalHours = 0, totalOT = 0
         for (const r of list) {
             counts[r.status] = (counts[r.status] ?? 0) + 1
             totalHours += parseFloat(r.hoursWorked ?? '0')
             totalOT += parseFloat(r.overtimeHours ?? '0')
         }
-        return { counts, totalHours, totalOT }
+        return { counts, totalHours, totalOT, totalRecords: list.length }
     }, [list])
 
-    const pieData = useMemo(() =>
-        Object.entries(STATUS_COLORS)
-            .map(([key, color]) => ({ name: statusLabel[key], value: summary.counts[key] ?? 0, color }))
-            .filter(d => d.value > 0),
-        [summary]
+    const pieData = useMemo(
+        () =>
+            STATUS_ORDER
+                .map((key) => ({
+                    name: STATUS_LABEL[key],
+                    value: summary.counts[key] ?? 0,
+                    color: STATUS_COLORS[key],
+                }))
+                .filter((d) => d.value > 0),
+        [summary],
     )
 
     const dailyData = useMemo(() => {
-        const map: Record<string, { date: string; present: number; absent: number; late: number; hours: number }> = {}
+        const map = new Map<string, { date: string; present: number; absent: number; late: number; hours: number }>()
         for (const r of list) {
-            if (!map[r.date]) map[r.date] = { date: r.date, present: 0, absent: 0, late: 0, hours: 0 }
-            if (r.status === 'present') map[r.date].present++
-            else if (r.status === 'absent') map[r.date].absent++
-            else if (r.status === 'late') map[r.date].late++
-            map[r.date].hours += parseFloat(r.hoursWorked ?? '0')
+            let row = map.get(r.date)
+            if (!row) {
+                row = { date: r.date, present: 0, absent: 0, late: 0, hours: 0 }
+                map.set(r.date, row)
+            }
+            if (r.status === 'present') row.present++
+            else if (r.status === 'absent') row.absent++
+            else if (r.status === 'late') row.late++
+            row.hours += parseFloat(r.hoursWorked ?? '0')
         }
-        return Object.values(map).sort((a, b) => a.date.localeCompare(b.date)).map(d => ({ ...d, date: d.date.slice(5) }))
+        return [...map.values()]
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map((d) => ({ ...d, date: d.date.slice(5) }))
     }, [list])
 
     const empSummary = useMemo(() => {
-        const map: Record<string, { empId: string; name: string; present: number; absent: number; hours: number; ot: number }> = {}
+        const map = new Map<string, { empId: string; name: string; present: number; absent: number; hours: number; ot: number }>()
         for (const r of list) {
-            if (!map[r.employeeId]) {
-                const emp = empList.find(e => e.id === r.employeeId)
-                map[r.employeeId] = { empId: r.employeeId, name: emp ? `${emp.firstName} ${emp.lastName}` : '...', present: 0, absent: 0, hours: 0, ot: 0 }
+            let row = map.get(r.employeeId)
+            if (!row) {
+                const emp = empMap.get(r.employeeId)
+                row = {
+                    empId: r.employeeId,
+                    name: emp?.name ?? '—',
+                    present: 0, absent: 0, hours: 0, ot: 0,
+                }
+                map.set(r.employeeId, row)
             }
-            if (r.status === 'present') map[r.employeeId].present++
-            else if (r.status === 'absent') map[r.employeeId].absent++
-            map[r.employeeId].hours += parseFloat(r.hoursWorked ?? '0')
-            map[r.employeeId].ot += parseFloat(r.overtimeHours ?? '0')
+            if (r.status === 'present') row.present++
+            else if (r.status === 'absent') row.absent++
+            row.hours += parseFloat(r.hoursWorked ?? '0')
+            row.ot += parseFloat(r.overtimeHours ?? '0')
         }
-        return Object.values(map).sort((a, b) => b.hours - a.hours)
-    }, [list, empList])
+        return [...map.values()].sort((a, b) => b.hours - a.hours)
+    }, [list, empMap])
+
+    const handleEdit = useCallback(
+        (rec: AttendanceRecord) => {
+            // Placeholder for edit modal — connected to useUpsertAttendance
+            toast.info(
+                'Edit attendance',
+                `Edit flow for ${empMap.get(rec.employeeId)?.name ?? 'employee'} on ${rec.date} will open here.`,
+            )
+        },
+        [empMap],
+    )
+
+    const handleExport = useCallback(() => {
+        if (!filteredList.length) {
+            toast.warning('Nothing to export', 'No records in the current view.')
+            return
+        }
+        const header = ['Date', 'Employee', 'Status', 'Punch In', 'Punch Out', 'Hours', 'Overtime', 'Notes']
+        const rows = filteredList.map((r) => [
+            r.date,
+            empMap.get(r.employeeId)?.name ?? '—',
+            STATUS_LABEL[r.status],
+            fmtTime(r.checkIn),
+            fmtTime(r.checkOut),
+            r.hoursWorked ?? '',
+            r.overtimeHours ?? '',
+            (r.notes ?? '').replace(/"/g, '""'),
+        ])
+        const csv = [header, ...rows].map((cols) =>
+            cols.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','),
+        ).join('\n')
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `attendance-${start}_to_${end}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+        toast.success('Exported', `${filteredList.length} rows exported to CSV.`)
+    }, [filteredList, empMap, start, end])
+
+    // Explicitly reference mutation to keep for future edit modal wiring
+    void upsert
+
+    // ─── Columns ───────────────────────────────────────────────────
+    const columns: ColumnDef<AttendanceRecord>[] = useMemo(() => [
+        {
+            accessorKey: 'date',
+            header: 'Date',
+            cell: ({ getValue }) => {
+                const d = getValue() as string
+                return (
+                    <span className="font-mono text-[11px] text-muted-foreground">{d}</span>
+                )
+            },
+            size: 110,
+        },
+        {
+            id: 'employee',
+            header: 'Employee',
+            accessorFn: (row) => empMap.get(row.employeeId)?.name ?? '—',
+            cell: ({ row: { original: r } }) => {
+                const emp = empMap.get(r.employeeId)
+                return (
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <InitialsAvatar
+                            name={emp?.name ?? '—'}
+                            size="sm"
+                        />
+                        <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{emp?.name ?? '—'}</p>
+                            {emp?.department && (
+                                <p className="text-[11px] text-muted-foreground truncate">{emp.department}</p>
+                            )}
+                        </div>
+                    </div>
+                )
+            },
+            size: 220,
+        },
+        {
+            accessorKey: 'status',
+            header: 'Status',
+            cell: ({ getValue }) => {
+                const s = getValue() as AttendanceRecord['status']
+                return (
+                    <StatusBadge tone={STATUS_TONE[s]} dot>
+                        {STATUS_LABEL[s]}
+                    </StatusBadge>
+                )
+            },
+            size: 110,
+        },
+        {
+            accessorKey: 'checkIn',
+            header: 'Punch In',
+            cell: ({ getValue }) => (
+                <span className="font-mono text-[11px] text-green-700 dark:text-green-400">
+                    {fmtTime(getValue() as string | undefined)}
+                </span>
+            ),
+            size: 90,
+        },
+        {
+            accessorKey: 'checkOut',
+            header: 'Punch Out',
+            cell: ({ getValue }) => (
+                <span className="font-mono text-[11px] text-red-700 dark:text-red-400">
+                    {fmtTime(getValue() as string | undefined)}
+                </span>
+            ),
+            size: 90,
+        },
+        {
+            accessorKey: 'hoursWorked',
+            header: () => <div className="text-right">Hours</div>,
+            cell: ({ getValue }) => {
+                const h = getValue() as string | undefined
+                return (
+                    <div className="text-right tabular-nums text-sm">
+                        {h ? `${parseFloat(h).toFixed(1)}h` : '—'}
+                    </div>
+                )
+            },
+            size: 80,
+        },
+        {
+            accessorKey: 'overtimeHours',
+            header: () => <div className="text-right">Overtime</div>,
+            cell: ({ getValue }) => {
+                const v = getValue() as string | undefined
+                const n = v ? parseFloat(v) : 0
+                return (
+                    <div className="text-right tabular-nums text-sm">
+                        {n > 0 ? (
+                            <span className="text-purple-700 dark:text-purple-400 font-semibold">
+                                {n.toFixed(1)}h
+                            </span>
+                        ) : '—'}
+                    </div>
+                )
+            },
+            size: 90,
+        },
+        {
+            accessorKey: 'notes',
+            header: 'Notes',
+            cell: ({ getValue }) => (
+                <span className="text-xs text-muted-foreground line-clamp-1">
+                    {(getValue() as string) || '—'}
+                </span>
+            ),
+            size: 160,
+        },
+        {
+            id: 'actions',
+            header: '',
+            cell: ({ row }) => (
+                <div className="flex justify-end">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs gap-1.5"
+                        onClick={() => handleEdit(row.original)}
+                    >
+                        <Edit2 className="h-3 w-3" />
+                        Edit
+                    </Button>
+                </div>
+            ),
+            size: 80,
+        },
+    ], [empMap, handleEdit])
 
     return (
         <PageWrapper>
             <PageHeader
-                title="Attendance"
-                description="Track daily employee attendance, punch history, and working hours"
+                eyebrow="Operations"
+                title={t('attendance.title')}
+                description={t('attendance.description')}
                 actions={
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setMonthOffset(o => o - 1)}>&lsaquo;</Button>
-                        <span className="text-sm font-medium min-w-[140px] text-center">{label}</span>
-                        <Button variant="outline" size="sm" onClick={() => setMonthOffset(o => Math.min(0, o + 1))} disabled={monthOffset === 0}>&rsaquo;</Button>
-                        <Button variant="ghost" size="sm" onClick={() => setMonthOffset(0)} disabled={monthOffset === 0}>{t('attendance.currentMonth')}</Button>
+                        <div className="inline-flex items-center rounded-lg border bg-card h-9 overflow-hidden">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 px-2 rounded-none"
+                                onClick={() => setMonthOffset((o) => o - 1)}
+                                aria-label="Previous month"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <div className="px-3 text-xs font-medium min-w-[140px] text-center border-l border-r">
+                                {label}
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 px-2 rounded-none"
+                                onClick={() => setMonthOffset((o) => Math.min(0, o + 1))}
+                                disabled={monthOffset === 0}
+                                aria-label="Next month"
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />}
+                            onClick={() => refetch()}
+                            disabled={isFetching}
+                        >
+                            Refresh
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<Download className="h-3.5 w-3.5" />}
+                            onClick={handleExport}
+                        >
+                            Export
+                        </Button>
                     </div>
                 }
             />
 
-            {/* KPI summary strip */}
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
-                {(['present', 'absent', 'late', 'wfh', 'half_day', 'on_leave'] as const).map(s => (
-                    <Card key={s} className="p-3 text-center">
-                        <p className="text-xl font-bold" style={{ color: STATUS_COLORS[s] }}>{summary.counts[s] ?? 0}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">{statusLabel[s]}</p>
-                    </Card>
-                ))}
-                <Card className="p-3 text-center">
-                    <p className="text-xl font-bold text-primary">{summary.totalHours.toFixed(0)}h</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">{t('attendance.totalHours')}</p>
-                </Card>
+            {/* KPI strip — 8 tiles */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+                <StatCard
+                    label={STATUS_LABEL.present}
+                    value={summary.counts.present ?? 0}
+                    accent={STATUS_COLORS.present}
+                    icon={<UserCheck className="h-4 w-4" />}
+                />
+                <StatCard
+                    label={STATUS_LABEL.absent}
+                    value={summary.counts.absent ?? 0}
+                    accent={STATUS_COLORS.absent}
+                    icon={<UserX className="h-4 w-4" />}
+                />
+                <StatCard
+                    label={STATUS_LABEL.late}
+                    value={summary.counts.late ?? 0}
+                    accent={STATUS_COLORS.late}
+                    icon={<AlarmClock className="h-4 w-4" />}
+                />
+                <StatCard
+                    label={STATUS_LABEL.wfh}
+                    value={summary.counts.wfh ?? 0}
+                    accent={STATUS_COLORS.wfh}
+                    icon={<Home className="h-4 w-4" />}
+                />
+                <StatCard
+                    label={STATUS_LABEL.half_day}
+                    value={summary.counts.half_day ?? 0}
+                    accent={STATUS_COLORS.half_day}
+                    icon={<Clock className="h-4 w-4" />}
+                />
+                <StatCard
+                    label={STATUS_LABEL.on_leave}
+                    value={summary.counts.on_leave ?? 0}
+                    accent={STATUS_COLORS.on_leave}
+                    icon={<CalendarOff className="h-4 w-4" />}
+                />
+                <StatCard
+                    label="Total Hours"
+                    value={`${summary.totalHours.toFixed(0)}h`}
+                    accent="hsl(var(--primary))"
+                    icon={<Clock className="h-4 w-4" />}
+                />
+                <StatCard
+                    label="Overtime"
+                    value={`${summary.totalOT.toFixed(0)}h`}
+                    accent="#a855f7"
+                    icon={<TrendingUp className="h-4 w-4" />}
+                />
             </div>
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-                <Card>
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">{t('attendance.statusDistribution')}</CardTitle></CardHeader>
+            {/* Charts row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <Card className="lg:col-span-1">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">{t('attendance.statusDistribution')}</CardTitle>
+                    </CardHeader>
                     <CardContent>
                         {pieData.length === 0 ? (
-                            <p className="text-xs text-muted-foreground text-center py-8">No data</p>
+                            <EmptyState
+                                icon={CalendarDays}
+                                title="No status data"
+                                description="No attendance entries in the selected month."
+                            />
                         ) : (
-                            <ResponsiveContainer width="100%" height={200}>
+                            <ResponsiveContainer width="100%" height={220}>
                                 <PieChart>
-                                    <Pie data={pieData} dataKey="value" cx="50%" cy="50%" outerRadius={70}>
-                                        {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                                    <Pie
+                                        data={pieData}
+                                        dataKey="value"
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={45}
+                                        outerRadius={80}
+                                        paddingAngle={2}
+                                    >
+                                        {pieData.map((entry, i) => (
+                                            <Cell key={i} fill={entry.color} strokeWidth={0} />
+                                        ))}
                                     </Pie>
-                                    <Tooltip />
-                                    <Legend />
+                                    <Tooltip
+                                        contentStyle={{
+                                            fontSize: 12,
+                                            borderRadius: 8,
+                                            border: '1px solid hsl(var(--border))',
+                                        }}
+                                    />
+                                    <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
                                 </PieChart>
                             </ResponsiveContainer>
                         )}
                     </CardContent>
                 </Card>
                 <Card className="lg:col-span-2">
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">{t('attendance.dailyTrend')}</CardTitle></CardHeader>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">{t('attendance.dailyTrend')}</CardTitle>
+                    </CardHeader>
                     <CardContent>
                         {dailyData.length === 0 ? (
-                            <p className="text-xs text-muted-foreground text-center py-8">No data</p>
+                            <EmptyState
+                                icon={TrendingUp}
+                                title="No trend data"
+                                description="Data will appear as daily entries are recorded."
+                            />
                         ) : (
-                            <ResponsiveContainer width="100%" height={200}>
-                                <LineChart data={dailyData} margin={{ left: -20, right: 8 }}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                                    <YAxis tick={{ fontSize: 10 }} />
-                                    <Tooltip />
-                                    <Legend />
+                            <ResponsiveContainer width="100%" height={220}>
+                                <LineChart data={dailyData} margin={{ left: -20, right: 8, top: 4 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                                    <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                                    <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                                    <Tooltip
+                                        contentStyle={{
+                                            fontSize: 12,
+                                            borderRadius: 8,
+                                            border: '1px solid hsl(var(--border))',
+                                        }}
+                                    />
+                                    <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
                                     <Line type="monotone" dataKey="present" stroke={STATUS_COLORS.present} strokeWidth={2} dot={false} name="Present" />
                                     <Line type="monotone" dataKey="absent" stroke={STATUS_COLORS.absent} strokeWidth={2} dot={false} name="Absent" />
                                     <Line type="monotone" dataKey="late" stroke={STATUS_COLORS.late} strokeWidth={2} dot={false} name="Late" />
@@ -187,17 +546,27 @@ export function AttendancePage() {
                 </Card>
             </div>
 
-            {/* Hours by employee bar chart */}
+            {/* Hours by employee */}
             {empSummary.length > 0 && (
-                <Card className="mb-6">
-                    <CardHeader className="pb-2"><CardTitle className="text-sm">{t('attendance.hoursByEmployee')}</CardTitle></CardHeader>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">{t('attendance.hoursByEmployee')}</CardTitle>
+                    </CardHeader>
                     <CardContent>
-                        <ResponsiveContainer width="100%" height={180}>
-                            <BarChart data={empSummary.slice(0, 15)} margin={{ left: -20, right: 8 }}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                                <YAxis tick={{ fontSize: 10 }} />
-                                <Tooltip formatter={(v) => `${Number(v).toFixed(1)}h`} />
+                        <ResponsiveContainer width="100%" height={200}>
+                            <BarChart data={empSummary.slice(0, 15)} margin={{ left: -20, right: 8, top: 4 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                                <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                                <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                                <Tooltip
+                                    formatter={(v) => `${Number(v).toFixed(1)}h`}
+                                    contentStyle={{
+                                        fontSize: 12,
+                                        borderRadius: 8,
+                                        border: '1px solid hsl(var(--border))',
+                                    }}
+                                />
+                                <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
                                 <Bar dataKey="hours" fill="#3b82f6" name="Regular" radius={[4, 4, 0, 0]} />
                                 <Bar dataKey="ot" fill="#a855f7" name="Overtime" radius={[4, 4, 0, 0]} />
                             </BarChart>
@@ -206,94 +575,71 @@ export function AttendancePage() {
                 </Card>
             )}
 
-            {/* Employee filter */}
-            <Card className="p-4 mb-4">
-                <div className="flex flex-wrap gap-3 items-end">
-                    <div className="space-y-1.5">
-                        <Label className="text-xs">{t('attendance.filterByEmployee')}</Label>
-                        <Select value={filterEmployee || '__all__'} onValueChange={(v) => setFilterEmployee(v === '__all__' ? '' : v)}>
-                            <SelectTrigger className="w-52"><SelectValue placeholder={t('attendance.allEmployees')} /></SelectTrigger>
+            {/* Records */}
+            <Card>
+                <CardHeader className="flex-row items-start sm:items-center justify-between gap-3 flex-wrap pb-4">
+                    <div>
+                        <CardTitle className="text-base">Punch history</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            {summary.totalRecords} records in {label}
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 items-center">
+                        <Select
+                            value={filterEmployee || '__all__'}
+                            onValueChange={(v) => setFilterEmployee(v === '__all__' ? '' : v)}
+                        >
+                            <SelectTrigger className="h-8 text-xs w-48">
+                                <SelectValue placeholder="All employees" />
+                            </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="__all__">{t('attendance.allEmployees')}</SelectItem>
-                                {empList.map((e: any) => (
-                                    <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
+                                <SelectItem value="__all__">All employees</SelectItem>
+                                {empList.map((e) => {
+                                    const name = (e.fullName as string | undefined)
+                                        ?? `${(e.firstName as string | undefined) ?? ''} ${(e.lastName as string | undefined) ?? ''}`.trim()
+                                    return (
+                                        <SelectItem key={e.id} value={e.id}>{name || '—'}</SelectItem>
+                                    )
+                                })}
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={filterStatus}
+                            onValueChange={(v) => setFilterStatus(v as 'all' | AttendanceRecord['status'])}
+                        >
+                            <SelectTrigger className="h-8 text-xs w-36">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All statuses</SelectItem>
+                                {STATUS_ORDER.map((s) => (
+                                    <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     </div>
-                    {filterEmployee && (
-                        <Button variant="ghost" size="sm" onClick={() => setFilterEmployee('')}>Clear</Button>
+                </CardHeader>
+                <CardContent>
+                    {isLoading ? (
+                        <TableSkeleton columns={8} rows={8} />
+                    ) : filteredList.length === 0 ? (
+                        <EmptyState
+                            icon={CalendarDays}
+                            title={t('attendance.noRecords')}
+                            description={`No matching records in ${label}.`}
+                        />
+                    ) : (
+                        <DataTable
+                            columns={columns}
+                            data={filteredList}
+                            searchKey="employee"
+                            searchPlaceholder="Search by employee, status…"
+                            pageSize={10}
+                            emptyMessage={t('attendance.noRecords')}
+                        />
                     )}
-                </div>
+                </CardContent>
             </Card>
-
-            {/* Punch history table */}
-            {isLoading ? (
-                <div className="rounded-lg border overflow-hidden">
-                    {/* Skeleton header */}
-                    <div className="flex gap-4 px-4 py-3 bg-muted/50">
-                        {[60, 140, 80, 90, 90, 70, 70, 80].map((w, i) => (
-                            <Skeleton key={i} className="h-4" style={{ width: w }} />
-                        ))}
-                    </div>
-                    {Array.from({ length: 8 }).map((_, i) => (
-                        <div key={i} className="flex gap-4 px-4 py-3.5 border-t">
-                            <Skeleton className="h-4 w-20" />
-                            <Skeleton className="h-4 w-36" />
-                            <Skeleton className="h-5 w-16 rounded-full" />
-                            <Skeleton className="h-4 w-16" />
-                            <Skeleton className="h-4 w-16" />
-                            <Skeleton className="h-4 w-14" />
-                            <Skeleton className="h-4 w-12" />
-                            <Skeleton className="h-4 w-24" />
-                        </div>
-                    ))}
-                </div>
-            ) : list.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 py-16">
-                    <CalendarDays className="h-10 w-10 text-muted-foreground" />
-                    <p className="text-muted-foreground text-sm">{t('attendance.noRecords')} — {label}.</p>
-                </div>
-            ) : (
-                <div className="rounded-lg border overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead className="bg-muted/50">
-                            <tr>
-                                <th className="text-left px-4 py-3 font-medium">{t('common.date')}</th>
-                                <th className="text-left px-4 py-3 font-medium">{t('employees.fullName')}</th>
-                                <th className="text-left px-4 py-3 font-medium">{t('common.status')}</th>
-                                <th className="text-left px-4 py-3 font-medium">{t('attendance.punchIn')}</th>
-                                <th className="text-left px-4 py-3 font-medium">{t('attendance.punchOut')}</th>
-                                <th className="text-right px-4 py-3 font-medium">{t('attendance.hoursWorked')}</th>
-                                <th className="text-right px-4 py-3 font-medium">{t('attendance.overtime')}</th>
-                                <th className="text-left px-4 py-3 font-medium">{t('common.notes')}</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                            {list.map((rec: AttendanceRecord) => {
-                                const emp = empList.find((e: any) => e.id === rec.employeeId)
-                                return (
-                                    <tr key={rec.id} className="hover:bg-muted/30 transition-colors">
-                                        <td className="px-4 py-3 font-mono text-xs">{rec.date}</td>
-                                        <td className="px-4 py-3 font-medium">{emp ? `${emp.firstName} ${emp.lastName}` : '—'}</td>
-                                        <td className="px-4 py-3">
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusBadge[rec.status]}`}>
-                                                {statusLabel[rec.status]}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 font-mono text-xs text-green-700">{fmtTime(rec.checkIn)}</td>
-                                        <td className="px-4 py-3 font-mono text-xs text-red-700">{fmtTime(rec.checkOut)}</td>
-                                        <td className="px-4 py-3 text-right">{rec.hoursWorked ? `${parseFloat(rec.hoursWorked).toFixed(1)}h` : '—'}</td>
-                                        <td className="px-4 py-3 text-right">{rec.overtimeHours && parseFloat(rec.overtimeHours) > 0 ? <span className="text-purple-700 font-medium">{parseFloat(rec.overtimeHours).toFixed(1)}h</span> : '—'}</td>
-                                        <td className="px-4 py-3 text-xs text-muted-foreground max-w-[160px] truncate">{rec.notes ?? '—'}</td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            )}
         </PageWrapper>
     )
 }
-

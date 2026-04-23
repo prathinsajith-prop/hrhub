@@ -47,6 +47,15 @@ const DialogContent = React.forwardRef<
           sizeClass, className
         )}
         {...props}
+        onPointerDownOutside={(e) => {
+          // Prevent closing when clicking the backdrop / outside the dialog body.
+          props.onPointerDownOutside?.(e)
+          if (!e.defaultPrevented) e.preventDefault()
+        }}
+        onInteractOutside={(e) => {
+          props.onInteractOutside?.(e)
+          if (!e.defaultPrevented) e.preventDefault()
+        }}
       >
         {children}
         <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:pointer-events-none">
