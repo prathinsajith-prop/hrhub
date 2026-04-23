@@ -34,7 +34,7 @@ import { Badge } from '@/components/ui/badge'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { KpiCard } from '@/components/ui/kpi-card'
+import { KpiCardCompact } from '@/components/ui/kpi-card'
 import type { KpiColor } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -175,15 +175,14 @@ export function DashboardPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        {kpiCards.map(({ labelKey, labelFallback, key, subKey, subFallback, icon, color, change }) => (
-          <KpiCard
+        {kpiCards.map(({ labelKey, labelFallback, key, subKey, subFallback, icon, color }) => (
+          <KpiCardCompact
             key={key}
             label={t(labelKey, { defaultValue: labelFallback })}
-            value={(kpis as any)?.[key]}
-            sub={t(subKey, { defaultValue: subFallback })}
+            value={(kpis as any)?.[key] ?? '—'}
+            hint={t(subKey, { defaultValue: subFallback })}
             icon={icon}
             color={color}
-            trend={change}
             loading={kpisLoading}
           />
         ))}

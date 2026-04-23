@@ -25,6 +25,7 @@ import {
     X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { KpiCardCompact } from '@/components/ui/kpi-card'
 
 type ActionMeta = {
     icon: React.ComponentType<{ className?: string }>
@@ -179,10 +180,10 @@ export function AuditLogPage() {
             />
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-                <StatTile label="Total events" value={stats.total} icon={Activity} tone="primary" />
-                <StatTile label="Created" value={stats.counts['create'] ?? 0} icon={Plus} tone="emerald" />
-                <StatTile label="Updated" value={stats.counts['update'] ?? 0} icon={Pencil} tone="blue" />
-                <StatTile label="Unique actors" value={stats.actorCount} icon={UserIcon} tone="primary" />
+                <KpiCardCompact label="Total events" value={stats.total} icon={Activity} color="blue" />
+                <KpiCardCompact label="Created" value={stats.counts['create'] ?? 0} icon={Plus} color="green" />
+                <KpiCardCompact label="Updated" value={stats.counts['update'] ?? 0} icon={Pencil} color="amber" />
+                <KpiCardCompact label="Unique actors" value={stats.actorCount} icon={UserIcon} color="purple" />
             </div>
 
             <div className="rounded-xl border bg-card shadow-sm p-3 mb-5">
@@ -280,31 +281,6 @@ export function AuditLogPage() {
                 </div>
             )}
         </PageWrapper>
-    )
-}
-
-function StatTile({ label, value, icon: Icon, tone }: {
-    label: string
-    value: number
-    icon: React.ComponentType<{ className?: string }>
-    tone: 'primary' | 'emerald' | 'blue' | 'violet'
-}) {
-    const tones: Record<string, string> = {
-        primary: 'bg-primary/10 text-primary',
-        emerald: 'bg-emerald-100 text-emerald-700',
-        blue: 'bg-blue-100 text-blue-700',
-        violet: 'bg-primary/10 text-primary',
-    }
-    return (
-        <div className="rounded-xl border bg-card shadow-sm p-4 flex items-center gap-3">
-            <div className={cn('h-10 w-10 rounded-lg flex items-center justify-center shrink-0', tones[tone])}>
-                <Icon className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-                <p className="text-2xl font-semibold leading-none tracking-tight">{value.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground mt-1 truncate">{label}</p>
-            </div>
-        </div>
     )
 }
 

@@ -18,9 +18,10 @@ import { DataTable } from '@/components/ui/data-table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/overlays'
 import {
-    StatCard, StatusBadge, EmptyState, TableSkeleton, InitialsAvatar,
+    StatusBadge, EmptyState, TableSkeleton, InitialsAvatar,
     type StatusTone,
 } from '@/components/shared'
+import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { useAttendance, useUpsertAttendance, type AttendanceRecord } from '@/hooks/useAttendance'
 import { useEmployees } from '@/hooks/useEmployees'
 
@@ -418,54 +419,54 @@ export function AttendancePage() {
             />
 
             {/* KPI strip — 8 tiles */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-                <StatCard
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+                <KpiCardCompact
                     label={STATUS_LABEL.present}
                     value={summary.counts.present ?? 0}
-                    accent={STATUS_COLORS.present}
-                    icon={<UserCheck className="h-4 w-4" />}
+                    color="green"
+                    icon={UserCheck}
                 />
-                <StatCard
+                <KpiCardCompact
                     label={STATUS_LABEL.absent}
                     value={summary.counts.absent ?? 0}
-                    accent={STATUS_COLORS.absent}
-                    icon={<UserX className="h-4 w-4" />}
+                    color="red"
+                    icon={UserX}
                 />
-                <StatCard
+                <KpiCardCompact
                     label={STATUS_LABEL.late}
                     value={summary.counts.late ?? 0}
-                    accent={STATUS_COLORS.late}
-                    icon={<AlarmClock className="h-4 w-4" />}
+                    color="amber"
+                    icon={AlarmClock}
                 />
-                <StatCard
+                <KpiCardCompact
                     label={STATUS_LABEL.wfh}
                     value={summary.counts.wfh ?? 0}
-                    accent={STATUS_COLORS.wfh}
-                    icon={<Home className="h-4 w-4" />}
+                    color="blue"
+                    icon={Home}
                 />
-                <StatCard
+                <KpiCardCompact
                     label={STATUS_LABEL.half_day}
                     value={summary.counts.half_day ?? 0}
-                    accent={STATUS_COLORS.half_day}
-                    icon={<Clock className="h-4 w-4" />}
+                    color="amber"
+                    icon={Clock}
                 />
-                <StatCard
+                <KpiCardCompact
                     label={STATUS_LABEL.on_leave}
                     value={summary.counts.on_leave ?? 0}
-                    accent={STATUS_COLORS.on_leave}
-                    icon={<CalendarOff className="h-4 w-4" />}
+                    color="cyan"
+                    icon={CalendarOff}
                 />
-                <StatCard
+                <KpiCardCompact
                     label="Total Hours"
                     value={`${summary.totalHours.toFixed(0)}h`}
-                    accent="hsl(var(--primary))"
-                    icon={<Clock className="h-4 w-4" />}
+                    color="blue"
+                    icon={Clock}
                 />
-                <StatCard
+                <KpiCardCompact
                     label="Overtime"
                     value={`${summary.totalOT.toFixed(0)}h`}
-                    accent="hsl(var(--info))"
-                    icon={<TrendingUp className="h-4 w-4" />}
+                    color="cyan"
+                    icon={TrendingUp}
                 />
             </div>
 
