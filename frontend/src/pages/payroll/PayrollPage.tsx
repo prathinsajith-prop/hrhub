@@ -13,6 +13,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency } from '@/lib/utils'
 import { usePayrollRuns, useRunPayroll, useSubmitWps } from '@/hooks/usePayroll'
+import { usePermissions } from '@/hooks/usePermissions'
 import { usePayrollTrend } from '@/hooks/useDashboard'
 import { useAuthStore } from '@/store/authStore'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
@@ -160,6 +161,8 @@ const columns: ColumnDef<PayrollRun>[] = [
 
 export function PayrollPage() {
   const { t } = useTranslation()
+  const { can } = usePermissions()
+  const canManagePayroll = can('manage_payroll')
   const [runConfirmOpen, setRunConfirmOpen] = useState(false)
   const [wpsExporting, setWpsExporting] = useState(false)
   const { accessToken } = useAuthStore()
@@ -308,9 +311,11 @@ export function PayrollPage() {
                   <div className="flex justify-between border-t pt-2"><span className="font-semibold">Est. Net Pay</span><span className="font-bold text-emerald-600">{formatCurrency(Number((draftRun as any).totalNet ?? 0))}</span></div>
                 </div>
               </div>
-              <Button className="mt-4 w-full" leftIcon={<Play className="h-4 w-4" />} onClick={() => setRunConfirmOpen(true)}>
-                Run {draftLabel} Payroll
-              </Button>
+              {canManagePayroll && (
+                <Button className="mt-4 w-full" leftIcon={<Play className="h-4 w-4" />} onClick={() => setRunConfirmOpen(true)}>
+                  Run {draftLabel} Payroll
+                </Button>
+              )}
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center">

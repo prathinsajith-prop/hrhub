@@ -18,6 +18,7 @@ import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { ApplyLeaveDialog } from '@/components/shared/action-dialogs'
 import { InitialsAvatar } from '@/components/shared/Avatar'
+import { usePermissions } from '@/hooks/usePermissions'
 import type { LeaveRequest } from '@/types'
 
 const LEAVE_FILTERS: FilterConfig[] = [
@@ -133,6 +134,8 @@ const leaveTypeColor: Record<string, string> = {
 
 export function LeavePage() {
     const { t } = useTranslation()
+    const { can } = usePermissions()
+    const canApprove = can('approve_leave')
     const { data: leaveData, isLoading: leaveLoading } = useLeaveRequests({ limit: 50 })
     const leaves: LeaveRequest[] = (leaveData?.data as LeaveRequest[]) ?? []
     const approveLeave = useApproveLeave()
@@ -208,7 +211,7 @@ export function LeavePage() {
                 const l = row.original
                 return (
                     <div className="flex gap-1 justify-end">
-                        {l.status === 'pending' && (
+                        {l.status === 'pending' && canApprove && (
                             <>
                                 <Button size="icon-sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => setApproveTarget(l)} aria-label="Approve">
                                     <CheckCircle2 className="h-4 w-4" />
@@ -223,7 +226,7 @@ export function LeavePage() {
             },
             size: 110,
         },
-    ], [])
+    ], [canApprove])
 
     return (
         <PageWrapper>

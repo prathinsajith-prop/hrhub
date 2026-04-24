@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
 import { api } from '@/lib/api'
+import { usePermissions } from '@/hooks/usePermissions'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useCompanySettings, useUpdateCompanySettings, useTenantUsers, useTwoFaStatus, useTwoFaSetup, useTwoFaVerify, useTwoFaDisable, useTwoFaRegenerateBackupCodes, useIpAllowlist, useUpdateIpAllowlist } from '@/hooks/useSettings'
@@ -388,6 +389,8 @@ function Section({ icon: Icon, title, description, action, children, className }
 
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 function UsersTab() {
+    const { can } = usePermissions()
+    const canManageUsers = can('manage_users')
     const { data: tenantUsers, isLoading } = useTenantUsers()
     const [showInvite, setShowInvite] = useState(false)
     const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'hr_manager' })
@@ -425,7 +428,7 @@ function UsersTab() {
 
     return (
         <div className="space-y-5">
-            {showInvite && (
+            {canManageUsers && showInvite && (
                 <SettingsCard className="bg-muted/30">
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -464,7 +467,7 @@ function UsersTab() {
                 icon={Users}
                 title="Team Members"
                 description="People with access to this workspace"
-                action={!showInvite && (
+                action={canManageUsers && !showInvite && (
                     <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setShowInvite(true)}>
                         Invite User
                     </Button>

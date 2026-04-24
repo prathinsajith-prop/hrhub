@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { type ColumnDef } from '@tanstack/react-table'
+import { LogOut, DollarSign, CheckCircle2, Clock, UserMinus } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -11,13 +13,16 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { DataTable } from '@/components/ui/data-table'
+import { KpiCardCompact } from '@/components/ui/kpi-card'
+import { InitialsAvatar } from '@/components/shared/Avatar'
 import { useExitRequests, useInitiateExit, useApproveExit, useMarkSettlementPaid, useSettlementPreview, type ExitRequest } from '@/hooks/useExit'
 import { useEmployees } from '@/hooks/useEmployees'
-import { LogOut, DollarSign, CheckCircle2, AlertCircle, Clock, XCircle } from 'lucide-react'
-import { Skeleton } from '@/components/ui/skeleton'
-import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
-import { type FilterConfig, type QuickFilter } from '@/lib/filters'
+import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { usePermissions } from '@/hooks/usePermissions'
+import { formatDate, formatCurrency } from '@/lib/utils'
+import { toast } from '@/components/ui/overlays'
 
 const EXIT_FILTERS: FilterConfig[] = [
     {
@@ -41,18 +46,11 @@ const EXIT_FILTERS: FilterConfig[] = [
     { name: 'exitDate', label: 'Exit date', type: 'date_range', field: 'exitDate' },
 ]
 
-const EXIT_QUICK_FILTERS: QuickFilter[] = [
-    { name: 'pending', label: 'Pending', icon: Clock, filter: { status: { operator: 'equals', value: 'pending' } } },
-    { name: 'approved', label: 'Approved', icon: CheckCircle2, filter: { status: { operator: 'equals', value: 'approved' } } },
-    { name: 'completed', label: 'Completed', icon: CheckCircle2, filter: { status: { operator: 'equals', value: 'completed' } } },
-    { name: 'rejected', label: 'Rejected', icon: XCircle, filter: { status: { operator: 'equals', value: 'rejected' } } },
-]
-
-const statusConfig: Record<string, { label: string; color: string }> = {
-    pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-    approved: { label: 'Approved', color: 'bg-blue-100 text-blue-800 border-blue-200' },
-    rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800 border-red-200' },
-    completed: { label: 'Completed', color: 'bg-green-100 text-green-800 border-green-200' },
+const statusVariant: Record<string, 'warning' | 'info' | 'destructive' | 'success' | 'secondary'> = {
+    pending: 'warning',
+    approved: 'info',
+    rejected: 'destructive',
+    completed: 'success',
 }
 
 const exitTypeLabel: Record<string, string> = {
@@ -62,63 +60,11 @@ const exitTypeLabel: Record<string, string> = {
     retirement: 'Retirement',
 }
 
-function fmt(n: string | number | undefined) {
-    if (n === undefined || n === null) return '—'
-    return `AED ${Number(n).toLocaleString('en-AE', { minimumFractionDigits: 2 })}`
-}
-
-function fmtDate(d: string | undefined) {
-    if (!d) return '—'
-    return new Date(d).toLocaleDateString('en-AE')
-}
-
-function ExitCard({ req, onApprove, onPaid }: { req: ExitRequest; onApprove: (id: string) => void; onPaid: (id: string) => void }) {
-    const sc = statusConfig[req.status]
-    return (
-        <Card className="p-5 space-y-4">
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <p className="font-semibold text-sm">{exitTypeLabel[req.exitType]}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Exit Date: {fmtDate(req.exitDate)} · LWD: {fmtDate(req.lastWorkingDay)}</p>
-                    {req.reason && <p className="text-xs text-muted-foreground mt-1 italic">{req.reason}</p>}
-                </div>
-                <Badge variant="outline" className={sc.color}>{sc.label}</Badge>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                <div>
-                    <p className="text-xs text-muted-foreground">Gratuity</p>
-                    <p className="font-medium">{fmt(req.gratuityAmount)}</p>
-                </div>
-                <div>
-                    <p className="text-xs text-muted-foreground">Leave Encashment</p>
-                    <p className="font-medium">{fmt(req.leaveEncashmentAmount)}</p>
-                </div>
-                <div>
-                    <p className="text-xs text-muted-foreground">Unpaid Salary</p>
-                    <p className="font-medium">{fmt(req.unpaidSalaryAmount)}</p>
-                </div>
-                <div>
-                    <p className="text-xs text-muted-foreground font-semibold">Total Settlement</p>
-                    <p className="font-bold text-primary">{fmt(req.totalSettlement)}</p>
-                </div>
-            </div>
-            <div className="flex gap-2 pt-1">
-                {req.status === 'pending' && (
-                    <Button size="sm" onClick={() => onApprove(req.id)}>Approve</Button>
-                )}
-                {req.status === 'approved' && !req.settlementPaid && (
-                    <Button size="sm" variant="outline" onClick={() => onPaid(req.id)}>
-                        <DollarSign className="h-3.5 w-3.5 mr-1" /> Mark Settlement Paid
-                    </Button>
-                )}
-                {req.settlementPaid && (
-                    <div className="flex items-center gap-1 text-xs text-green-600">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Settlement Paid {fmtDate(req.settlementPaidDate)}
-                    </div>
-                )}
-            </div>
-        </Card>
-    )
+const exitTypeColor: Record<string, string> = {
+    resignation: 'bg-amber-100 text-amber-700',
+    termination: 'bg-red-100 text-red-700',
+    contract_end: 'bg-blue-100 text-blue-700',
+    retirement: 'bg-emerald-100 text-emerald-700',
 }
 
 interface InitiateForm {
@@ -141,8 +87,16 @@ const defaultForm: InitiateForm = {
     notes: '',
 }
 
+function fmt(n: string | number | undefined) {
+    if (n === undefined || n === null) return '—'
+    return formatCurrency(Number(n))
+}
+
 export function ExitPage() {
     const { t } = useTranslation()
+    const { can } = usePermissions()
+    const canManage = can('manage_exit')
+
     const { data: exits, isLoading } = useExitRequests()
     const { data: employees } = useEmployees({ limit: 1000 })
     const initiate = useInitiateExit()
@@ -162,13 +116,14 @@ export function ExitPage() {
     const { data: preview, isLoading: previewLoading } = useSettlementPreview(
         previewEnabled ? form.employeeId : undefined,
         previewEnabled ? form.exitDate : undefined,
-        previewEnabled ? form.exitType : undefined
+        previewEnabled ? form.exitType : undefined,
     )
 
     const set = (k: keyof InitiateForm, v: string | number) => setForm(f => ({ ...f, [k]: v }))
 
     async function handleSubmit() {
         await initiate.mutateAsync(form)
+        toast.success('Exit initiated', 'Employee exit request submitted successfully.')
         setShowDialog(false)
         setForm(defaultForm)
         setStep('form')
@@ -180,34 +135,140 @@ export function ExitPage() {
     const enrichedExits = useMemo(
         () => exitList.map((e) => {
             const emp = empList.find((em: any) => em.id === e.employeeId)
-            return { ...e, employeeName: emp ? `${emp.firstName} ${emp.lastName}` : '' }
+            return {
+                ...e,
+                employeeName: emp ? `${emp.firstName} ${emp.lastName}` : '—',
+                employeeDepartment: emp?.department ?? '',
+                employeeDesignation: emp?.designation ?? '',
+            }
         }),
         [exitList, empList],
     )
 
-    const filteredExits = useMemo(() => {
-        const q = exitSearch.searchInput.trim().toLowerCase()
-        const f = exitSearch.appliedFilters
-        return enrichedExits.filter((e) => {
-            if (q) {
-                const hit = e.employeeName.toLowerCase().includes(q)
-                    || e.exitType.toLowerCase().includes(q)
-                    || (e.reason ?? '').toLowerCase().includes(q)
-                if (!hit) return false
-            }
-            if (f.exitType?.value && e.exitType !== f.exitType.value) return false
-            if (f.status?.value && e.status !== f.status.value) return false
-            if (f.exitDate?.value && typeof f.exitDate.value === 'object' && !Array.isArray(f.exitDate.value) && e.exitDate) {
-                const range = f.exitDate.value as { from?: string; to?: string }
-                if (range.from && e.exitDate < range.from) return false
-                if (range.to && e.exitDate > range.to) return false
-            }
-            return true
-        })
-    }, [enrichedExits, exitSearch.searchInput, exitSearch.appliedFilters])
+    const filteredExits = useMemo(
+        () => applyClientFilters(enrichedExits as any[], {
+            searchInput: exitSearch.searchInput,
+            appliedFilters: exitSearch.appliedFilters,
+            searchFields: ['employeeName', 'exitType', 'status', 'reason'],
+        }),
+        [enrichedExits, exitSearch.appliedFilters, exitSearch.searchInput],
+    )
 
-    const pending = exitList.filter((e: ExitRequest) => e.status === 'pending').length
-    const total = exitList.length
+    const pending = exitList.filter((e) => e.status === 'pending').length
+    const approved = exitList.filter((e) => e.status === 'approved').length
+    const completed = exitList.filter((e) => e.status === 'completed').length
+
+    const columns: ColumnDef<ExitRequest & { employeeName: string; employeeDepartment: string; employeeDesignation: string }>[] = useMemo(() => [
+        {
+            id: 'employee',
+            header: 'Employee',
+            cell: ({ row: { original: e } }) => (
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <InitialsAvatar name={e.employeeName} size="sm" />
+                    <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{e.employeeName}</p>
+                        {e.employeeDesignation && (
+                            <p className="text-[11px] text-muted-foreground truncate">{e.employeeDesignation}</p>
+                        )}
+                    </div>
+                </div>
+            ),
+            size: 200,
+        },
+        {
+            accessorKey: 'exitType',
+            header: 'Exit Type',
+            cell: ({ getValue }) => {
+                const v = getValue() as string
+                return (
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium capitalize ${exitTypeColor[v] ?? 'bg-gray-100 text-gray-700'}`}>
+                        {exitTypeLabel[v] ?? v}
+                    </span>
+                )
+            },
+            size: 130,
+        },
+        {
+            id: 'dates',
+            header: 'Exit Date / LWD',
+            cell: ({ row: { original: e } }) => (
+                <div>
+                    <p className="text-xs font-medium">{formatDate(e.exitDate)}</p>
+                    {e.lastWorkingDay && (
+                        <p className="text-[10px] text-muted-foreground">LWD: {formatDate(e.lastWorkingDay)}</p>
+                    )}
+                </div>
+            ),
+            size: 130,
+        },
+        {
+            id: 'settlement',
+            header: 'Settlement (AED)',
+            cell: ({ row: { original: e } }) => (
+                <div>
+                    <p className="text-sm font-semibold text-primary">{fmt(e.totalSettlement)}</p>
+                    {e.settlementPaid && (
+                        <p className="text-[10px] text-emerald-600 flex items-center gap-1 mt-0.5">
+                            <CheckCircle2 className="h-3 w-3" /> Paid
+                        </p>
+                    )}
+                </div>
+            ),
+            size: 150,
+        },
+        {
+            accessorKey: 'status',
+            header: 'Status',
+            cell: ({ getValue }) => {
+                const s = getValue() as string
+                return (
+                    <Badge variant={statusVariant[s] ?? 'secondary'} className="capitalize text-[11px]">
+                        {s}
+                    </Badge>
+                )
+            },
+            size: 110,
+        },
+        {
+            id: 'actions',
+            header: '',
+            cell: ({ row: { original: e } }) => {
+                if (!canManage) return null
+                return (
+                    <div className="flex gap-1.5 justify-end">
+                        {e.status === 'pending' && (
+                            <Button
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => approve.mutate(e.id, {
+                                    onSuccess: () => toast.success('Approved', 'Exit request approved.'),
+                                    onError: () => toast.error('Failed', 'Could not approve exit.'),
+                                })}
+                                disabled={approve.isPending}
+                            >
+                                Approve
+                            </Button>
+                        )}
+                        {e.status === 'approved' && !e.settlementPaid && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={() => markPaid.mutate(e.id, {
+                                    onSuccess: () => toast.success('Settlement paid', 'Settlement marked as paid.'),
+                                    onError: () => toast.error('Failed', 'Could not update settlement.'),
+                                })}
+                                disabled={markPaid.isPending}
+                            >
+                                <DollarSign className="h-3 w-3 mr-1" /> Mark Paid
+                            </Button>
+                        )}
+                    </div>
+                )
+            },
+            size: 140,
+        },
+    ], [canManage, approve, markPaid])
 
     return (
         <PageWrapper>
@@ -215,93 +276,53 @@ export function ExitPage() {
                 title={t('exit.title')}
                 description={t('exit.description')}
                 actions={
-                    <Button onClick={() => { setShowDialog(true); setStep('form') }}>
-                        <LogOut className="h-4 w-4 mr-2" /> Initiate Exit
-                    </Button>
+                    canManage && (
+                        <Button size="sm" leftIcon={<UserMinus className="h-3.5 w-3.5" />} onClick={() => { setShowDialog(true); setStep('form') }}>
+                            Initiate Exit
+                        </Button>
+                    )
                 }
             />
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                <Card className="p-4 text-center">
-                    <p className="text-2xl font-bold">{total}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Total Requests</p>
-                </Card>
-                <Card className="p-4 text-center">
-                    <p className="text-2xl font-bold text-yellow-600">{pending}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Pending Approval</p>
-                </Card>
-                <Card className="p-4 text-center">
-                    <p className="text-2xl font-bold text-blue-600">{exitList.filter((e) => e.status === 'approved').length}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Approved</p>
-                </Card>
-                <Card className="p-4 text-center">
-                    <p className="text-2xl font-bold text-green-600">{exitList.filter((e) => e.status === 'completed').length}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Completed</p>
-                </Card>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <KpiCardCompact label="Total Exits" value={exitList.length} icon={LogOut} color="blue" loading={isLoading} />
+                <KpiCardCompact label="Pending" value={pending} icon={Clock} color="amber" loading={isLoading} />
+                <KpiCardCompact label="Approved" value={approved} icon={CheckCircle2} color="green" loading={isLoading} />
+                <KpiCardCompact label="Completed" value={completed} icon={CheckCircle2} color="cyan" loading={isLoading} />
             </div>
 
-            <AdvancedSearchBar
-                search={exitSearch}
-                filters={EXIT_FILTERS}
-                quickFilters={EXIT_QUICK_FILTERS}
-                placeholder="Search by employee, exit type, reason…"
-                resultCount={filteredExits.length}
-            />
-
-            {isLoading && (
-                <div className="space-y-4">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="rounded-xl border p-5 space-y-4">
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="space-y-1.5 flex-1">
-                                    <Skeleton className="h-5 w-44" />
-                                    <Skeleton className="h-3 w-32" />
-                                </div>
-                                <Skeleton className="h-6 w-20 rounded-full" />
-                            </div>
-                            <div className="flex gap-6">
-                                <Skeleton className="h-4 w-28" />
-                                <Skeleton className="h-4 w-24" />
-                                <Skeleton className="h-4 w-20" />
-                            </div>
-                            <div className="flex gap-2">
-                                <Skeleton className="h-8 w-24 rounded-md" />
-                                <Skeleton className="h-8 w-20 rounded-md" />
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {!isLoading && exitList.length === 0 && (
-                <div className="flex flex-col items-center gap-3 py-16 text-center">
-                    <AlertCircle className="h-10 w-10 text-muted-foreground" />
-                    <p className="text-muted-foreground">No exit requests yet.</p>
-                </div>
-            )}
-
-            {!isLoading && exitList.length > 0 && filteredExits.length === 0 && (
-                <div className="flex flex-col items-center gap-3 py-16 text-center">
-                    <AlertCircle className="h-10 w-10 text-muted-foreground" />
-                    <p className="text-muted-foreground">No exit requests match your filters.</p>
-                </div>
-            )}
-
-            <div className="space-y-4">
-                {filteredExits.map((req) => (
-                    <ExitCard
-                        key={req.id}
-                        req={req}
-                        onApprove={(id) => approve.mutate(id)}
-                        onPaid={(id) => markPaid.mutate(id)}
+            <Card>
+                <CardHeader className="flex-row items-start sm:items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <CardTitle className="text-base">All Exit Requests</CardTitle>
+                        <CardDescription className="mt-0.5">
+                            {exitList.length} total records
+                        </CardDescription>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <DataTable
+                        columns={columns as ColumnDef<ExitRequest>[]}
+                        data={filteredExits as ExitRequest[]}
+                        isLoading={isLoading}
+                        advancedFilter={{
+                            search: exitSearch,
+                            filters: EXIT_FILTERS,
+                            placeholder: 'Search by employee, exit type, reason…',
+                        }}
+                        pageSize={10}
+                        emptyMessage={exitList.length === 0 ? 'No exit requests yet.' : 'No results match your filters.'}
                     />
-                ))}
-            </div>
+                </CardContent>
+            </Card>
 
-            <Dialog open={showDialog} onOpenChange={setShowDialog}>
+            {/* Initiate Exit Dialog */}
+            <Dialog open={showDialog} onOpenChange={(o) => { if (!initiate.isPending) setShowDialog(o) }}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>Initiate Employee Exit</DialogTitle>
+                        <DialogTitle>
+                            {step === 'form' ? 'Initiate Employee Exit' : 'Settlement Preview'}
+                        </DialogTitle>
                     </DialogHeader>
 
                     {step === 'form' && (
@@ -309,7 +330,7 @@ export function ExitPage() {
                             <div className="space-y-1.5">
                                 <Label>Employee</Label>
                                 <Select value={form.employeeId} onValueChange={v => set('employeeId', v)}>
-                                    <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+                                    <SelectTrigger><SelectValue placeholder="Select employee…" /></SelectTrigger>
                                     <SelectContent>
                                         {empList.map((e: any) => (
                                             <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
@@ -345,14 +366,27 @@ export function ExitPage() {
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Reason</Label>
-                                <Textarea value={form.reason} onChange={e => set('reason', e.target.value)} rows={2} />
+                                <Textarea value={form.reason} onChange={e => set('reason', e.target.value)} rows={2} placeholder="Reason for exit…" />
                             </div>
                         </div>
                     )}
 
-                    {step === 'preview' && preview && (
+                    {step === 'preview' && previewLoading && (
+                        <div className="py-10 text-center text-sm text-muted-foreground">
+                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-3" />
+                            Calculating settlement…
+                        </div>
+                    )}
+
+                    {step === 'preview' && preview && !previewLoading && (
                         <div className="space-y-4 py-2">
-                            <p className="text-sm font-medium">{preview.employeeName} · {preview.yearsOfService} years of service</p>
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40">
+                                <InitialsAvatar name={preview.employeeName} size="sm" />
+                                <div>
+                                    <p className="text-sm font-semibold">{preview.employeeName}</p>
+                                    <p className="text-xs text-muted-foreground">{preview.yearsOfService} years of service · {exitTypeLabel[form.exitType]}</p>
+                                </div>
+                            </div>
                             <div className="divide-y rounded-lg border overflow-hidden text-sm">
                                 {[
                                     ['Gratuity (UAE Labour Law)', fmt(preview.gratuityAmount)],
@@ -367,14 +401,10 @@ export function ExitPage() {
                                 ))}
                                 <div className="flex justify-between px-4 py-3 bg-muted/50 font-semibold">
                                     <span>Total Settlement</span>
-                                    <span className="text-primary">{fmt(preview.totalSettlement)}</span>
+                                    <span className="text-primary text-base">{fmt(preview.totalSettlement)}</span>
                                 </div>
                             </div>
                         </div>
-                    )}
-
-                    {step === 'preview' && previewLoading && (
-                        <div className="py-8 text-center text-sm text-muted-foreground">Calculating settlement...</div>
                     )}
 
                     <DialogFooter>
@@ -392,8 +422,8 @@ export function ExitPage() {
                         {step === 'preview' && (
                             <>
                                 <Button variant="outline" onClick={() => setStep('form')}>Back</Button>
-                                <Button onClick={handleSubmit} disabled={initiate.isPending}>
-                                    {initiate.isPending ? 'Submitting...' : 'Confirm & Submit'}
+                                <Button onClick={handleSubmit} disabled={initiate.isPending || previewLoading}>
+                                    {initiate.isPending ? 'Submitting…' : 'Confirm & Submit'}
                                 </Button>
                             </>
                         )}

@@ -35,17 +35,20 @@ import {
 import { useAuthStore } from "@/store/authStore"
 import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
+import { canAccessRoute, getNavRouteKey } from "@/lib/permissions"
+import type { UserRole } from "@/types"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user, tenant } = useAuthStore()
   const location = useLocation()
   const { t } = useTranslation()
+  const role = user?.role as UserRole | undefined
 
   // The sidebar re-renders on every route change because of useLocation().
   // Memoize the static-shape nav config so we don't rebuild dozens of objects
   // per navigation. The translation function reference changes only when
   // language switches, so this list is genuinely stable in steady state.
-  const navGroups = React.useMemo(() => [
+  const allNavGroups = React.useMemo(() => [
     {
       label: t('nav.overview'),
       items: [
@@ -90,9 +93,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     },
   ], [t])
 
-  const navSecondary = React.useMemo(() => [
-    { title: t('nav.settings'), url: "/settings", icon: SettingsIcon },
-  ], [t])
+  // Filter groups + items by role. Groups with no visible items are hidden.
+  const navGroups = React.useMemo(() => {
+    if (!role) return []
+    return allNavGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => {
+          const routeKey = getNavRouteKey(item.url)
+          return routeKey ? canAccessRoute(role, routeKey) : true
+        }),
+      }))
+      .filter((group) => group.items.length > 0)
+  }, [allNavGroups, role])
+
+  const navSecondary = React.useMemo(() => {
+    if (!role) return []
+    const items = [
+      { title: t('nav.settings'), url: "/settings", icon: SettingsIcon },
+    ]
+    return items.filter((item) => {
+      const routeKey = getNavRouteKey(item.url)
+      return routeKey ? canAccessRoute(role, routeKey) : true
+    })
+  }, [t, role])
 
   const userData = React.useMemo(() => ({
     name: user?.name ?? "HR Admin",

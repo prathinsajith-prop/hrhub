@@ -33,6 +33,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { useEmployees, useArchiveEmployee } from '@/hooks/useEmployees'
 import { AddEmployeeDialog, EditEmployeeDialog } from '@/components/shared/action-dialogs'
+import { usePermissions } from '@/hooks/usePermissions'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import type { FilterConfig } from '@/lib/filters'
 import type { Employee } from '@/types'
@@ -78,10 +79,12 @@ function ActionMenu({
   employee,
   onDelete,
   onEdit,
+  canManage,
 }: {
   employee: Employee
   onDelete: (e: Employee) => void
   onEdit: (e: Employee) => void
+  canManage: boolean
 }) {
   const navigate = useNavigate()
   return (
@@ -96,10 +99,12 @@ function ActionMenu({
           <Eye className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           View Profile
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onEdit(employee)}>
-          <Edit2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-          Edit Details
-        </DropdownMenuItem>
+        {canManage && (
+          <DropdownMenuItem onClick={() => onEdit(employee)}>
+            <Edit2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+            Edit Details
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           disabled={!employee.email}
           onClick={() => {
@@ -109,14 +114,18 @@ function ActionMenu({
           <Mail className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           Send Email
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => onDelete(employee)}
-          className="text-destructive focus:text-destructive focus:bg-destructive/10"
-        >
-          <Trash2 className="h-3.5 w-3.5 mr-2" />
-          Terminate
-        </DropdownMenuItem>
+        {canManage && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onDelete(employee)}
+              className="text-destructive focus:text-destructive focus:bg-destructive/10"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-2" />
+              Terminate
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -125,6 +134,8 @@ function ActionMenu({
 export function EmployeesPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { can } = usePermissions()
+  const canManage = can('manage_employees')
   const { data: empData, isLoading } = useEmployees({ limit: 50 })
   const employees: Employee[] = (empData?.data as Employee[]) ?? []
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
@@ -284,7 +295,7 @@ export function EmployeesPage() {
       id: 'actions',
       header: '',
       cell: ({ row }) => (
-        <ActionMenu employee={row.original} onDelete={setDeleteTarget} onEdit={setEditTarget} />
+        <ActionMenu employee={row.original} onDelete={setDeleteTarget} onEdit={setEditTarget} canManage={canManage} />
       ),
       size: 44,
     },
@@ -300,9 +311,11 @@ export function EmployeesPage() {
             <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}>
               Export
             </Button>
-            <Button size="sm" leftIcon={<UserPlus className="h-3.5 w-3.5" />} onClick={() => setAddOpen(true)}>
-              Add Employee
-            </Button>
+            {canManage && (
+              <Button size="sm" leftIcon={<UserPlus className="h-3.5 w-3.5" />} onClick={() => setAddOpen(true)}>
+                Add Employee
+              </Button>
+            )}
           </>
         }
       />

@@ -4,13 +4,14 @@ import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Plane, Clock, AlertTriangle, CheckCircle2, Plus, RefreshCw, Eye, Edit2 } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs } from '@/components/ui/form-controls'
-import { KpiCard } from '@/components/shared/KpiCard'
+import { KpiCardCompact } from '@/components/ui/kpi-card'
+import { ViewToggle } from '@/components/ui/view-toggle'
+import { useViewMode } from '@/hooks/useViewMode'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -373,10 +374,45 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
   )
 }
 
+function VisaCard({ v, onView }: { v: VisaApplication; onView: (v: VisaApplication) => void }) {
+  const progressPct = Math.round((v.currentStep / v.totalSteps) * 100)
+  const urgencyStyles: Record<string, string> = {
+    critical: 'border-l-destructive',
+    urgent: 'border-l-warning',
+    normal: 'border-l-border',
+  }
+  return (
+    <Card className={`p-4 border-l-4 ${urgencyStyles[(v as any).urgencyLevel ?? 'normal']} hover:shadow-md transition-shadow`}>
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-sm truncate">{v.employeeName || '—'}</p>
+          <p className="text-xs text-muted-foreground capitalize">{v.visaType.replace(/_/g, ' ')}</p>
+        </div>
+        <Badge variant="outline" className={cn('text-[10px] shrink-0', statusStyles[v.status])}>{statusLabel[v.status]}</Badge>
+      </div>
+      <div className="space-y-1.5 mb-3">
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>Step {v.currentStep}/{v.totalSteps}</span>
+          <span>{progressPct}%</span>
+        </div>
+        <Progress value={progressPct} className={cn('h-1.5', (v as any).urgencyLevel === 'critical' ? '[&>div]:bg-destructive' : (v as any).urgencyLevel === 'urgent' ? '[&>div]:bg-warning' : '[&>div]:bg-primary')} />
+      </div>
+      {v.expiryDate && (
+        <p className="text-xs text-muted-foreground mb-3">Expires {formatDate(v.expiryDate)}</p>
+      )}
+      <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={() => onView(v)}>
+        View Details
+      </Button>
+    </Card>
+  )
+}
+
 export function VisaPage() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('all')
   const [newAppOpen, setNewAppOpen] = useState(false)
+  const [viewingVisa, setViewingVisa] = useState<VisaApplication | null>(null)
+  const [tableView, setTableView] = useViewMode('visa')
   const { data: visaData, isLoading } = useVisas({ limit: 50 })
   const recalcUrgency = useRecalcVisaUrgency()
   const updateVisa = useUpdateVisa()
@@ -471,24 +507,10 @@ export function VisaPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="rounded-xl border p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <Skeleton className="h-3 w-24" />
-                <Skeleton className="h-7 w-7 rounded-lg" />
-              </div>
-              <Skeleton className="h-7 w-12" />
-            </div>
-          ))
-        ) : (
-          <>
-            <KpiCard label="Active Visas" value={activeCount} hint="All active visas" icon={<CheckCircle2 className="h-5 w-5" />} tone="emerald" />
-            <KpiCard label="In Processing" value={processingCount} hint="Applications" icon={<Clock className="h-5 w-5" />} tone="blue" trend={{ label: '20%', direction: 'up' }} />
-            <KpiCard label="Critical" value={criticalCount} hint="Require attention" icon={<AlertTriangle className="h-5 w-5" />} tone="rose" />
-            <KpiCard label="Expiring 30d" value={expiringCount} hint="Expiring soon" icon={<Plane className="h-5 w-5" />} tone="amber" />
-          </>
-        )}
+        <KpiCardCompact label="Active Visas" value={activeCount} icon={CheckCircle2} color="green" loading={isLoading} hint="All active visas" />
+        <KpiCardCompact label="In Processing" value={processingCount} icon={Clock} color="blue" loading={isLoading} hint="Applications" />
+        <KpiCardCompact label="Critical" value={criticalCount} icon={AlertTriangle} color="red" loading={isLoading} hint="Require attention" />
+        <KpiCardCompact label="Expiring 30d" value={expiringCount} icon={Plane} color="amber" loading={isLoading} hint="Expiring soon" />
       </div>
 
       <Tabs

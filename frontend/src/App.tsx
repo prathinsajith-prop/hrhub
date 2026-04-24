@@ -5,6 +5,8 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { Toaster } from '@/components/ui/overlays'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useAuthStore } from '@/store/authStore'
+import { canAccessRoute, type RouteKey } from '@/lib/permissions'
+import type { UserRole } from '@/types'
 
 // Code-split all pages — only loaded when navigated to
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage').then(m => ({ default: m.LoginPage })))
@@ -29,8 +31,8 @@ const AuditLogPage = lazy(() => import('@/pages/misc/AuditLogPage').then(m => ({
 const LoginHistoryPage = lazy(() => import('@/pages/misc/LoginHistoryPage').then(m => ({ default: m.LoginHistoryPage })))
 const NotificationsPage = lazy(() => import('@/pages/misc/NotificationsPage').then(m => ({ default: m.NotificationsPage })))
 const NotFoundPage = lazy(() => import('@/pages/misc/NotFoundPage').then(m => ({ default: m.NotFoundPage })))
+const ForbiddenPage = lazy(() => import('@/pages/misc/ForbiddenPage').then(m => ({ default: m.ForbiddenPage })))
 const CalendarPage = lazy(() => import('@/pages/calendar/CalendarPage').then(m => ({ default: m.CalendarPage })))
-// Misc pages bundle
 const LeavePage = lazy(() => import('@/pages/misc/LeavePage').then(m => ({ default: m.LeavePage })))
 const OnboardingPage = lazy(() => import('@/pages/misc/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
 const OnboardingDetailPage = lazy(() => import('@/pages/misc/OnboardingDetailPage').then(m => ({ default: m.OnboardingDetailPage })))
@@ -78,7 +80,6 @@ function TitleManager() {
 
   useEffect(() => {
     const path = location.pathname
-    // Exact match first, then prefix match (e.g. /employees/123)
     const key = PAGE_TITLE_MAP[path] ??
       Object.entries(PAGE_TITLE_MAP).find(([k]) => path.startsWith(k + '/') && k !== '/')?.[1]
     const pageTitle = key ? t(key) : null
@@ -88,9 +89,19 @@ function TitleManager() {
   return null
 }
 
+/** Redirects to /login if not authenticated. */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
+/** Guards a single route by role. Renders 403 inline if the role lacks access. */
+function RoleRoute({ routeKey, children }: { routeKey: RouteKey; children: React.ReactNode }) {
+  const role = useAuthStore((s) => s.user?.role) as UserRole | undefined
+  if (!role || !canAccessRoute(role, routeKey)) {
+    return <ForbiddenPage />
+  }
   return <>{children}</>
 }
 
@@ -106,31 +117,31 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/" element={<ProtectedRoute><ErrorBoundary><AppLayout /></ErrorBoundary></ProtectedRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="employees" element={<EmployeesPage />} />
-            <Route path="employees/:id" element={<EmployeeDetailPage />} />
-            <Route path="recruitment" element={<RecruitmentPage />} />
+            <Route path="dashboard" element={<RoleRoute routeKey="dashboard"><DashboardPage /></RoleRoute>} />
+            <Route path="employees" element={<RoleRoute routeKey="employees"><EmployeesPage /></RoleRoute>} />
+            <Route path="employees/:id" element={<RoleRoute routeKey="employees/:id"><EmployeeDetailPage /></RoleRoute>} />
+            <Route path="recruitment" element={<RoleRoute routeKey="recruitment"><RecruitmentPage /></RoleRoute>} />
             <Route path="recruitment/candidates" element={<Navigate to="/recruitment" replace />} />
-            <Route path="recruitment/candidates/:id" element={<CandidateProfilePage />} />
-            <Route path="onboarding" element={<OnboardingPage />} />
-            <Route path="onboarding/:employeeId" element={<OnboardingDetailPage />} />
-            <Route path="visa" element={<VisaPage />} />
-            <Route path="visa/:id" element={<VisaDetailPage />} />
-            <Route path="documents" element={<DocumentsPage />} />
-            <Route path="payroll" element={<PayrollPage />} />
-            <Route path="leave" element={<LeavePage />} />
-            <Route path="compliance" element={<CompliancePage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="exit" element={<ExitPage />} />
-            <Route path="calendar" element={<CalendarPage />} />
-            <Route path="attendance" element={<AttendancePage />} />
-            <Route path="performance" element={<PerformancePage />} />
-            <Route path="org-chart" element={<OrgChartPage />} />
-            <Route path="audit" element={<AuditLogPage />} />
-            <Route path="notifications" element={<NotificationsPage />} />
-            <Route path="my/login-history" element={<LoginHistoryPage />} />
-            <Route path="assets" element={<AssetsPage />} />
+            <Route path="recruitment/candidates/:id" element={<RoleRoute routeKey="recruitment/candidates/:id"><CandidateProfilePage /></RoleRoute>} />
+            <Route path="onboarding" element={<RoleRoute routeKey="onboarding"><OnboardingPage /></RoleRoute>} />
+            <Route path="onboarding/:employeeId" element={<RoleRoute routeKey="onboarding/:employeeId"><OnboardingDetailPage /></RoleRoute>} />
+            <Route path="visa" element={<RoleRoute routeKey="visa"><VisaPage /></RoleRoute>} />
+            <Route path="visa/:id" element={<RoleRoute routeKey="visa/:id"><VisaDetailPage /></RoleRoute>} />
+            <Route path="documents" element={<RoleRoute routeKey="documents"><DocumentsPage /></RoleRoute>} />
+            <Route path="payroll" element={<RoleRoute routeKey="payroll"><PayrollPage /></RoleRoute>} />
+            <Route path="leave" element={<RoleRoute routeKey="leave"><LeavePage /></RoleRoute>} />
+            <Route path="compliance" element={<RoleRoute routeKey="compliance"><CompliancePage /></RoleRoute>} />
+            <Route path="reports" element={<RoleRoute routeKey="reports"><ReportsPage /></RoleRoute>} />
+            <Route path="settings" element={<RoleRoute routeKey="settings"><SettingsPage /></RoleRoute>} />
+            <Route path="exit" element={<RoleRoute routeKey="exit"><ExitPage /></RoleRoute>} />
+            <Route path="calendar" element={<RoleRoute routeKey="calendar"><CalendarPage /></RoleRoute>} />
+            <Route path="attendance" element={<RoleRoute routeKey="attendance"><AttendancePage /></RoleRoute>} />
+            <Route path="performance" element={<RoleRoute routeKey="performance"><PerformancePage /></RoleRoute>} />
+            <Route path="org-chart" element={<RoleRoute routeKey="org-chart"><OrgChartPage /></RoleRoute>} />
+            <Route path="audit" element={<RoleRoute routeKey="audit"><AuditLogPage /></RoleRoute>} />
+            <Route path="notifications" element={<RoleRoute routeKey="notifications"><NotificationsPage /></RoleRoute>} />
+            <Route path="my/login-history" element={<RoleRoute routeKey="my/login-history"><LoginHistoryPage /></RoleRoute>} />
+            <Route path="assets" element={<RoleRoute routeKey="assets"><AssetsPage /></RoleRoute>} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
