@@ -13,7 +13,7 @@ ALTER TABLE payroll_runs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payslips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE visa_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE onboarding_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE onboarding_checklists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE performance_reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE attendance_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recruitment_jobs ENABLE ROW LEVEL SECURITY;
@@ -50,7 +50,7 @@ CREATE POLICY tenant_isolation ON visa_applications
 CREATE POLICY tenant_isolation ON documents
     USING (tenant_id::text = current_setting('app.current_tenant', true));
 
-CREATE POLICY tenant_isolation ON onboarding_records
+CREATE POLICY tenant_isolation ON onboarding_checklists
     USING (tenant_id::text = current_setting('app.current_tenant', true));
 
 CREATE POLICY tenant_isolation ON performance_reviews
