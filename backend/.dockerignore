@@ -1,0 +1,39 @@
+# Dependencies — always reinstalled inside the image
+node_modules
+
+# Build output — produced inside the image by pnpm build
+dist
+
+# Environment files — injected at runtime via Railway / Docker env vars
+.env
+.env.*
+!.env.example
+
+# Uploads — mounted as a volume in production, not baked into the image
+uploads
+
+# Dev / test artefacts
+coverage
+*.log
+*.log.*
+
+# Source control
+.git
+.gitignore
+.gitattributes
+
+# Editor
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# Docs / local tooling (not needed at runtime)
+README.md
+*.md
+drizzle.config.ts
+vitest.config.ts
+biome.json
+
+# Tests
+src/__tests__

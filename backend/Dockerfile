@@ -21,12 +21,13 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build
 
-# ───── 3. prod-deps: install production-only deps ─────
+# ───── 3. prod-deps: prune dev deps from the full install ─────
 FROM node:${NODE_VERSION} AS prod-deps
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.30.0 --activate
+COPY --from=deps /app/node_modules ./node_modules
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm prune --prod
 
 # ───── 4. runtime: minimal image ─────
 FROM node:${NODE_VERSION} AS runtime
