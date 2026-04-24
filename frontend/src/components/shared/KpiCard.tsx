@@ -1,10 +1,12 @@
-import { memo, type ReactNode } from 'react'
+import React, { memo, type ReactNode } from 'react'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
+export type KpiColor = 'blue' | 'purple' | 'amber' | 'red' | 'green' | 'cyan'
+
 type Tone = 'primary' | 'blue' | 'amber' | 'rose' | 'emerald' | 'violet' | 'neutral'
 
-interface KpiCardProps {
+export interface KpiCardProps {
     label: ReactNode
     value: ReactNode
     /** Secondary text under the value (e.g. "All active visas"). */
@@ -69,3 +71,49 @@ function KpiCardBase({ label, value, hint, trend, icon, tone = 'primary', classN
 }
 
 export const KpiCard = memo(KpiCardBase)
+
+// ── KpiCardCompact ────────────────────────────────────────────────────────────
+// Compact variant used across all module pages.
+
+export interface KpiCardCompactProps {
+    label: string
+    value: string | number | undefined | null
+    icon: React.ElementType
+    color?: KpiColor
+    loading?: boolean
+    className?: string
+    hint?: string
+}
+
+const colorToTone: Record<KpiColor, Tone> = {
+    blue: 'blue',
+    green: 'emerald',
+    amber: 'amber',
+    red: 'rose',
+    cyan: 'blue',
+    purple: 'violet',
+}
+
+function KpiCardCompactBase({ label, value, icon: Icon, color = 'blue', loading = false, className, hint }: KpiCardCompactProps) {
+    if (loading) {
+        return (
+            <div className={cn('rounded-xl bg-card p-5 border border-border animate-pulse space-y-3', className)}>
+                <div className="h-3 bg-muted rounded w-1/2" />
+                <div className="h-8 bg-muted rounded w-2/3" />
+                <div className="h-2 bg-muted rounded w-3/4" />
+            </div>
+        )
+    }
+    return (
+        <KpiCard
+            label={label}
+            value={value ?? '—'}
+            hint={hint}
+            icon={<Icon className="h-5 w-5" />}
+            tone={colorToTone[color] ?? 'primary'}
+            className={className}
+        />
+    )
+}
+
+export const KpiCardCompact = memo(KpiCardCompactBase)

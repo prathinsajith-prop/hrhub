@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useTranslation } from 'react-i18next'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Toaster } from '@/components/ui/overlays'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ErrorBoundary } from '@/components/layout/ErrorBoundary'
 import { useAuthStore } from '@/store/authStore'
 import { canAccessRoute, type RouteKey } from '@/lib/permissions'
 import type { UserRole } from '@/types'
@@ -39,6 +39,11 @@ const OnboardingDetailPage = lazy(() => import('@/pages/misc/OnboardingDetailPag
 const CompliancePage = lazy(() => import('@/pages/misc/CompliancePage').then(m => ({ default: m.CompliancePage })))
 const ReportsPage = lazy(() => import('@/pages/misc/ReportsPage').then(m => ({ default: m.ReportsPage })))
 const AssetsPage = lazy(() => import('@/pages/assets/AssetsPage').then(m => ({ default: m.AssetsPage })))
+const OrganizationsPage = lazy(() => import('@/pages/organizations/OrganizationsPage').then(m => ({ default: m.OrganizationsPage })))
+const NewOrganizationPage = lazy(() => import('@/pages/organizations/NewOrganizationPage').then(m => ({ default: m.NewOrganizationPage })))
+const TeamPage = lazy(() => import('@/pages/organizations/TeamPage').then(m => ({ default: m.TeamPage })))
+const ConnectedAppsPage = lazy(() => import('@/pages/organizations/ConnectedAppsPage').then(m => ({ default: m.ConnectedAppsPage })))
+const LeavePoliciesPage = lazy(() => import('@/pages/leave/LeavePoliciesPage').then(m => ({ default: m.LeavePoliciesPage })))
 
 function PageLoader() {
   return (
@@ -72,6 +77,11 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/audit': 'audit.title',
   '/notifications': 'notifications.title',
   '/my/login-history': 'loginHistory.title',
+  '/organizations': 'organizations.title',
+  '/organizations/new': 'organizations.new',
+  '/team': 'team.title',
+  '/apps': 'apps.title',
+  '/leave-policies': 'leavePolicies.title',
 }
 
 function TitleManager() {
@@ -142,6 +152,11 @@ export default function App() {
             <Route path="notifications" element={<RoleRoute routeKey="notifications"><NotificationsPage /></RoleRoute>} />
             <Route path="my/login-history" element={<RoleRoute routeKey="my/login-history"><LoginHistoryPage /></RoleRoute>} />
             <Route path="assets" element={<RoleRoute routeKey="assets"><AssetsPage /></RoleRoute>} />
+            <Route path="organizations" element={<RoleRoute routeKey="organizations"><OrganizationsPage /></RoleRoute>} />
+            <Route path="organizations/new" element={<RoleRoute routeKey="organizations/new"><NewOrganizationPage /></RoleRoute>} />
+            <Route path="team" element={<RoleRoute routeKey="team"><TeamPage /></RoleRoute>} />
+            <Route path="apps" element={<RoleRoute routeKey="apps"><ConnectedAppsPage /></RoleRoute>} />
+            <Route path="leave-policies" element={<RoleRoute routeKey="leave-policies"><LeavePoliciesPage /></RoleRoute>} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

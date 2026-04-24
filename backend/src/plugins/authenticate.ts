@@ -40,6 +40,7 @@ async function authenticatePlugin(fastify: any): Promise<void> {
                 role: payload.role as RequestUser['role'],
                 email: payload.email,
                 name: payload.name,
+                employeeId: payload.employeeId ?? null,
             }
         } catch {
             return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid or expired token' })

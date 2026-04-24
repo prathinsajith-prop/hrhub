@@ -7,6 +7,7 @@ export interface JwtPayload {
     role: UserRole
     name: string      // embedded at login — avoids DB lookup in authenticate plugin
     email: string     // embedded at login
+    employeeId?: string | null  // linked HR record (null for non-employee accounts)
     iat?: number
     exp?: number
 }
@@ -17,6 +18,7 @@ export interface RequestUser {
     role: UserRole
     email: string
     name: string
+    employeeId?: string | null
 }
 
 export interface PaginationParams {

@@ -1,6 +1,7 @@
 import { db } from '../../db/index.js'
 import { attendanceRecords, employees } from '../../db/schema/index.js'
 import { eq, and, gte, lte, sql } from 'drizzle-orm'
+import { encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 
 export async function checkIn(tenantId: string, employeeId: string) {
     const today = new Date().toISOString().split('T')[0]
@@ -58,19 +59,47 @@ export async function checkOut(tenantId: string, employeeId: string) {
     return rec
 }
 
-export async function getAttendance(tenantId: string, params: {
+export interface GetAttendanceParams {
     employeeId?: string
     startDate?: string
     endDate?: string
     status?: string
-}) {
+    /** 1-based page number; ignored when cursor is provided. */
+    page?: number
+    /** Page size (default 50, max 200). */
+    limit?: number
+    /** Opaque keyset cursor encoded by db-helpers.encodeCursor. */
+    cursor?: string
+}
+
+export interface GetAttendanceResult {
+    items: Array<Record<string, unknown>>
+    /** Cursor for the next page, or null if there are no more rows. */
+    nextCursor: string | null
+    /** Total matching rows (only computed when page-mode requested). */
+    total?: number
+}
+
+const MAX_ATTENDANCE_PAGE = 200
+const DEFAULT_ATTENDANCE_PAGE = 50
+
+export async function getAttendance(tenantId: string, params: GetAttendanceParams): Promise<GetAttendanceResult> {
+    const limit = Math.min(Math.max(1, params.limit ?? DEFAULT_ATTENDANCE_PAGE), MAX_ATTENDANCE_PAGE)
     const conditions = [eq(attendanceRecords.tenantId, tenantId)]
     if (params.employeeId) conditions.push(eq(attendanceRecords.employeeId, params.employeeId))
     if (params.startDate) conditions.push(gte(attendanceRecords.date, params.startDate))
     if (params.endDate) conditions.push(lte(attendanceRecords.date, params.endDate))
     if (params.status) conditions.push(eq(attendanceRecords.status, params.status as never))
 
-    return db.select({
+    // Cursor: { c: ISO date, i: row id } — keyset on (date DESC, id DESC).
+    if (params.cursor) {
+        const decoded = decodeCursor(params.cursor)
+        if (decoded) {
+            conditions.push(sql`(${attendanceRecords.date}, ${attendanceRecords.id}) < (${decoded.c}, ${decoded.i})`)
+        }
+    }
+
+    const baseQuery = db.select({
         id: attendanceRecords.id,
         tenantId: attendanceRecords.tenantId,
         employeeId: attendanceRecords.employeeId,
@@ -91,7 +120,52 @@ export async function getAttendance(tenantId: string, params: {
         .from(attendanceRecords)
         .leftJoin(employees, eq(employees.id, attendanceRecords.employeeId))
         .where(and(...conditions))
-        .orderBy(sql`${attendanceRecords.date} DESC, ${attendanceRecords.checkIn} DESC NULLS LAST`)
+        .orderBy(sql`${attendanceRecords.date} DESC, ${attendanceRecords.id} DESC`)
+        .limit(limit + 1) // fetch one extra to detect "has more"
+
+    // Page-mode (offset) — used by traditional table UIs.
+    if (!params.cursor && params.page && params.page > 0) {
+        const offset = (params.page - 1) * limit
+        const [items, totalRow] = await Promise.all([
+            db.select({
+                id: attendanceRecords.id,
+                tenantId: attendanceRecords.tenantId,
+                employeeId: attendanceRecords.employeeId,
+                date: attendanceRecords.date,
+                checkIn: attendanceRecords.checkIn,
+                checkOut: attendanceRecords.checkOut,
+                hoursWorked: attendanceRecords.hoursWorked,
+                overtimeHours: attendanceRecords.overtimeHours,
+                status: attendanceRecords.status,
+                notes: attendanceRecords.notes,
+                createdAt: attendanceRecords.createdAt,
+                updatedAt: attendanceRecords.updatedAt,
+                employeeName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.lastName}, '—')`,
+                employeeNo: employees.employeeNo,
+                employeeDepartment: employees.department,
+                employeeAvatarUrl: employees.avatarUrl,
+            })
+                .from(attendanceRecords)
+                .leftJoin(employees, eq(employees.id, attendanceRecords.employeeId))
+                .where(and(...conditions))
+                .orderBy(sql`${attendanceRecords.date} DESC, ${attendanceRecords.id} DESC`)
+                .limit(limit)
+                .offset(offset),
+            db.select({ count: sql<number>`count(*)::int` })
+                .from(attendanceRecords)
+                .where(and(...conditions)),
+        ])
+        return { items, nextCursor: null, total: totalRow[0]?.count ?? 0 }
+    }
+
+    const rows = await baseQuery
+    const hasMore = rows.length > limit
+    const items = hasMore ? rows.slice(0, limit) : rows
+    const last = items[items.length - 1]
+    const nextCursor = hasMore && last
+        ? encodeCursor(String((last as { date: string }).date), String((last as { id: string }).id))
+        : null
+    return { items, nextCursor }
 }
 
 export async function upsertAttendance(tenantId: string, data: {

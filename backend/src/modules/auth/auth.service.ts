@@ -109,13 +109,13 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
     return issueTokens(fastify, user, input)
 }
 
-type UserRow = { id: string; name: string; email: string; role: string; tenantId: string; entityId: string | null; department: string | null; avatarUrl: string | null }
+type UserRow = { id: string; name: string; email: string; role: string; tenantId: string; entityId: string | null; employeeId: string | null; department: string | null; avatarUrl: string | null }
 
-async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ipAddress?: string; userAgent?: string }) {
+export async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ipAddress?: string; userAgent?: string }) {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, user.tenantId)).limit(1)
 
     const accessToken = fastify.jwt.sign(
-        { sub: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email },
+        { sub: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email, employeeId: user.employeeId },
         { expiresIn: '15m' }
     )
     const rawRefreshToken = crypto.randomBytes(48).toString('hex')
@@ -146,6 +146,7 @@ async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ipAddress
             role: user.role,
             tenantId: user.tenantId,
             entityId: user.entityId,
+            employeeId: user.employeeId,
             department: user.department,
             avatarUrl: user.avatarUrl,
         },

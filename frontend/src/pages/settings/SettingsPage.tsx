@@ -36,7 +36,7 @@ import { api } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { useCompanySettings, useUpdateCompanySettings, useTenantUsers, useTwoFaStatus, useTwoFaSetup, useTwoFaVerify, useTwoFaDisable, useTwoFaRegenerateBackupCodes, useIpAllowlist, useUpdateIpAllowlist } from '@/hooks/useSettings'
+import { useCompanySettings, useUpdateCompanySettings, useTenantUsers, useUpdateUser, useTwoFaStatus, useTwoFaSetup, useTwoFaVerify, useTwoFaDisable, useTwoFaRegenerateBackupCodes, useIpAllowlist, useUpdateIpAllowlist } from '@/hooks/useSettings'
 import { useInfiniteLoginHistory } from '@/hooks/useAudit'
 import type { CompanySettings } from '@/hooks/useSettings'
 
@@ -388,13 +388,24 @@ function Section({ icon: Icon, title, description, action, children, className }
 }
 
 // ─── Users Tab ────────────────────────────────────────────────────────────────
+const ROLE_ACCESS_MAP: Record<string, string[]> = {
+    super_admin: ['All modules', 'User management', 'Settings', 'Audit logs'],
+    hr_manager: ['Employees', 'Recruitment', 'Leave', 'Payroll', 'Onboarding', 'Reports'],
+    pro_officer: ['Visa & Compliance', 'Documents', 'Employee view'],
+    dept_head: ['Team attendance', 'Leave approval', 'Performance', 'Onboarding'],
+    employee: ['Own leave', 'Own attendance', 'Own performance'],
+}
+
 function UsersTab() {
     const { can } = usePermissions()
+    const { user: me } = useAuthStore()
     const canManageUsers = can('manage_users')
     const { data: tenantUsers, isLoading } = useTenantUsers()
+    const updateUser = useUpdateUser()
     const [showInvite, setShowInvite] = useState(false)
     const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'hr_manager' })
     const [inviting, setInviting] = useState(false)
+    const [deactivateTarget, setDeactivateTarget] = useState<{ id: string; name: string; active: boolean } | null>(null)
 
     const getRoleStyle = (role: string) => roles.find((r) => r.id === role)?.color ?? 'bg-gray-50 text-gray-600'
     const getRoleLabel = (role: string) => roles.find((r) => r.id === role)?.label ?? role.replace(/_/g, ' ')
@@ -423,6 +434,26 @@ function UsersTab() {
             toast.error('Failed to send invitation')
         } finally {
             setInviting(false)
+        }
+    }
+
+    async function handleRoleChange(userId: string, newRole: string) {
+        try {
+            await updateUser.mutateAsync({ id: userId, role: newRole })
+            toast.success('Role updated successfully')
+        } catch {
+            toast.error('Failed to update role')
+        }
+    }
+
+    async function handleToggleActive() {
+        if (!deactivateTarget) return
+        try {
+            await updateUser.mutateAsync({ id: deactivateTarget.id, isActive: !deactivateTarget.active })
+            toast.success(deactivateTarget.active ? 'User deactivated' : 'User activated')
+            setDeactivateTarget(null)
+        } catch {
+            toast.error('Failed to update user status')
         }
     }
 
@@ -466,7 +497,7 @@ function UsersTab() {
             <Section
                 icon={Users}
                 title="Team Members"
-                description="People with access to this workspace"
+                description="Manage roles and access for all workspace members"
                 action={canManageUsers && !showInvite && (
                     <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setShowInvite(true)}>
                         Invite User
@@ -492,55 +523,138 @@ function UsersTab() {
                     </div>
                 ) : (
                     <div className="divide-y border rounded-lg overflow-hidden">
-                        {(tenantUsers ?? []).map((u) => (
-                            <div key={u.id} className="flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors">
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <Avatar className="h-9 w-9">
-                                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                                            {u.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-medium truncate">{u.name}</p>
-                                        <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                        {(tenantUsers ?? []).map((u) => {
+                            const isSelf = u.id === me?.id
+                            return (
+                                <div key={u.id} className={cn(
+                                    'flex items-center justify-between gap-3 px-4 py-3 transition-colors',
+                                    u.isActive ? 'hover:bg-muted/30' : 'bg-muted/20 opacity-60',
+                                )}>
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <Avatar className="h-9 w-9 shrink-0">
+                                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                                                {u.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-sm font-medium truncate">{u.name}</p>
+                                                {isSelf && <span className="text-[10px] text-muted-foreground">(you)</span>}
+                                            </div>
+                                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2.5 shrink-0 flex-wrap justify-end">
+                                        <span className="hidden sm:inline text-xs text-muted-foreground">
+                                            {formatLastLogin(u.lastLoginAt)}
+                                        </span>
+
+                                        {/* Role — inline edit for managers on non-self rows */}
+                                        {canManageUsers && !isSelf ? (
+                                            <select
+                                                value={u.role}
+                                                onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                                                className="h-7 rounded-md border border-input bg-background px-2 py-0 text-xs font-medium"
+                                                disabled={updateUser.isPending}
+                                            >
+                                                <option value="super_admin">Super Admin</option>
+                                                <option value="hr_manager">HR Manager</option>
+                                                <option value="pro_officer">PRO Officer</option>
+                                                <option value="dept_head">Dept Head</option>
+                                                <option value="employee">Employee</option>
+                                            </select>
+                                        ) : (
+                                            <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full capitalize', getRoleStyle(u.role))}>
+                                                {getRoleLabel(u.role)}
+                                            </span>
+                                        )}
+
+                                        {/* Active badge */}
+                                        <span className={cn(
+                                            'text-[10px] font-medium px-2 py-0.5 rounded-full',
+                                            u.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500',
+                                        )}>
+                                            {u.isActive ? 'Active' : 'Inactive'}
+                                        </span>
+
+                                        {/* Deactivate / Activate toggle */}
+                                        {canManageUsers && !isSelf && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className={cn('h-7 text-xs', u.isActive ? 'text-destructive hover:text-destructive hover:bg-destructive/10' : 'text-emerald-600 hover:bg-emerald-50')}
+                                                onClick={() => setDeactivateTarget({ id: u.id, name: u.name, active: u.isActive })}
+                                            >
+                                                {u.isActive ? <XCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3 shrink-0">
-                                    <span className="hidden sm:inline text-xs text-muted-foreground">
-                                        {formatLastLogin(u.lastLoginAt)}
-                                    </span>
-                                    <Badge variant={u.isActive ? 'success' : 'secondary'} className="text-[10px]">
-                                        {u.isActive ? 'active' : 'inactive'}
-                                    </Badge>
-                                    <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full capitalize', getRoleStyle(u.role))}>
-                                        {getRoleLabel(u.role)}
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 )}
             </Section>
 
+            {/* Roles & Permissions reference */}
             <Section
                 icon={Shield}
                 title="Roles & Permissions"
-                description="What each role is allowed to do in the workspace"
+                description="What each role is allowed to do in this workspace"
             >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     {roles.map((role) => (
-                        <div key={role.id} className="flex items-start gap-3 p-3.5 rounded-lg border hover:border-primary/30 hover:bg-muted/30 transition-colors">
-                            <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', role.color)}>
-                                <UserCircle className="h-4 w-4" />
+                        <div key={role.id} className="rounded-lg border p-4 hover:border-primary/30 hover:bg-muted/20 transition-colors">
+                            <div className="flex items-center gap-2.5 mb-3">
+                                <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', role.color)}>
+                                    <UserCircle className="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold leading-tight">{role.label}</p>
+                                    <p className="text-[10px] text-muted-foreground">{role.desc}</p>
+                                </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold">{role.label}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">{role.desc}</p>
+                            <div className="flex flex-wrap gap-1">
+                                {(ROLE_ACCESS_MAP[role.id] ?? []).map((access) => (
+                                    <span key={access} className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                                        {access}
+                                    </span>
+                                ))}
                             </div>
                         </div>
                     ))}
                 </div>
             </Section>
+
+            {/* Deactivate / activate confirm dialog */}
+            {deactivateTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div className="bg-background border rounded-xl shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
+                        <div className="space-y-1">
+                            <p className="font-semibold text-sm">
+                                {deactivateTarget.active ? 'Deactivate' : 'Activate'} {deactivateTarget.name}?
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                                {deactivateTarget.active
+                                    ? 'This user will immediately lose access. They can be reactivated at any time.'
+                                    : 'This user will regain access to the workspace.'}
+                            </p>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                            <Button variant="outline" size="sm" onClick={() => setDeactivateTarget(null)}>Cancel</Button>
+                            <Button
+                                size="sm"
+                                variant={deactivateTarget.active ? 'destructive' : 'default'}
+                                onClick={handleToggleActive}
+                                disabled={updateUser.isPending}
+                            >
+                                {updateUser.isPending ? 'Saving…' : deactivateTarget.active ? 'Deactivate' : 'Activate'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

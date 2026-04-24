@@ -20,12 +20,31 @@ export interface AttendanceRecord {
     employeeAvatarUrl?: string
 }
 
-export function useAttendance(params: { employeeId?: string; startDate?: string; endDate?: string; status?: string } = {}) {
+export interface AttendancePage {
+    items: AttendanceRecord[]
+    nextCursor: string | null
+    total?: number
+}
+
+export function useAttendance(params: {
+    employeeId?: string
+    startDate?: string
+    endDate?: string
+    status?: string
+    page?: number
+    limit?: number
+    cursor?: string
+} = {}) {
     const qs = new URLSearchParams()
-    Object.entries(params).forEach(([k, v]) => v && qs.set(k, v))
+    Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') qs.set(k, String(v))
+    })
     return useQuery({
         queryKey: ['attendance', params],
-        queryFn: () => api.get<AttendanceRecord[]>(`/attendance?${qs}`),
+        // Backend now returns { items, nextCursor, total? }. Keep `data.items`
+        // as the primary array; consumers that expect a plain list should
+        // read response.items instead.
+        queryFn: () => api.get<AttendancePage>(`/attendance?${qs}`),
     })
 }
 

@@ -2,7 +2,7 @@ import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns } from '
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { leaveRequests } from '../../db/schema/index.js'
+import { leaveRequests, leavePolicies, leaveBalances } from '../../db/schema/index.js'
 import { employees } from '../../db/schema/employees.js'
 import { sendEmail } from '../../plugins/email.js'
 import type { InferInsertModel } from 'drizzle-orm'
@@ -39,7 +39,7 @@ export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRe
     return row
 }
 
-export async function approveLeave(tenantId: string, id: string, approvedBy: string, approverEmail: string, approved: boolean) {
+export async function approveLeave(tenantId: string, id: string, approvedBy: string, approverEmail: string, approved: boolean, approverUserEmployeeId?: string | null) {
     // Fetch the pending leave request first
     const [req] = await db.select({ employeeId: leaveRequests.employeeId, leaveType: leaveRequests.leaveType, startDate: leaveRequests.startDate })
         .from(leaveRequests)
@@ -47,12 +47,17 @@ export async function approveLeave(tenantId: string, id: string, approvedBy: str
         .limit(1)
     if (!req) return null
 
-    // Block self-approval: check if the approver's employee record matches the requester
-    const [approverEmployee] = await db.select({ id: employees.id, email: employees.email })
-        .from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.email, approverEmail)))
-        .limit(1)
-    if (approverEmployee && approverEmployee.id === req.employeeId) {
+    // Block self-approval. Prefer the user→employee FK (added in 0014); fall
+    // back to email match for tokens issued before the FK rollout.
+    let approverEmployeeId = approverUserEmployeeId ?? null
+    if (!approverEmployeeId) {
+        const [approverEmployee] = await db.select({ id: employees.id })
+            .from(employees)
+            .where(and(eq(employees.tenantId, tenantId), eq(employees.email, approverEmail)))
+            .limit(1)
+        approverEmployeeId = approverEmployee?.id ?? null
+    }
+    if (approverEmployeeId && approverEmployeeId === req.employeeId) {
         throw Object.assign(new Error('You cannot approve or reject your own leave request'), { statusCode: 403 })
     }
 
@@ -86,7 +91,7 @@ export async function approveLeave(tenantId: string, id: string, approvedBy: str
     return row
 }
 
-export async function cancelLeave(tenantId: string, id: string, requesterEmail: string, requesterRole: string) {
+export async function cancelLeave(tenantId: string, id: string, requesterEmail: string, requesterRole: string, requesterUserEmployeeId?: string | null) {
     // Fetch the leave request to check ownership
     const [req] = await db.select({ employeeId: leaveRequests.employeeId, status: leaveRequests.status })
         .from(leaveRequests)
@@ -97,11 +102,15 @@ export async function cancelLeave(tenantId: string, id: string, requesterEmail: 
     // HR managers and super_admins can cancel any leave request; others can only cancel their own
     const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(requesterRole)
     if (!isAdmin) {
-        const [requesterEmployee] = await db.select({ id: employees.id })
-            .from(employees)
-            .where(and(eq(employees.tenantId, tenantId), eq(employees.email, requesterEmail)))
-            .limit(1)
-        if (!requesterEmployee || requesterEmployee.id !== req.employeeId) {
+        let requesterEmployeeId = requesterUserEmployeeId ?? null
+        if (!requesterEmployeeId) {
+            const [requesterEmployee] = await db.select({ id: employees.id })
+                .from(employees)
+                .where(and(eq(employees.tenantId, tenantId), eq(employees.email, requesterEmail)))
+                .limit(1)
+            requesterEmployeeId = requesterEmployee?.id ?? null
+        }
+        if (!requesterEmployeeId || requesterEmployeeId !== req.employeeId) {
             throw Object.assign(new Error('You can only cancel your own leave requests'), { statusCode: 403 })
         }
     }
@@ -121,51 +130,97 @@ export async function softDeleteLeaveRequest(tenantId: string, id: string) {
     return row ?? null
 }
 
-// ─── Leave Balance (UAE Labour Law) ────────────────────────────────────────
-// Annual leave entitlement:
-//   < 1 year service: 2 days/month  |  ≥ 1 year: 30 calendar days/year
-// Sick: 15 days full-pay + 30 days half-pay = 45 tracked days/year
-// Maternity: 60 days | Paternity: 5 days | Compassionate: 5 days
+// ─── Leave Policies + Balances (per-tenant config + yearly cumulation) ─────
+// Policies are stored in `leave_policies`. Defaults seeded by migration 0008.
+// Yearly snapshots live in `leave_balances` keyed by (tenant, employee, type, year).
+// Annual leave carries forward (default cap 15 days, expires 12 months later).
 
-const LEAVE_ENTITLEMENTS: Record<string, number> = {
-    annual: 30,
-    sick: 45,
-    maternity: 60,
-    paternity: 5,
-    compassionate: 5,
-    hajj: 30,
-    unpaid: 999, // unlimited
-    public_holiday: 0, // system-generated
+type AccrualRule = 'flat' | 'monthly_2_then_30' | 'unlimited' | 'none'
+type LeavePolicy = {
+    leaveType: string
+    daysPerYear: number
+    accrualRule: AccrualRule
+    maxCarryForward: number
+    carryExpiresAfterMonths: number
+}
+
+const HARDCODED_FALLBACK: LeavePolicy[] = [
+    { leaveType: 'annual', daysPerYear: 30, accrualRule: 'monthly_2_then_30', maxCarryForward: 15, carryExpiresAfterMonths: 12 },
+    { leaveType: 'sick', daysPerYear: 45, accrualRule: 'flat', maxCarryForward: 0, carryExpiresAfterMonths: 0 },
+    { leaveType: 'maternity', daysPerYear: 60, accrualRule: 'flat', maxCarryForward: 0, carryExpiresAfterMonths: 0 },
+    { leaveType: 'paternity', daysPerYear: 5, accrualRule: 'flat', maxCarryForward: 0, carryExpiresAfterMonths: 0 },
+    { leaveType: 'compassionate', daysPerYear: 5, accrualRule: 'flat', maxCarryForward: 0, carryExpiresAfterMonths: 0 },
+    { leaveType: 'hajj', daysPerYear: 30, accrualRule: 'flat', maxCarryForward: 0, carryExpiresAfterMonths: 0 },
+    { leaveType: 'unpaid', daysPerYear: 0, accrualRule: 'unlimited', maxCarryForward: 0, carryExpiresAfterMonths: 0 },
+    { leaveType: 'public_holiday', daysPerYear: 0, accrualRule: 'none', maxCarryForward: 0, carryExpiresAfterMonths: 0 },
+]
+
+export async function listLeavePolicies(tenantId: string): Promise<LeavePolicy[]> {
+    const rows = await db.select({
+        leaveType: leavePolicies.leaveType,
+        daysPerYear: leavePolicies.daysPerYear,
+        accrualRule: leavePolicies.accrualRule,
+        maxCarryForward: leavePolicies.maxCarryForward,
+        carryExpiresAfterMonths: leavePolicies.carryExpiresAfterMonths,
+    }).from(leavePolicies).where(eq(leavePolicies.tenantId, tenantId))
+    if (rows.length === 0) return HARDCODED_FALLBACK
+    return rows as LeavePolicy[]
+}
+
+export async function upsertLeavePolicies(tenantId: string, items: LeavePolicy[]) {
+    for (const p of items) {
+        await db.insert(leavePolicies).values({
+            tenantId,
+            leaveType: p.leaveType,
+            daysPerYear: p.daysPerYear,
+            accrualRule: p.accrualRule,
+            maxCarryForward: p.maxCarryForward,
+            carryExpiresAfterMonths: p.carryExpiresAfterMonths,
+        }).onConflictDoUpdate({
+            target: [leavePolicies.tenantId, leavePolicies.leaveType],
+            set: {
+                daysPerYear: p.daysPerYear,
+                accrualRule: p.accrualRule,
+                maxCarryForward: p.maxCarryForward,
+                carryExpiresAfterMonths: p.carryExpiresAfterMonths,
+                updatedAt: new Date(),
+            },
+        })
+    }
+    return listLeavePolicies(tenantId)
+}
+
+function computeAccrued(policy: LeavePolicy, monthsOfService: number, year: number, joinYear: number): number {
+    if (policy.accrualRule === 'unlimited' || policy.accrualRule === 'none') return 0
+    if (policy.accrualRule === 'monthly_2_then_30') {
+        // First incomplete year of service: 2 days/month capped at 30
+        if (year === joinYear && monthsOfService < 12) {
+            return Math.min(monthsOfService * 2, policy.daysPerYear)
+        }
+        return policy.daysPerYear
+    }
+    return policy.daysPerYear
 }
 
 export async function getLeaveBalance(tenantId: string, employeeId: string, year: number) {
-    // 1. Get employee join date
     const [emp] = await db.select({ joinDate: employees.joinDate }).from(employees)
         .where(and(eq(employees.id, employeeId), eq(employees.tenantId, tenantId)))
-
     if (!emp) return null
 
     const today = new Date()
     const joinDate = emp.joinDate ? new Date(emp.joinDate) : today
+    const joinYear = joinDate.getFullYear()
     const monthsOfService = Math.max(0,
         (today.getFullYear() - joinDate.getFullYear()) * 12 +
         (today.getMonth() - joinDate.getMonth()),
     )
 
-    // 2. Compute annual entitlement based on service length
-    let annualEntitled: number
-    if (monthsOfService < 12) {
-        // Accrued 2 days/month, pro-rated for year
-        annualEntitled = Math.min(monthsOfService * 2, 30)
-    } else {
-        annualEntitled = 30
-    }
+    const policies = await listLeavePolicies(tenantId)
 
+    // Aggregate taken/pending in this year per type
     const yearStart = `${year}-01-01`
     const yearEnd = `${year}-12-31`
-
-    // 3. Count leave taken (approved) and pending per type this year
-    const rows = await db.select({
+    const usageRows = await db.select({
         leaveType: leaveRequests.leaveType,
         status: leaveRequests.status,
         days: leaveRequests.days,
@@ -178,35 +233,139 @@ export async function getLeaveBalance(tenantId: string, employeeId: string, year
             lte(leaveRequests.startDate, yearEnd),
             inArray(leaveRequests.status, ['approved', 'pending']),
         ))
-
     const taken: Record<string, number> = {}
     const pending: Record<string, number> = {}
-
-    for (const r of rows) {
+    for (const r of usageRows) {
         const t = r.leaveType as string
-        if (r.status === 'approved') {
-            taken[t] = (taken[t] ?? 0) + (r.days ?? 0)
-        } else if (r.status === 'pending') {
-            pending[t] = (pending[t] ?? 0) + (r.days ?? 0)
+        if (r.status === 'approved') taken[t] = (taken[t] ?? 0) + (r.days ?? 0)
+        else if (r.status === 'pending') pending[t] = (pending[t] ?? 0) + (r.days ?? 0)
+    }
+
+    // Read existing balance rows (carry-forward + adjustments)
+    const balanceRows = await db.select().from(leaveBalances).where(and(
+        eq(leaveBalances.tenantId, tenantId),
+        eq(leaveBalances.employeeId, employeeId),
+        eq(leaveBalances.year, year),
+    ))
+    const balanceByType = new Map(balanceRows.map((r) => [r.leaveType, r]))
+
+    const balance: Record<string, {
+        entitled: number
+        accrued: number
+        carriedForward: number
+        carryExpiresOn: string | null
+        taken: number
+        pending: number
+        adjustment: number
+        available: number
+        unlimited: boolean
+    }> = {}
+
+    const todayIso = today.toISOString().slice(0, 10)
+
+    for (const policy of policies) {
+        const existing = balanceByType.get(policy.leaveType)
+        const accrued = existing ? Number(existing.accrued) : computeAccrued(policy, monthsOfService, year, joinYear)
+        let carried = existing ? Number(existing.carriedForward) : 0
+        const carryExpiresOn = existing?.carryExpiresOn ?? null
+        if (carryExpiresOn && carryExpiresOn < todayIso) carried = 0 // expired
+        const adjustment = existing ? Number(existing.adjustment) : 0
+        const t = taken[policy.leaveType] ?? 0
+        const p = pending[policy.leaveType] ?? 0
+        const unlimited = policy.accrualRule === 'unlimited'
+        const available = unlimited ? -1 : Math.max(0, accrued + carried + adjustment - t - p)
+        balance[policy.leaveType] = {
+            entitled: policy.daysPerYear,
+            accrued,
+            carriedForward: carried,
+            carryExpiresOn,
+            taken: t,
+            pending: p,
+            adjustment,
+            available,
+            unlimited,
         }
     }
 
-    // 4. Build balance per leave type
-    const types = ['annual', 'sick', 'maternity', 'paternity', 'compassionate', 'hajj', 'unpaid']
-    const balance: Record<string, { entitled: number; taken: number; pending: number; available: number }> = {}
+    return { employeeId, year, monthsOfService, balance }
+}
 
-    for (const type of types) {
-        const entitled = type === 'annual' ? annualEntitled : (LEAVE_ENTITLEMENTS[type] ?? 0)
-        const t = taken[type] ?? 0
-        const p = pending[type] ?? 0
-        const available = entitled === 999 ? 999 : Math.max(0, entitled - t - p)
-        balance[type] = { entitled: entitled === 999 ? -1 : entitled, taken: t, pending: p, available: entitled === 999 ? -1 : available }
-    }
+// ─── Year-end rollover ─────────────────────────────────────────────────────
+// Closes `fromYear` and creates `fromYear + 1` rows with carried_forward applied.
+export async function rolloverYear(tenantId: string, fromYear: number) {
+    const policies = await listLeavePolicies(tenantId)
+    const empRows = await db.select({ id: employees.id, joinDate: employees.joinDate })
+        .from(employees)
+        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false)))
 
-    return {
-        employeeId,
-        year,
-        monthsOfService,
-        balance,
+    let closed = 0
+    let opened = 0
+
+    for (const emp of empRows) {
+        const balance = await getLeaveBalance(tenantId, emp.id, fromYear)
+        if (!balance) continue
+        for (const policy of policies) {
+            const b = balance.balance[policy.leaveType]
+            if (!b) continue
+            const closing = b.unlimited ? 0 : Math.max(0, b.accrued + b.carriedForward + b.adjustment - b.taken)
+
+            // Persist closing for fromYear
+            await db.insert(leaveBalances).values({
+                tenantId, employeeId: emp.id, leaveType: policy.leaveType, year: fromYear,
+                accrued: String(b.accrued), carriedForward: String(b.carriedForward),
+                carryExpiresOn: b.carryExpiresOn ?? undefined,
+                taken: String(b.taken), adjustment: String(b.adjustment),
+                closingBalance: String(closing), rolledOverAt: new Date(),
+            }).onConflictDoUpdate({
+                target: [leaveBalances.tenantId, leaveBalances.employeeId, leaveBalances.leaveType, leaveBalances.year],
+                set: { closingBalance: String(closing), rolledOverAt: new Date(), updatedAt: new Date() },
+            })
+            closed++
+
+            // Open next year with carry-forward (capped)
+            const carryAmount = Math.min(closing, policy.maxCarryForward)
+            if (carryAmount <= 0 && policy.accrualRule !== 'monthly_2_then_30' && policy.accrualRule !== 'flat') continue
+
+            const expiresOn = policy.carryExpiresAfterMonths > 0
+                ? new Date(fromYear + 1, 0, 1 + policy.carryExpiresAfterMonths * 30).toISOString().slice(0, 10)
+                : null
+
+            // Compute next-year accrual snapshot (so balance row has it baked in)
+            const joinDate = emp.joinDate ? new Date(emp.joinDate) : new Date()
+            const monthsAtNextYearStart = Math.max(0,
+                ((fromYear + 1) - joinDate.getFullYear()) * 12 - joinDate.getMonth(),
+            )
+            const nextAccrued = computeAccrued(policy, monthsAtNextYearStart, fromYear + 1, joinDate.getFullYear())
+
+            await db.insert(leaveBalances).values({
+                tenantId, employeeId: emp.id, leaveType: policy.leaveType, year: fromYear + 1,
+                openingBalance: String(carryAmount),
+                accrued: String(nextAccrued),
+                carriedForward: String(carryAmount),
+                carryExpiresOn: expiresOn ?? undefined,
+                closingBalance: String(carryAmount + nextAccrued),
+            }).onConflictDoNothing()
+            opened++
+        }
     }
+    return { fromYear, toYear: fromYear + 1, closed, opened }
+}
+
+export async function adjustLeaveBalance(tenantId: string, employeeId: string, leaveType: string, year: number, delta: number, _reason?: string) {
+    const [existing] = await db.select().from(leaveBalances).where(and(
+        eq(leaveBalances.tenantId, tenantId),
+        eq(leaveBalances.employeeId, employeeId),
+        eq(leaveBalances.leaveType, leaveType),
+        eq(leaveBalances.year, year),
+    ))
+    const newAdj = (existing ? Number(existing.adjustment) : 0) + delta
+    if (existing) {
+        await db.update(leaveBalances).set({ adjustment: String(newAdj), updatedAt: new Date() })
+            .where(eq(leaveBalances.id, existing.id))
+    } else {
+        await db.insert(leaveBalances).values({
+            tenantId, employeeId, leaveType, year, adjustment: String(newAdj),
+        })
+    }
+    return getLeaveBalance(tenantId, employeeId, year)
 }

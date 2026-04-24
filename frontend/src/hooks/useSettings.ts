@@ -44,6 +44,16 @@ export function useTenantUsers() {
         queryKey: ['settings', 'users'],
         queryFn: () =>
             api.get<{ data: TenantUser[] }>('/settings/users').then((r) => r.data),
+        staleTime: 30_000,
+    })
+}
+
+export function useUpdateUser() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, ...data }: { id: string; isActive?: boolean; role?: string }) =>
+            api.patch<{ data: TenantUser }>(`/settings/users/${id}`, data).then((r) => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'users'] }),
     })
 }
 

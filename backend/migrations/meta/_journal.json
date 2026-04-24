@@ -5,50 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1776749822353,
-      "tag": "0000_initial_schema",
+      "when": 1745539200000,
+      "tag": "0000_init",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1776753674430,
-      "tag": "0001_soft_delete_columns",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1776843012292,
-      "tag": "0002_extended_tables_and_fields",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1776843100000,
-      "tag": "0003_employee_fts_index",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1776843200000,
-      "tag": "0004_row_level_security",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1776843300000,
-      "tag": "0005_two_fa_backup_codes",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1776843400000,
-      "tag": "0006_assets_module",
+      "when": 1745625600000,
+      "tag": "0001_public_holidays_salary_revisions",
       "breakpoints": true
     }
   ]

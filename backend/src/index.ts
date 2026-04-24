@@ -37,6 +37,10 @@ import { attendanceRoutes } from './modules/attendance/attendance.routes.js'
 import { auditRoutes } from './modules/audit/audit.routes.js'
 import { notificationsRoutes } from './modules/notifications/notifications.routes.js'
 import assetsRoutes from './modules/assets/assets.routes.js'
+import tenantsRoutes from './modules/tenants/tenants.routes.js'
+import appsRoutes from './modules/apps/apps.routes.js'
+import publicHolidaysRoutes from './modules/hr/public-holidays.routes.js'
+import salaryRevisionsRoutes from './modules/employees/salary-revisions.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -199,6 +203,10 @@ async function bootstrap() {
     await app.register(auditRoutes, { prefix: '/api/v1/audit' })
     await app.register(notificationsRoutes, { prefix: '/api/v1/notifications' })
     await app.register(assetsRoutes, { prefix: '/api/v1/assets' })
+    await app.register(tenantsRoutes, { prefix: '/api/v1/tenants' })
+    await app.register(appsRoutes, { prefix: '/api/v1/apps' })
+    await app.register(publicHolidaysRoutes, { prefix: '/api/v1/hr' })
+    await app.register(salaryRevisionsRoutes, { prefix: '/api/v1/employees' })
 
     // Health check — basic
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))

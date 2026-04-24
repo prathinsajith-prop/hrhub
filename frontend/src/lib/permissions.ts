@@ -54,6 +54,11 @@ export type RouteKey =
   | 'notifications'
   | 'my/login-history'
   | 'assets'
+  | 'organizations'
+  | 'organizations/new'
+  | 'team'
+  | 'apps'
+  | 'leave-policies'
 
 // ─── Permission matrix ────────────────────────────────────────────────────────
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -149,6 +154,13 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   reports: ['super_admin', 'hr_manager', 'pro_officer'],
   audit: ['super_admin', 'hr_manager'],
   settings: ['super_admin', 'hr_manager'],
+
+  // App Management
+  organizations: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'organizations/new': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  team: ['super_admin', 'hr_manager'],
+  apps: ['super_admin'],
+  'leave-policies': ['super_admin', 'hr_manager'],
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -188,6 +200,10 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/settings': 'settings',
     '/notifications': 'notifications',
     '/my/login-history': 'my/login-history',
+    '/organizations': 'organizations',
+    '/team': 'team',
+    '/apps': 'apps',
+    '/leave-policies': 'leave-policies',
   }
   return map[url] ?? null
 }

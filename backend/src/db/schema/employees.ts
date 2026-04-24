@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, timestamp, numeric, date, index, uniqueIndex, check } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, boolean, timestamp, numeric, date, index, uniqueIndex, check, type AnyPgColumn } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 import { tenants, entities } from './tenants.js'
 
@@ -18,7 +18,9 @@ export const employees = pgTable('employees', {
     gender: text('gender').$type<'male' | 'female'>(),
     department: text('department'),
     designation: text('designation'),
-    reportingTo: uuid('reporting_to'),
+    // Self-referential manager FK (added in migration 0012). manager_name is
+    // kept as a denormalised snapshot used by email templates and list views.
+    reportingTo: uuid('reporting_to').references((): AnyPgColumn => employees.id, { onDelete: 'set null' }),
     joinDate: date('join_date').notNull(),
     status: text('status').notNull().default('onboarding')
         .$type<'active' | 'onboarding' | 'probation' | 'suspended' | 'terminated' | 'visa_expired'>(),
@@ -71,6 +73,9 @@ export const employees = pgTable('employees', {
     index('idx_employees_eid_expiry').on(t.tenantId, t.emiratesIdExpiry),
     // Partial index: active (non-archived) employees — most common query
     index('idx_employees_active').on(t.tenantId).where(sql`${t.isArchived} = false`),
+    // Reporting hierarchy lookups
+    index('idx_employees_reporting_to').on(t.reportingTo).where(sql`${t.reportingTo} IS NOT NULL`),
+    index('idx_employees_tenant_reporting_to').on(t.tenantId, t.reportingTo).where(sql`${t.reportingTo} IS NOT NULL`),
     // Unique employee number per tenant
     uniqueIndex('idx_employees_no_tenant').on(t.tenantId, t.employeeNo),
     // Unique email per tenant (where email is provided)
@@ -86,4 +91,5 @@ export const employees = pgTable('employees', {
 export const employeesRelations = relations(employees, ({ one }) => ({
     tenant: one(tenants, { fields: [employees.tenantId], references: [tenants.id] }),
     entity: one(entities, { fields: [employees.entityId], references: [entities.id] }),
+    manager: one(employees, { fields: [employees.reportingTo], references: [employees.id], relationName: 'employee_manager' }),
 }))

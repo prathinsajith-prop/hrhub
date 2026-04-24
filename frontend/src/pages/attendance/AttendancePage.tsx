@@ -109,12 +109,19 @@ export function AttendancePage() {
         startDate: start,
         endDate: end,
         employeeId: filterEmployee || undefined,
+        limit: 200,
     })
     const { data: employeesData } = useEmployees({ limit: 1000 })
     const upsert = useUpsertAttendance()
 
     const list = useMemo<AttendanceRecord[]>(
-        () => (Array.isArray(records) ? records : []),
+        () => {
+            if (!records) return []
+            // Backend now returns { items, nextCursor, total? }; tolerate the
+            // legacy array shape so older deployed APIs still work.
+            if (Array.isArray(records)) return records as AttendanceRecord[]
+            return Array.isArray(records.items) ? records.items : []
+        },
         [records],
     )
     // employees response shape may be { data: [] } or []

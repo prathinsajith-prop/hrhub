@@ -6,14 +6,12 @@ import {
 import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSchema } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { sendWithETag } from '../../lib/etag.js'
+import { uploadObject, buildS3Key } from '../../plugins/s3.js'
+import { loadEnv } from '../../config/env.js'
 import { db } from '../../db/index.js'
 import { entities, employees } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
-import { createWriteStream, existsSync, createReadStream } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
-import { join, extname } from 'node:path'
-import { pipeline } from 'node:stream/promises'
-import { randomUUID } from 'node:crypto'
+import { extname } from 'node:path'
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
@@ -31,7 +29,7 @@ export default async function (fastify: any): Promise<void> {
             after: query.after,
         })
 
-        return reply.send(result)
+        return sendWithETag(reply, request, result)
     })
 
     // GET /api/v1/employees/org-chart
@@ -210,7 +208,7 @@ export default async function (fastify: any): Promise<void> {
         return reply.code(created > 0 || failed === 0 ? 201 : 400).send({ created, failed, errors: results })
     })
 
-    // POST /api/v1/employees/:id/avatar — multipart upload of profile image
+    // POST /api/v1/employees/:id/avatar — upload profile image to S3
     fastify.post('/:id/avatar', {
         preHandler: [fastify.authenticate],
         schema: { tags: ['Employees'] },
@@ -221,18 +219,26 @@ export default async function (fastify: any): Promise<void> {
 
         const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
         if (!allowed.includes(part.mimetype)) {
-            return reply.code(400).send({ message: 'Only JPEG, PNG, WEBP, or GIF images are allowed' })
+            return reply.code(415).send({ message: 'Only JPEG, PNG, WEBP, or GIF images are allowed' })
         }
 
-        const uploadsDir = join(new URL('../../../../uploads', import.meta.url).pathname, 'avatars')
-        if (!existsSync(uploadsDir)) await mkdir(uploadsDir, { recursive: true })
+        const chunks: Buffer[] = []
+        for await (const chunk of part.file) chunks.push(chunk as Buffer)
+        const buffer = Buffer.concat(chunks)
 
         const ext = extname(part.filename) || '.jpg'
-        const savedName = `${id}-${randomUUID()}${ext}`
-        const filePath = join(uploadsDir, savedName)
-        await pipeline(part.file, createWriteStream(filePath))
+        const safeName = `avatar${ext}`
+        const s3Key = buildS3Key(request.user.tenantId, `employees/${id}/avatar`, safeName)
 
-        const avatarUrl = `/api/v1/employees/avatars/${savedName}`
+        try {
+            await uploadObject(s3Key, buffer, part.mimetype)
+        } catch (err) {
+            request.log.error({ err }, 'S3 avatar upload failed')
+            return reply.code(503).send({ message: 'File storage service is unavailable. Please try again later.' })
+        }
+
+        const env = loadEnv()
+        const avatarUrl = `${env.S3_PUBLIC_URL}/${s3Key}`
         const updated = await updateEmployee(request.user.tenantId, id, { avatarUrl } as never)
         if (!updated) return reply.code(404).send({ message: 'Employee not found' })
 
@@ -250,25 +256,6 @@ export default async function (fastify: any): Promise<void> {
         }).catch(() => { })
 
         return reply.send({ data: { avatarUrl } })
-    })
-
-    // GET /api/v1/employees/avatars/:filename — serve avatar image (no auth required so <img src> works)
-    fastify.get('/avatars/:filename', { schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
-        const { filename } = request.params as { filename: string }
-        // Prevent directory traversal
-        if (filename.includes('/') || filename.includes('..') || filename.includes('\\')) {
-            return reply.code(400).send({ message: 'Invalid filename' })
-        }
-        const filePath = join(new URL('../../../../uploads', import.meta.url).pathname, 'avatars', filename)
-        if (!existsSync(filePath)) return reply.code(404).send({ message: 'Avatar not found' })
-        const ext = extname(filename).toLowerCase()
-        const mimeMap: Record<string, string> = {
-            '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-            '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif',
-        }
-        reply.header('Content-Type', mimeMap[ext] ?? 'application/octet-stream')
-        reply.header('Cache-Control', 'public, max-age=86400')
-        return reply.send(createReadStream(filePath))
     })
 }
 

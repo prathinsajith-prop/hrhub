@@ -21,7 +21,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useNotificationsList, useUnreadCount, useMarkNotificationRead, useMarkAllRead } from '@/hooks/useNotifications'
 import { useAuthStore } from '@/store/authStore'
-import { GlobalSearch } from '@/components/GlobalSearch'
+import { GlobalSearch } from '@/components/shared/GlobalSearch'
 import { ROOT_NAV_LABELS, ROUTES } from '@/lib/routes'
 
 /** Humanise a URL segment as a fallback label (kebab/snake → Title Case). */

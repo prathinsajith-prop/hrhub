@@ -4,8 +4,16 @@ export async function attendanceRoutes(fastify: any) {
     fastify.get('/attendance', {
         preHandler: [fastify.authenticate],
     }, async (request: any, reply: any) => {
-        const { employeeId, startDate, endDate, status } = request.query as Record<string, string>
-        return reply.send(await getAttendance(request.user.tenantId, { employeeId, startDate, endDate, status }))
+        const { employeeId, startDate, endDate, status, page, limit, cursor } = request.query as Record<string, string>
+        return reply.send(await getAttendance(request.user.tenantId, {
+            employeeId,
+            startDate,
+            endDate,
+            status,
+            page: page ? Number(page) : undefined,
+            limit: limit ? Number(limit) : undefined,
+            cursor,
+        }))
     })
 
     fastify.get('/attendance/summary', {

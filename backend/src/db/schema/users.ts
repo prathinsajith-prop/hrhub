@@ -1,13 +1,21 @@
-import { pgTable, uuid, text, boolean, timestamp, index, integer } from 'drizzle-orm/pg-core'
-import type { AnyPgColumn } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, boolean, timestamp, index, integer, uniqueIndex } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
+import { employees } from './employees.js'
 
 export const users = pgTable('users', {
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
     entityId: uuid('entity_id'),
-    email: text('email').unique().notNull(),
+    // Optional 1:1 link to the employees table. Nullable because not every
+    // user is an employee (super_admin, integration accounts, parent-company
+    // auditors). FK + UNIQUE(employee_id) WHERE NOT NULL added in
+    // migration 0014.
+    employeeId: uuid('employee_id').references(() => employees.id, { onDelete: 'set null' }),
+    // Email is unique per-tenant (not globally) so the same human can belong
+    // to multiple tenants. Enforced by uq_users_tenant_email_ci in
+    // migration 0011 — case-insensitive on LOWER(email).
+    email: text('email').notNull(),
     passwordHash: text('password_hash').notNull(),
     name: text('name').notNull(),
     role: text('role').notNull().default('employee')
@@ -28,7 +36,18 @@ export const users = pgTable('users', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
     tenantIdx: index('idx_users_tenant').on(t.tenantId),
-    emailIdx: index('idx_users_email').on(t.email),
+    // Case-insensitive lookup for login flow.
+    emailLowerIdx: index('idx_users_email_ci').on(sql`LOWER(${t.email})`),
+    // Tenant-scoped unique email (case-insensitive).
+    tenantEmailUq: uniqueIndex('uq_users_tenant_email_ci')
+        .on(t.tenantId, sql`LOWER(${t.email})`),
+    // One user account per employee (within a tenant).
+    employeeUq: uniqueIndex('uq_users_employee_id')
+        .on(t.employeeId)
+        .where(sql`${t.employeeId} IS NOT NULL`),
+    tenantEmployeeIdx: index('idx_users_tenant_employee')
+        .on(t.tenantId, t.employeeId)
+        .where(sql`${t.employeeId} IS NOT NULL`),
 }))
 
 export const refreshTokens = pgTable('refresh_tokens', {
@@ -54,6 +73,7 @@ export const passwordResetTokens = pgTable('password_reset_tokens', {
 
 export const usersRelations = relations(users, ({ one, many }) => ({
     tenant: one(tenants, { fields: [users.tenantId], references: [tenants.id] }),
+    employee: one(employees, { fields: [users.employeeId], references: [employees.id] }),
     refreshTokens: many(refreshTokens),
     passwordResetTokens: many(passwordResetTokens),
 }))

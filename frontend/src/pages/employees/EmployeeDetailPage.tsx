@@ -92,7 +92,15 @@ export function EmployeeDetailPage() {
     const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10)
   }, [])
   const attendanceEnd = React.useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const { data: attendanceRecords, isLoading: attendanceLoading } = useAttendance({ employeeId: id, startDate: attendanceStart, endDate: attendanceEnd })
+  const { data: attendanceData, isLoading: attendanceLoading } = useAttendance({ employeeId: id, startDate: attendanceStart, endDate: attendanceEnd, limit: 200 })
+  // Backend now returns { items, nextCursor }; tolerate the legacy array
+  // shape too for forward/backward compatibility.
+  const attendanceRecords = React.useMemo<Array<Record<string, unknown>>>(() => {
+    if (!attendanceData) return []
+    if (Array.isArray(attendanceData)) return attendanceData as Array<Record<string, unknown>>
+    const items = (attendanceData as { items?: unknown }).items
+    return Array.isArray(items) ? (items as Array<Record<string, unknown>>) : []
+  }, [attendanceData])
   const uploadAvatar = useUploadEmployeeAvatar(id!)
   const uploadDoc = useUploadDocument()
   const [editOpen, setEditOpen] = React.useState(false)

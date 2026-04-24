@@ -36,7 +36,17 @@ export function useApproveLeave() {
     })
 }
 
-export interface LeaveBalanceEntry { entitled: number; taken: number; pending: number; available: number }
+export interface LeaveBalanceEntry {
+    entitled: number
+    accrued: number
+    carriedForward: number
+    carryExpiresOn: string | null
+    taken: number
+    pending: number
+    adjustment: number
+    available: number
+    unlimited: boolean
+}
 export interface LeaveBalance {
     employeeId: string
     year: number
@@ -49,5 +59,49 @@ export function useLeaveBalance(employeeId: string | undefined, year = new Date(
         queryKey: ['leave-balance', employeeId, year],
         queryFn: () => api.get<{ data: LeaveBalance }>(`/leave/balance/${employeeId}?year=${year}`).then(r => r.data),
         enabled: !!employeeId,
+    })
+}
+
+export type AccrualRule = 'flat' | 'monthly_2_then_30' | 'unlimited' | 'none'
+export interface LeavePolicy {
+    leaveType: string
+    daysPerYear: number
+    accrualRule: AccrualRule
+    maxCarryForward: number
+    carryExpiresAfterMonths: number
+}
+
+export function useLeavePolicies() {
+    return useQuery({
+        queryKey: ['leave-policies'],
+        queryFn: () => api.get<{ data: LeavePolicy[] }>(`/leave/policies`).then(r => r.data),
+    })
+}
+
+export function useSaveLeavePolicies() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (policies: LeavePolicy[]) => api.put(`/leave/policies`, { policies }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['leave-policies'] })
+            qc.invalidateQueries({ queryKey: ['leave-balance'] })
+        },
+    })
+}
+
+export function useRolloverYear() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (fromYear: number) => api.post(`/leave/rollover`, { fromYear }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['leave-balance'] }),
+    })
+}
+
+export function useAdjustLeaveBalance() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (input: { employeeId: string; leaveType: string; year: number; delta: number; reason?: string }) =>
+            api.post(`/leave/balance/${input.employeeId}/adjust`, input),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['leave-balance'] }),
     })
 }

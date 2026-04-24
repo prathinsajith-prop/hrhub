@@ -19,8 +19,12 @@ import {
   StarIcon,
   PackageIcon,
   UserMinusIcon,
+  CalendarClockIcon,
+  Building2Icon,
+  UsersRoundIcon,
+  KeyRoundIcon,
 } from "lucide-react"
-import { NavUser } from "@/components/nav-user"
+import { NavUser } from "@/components/layout/NavUser"
 import {
   Sidebar,
   SidebarContent,
@@ -79,6 +83,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       items: [
         { title: t('nav.payroll'), url: "/payroll", icon: BanknoteIcon },
         { title: t('nav.leave'), url: "/leave", icon: CalendarCheckIcon },
+        { title: t('nav.leavePolicies'), url: "/leave-policies", icon: CalendarClockIcon },
         { title: t('nav.attendance'), url: "/attendance", icon: ClockIcon },
         { title: t('nav.performance'), url: "/performance", icon: StarIcon },
         { title: t('nav.assets', { defaultValue: 'Asset Management' }), url: "/assets", icon: PackageIcon },
@@ -89,6 +94,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       items: [
         { title: t('nav.reports'), url: "/reports", icon: BarChart3Icon },
         { title: t('nav.auditLog'), url: "/audit", icon: ClipboardListIcon },
+      ],
+    },
+    {
+      label: t('nav.workspace'),
+      items: [
+        { title: t('nav.organizations'), url: "/organizations", icon: Building2Icon },
+        { title: t('nav.team'), url: "/team", icon: UsersRoundIcon },
+        { title: t('nav.apps'), url: "/apps", icon: KeyRoundIcon },
       ],
     },
   ], [t])
