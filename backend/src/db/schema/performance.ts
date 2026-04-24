@@ -1,7 +1,7 @@
 import { pgTable, uuid, text, integer, timestamp, date } from 'drizzle-orm/pg-core'
-import { tenants } from './tenants'
-import { employees } from './employees'
-import { users } from './users'
+import { tenants } from './tenants.js'
+import { employees } from './employees.js'
+import { users } from './users.js'
 
 export const performanceReviews = pgTable('performance_reviews', {
     id: uuid('id').primaryKey().defaultRandom(),

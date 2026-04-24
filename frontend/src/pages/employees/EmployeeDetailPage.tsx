@@ -24,6 +24,9 @@ import {
   Loader2,
   Plus,
   Package,
+  CalendarDays,
+  ClipboardList,
+  TrendingDown,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -36,6 +39,8 @@ import { useEmployee, useUploadEmployeeAvatar } from '@/hooks/useEmployees'
 import { useDocuments, useUploadDocument } from '@/hooks/useDocuments'
 import { usePerformanceReviews } from '@/hooks/usePerformance'
 import { useEmployeeAssets } from '@/hooks/useAssets'
+import { useLeaveBalance, useLeaveRequests } from '@/hooks/useLeave'
+import { useAttendance } from '@/hooks/useAttendance'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { EditEmployeeDialog } from '@/components/shared/action-dialogs'
 import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
@@ -81,6 +86,13 @@ export function EmployeeDetailPage() {
   const { data: docsResult, isLoading: docsLoading } = useDocuments({ employeeId: id })
   const { data: reviews, isLoading: reviewsLoading } = usePerformanceReviews(id)
   const { data: employeeAssignments, isLoading: assetsLoading } = useEmployeeAssets(id!)
+  const { data: leaveBalanceData, isLoading: leaveBalanceLoading } = useLeaveBalance(id)
+  const { data: leaveHistoryData, isLoading: leaveHistoryLoading } = useLeaveRequests({ employeeId: id, limit: 20 })
+  const attendanceStart = React.useMemo(() => {
+    const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10)
+  }, [])
+  const attendanceEnd = React.useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const { data: attendanceRecords, isLoading: attendanceLoading } = useAttendance({ employeeId: id, startDate: attendanceStart, endDate: attendanceEnd })
   const uploadAvatar = useUploadEmployeeAvatar(id!)
   const uploadDoc = useUploadDocument()
   const [editOpen, setEditOpen] = React.useState(false)
@@ -355,6 +367,12 @@ export function EmployeeDetailPage() {
               </TabsTrigger>
               <TabsTrigger value="assets" className="gap-1.5 text-xs">
                 <Package className="h-3.5 w-3.5" /> Assets
+              </TabsTrigger>
+              <TabsTrigger value="leave" className="gap-1.5 text-xs">
+                <CalendarDays className="h-3.5 w-3.5" /> Leave
+              </TabsTrigger>
+              <TabsTrigger value="attendance" className="gap-1.5 text-xs">
+                <ClipboardList className="h-3.5 w-3.5" /> Attendance
               </TabsTrigger>
             </TabsList>
 
@@ -662,6 +680,198 @@ export function EmployeeDetailPage() {
                           <Badge variant="info" className="text-[10px]">Assigned</Badge>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="leave" className="mt-4 space-y-4">
+              {/* Leave Balance Cards */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Leave Balance — {new Date().getFullYear()}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {leaveBalanceLoading ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 rounded-lg" />)}
+                    </div>
+                  ) : !leaveBalanceData?.balance ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">No leave data available</p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {Object.entries(leaveBalanceData.balance)
+                        .filter(([, b]) => b.entitled !== 0)
+                        .map(([type, b]) => {
+                          const isUnlimited = b.entitled === -1
+                          const pct = isUnlimited ? 0 : Math.min(100, Math.round((b.taken / (b.entitled || 1)) * 100))
+                          const available = isUnlimited ? '∞' : b.available
+                          const label = type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')
+                          const isLow = !isUnlimited && b.available <= 3 && b.entitled > 0
+                          return (
+                            <div key={type} className="rounded-lg border bg-card p-3 space-y-2">
+                              <div className="flex items-start justify-between gap-1">
+                                <span className="text-xs font-medium text-foreground leading-tight">{label}</span>
+                                {isLow && <TrendingDown className="h-3 w-3 text-destructive shrink-0 mt-0.5" />}
+                              </div>
+                              <div className="flex items-baseline gap-1">
+                                <span className={`text-xl font-bold font-display ${isLow ? 'text-destructive' : 'text-foreground'}`}>{available}</span>
+                                <span className="text-[10px] text-muted-foreground">/ {isUnlimited ? '∞' : b.entitled} days</span>
+                              </div>
+                              {!isUnlimited && (
+                                <div className="w-full bg-muted rounded-full h-1.5">
+                                  <div
+                                    className={`h-1.5 rounded-full transition-all ${pct >= 80 ? 'bg-destructive' : pct >= 50 ? 'bg-warning' : 'bg-success'}`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                              )}
+                              <div className="flex gap-2 text-[10px] text-muted-foreground">
+                                <span>Used: <strong className="text-foreground">{b.taken}</strong></span>
+                                {b.pending > 0 && <span>Pending: <strong className="text-warning">{b.pending}</strong></span>}
+                              </div>
+                            </div>
+                          )
+                        })
+                      }
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Leave Request History */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Leave History</CardTitle>
+                    <Button size="sm" variant="outline" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => navigate(`/leave?employeeId=${id}`)}>
+                      View all
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {leaveHistoryLoading ? (
+                    <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                  ) : !leaveHistoryData?.data || leaveHistoryData.data.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No leave requests found</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {(leaveHistoryData.data as Array<any>).map((req) => (
+                        <div key={req.id} className="py-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium capitalize">{(req.leaveType as string).replace('_', ' ')} Leave</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDate(req.startDate)} — {formatDate(req.endDate)} · {req.days} day{req.days !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                          <Badge
+                            variant={req.status === 'approved' ? 'success' : req.status === 'rejected' ? 'destructive' : req.status === 'pending' ? 'warning' : 'secondary'}
+                            className="text-[10px] capitalize shrink-0"
+                          >
+                            {req.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="attendance" className="mt-4 space-y-4">
+              {/* Monthly Stats Strip */}
+              {!attendanceLoading && attendanceRecords && attendanceRecords.length > 0 && (() => {
+                const records = attendanceRecords as Array<{ status: string; hoursWorked?: string; overtimeHours?: string }>
+                const counts: Record<string, number> = {}
+                let totalHours = 0
+                for (const r of records) {
+                  counts[r.status] = (counts[r.status] ?? 0) + 1
+                  totalHours += parseFloat(r.hoursWorked ?? '0')
+                }
+                const stats = [
+                  { label: 'Present', value: counts['present'] ?? 0, color: 'text-success' },
+                  { label: 'Absent', value: counts['absent'] ?? 0, color: 'text-destructive' },
+                  { label: 'Late', value: counts['late'] ?? 0, color: 'text-warning' },
+                  { label: 'Half Day', value: counts['half_day'] ?? 0, color: 'text-info' },
+                  { label: 'WFH', value: counts['wfh'] ?? 0, color: 'text-muted-foreground' },
+                  { label: 'Total Hours', value: `${totalHours.toFixed(1)}h`, color: 'text-foreground' },
+                ]
+                return (
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                    {stats.map(s => (
+                      <Card key={s.label}>
+                        <CardContent className="p-3 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">{s.label}</p>
+                          <p className={`text-lg font-bold font-display ${s.color}`}>{s.value}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )
+              })()}
+
+              {/* Attendance Log */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Attendance Log — {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</CardTitle>
+                    <Button size="sm" variant="outline" leftIcon={<ClipboardList className="h-3.5 w-3.5" />} onClick={() => navigate(`/attendance?employeeId=${id}`)}>
+                      Full log
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {attendanceLoading ? (
+                    <div className="p-4 space-y-2">{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
+                  ) : !attendanceRecords || (attendanceRecords as unknown[]).length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No attendance records this month</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-muted/40">
+                            <th className="text-left font-medium text-muted-foreground px-4 py-2.5">Date</th>
+                            <th className="text-left font-medium text-muted-foreground px-4 py-2.5">Status</th>
+                            <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden sm:table-cell">Check In</th>
+                            <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden sm:table-cell">Check Out</th>
+                            <th className="text-right font-medium text-muted-foreground px-4 py-2.5">Hours</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(attendanceRecords as Array<any>)
+                            .slice()
+                            .sort((a, b) => b.date.localeCompare(a.date))
+                            .map((r) => {
+                              const statusVariants: Record<string, 'success' | 'destructive' | 'warning' | 'info' | 'secondary'> = {
+                                present: 'success', absent: 'destructive', late: 'warning',
+                                half_day: 'info', wfh: 'secondary', on_leave: 'secondary',
+                              }
+                              const checkIn = r.checkIn ? new Date(r.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
+                              const checkOut = r.checkOut ? new Date(r.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
+                              return (
+                                <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                                  <td className="px-4 py-2.5 font-medium">{formatDate(r.date)}</td>
+                                  <td className="px-4 py-2.5">
+                                    <Badge variant={statusVariants[r.status] ?? 'secondary'} className="text-[10px] capitalize">
+                                      {r.status.replace('_', ' ')}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-muted-foreground hidden sm:table-cell">{checkIn}</td>
+                                  <td className="px-4 py-2.5 text-muted-foreground hidden sm:table-cell">{checkOut}</td>
+                                  <td className="px-4 py-2.5 text-right font-medium">
+                                    {r.hoursWorked ? `${parseFloat(r.hoursWorked).toFixed(1)}h` : '—'}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </CardContent>

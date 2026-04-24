@@ -1,8 +1,8 @@
 import { pgTable, uuid, text, integer, date, timestamp, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { tenants } from './tenants'
-import { employees } from './employees'
-import { users } from './users'
+import { tenants } from './tenants.js'
+import { employees } from './employees.js'
+import { users } from './users.js'
 
 export const leaveRequests = pgTable('leave_requests', {
     id: uuid('id').primaryKey().defaultRandom(),

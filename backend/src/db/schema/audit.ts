@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, boolean, timestamp, index, jsonb, inet } from 'drizzle-orm/pg-core'
-import { users } from './users'
-import { tenants } from './tenants'
+import { users } from './users.js'
+import { tenants } from './tenants.js'
 
 /**
  * Records every auth event: login success/fail, logout, password change, token refresh.

@@ -1,7 +1,7 @@
 import { pgTable, uuid, text, integer, boolean, timestamp, index, jsonb } from 'drizzle-orm/pg-core'
-import { tenants } from './tenants'
-import { documents } from './documents'
-import { users } from './users'
+import { tenants } from './tenants.js'
+import { documents } from './documents.js'
+import { users } from './users.js'
 
 /**
  * Version history for each document — every upload creates a new version.

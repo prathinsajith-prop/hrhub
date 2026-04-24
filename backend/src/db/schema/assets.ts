@@ -1,8 +1,8 @@
 import { pgTable, uuid, text, boolean, date, numeric, timestamp, index, unique } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { tenants } from './tenants'
-import { employees } from './employees'
-import { users } from './users'
+import { tenants } from './tenants.js'
+import { employees } from './employees.js'
+import { users } from './users.js'
 
 // ─── Asset Categories ────────────────────────────────────────────────────────
 export const assetCategories = pgTable('asset_categories', {

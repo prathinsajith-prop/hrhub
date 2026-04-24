@@ -1,7 +1,7 @@
 import { pgTable, uuid, text, boolean, jsonb, timestamp, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { tenants } from './tenants'
-import { users } from './users'
+import { tenants } from './tenants.js'
+import { users } from './users.js'
 
 export const notifications = pgTable('notifications', {
     id: uuid('id').primaryKey().defaultRandom(),

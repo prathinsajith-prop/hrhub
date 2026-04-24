@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, boolean, timestamp, numeric, date, index, uniqueIndex, check } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
-import { tenants, entities } from './tenants'
+import { tenants, entities } from './tenants.js'
 
 export const employees = pgTable('employees', {
     id: uuid('id').primaryKey().defaultRandom(),

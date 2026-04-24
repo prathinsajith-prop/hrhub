@@ -1,7 +1,7 @@
 import { pgTable, uuid, text, integer, date, timestamp, index, unique } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { tenants } from './tenants'
-import { employees } from './employees'
+import { tenants } from './tenants.js'
+import { employees } from './employees.js'
 
 export const onboardingChecklists = pgTable('onboarding_checklists', {
     id: uuid('id').primaryKey().defaultRandom(),
