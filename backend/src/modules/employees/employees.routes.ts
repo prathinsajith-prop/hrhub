@@ -5,6 +5,7 @@ import {
 } from './employees.service.js'
 import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSchema } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { sendWithETag } from '../../lib/etag.js'
 import { db } from '../../db/index.js'
 import { entities } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
@@ -30,7 +31,7 @@ export default async function (fastify: any): Promise<void> {
             after: query.after,
         })
 
-        return reply.send(result)
+        return sendWithETag(reply, request, result)
     })
 
     // GET /api/v1/employees/org-chart

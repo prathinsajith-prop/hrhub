@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Briefcase, FileText, CreditCard,
   Calendar, Shield, LogOut, ChevronLeft, ChevronRight,
-  UserCheck, Plane, BarChart3, Network, CalendarDays, Clock, Star, UserMinus, Activity, Settings as SettingsIcon
+  UserCheck, Plane, BarChart3, Network, CalendarDays, Clock, Star, UserMinus, Activity, Settings as SettingsIcon, Package
 } from 'lucide-react'
 import { cn, getInitials } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
@@ -40,6 +40,7 @@ const navGroups = [
       { to: '/leave', icon: Calendar, label: 'Leave Management' },
       { to: '/attendance', icon: Clock, label: 'Attendance' },
       { to: '/performance', icon: Star, label: 'Performance' },
+      { to: '/assets', icon: Package, label: 'Asset Management' },
     ]
   },
   {

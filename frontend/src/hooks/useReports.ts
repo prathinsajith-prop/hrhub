@@ -71,6 +71,7 @@ export function usePayrollSummaryReport() {
     return useQuery({
         queryKey: ['reports', 'payroll-summary'],
         queryFn: () => api.get<{ data: PayrollSummaryReport }>('/reports/payroll-summary').then(r => r.data),
+        staleTime: 5 * 60_000, // 5 minutes — payroll totals change infrequently
     })
 }
 
@@ -78,5 +79,6 @@ export function useVisaExpiryReport(days = 90) {
     return useQuery({
         queryKey: ['reports', 'visa-expiry', days],
         queryFn: () => api.get<{ data: VisaExpiryReport }>(`/reports/visa-expiry?days=${days}`).then(r => r.data),
+        staleTime: 5 * 60_000, // 5 minutes
     })
 }

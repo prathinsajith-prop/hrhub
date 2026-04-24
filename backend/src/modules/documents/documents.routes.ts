@@ -2,6 +2,7 @@ import { listDocuments, getDocument, createDocument, updateDocument, verifyDocum
 import { generateUploadUrl, generateDownloadUrl, buildS3Key, uploadObject } from '../../plugins/s3.js'
 import { templateRoutes } from './templates.routes.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { sendWithETag } from '../../lib/etag.js'
 import { extname } from 'path'
 
 export default async function (fastify: any): Promise<void> {
@@ -13,7 +14,7 @@ export default async function (fastify: any): Promise<void> {
     fastify.get('/', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {
         const { employeeId, category, status, limit = '20', offset = '0', after } = request.query as Record<string, string>
         const result = await listDocuments(request.user.tenantId, { employeeId, category, status, limit: Number(limit), offset: Number(offset), after })
-        return reply.send(result)
+        return sendWithETag(reply, request, result)
     })
 
     fastify.get('/expiring', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {

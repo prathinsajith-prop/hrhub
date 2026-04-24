@@ -2,6 +2,7 @@ import { eq, and, desc, isNull, sql, getTableColumns, or, lt } from 'drizzle-orm
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { visaApplications, employees } from '../../db/schema/index.js'
+import { cacheDel } from '../../lib/redis.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewVisa = InferInsertModel<typeof visaApplications>
@@ -89,6 +90,8 @@ export async function softDeleteVisa(tenantId: string, id: string) {
 
 export async function createVisa(tenantId: string, data: Omit<NewVisa, 'tenantId' | 'id'>) {
     const [row] = await db.insert(visaApplications).values({ ...data, tenantId }).returning()
+    // Invalidate dashboard KPI cache so activeVisas count refreshes (P1-05)
+    await cacheDel(`dashboard:kpis:${tenantId}`)
     return row
 }
 
@@ -159,6 +162,7 @@ export async function cancelVisa(tenantId: string, id: string, reason?: string) 
         .set(withTimestamp({ status: 'cancelled' as const, notes: mergedNotes }))
         .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)))
         .returning()
+    if (row) await cacheDel(`dashboard:kpis:${tenantId}`)
     return row ?? null
 }
 

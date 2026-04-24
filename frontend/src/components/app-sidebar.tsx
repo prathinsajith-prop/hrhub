@@ -16,6 +16,9 @@ import {
   ClipboardListIcon,
   GitBranchIcon,
   ClockIcon,
+  StarIcon,
+  PackageIcon,
+  UserMinusIcon,
 } from "lucide-react"
 import { NavUser } from "@/components/nav-user"
 import {
@@ -57,6 +60,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         { title: t('nav.orgChart'), url: "/org-chart", icon: GitBranchIcon },
         { title: t('nav.recruitment'), url: "/recruitment", icon: BriefcaseIcon },
         { title: t('nav.onboarding'), url: "/onboarding", icon: UserPlusIcon },
+        { title: t('nav.exit', { defaultValue: 'Exit & Offboarding' }), url: "/exit", icon: UserMinusIcon },
       ],
     },
     {
@@ -73,6 +77,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         { title: t('nav.payroll'), url: "/payroll", icon: BanknoteIcon },
         { title: t('nav.leave'), url: "/leave", icon: CalendarCheckIcon },
         { title: t('nav.attendance'), url: "/attendance", icon: ClockIcon },
+        { title: t('nav.performance'), url: "/performance", icon: StarIcon },
+        { title: t('nav.assets', { defaultValue: 'Asset Management' }), url: "/assets", icon: PackageIcon },
       ],
     },
     {

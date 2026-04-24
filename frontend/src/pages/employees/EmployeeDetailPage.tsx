@@ -23,6 +23,7 @@ import {
   Camera,
   Loader2,
   Plus,
+  Package,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +35,7 @@ import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { useEmployee, useUploadEmployeeAvatar } from '@/hooks/useEmployees'
 import { useDocuments, useUploadDocument } from '@/hooks/useDocuments'
 import { usePerformanceReviews } from '@/hooks/usePerformance'
+import { useEmployeeAssets } from '@/hooks/useAssets'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { EditEmployeeDialog } from '@/components/shared/action-dialogs'
 import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
@@ -78,6 +80,7 @@ export function EmployeeDetailPage() {
   const { data: employee, isLoading } = useEmployee(id!)
   const { data: docsResult, isLoading: docsLoading } = useDocuments({ employeeId: id })
   const { data: reviews, isLoading: reviewsLoading } = usePerformanceReviews(id)
+  const { data: employeeAssignments, isLoading: assetsLoading } = useEmployeeAssets(id!)
   const uploadAvatar = useUploadEmployeeAvatar(id!)
   const uploadDoc = useUploadDocument()
   const [editOpen, setEditOpen] = React.useState(false)
@@ -350,6 +353,9 @@ export function EmployeeDetailPage() {
               <TabsTrigger value="performance" className="gap-1.5 text-xs">
                 <Star className="h-3.5 w-3.5" /> Performance
               </TabsTrigger>
+              <TabsTrigger value="assets" className="gap-1.5 text-xs">
+                <Package className="h-3.5 w-3.5" /> Assets
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="personal" className="mt-4">
@@ -610,6 +616,50 @@ export function EmployeeDetailPage() {
                           >
                             {r.status}
                           </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="assets" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Assigned Assets</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {assetsLoading ? (
+                    <div className="space-y-2">
+                      {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+                    </div>
+                  ) : !employeeAssignments || employeeAssignments.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm font-medium">No assets assigned</p>
+                      <p className="text-xs mt-1">Assets assigned to this employee will appear here</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {employeeAssignments.map((a) => (
+                        <div key={a.id} className="flex items-center justify-between py-3">
+                          <div className="flex items-center gap-3">
+                            <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium">{a.assetName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {a.categoryName && `${a.categoryName} · `}
+                                {a.assetBrand} {a.assetModel}
+                                {a.assetSerialNumber && ` · S/N: ${a.assetSerialNumber}`}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Assigned: {formatDate(a.assignedDate)}
+                                {a.expectedReturnDate && ` · Due: ${formatDate(a.expectedReturnDate)}`}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="info" className="text-[10px]">Assigned</Badge>
                         </div>
                       ))}
                     </div>

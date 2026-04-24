@@ -39,7 +39,7 @@ export interface KpiCardProps {
   className?: string
 }
 
-export function KpiCard({
+export const KpiCard = React.memo(function KpiCard({
   label,
   value,
   sub,
@@ -103,7 +103,7 @@ export function KpiCard({
       )}
     </Wrapper>
   )
-}
+})
 
 /** Compact horizontal KPI card — delegates to the shared modern KpiCard
  *  so the entire app gets the new design while keeping the legacy API.
@@ -129,7 +129,7 @@ const colorToTone: Record<KpiColor, 'blue' | 'emerald' | 'amber' | 'rose' | 'pri
   purple: 'violet',
 }
 
-export function KpiCardCompact({ label, value, icon: Icon, color = 'blue', loading = false, className, hint }: KpiCardCompactProps) {
+export const KpiCardCompact = React.memo(function KpiCardCompact({ label, value, icon: Icon, color = 'blue', loading = false, className, hint }: KpiCardCompactProps) {
   if (loading) {
     return (
       <div className={cn('rounded-xl bg-card p-5 border border-border animate-pulse space-y-3', className)}>
@@ -149,4 +149,4 @@ export function KpiCardCompact({ label, value, icon: Icon, color = 'blue', loadi
       className={className}
     />
   )
-}
+})

@@ -36,6 +36,7 @@ import { performanceRoutes } from './modules/performance/performance.routes.js'
 import { attendanceRoutes } from './modules/attendance/attendance.routes.js'
 import { auditRoutes } from './modules/audit/audit.routes.js'
 import { notificationsRoutes } from './modules/notifications/notifications.routes.js'
+import assetsRoutes from './modules/assets/assets.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -197,6 +198,7 @@ async function bootstrap() {
     await app.register(attendanceRoutes, { prefix: '/api/v1' })
     await app.register(auditRoutes, { prefix: '/api/v1/audit' })
     await app.register(notificationsRoutes, { prefix: '/api/v1/notifications' })
+    await app.register(assetsRoutes, { prefix: '/api/v1/assets' })
 
     // Health check — basic
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))

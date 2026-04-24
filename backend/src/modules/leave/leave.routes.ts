@@ -1,6 +1,7 @@
 import { listLeaveRequests, createLeaveRequest, approveLeave, cancelLeave, getLeaveBalance } from './leave.service.js'
 import { validate, createLeaveSchema, leaveActionSchema } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { sendWithETag } from '../../lib/etag.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -8,7 +9,7 @@ export default async function (fastify: any): Promise<void> {
     fastify.get('/', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
         const { employeeId, status, leaveType, limit = '20', offset = '0' } = request.query as Record<string, string>
         const result = await listLeaveRequests(request.user.tenantId, { employeeId, status, leaveType, limit: Number(limit), offset: Number(offset) })
-        return reply.send(result)
+        return sendWithETag(reply, request, result)
     })
 
     fastify.post('/', {

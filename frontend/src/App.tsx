@@ -31,11 +31,12 @@ const NotificationsPage = lazy(() => import('@/pages/misc/NotificationsPage').th
 const NotFoundPage = lazy(() => import('@/pages/misc/NotFoundPage').then(m => ({ default: m.NotFoundPage })))
 const CalendarPage = lazy(() => import('@/pages/calendar/CalendarPage').then(m => ({ default: m.CalendarPage })))
 // Misc pages bundle
-const LeavePage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.LeavePage })))
-const OnboardingPage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.OnboardingPage })))
-const OnboardingDetailPage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.OnboardingDetailPage })))
-const CompliancePage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.CompliancePage })))
-const ReportsPage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.ReportsPage })))
+const LeavePage = lazy(() => import('@/pages/misc/LeavePage').then(m => ({ default: m.LeavePage })))
+const OnboardingPage = lazy(() => import('@/pages/misc/OnboardingPage').then(m => ({ default: m.OnboardingPage })))
+const OnboardingDetailPage = lazy(() => import('@/pages/misc/OnboardingDetailPage').then(m => ({ default: m.OnboardingDetailPage })))
+const CompliancePage = lazy(() => import('@/pages/misc/CompliancePage').then(m => ({ default: m.CompliancePage })))
+const ReportsPage = lazy(() => import('@/pages/misc/ReportsPage').then(m => ({ default: m.ReportsPage })))
+const AssetsPage = lazy(() => import('@/pages/assets/AssetsPage').then(m => ({ default: m.AssetsPage })))
 
 function PageLoader() {
   return (
@@ -129,6 +130,7 @@ export default function App() {
             <Route path="audit" element={<AuditLogPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="my/login-history" element={<LoginHistoryPage />} />
+            <Route path="assets" element={<AssetsPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
