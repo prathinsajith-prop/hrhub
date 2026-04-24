@@ -4,7 +4,7 @@
 # Multi-stage build for a small, reproducible production image
 # ─────────────────────────────────────────────────────────────
 
-ARG NODE_VERSION=20-alpine
+ARG NODE_VERSION=24-alpine
 
 # ───── 1. deps: install all deps (including dev) for build ─────
 FROM node:${NODE_VERSION} AS deps
