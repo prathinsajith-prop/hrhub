@@ -113,7 +113,7 @@ async function bootstrap() {
 
     // CORS
     await app.register(cors, {
-        origin: env.CORS_ORIGINS.split(',').map(o => o.trim()),
+        origin: env.CORS_ORIGINS === '*' ? true : env.CORS_ORIGINS.split(',').map(o => o.trim()),
         credentials: true,
     })
 

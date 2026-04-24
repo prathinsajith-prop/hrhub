@@ -10,7 +10,8 @@ const envSchema = z.object({
     JWT_EXPIRES_IN: z.string().default('15m'),
     REFRESH_TOKEN_SECRET: z.string().min(32, 'REFRESH_TOKEN_SECRET must be at least 32 characters'),
     REFRESH_TOKEN_EXPIRES_IN: z.string().default('7d'),
-    CORS_ORIGINS: z.string().default('http://localhost:5173'),
+    // Use '*' to allow all origins (Railway default) or comma-separated URLs for production
+    CORS_ORIGINS: z.string().default('*'),
     // S3 / MinIO
     S3_ENDPOINT: z.string().default('http://localhost:9000'),
     S3_REGION: z.string().default('us-east-1'),
@@ -49,7 +50,8 @@ export function loadEnv(): Env {
         const issues = result.error.issues
             .map((i) => `  • ${i.path.join('.')}: ${i.message}`)
             .join('\n')
-        throw new Error(`Environment configuration errors:\n${issues}`)
+        const hint = '\n\nRequired env vars: DATABASE_URL, JWT_SECRET (≥32 chars), REFRESH_TOKEN_SECRET (≥32 chars)'
+        throw new Error(`Environment configuration errors:\n${issues}${hint}`)
     }
 
     cached = result.data

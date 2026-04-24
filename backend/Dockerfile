@@ -42,6 +42,8 @@ COPY --from=prod-deps --chown=app:app /app/node_modules ./node_modules
 COPY --from=build --chown=app:app /app/dist ./dist
 COPY --from=build --chown=app:app /app/migrations ./migrations
 COPY --chown=app:app package.json ./
+COPY --chown=app:app entrypoint.sh ./
+RUN chmod +x entrypoint.sh
 
 USER app
 EXPOSE 4000
@@ -50,4 +52,5 @@ EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD wget -qO- http://localhost:4000/health || exit 1
 
-CMD ["node", "dist/index.js"]
+# Run migrations then start the server
+CMD ["sh", "entrypoint.sh"]
