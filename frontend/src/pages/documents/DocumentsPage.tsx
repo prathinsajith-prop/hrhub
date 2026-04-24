@@ -20,6 +20,8 @@ import { api } from '@/lib/api'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
 import { useDocuments, useVerifyDocument, useDeleteDocument } from '@/hooks/useDocuments'
 import { useEmployees } from '@/hooks/useEmployees'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { EditDocumentDialog } from '@/components/shared/action-dialogs'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
@@ -32,6 +34,33 @@ const statusBadge: Record<DocStatus, { variant: any; label: string }> = {
   pending_upload: { variant: 'secondary', label: 'Pending Upload' },
   under_review: { variant: 'info', label: 'Under Review' },
 }
+
+const DOCUMENT_FILTERS: FilterConfig[] = [
+  { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
+  {
+    name: 'category', label: 'Category', type: 'select', field: 'category',
+    options: [
+      { value: 'identity', label: 'Identity' },
+      { value: 'visa', label: 'Visa' },
+      { value: 'employment', label: 'Employment' },
+      { value: 'compliance', label: 'Compliance' },
+      { value: 'financial', label: 'Financial' },
+      { value: 'qualification', label: 'Qualification' },
+    ],
+  },
+  {
+    name: 'status', label: 'Status', type: 'select', field: 'status',
+    options: [
+      { value: 'valid', label: 'Valid' },
+      { value: 'expiring_soon', label: 'Expiring soon' },
+      { value: 'expired', label: 'Expired' },
+      { value: 'under_review', label: 'Under review' },
+      { value: 'pending_upload', label: 'Pending upload' },
+    ],
+  },
+  { name: 'expiryDate', label: 'Expiry date', type: 'date_range', field: 'expiryDate' },
+  { name: 'verified', label: 'Verified only', type: 'toggle', field: 'verified' },
+]
 
 function ExpiryCell({ date }: { date?: string }) {
   if (!date) return <span className="text-xs text-muted-foreground">—</span>
@@ -318,6 +347,18 @@ export function DocumentsPage() {
   const expired = documents.filter((d: any) => d.status === 'expired').length
   const verifyDoc = useVerifyDocument()
   const deleteDoc = useDeleteDocument()
+  const search = useSearchFilters({
+    storageKey: 'hrhub.documents.searchHistory',
+    availableFilters: DOCUMENT_FILTERS,
+  })
+  const filteredDocuments = useMemo(
+    () => applyClientFilters(documents as any[], {
+      searchInput: search.searchInput,
+      appliedFilters: search.appliedFilters,
+      searchFields: ['employeeName', 'employeeNo', 'docType', 'fileName', 'category'],
+    }),
+    [documents, search.appliedFilters, search.searchInput],
+  )
 
   const handleView = (d: Document) => {
     setViewTarget(d)
@@ -416,9 +457,13 @@ export function DocumentsPage() {
       <Card className="p-5">
         <DataTable
           columns={cols}
-          data={documents}
+          data={filteredDocuments}
           isLoading={isLoading}
-          searchPlaceholder="Search documents..."
+          advancedFilter={{
+            search,
+            filters: DOCUMENT_FILTERS,
+            placeholder: 'Search documents…',
+          }}
           pageSize={8}
           enableSelection
           getRowId={(row: any) => String(row.id)}

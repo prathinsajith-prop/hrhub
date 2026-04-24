@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import type { Employee } from '@/types'
 
@@ -16,6 +16,7 @@ interface PaginatedResult<T> {
     limit: number
     offset: number
     hasMore: boolean
+    nextCursor?: string
 }
 
 export function useEmployees(params: ListParams = {}) {
@@ -29,6 +30,23 @@ export function useEmployees(params: ListParams = {}) {
     return useQuery({
         queryKey: ['employees', params],
         queryFn: () => api.get<PaginatedResult<Employee>>(`/employees?${query}`),
+    })
+}
+
+export function useInfiniteEmployees(params: Omit<ListParams, 'offset'> = {}) {
+    return useInfiniteQuery({
+        queryKey: ['employees', 'infinite', params],
+        queryFn: ({ pageParam }) => {
+            const query = new URLSearchParams()
+            if (params.search) query.set('search', params.search)
+            if (params.status) query.set('status', params.status)
+            if (params.department) query.set('department', params.department)
+            query.set('limit', String(params.limit ?? 20))
+            if (pageParam) query.set('after', pageParam as string)
+            return api.get<PaginatedResult<Employee>>(`/employees?${query}`)
+        },
+        getNextPageParam: (last) => last.nextCursor ?? undefined,
+        initialPageParam: undefined as string | undefined,
     })
 }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import { CreditCard, CheckCircle2, Clock, Play, FileDown, Send, TrendingUp } from 'lucide-react'
@@ -15,7 +15,26 @@ import { formatCurrency } from '@/lib/utils'
 import { usePayrollRuns, useRunPayroll, useSubmitWps } from '@/hooks/usePayroll'
 import { usePayrollTrend } from '@/hooks/useDashboard'
 import { useAuthStore } from '@/store/authStore'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import type { PayrollRun } from '@/types'
+
+const PAYROLL_FILTERS: FilterConfig[] = [
+  {
+    name: 'status', label: 'Status', type: 'select', field: 'status',
+    options: [
+      { value: 'draft', label: 'Draft' },
+      { value: 'processing', label: 'Processing' },
+      { value: 'approved', label: 'Approved' },
+      { value: 'wps_submitted', label: 'WPS submitted' },
+      { value: 'paid', label: 'Paid' },
+    ],
+  },
+  { name: 'year', label: 'Year', type: 'number_range', field: 'year', min: 2020, max: 2100 },
+  { name: 'totalEmployees', label: 'Headcount', type: 'number_range', field: 'totalEmployees', min: 0 },
+  { name: 'totalNet', label: 'Net pay (AED)', type: 'number_range', field: 'totalNet', min: 0, prefix: 'AED' },
+  { name: 'processedDate', label: 'Processed date', type: 'date_range', field: 'processedDate' },
+]
 
 async function downloadWpsSif(payrollRunId: string, token: string | null) {
   const res = await fetch(`/api/v1/payroll/${payrollRunId}/wps-sif`, {
@@ -148,6 +167,18 @@ export function PayrollPage() {
   const { data: trendRaw } = usePayrollTrend()
   const runPayroll = useRunPayroll()
   const payrollRuns: PayrollRun[] = (payrollData?.data as PayrollRun[]) ?? []
+  const search = useSearchFilters({
+    storageKey: 'hrhub.payroll.searchHistory',
+    availableFilters: PAYROLL_FILTERS,
+  })
+  const filteredRuns = useMemo(
+    () => applyClientFilters(payrollRuns as any[], {
+      searchInput: search.searchInput,
+      appliedFilters: search.appliedFilters,
+      searchFields: ['wpsFileRef', 'status'],
+    }),
+    [payrollRuns, search.appliedFilters, search.searchInput],
+  )
 
   // Build gross/net chart from backend trend (which returns { month, amount } in millions)
   const chartData = (trendRaw ?? []).map((t) => {
@@ -295,9 +326,14 @@ export function PayrollPage() {
       <Card className="p-5">
         <DataTable
           columns={columns}
-          data={payrollRuns}
+          data={filteredRuns}
           isLoading={isLoading}
           emptyMessage="No payroll runs found."
+          advancedFilter={{
+            search,
+            filters: PAYROLL_FILTERS,
+            placeholder: 'Search payroll runs…',
+          }}
           enableSelection
           getRowId={(row: any) => String(row.id)}
           toolbar={

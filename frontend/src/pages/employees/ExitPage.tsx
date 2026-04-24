@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -13,8 +13,40 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { useExitRequests, useInitiateExit, useApproveExit, useMarkSettlementPaid, useSettlementPreview, type ExitRequest } from '@/hooks/useExit'
 import { useEmployees } from '@/hooks/useEmployees'
-import { LogOut, DollarSign, CheckCircle2, AlertCircle } from 'lucide-react'
+import { LogOut, DollarSign, CheckCircle2, AlertCircle, Clock, XCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import { type FilterConfig, type QuickFilter } from '@/lib/filters'
+
+const EXIT_FILTERS: FilterConfig[] = [
+    {
+        name: 'exitType', label: 'Exit type', type: 'select', field: 'exitType',
+        options: [
+            { value: 'resignation', label: 'Resignation' },
+            { value: 'termination', label: 'Termination' },
+            { value: 'contract_end', label: 'Contract End' },
+            { value: 'retirement', label: 'Retirement' },
+        ],
+    },
+    {
+        name: 'status', label: 'Status', type: 'select', field: 'status',
+        options: [
+            { value: 'pending', label: 'Pending' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'rejected', label: 'Rejected' },
+            { value: 'completed', label: 'Completed' },
+        ],
+    },
+    { name: 'exitDate', label: 'Exit date', type: 'date_range', field: 'exitDate' },
+]
+
+const EXIT_QUICK_FILTERS: QuickFilter[] = [
+    { name: 'pending', label: 'Pending', icon: Clock, filter: { status: { operator: 'equals', value: 'pending' } } },
+    { name: 'approved', label: 'Approved', icon: CheckCircle2, filter: { status: { operator: 'equals', value: 'approved' } } },
+    { name: 'completed', label: 'Completed', icon: CheckCircle2, filter: { status: { operator: 'equals', value: 'completed' } } },
+    { name: 'rejected', label: 'Rejected', icon: XCircle, filter: { status: { operator: 'equals', value: 'rejected' } } },
+]
 
 const statusConfig: Record<string, { label: string; color: string }> = {
     pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
@@ -121,6 +153,11 @@ export function ExitPage() {
     const [form, setForm] = useState<InitiateForm>(defaultForm)
     const [step, setStep] = useState<'form' | 'preview'>('form')
 
+    const exitSearch = useSearchFilters({
+        storageKey: 'hrhub.exit.searchHistory',
+        availableFilters: EXIT_FILTERS,
+    })
+
     const previewEnabled = !!form.employeeId && !!form.exitDate && !!form.exitType
     const { data: preview, isLoading: previewLoading } = useSettlementPreview(
         previewEnabled ? form.employeeId : undefined,
@@ -138,7 +175,36 @@ export function ExitPage() {
     }
 
     const empList = Array.isArray(employees) ? employees : (employees as any)?.data ?? []
-    const exitList = Array.isArray(exits) ? exits : (exits as any)?.data ?? []
+    const exitList: ExitRequest[] = Array.isArray(exits) ? exits : (exits as any)?.data ?? []
+
+    const enrichedExits = useMemo(
+        () => exitList.map((e) => {
+            const emp = empList.find((em: any) => em.id === e.employeeId)
+            return { ...e, employeeName: emp ? `${emp.firstName} ${emp.lastName}` : '' }
+        }),
+        [exitList, empList],
+    )
+
+    const filteredExits = useMemo(() => {
+        const q = exitSearch.searchInput.trim().toLowerCase()
+        const f = exitSearch.appliedFilters
+        return enrichedExits.filter((e) => {
+            if (q) {
+                const hit = e.employeeName.toLowerCase().includes(q)
+                    || e.exitType.toLowerCase().includes(q)
+                    || (e.reason ?? '').toLowerCase().includes(q)
+                if (!hit) return false
+            }
+            if (f.exitType?.value && e.exitType !== f.exitType.value) return false
+            if (f.status?.value && e.status !== f.status.value) return false
+            if (f.exitDate?.value && typeof f.exitDate.value === 'object' && !Array.isArray(f.exitDate.value) && e.exitDate) {
+                const range = f.exitDate.value as { from?: string; to?: string }
+                if (range.from && e.exitDate < range.from) return false
+                if (range.to && e.exitDate > range.to) return false
+            }
+            return true
+        })
+    }, [enrichedExits, exitSearch.searchInput, exitSearch.appliedFilters])
 
     const pending = exitList.filter((e: ExitRequest) => e.status === 'pending').length
     const total = exitList.length
@@ -165,14 +231,22 @@ export function ExitPage() {
                     <p className="text-xs text-muted-foreground mt-1">Pending Approval</p>
                 </Card>
                 <Card className="p-4 text-center">
-                    <p className="text-2xl font-bold text-blue-600">{exitList.filter((e: ExitRequest) => e.status === 'approved').length}</p>
+                    <p className="text-2xl font-bold text-blue-600">{exitList.filter((e) => e.status === 'approved').length}</p>
                     <p className="text-xs text-muted-foreground mt-1">Approved</p>
                 </Card>
                 <Card className="p-4 text-center">
-                    <p className="text-2xl font-bold text-green-600">{exitList.filter((e: ExitRequest) => e.status === 'completed').length}</p>
+                    <p className="text-2xl font-bold text-green-600">{exitList.filter((e) => e.status === 'completed').length}</p>
                     <p className="text-xs text-muted-foreground mt-1">Completed</p>
                 </Card>
             </div>
+
+            <AdvancedSearchBar
+                search={exitSearch}
+                filters={EXIT_FILTERS}
+                quickFilters={EXIT_QUICK_FILTERS}
+                placeholder="Search by employee, exit type, reason…"
+                resultCount={filteredExits.length}
+            />
 
             {isLoading && (
                 <div className="space-y-4">
@@ -206,8 +280,15 @@ export function ExitPage() {
                 </div>
             )}
 
+            {!isLoading && exitList.length > 0 && filteredExits.length === 0 && (
+                <div className="flex flex-col items-center gap-3 py-16 text-center">
+                    <AlertCircle className="h-10 w-10 text-muted-foreground" />
+                    <p className="text-muted-foreground">No exit requests match your filters.</p>
+                </div>
+            )}
+
             <div className="space-y-4">
-                {exitList.map((req: ExitRequest) => (
+                {filteredExits.map((req) => (
                     <ExitCard
                         key={req.id}
                         req={req}

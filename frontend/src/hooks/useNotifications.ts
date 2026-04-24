@@ -34,7 +34,7 @@ export function useNotificationsList(params?: { limit?: number; offset?: number;
             api.get<NotificationsResponse>(
                 `/notifications?limit=${limit}&offset=${offset}&unreadOnly=${unreadOnly}`,
             ),
-        staleTime: 30_000,
+        staleTime: 60_000,
     })
 }
 

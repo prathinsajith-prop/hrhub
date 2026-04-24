@@ -29,7 +29,10 @@ export function useApproveLeave() {
     return useMutation({
         mutationFn: ({ id, approved }: { id: string; approved: boolean }) =>
             api.post(`/leave/${id}/approve`, { approved }),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['leave'] }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['leave'] })
+            qc.invalidateQueries({ queryKey: ['dashboard'] })
+        },
     })
 }
 

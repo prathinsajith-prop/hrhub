@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -14,8 +14,34 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { usePerformanceReviews, useCreateReview, useUpdateReview, type PerformanceReview } from '@/hooks/usePerformance'
 import { useEmployees } from '@/hooks/useEmployees'
-import { Star, TrendingUp, Plus } from 'lucide-react'
+import { Star, TrendingUp, Plus, CheckCircle2, Clock, Send, FileText } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import { type FilterConfig, type QuickFilter } from '@/lib/filters'
+
+const PERFORMANCE_FILTERS: FilterConfig[] = [
+    {
+        name: 'status', label: 'Status', type: 'select', field: 'status',
+        options: [
+            { value: 'draft', label: 'Draft' },
+            { value: 'submitted', label: 'Submitted' },
+            { value: 'acknowledged', label: 'Acknowledged' },
+            { value: 'completed', label: 'Completed' },
+        ],
+    },
+    { name: 'period', label: 'Period', type: 'text', field: 'period', placeholder: 'e.g. 2024-Q2' },
+    { name: 'overallRating', label: 'Overall rating', type: 'number_range', field: 'overallRating', min: 1, max: 5, step: 1 },
+    { name: 'reviewDate', label: 'Review date', type: 'date_range', field: 'reviewDate' },
+]
+
+const PERFORMANCE_QUICK_FILTERS: QuickFilter[] = [
+    { name: 'all', label: 'All', filter: {} },
+    { name: 'draft', label: 'Draft', icon: FileText, filter: { status: { operator: 'equals', value: 'draft' } } },
+    { name: 'submitted', label: 'Submitted', icon: Send, filter: { status: { operator: 'equals', value: 'submitted' } } },
+    { name: 'acknowledged', label: 'Acknowledged', icon: Clock, filter: { status: { operator: 'equals', value: 'acknowledged' } } },
+    { name: 'completed', label: 'Completed', icon: CheckCircle2, filter: { status: { operator: 'equals', value: 'completed' } } },
+]
 
 const statusConfig: Record<string, { label: string; color: string }> = {
     draft: { label: 'Draft', color: 'bg-gray-100 text-gray-700 border-gray-200' },
@@ -85,7 +111,11 @@ export function PerformancePage() {
     const [form, setForm] = useState<ReviewForm>(() =>
         lockedEmployeeId ? { ...defaultForm, employeeId: lockedEmployeeId } : defaultForm,
     )
-    const [activeTab, setActiveTab] = useState<'all' | 'draft' | 'completed'>('all')
+
+    const perfSearch = useSearchFilters({
+        storageKey: 'hrhub.performance.searchHistory',
+        availableFilters: PERFORMANCE_FILTERS,
+    })
 
     const set = (k: keyof ReviewForm, v: string | number) => setForm(f => ({ ...f, [k]: v }))
 
@@ -112,7 +142,38 @@ export function PerformancePage() {
 
     const empList = Array.isArray(employees) ? employees : (employees as any)?.data ?? []
     const reviewList: PerformanceReview[] = Array.isArray(reviews) ? reviews : []
-    const filtered = activeTab === 'all' ? reviewList : reviewList.filter(r => r.status === activeTab || (activeTab === 'completed' && r.status === 'completed'))
+
+    const enrichedReviews = useMemo(
+        () => reviewList.map((r) => {
+            const emp = empList.find((e: any) => e.id === r.employeeId)
+            return { ...r, employeeName: emp ? `${emp.firstName} ${emp.lastName}` : '' }
+        }),
+        [reviewList, empList],
+    )
+
+    const filtered = useMemo(() => {
+        const q = perfSearch.searchInput.trim().toLowerCase()
+        const f = perfSearch.appliedFilters
+        return enrichedReviews.filter((r) => {
+            if (q) {
+                const hit = r.employeeName.toLowerCase().includes(q) || (r.period ?? '').toLowerCase().includes(q)
+                if (!hit) return false
+            }
+            if (f.status?.value && r.status !== f.status.value) return false
+            if (f.period?.value && !(r.period ?? '').toLowerCase().includes((f.period.value as string).toLowerCase())) return false
+            if (f.overallRating?.value && typeof f.overallRating.value === 'object' && !Array.isArray(f.overallRating.value)) {
+                const range = f.overallRating.value as { min?: number; max?: number }
+                if (range.min !== undefined && (r.overallRating ?? 0) < range.min) return false
+                if (range.max !== undefined && (r.overallRating ?? 0) > range.max) return false
+            }
+            if (f.reviewDate?.value && typeof f.reviewDate.value === 'object' && !Array.isArray(f.reviewDate.value) && r.reviewDate) {
+                const range = f.reviewDate.value as { from?: string; to?: string }
+                if (range.from && r.reviewDate < range.from) return false
+                if (range.to && r.reviewDate > range.to) return false
+            }
+            return true
+        })
+    }, [enrichedReviews, perfSearch.searchInput, perfSearch.appliedFilters])
 
     return (
         <PageWrapper>
@@ -126,12 +187,13 @@ export function PerformancePage() {
                 }
             />
 
-            <div className="flex gap-2 mb-6">
-                {(['all', 'draft', 'completed'] as const).map(tab => (
-                    <Button key={tab} variant={activeTab === tab ? 'default' : 'outline'} size="sm"
-                        onClick={() => setActiveTab(tab)} className="capitalize">{tab}</Button>
-                ))}
-            </div>
+            <AdvancedSearchBar
+                search={perfSearch}
+                filters={PERFORMANCE_FILTERS}
+                quickFilters={PERFORMANCE_QUICK_FILTERS}
+                placeholder="Search by employee name or period…"
+                resultCount={filtered.length}
+            />
 
             {isLoading && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -166,14 +228,13 @@ export function PerformancePage() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filtered.map((rev: PerformanceReview) => {
-                    const emp = empList.find((e: any) => e.id === rev.employeeId)
+                {filtered.map((rev) => {
                     const sc = statusConfig[rev.status]
                     return (
                         <Card key={rev.id} className="p-5 space-y-4">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <p className="font-semibold text-sm">{emp ? `${emp.firstName} ${emp.lastName}` : 'Unknown'}</p>
+                                    <p className="font-semibold text-sm">{rev.employeeName || 'Unknown'}</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">{rev.period} · {rev.reviewDate ?? 'No date'}</p>
                                     <div className="mt-2">
                                         <RatingStars rating={rev.overallRating} />

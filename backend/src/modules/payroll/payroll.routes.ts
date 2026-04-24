@@ -46,6 +46,9 @@ export default async function (fastify: any): Promise<void> {
         // If BullMQ worker is available, enqueue and return jobId immediately
         if (getPayrollQueue()) {
             const jobId = await enqueuePayrollRun(request.user.tenantId, id)
+            if (!jobId) {
+                return reply.code(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Payroll processing unavailable. Please try again.' })
+            }
             recordActivity({
                 tenantId: request.user.tenantId,
                 userId: request.user.id,
@@ -61,7 +64,7 @@ export default async function (fastify: any): Promise<void> {
             return reply.code(202).send({ data: { jobId, status: 'processing' } })
         }
 
-        // Fallback: run synchronously when Redis is unavailable
+        // Fallback: run synchronously when Redis is unavailable (BUG-05 — was incorrectly returning 202)
         const ok = await runPayroll(request.user.tenantId, id)
         if (!ok) {
             return reply.code(422).send({

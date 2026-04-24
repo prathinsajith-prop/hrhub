@@ -33,6 +33,26 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { NewJobDialog, EditJobDialog } from '@/components/shared/action-dialogs'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+
+const JOB_FILTERS: FilterConfig[] = [
+  { name: 'title', label: 'Job title', type: 'text', field: 'title' },
+  {
+    name: 'status', label: 'Status', type: 'select', field: 'status',
+    options: [
+      { value: 'open', label: 'Open' },
+      { value: 'on_hold', label: 'On hold' },
+      { value: 'closed', label: 'Closed' },
+      { value: 'draft', label: 'Draft' },
+    ],
+  },
+  { name: 'department', label: 'Department', type: 'text', field: 'department' },
+  { name: 'location', label: 'Location', type: 'text', field: 'location' },
+  { name: 'openings', label: 'Openings', type: 'number_range', field: 'openings', min: 1 },
+  { name: 'minSalary', label: 'Min salary (AED)', type: 'number_range', field: 'minSalary', min: 0, prefix: 'AED' },
+  { name: 'closingDate', label: 'Closing date', type: 'date_range', field: 'closingDate' },
+]
 import type { Candidate, ApplicationStage } from '@/types'
 import type { ColumnDef } from '@tanstack/react-table'
 
@@ -513,6 +533,18 @@ export function RecruitmentPage() {
   const updateJob = useUpdateJob()
   const createJob = useCreateJob()
   const jobs: any[] = (jobsData?.data as any[]) ?? []
+  const jobSearch = useSearchFilters({
+    storageKey: 'hrhub.recruitment.jobs.searchHistory',
+    availableFilters: JOB_FILTERS,
+  })
+  const filteredJobs = useMemo(
+    () => applyClientFilters(jobs as any[], {
+      searchInput: jobSearch.searchInput,
+      appliedFilters: jobSearch.appliedFilters,
+      searchFields: ['title', 'department', 'location'],
+    }),
+    [jobs, jobSearch.appliedFilters, jobSearch.searchInput],
+  )
   const candidates: Candidate[] = (appsData?.data as Candidate[]) ?? []
   const jobColumns = useMemo(() => buildJobColumns((j) => setEditJob(j)), [])
 
@@ -651,9 +683,12 @@ export function RecruitmentPage() {
         <Card className="p-4 sm:p-5">
           <DataTable
             columns={jobColumns}
-            data={jobs}
-            searchKey="title"
-            searchPlaceholder="Search jobs..."
+            data={filteredJobs}
+            advancedFilter={{
+              search: jobSearch,
+              filters: JOB_FILTERS,
+              placeholder: 'Search jobs…',
+            }}
             pageSize={8}
             enableSelection
             getRowId={(row: any) => String(row.id)}

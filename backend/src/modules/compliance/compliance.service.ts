@@ -1,4 +1,4 @@
-import { eq, and, count, lte, sql } from 'drizzle-orm'
+import { eq, and, count, lte, gte, sql, isNotNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, payrollRuns, documents } from '../../db/schema/index.js'
 
@@ -33,18 +33,43 @@ export async function getEmiratisationMetrics(tenantId: string) {
 
 export async function getExpiryAlerts(tenantId: string) {
     const today = new Date()
+    const todayStr = today.toISOString().split('T')[0]
     const in30 = new Date(today); in30.setDate(today.getDate() + 30)
     const in60 = new Date(today); in60.setDate(today.getDate() + 60)
     const in90 = new Date(today); in90.setDate(today.getDate() + 90)
 
-    const [visaExpiring30] = await db.select({ count: count() }).from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), lte(employees.visaExpiry, in30.toISOString().split('T')[0])))
-
-    const [visaExpiring90] = await db.select({ count: count() }).from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), lte(employees.visaExpiry, in90.toISOString().split('T')[0])))
-
-    const [passportExpiring60] = await db.select({ count: count() }).from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), lte(employees.passportExpiry, in60.toISOString().split('T')[0])))
+    // Run all 3 queries in parallel — also add gte(today) lower bound so
+    // already-expired employees and NULL dates are excluded (BUG-02)
+    const [
+        [visaExpiring30],
+        [visaExpiring90],
+        [passportExpiring60],
+    ] = await Promise.all([
+        db.select({ count: count() }).from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                isNotNull(employees.visaExpiry),
+                gte(employees.visaExpiry, todayStr),
+                lte(employees.visaExpiry, in30.toISOString().split('T')[0]),
+            )),
+        db.select({ count: count() }).from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                isNotNull(employees.visaExpiry),
+                gte(employees.visaExpiry, todayStr),
+                lte(employees.visaExpiry, in90.toISOString().split('T')[0]),
+            )),
+        db.select({ count: count() }).from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                isNotNull(employees.passportExpiry),
+                gte(employees.passportExpiry, todayStr),
+                lte(employees.passportExpiry, in60.toISOString().split('T')[0]),
+            )),
+    ])
 
     return {
         visaExpiring30Days: Number(visaExpiring30.count),
@@ -54,51 +79,50 @@ export async function getExpiryAlerts(tenantId: string) {
 }
 
 export async function getComplianceReport(tenantId: string) {
-    // ── WPS: ratio of recent payroll runs that reached wps_submitted or paid ──
-    const [{ total: totalRuns }] = await db.select({ total: count() }).from(payrollRuns)
-        .where(eq(payrollRuns.tenantId, tenantId))
-    const [{ compliant }] = await db.select({ compliant: count() }).from(payrollRuns)
-        .where(and(
+    const today = new Date().toISOString().split('T')[0]
+    const in30 = new Date(); in30.setDate(in30.getDate() + 30)
+    const cutoff = in30.toISOString().split('T')[0]
+
+    // Run all independent queries in parallel (P1-06)
+    const [
+        [{ total: totalRuns }],
+        [{ compliant }],
+        emi,
+        [{ total: totalActive }],
+        [{ expired }],
+        [{ totalDocs }],
+        [{ validDocs }],
+        [{ expiringDocs }],
+    ] = await Promise.all([
+        db.select({ total: count() }).from(payrollRuns).where(eq(payrollRuns.tenantId, tenantId)),
+        db.select({ compliant: count() }).from(payrollRuns).where(and(
             eq(payrollRuns.tenantId, tenantId),
             sql`${payrollRuns.status} IN ('wps_submitted', 'paid')`,
-        ))
+        )),
+        getEmiratisationMetrics(tenantId),
+        db.select({ total: count() }).from(employees)
+            .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), eq(employees.status, 'active'))),
+        db.select({ expired: count() }).from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                eq(employees.status, 'active'),
+                isNotNull(employees.visaExpiry),
+                lte(employees.visaExpiry, today),
+            )),
+        db.select({ totalDocs: count() }).from(documents).where(eq(documents.tenantId, tenantId)),
+        db.select({ validDocs: count() }).from(documents)
+            .where(and(eq(documents.tenantId, tenantId), eq(documents.status, 'valid'))),
+        db.select({ expiringDocs: count() }).from(documents)
+            .where(and(eq(documents.tenantId, tenantId), isNotNull(documents.expiryDate), lte(documents.expiryDate, cutoff))),
+    ])
+
     const wpsScore = Number(totalRuns) > 0 ? Math.round((Number(compliant) / Number(totalRuns)) * 100) : 100
-
-    // ── Emiratisation ──
-    const emi = await getEmiratisationMetrics(tenantId)
-    const emiScore = emi.target > 0
-        ? Math.min(100, Math.round((emi.percentage / emi.target) * 100))
-        : 100
-
-    // ── Visa validity: active employees without expired visas ──
-    const today = new Date().toISOString().split('T')[0]
-    const [{ total: totalActive }] = await db.select({ total: count() }).from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), eq(employees.status, 'active')))
-    const [{ expired }] = await db.select({ expired: count() }).from(employees)
-        .where(and(
-            eq(employees.tenantId, tenantId),
-            eq(employees.isArchived, false),
-            eq(employees.status, 'active'),
-            lte(employees.visaExpiry, today),
-        ))
+    const emiScore = emi.target > 0 ? Math.min(100, Math.round((emi.percentage / emi.target) * 100)) : 100
     const visaScore = Number(totalActive) > 0
         ? Math.round(((Number(totalActive) - Number(expired)) / Number(totalActive)) * 100)
         : 100
-
-    // ── Document completeness: valid vs total documents ──
-    const [{ totalDocs }] = await db.select({ totalDocs: count() }).from(documents)
-        .where(eq(documents.tenantId, tenantId))
-    const [{ validDocs }] = await db.select({ validDocs: count() }).from(documents)
-        .where(and(eq(documents.tenantId, tenantId), eq(documents.status, 'valid')))
-    const docScore = Number(totalDocs) > 0
-        ? Math.round((Number(validDocs) / Number(totalDocs)) * 100)
-        : 100
-
-    // ── Expiring soon: documents/visas needing attention soon ──
-    const in30 = new Date(); in30.setDate(in30.getDate() + 30)
-    const cutoff = in30.toISOString().split('T')[0]
-    const [{ expiringDocs }] = await db.select({ expiringDocs: count() }).from(documents)
-        .where(and(eq(documents.tenantId, tenantId), lte(documents.expiryDate, cutoff)))
+    const docScore = Number(totalDocs) > 0 ? Math.round((Number(validDocs) / Number(totalDocs)) * 100) : 100
 
     const checks = [
         {

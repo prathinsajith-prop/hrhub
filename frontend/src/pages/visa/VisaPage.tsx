@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
@@ -16,10 +16,46 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatDate, cn } from '@/lib/utils'
 import { useVisas, useAdvanceVisaStep, useCancelVisa, useRecalcVisaUrgency, useUpdateVisa } from '@/hooks/useVisa'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import type { VisaApplication, VisaStatus } from '@/types'
 import { toast } from '@/components/ui/overlays'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { NewVisaApplicationDialog } from '@/components/shared/action-dialogs'
+
+const VISA_FILTERS: FilterConfig[] = [
+  { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
+  {
+    name: 'status', label: 'Status', type: 'select', field: 'status',
+    options: [
+      { value: 'active', label: 'Active' },
+      { value: 'expiring_soon', label: 'Expiring soon' },
+      { value: 'expired', label: 'Expired' },
+      { value: 'not_started', label: 'Not started' },
+      { value: 'stamping', label: 'Stamping' },
+      { value: 'medical_pending', label: 'Medical pending' },
+      { value: 'eid_pending', label: 'EID pending' },
+      { value: 'cancelled', label: 'Cancelled' },
+    ],
+  },
+  {
+    name: 'urgencyLevel', label: 'Priority', type: 'select', field: 'urgencyLevel',
+    options: [
+      { value: 'critical', label: 'Critical' },
+      { value: 'urgent', label: 'Urgent' },
+      { value: 'normal', label: 'Normal' },
+    ],
+  },
+  {
+    name: 'visaType', label: 'Visa type', type: 'select', field: 'visaType',
+    options: [
+      { value: 'employment_new', label: 'Employment (new)' },
+      { value: 'employment_renewal', label: 'Employment (renewal)' },
+    ],
+  },
+  { name: 'expiryDate', label: 'Expiry date', type: 'date_range', field: 'expiryDate' },
+  { name: 'currentStep', label: 'Current step', type: 'number_range', field: 'currentStep', min: 0, max: 8 },
+]
 
 const statusLabel: Record<VisaStatus, string> = {
   not_started: 'Not Started',
@@ -386,6 +422,19 @@ export function VisaPage() {
       activeTab === 'active' ? visaApplications.filter((v: any) => v.status === 'active' || v.status === 'expiring_soon') :
         visaApplications
 
+  const search = useSearchFilters({
+    storageKey: 'hrhub.visa.searchHistory',
+    availableFilters: VISA_FILTERS,
+  })
+  const filteredVisas = useMemo(
+    () => applyClientFilters(filtered as any[], {
+      searchInput: search.searchInput,
+      appliedFilters: search.appliedFilters,
+      searchFields: ['employeeName', 'employeeNo', 'visaType', 'mohreRef', 'gdfrRef'],
+    }),
+    [filtered, search.appliedFilters, search.searchInput],
+  )
+
   const activeCount = visaApplications.filter((v: any) => v.status === 'active').length
   const processingCount = visaApplications.filter((v: any) => !['active', 'expired', 'cancelled'].includes(v.status)).length
   const criticalCount = visaApplications.filter((v: any) => v.urgencyLevel === 'critical').length
@@ -468,9 +517,13 @@ export function VisaPage() {
         <Card className="p-4 sm:p-5">
           <DataTable
             columns={columns}
-            data={filtered}
+            data={filteredVisas}
             isLoading={isLoading}
-            searchPlaceholder="Search by employee..."
+            advancedFilter={{
+              search,
+              filters: VISA_FILTERS,
+              placeholder: 'Search by employee, MOHRE, GDRFA…',
+            }}
             pageSize={8}
             enableSelection
             getRowId={(row: any) => String(row.id)}

@@ -1,43 +1,37 @@
-import { eq, and, count, lte, gte, sql, desc } from 'drizzle-orm'
+import { eq, and, count, lte, gte, sql, desc, isNotNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, payrollRuns } from '../../db/schema/index.js'
 
 export async function getHeadcountReport(tenantId: string) {
-    const all = await db
-        .select({
-            id: employees.id,
-            employeeNo: employees.employeeNo,
-            fullName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
-            avatarUrl: employees.avatarUrl,
-            email: employees.email,
-            department: employees.department,
-            designation: employees.designation,
-            nationality: employees.nationality,
-            status: employees.status,
-            joinDate: employees.joinDate,
-            visaExpiry: employees.visaExpiry,
-            emiratisationCategory: employees.emiratisationCategory,
-        })
-        .from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false)))
-        .orderBy(desc(employees.createdAt))
+    // Use SQL GROUP BY instead of loading all rows into JS memory (BUG-03)
+    const baseWhere = and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false))
 
-    const byStatus: Record<string, number> = {}
-    const byDepartment: Record<string, number> = {}
-    const byNationality: Record<string, number> = {}
-
-    for (const e of all) {
-        byStatus[e.status ?? 'unknown'] = (byStatus[e.status ?? 'unknown'] ?? 0) + 1
-        byDepartment[e.department ?? 'Unassigned'] = (byDepartment[e.department ?? 'Unassigned'] ?? 0) + 1
-        byNationality[e.nationality ?? 'Unknown'] = (byNationality[e.nationality ?? 'Unknown'] ?? 0) + 1
-    }
+    const [
+        [{ total }],
+        byStatusRows,
+        byDeptRows,
+        byNatRows,
+    ] = await Promise.all([
+        db.select({ total: count() }).from(employees).where(baseWhere),
+        db.select({ label: employees.status, count: count() })
+            .from(employees).where(baseWhere)
+            .groupBy(employees.status),
+        db.select({ label: employees.department, count: count() })
+            .from(employees).where(baseWhere)
+            .groupBy(employees.department)
+            .orderBy(desc(count())),
+        db.select({ label: employees.nationality, count: count() })
+            .from(employees).where(baseWhere)
+            .groupBy(employees.nationality)
+            .orderBy(desc(count()))
+            .limit(15),
+    ])
 
     return {
-        total: all.length,
-        byStatus: Object.entries(byStatus).map(([label, count]) => ({ label, count })),
-        byDepartment: Object.entries(byDepartment).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count),
-        byNationality: Object.entries(byNationality).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count).slice(0, 15),
-        employees: all,
+        total: Number(total),
+        byStatus: byStatusRows.map(r => ({ label: r.label ?? 'unknown', count: Number(r.count) })),
+        byDepartment: byDeptRows.map(r => ({ label: r.label ?? 'Unassigned', count: Number(r.count) })),
+        byNationality: byNatRows.map(r => ({ label: r.label ?? 'Unknown', count: Number(r.count) })),
     }
 }
 

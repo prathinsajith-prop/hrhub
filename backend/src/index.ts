@@ -229,6 +229,19 @@ async function bootstrap() {
             checks.redis = { ok: false, error: e.message }
         }
 
+        // S3/MinIO check (P0-08)
+        const s3Start = Date.now()
+        try {
+            const { getS3Client } = await import('./plugins/s3.js')
+            const { HeadBucketCommand } = await import('@aws-sdk/client-s3')
+            const { loadEnv: _loadEnv } = await import('./config/env.js')
+            const _env = _loadEnv()
+            await getS3Client().send(new HeadBucketCommand({ Bucket: _env.S3_BUCKET }))
+            checks.s3 = { ok: true, latencyMs: Date.now() - s3Start }
+        } catch (e: any) {
+            checks.s3 = { ok: false, error: e.message }
+        }
+
         const allOk = Object.values(checks).every(c => c.ok)
         return reply.code(allOk ? 200 : 503).send({
             status: allOk ? 'ok' : 'degraded',

@@ -2,12 +2,7 @@ import { listDocuments, getDocument, createDocument, updateDocument, verifyDocum
 import { generateUploadUrl, generateDownloadUrl, buildS3Key, uploadObject } from '../../plugins/s3.js'
 import { templateRoutes } from './templates.routes.js'
 import { recordActivity } from '../audit/audit.service.js'
-import { createWriteStream, existsSync } from 'fs'
-import { mkdir } from 'fs/promises'
-import { join, extname } from 'path'
-import { pipeline } from 'stream/promises'
-import { createReadStream } from 'fs'
-import { randomUUID } from 'crypto'
+import { extname } from 'path'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -132,7 +127,7 @@ export default async function (fastify: any): Promise<void> {
         return reply.code(204).send()
     })
 
-    // POST /api/v1/documents/upload — multipart file upload (uploads to S3/MinIO; falls back to local disk)
+    // POST /api/v1/documents/upload — multipart file upload (S3/MinIO only; no local fallback)
     fastify.post('/upload', {
         preHandler: [fastify.authenticate],
         schema: { tags: ['Documents'] },
@@ -141,36 +136,45 @@ export default async function (fastify: any): Promise<void> {
         let fileMeta: { fileName: string; mime: string; s3Key: string; size: number } | null = null
         const fields: Record<string, string> = {}
 
+        // Allowed MIME types + their magic byte signatures (P0-07)
+        const ALLOWED: Record<string, Buffer[]> = {
+            'application/pdf': [Buffer.from([0x25, 0x50, 0x44, 0x46])], // %PDF
+            'image/jpeg': [Buffer.from([0xFF, 0xD8, 0xFF])],
+            'image/png': [Buffer.from([0x89, 0x50, 0x4E, 0x47])],
+            'image/gif': [Buffer.from([0x47, 0x49, 0x46, 0x38])],
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [Buffer.from([0x50, 0x4B, 0x03, 0x04])], // DOCX (ZIP)
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': [Buffer.from([0x50, 0x4B, 0x03, 0x04])], // XLSX (ZIP)
+        }
+
         for await (const part of parts) {
             if (part.type === 'file') {
-                // Buffer the stream so we can both upload to S3 and know the size
                 const chunks: Buffer[] = []
                 for await (const chunk of part.file) chunks.push(chunk as Buffer)
                 const buffer = Buffer.concat(chunks)
-                const ext = extname(part.filename) || ''
+
+                // Magic bytes validation — reject files whose content doesn't match declared MIME
+                const declared = part.mimetype || 'application/octet-stream'
+                const signatures = ALLOWED[declared]
+                if (!signatures) {
+                    return reply.code(415).send({ message: `File type '${declared}' is not permitted.` })
+                }
+                const matchesMagic = signatures.some(sig => buffer.slice(0, sig.length).equals(sig))
+                if (!matchesMagic) {
+                    return reply.code(415).send({ message: 'File content does not match its declared type.' })
+                }
+
                 const safeName = part.filename.replace(/[^a-zA-Z0-9._-]/g, '_')
                 const s3Key = buildS3Key(request.user.tenantId, fields.employeeId ? `employees/${fields.employeeId}/documents` : 'documents', safeName)
-                const mime = part.mimetype || 'application/octet-stream'
+                const mime = declared
 
-                // Try S3/MinIO first; on failure fall back to local disk for resilience.
-                let storedKey = s3Key
                 try {
                     await uploadObject(s3Key, buffer, mime)
                 } catch (err) {
-                    request.log.warn({ err }, 'S3 upload failed; falling back to local disk')
-                    const uploadsDir = join(new URL('../../../../uploads', import.meta.url).pathname)
-                    if (!existsSync(uploadsDir)) await mkdir(uploadsDir, { recursive: true })
-                    const savedName = `${randomUUID()}${ext}`
-                    const filePath = join(uploadsDir, savedName)
-                    await pipeline(
-                        // re-stream the buffer
-                        (function* () { yield buffer })(),
-                        createWriteStream(filePath),
-                    )
-                    storedKey = `local://${savedName}`
+                    request.log.error({ err }, 'S3 upload failed')
+                    return reply.code(503).send({ message: 'File storage service is unavailable. Please try again later.' })
                 }
 
-                fileMeta = { fileName: part.filename, mime, s3Key: storedKey, size: buffer.length }
+                fileMeta = { fileName: part.filename, mime, s3Key, size: buffer.length }
             } else {
                 fields[part.fieldname] = part.value as string
             }
@@ -232,19 +236,6 @@ export default async function (fastify: any): Promise<void> {
         const doc = await getDocument(claims.tenantId, id)
         if (!doc) return reply.code(404).send({ message: 'Document not found' })
 
-        if (doc.s3Key?.startsWith('local://')) {
-            const savedName = doc.s3Key.replace('local://', '')
-            const uploadsDir = join(new URL('../../../../uploads', import.meta.url).pathname)
-            const filePath = join(uploadsDir, savedName)
-            if (!existsSync(filePath)) return reply.code(404).send({ message: 'File not found on server' })
-            const ext = extname(doc.fileName ?? savedName).toLowerCase()
-            const mimeMap: Record<string, string> = { '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png' }
-            const mime = mimeMap[ext] ?? 'application/octet-stream'
-            reply.header('Content-Type', mime)
-            reply.header('Content-Disposition', `inline; filename="${doc.fileName ?? savedName}"`)
-            return reply.send(createReadStream(filePath))
-        }
-
         if (doc.s3Key) {
             try {
                 const downloadUrl = await generateDownloadUrl(doc.s3Key)
@@ -272,22 +263,12 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data: { uploadUrl, s3Key, category } })
     })
 
-    // GET /api/v1/documents/:id/download-url — returns a URL the browser can open directly.
-    // For S3/MinIO objects we issue a presigned URL; for legacy local:// files we issue a
-    // short-lived JWT-protected backend URL (so window.open without auth headers still works).
+    // GET /api/v1/documents/:id/download-url
     fastify.get('/:id/download-url', { ...auth, schema: { tags: ['Documents'] } }, async (request: any, reply) => {
         const { id } = request.params as { id: string }
         const doc = await getDocument(request.user.tenantId, id)
         if (!doc) return reply.code(404).send({ message: 'Document not found' })
         if (!doc.s3Key) return reply.code(400).send({ message: 'No file stored for this document' })
-
-        if (doc.s3Key.startsWith('local://')) {
-            const token = (fastify as any).jwt.sign(
-                { docId: id, tenantId: request.user.tenantId, scope: 'doc-download' },
-                { expiresIn: '5m' },
-            )
-            return reply.send({ data: { downloadUrl: `/api/v1/documents/${id}/file?token=${encodeURIComponent(token)}` } })
-        }
 
         const downloadUrl = await generateDownloadUrl(doc.s3Key)
         return reply.send({ data: { downloadUrl } })

@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { SearchInput } from '@/components/shared'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { useInfiniteActivityLogs, type ActivityLog } from '@/hooks/useAudit'
+import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import type { FilterConfig } from '@/lib/filters'
 import {
     ClipboardList,
     Plus,
@@ -21,7 +22,6 @@ import {
     LogOut,
     Activity,
     User as UserIcon,
-    SlidersHorizontal,
     X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -54,6 +54,39 @@ const FALLBACK_META: ActionMeta = {
 }
 
 const ENTITY_TYPES = ['employee', 'leave', 'payroll', 'visa', 'document', 'recruitment', 'onboarding', 'compliance', 'user', 'tenant']
+
+const ACTION_OPTIONS = [
+    { value: 'create', label: 'Create' },
+    { value: 'update', label: 'Update' },
+    { value: 'delete', label: 'Delete' },
+    { value: 'approve', label: 'Approve' },
+    { value: 'reject', label: 'Reject' },
+    { value: 'submit', label: 'Submit' },
+    { value: 'view', label: 'View' },
+    { value: 'export', label: 'Export' },
+    { value: 'import', label: 'Import' },
+    { value: 'login', label: 'Login' },
+    { value: 'logout', label: 'Logout' },
+]
+
+const AUDIT_FILTERS: FilterConfig[] = [
+    { name: 'entityType', label: 'Entity', type: 'select', field: 'entityType', options: ENTITY_TYPES.map(et => ({ value: et, label: et[0].toUpperCase() + et.slice(1) })) },
+    { name: 'action', label: 'Action', type: 'select', field: 'action', options: ACTION_OPTIONS },
+    { name: 'actorName', label: 'Actor name', type: 'text', field: 'actorName' },
+    {
+        name: 'actorRole', label: 'Actor role', type: 'select', field: 'actorRole',
+        options: [
+            { value: 'super_admin', label: 'Super admin' },
+            { value: 'hr_manager', label: 'HR manager' },
+            { value: 'pro_officer', label: 'PRO officer' },
+            { value: 'manager', label: 'Manager' },
+            { value: 'employee', label: 'Employee' },
+        ],
+    },
+    { name: 'entityName', label: 'Entity name', type: 'text', field: 'entityName' },
+    { name: 'createdAt', label: 'Date range', type: 'date_range', field: 'createdAt' },
+    { name: 'ipAddress', label: 'IP address', type: 'text', field: 'ipAddress' },
+]
 
 function getInitials(name?: string | null): string {
     if (!name) return 'SY'
@@ -108,13 +141,22 @@ function actionVerb(action: string): string {
 
 export function AuditLogPage() {
     const { t } = useTranslation()
-    const [entityType, setEntityType] = useState('')
-    const [actionFilter, setActionFilter] = useState('')
-    const [search, setSearch] = useState('')
     const [dateRange, setDateRange] = useState<'today' | '7d' | '30d' | 'all'>('30d')
+    const auditSearch = useSearchFilters({
+        storageKey: 'hrhub.audit.searchHistory',
+        availableFilters: AUDIT_FILTERS,
+    })
+
+    const entityTypeFilter = (auditSearch.appliedFilters.entityType?.value as string | undefined) ?? ''
+    const actionFilter = (auditSearch.appliedFilters.action?.value as string | undefined) ?? ''
+    const actorNameFilter = (auditSearch.appliedFilters.actorName?.value as string | undefined) ?? ''
+    const actorRoleFilter = (auditSearch.appliedFilters.actorRole?.value as string | undefined) ?? ''
+    const entityNameFilter = (auditSearch.appliedFilters.entityName?.value as string | undefined) ?? ''
+    const ipFilter = (auditSearch.appliedFilters.ipAddress?.value as string | undefined) ?? ''
+    const createdAtRange = (auditSearch.appliedFilters.createdAt?.value as [string | null, string | null] | undefined) ?? null
 
     const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteActivityLogs({
-        entityType: entityType || undefined,
+        entityType: entityTypeFilter || undefined,
         pageSize: 30,
     })
 
@@ -150,7 +192,31 @@ export function AuditLogPage() {
         if (cutoff !== null) {
             result = result.filter(l => now - new Date(l.createdAt).getTime() <= cutoff)
         }
+        if (createdAtRange) {
+            const [from, to] = createdAtRange
+            if (from) {
+                const fromTs = new Date(from).getTime()
+                result = result.filter(l => new Date(l.createdAt).getTime() >= fromTs)
+            }
+            if (to) {
+                const toTs = new Date(to).getTime() + 24 * 3600 * 1000 - 1
+                result = result.filter(l => new Date(l.createdAt).getTime() <= toTs)
+            }
+        }
         if (actionFilter) result = result.filter(l => l.action === actionFilter)
+        if (actorRoleFilter) result = result.filter(l => l.actorRole === actorRoleFilter)
+        if (actorNameFilter) {
+            const q = actorNameFilter.toLowerCase()
+            result = result.filter(l => (l.actorName ?? '').toLowerCase().includes(q))
+        }
+        if (entityNameFilter) {
+            const q = entityNameFilter.toLowerCase()
+            result = result.filter(l => (l.entityName ?? '').toLowerCase().includes(q))
+        }
+        if (ipFilter) {
+            result = result.filter(l => (l.ipAddress ?? '').includes(ipFilter))
+        }
+        const search = auditSearch.searchInput.trim()
         if (search) {
             const q = search.toLowerCase()
             result = result.filter(l =>
@@ -161,7 +227,7 @@ export function AuditLogPage() {
             )
         }
         return result
-    }, [logs, search, actionFilter, dateRange])
+    }, [logs, auditSearch.searchInput, actionFilter, actorRoleFilter, actorNameFilter, entityNameFilter, ipFilter, createdAtRange, dateRange])
 
     const grouped = useMemo(() => {
         const map = new Map<string, ActivityLog[]>()
@@ -186,7 +252,12 @@ export function AuditLogPage() {
         return { total: filtered.length, counts, actorCount: actors.size }
     }, [filtered])
 
-    const hasFilters = !!entityType || !!search || !!actionFilter || dateRange !== '30d'
+    const hasFilters = auditSearch.appliedCount > 0 || !!auditSearch.searchInput || dateRange !== '30d'
+
+    function clearAll() {
+        auditSearch.clearAll()
+        setDateRange('30d')
+    }
 
     function exportCsv() {
         const headers = ['Timestamp', 'Actor', 'Role', 'Action', 'Entity Type', 'Entity Name', 'Entity Id', 'IP']
@@ -227,54 +298,29 @@ export function AuditLogPage() {
             </div>
 
             <div className="rounded-xl border bg-card shadow-sm p-3 mb-5">
-                <div className="flex flex-wrap gap-2 items-center">
-                    <SearchInput
-                        value={search}
-                        onChange={setSearch}
-                        placeholder="Search by actor, entity, or action..."
-                        size="md"
-                        containerClassName="flex-1 min-w-[220px]"
-                        className="bg-muted/40 border-transparent focus-visible:bg-background"
-                    />
-                    <div className="flex items-center gap-2">
-                        <SlidersHorizontal className="h-4 w-4 text-muted-foreground hidden md:block" />
-                        <Select value={entityType || '__all__'} onValueChange={(v) => setEntityType(v === '__all__' ? '' : v)}>
-                            <SelectTrigger className="h-9 w-44">
-                                <SelectValue placeholder="All entities" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__all__">All entities</SelectItem>
-                                {ENTITY_TYPES.map(et => (
-                                    <SelectItem key={et} value={et} className="capitalize">{et}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Select value={actionFilter || '__all__'} onValueChange={(v) => setActionFilter(v === '__all__' ? '' : v)}>
-                            <SelectTrigger className="h-9 w-40">
-                                <SelectValue placeholder="All actions" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__all__">All actions</SelectItem>
-                                {Object.keys(ACTION_META).map(a => (
-                                    <SelectItem key={a} value={a} className="capitalize">{a}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Button variant="outline" size="sm" className="h-9 gap-1" onClick={exportCsv}>
-                            <Download className="h-3.5 w-3.5" /> Export
-                        </Button>
-                        {hasFilters && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-9 px-2 text-xs gap-1"
-                                onClick={() => { setSearch(''); setEntityType(''); setActionFilter(''); setDateRange('30d') }}
-                            >
-                                <X className="h-3.5 w-3.5" /> Clear
+                <AdvancedSearchBar
+                    search={auditSearch}
+                    filters={AUDIT_FILTERS}
+                    placeholder="Search by actor, entity, or action…"
+                    resultCount={filtered.length}
+                    rightSlot={
+                        <>
+                            <Button variant="outline" size="sm" className="h-9 gap-1" onClick={exportCsv}>
+                                <Download className="h-3.5 w-3.5" /> Export
                             </Button>
-                        )}
-                    </div>
-                </div>
+                            {hasFilters && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-9 px-2 text-xs gap-1"
+                                    onClick={clearAll}
+                                >
+                                    <X className="h-3.5 w-3.5" /> Clear
+                                </Button>
+                            )}
+                        </>
+                    }
+                />
                 <div className="flex items-center gap-1 mt-3 pt-3 border-t">
                     <span className="text-[11px] text-muted-foreground mr-2">Range:</span>
                     {(['today', '7d', '30d', 'all'] as const).map(r => (
@@ -314,7 +360,7 @@ export function AuditLogPage() {
                             </p>
                         </div>
                         {hasFilters && (
-                            <Button variant="outline" size="sm" onClick={() => { setSearch(''); setEntityType(''); setActionFilter(''); setDateRange('30d') }}>
+                            <Button variant="outline" size="sm" onClick={clearAll}>
                                 Clear filters
                             </Button>
                         )}

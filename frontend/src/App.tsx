@@ -33,6 +33,7 @@ const CalendarPage = lazy(() => import('@/pages/calendar/CalendarPage').then(m =
 // Misc pages bundle
 const LeavePage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.LeavePage })))
 const OnboardingPage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.OnboardingPage })))
+const OnboardingDetailPage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.OnboardingDetailPage })))
 const CompliancePage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.CompliancePage })))
 const ReportsPage = lazy(() => import('@/pages/misc/Pages').then(m => ({ default: m.ReportsPage })))
 
@@ -111,6 +112,7 @@ export default function App() {
             <Route path="recruitment/candidates" element={<Navigate to="/recruitment" replace />} />
             <Route path="recruitment/candidates/:id" element={<CandidateProfilePage />} />
             <Route path="onboarding" element={<OnboardingPage />} />
+            <Route path="onboarding/:employeeId" element={<OnboardingDetailPage />} />
             <Route path="visa" element={<VisaPage />} />
             <Route path="visa/:id" element={<VisaDetailPage />} />
             <Route path="documents" element={<DocumentsPage />} />

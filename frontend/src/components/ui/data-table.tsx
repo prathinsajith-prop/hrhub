@@ -17,6 +17,17 @@ import { cn } from '@/lib/utils'
 import { Button } from './button'
 import { Checkbox } from './checkbox'
 import { SearchInput } from '@/components/shared/SearchInput'
+import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
+import type { FilterConfig, QuickFilter } from '@/lib/filters'
+import type { UseSearchFiltersReturn } from '@/hooks/useSearchFilters'
+
+export interface DataTableAdvancedFilter {
+  search: UseSearchFiltersReturn
+  filters: FilterConfig[]
+  quickFilters?: QuickFilter[]
+  placeholder?: string
+  onApply?: () => void
+}
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -34,6 +45,8 @@ interface DataTableProps<TData, TValue> {
   bulkActions?: (selected: TData[]) => React.ReactNode
   /** Stable identifier for each row (defaults to tanstack-generated id). */
   getRowId?: (row: TData, index: number) => string
+  /** When provided, replaces the basic SearchInput with the AdvancedSearchBar (search on left, Filters button on right). */
+  advancedFilter?: DataTableAdvancedFilter
 }
 
 export function DataTable<TData, TValue>({
@@ -49,11 +62,18 @@ export function DataTable<TData, TValue>({
   enableSelection = false,
   bulkActions,
   getRowId,
+  advancedFilter,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-  const [globalFilter, setGlobalFilter] = React.useState('')
+  const [internalGlobalFilter, setInternalGlobalFilter] = React.useState('')
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
+
+  // When using advanced filter, the search input value lives in the search hook.
+  const globalFilter = advancedFilter ? advancedFilter.search.searchInput : internalGlobalFilter
+  const setGlobalFilter = advancedFilter
+    ? (v: string) => advancedFilter.search.setSearchInput(typeof v === 'string' ? v : '')
+    : setInternalGlobalFilter
 
   const selectionColumn: ColumnDef<TData, TValue> = React.useMemo(
     () => ({
@@ -114,19 +134,30 @@ export function DataTable<TData, TValue>({
   return (
     <div className="space-y-3">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-1">
-          {searchKey !== undefined && (
-            <SearchInput
-              value={globalFilter}
-              onChange={setGlobalFilter}
-              placeholder={searchPlaceholder}
-              containerClassName="max-w-xs"
-            />
-          )}
+      {advancedFilter ? (
+        <AdvancedSearchBar
+          search={advancedFilter.search}
+          filters={advancedFilter.filters}
+          quickFilters={advancedFilter.quickFilters}
+          placeholder={advancedFilter.placeholder ?? searchPlaceholder}
+          onApply={advancedFilter.onApply}
+          rightSlot={toolbar}
+        />
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-1">
+            {searchKey !== undefined && (
+              <SearchInput
+                value={globalFilter}
+                onChange={setGlobalFilter}
+                placeholder={searchPlaceholder}
+                containerClassName="max-w-xs"
+              />
+            )}
+          </div>
+          {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}
         </div>
-        {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}
-      </div>
+      )}
 
       {/* Bulk action bar */}
       {enableSelection && selectedCount > 0 && (

@@ -33,7 +33,34 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { useEmployees, useArchiveEmployee } from '@/hooks/useEmployees'
 import { AddEmployeeDialog, EditEmployeeDialog } from '@/components/shared/action-dialogs'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import type { FilterConfig } from '@/lib/filters'
 import type { Employee } from '@/types'
+
+const EMPLOYEE_FILTERS: FilterConfig[] = [
+  {
+    name: 'status',
+    label: 'Status',
+    type: 'select',
+    field: 'status',
+    icon: Star,
+    options: [
+      { value: 'active', label: 'Active' },
+      { value: 'probation', label: 'Probation' },
+      { value: 'onboarding', label: 'Onboarding' },
+      { value: 'suspended', label: 'Suspended' },
+      { value: 'terminated', label: 'Terminated' },
+      { value: 'visa_expired', label: 'Visa expired' },
+    ],
+  },
+  { name: 'department', label: 'Department', type: 'text', field: 'department', icon: Users },
+  { name: 'designation', label: 'Designation', type: 'text', field: 'designation' },
+  { name: 'nationality', label: 'Nationality', type: 'text', field: 'nationality' },
+  { name: 'salary', label: 'Salary (AED)', type: 'number_range', field: 'totalSalary', min: 0, step: 500, prefix: 'AED' },
+  { name: 'joinDate', label: 'Join date', type: 'date_range', field: 'joinDate' },
+  { name: 'visaExpiry', label: 'Visa expiry', type: 'date_range', field: 'visaExpiry', icon: Clock },
+  { name: 'emirati', label: 'Emirati only', type: 'toggle', field: 'emiratisationCategory' },
+]
 
 const statusVariant: Record<
   string,
@@ -104,6 +131,40 @@ export function EmployeesPage() {
   const [editTarget, setEditTarget] = useState<Employee | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const archiveEmployee = useArchiveEmployee()
+  const search = useSearchFilters({
+    storageKey: 'hrhub.employees.searchHistory',
+    availableFilters: EMPLOYEE_FILTERS,
+  })
+
+  const filtered = useMemo(() => {
+    const f = search.appliedFilters
+    const q = search.searchInput.trim().toLowerCase()
+    return employees.filter((e: any) => {
+      if (q && !`${e.fullName} ${e.employeeNo} ${e.email ?? ''}`.toLowerCase().includes(q)) return false
+      if (f.status?.value && e.status !== f.status.value) return false
+      if (f.department?.value && !String(e.department ?? '').toLowerCase().includes(String(f.department.value).toLowerCase())) return false
+      if (f.designation?.value && !String(e.designation ?? '').toLowerCase().includes(String(f.designation.value).toLowerCase())) return false
+      if (f.nationality?.value && !String(e.nationality ?? '').toLowerCase().includes(String(f.nationality.value).toLowerCase())) return false
+      if (f.salary?.value) {
+        const [min, max] = f.salary.value as [number | null, number | null]
+        const v = Number(e.totalSalary ?? 0)
+        if (min != null && v < min) return false
+        if (max != null && v > max) return false
+      }
+      if (f.joinDate?.value) {
+        const [from, to] = f.joinDate.value as [string | null, string | null]
+        if (from && e.joinDate && new Date(e.joinDate) < new Date(from)) return false
+        if (to && e.joinDate && new Date(e.joinDate) > new Date(to)) return false
+      }
+      if (f.visaExpiry?.value) {
+        const [from, to] = f.visaExpiry.value as [string | null, string | null]
+        if (from && e.visaExpiry && new Date(e.visaExpiry) < new Date(from)) return false
+        if (to && e.visaExpiry && new Date(e.visaExpiry) > new Date(to)) return false
+      }
+      if (f.emirati?.value === true && e.emiratisationCategory !== 'emirati') return false
+      return true
+    })
+  }, [employees, search.appliedFilters, search.searchInput])
 
   const active = employees.filter((e: any) => e.status === 'active').length
   const onboarding = employees.filter((e: any) => e.status === 'onboarding').length
@@ -267,10 +328,13 @@ export function EmployeesPage() {
         <CardContent>
           <DataTable
             columns={columns}
-            data={employees}
+            data={filtered}
             isLoading={isLoading}
-            searchKey="fullName"
-            searchPlaceholder="Search by name, ID..."
+            advancedFilter={{
+              search,
+              filters: EMPLOYEE_FILTERS,
+              placeholder: 'Search by name, ID, email…',
+            }}
             pageSize={8}
             emptyMessage="No employees found."
             enableSelection

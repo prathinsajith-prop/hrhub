@@ -27,6 +27,26 @@ import {
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { useAttendance, useUpsertAttendance, type AttendanceRecord } from '@/hooks/useAttendance'
 import { useEmployees } from '@/hooks/useEmployees'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+
+const ATTENDANCE_FILTERS: FilterConfig[] = [
+    { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
+    {
+        name: 'status', label: 'Status', type: 'select', field: 'status',
+        options: [
+            { value: 'present', label: 'Present' },
+            { value: 'absent', label: 'Absent' },
+            { value: 'late', label: 'Late' },
+            { value: 'wfh', label: 'WFH' },
+            { value: 'half_day', label: 'Half day' },
+            { value: 'on_leave', label: 'On leave' },
+        ],
+    },
+    { name: 'date', label: 'Date', type: 'date_range', field: 'date' },
+    { name: 'hoursWorked', label: 'Hours worked', type: 'number_range', field: 'hoursWorked', min: 0, max: 24 },
+    { name: 'overtimeHours', label: 'Has overtime', type: 'toggle', field: 'overtimeHours' },
+]
 
 // ─────────────────────────── Domain config ───────────────────────────────
 
@@ -131,6 +151,19 @@ export function AttendancePage() {
     const filteredList = useMemo(
         () => (filterStatus === 'all' ? list : list.filter((r) => r.status === filterStatus)),
         [list, filterStatus],
+    )
+
+    const search = useSearchFilters({
+        storageKey: 'hrhub.attendance.searchHistory',
+        availableFilters: ATTENDANCE_FILTERS,
+    })
+    const filteredAttendance = useMemo(
+        () => applyClientFilters(filteredList as any[], {
+            searchInput: search.searchInput,
+            appliedFilters: search.appliedFilters,
+            searchFields: ['employeeName', 'employeeNo', 'employeeDepartment', 'status'],
+        }),
+        [filteredList, search.appliedFilters, search.searchInput],
     )
 
     const summary = useMemo(() => {
@@ -627,7 +660,7 @@ export function AttendancePage() {
                 <CardContent>
                     {isLoading ? (
                         <TableSkeleton columns={8} rows={8} />
-                    ) : filteredList.length === 0 ? (
+                    ) : filteredAttendance.length === 0 ? (
                         <EmptyState
                             icon={CalendarDays}
                             title={t('attendance.noRecords')}
@@ -636,9 +669,12 @@ export function AttendancePage() {
                     ) : (
                         <DataTable
                             columns={columns}
-                            data={filteredList}
-                            searchKey="employee"
-                            searchPlaceholder="Search by employee, status…"
+                            data={filteredAttendance}
+                            advancedFilter={{
+                                search,
+                                filters: ATTENDANCE_FILTERS,
+                                placeholder: 'Search by employee, status…',
+                            }}
                             pageSize={10}
                             emptyMessage={t('attendance.noRecords')}
                         />

@@ -20,7 +20,10 @@ export function useCreateVisa() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (data: unknown) => api.post('/visa', data),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['visa'] }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['visa'] })
+            qc.invalidateQueries({ queryKey: ['dashboard'] })
+        },
     })
 }
 
@@ -37,7 +40,10 @@ export function useCancelVisa() {
     return useMutation({
         mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
             api.post(`/visa/${id}/cancel`, { reason }),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['visa'] }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['visa'] })
+            qc.invalidateQueries({ queryKey: ['dashboard'] })
+        },
     })
 }
 
