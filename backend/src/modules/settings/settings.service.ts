@@ -70,6 +70,19 @@ export async function listTenantUsers(tenantId: string) {
     return rows
 }
 
+export async function updateUserStatus(tenantId: string, userId: string, data: { isActive?: boolean; role?: string }) {
+    const [updated] = await db
+        .update(users)
+        .set({
+            ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+            ...(data.role ? { role: data.role as 'hr_manager' | 'pro_officer' | 'dept_head' | 'employee' | 'super_admin' } : {}),
+            updatedAt: new Date(),
+        })
+        .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
+        .returning({ id: users.id, name: users.name, email: users.email, role: users.role, isActive: users.isActive })
+    return updated ?? null
+}
+
 export async function inviteUser(tenantId: string, data: { name: string; email: string; role: string }) {
     const env = loadEnv()
     // Create user with random temp password and isActive=false

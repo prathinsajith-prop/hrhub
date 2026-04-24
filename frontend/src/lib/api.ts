@@ -57,7 +57,10 @@ async function request<T>(
         headers['Authorization'] = `Bearer ${accessToken}`
     }
 
-    const res = await fetch(`${BASE}${path}`, { ...init, headers })
+    // Bypass the browser HTTP cache so server-side ETag/304 responses
+    // never leave the JS layer with an empty body. React Query handles
+    // caching for us at the application level.
+    const res = await fetch(`${BASE}${path}`, { cache: 'no-store', ...init, headers })
 
     if (res.status === 401 && retry) {
         // Try to refresh the token once
@@ -73,6 +76,9 @@ async function request<T>(
     }
 
     if (res.status === 204) return undefined as T
+    // 304 with no-store means Chrome still sent If-None-Match but we have no cached body —
+    // throw so React Query retains the previous query data instead of replacing it with undefined.
+    if (res.status === 304) throw new ApiError(304, 'Not Modified')
     return res.json() as Promise<T>
 }
 
@@ -93,7 +99,7 @@ export const api = {
         }
         const headers: Record<string, string> = {}
         if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
-        const res = await fetch(`${BASE}${path}`, { method: 'POST', body: formData, headers })
+        const res = await fetch(`${BASE}${path}`, { method: 'POST', body: formData, headers, cache: 'no-store' })
         if (res.status === 401 && retry) {
             const ok = await refreshTokens()
             if (ok) return api.upload<T>(path, formData, false)

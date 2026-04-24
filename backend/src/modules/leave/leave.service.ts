@@ -4,6 +4,7 @@ import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
 import { leaveRequests } from '../../db/schema/index.js'
 import { employees } from '../../db/schema/employees.js'
+import { sendEmail } from '../../plugins/email.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewLeaveRequest = InferInsertModel<typeof leaveRequests>
@@ -38,21 +39,73 @@ export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRe
     return row
 }
 
-export async function approveLeave(tenantId: string, id: string, approvedBy: string, approved: boolean) {
+export async function approveLeave(tenantId: string, id: string, approvedBy: string, approverEmail: string, approved: boolean) {
+    // Fetch the pending leave request first
+    const [req] = await db.select({ employeeId: leaveRequests.employeeId, leaveType: leaveRequests.leaveType, startDate: leaveRequests.startDate })
+        .from(leaveRequests)
+        .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId), eq(leaveRequests.status, 'pending')))
+        .limit(1)
+    if (!req) return null
+
+    // Block self-approval: check if the approver's employee record matches the requester
+    const [approverEmployee] = await db.select({ id: employees.id, email: employees.email })
+        .from(employees)
+        .where(and(eq(employees.tenantId, tenantId), eq(employees.email, approverEmail)))
+        .limit(1)
+    if (approverEmployee && approverEmployee.id === req.employeeId) {
+        throw Object.assign(new Error('You cannot approve or reject your own leave request'), { statusCode: 403 })
+    }
+
     const status = approved ? ('approved' as const) : ('rejected' as const)
     const [row] = await db.update(leaveRequests)
-        .set(withTimestamp({
-            status,
-            approvedBy,
-            approvedAt: new Date(),
-        }))
+        .set(withTimestamp({ status, approvedBy, approvedAt: new Date() }))
         .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId), eq(leaveRequests.status, 'pending')))
         .returning()
-    if (row) await cacheDel(`dashboard:kpis:${tenantId}`)
-    return row ?? null
+    if (!row) return null
+
+    await cacheDel(`dashboard:kpis:${tenantId}`)
+
+    // Send email notification to employee
+    try {
+        const [emp] = await db.select({ email: employees.email, firstName: employees.firstName })
+            .from(employees)
+            .where(eq(employees.id, req.employeeId))
+            .limit(1)
+        if (emp?.email) {
+            await sendEmail({
+                to: emp.email,
+                subject: `Leave Request ${approved ? 'Approved' : 'Rejected'}`,
+                html: `<p>Hi ${emp.firstName},</p>
+                    <p>Your <strong>${req.leaveType}</strong> leave request starting <strong>${req.startDate}</strong> has been <strong>${approved ? 'approved' : 'rejected'}</strong>.</p>
+                    <p>Please log in to HRHub for more details.</p>`,
+                text: `Your ${req.leaveType} leave request starting ${req.startDate} has been ${approved ? 'approved' : 'rejected'}.`,
+            })
+        }
+    } catch { /* email errors are non-fatal */ }
+
+    return row
 }
 
-export async function cancelLeave(tenantId: string, id: string) {
+export async function cancelLeave(tenantId: string, id: string, requesterEmail: string, requesterRole: string) {
+    // Fetch the leave request to check ownership
+    const [req] = await db.select({ employeeId: leaveRequests.employeeId, status: leaveRequests.status })
+        .from(leaveRequests)
+        .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId), isNull(leaveRequests.deletedAt)))
+        .limit(1)
+    if (!req) return null
+
+    // HR managers and super_admins can cancel any leave request; others can only cancel their own
+    const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(requesterRole)
+    if (!isAdmin) {
+        const [requesterEmployee] = await db.select({ id: employees.id })
+            .from(employees)
+            .where(and(eq(employees.tenantId, tenantId), eq(employees.email, requesterEmail)))
+            .limit(1)
+        if (!requesterEmployee || requesterEmployee.id !== req.employeeId) {
+            throw Object.assign(new Error('You can only cancel your own leave requests'), { statusCode: 403 })
+        }
+    }
+
     const [row] = await db.update(leaveRequests)
         .set(withTimestamp({ status: 'cancelled' as const }))
         .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId)))

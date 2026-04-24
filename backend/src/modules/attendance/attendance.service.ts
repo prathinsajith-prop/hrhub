@@ -4,15 +4,20 @@ import { eq, and, gte, lte, sql } from 'drizzle-orm'
 
 export async function checkIn(tenantId: string, employeeId: string) {
     const today = new Date().toISOString().split('T')[0]
-    // Upsert for today
-    const existing = await db.select().from(attendanceRecords)
-        .where(and(eq(attendanceRecords.employeeId, employeeId), eq(attendanceRecords.date, today)))
+    const [existing] = await db.select().from(attendanceRecords)
+        .where(and(eq(attendanceRecords.tenantId, tenantId), eq(attendanceRecords.employeeId, employeeId), eq(attendanceRecords.date, today)))
+        .limit(1)
 
-    if (existing.length > 0) {
-        // Already checked in - update check_in time
+    // Guard against duplicate check-in
+    if (existing?.checkIn) {
+        throw Object.assign(new Error('Already checked in for today'), { statusCode: 409 })
+    }
+
+    if (existing) {
+        // Record exists (e.g. from upsert) but has no checkIn yet — update it
         const [rec] = await db.update(attendanceRecords)
             .set({ checkIn: new Date(), updatedAt: new Date() })
-            .where(eq(attendanceRecords.id, existing[0].id))
+            .where(eq(attendanceRecords.id, existing.id))
             .returning()
         return rec
     }
@@ -32,7 +37,9 @@ export async function checkOut(tenantId: string, employeeId: string) {
     const [existing] = await db.select().from(attendanceRecords)
         .where(and(eq(attendanceRecords.employeeId, employeeId), eq(attendanceRecords.date, today)))
 
-    if (!existing || !existing.checkIn) throw new Error('No check-in found for today')
+    if (!existing || !existing.checkIn) {
+        throw Object.assign(new Error('No check-in found for today'), { statusCode: 422 })
+    }
 
     const checkOutTime = new Date()
     const hoursWorked = (checkOutTime.getTime() - new Date(existing.checkIn).getTime()) / (1000 * 3600)
@@ -61,6 +68,7 @@ export async function getAttendance(tenantId: string, params: {
     if (params.employeeId) conditions.push(eq(attendanceRecords.employeeId, params.employeeId))
     if (params.startDate) conditions.push(gte(attendanceRecords.date, params.startDate))
     if (params.endDate) conditions.push(lte(attendanceRecords.date, params.endDate))
+    if (params.status) conditions.push(eq(attendanceRecords.status, params.status as never))
 
     return db.select({
         id: attendanceRecords.id,

@@ -14,7 +14,7 @@ export default async function (fastify: any): Promise<void> {
     fastify.get('/', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {
         const { employeeId, category, status, limit = '20', offset = '0', after } = request.query as Record<string, string>
         const result = await listDocuments(request.user.tenantId, { employeeId, category, status, limit: Number(limit), offset: Number(offset), after })
-        return sendWithETag(reply, request, result)
+        return reply.send(result)
     })
 
     fastify.get('/expiring', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {

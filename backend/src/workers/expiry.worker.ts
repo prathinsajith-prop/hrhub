@@ -1,7 +1,7 @@
 import { Queue, Worker } from 'bullmq'
 import { db } from '../db/index.js'
 import { employees, notifications, documents, users } from '../db/schema/index.js'
-import { and, eq, lt, lte, gte, ne, or } from 'drizzle-orm'
+import { and, eq, lt, lte, gte, ne, or, inArray } from 'drizzle-orm'
 import { loadEnv } from '../config/env.js'
 import { sendEmail, visaExpiryAlertEmail } from '../plugins/email.js'
 
@@ -32,18 +32,57 @@ function daysFromNow(days: number): Date {
     return d
 }
 
-async function createNotification(tenantId: string, _employeeId: string | null, type: string, title: string, message: string, _severity: string = 'warning') {
+/**
+ * Create a notification for every HR manager and PRO officer in the tenant.
+ * Uses a daily deduplication check so re-running the worker doesn't create duplicates.
+ */
+async function notifyHrManagers(tenantId: string, entityId: string, notifType: string, title: string, message: string) {
     try {
-        await db.insert(notifications).values({
-            tenantId,
-            type: type as 'info' | 'warning' | 'error' | 'success',
-            title,
-            message,
-            isRead: false,
-        })
-    } catch {
-        // ignore duplicate notifications
-    }
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+
+        // Deduplication: skip if we already sent this notification today
+        const [existing] = await db.select({ id: notifications.id }).from(notifications)
+            .where(and(
+                eq(notifications.tenantId, tenantId),
+                eq(notifications.title, title),
+                eq(notifications.message, message),
+                gte(notifications.createdAt, todayStart),
+            ))
+            .limit(1)
+        if (existing) return
+
+        // Find all HR managers and PRO officers for this tenant
+        const hrUsers = await db.select({ id: users.id }).from(users)
+            .where(and(
+                eq(users.tenantId, tenantId),
+                eq(users.isActive, true),
+                inArray(users.role, ['hr_manager', 'pro_officer', 'super_admin'] as never[]),
+            ))
+            .limit(10)
+
+        if (hrUsers.length === 0) {
+            // Fall back to a tenant-wide broadcast (userId = null)
+            await db.insert(notifications).values({
+                tenantId,
+                type: notifType as 'info' | 'warning' | 'error' | 'success',
+                title,
+                message,
+                isRead: false,
+            })
+            return
+        }
+
+        for (const hrUser of hrUsers) {
+            await db.insert(notifications).values({
+                tenantId,
+                userId: hrUser.id,
+                type: notifType as 'info' | 'warning' | 'error' | 'success',
+                title,
+                message,
+                isRead: false,
+            })
+        }
+    } catch { /* non-fatal */ }
 }
 
 // ─── Visa Expiry Worker ───────────────────────────────────────────────────────
@@ -76,23 +115,21 @@ async function runVisaExpiryCheck() {
             const name = `${emp.firstName} ${emp.lastName}`
             const visaType = emp.visaType ?? 'Employment Visa'
             const expiryDate = emp.visaExpiry ?? ''
-            const severity = days <= 7 ? 'critical' : days <= 30 ? 'warning' : 'info'
+            const notifType = days <= 7 ? 'error' : days <= 30 ? 'warning' : 'info'
+            const env = loadEnv()
+            const frontendUrl = (env as any).APP_URL ?? ''
 
-            await createNotification(
+            await notifyHrManagers(
                 emp.tenantId,
                 emp.id,
-                'warning',
-                `Visa Expiring in ${days} days`,
-                `${name}'s ${visaType} visa expires on ${expiryDate}`,
-                severity,
+                notifType,
+                `Visa Expiring in ${days} Days`,
+                `${name}'s ${visaType} expires on ${expiryDate}`,
             )
 
-            // Send email to HR managers and PRO officers only (not all active employees)
+            // Send email to HR managers and PRO officers
             try {
-                const hrManagers = await db.select({
-                    name: users.name,
-                    email: users.email,
-                }).from(users)
+                const hrManagers = await db.select({ name: users.name, email: users.email }).from(users)
                     .where(and(
                         eq(users.tenantId, emp.tenantId),
                         eq(users.isActive, true),
@@ -108,7 +145,7 @@ async function runVisaExpiryCheck() {
                             visaType,
                             expiryDate,
                             daysRemaining: days,
-                            actionUrl: '',
+                            actionUrl: `${frontendUrl}/visas?employee=${emp.id}`,
                         })
                         await sendEmail({ ...emailOpts, to: manager.email })
                     }
@@ -143,11 +180,11 @@ async function runDocumentExpiryCheck() {
             ))
 
         for (const doc of expiringDocs) {
-            await createNotification(
+            await notifyHrManagers(
                 doc.tenantId,
-                doc.employeeId,
+                doc.id,
                 days <= 30 ? 'warning' : 'info',
-                `Document Expiring in ${days} days`,
+                `Document Expiring in ${days} Days`,
                 `${doc.docType}: ${doc.fileName} expires on ${doc.expiryDate}`,
             )
 
@@ -192,11 +229,11 @@ async function runContractExpiryCheck() {
             ))
 
         for (const emp of expiring) {
-            await createNotification(
+            await notifyHrManagers(
                 emp.tenantId,
                 emp.id,
                 days <= 30 ? 'warning' : 'info',
-                `Contract Expiring in ${days} days`,
+                `Contract Expiring in ${days} Days`,
                 `${emp.firstName} ${emp.lastName}'s contract (${emp.designation ?? 'Employee'}) expires on ${emp.contractEndDate}`,
             )
         }
@@ -229,11 +266,11 @@ async function runPassportExpiryCheck() {
             ))
 
         for (const emp of expiring) {
-            await createNotification(
+            await notifyHrManagers(
                 emp.tenantId,
                 emp.id,
                 'warning',
-                `Passport Expiring in ${days} days`,
+                `Passport Expiring in ${days} Days`,
                 `${emp.firstName} ${emp.lastName}'s passport expires on ${emp.passportExpiry}`,
             )
         }

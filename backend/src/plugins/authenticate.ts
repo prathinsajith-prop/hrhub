@@ -1,19 +1,39 @@
 import fp from 'fastify-plugin'
 import type { JwtPayload, RequestUser } from '../types/index.js'
+import { cacheGet, cacheSet } from '../lib/redis.js'
+import { db } from '../db/index.js'
+import { users } from '../db/schema/index.js'
+import { and, eq } from 'drizzle-orm'
 
 async function authenticatePlugin(fastify: any): Promise<void> {
     /**
      * Decorate request with `authenticate` preHandler.
-     * Trusts the verified JWT payload — no extra DB round-trip per request.
-     * isActive + name are embedded in the token at login time.
+     * Verifies JWT signature then checks isActive via Redis cache (TTL 5 min).
+     * This ensures deactivated users are blocked within 5 minutes without a DB
+     * hit on every request.
      * Usage: { preHandler: fastify.authenticate }
      */
     fastify.decorate('authenticate', async (request: any, reply: any) => {
         try {
             const payload = await (request.jwtVerify as any)() as JwtPayload
 
-            // JWT signature verification is sufficient. We embed user info at login time
-            // so there is no need to re-query the DB on every request.
+            // Check isActive — use Redis cache to avoid a DB hit per request.
+            // Cache key: user:active:<userId>  TTL: 5 minutes.
+            const cacheKey = `user:active:${payload.sub}`
+            let isActive = await cacheGet<boolean>(cacheKey)
+            if (isActive === null) {
+                const [user] = await db
+                    .select({ isActive: users.isActive })
+                    .from(users)
+                    .where(and(eq(users.id, payload.sub), eq(users.tenantId, payload.tenantId)))
+                    .limit(1)
+                isActive = user?.isActive ?? false
+                await cacheSet(cacheKey, isActive, 300) // cache for 5 minutes
+            }
+            if (!isActive) {
+                return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Account is deactivated' })
+            }
+
             request.user = {
                 id: payload.sub,
                 tenantId: payload.tenantId,

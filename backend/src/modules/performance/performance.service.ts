@@ -1,14 +1,18 @@
 import { db } from '../../db/index.js'
 import { performanceReviews } from '../../db/schema/index.js'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, desc } from 'drizzle-orm'
 
-export async function getReviews(tenantId: string, employeeId?: string) {
-    const query = db.select().from(performanceReviews).where(
-        employeeId
-            ? and(eq(performanceReviews.tenantId, tenantId), eq(performanceReviews.employeeId, employeeId))
-            : eq(performanceReviews.tenantId, tenantId)
-    )
-    return query
+export async function getReviews(tenantId: string, params: { employeeId?: string; limit?: number; offset?: number }) {
+    const { employeeId, limit = 20, offset = 0 } = params
+    const conditions = [eq(performanceReviews.tenantId, tenantId)]
+    if (employeeId) conditions.push(eq(performanceReviews.employeeId, employeeId))
+
+    const rows = await db.select().from(performanceReviews)
+        .where(and(...conditions))
+        .orderBy(desc(performanceReviews.createdAt))
+        .limit(limit)
+        .offset(offset)
+    return rows
 }
 
 export async function createReview(tenantId: string, reviewerId: string, data: {

@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js'
-import { interviews } from '../../db/schema/index.js'
-import { eq, and } from 'drizzle-orm'
+import { interviews, jobApplications } from '../../db/schema/index.js'
+import { eq, and, getTableColumns } from 'drizzle-orm'
 
 export async function scheduleInterview(tenantId: string, data: {
     applicationId: string
@@ -26,8 +26,15 @@ export async function scheduleInterview(tenantId: string, data: {
     return interview
 }
 
-export async function getInterviewsForApplication(applicationId: string) {
-    return db.select().from(interviews).where(eq(interviews.applicationId, applicationId))
+export async function getInterviewsForApplication(tenantId: string, applicationId: string) {
+    // Scope by tenantId via a join to prevent IDOR across tenants
+    return db.select(getTableColumns(interviews))
+        .from(interviews)
+        .innerJoin(jobApplications, and(
+            eq(jobApplications.id, interviews.applicationId),
+            eq(jobApplications.tenantId, tenantId),
+        ))
+        .where(eq(interviews.applicationId, applicationId))
 }
 
 export async function getInterviewsByTenant(tenantId: string) {

@@ -168,6 +168,10 @@ export async function listChecklists(tenantId: string, params: { limit: number; 
             department: employees.department,
             avatarUrl: employees.avatarUrl,
             employeeNo: employees.employeeNo,
+            email: employees.email,
+            phone: employees.phone,
+            joinDate: employees.joinDate,
+            employeeStatus: employees.status,
         })
         .from(onboardingChecklists)
         .leftJoin(employees, eq(onboardingChecklists.employeeId, employees.id))
@@ -202,10 +206,10 @@ export async function listChecklists(tenantId: string, params: { limit: number; 
             designation: r.designation,
             department: r.department,
             avatarUrl: r.avatarUrl,
-            email: null,
-            phone: null,
-            joinDate: null,
-            employeeStatus: null,
+            email: r.email,
+            phone: r.phone,
+            joinDate: r.joinDate,
+            employeeStatus: r.employeeStatus,
             progress: r.progress,
             startDate: r.startDate,
             dueDate: r.dueDate,

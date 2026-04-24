@@ -8,6 +8,7 @@ import { loadEnv } from '../../config/env.js'
 import { recordLoginEvent } from '../audit/audit.service.js'
 import { verifyTotpCode, verifyAndConsumeBackupCode } from './twofa.service.js'
 import { withTimestamp } from '../../lib/db-helpers.js'
+import { seedDefaultTemplates } from '../documents/templates.service.js'
 import type { FastifyInstance } from 'fastify'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -227,13 +228,16 @@ export async function registerTenant(input: { name: string; email: string; passw
             subscriptionPlan: 'starter',
         }).returning()
 
-        await tx.insert(users).values({
+        const [adminUser] = await tx.insert(users).values({
             tenantId: tenant.id,
             name: input.name,
             email: input.email.toLowerCase(),
             passwordHash,
             role: 'super_admin',
-        })
+        }).returning({ id: users.id })
+
+        // Seed default document templates for the new tenant (non-fatal if it fails)
+        seedDefaultTemplates(tenant.id, adminUser.id).catch(() => { })
 
         return { ok: true as const }
     })

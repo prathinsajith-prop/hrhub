@@ -191,5 +191,11 @@ export async function addDocumentVersion(tenantId: string, documentId: string, u
         uploadedBy,
         notes: data.notes,
     } as any).returning()
+
+    // Sync main document's s3Key and fileName to point at the latest version
+    await db.update(documents)
+        .set({ s3Key: data.s3Key, fileName: data.fileName, updatedAt: new Date() } as any)
+        .where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId)))
+
     return row
 }

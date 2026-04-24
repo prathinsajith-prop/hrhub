@@ -7,7 +7,7 @@ import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSche
 import { recordActivity } from '../audit/audit.service.js'
 import { sendWithETag } from '../../lib/etag.js'
 import { db } from '../../db/index.js'
-import { entities } from '../../db/schema/index.js'
+import { entities, employees } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
 import { createWriteStream, existsSync, createReadStream } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
@@ -31,7 +31,7 @@ export default async function (fastify: any): Promise<void> {
             after: query.after,
         })
 
-        return sendWithETag(reply, request, result)
+        return reply.send(result)
     })
 
     // GET /api/v1/employees/org-chart
@@ -175,24 +175,35 @@ export default async function (fastify: any): Promise<void> {
         const results: { row: number; error: string }[] = []
         let created = 0
 
-        // Wrap all inserts in a transaction — if any fail, everything rolls back (BUG-010)
-        try {
-            await db.transaction(async (tx) => {
-                void tx
-                for (let i = 0; i < rows.length; i++) {
-                    try {
-                        const row = rows[i]
-                        const employeeNo = row.employeeNo || await generateNextEmployeeNo(request.user.tenantId)
-                        await createEmployee(request.user.tenantId, { ...row, employeeNo } as never)
-                        created++
-                    } catch (e: any) {
-                        results.push({ row: i + 1, error: e.message ?? 'Unknown error' })
-                        throw e // Abort transaction on first error
+        // Pre-generate employee numbers outside the transaction, then batch-insert
+        // inside a real transaction so all rows roll back on any failure.
+        const valuesToInsert: Record<string, unknown>[] = []
+        for (let i = 0; i < rows.length; i++) {
+            try {
+                const row = rows[i]
+                const employeeNo = row.employeeNo || await generateNextEmployeeNo(request.user.tenantId)
+                valuesToInsert.push({ ...row, employeeNo, tenantId: request.user.tenantId })
+            } catch (e: any) {
+                results.push({ row: i + 1, error: e.message ?? 'Unknown error' })
+            }
+        }
+
+        if (valuesToInsert.length > 0) {
+            try {
+                await db.transaction(async (tx) => {
+                    for (let i = 0; i < valuesToInsert.length; i++) {
+                        try {
+                            await tx.insert(employees).values(valuesToInsert[i] as never)
+                            created++
+                        } catch (e: any) {
+                            results.push({ row: i + 1, error: e.message ?? 'Unknown error' })
+                            throw e // abort the entire transaction
+                        }
                     }
-                }
-            })
-        } catch {
-            // Transaction rolled back — return error info
+                })
+            } catch {
+                created = 0 // transaction rolled back
+            }
         }
 
         const failed = rows.length - created

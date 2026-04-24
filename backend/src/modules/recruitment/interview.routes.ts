@@ -9,12 +9,12 @@ export async function interviewRoutes(fastify: any) {
         return reply.send(list)
     })
 
-    // Get interviews for an application
+    // Get interviews for an application (tenant-scoped to prevent IDOR)
     fastify.get('/interviews/application/:applicationId', {
         preHandler: [fastify.authenticate],
     }, async (request: any, reply: any) => {
         const { applicationId } = request.params as { applicationId: string }
-        const list = await getInterviewsForApplication(applicationId)
+        const list = await getInterviewsForApplication(request.user.tenantId, applicationId)
         return reply.send(list)
     })
 

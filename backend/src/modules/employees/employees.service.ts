@@ -164,8 +164,10 @@ export async function archiveEmployee(tenantId: string, id: string) {
 }
 
 export async function getExpiringVisas(tenantId: string, daysAhead = 90) {
+    const today = new Date().toISOString().split('T')[0]
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() + daysAhead)
+    const cutoffStr = cutoff.toISOString().split('T')[0]
 
     const rows = await db
         .select({
@@ -180,7 +182,10 @@ export async function getExpiringVisas(tenantId: string, daysAhead = 90) {
         .where(
             and(
                 eq(employees.tenantId, tenantId),
-                eq(employees.isArchived, false)
+                eq(employees.isArchived, false),
+                sql`${employees.visaExpiry} IS NOT NULL`,
+                sql`${employees.visaExpiry} >= ${today}`,
+                sql`${employees.visaExpiry} <= ${cutoffStr}`,
             )
         )
         .orderBy(asc(employees.visaExpiry))

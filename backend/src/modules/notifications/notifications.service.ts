@@ -1,6 +1,14 @@
-import { eq, and, desc, count } from 'drizzle-orm'
+import { eq, and, or, isNull, desc, count } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { notifications } from '../../db/schema/index.js'
+
+// Returns both user-specific and tenant-wide broadcast (userId = null) notifications
+function notificationScope(tenantId: string, userId: string) {
+    return and(
+        eq(notifications.tenantId, tenantId),
+        or(eq(notifications.userId, userId), isNull(notifications.userId)),
+    )
+}
 
 export async function getNotifications(
     tenantId: string,
@@ -8,15 +16,15 @@ export async function getNotifications(
     params: { limit: number; offset: number; unreadOnly: boolean },
 ) {
     const { limit, offset, unreadOnly } = params
-    const conditions = [eq(notifications.tenantId, tenantId), eq(notifications.userId, userId)]
-    if (unreadOnly) conditions.push(eq(notifications.isRead, false))
+    const scope = notificationScope(tenantId, userId)
+    const conditions = unreadOnly ? and(scope, eq(notifications.isRead, false)) : scope
 
     const [{ total }] = await db.select({ total: count() })
         .from(notifications)
-        .where(and(...conditions))
+        .where(conditions)
 
     const data = await db.select().from(notifications)
-        .where(and(...conditions))
+        .where(conditions)
         .orderBy(desc(notifications.createdAt))
         .limit(limit)
         .offset(offset)
@@ -27,17 +35,21 @@ export async function getNotifications(
 export async function getUnreadCount(tenantId: string, userId: string): Promise<number> {
     const [{ total }] = await db.select({ total: count() })
         .from(notifications)
-        .where(and(eq(notifications.tenantId, tenantId), eq(notifications.userId, userId), eq(notifications.isRead, false)))
+        .where(and(
+            notificationScope(tenantId, userId),
+            eq(notifications.isRead, false),
+        ))
     return Number(total)
 }
 
 export async function markNotificationRead(tenantId: string, userId: string, id: string) {
+    // Allow marking both user-specific and broadcast (userId = null) notifications
     const [row] = await db.update(notifications)
         .set({ isRead: true })
         .where(and(
             eq(notifications.id, id),
             eq(notifications.tenantId, tenantId),
-            eq(notifications.userId, userId),
+            or(eq(notifications.userId, userId), isNull(notifications.userId)),
         ))
         .returning()
     return row ?? null
@@ -47,8 +59,7 @@ export async function markAllNotificationsRead(tenantId: string, userId: string)
     const rows = await db.update(notifications)
         .set({ isRead: true })
         .where(and(
-            eq(notifications.tenantId, tenantId),
-            eq(notifications.userId, userId),
+            notificationScope(tenantId, userId),
             eq(notifications.isRead, false),
         ))
         .returning({ id: notifications.id })

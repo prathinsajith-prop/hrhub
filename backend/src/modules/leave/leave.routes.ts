@@ -9,7 +9,7 @@ export default async function (fastify: any): Promise<void> {
     fastify.get('/', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
         const { employeeId, status, leaveType, limit = '20', offset = '0' } = request.query as Record<string, string>
         const result = await listLeaveRequests(request.user.tenantId, { employeeId, status, leaveType, limit: Number(limit), offset: Number(offset) })
-        return sendWithETag(reply, request, result)
+        return reply.send(result)
     })
 
     fastify.post('/', {
@@ -27,7 +27,7 @@ export default async function (fastify: any): Promise<void> {
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
         const { approved, notes } = validate(leaveActionSchema, request.body)
-        const updated = await approveLeave(request.user.tenantId, id, request.user.id, approved)
+        const updated = await approveLeave(request.user.tenantId, id, request.user.id, request.user.email, approved)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Leave request not found or already processed' })
         recordActivity({
             tenantId: request.user.tenantId,
@@ -46,7 +46,7 @@ export default async function (fastify: any): Promise<void> {
 
     fastify.post('/:id/cancel', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        const updated = await cancelLeave(request.user.tenantId, id)
+        const updated = await cancelLeave(request.user.tenantId, id, request.user.email, request.user.role)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Leave request not found' })
         return reply.send({ data: updated })
     })

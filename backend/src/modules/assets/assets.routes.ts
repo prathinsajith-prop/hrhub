@@ -75,7 +75,7 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
             offset: Number(qs.offset ?? 0),
             after: qs.after,
         })
-        sendWithETag(reply, request, result)
+        reply.send(result)
     })
 
     fastify.post('/', {

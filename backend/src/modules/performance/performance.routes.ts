@@ -4,8 +4,8 @@ export async function performanceRoutes(fastify: any) {
     fastify.get('/performance', {
         preHandler: [fastify.authenticate],
     }, async (request: any, reply: any) => {
-        const { employeeId } = request.query as { employeeId?: string }
-        return reply.send(await getReviews(request.user.tenantId, employeeId))
+        const { employeeId, limit = '20', offset = '0' } = request.query as Record<string, string>
+        return reply.send(await getReviews(request.user.tenantId, { employeeId, limit: Number(limit), offset: Number(offset) }))
     })
 
     fastify.post('/performance', {

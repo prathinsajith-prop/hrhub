@@ -1,4 +1,4 @@
-import { eq, and, desc, lte, isNull, sql, getTableColumns, or, lt } from 'drizzle-orm'
+import { eq, and, desc, lte, gte, isNull, isNotNull, sql, getTableColumns, or, lt } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { documents, employees } from '../../db/schema/index.js'
@@ -105,8 +105,15 @@ export async function getExpiringDocuments(tenantId: string, daysAhead = 90) {
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() + daysAhead)
 
+    const today = new Date().toISOString().split('T')[0]
     return db.select().from(documents)
-        .where(and(eq(documents.tenantId, tenantId), isNull(documents.deletedAt), lte(documents.expiryDate, cutoff.toISOString().split('T')[0])))
+        .where(and(
+            eq(documents.tenantId, tenantId),
+            isNull(documents.deletedAt),
+            isNotNull(documents.expiryDate),
+            gte(documents.expiryDate, today),
+            lte(documents.expiryDate, cutoff.toISOString().split('T')[0]),
+        ))
         .orderBy(documents.expiryDate)
         .limit(100)
 }

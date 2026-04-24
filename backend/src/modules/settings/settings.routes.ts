@@ -1,4 +1,4 @@
-import { getCompanySettings, updateCompanySettings, listTenantUsers, inviteUser } from './settings.service.js'
+import { getCompanySettings, updateCompanySettings, listTenantUsers, inviteUser, updateUserStatus } from './settings.service.js'
 import { db } from '../../db/index.js'
 import { tenants } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
@@ -45,6 +45,26 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         }
         await inviteUser(request.user.tenantId, { name, email, role })
         return reply.send({ message: 'Invitation sent' })
+    })
+
+    // PATCH /settings/users/:id — deactivate/reactivate a user or change their role
+    fastify.patch('/users/:id', hrAdmin, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const { isActive, role } = request.body as { isActive?: boolean; role?: string }
+
+        // Prevent super_admin from deactivating themselves
+        if (id === request.user.id && isActive === false) {
+            return reply.code(400).send({ message: 'You cannot deactivate your own account' })
+        }
+
+        const updated = await updateUserStatus(request.user.tenantId, id, { isActive, role })
+        if (!updated) return reply.code(404).send({ message: 'User not found' })
+
+        // Invalidate the isActive cache for this user so the change is effective immediately
+        const { cacheDel } = await import('../../lib/redis.js')
+        await cacheDel(`user:active:${id}`)
+
+        return reply.send({ data: updated })
     })
 
     // ── IP Allowlist routes ──────────────────────────────────────────────
