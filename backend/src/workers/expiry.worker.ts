@@ -317,10 +317,15 @@ async function runPassportExpiryCheck() {
 
 // ─── Scheduler: Register all daily workers ────────────────────────────────────
 export async function startExpiryWorkers() {
+    const env = loadEnv()
+    if (!env.REDIS_URL) {
+        console.warn('⚠️  REDIS_URL not set — expiry alert workers disabled')
+        return
+    }
+
     // Test Redis availability first with a quick probe
     const { createConnection } = await import('net')
     const redisAvailable = await new Promise<boolean>((resolve) => {
-        const env = loadEnv()
         const url = new URL(env.REDIS_URL)
         const socket = createConnection({ host: url.hostname, port: Number(url.port ?? 6379) })
         socket.setTimeout(1000)

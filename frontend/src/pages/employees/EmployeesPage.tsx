@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, memo } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
   MoreHorizontal,
@@ -75,7 +75,7 @@ const statusVariant: Record<
   visa_expired: 'destructive',
 }
 
-function ActionMenu({
+const ActionMenu = memo(function ActionMenu({
   employee,
   onDelete,
   onEdit,
@@ -108,7 +108,7 @@ function ActionMenu({
         <DropdownMenuItem
           disabled={!employee.email}
           onClick={() => {
-            if (employee.email) window.location.href = `mailto:${employee.email}`
+            if (employee.email) window.open(`mailto:${employee.email}`, '_self')
           }}
         >
           <Mail className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
@@ -129,7 +129,7 @@ function ActionMenu({
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
+})
 
 export function EmployeesPage() {
   const { t } = useTranslation()
@@ -299,7 +299,7 @@ export function EmployeesPage() {
       ),
       size: 44,
     },
-  ], [navigate])
+  ], [navigate, canManage])
 
   return (
     <PageWrapper>

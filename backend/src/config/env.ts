@@ -28,8 +28,9 @@ const envSchema = z.object({
     SMTP_USER: z.string().default(''),
     SMTP_PASS: z.string().default(''),
     RESEND_API_KEY: z.string().default(''),
-    // Redis
-    REDIS_URL: z.string().default('redis://:hrhub_redis_secret@localhost:6379'),
+    // Redis — leave empty to disable BullMQ workers (payroll runs synchronously,
+    // expiry alert schedulers are skipped). Set to redis://… to enable.
+    REDIS_URL: z.string().default(''),
     // App
     APP_URL: z.string().url().default('http://localhost:5174'),
     // Observability (optional). If SENTRY_DSN is set, the error handler

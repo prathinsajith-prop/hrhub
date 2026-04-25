@@ -37,6 +37,8 @@ export function useMyTenants() {
     return useQuery({
         queryKey: ['tenants', 'mine'],
         queryFn: () => api.get<{ data: TenantMembershipSummary[] }>('/tenants').then(r => r.data),
+        // Tenant list changes rarely; avoid redundant network calls on every nav
+        staleTime: 5 * 60 * 1000, // 5 minutes
     })
 }
 
@@ -44,6 +46,7 @@ export function useCurrentTenant() {
     return useQuery({
         queryKey: ['tenants', 'current'],
         queryFn: () => api.get<{ data: CurrentTenant }>('/tenants/current').then(r => r.data),
+        staleTime: 5 * 60 * 1000,
     })
 }
 

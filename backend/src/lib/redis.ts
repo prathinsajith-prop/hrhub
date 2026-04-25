@@ -14,6 +14,10 @@ export function getRedisClient(): Redis | null {
     if (_client) return _client
     try {
         const env = loadEnv()
+        if (!env.REDIS_URL) {
+            _disabled = true
+            return null
+        }
         const url = new URL(env.REDIS_URL)
         _client = new Redis({
             host: url.hostname,

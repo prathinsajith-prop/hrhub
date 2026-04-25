@@ -36,6 +36,13 @@
       "when": 1745884800000,
       "tag": "0004_doc_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1745971200000,
+      "tag": "0005_attendance_leave_indexes",
+      "breakpoints": true
     }
   ]
 }

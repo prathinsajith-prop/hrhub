@@ -18,9 +18,11 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     componentDidCatch(error: Error, info: ErrorInfo) {
-        // In production, send to Sentry/Datadog:
+        if (import.meta.env.DEV) {
+            console.error('[ErrorBoundary]', error, info.componentStack)
+        }
+        // In production, wire to Sentry/Datadog:
         // Sentry.captureException(error, { extra: info })
-        console.error('[ErrorBoundary]', error, info.componentStack)
     }
 
     reset = () => this.setState({ hasError: false, error: null })

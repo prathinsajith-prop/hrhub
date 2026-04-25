@@ -168,25 +168,27 @@ export async function listLeavePolicies(tenantId: string): Promise<LeavePolicy[]
 }
 
 export async function upsertLeavePolicies(tenantId: string, items: LeavePolicy[]) {
-    for (const p of items) {
-        await db.insert(leavePolicies).values({
+    if (items.length === 0) return listLeavePolicies(tenantId)
+    // Single batch upsert — one round-trip instead of N sequential inserts
+    await db.insert(leavePolicies).values(
+        items.map(p => ({
             tenantId,
             leaveType: p.leaveType,
             daysPerYear: p.daysPerYear,
-            accrualRule: p.accrualRule,
+            accrualRule: p.accrualRule as AccrualRule,
             maxCarryForward: p.maxCarryForward,
             carryExpiresAfterMonths: p.carryExpiresAfterMonths,
-        }).onConflictDoUpdate({
-            target: [leavePolicies.tenantId, leavePolicies.leaveType],
-            set: {
-                daysPerYear: p.daysPerYear,
-                accrualRule: p.accrualRule,
-                maxCarryForward: p.maxCarryForward,
-                carryExpiresAfterMonths: p.carryExpiresAfterMonths,
-                updatedAt: new Date(),
-            },
-        })
-    }
+        }))
+    ).onConflictDoUpdate({
+        target: [leavePolicies.tenantId, leavePolicies.leaveType],
+        set: {
+            daysPerYear: sql`excluded.days_per_year`,
+            accrualRule: sql`excluded.accrual_rule`,
+            maxCarryForward: sql`excluded.max_carry_forward`,
+            carryExpiresAfterMonths: sql`excluded.carry_expires_after_months`,
+            updatedAt: sql`NOW()`,
+        },
+    })
     return listLeavePolicies(tenantId)
 }
 

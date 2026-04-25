@@ -43,7 +43,9 @@ export default defineConfig({
         },
       },
     },
-    // Suppress noisy warnings only — we are explicitly chunking now.
-    chunkSizeWarningLimit: 800,
+    // country-atlas + libphonenumber are intentionally isolated in the
+    // 'country-data' manual chunk (only loaded when Add Employee dialog opens).
+    // Raise the threshold to avoid false-alarm noise on this known-large chunk.
+    chunkSizeWarningLimit: 2000,
   },
 })

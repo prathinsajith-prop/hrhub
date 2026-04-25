@@ -27,6 +27,7 @@ export function useCompanySettings() {
         queryKey: ['settings', 'company'],
         queryFn: () =>
             api.get<{ data: CompanySettings }>('/settings/company').then((r) => r.data),
+        staleTime: 5 * 60 * 1000,
     })
 }
 
@@ -110,6 +111,7 @@ export function useRegionalSettings() {
     return useQuery({
         queryKey: ['settings', 'regional'],
         queryFn: () => api.get<{ data: RegionalSettings }>('/settings/regional').then(r => r.data),
+        staleTime: 5 * 60 * 1000,
     })
 }
 
@@ -132,6 +134,7 @@ export function useSecuritySettings() {
     return useQuery({
         queryKey: ['settings', 'security'],
         queryFn: () => api.get<{ data: SecuritySettings }>('/settings/security').then(r => r.data),
+        staleTime: 5 * 60 * 1000,
     })
 }
 
@@ -151,6 +154,7 @@ export function useNotifPrefs() {
     return useQuery({
         queryKey: ['settings', 'notifications'],
         queryFn: () => api.get<{ data: NotifPrefs }>('/settings/notifications').then(r => r.data),
+        staleTime: 5 * 60 * 1000,
     })
 }
 
@@ -168,6 +172,7 @@ export function useIpAllowlist() {
     return useQuery({
         queryKey: ['settings', 'ip-allowlist'],
         queryFn: () => api.get<{ data: { ipAllowlist: string[] } }>('/settings/ip-allowlist').then((r) => r.data),
+        staleTime: 5 * 60 * 1000,
     })
 }
 

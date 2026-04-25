@@ -26,6 +26,10 @@ export const leaveRequests = pgTable('leave_requests', {
     tenantIdx: index('idx_leave_tenant').on(t.tenantId),
     employeeIdx: index('idx_leave_employee').on(t.employeeId),
     statusIdx: index('idx_leave_status').on(t.status),
+    // Composite for dashboard KPI (pending count per tenant) and approval flow
+    tenantStatusIdx: index('idx_leave_tenant_status').on(t.tenantId, t.status),
+    // Employee leave history lookups
+    tenantEmployeeIdx: index('idx_leave_tenant_employee').on(t.tenantId, t.employeeId),
 }))
 
 export const leaveRequestsRelations = relations(leaveRequests, ({ one }) => ({

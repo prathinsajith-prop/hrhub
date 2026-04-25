@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, Briefcase, Users, Clock, TrendingUp, Star, DollarSign, Eye, Edit2, UserCheck } from 'lucide-react'
@@ -66,7 +66,7 @@ const stages: { id: ApplicationStage; label: string; bgClass: string }[] = [
   { id: 'rejected', label: 'Rejected', bgClass: 'bg-destructive/5 border-destructive/20' },
 ]
 
-function CandidateCard({
+const CandidateCard = memo(function CandidateCard({
   candidate,
   onMove,
   onConvert,
@@ -178,7 +178,7 @@ function CandidateCard({
       </Button>
     </div>
   )
-}
+})
 
 function StageColumn({
   stage,

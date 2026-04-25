@@ -44,6 +44,32 @@ export async function enqueuePayrollRun(tenantId: string, payrollRunId: string):
 }
 
 export async function startPayrollWorker(): Promise<void> {
+    const env = loadEnv()
+    if (!env.REDIS_URL) {
+        console.warn('⚠️  REDIS_URL not set — payroll worker disabled')
+        return
+    }
+
+    // Probe Redis once before wiring BullMQ so we fail fast (instead of looping
+    // ECONNREFUSED on every reconnect attempt).
+    const { createConnection } = await import('net')
+    const reachable = await new Promise<boolean>((resolve) => {
+        try {
+            const url = new URL(env.REDIS_URL)
+            const socket = createConnection({ host: url.hostname, port: Number(url.port ?? 6379) })
+            socket.setTimeout(1000)
+            socket.on('connect', () => { socket.destroy(); resolve(true) })
+            socket.on('error', () => { socket.destroy(); resolve(false) })
+            socket.on('timeout', () => { socket.destroy(); resolve(false) })
+        } catch {
+            resolve(false)
+        }
+    })
+    if (!reachable) {
+        console.warn('⚠️  Redis unreachable — payroll worker disabled')
+        return
+    }
+
     let connection: ReturnType<typeof getRedisConnection>
     try {
         connection = getRedisConnection()
