@@ -106,3 +106,170 @@ export function useOnboardingAnalytics() {
         queryFn: () => api.get<{ data: OnboardingAnalytics }>('/onboarding/analytics').then(r => r.data),
     })
 }
+
+export interface UploadTokenResult {
+    sent: boolean
+    error?: string
+    email: string
+    uploadUrl: string
+    expiresInDays: number
+    tokenId: string
+}
+
+export function useSendOnboardingUploadLink() {
+    return useMutation({
+        mutationFn: (input: { checklistId: string; expiresInDays?: number; seedRequiredDocs?: boolean }) =>
+            api.post<{ data: UploadTokenResult }>(`/onboarding/${input.checklistId}/upload-token`, {
+                expiresInDays: input.expiresInDays,
+                seedRequiredDocs: input.seedRequiredDocs ?? true,
+            }).then(r => r.data),
+    })
+}
+
+export interface OnboardingUploadToken {
+    id: string
+    issuedToEmail: string
+    issuedBy: string | null
+    expiresAt: string
+    revokedAt: string | null
+    viewCount: number
+    uploadCount: number
+    lastUsedAt: string | null
+    createdAt: string
+}
+
+export function useOnboardingUploadTokens(checklistId: string | null | undefined) {
+    return useQuery({
+        queryKey: ['onboarding-upload-tokens', checklistId],
+        queryFn: () => api.get<{ data: OnboardingUploadToken[] }>(`/onboarding/${checklistId}/upload-tokens`).then(r => r.data),
+        enabled: !!checklistId,
+    })
+}
+
+export function useRevokeOnboardingToken() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (tokenId: string) =>
+            api.post<{ data: OnboardingUploadToken }>(`/onboarding/upload-tokens/${tokenId}/revoke`, {}).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['onboarding-upload-tokens'] }),
+    })
+}
+
+export interface StepRequiredDoc {
+    id: string
+    category: string
+    docType: string
+    expiryRequired: boolean
+    isMandatory: boolean
+    hint: string | null
+    fulfilled?: boolean
+}
+
+export function useStepRequiredDocs(stepId: string | null | undefined) {
+    return useQuery({
+        queryKey: ['onboarding-required-docs', stepId],
+        queryFn: () => api.get<{ data: StepRequiredDoc[] }>(`/onboarding/steps/${stepId}/required-docs`).then(r => r.data),
+        enabled: !!stepId,
+    })
+}
+
+export function useAddStepRequiredDoc() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (input: { stepId: string; category: string; docType: string; expiryRequired?: boolean; isMandatory?: boolean; hint?: string }) =>
+            api.post<{ data: StepRequiredDoc }>(`/onboarding/steps/${input.stepId}/required-docs`, input).then(r => r.data),
+        onSuccess: (_d, vars) => {
+            qc.invalidateQueries({ queryKey: ['onboarding-required-docs', vars.stepId] })
+            qc.invalidateQueries({ queryKey: ['onboarding-doc-summary'] })
+        },
+    })
+}
+
+export function useDeleteStepRequiredDoc() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (requiredDocId: string) =>
+            api.delete<{ data: StepRequiredDoc }>(`/onboarding/required-docs/${requiredDocId}`).then(r => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['onboarding-required-docs'] })
+            qc.invalidateQueries({ queryKey: ['onboarding-doc-summary'] })
+        },
+    })
+}
+
+export interface ChecklistDocSummary {
+    steps: Array<{
+        stepId: string
+        title: string
+        required: number
+        uploaded: number
+        completion: number
+        missingMandatory: string[]
+    }>
+}
+
+export function useChecklistDocSummary(checklistId: string | null | undefined) {
+    return useQuery({
+        queryKey: ['onboarding-doc-summary', checklistId],
+        queryFn: () => api.get<{ data: ChecklistDocSummary }>(`/onboarding/${checklistId}/doc-summary`).then(r => r.data),
+        enabled: !!checklistId,
+    })
+}
+
+export interface StepUploadDoc {
+    id: string
+    stepId: string | null
+    category?: string
+    docType: string
+    fileName: string
+    status: string
+    expiryDate: string | null
+    rejectionReason?: string | null
+    createdAt?: string
+}
+
+export interface UploadInfoStep {
+    id: string
+    stepOrder: number
+    title: string
+    owner: string | null
+    status: string
+    dueDate: string | null
+    requiredDocs: StepRequiredDoc[]
+    suggestedDocs: Array<{ docType: string; category: string; expiryRequired: boolean }>
+    uploadedDocs: StepUploadDoc[]
+}
+
+export interface OnboardingUploadInfo {
+    checklistId: string
+    employeeName: string
+    companyName: string | null
+    progress: number
+    requiredDocsProgress: number | null
+    mandatoryTotal: number
+    mandatoryFulfilled: number
+    steps: UploadInfoStep[]
+}
+
+export function useOnboardingUploadInfo(token: string) {
+    return useQuery({
+        queryKey: ['onboarding-upload', token],
+        queryFn: () => api.get<{ data: OnboardingUploadInfo }>(`/onboarding/upload-info/${token}`).then(r => r.data),
+        enabled: !!token,
+        retry: false,
+    })
+}
+
+export function useOnboardingPublicUpload(token: string) {
+    return useMutation({
+        mutationFn: async (input: { file: File; stepId: string; category: string; docType: string; expiryDate?: string }) => {
+            const fd = new FormData()
+            fd.append('file', input.file)
+            fd.append('stepId', input.stepId)
+            fd.append('category', input.category)
+            fd.append('docType', input.docType)
+            if (input.expiryDate) fd.append('expiryDate', input.expiryDate)
+            return api.upload<{ data: unknown }>(`/onboarding/upload/${token}`, fd)
+        },
+    })
+}

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, timestamp, index, integer, uniqueIndex } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, boolean, timestamp, index, integer, uniqueIndex, jsonb } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
@@ -32,6 +32,8 @@ export const users = pgTable('users', {
     twoFaEnabled: boolean('two_fa_enabled').notNull().default(false),
     // Hashed (bcrypt) single-use recovery codes for MFA fallback. Empty array when none active.
     twoFaBackupCodes: text('two_fa_backup_codes').array().notNull().default(sql`ARRAY[]::text[]`),
+    // Per-user notification channel preferences — keys match notification event IDs
+    notifPrefs: jsonb('notif_prefs').$type<Record<string, { email: boolean; push: boolean }>>().notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({

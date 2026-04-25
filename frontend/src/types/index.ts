@@ -172,7 +172,7 @@ export interface VisaApplication {
 
 // Documents
 export type DocCategory = 'identity' | 'visa' | 'company' | 'employment' | 'insurance' | 'qualification' | 'financial' | 'compliance'
-export type DocStatus = 'valid' | 'expiring_soon' | 'expired' | 'pending_upload' | 'under_review'
+export type DocStatus = 'valid' | 'expiring_soon' | 'expired' | 'pending_upload' | 'under_review' | 'rejected'
 
 export interface Document {
   id: string

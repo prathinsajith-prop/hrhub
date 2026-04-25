@@ -3,7 +3,7 @@ import { db } from '../db/index.js'
 import { employees, notifications, documents, users } from '../db/schema/index.js'
 import { and, eq, lt, lte, gte, ne, or, inArray } from 'drizzle-orm'
 import { loadEnv } from '../config/env.js'
-import { sendEmail, visaExpiryAlertEmail } from '../plugins/email.js'
+import { sendEmail, visaExpiryAlertEmail, documentExpiryAlertEmail } from '../plugins/email.js'
 
 function getRedisConnection() {
     const env = loadEnv()
@@ -187,6 +187,43 @@ async function runDocumentExpiryCheck() {
                 `Document Expiring in ${days} Days`,
                 `${doc.docType}: ${doc.fileName} expires on ${doc.expiryDate}`,
             )
+
+            // Email HR managers / PRO officers
+            try {
+                const env = loadEnv()
+                const frontendUrl = (env as any).APP_URL ?? ''
+                const actionUrl = frontendUrl ? `${frontendUrl}/documents/${doc.id}` : ''
+
+                let employeeName = 'Unknown employee'
+                if (doc.employeeId) {
+                    const [emp] = await db.select({ firstName: employees.firstName, lastName: employees.lastName })
+                        .from(employees).where(eq(employees.id, doc.employeeId)).limit(1)
+                    if (emp) employeeName = `${emp.firstName} ${emp.lastName}`
+                }
+
+                const hrUsers = await db.select({ email: users.email, name: users.name })
+                    .from(users)
+                    .where(and(
+                        eq(users.tenantId, doc.tenantId),
+                        eq(users.isActive, true),
+                        inArray(users.role, ['hr_manager', 'pro_officer', 'super_admin'] as never[]),
+                    ))
+                    .limit(10)
+
+                for (const u of hrUsers) {
+                    if (!u.email) continue
+                    const opts = documentExpiryAlertEmail({
+                        recipientName: u.name ?? 'HR',
+                        employeeName,
+                        docType: doc.docType ?? doc.fileName ?? 'Document',
+                        expiryDate: doc.expiryDate ?? '',
+                        daysRemaining: days,
+                        actionUrl,
+                    })
+                    opts.to = u.email
+                    sendEmail(opts).catch(() => { })
+                }
+            } catch { /* non-fatal */ }
 
             // Update document status to expiring_soon
             await db.update(documents)

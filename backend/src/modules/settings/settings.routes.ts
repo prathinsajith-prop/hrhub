@@ -1,6 +1,6 @@
 import { getCompanySettings, updateCompanySettings, listTenantUsers, inviteUser, updateUserStatus } from './settings.service.js'
 import { db } from '../../db/index.js'
-import { tenants } from '../../db/schema/index.js'
+import { tenants, users } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
 
 export default async function settingsRoutes(fastify: any): Promise<void> {
@@ -96,5 +96,110 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             .where(eq(tenants.id, request.user.tenantId))
             .returning({ ipAllowlist: tenants.ipAllowlist })
         return reply.send({ data: { ipAllowlist: updated?.ipAllowlist ?? [] } })
+    })
+
+    // ── Regional Settings ────────────────────────────────────────────────────
+    // GET /settings/regional
+    fastify.get('/regional', { preHandler: [fastify.authenticate] }, async (request: any, reply: any) => {
+        const [row] = await db
+            .select({ regionalSettings: tenants.regionalSettings })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
+            .limit(1)
+        return reply.send({ data: row?.regionalSettings ?? { timezone: 'Asia/Dubai', currency: 'AED', dateFormat: 'DD/MM/YYYY' } })
+    })
+
+    // PATCH /settings/regional
+    fastify.patch('/regional', hrAdmin, async (request: any, reply: any) => {
+        const { timezone, currency, dateFormat } = request.body as { timezone?: string; currency?: string; dateFormat?: string }
+        const [current] = await db
+            .select({ regionalSettings: tenants.regionalSettings })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
+            .limit(1)
+        const merged = { ...current?.regionalSettings, ...(timezone ? { timezone } : {}), ...(currency ? { currency } : {}), ...(dateFormat ? { dateFormat } : {}) }
+        const [updated] = await db
+            .update(tenants)
+            .set({ regionalSettings: merged, updatedAt: new Date() })
+            .where(eq(tenants.id, request.user.tenantId))
+            .returning({ regionalSettings: tenants.regionalSettings })
+        return reply.send({ data: updated?.regionalSettings })
+    })
+
+    // ── Security Settings ─────────────────────────────────────────────────────
+    // GET /settings/security
+    fastify.get('/security', hrAdmin, async (request: any, reply: any) => {
+        const [row] = await db
+            .select({ securitySettings: tenants.securitySettings })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
+            .limit(1)
+        return reply.send({ data: row?.securitySettings ?? { sessionTimeoutMinutes: 480, auditLoggingEnabled: true } })
+    })
+
+    // PATCH /settings/security
+    fastify.patch('/security', hrAdmin, async (request: any, reply: any) => {
+        const { sessionTimeoutMinutes, auditLoggingEnabled } = request.body as { sessionTimeoutMinutes?: number; auditLoggingEnabled?: boolean }
+        const [current] = await db
+            .select({ securitySettings: tenants.securitySettings })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
+            .limit(1)
+        const merged = {
+            ...current?.securitySettings,
+            ...(sessionTimeoutMinutes !== undefined ? { sessionTimeoutMinutes } : {}),
+            ...(auditLoggingEnabled !== undefined ? { auditLoggingEnabled } : {}),
+        }
+        const [updated] = await db
+            .update(tenants)
+            .set({ securitySettings: merged, updatedAt: new Date() })
+            .where(eq(tenants.id, request.user.tenantId))
+            .returning({ securitySettings: tenants.securitySettings })
+        return reply.send({ data: updated?.securitySettings })
+    })
+
+    // ── Notification Preferences (per user) ───────────────────────────────────
+    // GET /settings/notifications
+    fastify.get('/notifications', { preHandler: [fastify.authenticate] }, async (request: any, reply: any) => {
+        const [row] = await db
+            .select({ notifPrefs: users.notifPrefs })
+            .from(users)
+            .where(eq(users.id, request.user.id))
+            .limit(1)
+        return reply.send({ data: row?.notifPrefs ?? {} })
+    })
+
+    // PUT /settings/notifications
+    fastify.put('/notifications', { preHandler: [fastify.authenticate] }, async (request: any, reply: any) => {
+        const prefs = request.body as Record<string, { email: boolean; push: boolean }>
+        if (typeof prefs !== 'object' || Array.isArray(prefs)) {
+            return reply.code(400).send({ message: 'Body must be a notification preferences object' })
+        }
+        const [updated] = await db
+            .update(users)
+            .set({ notifPrefs: prefs, updatedAt: new Date() })
+            .where(eq(users.id, request.user.id))
+            .returning({ notifPrefs: users.notifPrefs })
+        return reply.send({ data: updated?.notifPrefs ?? {} })
+    })
+
+    // ── Mail diagnostics ─────────────────────────────────────────────────────
+    // GET /settings/mail/status — verify SMTP/Resend connection (hr_admin only)
+    fastify.get('/mail/status', hrAdmin, async (_request: any, reply: any) => {
+        const { verifyEmailConfig } = await import('../../plugins/email.js')
+        const status = await verifyEmailConfig()
+        return reply.send({ data: status })
+    })
+
+    // POST /settings/mail/test — send a test email to a chosen address
+    fastify.post('/mail/test', hrAdmin, async (request: any, reply: any) => {
+        const { to } = (request.body ?? {}) as { to?: string }
+        if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+            return reply.code(400).send({ message: 'Provide a valid `to` email address.' })
+        }
+        const { sendEmail, mailTestEmail } = await import('../../plugins/email.js')
+        const tmpl = mailTestEmail({ recipientName: to })
+        const result = await sendEmail({ ...tmpl, to })
+        return reply.send({ data: result })
     })
 }

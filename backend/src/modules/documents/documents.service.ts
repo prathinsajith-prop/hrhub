@@ -95,7 +95,23 @@ export async function updateDocument(tenantId: string, id: string, data: Partial
 
 export async function verifyDocument(tenantId: string, id: string, verifiedBy: string) {
     const [row] = await db.update(documents)
-        .set(withTimestamp({ verified: true, verifiedBy, verifiedAt: new Date(), status: 'valid' as const }))
+        .set(withTimestamp({ verified: true, verifiedBy, verifiedAt: new Date(), status: 'valid' as const, rejectionReason: null, rejectedAt: null, rejectedBy: null }))
+        .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId)))
+        .returning()
+    return row ?? null
+}
+
+export async function rejectDocument(tenantId: string, id: string, rejectedBy: string, reason: string) {
+    const [row] = await db.update(documents)
+        .set(withTimestamp({
+            verified: false,
+            verifiedBy: null,
+            verifiedAt: null,
+            rejectedBy,
+            rejectedAt: new Date(),
+            rejectionReason: reason,
+            status: 'rejected' as const,
+        }))
         .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId)))
         .returning()
     return row ?? null

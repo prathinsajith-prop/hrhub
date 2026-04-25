@@ -71,3 +71,27 @@ export function useUpsertAttendance() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
     })
 }
+
+export interface AttendanceSummary {
+    month: number
+    year: number
+    totalPresent: number
+    totalAbsent: number
+    totalLate: number
+    totalWfh: number
+    totalHalfDay: number
+    totalOnLeave: number
+    avgHoursWorked: number
+    avgOvertimeHours: number
+    byDepartment: Array<{ department: string; present: number; absent: number; late: number }>
+}
+
+export function useAttendanceSummary(params: { month?: number; year?: number } = {}) {
+    const qs = new URLSearchParams()
+    if (params.month) qs.set('month', String(params.month))
+    if (params.year) qs.set('year', String(params.year))
+    return useQuery({
+        queryKey: ['attendance', 'summary', params],
+        queryFn: () => api.get<{ data: AttendanceSummary }>(`/attendance/summary?${qs}`).then(r => r.data),
+    })
+}

@@ -70,3 +70,31 @@ export function useDeleteDocument() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
     })
 }
+
+export function useRejectDocument() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (input: { id: string; reason: string }) =>
+            api.post(`/documents/${input.id}/reject`, { reason: input.reason }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+    })
+}
+
+export interface DocumentAuditEntry {
+    id: string
+    action: string
+    actorId: string | null
+    actorLabel: string | null
+    details: Record<string, unknown> | null
+    ipAddress: string | null
+    userAgent: string | null
+    createdAt: string
+}
+
+export function useDocumentAuditLog(id: string | null | undefined) {
+    return useQuery({
+        queryKey: ['document-audit', id],
+        queryFn: () => api.get<{ data: DocumentAuditEntry[] }>(`/documents/${id}/audit-log`).then(r => r.data),
+        enabled: !!id,
+    })
+}

@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Clock, CheckCircle2, Plus, ArrowLeft, Trash2, Mail, Phone, FileText, Activity, Sparkles } from 'lucide-react'
+import { Clock, CheckCircle2, Plus, ArrowLeft, Trash2, Mail, Phone, FileText, Activity, Sparkles, Send, Upload, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
 import { ConfirmDialog, toast, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, DialogClose } from '@/components/ui/overlays'
@@ -12,10 +12,12 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { Textarea } from '@/components/ui/textarea'
 import { formatDate, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { useEmployeeChecklist, useUpdateOnboardingStep, useAddOnboardingStep, useDeleteOnboardingStep, type OnboardingChecklist, type OnboardingStep, type OnboardingStepStatus } from '@/hooks/useOnboarding'
-import { useDocuments } from '@/hooks/useDocuments'
+import { useEmployeeChecklist, useUpdateOnboardingStep, useAddOnboardingStep, useDeleteOnboardingStep, useSendOnboardingUploadLink, type OnboardingChecklist, type OnboardingStep, type OnboardingStepStatus } from '@/hooks/useOnboarding'
+import { useDocuments, useUploadDocument } from '@/hooks/useDocuments'
+import { useQueryClient } from '@tanstack/react-query'
 import { useActivityLogs } from '@/hooks/useAudit'
 import { InitialsAvatar } from '@/components/shared/Avatar'
+import { DOC_TYPE_CATALOG, CATEGORY_LABELS, type DocCategory } from '@/lib/docTypes'
 import {
     ONBOARDING_TEMPLATE_STEPS,
     ONBOARDING_STATUS_LABEL,
@@ -62,6 +64,21 @@ export function OnboardingDetailPage() {
 
     const tone = progressTone(checklist.progress)
 
+    const sendLink = useSendOnboardingUploadLink()
+
+    const handleSendUploadLink = () => {
+        sendLink.mutate({ checklistId: checklist.id }, {
+            onSuccess: (result) => {
+                if (result.sent) {
+                    toast.success('Upload link sent', `Email sent to ${result.email}. Link expires in ${result.expiresInDays} days.`)
+                } else {
+                    toast.warning('Email delivery failed', 'Link generated but email could not be sent. Check email settings.')
+                }
+            },
+            onError: () => toast.error('Failed to send link', 'Could not generate upload link. Please try again.'),
+        })
+    }
+
     return (
         <PageWrapper>
             <div className="flex items-center gap-2 mb-3">
@@ -87,12 +104,27 @@ export function OnboardingDetailPage() {
                             </div>
                         </div>
                     </div>
-                    <div className="text-right shrink-0">
-                        <p className={cn('text-3xl font-bold font-display', tone.color)}>{checklist.progress}%</p>
-                        <p className="text-xs text-muted-foreground">{tone.label} · {checklist.completedCount}/{checklist.totalCount} steps</p>
-                        <Button asChild variant="outline" size="sm" className="mt-2">
-                            <Link to={`/employees/${checklist.employeeId}`}>View employee</Link>
-                        </Button>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                        <div className="text-right">
+                            <p className={cn('text-3xl font-bold font-display', tone.color)}>{checklist.progress}%</p>
+                            <p className="text-xs text-muted-foreground">{tone.label} · {checklist.completedCount}/{checklist.totalCount} steps</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                leftIcon={<Send className="h-3.5 w-3.5" />}
+                                loading={sendLink.isPending}
+                                onClick={handleSendUploadLink}
+                                title={checklist.email ? `Send upload link to ${checklist.email}` : 'No email address on record'}
+                                disabled={!checklist.email}
+                            >
+                                Send Upload Link
+                            </Button>
+                            <Button asChild variant="outline" size="sm">
+                                <Link to={`/employees/${checklist.employeeId}`}>View employee</Link>
+                            </Button>
+                        </div>
                     </div>
                 </div>
                 <Progress value={checklist.progress} className="mt-4" />
@@ -108,7 +140,7 @@ export function OnboardingDetailPage() {
 
                 <TabsContent value="overview"><OverviewTab checklist={checklist} /></TabsContent>
                 <TabsContent value="steps"><StepsTab checklist={checklist} /></TabsContent>
-                <TabsContent value="documents"><DocumentsTab employeeId={checklist.employeeId} /></TabsContent>
+                <TabsContent value="documents"><DocumentsTab checklist={checklist} /></TabsContent>
                 <TabsContent value="activity"><ActivityTab employeeId={checklist.employeeId} /></TabsContent>
             </Tabs>
         </PageWrapper>
@@ -502,52 +534,293 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
     )
 }
 
-function DocumentsTab({ employeeId }: { employeeId: string }) {
-    const { data, isLoading } = useDocuments({ employeeId, limit: 50 })
-    const docs = (data?.data ?? []) as Array<{ id: string; fileName?: string; category?: string; docType?: string; status?: string; expiryDate?: string | null; uploadedAt?: string }>
+// ── Per-step document upload panel ───────────────────────────────────────────
+function StepDocPanel({
+    step,
+    stepDocs,
+    checklistId,
+    employeeId,
+}: {
+    step: OnboardingStep
+    stepDocs: Array<{ id: string; docType: string; fileName?: string; category?: string; status?: string; expiryDate?: string | null; stepId?: string | null }>
+    checklistId: string
+    employeeId: string
+}) {
+    const [expanded, setExpanded] = useState(false)
+    const [uploadOpen, setUploadOpen] = useState(false)
+    const [selectedCategory, setSelectedCategory] = useState<DocCategory | ''>('')
+    const [selectedDocType, setSelectedDocType] = useState('')
+    const [expiryDate, setExpiryDate] = useState('')
+    const [file, setFile] = useState<File | null>(null)
+    const [uploading, setUploading] = useState(false)
+    const fileRef = useRef<HTMLInputElement>(null)
+    const qc = useQueryClient()
+    const uploadDoc = useUploadDocument()
+
+    const categoryDocs = selectedCategory ? DOC_TYPE_CATALOG[selectedCategory] : []
+    const selectedDocDef = categoryDocs.find(d => d.docType === selectedDocType)
+    const expiryRequired = selectedDocDef?.expiryRequired ?? false
+
+    const handleUpload = async () => {
+        if (!selectedCategory || !selectedDocType || !file) {
+            toast.warning('Incomplete', 'Please select a category, document type, and file.')
+            return
+        }
+        if (expiryRequired && !expiryDate) {
+            toast.warning('Expiry date required', `${selectedDocType} requires an expiry date.`)
+            return
+        }
+        setUploading(true)
+        try {
+            await uploadDoc.mutateAsync({
+                file,
+                employeeId,
+                category: selectedCategory,
+                docType: selectedDocType,
+                expiryDate: expiryDate || undefined,
+            })
+            await qc.invalidateQueries({ queryKey: ['documents'] })
+            toast.success('Document uploaded', `${selectedDocType} submitted for review.`)
+            setUploadOpen(false)
+            setFile(null)
+            setSelectedCategory('')
+            setSelectedDocType('')
+            setExpiryDate('')
+        } catch {
+            toast.error('Upload failed', 'Could not upload the document.')
+        } finally {
+            setUploading(false)
+        }
+    }
+
+    const docCount = stepDocs.length
+    const hasOverdue = step.status === 'overdue'
+
+    return (
+        <div className={cn(
+            'rounded-xl border overflow-hidden',
+            step.status === 'completed' ? 'border-success/30 bg-success/5' :
+                hasOverdue ? 'border-destructive/30 bg-destructive/5' :
+                    'border-border bg-card',
+        )}>
+            <button
+                type="button"
+                onClick={() => setExpanded(e => !e)}
+                className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-black/5 transition-colors text-left"
+            >
+                <div className={cn(
+                    'h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0',
+                    step.status === 'completed' ? 'bg-success text-success-foreground' :
+                        hasOverdue ? 'bg-destructive text-destructive-foreground' :
+                            'bg-muted text-muted-foreground',
+                )}>
+                    {step.status === 'completed' ? '✓' : step.stepOrder}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{step.title}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                        {step.owner ?? 'Unassigned'}
+                        {step.dueDate ? ` · Due ${formatDate(step.dueDate)}` : ''}
+                    </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                    {docCount > 0 && (
+                        <span className="text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+                            {docCount} doc{docCount !== 1 ? 's' : ''}
+                        </span>
+                    )}
+                    <StatusPill status={step.status} />
+                    {expanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                </div>
+            </button>
+
+            {expanded && (
+                <div className="border-t px-3.5 py-3 space-y-3">
+                    {/* Existing docs */}
+                    {stepDocs.length > 0 ? (
+                        <div className="space-y-1.5">
+                            {stepDocs.map((d) => (
+                                <div key={d.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-card border">
+                                    <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-semibold text-foreground truncate">{d.docType}</p>
+                                        <p className="text-[10px] text-muted-foreground truncate">
+                                            {CATEGORY_LABELS[d.category as DocCategory] ?? d.category}
+                                            {d.expiryDate ? ` · Expires ${formatDate(d.expiryDate)}` : ''}
+                                        </p>
+                                    </div>
+                                    <Badge
+                                        variant={d.status === 'valid' ? 'success' : d.status === 'expired' ? 'destructive' : 'secondary'}
+                                        className="text-[10px] capitalize shrink-0"
+                                    >
+                                        {d.status?.replace(/_/g, ' ')}
+                                    </Badge>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-muted-foreground py-1">No documents uploaded for this step yet.</p>
+                    )}
+
+                    {/* Upload form toggle */}
+                    {!uploadOpen ? (
+                        <Button size="sm" variant="outline" leftIcon={<Upload className="h-3 w-3" />} onClick={() => setUploadOpen(true)}>
+                            Upload document
+                        </Button>
+                    ) : (
+                        <div className="border rounded-xl p-3.5 space-y-3 bg-background">
+                            <p className="text-xs font-semibold text-foreground">Upload for: {step.title}</p>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-muted-foreground">Category *</label>
+                                    <Select value={selectedCategory} onValueChange={(v) => { setSelectedCategory(v as DocCategory); setSelectedDocType('') }}>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
+                                        <SelectContent>
+                                            {(Object.entries(CATEGORY_LABELS) as [DocCategory, string][]).map(([key, label]) => (
+                                                <SelectItem key={key} value={key} className="text-xs">{label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-muted-foreground">Document type *</label>
+                                    <Select value={selectedDocType} onValueChange={setSelectedDocType} disabled={!selectedCategory}>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
+                                        <SelectContent>
+                                            {categoryDocs.map(d => (
+                                                <SelectItem key={d.docType} value={d.docType} className="text-xs">
+                                                    {d.label}{d.expiryRequired ? ' *' : ''}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            {expiryRequired && (
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-destructive flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3" />Expiry date required *
+                                    </label>
+                                    <DatePicker value={expiryDate} onChange={setExpiryDate} className="h-8" />
+                                </div>
+                            )}
+
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-medium text-muted-foreground">File *</label>
+                                <div
+                                    className="border-2 border-dashed rounded-lg p-3 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+                                    onClick={() => fileRef.current?.click()}
+                                >
+                                    {file ? (
+                                        <div className="flex items-center justify-center gap-1.5 text-xs">
+                                            <FileText className="h-3.5 w-3.5 text-primary" />
+                                            <span className="font-medium truncate max-w-[180px]">{file.name}</span>
+                                        </div>
+                                    ) : (
+                                        <p className="text-[11px] text-muted-foreground">Click to choose file (PDF, JPG, PNG)</p>
+                                    )}
+                                    <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <Button size="sm" loading={uploading} leftIcon={<Upload className="h-3 w-3" />} onClick={handleUpload}>
+                                    Upload
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => { setUploadOpen(false); setFile(null); setSelectedCategory(''); setSelectedDocType(''); setExpiryDate('') }}>
+                                    Cancel
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    )
+}
+
+function DocumentsTab({ checklist }: { checklist: OnboardingChecklist }) {
+    const { data, isLoading } = useDocuments({ employeeId: checklist.employeeId, limit: 100 })
+    const allDocs = (data?.data ?? []) as Array<{ id: string; docType: string; fileName?: string; category?: string; status?: string; expiryDate?: string | null; stepId?: string | null }>
+
+    // Group docs by stepId
+    const docsByStep = useMemo(() => {
+        const map = new Map<string, typeof allDocs>()
+        for (const d of allDocs) {
+            const key = d.stepId ?? '__none'
+            const arr = map.get(key) ?? []
+            arr.push(d)
+            map.set(key, arr)
+        }
+        return map
+    }, [allDocs])
+
+    const unattachedDocs = docsByStep.get('__none') ?? []
 
     if (isLoading) {
         return (
             <Card className="p-4 space-y-2">
-                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
             </Card>
         )
     }
 
     return (
-        <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold">Employee documents</h3>
-                <Button asChild size="sm" variant="outline">
-                    <Link to={`/documents?employeeId=${employeeId}`}>
-                        <Plus className="h-3.5 w-3.5 mr-1.5" />Upload
-                    </Link>
+        <div className="space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="text-sm font-semibold">Documents by onboarding step</h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Upload documents against each step. Expiry dates are required for time-sensitive documents.</p>
+                </div>
+                <Button asChild size="sm" variant="outline" leftIcon={<Plus className="h-3.5 w-3.5" />}>
+                    <Link to={`/documents?employeeId=${checklist.employeeId}`}>All documents</Link>
                 </Button>
             </div>
-            {docs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+
+            {/* Per-step panels */}
+            {checklist.steps.length === 0 ? (
+                <Card className="flex flex-col items-center justify-center py-10 text-center gap-2">
                     <FileText className="h-8 w-8 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">No documents uploaded yet.</p>
-                </div>
+                    <p className="text-sm text-muted-foreground">No onboarding steps yet. Add steps first, then upload documents against each one.</p>
+                </Card>
             ) : (
                 <div className="space-y-2">
-                    {docs.map((d) => (
-                        <div key={d.id} className="flex items-center gap-3 p-2.5 rounded-lg border bg-card">
-                            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{d.fileName ?? d.docType ?? 'Document'}</p>
-                                <p className="text-[11px] text-muted-foreground truncate">
-                                    {d.category ?? '—'}
-                                    {d.expiryDate ? ` · Expires ${formatDate(d.expiryDate)}` : ''}
-                                    {d.uploadedAt ? ` · Uploaded ${formatDate(d.uploadedAt)}` : ''}
-                                </p>
-                            </div>
-                            {d.status && <Badge variant="secondary" className="text-[10px] capitalize">{d.status}</Badge>}
-                        </div>
+                    {checklist.steps.map((step) => (
+                        <StepDocPanel
+                            key={step.id}
+                            step={step}
+                            stepDocs={docsByStep.get(step.id) ?? []}
+                            checklistId={checklist.id}
+                            employeeId={checklist.employeeId}
+                        />
                     ))}
                 </div>
             )}
-        </Card>
+
+            {/* Unattached docs (legacy / uploaded from main docs page) */}
+            {unattachedDocs.length > 0 && (
+                <Card className="p-4">
+                    <h4 className="text-xs font-semibold text-muted-foreground mb-2">Other employee documents (not linked to a step)</h4>
+                    <div className="space-y-1.5">
+                        {unattachedDocs.map((d) => (
+                            <div key={d.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg border bg-card">
+                                <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium truncate">{d.docType}</p>
+                                    <p className="text-[10px] text-muted-foreground truncate">
+                                        {CATEGORY_LABELS[d.category as DocCategory] ?? d.category}
+                                        {d.expiryDate ? ` · Expires ${formatDate(d.expiryDate)}` : ''}
+                                    </p>
+                                </div>
+                                <Badge variant="secondary" className="text-[10px] capitalize shrink-0">{d.status?.replace(/_/g, ' ')}</Badge>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            )}
+        </div>
     )
 }
 

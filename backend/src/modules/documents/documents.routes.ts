@@ -1,7 +1,12 @@
-import { listDocuments, getDocument, createDocument, updateDocument, verifyDocument, getExpiringDocuments, softDeleteDocument } from './documents.service.js'
+import { listDocuments, getDocument, createDocument, updateDocument, verifyDocument, rejectDocument, getExpiringDocuments, softDeleteDocument } from './documents.service.js'
 import { generateUploadUrl, generateDownloadUrl, buildS3Key, uploadObject } from '../../plugins/s3.js'
 import { templateRoutes } from './templates.routes.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { logDocumentAction, getDocumentAuditLog } from '../onboarding/onboarding.docs.service.js'
+import { sendEmail, documentVerifiedEmail, documentRejectedEmail } from '../../plugins/email.js'
+import { db } from '../../db/index.js'
+import { employees, tenants } from '../../db/schema/index.js'
+import { eq } from 'drizzle-orm'
 import { sendWithETag } from '../../lib/etag.js'
 import { extname } from 'path'
 
@@ -104,7 +109,98 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        await logDocumentAction({
+            tenantId: request.user.tenantId,
+            documentId: id,
+            action: 'verified',
+            actorId: request.user.id,
+            actorLabel: request.user.name,
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'] as string | undefined,
+        })
+        // Notify employee (best-effort)
+        if (updated.employeeId) {
+            try {
+                const [emp] = await db.select({ email: employees.email, firstName: employees.firstName, lastName: employees.lastName })
+                    .from(employees).where(eq(employees.id, updated.employeeId)).limit(1)
+                const [tn] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
+                if (emp?.email) {
+                    const opts = documentVerifiedEmail({
+                        employeeName: [emp.firstName, emp.lastName].filter(Boolean).join(' ') || 'Employee',
+                        docType: updated.docType ?? updated.fileName ?? 'Document',
+                        verifiedBy: request.user.name ?? 'HR Team',
+                        companyName: tn?.name ?? 'Your Company',
+                    })
+                    opts.to = emp.email
+                    sendEmail(opts).catch(() => { })
+                }
+            } catch { /* ignore */ }
+        }
         return reply.send({ data: updated })
+    })
+
+    fastify.post('/:id/reject', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'pro_officer', 'super_admin')],
+        schema: {
+            tags: ['Documents'],
+            body: {
+                type: 'object',
+                required: ['reason'],
+                properties: { reason: { type: 'string', minLength: 1, maxLength: 1000 } },
+            },
+        },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const { reason } = request.body as { reason: string }
+        const updated = await rejectDocument(request.user.tenantId, id, request.user.id, reason)
+        if (!updated) return reply.code(404).send({ message: 'Document not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'document',
+            entityId: id,
+            entityName: updated.fileName ?? updated.docType,
+            action: 'reject',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        await logDocumentAction({
+            tenantId: request.user.tenantId,
+            documentId: id,
+            action: 'rejected',
+            actorId: request.user.id,
+            actorLabel: request.user.name,
+            details: { reason },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'] as string | undefined,
+        })
+        if (updated.employeeId) {
+            try {
+                const [emp] = await db.select({ email: employees.email, firstName: employees.firstName, lastName: employees.lastName })
+                    .from(employees).where(eq(employees.id, updated.employeeId)).limit(1)
+                const [tn] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
+                if (emp?.email) {
+                    const opts = documentRejectedEmail({
+                        employeeName: [emp.firstName, emp.lastName].filter(Boolean).join(' ') || 'Employee',
+                        docType: updated.docType ?? updated.fileName ?? 'Document',
+                        reason,
+                        companyName: tn?.name ?? 'Your Company',
+                    })
+                    opts.to = emp.email
+                    sendEmail(opts).catch(() => { })
+                }
+            } catch { /* ignore */ }
+        }
+        return reply.send({ data: updated })
+    })
+
+    // GET /api/v1/documents/:id/audit-log
+    fastify.get('/:id/audit-log', { ...auth, schema: { tags: ['Documents'] } }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const data = await getDocumentAuditLog(request.user.tenantId, id)
+        return reply.send({ data })
     })
 
     fastify.delete('/:id', {
@@ -114,6 +210,15 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const deleted = await softDeleteDocument(request.user.tenantId, id)
         if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Document not found' })
+        await logDocumentAction({
+            tenantId: request.user.tenantId,
+            documentId: id,
+            action: 'deleted',
+            actorId: request.user.id,
+            actorLabel: request.user.name,
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'] as string | undefined,
+        })
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,
@@ -210,6 +315,17 @@ export default async function (fastify: any): Promise<void> {
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
 
+        await logDocumentAction({
+            tenantId: request.user.tenantId,
+            documentId: doc.id,
+            action: 'uploaded',
+            actorId: request.user.id,
+            actorLabel: request.user.name,
+            details: { stepId: null, category, docType: docType || fileMeta.fileName, fileName: fileMeta.fileName, sizeBytes: fileMeta.size, expiryDate: expiryDate || null },
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'] as string | undefined,
+        })
+
         return reply.code(201).send({ data: doc })
     })
 
@@ -240,6 +356,15 @@ export default async function (fastify: any): Promise<void> {
         if (doc.s3Key) {
             try {
                 const downloadUrl = await generateDownloadUrl(doc.s3Key)
+                logDocumentAction({
+                    tenantId: claims.tenantId,
+                    documentId: id,
+                    action: 'viewed',
+                    actorId: (request as any).user?.id,
+                    actorLabel: (request as any).user?.name ?? 'token_view',
+                    ipAddress: (request as any).ip,
+                    userAgent: request.headers['user-agent'] as string | undefined,
+                }).catch(() => { })
                 return reply.redirect(302, downloadUrl)
             } catch {
                 return reply.code(500).send({ message: 'Could not generate download URL' })
@@ -272,6 +397,15 @@ export default async function (fastify: any): Promise<void> {
         if (!doc.s3Key) return reply.code(400).send({ message: 'No file stored for this document' })
 
         const downloadUrl = await generateDownloadUrl(doc.s3Key)
+        logDocumentAction({
+            tenantId: request.user.tenantId,
+            documentId: id,
+            action: 'downloaded',
+            actorId: request.user.id,
+            actorLabel: request.user.name,
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'] as string | undefined,
+        }).catch(() => { })
         return reply.send({ data: { downloadUrl } })
     })
 }

@@ -36,7 +36,7 @@ import { api } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { useCompanySettings, useUpdateCompanySettings, useTenantUsers, useUpdateUser, useTwoFaStatus, useTwoFaSetup, useTwoFaVerify, useTwoFaDisable, useTwoFaRegenerateBackupCodes, useIpAllowlist, useUpdateIpAllowlist } from '@/hooks/useSettings'
+import { useCompanySettings, useUpdateCompanySettings, useTenantUsers, useUpdateUser, useTwoFaStatus, useTwoFaSetup, useTwoFaVerify, useTwoFaDisable, useTwoFaRegenerateBackupCodes, useIpAllowlist, useUpdateIpAllowlist, useNotifPrefs, useUpdateNotifPrefs, useSecuritySettings, useUpdateSecuritySettings, useRegionalSettings, useUpdateRegionalSettings } from '@/hooks/useSettings'
 import { useInfiniteLoginHistory } from '@/hooks/useAudit'
 import type { CompanySettings } from '@/hooks/useSettings'
 
@@ -78,7 +78,10 @@ function CompanyTab() {
     const { tenant } = useAuthStore()
     const { data: company, isLoading } = useCompanySettings()
     const updateCompany = useUpdateCompanySettings()
+    const { data: regional, isLoading: regionalLoading } = useRegionalSettings()
+    const updateRegional = useUpdateRegionalSettings()
     const [form, setForm] = useState<Partial<CompanySettings>>({})
+    const [regionalForm, setRegionalForm] = useState({ timezone: 'Asia/Dubai', currency: 'AED', dateFormat: 'DD/MM/YYYY' })
     const [saved, setSaved] = useState(false)
 
     useEffect(() => {
@@ -92,12 +95,19 @@ function CompanyTab() {
         }
     }, [company])
 
+    useEffect(() => {
+        if (regional) setRegionalForm({ timezone: regional.timezone, currency: regional.currency, dateFormat: regional.dateFormat })
+    }, [regional])
+
     const set = (field: keyof CompanySettings, value: string) =>
         setForm((prev) => ({ ...prev, [field]: value }))
 
     const handleSave = async () => {
         try {
-            await updateCompany.mutateAsync(form)
+            await Promise.all([
+                updateCompany.mutateAsync(form),
+                updateRegional.mutateAsync(regionalForm),
+            ])
             setSaved(true)
             toast.success('Settings saved', 'Company profile has been updated successfully.')
             setTimeout(() => setSaved(false), 2000)
@@ -170,18 +180,26 @@ function CompanyTab() {
                         </h3>
                         <p className="text-xs text-muted-foreground mt-0.5">Defaults applied across the workspace</p>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {[
-                            { id: 'timezone', label: 'Time Zone', value: 'Asia/Dubai (UTC+4)' },
-                            { id: 'currency', label: 'Currency', value: 'AED – UAE Dirham' },
-                            { id: 'date_format', label: 'Date Format', value: 'DD/MM/YYYY' },
-                        ].map((f) => (
-                            <div key={f.id} className="space-y-1.5">
-                                <Label htmlFor={f.id}>{f.label}</Label>
-                                <Input id={f.id} defaultValue={f.value} readOnly className="bg-muted/40" />
+                    {regionalLoading ? (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="timezone">Time Zone</Label>
+                                <Input id="timezone" value={regionalForm.timezone} onChange={e => setRegionalForm(p => ({ ...p, timezone: e.target.value }))} />
                             </div>
-                        ))}
-                    </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="currency">Currency</Label>
+                                <Input id="currency" value={regionalForm.currency} onChange={e => setRegionalForm(p => ({ ...p, currency: e.target.value }))} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="dateFormat">Date Format</Label>
+                                <Input id="dateFormat" value={regionalForm.dateFormat} onChange={e => setRegionalForm(p => ({ ...p, dateFormat: e.target.value }))} placeholder="DD/MM/YYYY" />
+                            </div>
+                        </div>
+                    )}
                 </div>
             </SettingsCard>
 
@@ -661,14 +679,41 @@ function UsersTab() {
 
 // ─── Notifications Tab ────────────────────────────────────────────────────────
 function NotificationsTab() {
-    const [settings, setSettings] = useState(() =>
-        notifGroups.flatMap((g) => g.items).reduce(
-            (acc, item) => ({ ...acc, [`${item.id}_email`]: item.email, [`${item.id}_push`]: item.push }),
-            {} as Record<string, boolean>,
-        ),
-    )
+    const { data: savedPrefs, isLoading } = useNotifPrefs()
+    const updatePrefs = useUpdateNotifPrefs()
 
-    const toggle = (key: string) => setSettings((prev) => ({ ...prev, [key]: !prev[key] }))
+    // Local state mirrors the server — initialised from API, changes are local until Save
+    const [settings, setSettings] = useState<Record<string, boolean>>({})
+
+    useEffect(() => {
+        if (!savedPrefs) return
+        const flat: Record<string, boolean> = {}
+        for (const item of notifGroups.flatMap(g => g.items)) {
+            flat[`${item.id}_email`] = savedPrefs[item.id]?.email ?? item.email
+            flat[`${item.id}_push`] = savedPrefs[item.id]?.push ?? item.push
+        }
+        setSettings(flat)
+    }, [savedPrefs])
+
+    const toggle = (key: string) => setSettings(prev => ({ ...prev, [key]: !prev[key] }))
+
+    const handleSave = async () => {
+        const prefs: Record<string, { email: boolean; push: boolean }> = {}
+        for (const item of notifGroups.flatMap(g => g.items)) {
+            prefs[item.id] = {
+                email: settings[`${item.id}_email`] ?? item.email,
+                push: settings[`${item.id}_push`] ?? item.push,
+            }
+        }
+        try {
+            await updatePrefs.mutateAsync(prefs)
+            toast.success('Preferences saved', 'Your notification settings have been updated.')
+        } catch {
+            toast.error('Save failed', 'Could not save notification preferences.')
+        }
+    }
+
+    if (isLoading) return <div className="py-12 text-center text-sm text-muted-foreground">Loading…</div>
 
     return (
         <div className="space-y-5">
@@ -695,14 +740,14 @@ function NotificationsTab() {
                                     <div className="flex items-center gap-3 shrink-0">
                                         <div className="w-12 flex justify-center">
                                             <Switch
-                                                checked={settings[`${item.id}_email`]}
+                                                checked={settings[`${item.id}_email`] ?? item.email}
                                                 onCheckedChange={() => toggle(`${item.id}_email`)}
                                                 aria-label={`${item.label} — Email`}
                                             />
                                         </div>
                                         <div className="w-12 flex justify-center">
                                             <Switch
-                                                checked={settings[`${item.id}_push`]}
+                                                checked={settings[`${item.id}_push`] ?? item.push}
                                                 onCheckedChange={() => toggle(`${item.id}_push`)}
                                                 aria-label={`${item.label} — Push`}
                                             />
@@ -715,7 +760,7 @@ function NotificationsTab() {
                 </SettingsCard>
             ))}
             <div className="flex justify-end pt-2">
-                <Button onClick={() => toast.success('Preferences saved', 'Your notification settings have been updated.')} leftIcon={<Save className="h-4 w-4" />}>
+                <Button onClick={handleSave} loading={updatePrefs.isPending} leftIcon={<Save className="h-4 w-4" />}>
                     Save Preferences
                 </Button>
             </div>
@@ -724,6 +769,57 @@ function NotificationsTab() {
 }
 
 // ─── Security Tab ─────────────────────────────────────────────────────────────
+function SecurityPoliciesCard() {
+    const { data: security, isLoading } = useSecuritySettings()
+    const updateSecurity = useUpdateSecuritySettings()
+
+    const handleToggle = async (key: 'auditLoggingEnabled') => {
+        if (!security) return
+        try {
+            await updateSecurity.mutateAsync({ [key]: !security[key] })
+        } catch {
+            toast.error('Save failed', 'Could not update security settings.')
+        }
+    }
+
+    return (
+        <Section icon={Shield} title="Security Policies" description="Workspace-wide protection rules">
+            <div className="divide-y border rounded-lg overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3.5">
+                    <div>
+                        <p className="text-sm font-medium">Auto Session Timeout</p>
+                        <p className="text-xs text-muted-foreground">Log out after {security?.sessionTimeoutMinutes ?? 480} minutes of inactivity</p>
+                    </div>
+                    <Switch
+                        checked={(security?.sessionTimeoutMinutes ?? 480) < 1440}
+                        onCheckedChange={async (checked) => {
+                            try {
+                                await updateSecurity.mutateAsync({ sessionTimeoutMinutes: checked ? 480 : 0 })
+                            } catch {
+                                toast.error('Save failed', 'Could not update session timeout.')
+                            }
+                        }}
+                        disabled={isLoading || updateSecurity.isPending}
+                        aria-label="Auto Session Timeout"
+                    />
+                </div>
+                <div className="flex items-center justify-between px-4 py-3.5">
+                    <div>
+                        <p className="text-sm font-medium">Audit Logging</p>
+                        <p className="text-xs text-muted-foreground">Track all admin actions and changes</p>
+                    </div>
+                    <Switch
+                        checked={security?.auditLoggingEnabled ?? true}
+                        onCheckedChange={() => handleToggle('auditLoggingEnabled')}
+                        disabled={isLoading || updateSecurity.isPending}
+                        aria-label="Audit Logging"
+                    />
+                </div>
+            </div>
+        </Section>
+    )
+}
+
 function SecurityTab() {
     const [currentPw, setCurrentPw] = useState('')
     const [newPw, setNewPw] = useState('')
@@ -773,27 +869,7 @@ function SecurityTab() {
                 </div>
             </Section>
 
-            <Section
-                icon={Shield}
-                title="Security Policies"
-                description="Workspace-wide protection rules"
-            >
-                <div className="divide-y border rounded-lg overflow-hidden">
-                    {[
-                        { id: 'session_timeout', label: 'Auto Session Timeout', desc: 'Log out after 30 minutes of inactivity', defaultChecked: true },
-                        { id: 'audit_log', label: 'Audit Logging', desc: 'Track all admin actions and changes', defaultChecked: true },
-                    ].map((policy) => (
-                        <div key={policy.id} className="flex items-center justify-between px-4 py-3.5">
-                            <div>
-                                <p className="text-sm font-medium">{policy.label}</p>
-                                <p className="text-xs text-muted-foreground">{policy.desc}</p>
-                            </div>
-                            <Switch defaultChecked={policy.defaultChecked} aria-label={policy.label} />
-                        </div>
-                    ))}
-                </div>
-            </Section>
-
+            <SecurityPoliciesCard />
             <TwoFactorCard />
             <IpAllowlistCard />
 

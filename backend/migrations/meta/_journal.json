@@ -15,6 +15,27 @@
       "when": 1745625600000,
       "tag": "0001_public_holidays_salary_revisions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1745712000000,
+      "tag": "0002_tenant_user_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1745798400000,
+      "tag": "0003_document_step_upload_token",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1745884800000,
+      "tag": "0004_doc_lifecycle",
+      "breakpoints": true
     }
   ]
 }

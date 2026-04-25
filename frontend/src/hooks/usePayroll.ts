@@ -64,3 +64,51 @@ export function useSubmitWps() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll'] }),
     })
 }
+
+/** Downloads WPS SIF file for the given payroll run and triggers browser save. */
+export function useDownloadWpsSif() {
+    return useMutation({
+        mutationFn: async (runId: string) => {
+            const { useAuthStore } = await import('@/store/authStore')
+            const token = useAuthStore.getState().accessToken
+            const res = await fetch(`/api/v1/payroll/${runId}/wps-sif`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                cache: 'no-store',
+            })
+            if (!res.ok) throw new Error('Failed to download WPS file')
+            const blob = await res.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `wps-sif-${runId}.txt`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            URL.revokeObjectURL(url)
+        },
+    })
+}
+
+/** Downloads payslip PDF for the given payslip ID and triggers browser save. */
+export function useDownloadPayslip() {
+    return useMutation({
+        mutationFn: async (payslipId: string) => {
+            const { useAuthStore } = await import('@/store/authStore')
+            const token = useAuthStore.getState().accessToken
+            const res = await fetch(`/api/v1/payroll/payslips/${payslipId}/download`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                cache: 'no-store',
+            })
+            if (!res.ok) throw new Error('Failed to download payslip')
+            const blob = await res.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `payslip-${payslipId}.pdf`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            URL.revokeObjectURL(url)
+        },
+    })
+}

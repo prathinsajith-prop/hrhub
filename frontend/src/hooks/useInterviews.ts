@@ -44,3 +44,11 @@ export function useUpdateInterview() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['interviews'] }),
     })
 }
+
+export function useDeleteInterview() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (id: string) => api.delete(`/interviews/${id}`),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['interviews'] }),
+    })
+}

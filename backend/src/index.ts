@@ -266,6 +266,22 @@ async function bootstrap() {
         app.log.info(`Swagger docs at http://${env.HOST}:${env.PORT}/docs`)
     }
 
+    // Verify mail transport is reachable (non-fatal — emails will retry per send)
+    try {
+        const { verifyEmailConfig } = await import('./plugins/email.js')
+        const mailStatus = await verifyEmailConfig()
+        if (mailStatus.ok) {
+            app.log.info(`[email] Connected: ${mailStatus.provider} via ${mailStatus.host} (from: ${mailStatus.from})`)
+        } else {
+            app.log.warn(`[email] Transport check FAILED — ${mailStatus.provider}@${mailStatus.host}: ${mailStatus.error}`)
+            if (env.NODE_ENV === 'production') {
+                app.log.warn('[email] Outbound emails will fail until configuration is fixed.')
+            }
+        }
+    } catch (e) {
+        app.log.error('[email] verifyEmailConfig threw: %s', e)
+    }
+
     // Task 2.8 — Expired token cleanup every 6 hours
     const SIX_HOURS = 6 * 60 * 60 * 1000
     setInterval(() => {

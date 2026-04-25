@@ -89,6 +89,45 @@ export function useArchiveEmployee() {
     })
 }
 
+export interface SalaryRevision {
+    id: string
+    employeeId: string
+    effectiveDate: string
+    revisionType: 'increment' | 'decrement' | 'promotion' | 'annual_review' | 'probation_completion' | 'correction'
+    previousBasicSalary: string | null
+    newBasicSalary: string
+    previousTotalSalary: string | null
+    newTotalSalary: string | null
+    reason: string | null
+    approvedBy: string | null
+    createdAt: string
+}
+
+export function useSalaryHistory(employeeId: string) {
+    return useQuery({
+        queryKey: ['salary-history', employeeId],
+        queryFn: () => api.get<{ data: SalaryRevision[] }>(`/employees/${employeeId}/salary-history`).then(r => r.data),
+        enabled: !!employeeId,
+    })
+}
+
+export function useRecordSalaryRevision(employeeId: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: {
+            effectiveDate: string
+            revisionType: string
+            newBasicSalary: string | number
+            newTotalSalary?: string | number
+            reason?: string
+        }) => api.post<{ data: SalaryRevision }>(`/employees/${employeeId}/salary-revision`, data).then(r => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['salary-history', employeeId] })
+            qc.invalidateQueries({ queryKey: ['employees', employeeId] })
+        },
+    })
+}
+
 export function useUploadEmployeeAvatar(id: string) {
     const qc = useQueryClient()
     return useMutation({

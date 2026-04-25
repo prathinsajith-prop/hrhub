@@ -99,6 +99,70 @@ export function useTwoFaRegenerateBackupCodes() {
     })
 }
 
+// ── Regional Settings hooks ───────────────────────────────────────────────────
+export interface RegionalSettings {
+    timezone: string
+    currency: string
+    dateFormat: string
+}
+
+export function useRegionalSettings() {
+    return useQuery({
+        queryKey: ['settings', 'regional'],
+        queryFn: () => api.get<{ data: RegionalSettings }>('/settings/regional').then(r => r.data),
+    })
+}
+
+export function useUpdateRegionalSettings() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: Partial<RegionalSettings>) =>
+            api.patch<{ data: RegionalSettings }>('/settings/regional', data).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'regional'] }),
+    })
+}
+
+// ── Security Settings hooks ───────────────────────────────────────────────────
+export interface SecuritySettings {
+    sessionTimeoutMinutes: number
+    auditLoggingEnabled: boolean
+}
+
+export function useSecuritySettings() {
+    return useQuery({
+        queryKey: ['settings', 'security'],
+        queryFn: () => api.get<{ data: SecuritySettings }>('/settings/security').then(r => r.data),
+    })
+}
+
+export function useUpdateSecuritySettings() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: Partial<SecuritySettings>) =>
+            api.patch<{ data: SecuritySettings }>('/settings/security', data).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'security'] }),
+    })
+}
+
+// ── Notification Preferences hooks ───────────────────────────────────────────
+export type NotifPrefs = Record<string, { email: boolean; push: boolean }>
+
+export function useNotifPrefs() {
+    return useQuery({
+        queryKey: ['settings', 'notifications'],
+        queryFn: () => api.get<{ data: NotifPrefs }>('/settings/notifications').then(r => r.data),
+    })
+}
+
+export function useUpdateNotifPrefs() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (prefs: NotifPrefs) =>
+            api.put<{ data: NotifPrefs }>('/settings/notifications', prefs).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'notifications'] }),
+    })
+}
+
 // ── IP Allowlist hooks ────────────────────────────────────────────────────────
 export function useIpAllowlist() {
     return useQuery({

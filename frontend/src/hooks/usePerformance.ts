@@ -46,3 +46,11 @@ export function useUpdateReview() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['performance'] }),
     })
 }
+
+export function useDeleteReview() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (id: string) => api.delete(`/performance/${id}`),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['performance'] }),
+    })
+}
