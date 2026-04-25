@@ -103,7 +103,6 @@ export function SiteHeader() {
   }
 
   // Tenants other than the current one (to show in switcher)
-  const otherTenants = myTenants?.filter(m => m.tenantId !== tenant?.id) ?? []
   const hasMultipleOrgs = (myTenants?.length ?? 0) > 1
 
   const iconBtn = 'h-9 w-9 border-border bg-background hover:bg-muted'
