@@ -31,7 +31,11 @@ export const SearchInput = memo(
         ref,
     ) {
         const handleClear = () => {
-            onClear ? onClear() : onChange('')
+            if (onClear) {
+                onClear()
+            } else {
+                onChange('')
+            }
         }
 
         const sizeClasses = size === 'sm' ? 'h-8 text-xs' : 'h-9 text-sm'

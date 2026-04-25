@@ -10,8 +10,6 @@ import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs } from '@/components/ui/form-controls'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
-import { ViewToggle } from '@/components/ui/view-toggle'
-import { useViewMode } from '@/hooks/useViewMode'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -374,45 +372,10 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
   )
 }
 
-function VisaCard({ v, onView }: { v: VisaApplication; onView: (v: VisaApplication) => void }) {
-  const progressPct = Math.round((v.currentStep / v.totalSteps) * 100)
-  const urgencyStyles: Record<string, string> = {
-    critical: 'border-l-destructive',
-    urgent: 'border-l-warning',
-    normal: 'border-l-border',
-  }
-  return (
-    <Card className={`p-4 border-l-4 ${urgencyStyles[(v as any).urgencyLevel ?? 'normal']} hover:shadow-md transition-shadow`}>
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-sm truncate">{v.employeeName || '—'}</p>
-          <p className="text-xs text-muted-foreground capitalize">{v.visaType.replace(/_/g, ' ')}</p>
-        </div>
-        <Badge variant="outline" className={cn('text-[10px] shrink-0', statusStyles[v.status])}>{statusLabel[v.status]}</Badge>
-      </div>
-      <div className="space-y-1.5 mb-3">
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Step {v.currentStep}/{v.totalSteps}</span>
-          <span>{progressPct}%</span>
-        </div>
-        <Progress value={progressPct} className={cn('h-1.5', (v as any).urgencyLevel === 'critical' ? '[&>div]:bg-destructive' : (v as any).urgencyLevel === 'urgent' ? '[&>div]:bg-warning' : '[&>div]:bg-primary')} />
-      </div>
-      {v.expiryDate && (
-        <p className="text-xs text-muted-foreground mb-3">Expires {formatDate(v.expiryDate)}</p>
-      )}
-      <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={() => onView(v)}>
-        View Details
-      </Button>
-    </Card>
-  )
-}
-
 export function VisaPage() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('all')
   const [newAppOpen, setNewAppOpen] = useState(false)
-  const [viewingVisa, setViewingVisa] = useState<VisaApplication | null>(null)
-  const [tableView, setTableView] = useViewMode('visa')
   const { data: visaData, isLoading } = useVisas({ limit: 50 })
   const recalcUrgency = useRecalcVisaUrgency()
   const updateVisa = useUpdateVisa()

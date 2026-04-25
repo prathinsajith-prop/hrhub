@@ -35,6 +35,7 @@ export function OnboardingDetailPage() {
         if (!raw) return null
         return { ...raw, steps: deriveSteps(raw.steps) }
     }, [raw])
+    const sendLink = useSendOnboardingUploadLink()
 
     if (isLoading) {
         return (
@@ -63,8 +64,6 @@ export function OnboardingDetailPage() {
     }
 
     const tone = progressTone(checklist.progress)
-
-    const sendLink = useSendOnboardingUploadLink()
 
     const handleSendUploadLink = () => {
         sendLink.mutate({ checklistId: checklist.id }, {
@@ -538,12 +537,10 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
 function StepDocPanel({
     step,
     stepDocs,
-    checklistId,
     employeeId,
 }: {
     step: OnboardingStep
     stepDocs: Array<{ id: string; docType: string; fileName?: string; category?: string; status?: string; expiryDate?: string | null; stepId?: string | null }>
-    checklistId: string
     employeeId: string
 }) {
     const [expanded, setExpanded] = useState(false)
@@ -792,7 +789,6 @@ function DocumentsTab({ checklist }: { checklist: OnboardingChecklist }) {
                             key={step.id}
                             step={step}
                             stepDocs={docsByStep.get(step.id) ?? []}
-                            checklistId={checklist.id}
                             employeeId={checklist.employeeId}
                         />
                     ))}
