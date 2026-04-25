@@ -578,7 +578,9 @@
     "switched": "Switched to {{name}}",
     "switchFailed": "Failed to switch tenant",
     "createTitle": "Create Organization",
-    "createDescription": "Set up a new tenant workspace."
+    "createDescription": "Set up a new tenant workspace.",
+    "settings": "Organization Settings",
+    "settingsDescription": "Manage your organization profile, members, and security."
   },
   "team": {
     "title": "Team",

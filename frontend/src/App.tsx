@@ -45,6 +45,7 @@ const TeamPage = lazy(() => import('@/pages/organizations/TeamPage').then(m => (
 const ConnectedAppsPage = lazy(() => import('@/pages/organizations/ConnectedAppsPage').then(m => ({ default: m.ConnectedAppsPage })))
 const LeavePoliciesPage = lazy(() => import('@/pages/leave/LeavePoliciesPage').then(m => ({ default: m.LeavePoliciesPage })))
 const OnboardingUploadPage = lazy(() => import('@/pages/onboarding/OnboardingUploadPage').then(m => ({ default: m.OnboardingUploadPage })))
+const OrganizationSettingsPage = lazy(() => import('@/pages/organizations/OrganizationSettingsPage').then(m => ({ default: m.OrganizationSettingsPage })))
 
 function PageLoader() {
   return (
@@ -158,6 +159,7 @@ export default function App() {
             <Route path="team" element={<RoleRoute routeKey="team"><TeamPage /></RoleRoute>} />
             <Route path="apps" element={<RoleRoute routeKey="apps"><ConnectedAppsPage /></RoleRoute>} />
             <Route path="leave-policies" element={<RoleRoute routeKey="leave-policies"><LeavePoliciesPage /></RoleRoute>} />
+            <Route path="organization-settings" element={<RoleRoute routeKey="organization-settings"><OrganizationSettingsPage /></RoleRoute>} />
           </Route>
           {/* Public onboarding upload — no auth, no AppLayout */}
           <Route path="onboarding/upload/:token" element={<OnboardingUploadPage />} />

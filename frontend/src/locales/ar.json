@@ -578,7 +578,9 @@
     "switched": "تم التبديل إلى {{name}}",
     "switchFailed": "فشل التبديل بين المؤسسات",
     "createTitle": "إنشاء مؤسسة",
-    "createDescription": "أنشئ مساحة عمل جديدة لمؤسستك."
+    "createDescription": "أنشئ مساحة عمل جديدة لمؤسستك.",
+    "settings": "إعدادات المؤسسة",
+    "settingsDescription": "إدارة ملف مؤسستك والأعضاء والأمان."
   },
   "team": {
     "title": "الفريق",

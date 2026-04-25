@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight } from 'lucide-react'
+import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight, ArrowRightLeft, Check, Settings2 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu'
 import {
   Popover,
@@ -21,8 +24,10 @@ import {
 import { cn } from '@/lib/utils'
 import { useNotificationsList, useUnreadCount, useMarkNotificationRead, useMarkAllRead } from '@/hooks/useNotifications'
 import { useAuthStore } from '@/store/authStore'
+import { useMyTenants, useSwitchTenant } from '@/hooks/useTenants'
 import { GlobalSearch } from '@/components/shared/GlobalSearch'
 import { ROOT_NAV_LABELS, ROUTES } from '@/lib/routes'
+import { toast } from '@/components/ui/overlays'
 
 /** Humanise a URL segment as a fallback label (kebab/snake → Title Case). */
 function humaniseSegment(seg: string): string {
@@ -75,6 +80,8 @@ export function SiteHeader() {
   const markAll = useMarkAllRead()
   const notifications = notifData?.data ?? []
   const { user, tenant, logout } = useAuthStore()
+  const { data: myTenants } = useMyTenants()
+  const switchMut = useSwitchTenant()
 
   const initials = user?.name
     ? user.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
@@ -84,6 +91,20 @@ export function SiteHeader() {
     logout()
     navigate(ROUTES.login, { replace: true })
   }
+
+  async function handleSwitchTenant(tenantId: string, tenantName: string) {
+    try {
+      await switchMut.mutateAsync(tenantId)
+      toast.success(t('organizations.switched', { name: tenantName }))
+      navigate('/dashboard', { replace: true })
+    } catch {
+      toast.error(t('organizations.switchFailed', { defaultValue: 'Failed to switch organization' }))
+    }
+  }
+
+  // Tenants other than the current one (to show in switcher)
+  const otherTenants = myTenants?.filter(m => m.tenantId !== tenant?.id) ?? []
+  const hasMultipleOrgs = (myTenants?.length ?? 0) > 1
 
   const iconBtn = 'h-9 w-9 border-border bg-background hover:bg-muted'
 
@@ -293,6 +314,61 @@ export function SiteHeader() {
 
             {/* Menu actions */}
             <div className="p-1.5">
+              {/* Organization switcher — only shown when user belongs to multiple orgs */}
+              {hasMultipleOrgs && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md w-full flex items-center text-sm">
+                    <ArrowRightLeft className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span>{t('organizations.switch', { defaultValue: 'Switch Organization' })}</span>
+                    {switchMut.isPending && (
+                      <span className="ms-auto h-3.5 w-3.5 border border-muted-foreground/40 border-t-muted-foreground rounded-full animate-spin" />
+                    )}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-56 p-1">
+                    {/* Current org */}
+                    {myTenants?.map(m => (
+                      <DropdownMenuItem
+                        key={m.tenantId}
+                        className="gap-2.5 cursor-pointer px-2.5 rounded-md"
+                        onClick={() => {
+                          if (m.tenantId !== tenant?.id) handleSwitchTenant(m.tenantId, m.tenantName)
+                        }}
+                        disabled={m.tenantId === tenant?.id || switchMut.isPending}
+                      >
+                        <div className="h-6 w-6 rounded bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground shrink-0 overflow-hidden">
+                          {m.logoUrl
+                            ? <img src={m.logoUrl} alt="" className="h-full w-full object-cover" />
+                            : m.tenantName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{m.tenantName}</p>
+                          <p className="text-[10px] text-muted-foreground capitalize truncate">
+                            {t(`team.roles.${m.role}`, { defaultValue: m.role.replace('_', ' ') })}
+                          </p>
+                        </div>
+                        {m.tenantId === tenant?.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator className="my-1" />
+                    <DropdownMenuItem
+                      className="gap-2.5 cursor-pointer px-2.5 rounded-md text-muted-foreground"
+                      onClick={() => navigate('/organizations')}
+                    >
+                      <Building2 className="h-3.5 w-3.5" />
+                      <span className="text-xs">{t('organizations.title', { defaultValue: 'Manage Organizations' })}</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+
+              {/* Org Settings */}
+              <DropdownMenuItem onClick={() => navigate('/organization-settings')} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
+                <Settings2 className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">{t('organizations.settings', { defaultValue: 'Organization Settings' })}</span>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="my-1.5" />
+
               <DropdownMenuItem onClick={() => navigate(ROUTES.settings)} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
                 <UserIcon className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">{t('profile.settings', { defaultValue: 'Profile & Settings' })}</span>

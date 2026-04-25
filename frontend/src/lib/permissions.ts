@@ -59,6 +59,7 @@ export type RouteKey =
   | 'team'
   | 'apps'
   | 'leave-policies'
+  | 'organization-settings'
 
 // ─── Permission matrix ────────────────────────────────────────────────────────
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -161,6 +162,7 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   team: ['super_admin', 'hr_manager'],
   apps: ['super_admin'],
   'leave-policies': ['super_admin', 'hr_manager'],
+  'organization-settings': ['super_admin', 'hr_manager'],
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -204,6 +206,7 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/team': 'team',
     '/apps': 'apps',
     '/leave-policies': 'leave-policies',
+    '/organization-settings': 'organization-settings',
   }
   return map[url] ?? null
 }

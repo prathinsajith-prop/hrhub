@@ -234,10 +234,31 @@ async function seed() {
     ])
     console.log('✓ Notifications created')
 
+    // ── Second tenant (for org-switching demo) ─────────────────
+    const [tenant2] = await db.insert(tenants).values({
+        name: 'Al Noor Freezone LLC',
+        tradeLicenseNo: 'DIFC-2021-98765',
+        jurisdiction: 'freezone',
+        industryType: 'technology',
+        subscriptionPlan: 'starter',
+        isActive: true,
+    }).returning()
+
+    // Add admin@hrhub.ae (hrManager) to second tenant as hr_manager
+    await db.insert(tenantMemberships).values({
+        tenantId: tenant2.id,
+        userId: hrManager.id,
+        role: 'hr_manager',
+        inviteStatus: 'accepted',
+        isActive: true,
+        acceptedAt: new Date(),
+    })
+    console.log('✓ Second tenant created and admin@hrhub.ae assigned to both tenants')
+
     console.log('\n✅ Seed complete!')
     console.log('\n── Login Credentials (all use password: Admin@12345) ──')
-    console.log('  Super Admin : superadmin@hrhub.ae')
-    console.log('  HR Manager  : admin@hrhub.ae')
+    console.log('  Super Admin : superadmin@hrhub.ae  (1 org)')
+    console.log('  HR Manager  : admin@hrhub.ae        (2 orgs — can test org switching)')
     console.log('  PRO Officer : pro@hrhub.ae')
     console.log('  Dept Head   : manager@hrhub.ae')
     console.log('  Employee    : employee@hrhub.ae')
