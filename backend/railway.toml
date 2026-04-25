@@ -9,6 +9,7 @@ dockerfilePath = "Dockerfile"
 # overrides any stale dashboard-level start command.
 startCommand = "sh entrypoint.sh"
 preDeploy = ""
+startCommand = "sh entrypoint.sh"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
