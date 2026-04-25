@@ -51,7 +51,7 @@ export function CandidateProfilePage() {
     const { t } = useTranslation()
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
-    const { data, isLoading } = useApplications({ limit: 200 })
+    const { data, isLoading } = useApplications({ limit: 100 })
     const updateStage = useUpdateApplicationStage()
     const updateApplication = useUpdateApplication()
     const convertToEmployee = useConvertCandidateToEmployee()

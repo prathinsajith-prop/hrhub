@@ -57,9 +57,9 @@ export function CalendarPage() {
     const [currentTitle, setCurrentTitle] = useState<string>('')
     const [view, setView] = useState<ViewKey>('dayGridMonth')
 
-    const visas = useVisas({ limit: 1000 })
-    const documents = useDocuments({ limit: 1000 })
-    const leaves = useLeaveRequests({ limit: 1000 })
+    const visas = useVisas({ limit: 100 })
+    const documents = useDocuments({ limit: 100 })
+    const leaves = useLeaveRequests({ limit: 100 })
     const reviews = usePerformanceReviews()
 
     const isLoading = visas.isLoading || documents.isLoading || leaves.isLoading || reviews.isLoading

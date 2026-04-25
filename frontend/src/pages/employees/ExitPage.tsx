@@ -98,7 +98,7 @@ export function ExitPage() {
     const canManage = can('manage_exit')
 
     const { data: exits, isLoading } = useExitRequests()
-    const { data: employees } = useEmployees({ limit: 1000 })
+    const { data: employees } = useEmployees({ limit: 100 })
     const initiate = useInitiateExit()
     const approve = useApproveExit()
     const markPaid = useMarkSettlementPaid()

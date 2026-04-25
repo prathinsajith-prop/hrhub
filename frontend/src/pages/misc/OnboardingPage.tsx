@@ -32,7 +32,7 @@ export function OnboardingPage() {
     const { data: analyticsData } = useOnboardingAnalytics()
     const analytics = analyticsData
     const createChecklist = useCreateOnboardingChecklist()
-    const { data: empData } = useEmployees({ limit: 500, status: 'active' })
+    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
     const allEmployees = (empData?.data ?? []) as any[]
 
     const [newOpen, setNewOpen] = useState(false)

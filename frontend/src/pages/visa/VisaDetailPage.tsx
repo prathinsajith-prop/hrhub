@@ -58,7 +58,7 @@ export function VisaDetailPage() {
     const { t } = useTranslation()
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
-    const { data, isLoading } = useVisas({ limit: 1000 })
+    const { data, isLoading } = useVisas({ limit: 100 })
     const advanceStep = useAdvanceVisaStep()
     const cancelVisa = useCancelVisa()
 

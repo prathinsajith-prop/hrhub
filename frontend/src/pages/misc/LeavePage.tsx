@@ -55,7 +55,7 @@ const LEAVE_LABELS: Record<string, string> = {
 
 function LeaveBalancePanel() {
     const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>()
-    const { data: empData } = useEmployees({ limit: 1000, status: 'active' })
+    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
     const employees = (empData?.data as any[]) ?? []
     const { data: balanceData, isLoading: balanceLoading } = useLeaveBalance(selectedEmployee)
     const balance = balanceData?.balance

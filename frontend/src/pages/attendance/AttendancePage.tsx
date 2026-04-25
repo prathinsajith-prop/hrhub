@@ -109,9 +109,9 @@ export function AttendancePage() {
         startDate: start,
         endDate: end,
         employeeId: filterEmployee || undefined,
-        limit: 200,
+        limit: 100,
     })
-    const { data: employeesData } = useEmployees({ limit: 1000 })
+    const { data: employeesData } = useEmployees({ limit: 100 })
     const upsert = useUpsertAttendance()
 
     const list = useMemo<AttendanceRecord[]>(

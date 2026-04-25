@@ -84,7 +84,7 @@ function UploadDocumentDialog({ open, onOpenChange, defaultEmployeeId, defaultCa
   const [docType, setDocType] = useState('')
   const [expiryDate, setExpiryDate] = useState('')
   const [saving, setSaving] = useState(false)
-  const { data: empData } = useEmployees({ limit: 1000 })
+  const { data: empData } = useEmployees({ limit: 100 })
   const employees = (empData?.data as any[]) ?? []
   const qc = useQueryClient()
 

@@ -202,7 +202,7 @@ function AssignAssetDialog({
     open: boolean
     onOpenChange: (o: boolean) => void
 }) {
-    const { data: employeesData } = useEmployees({ limit: 200 })
+    const { data: employeesData } = useEmployees({ limit: 100 })
     const assignAsset = useAssignAsset()
 
     const [employeeId, setEmployeeId] = useState('')

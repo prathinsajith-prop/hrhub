@@ -92,7 +92,7 @@ export function EmployeeDetailPage() {
     const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10)
   }, [])
   const attendanceEnd = React.useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const { data: attendanceData, isLoading: attendanceLoading } = useAttendance({ employeeId: id, startDate: attendanceStart, endDate: attendanceEnd, limit: 200 })
+  const { data: attendanceData, isLoading: attendanceLoading } = useAttendance({ employeeId: id, startDate: attendanceStart, endDate: attendanceEnd, limit: 100 })
   // Backend now returns { items, nextCursor }; tolerate the legacy array
   // shape too for forward/backward compatibility.
   const attendanceRecords = React.useMemo<Array<Record<string, unknown>>>(() => {

@@ -30,7 +30,7 @@ function ManagerPicker({
     onChange: (id: string, name: string) => void
     excludeId?: string
 }) {
-    const { data } = useEmployees({ limit: 1000 })
+    const { data } = useEmployees({ limit: 100 })
     const employees = (data?.data ?? []) as Employee[]
     const options = employees.filter((e) => e.id !== excludeId)
     return (
@@ -154,7 +154,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
     const [urgencyLevel, setUrgencyLevel] = useState('normal')
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
     const today = new Date().toISOString().split('T')[0]
-    const { data: empData } = useEmployees({ limit: 1000 })
+    const { data: empData } = useEmployees({ limit: 100 })
     const employees = (empData?.data as any[]) ?? []
     const createVisa = useCreateVisa()
 
@@ -243,7 +243,7 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
     const [endDate, setEndDate] = useState('')
     const [reason, setReason] = useState('')
     const today = new Date().toISOString().split('T')[0]
-    const { data: empData } = useEmployees({ limit: 1000 })
+    const { data: empData } = useEmployees({ limit: 100 })
     const employees = (empData?.data as any[]) ?? []
     const createLeave = useCreateLeave()
 

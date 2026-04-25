@@ -103,7 +103,7 @@ export function PerformancePage() {
     const [searchParams, setSearchParams] = useSearchParams()
     const lockedEmployeeId = searchParams.get('employeeId') ?? ''
     const { data: reviews, isLoading } = usePerformanceReviews()
-    const { data: employees } = useEmployees({ limit: 1000 })
+    const { data: employees } = useEmployees({ limit: 100 })
     const createReview = useCreateReview()
     const updateReview = useUpdateReview()
 
