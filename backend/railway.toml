@@ -3,6 +3,11 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
+# Use the Dockerfile's CMD (sh entrypoint.sh) — pnpm is NOT present in the
+# runtime image, so do NOT set a pnpm-based start command in the Railway
+# dashboard. Setting startCommand here ensures Railway uses this value and
+# overrides any stale dashboard-level start command.
+startCommand = "sh entrypoint.sh"
 preDeploy = ""
 healthcheckPath = "/health"
 healthcheckTimeout = 30
