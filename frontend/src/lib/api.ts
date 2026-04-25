@@ -3,7 +3,13 @@
  */
 import { useAuthStore } from '@/store/authStore'
 
-const BASE = '/api/v1'
+// API base URL.
+//   • In local dev → defaults to '/api/v1' (proxied by Vite to the backend).
+//   • In production (Vercel/Netlify) → set VITE_API_URL at build time, e.g.
+//     VITE_API_URL=https://your-backend.up.railway.app/api/v1
+// Trailing slashes are stripped so callers can keep using `/auth/login` etc.
+const ENV_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '')
+const BASE = ENV_BASE && ENV_BASE.length > 0 ? ENV_BASE : '/api/v1'
 
 export class ApiError extends Error {
     statusCode: number
