@@ -9,7 +9,7 @@ export default async function (fastify: any): Promise<void> {
     fastify.get('/', { ...auth, schema: { tags: ['Visa'] } }, async (request, reply) => {
         const { status, urgencyLevel, limit = '20', offset = '0', after } = request.query as Record<string, string>
         const result = await listVisas(request.user.tenantId, { status, urgencyLevel, limit: Number(limit), offset: Number(offset), after })
-        return reply.send(result)
+        return reply.send({ data: result.data, total: result.total, hasMore: result.hasMore, nextCursor: result.nextCursor })
     })
 
     fastify.get('/:id', { ...auth, schema: { tags: ['Visa'] } }, async (request, reply) => {

@@ -1,44 +1,38 @@
 import { scheduleInterview, getInterviewsForApplication, getInterviewsByTenant, updateInterviewStatus, deleteInterview } from './interview.service.js'
 
 export async function interviewRoutes(fastify: any) {
-    // List all interviews for tenant
-    fastify.get('/interviews', {
-        preHandler: [fastify.authenticate],
-    }, async (request: any, reply: any) => {
-        const list = await getInterviewsByTenant(request.user.tenantId)
-        return reply.send(list)
+    const auth = { preHandler: [fastify.authenticate] }
+    const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
+
+    // GET /api/v1/interviews
+    fastify.get('/interviews', { ...auth, schema: { tags: ['Recruitment'] } }, async (request: any, reply: any) => {
+        const data = await getInterviewsByTenant(request.user.tenantId)
+        return reply.send({ data })
     })
 
-    // Get interviews for an application (tenant-scoped to prevent IDOR)
-    fastify.get('/interviews/application/:applicationId', {
-        preHandler: [fastify.authenticate],
-    }, async (request: any, reply: any) => {
+    // GET /api/v1/interviews/application/:applicationId
+    fastify.get('/interviews/application/:applicationId', { ...auth, schema: { tags: ['Recruitment'] } }, async (request: any, reply: any) => {
         const { applicationId } = request.params as { applicationId: string }
-        const list = await getInterviewsForApplication(request.user.tenantId, applicationId)
-        return reply.send(list)
+        const data = await getInterviewsForApplication(request.user.tenantId, applicationId)
+        return reply.send({ data })
     })
 
-    // Schedule interview
-    fastify.post('/interviews', {
-        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
-    }, async (request: any, reply: any) => {
-        const interview = await scheduleInterview(request.user.tenantId, request.body as any)
-        return reply.code(201).send(interview)
+    // POST /api/v1/interviews
+    fastify.post('/interviews', { ...adminAuth, schema: { tags: ['Recruitment'] } }, async (request: any, reply: any) => {
+        const data = await scheduleInterview(request.user.tenantId, request.body as any)
+        return reply.code(201).send({ data })
     })
 
-    // Update interview status / add feedback
-    fastify.patch('/interviews/:id', {
-        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
-    }, async (request: any, reply: any) => {
+    // PATCH /api/v1/interviews/:id
+    fastify.patch('/interviews/:id', { ...adminAuth, schema: { tags: ['Recruitment'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const interview = await updateInterviewStatus(request.user.tenantId, id, request.body as any)
-        return reply.send(interview)
+        const data = await updateInterviewStatus(request.user.tenantId, id, request.body as any)
+        if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Interview not found' })
+        return reply.send({ data })
     })
 
-    // Cancel interview
-    fastify.delete('/interviews/:id', {
-        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
-    }, async (request: any, reply: any) => {
+    // DELETE /api/v1/interviews/:id
+    fastify.delete('/interviews/:id', { ...adminAuth, schema: { tags: ['Recruitment'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         await deleteInterview(request.user.tenantId, id)
         return reply.code(204).send()

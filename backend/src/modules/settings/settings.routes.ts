@@ -12,14 +12,14 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     }
 
     // GET /settings/company — returns current tenant profile
-    fastify.get('/company', { preHandler: [fastify.authenticate] }, async (request: any, reply: any) => {
+    fastify.get('/company', { preHandler: [fastify.authenticate], schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const data = await getCompanySettings(request.user.tenantId)
         if (!data) return reply.code(404).send({ message: 'Tenant not found' })
         return reply.send({ data })
     })
 
     // PATCH /settings/company — update tenant profile (hr_manager / super_admin only)
-    fastify.patch('/company', hrAdmin, async (request: any, reply: any) => {
+    fastify.patch('/company', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const { name, tradeLicenseNo, jurisdiction, industryType, logoUrl } = request.body as Record<string, string>
         const updated = await updateCompanySettings(request.user.tenantId, {
             name,
@@ -32,13 +32,13 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     })
 
     // GET /settings/users — list admin/staff users in tenant
-    fastify.get('/users', hrAdmin, async (request: any, reply: any) => {
+    fastify.get('/users', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const data = await listTenantUsers(request.user.tenantId)
         return reply.send({ data })
     })
 
     // POST /settings/users/invite — invite a new user by email
-    fastify.post('/users/invite', hrAdmin, async (request: any, reply: any) => {
+    fastify.post('/users/invite', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const { name, email, role } = request.body as { name: string; email: string; role: string }
         if (!name || !email || !role) {
             return reply.code(400).send({ message: 'name, email and role are required' })
@@ -48,7 +48,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     })
 
     // PATCH /settings/users/:id — deactivate/reactivate a user or change their role
-    fastify.patch('/users/:id', hrAdmin, async (request: any, reply: any) => {
+    fastify.patch('/users/:id', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         const { isActive, role } = request.body as { isActive?: boolean; role?: string }
 
@@ -69,7 +69,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
 
     // ── IP Allowlist routes ──────────────────────────────────────────────
     // GET /settings/ip-allowlist
-    fastify.get('/ip-allowlist', hrAdmin, async (request: any, reply: any) => {
+    fastify.get('/ip-allowlist', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const [tenant] = await db
             .select({ ipAllowlist: tenants.ipAllowlist })
             .from(tenants)
@@ -79,7 +79,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     })
 
     // PUT /settings/ip-allowlist
-    fastify.put('/ip-allowlist', hrAdmin, async (request: any, reply: any) => {
+    fastify.put('/ip-allowlist', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const { ipAllowlist } = request.body as { ipAllowlist: string[] }
         if (!Array.isArray(ipAllowlist)) {
             return reply.code(400).send({ error: 'ipAllowlist must be an array' })
@@ -100,7 +100,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
 
     // ── Regional Settings ────────────────────────────────────────────────────
     // GET /settings/regional
-    fastify.get('/regional', { preHandler: [fastify.authenticate] }, async (request: any, reply: any) => {
+    fastify.get('/regional', { preHandler: [fastify.authenticate], schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const [row] = await db
             .select({ regionalSettings: tenants.regionalSettings })
             .from(tenants)
@@ -110,7 +110,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     })
 
     // PATCH /settings/regional
-    fastify.patch('/regional', hrAdmin, async (request: any, reply: any) => {
+    fastify.patch('/regional', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const { timezone, currency, dateFormat } = request.body as { timezone?: string; currency?: string; dateFormat?: string }
         const [current] = await db
             .select({ regionalSettings: tenants.regionalSettings })
@@ -128,7 +128,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
 
     // ── Security Settings ─────────────────────────────────────────────────────
     // GET /settings/security
-    fastify.get('/security', hrAdmin, async (request: any, reply: any) => {
+    fastify.get('/security', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const [row] = await db
             .select({ securitySettings: tenants.securitySettings })
             .from(tenants)
@@ -138,7 +138,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     })
 
     // PATCH /settings/security
-    fastify.patch('/security', hrAdmin, async (request: any, reply: any) => {
+    fastify.patch('/security', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const { sessionTimeoutMinutes, auditLoggingEnabled } = request.body as { sessionTimeoutMinutes?: number; auditLoggingEnabled?: boolean }
         const [current] = await db
             .select({ securitySettings: tenants.securitySettings })
@@ -160,7 +160,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
 
     // ── Notification Preferences (per user) ───────────────────────────────────
     // GET /settings/notifications
-    fastify.get('/notifications', { preHandler: [fastify.authenticate] }, async (request: any, reply: any) => {
+    fastify.get('/notifications', { preHandler: [fastify.authenticate], schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const [row] = await db
             .select({ notifPrefs: users.notifPrefs })
             .from(users)
@@ -170,7 +170,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     })
 
     // PUT /settings/notifications
-    fastify.put('/notifications', { preHandler: [fastify.authenticate] }, async (request: any, reply: any) => {
+    fastify.put('/notifications', { preHandler: [fastify.authenticate], schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const prefs = request.body as Record<string, { email: boolean; push: boolean }>
         if (typeof prefs !== 'object' || Array.isArray(prefs)) {
             return reply.code(400).send({ message: 'Body must be a notification preferences object' })
@@ -185,14 +185,14 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
 
     // ── Mail diagnostics ─────────────────────────────────────────────────────
     // GET /settings/mail/status — verify SMTP/Resend connection (hr_admin only)
-    fastify.get('/mail/status', hrAdmin, async (_request: any, reply: any) => {
+    fastify.get('/mail/status', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (_request: any, reply: any) => {
         const { verifyEmailConfig } = await import('../../plugins/email.js')
         const status = await verifyEmailConfig()
         return reply.send({ data: status })
     })
 
     // POST /settings/mail/test — send a test email to a chosen address
-    fastify.post('/mail/test', hrAdmin, async (request: any, reply: any) => {
+    fastify.post('/mail/test', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const { to } = (request.body ?? {}) as { to?: string }
         if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
             return reply.code(400).send({ message: 'Provide a valid `to` email address.' })

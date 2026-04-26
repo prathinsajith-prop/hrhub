@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/store/authStore'
 
 export interface PublicHoliday {
     id: string
@@ -15,11 +16,13 @@ export interface PublicHoliday {
 }
 
 export function usePublicHolidays(year?: number) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const currentYear = year ?? new Date().getFullYear()
     return useQuery({
-        queryKey: ['public-holidays', currentYear],
+        queryKey: ['public-holidays', tenantId, currentYear],
         queryFn: () =>
             api.get<{ data: PublicHoliday[] }>(`/hr/public-holidays?year=${currentYear}`).then(r => r.data),
+        enabled: !!tenantId,
     })
 }
 
@@ -30,7 +33,8 @@ export function useCreatePublicHoliday() {
             api.post<{ data: PublicHoliday }>('/hr/public-holidays', data).then(r => r.data),
         onSuccess: (_, vars) => {
             const year = new Date(vars.date).getFullYear()
-            qc.invalidateQueries({ queryKey: ['public-holidays', year] })
+            qc.invalidateQueries({ queryKey: ['public-holidays'] })
+            qc.invalidateQueries({ queryKey: ['public-holidays', undefined, year] })
         },
     })
 }
@@ -47,7 +51,10 @@ export function useSeedUaeHolidays() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (year: number) =>
-            api.post<{ message: string }>('/hr/public-holidays/seed-uae', { year }),
-        onSuccess: (_, year) => qc.invalidateQueries({ queryKey: ['public-holidays', year] }),
+            api.post<{ data: { seeded: number; year: number } }>('/hr/public-holidays/seed-uae', { year }).then(r => r.data),
+        onSuccess: (result) => {
+            qc.invalidateQueries({ queryKey: ['public-holidays'] })
+            qc.invalidateQueries({ queryKey: ['public-holidays', undefined, result.year] })
+        },
     })
 }

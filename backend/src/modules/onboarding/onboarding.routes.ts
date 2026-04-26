@@ -139,11 +139,11 @@ export default async function (fastify: any): Promise<void> {
         return reply.code(201).send({ data: result })
     })
 
-    fastify.delete('/:checklistId/steps/:stepId', writeAuth, async (request, reply) => {
+    fastify.delete('/:checklistId/steps/:stepId', { ...writeAuth, schema: { tags: ['Onboarding'] } }, async (request, reply) => {
         const { checklistId, stepId } = request.params as { checklistId: string; stepId: string }
         const result = await deleteStep(request.user.tenantId, checklistId, stepId)
         if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Step not found' })
-        return reply.send({ data: result })
+        return reply.code(204).send()
     })
 
     // ── Upload Magic Link ─────────────────────────────────────────────────────
@@ -233,14 +233,14 @@ export default async function (fastify: any): Promise<void> {
     })
 
     // GET /onboarding/:checklistId/upload-tokens — list all tokens for HR
-    fastify.get('/:checklistId/upload-tokens', writeAuth, async (request: any, reply: any) => {
+    fastify.get('/:checklistId/upload-tokens', { ...writeAuth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
         const { checklistId } = request.params as { checklistId: string }
         const tokens = await listUploadTokens(request.user.tenantId, checklistId)
         return reply.send({ data: tokens })
     })
 
     // POST /onboarding/upload-tokens/:tokenId/revoke — revoke a magic link
-    fastify.post('/upload-tokens/:tokenId/revoke', writeAuth, async (request: any, reply: any) => {
+    fastify.post('/upload-tokens/:tokenId/revoke', { ...writeAuth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
         const { tokenId } = request.params as { tokenId: string }
         const revoked = await revokeUploadToken(request.user.tenantId, tokenId, request.user.id)
         if (!revoked) return reply.code(404).send({ message: 'Token not found or already revoked' })
@@ -512,7 +512,7 @@ export default async function (fastify: any): Promise<void> {
     })
 
     // ── Required-docs config (HR side) ────────────────────────────────────────
-    fastify.get('/steps/:stepId/required-docs', auth, async (request: any, reply: any) => {
+    fastify.get('/steps/:stepId/required-docs', { ...auth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
         const { stepId } = request.params as { stepId: string }
         const data = await listRequiredDocs(request.user.tenantId, stepId)
         return reply.send({ data })
@@ -542,21 +542,21 @@ export default async function (fastify: any): Promise<void> {
         return reply.code(201).send({ data: created })
     })
 
-    fastify.delete('/required-docs/:requiredDocId', writeAuth, async (request: any, reply: any) => {
+    fastify.delete('/required-docs/:requiredDocId', { ...writeAuth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
         const { requiredDocId } = request.params as { requiredDocId: string }
         const deleted = await deleteRequiredDoc(request.user.tenantId, requiredDocId)
         if (!deleted) return reply.code(404).send({ message: 'Required-doc not found' })
         return reply.send({ data: deleted })
     })
 
-    fastify.post('/:checklistId/seed-required-docs', writeAuth, async (request: any, reply: any) => {
+    fastify.post('/:checklistId/seed-required-docs', { ...writeAuth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
         const { checklistId } = request.params as { checklistId: string }
         const result = await seedRequiredDocsFromTemplate(request.user.tenantId, checklistId)
         return reply.send({ data: result })
     })
 
     // GET /onboarding/:checklistId/doc-summary — HR view of per-step uploaded vs required
-    fastify.get('/:checklistId/doc-summary', auth, async (request: any, reply: any) => {
+    fastify.get('/:checklistId/doc-summary', { ...auth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
         const { checklistId } = request.params as { checklistId: string }
         const summary = await getStepDocSummary(request.user.tenantId, checklistId)
         if (!summary) return reply.code(404).send({ message: 'Checklist not found' })
@@ -565,7 +565,7 @@ export default async function (fastify: any): Promise<void> {
 
     // GET /onboarding/templates/required-docs — read-only template catalog (so the UI
     // can show "what would be seeded" before creating a checklist)
-    fastify.get('/templates/required-docs', auth, async (_request: any, reply: any) => {
+    fastify.get('/templates/required-docs', { ...auth, schema: { tags: ['Onboarding'] } }, async (_request: any, reply: any) => {
         const data: Record<string, ReturnType<typeof defaultRequiredDocsForStep>> = {}
         // Build from REQUIRED_DOC_TEMPLATES via title keywords; map keyword→docs
         const { REQUIRED_DOC_TEMPLATES } = await import('./onboarding.docs.service.js')

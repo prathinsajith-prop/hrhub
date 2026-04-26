@@ -6,7 +6,7 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
     const hrAdmin = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
 
     // GET /employees/:id/salary-history
-    fastify.get('/:id/salary-history', hrAdmin, async (request: any, reply: any) => {
+    fastify.get('/:id/salary-history', { ...hrAdmin, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         const rows = await db
             .select()
@@ -20,7 +20,7 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
     })
 
     // POST /employees/:id/salary-revision — record a salary change
-    fastify.post('/:id/salary-revision', hrAdmin, async (request: any, reply: any) => {
+    fastify.post('/:id/salary-revision', { ...hrAdmin, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         const {
             effectiveDate,

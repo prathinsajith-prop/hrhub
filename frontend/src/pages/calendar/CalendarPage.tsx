@@ -6,7 +6,7 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import listPlugin from '@fullcalendar/list'
 import interactionPlugin from '@fullcalendar/interaction'
-import type { EventInput, EventClickArg, EventContentArg } from '@fullcalendar/core'
+import type { EventInput, EventClickArg, EventContentArg, DatesSetArg } from '@fullcalendar/core'
 import {
     CalendarDays, Plane, FileText, CalendarCheck2, Star,
     ChevronLeft, ChevronRight, Filter,
@@ -22,8 +22,11 @@ import { useVisas } from '@/hooks/useVisa'
 import { useDocuments } from '@/hooks/useDocuments'
 import { useLeaveRequests } from '@/hooks/useLeave'
 import { usePerformanceReviews } from '@/hooks/usePerformance'
+import { usePublicHolidays } from '@/hooks/useHr'
 
-type EventKind = 'visa' | 'document' | 'leave' | 'review'
+// ─── Event kinds ──────────────────────────────────────────────────────────────
+
+type EventKind = 'visa' | 'document' | 'leave' | 'review' | 'holiday'
 
 const KIND_META: Record<EventKind, {
     label: string
@@ -32,11 +35,14 @@ const KIND_META: Record<EventKind, {
     border: string
     text: string
 }> = {
-    visa: { label: 'Visa', icon: Plane, bg: '#ecfeff', border: '#06b6d4', text: '#155e75' },
-    document: { label: 'Document', icon: FileText, bg: '#fffbeb', border: '#f59e0b', text: '#854d0e' },
-    leave: { label: 'Leave', icon: CalendarCheck2, bg: '#ecfdf5', border: '#10b981', text: '#065f46' },
-    review: { label: 'Review', icon: Star, bg: '#f5f3ff', border: '#8b5cf6', text: '#5b21b6' },
+    visa:     { label: 'Visa',            icon: Plane,          bg: '#ecfeff', border: '#06b6d4', text: '#155e75' },
+    document: { label: 'Document',        icon: FileText,       bg: '#fffbeb', border: '#f59e0b', text: '#854d0e' },
+    leave:    { label: 'Leave',           icon: CalendarCheck2, bg: '#ecfdf5', border: '#10b981', text: '#065f46' },
+    review:   { label: 'Review',          icon: Star,           bg: '#f5f3ff', border: '#8b5cf6', text: '#5b21b6' },
+    holiday:  { label: 'Public Holiday',  icon: CalendarDays,   bg: '#fff1f2', border: '#f43f5e', text: '#9f1239' },
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function safeISO(s: string | undefined | null): string | null {
     if (!s) return null
@@ -47,22 +53,33 @@ function safeISO(s: string | undefined | null): string | null {
 
 type ViewKey = 'dayGridMonth' | 'timeGridWeek' | 'listWeek'
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export function CalendarPage() {
     const { t } = useTranslation()
     const navigate = useNavigate()
     const calRef = useRef<FullCalendar | null>(null)
+
     const [filter, setFilter] = useState<Record<EventKind, boolean>>({
-        visa: true, document: true, leave: true, review: true,
+        visa: true, document: true, leave: true, review: true, holiday: true,
     })
     const [currentTitle, setCurrentTitle] = useState<string>('')
     const [view, setView] = useState<ViewKey>('dayGridMonth')
+    // Track which year the calendar is currently showing so we fetch the right holidays.
+    const [visibleYear, setVisibleYear] = useState<number>(new Date().getFullYear())
 
-    const visas = useVisas({ limit: 100 })
+    const visas     = useVisas({ limit: 100 })
     const documents = useDocuments({ limit: 100 })
-    const leaves = useLeaveRequests({ limit: 100 })
-    const reviews = usePerformanceReviews()
+    const leaves    = useLeaveRequests({ limit: 100 })
+    const reviews   = usePerformanceReviews()
+    // Fetch holidays for the visible calendar year (updates when user navigates months).
+    const holidays  = usePublicHolidays(visibleYear)
 
-    const isLoading = visas.isLoading || documents.isLoading || leaves.isLoading || reviews.isLoading
+    const isLoading =
+        visas.isLoading || documents.isLoading ||
+        leaves.isLoading || reviews.isLoading || holidays.isLoading
+
+    // ─── Build calendar events ─────────────────────────────────────────────────
 
     const events = useMemo<EventInput[]>(() => {
         const out: EventInput[] = []
@@ -75,7 +92,7 @@ export function CalendarPage() {
                 const c = KIND_META.visa
                 out.push({
                     id: `visa-${v.id}`,
-                    title: `Visa expires \u2014 ${v.employeeName ?? 'Employee'}`,
+                    title: `Visa expires — ${v.employeeName ?? 'Employee'}`,
                     start: date,
                     allDay: true,
                     backgroundColor: c.bg,
@@ -109,18 +126,18 @@ export function CalendarPage() {
             const rows = ((leaves.data as any)?.data ?? []) as any[]
             for (const l of rows) {
                 const start = safeISO(l.startDate)
-                const end = safeISO(l.endDate)
+                const end   = safeISO(l.endDate)
                 if (!start) continue
-                const c = KIND_META.leave
                 let endExclusive: string | undefined
                 if (end) {
                     const d = new Date(end + 'T00:00:00Z')
                     d.setUTCDate(d.getUTCDate() + 1)
                     endExclusive = d.toISOString().slice(0, 10)
                 }
+                const c = KIND_META.leave
                 out.push({
                     id: `leave-${l.id}`,
-                    title: `${l.employeeName ?? 'Employee'} \u2014 ${l.leaveType ?? 'leave'}`,
+                    title: `${l.employeeName ?? 'Employee'} — ${l.leaveType ?? 'leave'}`,
                     start,
                     end: endExclusive,
                     allDay: true,
@@ -140,7 +157,7 @@ export function CalendarPage() {
                 const c = KIND_META.review
                 out.push({
                     id: `review-${r.id}`,
-                    title: `Review \u2014 ${r.period ?? ''}`,
+                    title: `Review — ${r.period ?? ''}`,
                     start: date,
                     allDay: true,
                     backgroundColor: c.bg,
@@ -151,46 +168,71 @@ export function CalendarPage() {
             }
         }
 
+        if (filter.holiday) {
+            const rows = (holidays.data ?? []) as any[]
+            for (const h of rows) {
+                const date = safeISO(h.date)
+                if (!date) continue
+                const c = KIND_META.holiday
+                out.push({
+                    id: `holiday-${h.id}`,
+                    title: h.name,
+                    start: date,
+                    allDay: true,
+                    backgroundColor: c.bg,
+                    borderColor: c.border,
+                    textColor: c.text,
+                    // Holidays are not clickable links — show info via display only
+                    extendedProps: { kind: 'holiday' as EventKind, href: null, sub: h.isRecurring ? 'Annual' : undefined },
+                })
+            }
+        }
+
         return out
-    }, [visas.data, documents.data, leaves.data, reviews.data, filter])
+    }, [visas.data, documents.data, leaves.data, reviews.data, holidays.data, filter])
+
+    // ─── Toolbar actions ───────────────────────────────────────────────────────
 
     const handleEventClick = (arg: EventClickArg) => {
-        const href = arg.event.extendedProps.href as string | undefined
+        const href = arg.event.extendedProps.href as string | null
         if (href) navigate(href)
     }
 
+    const handleDatesSet = (arg: DatesSetArg) => {
+        setCurrentTitle(arg.view.title)
+        // Derive the year from the middle of the visible range to handle month boundaries correctly.
+        const mid = new Date((arg.start.getTime() + arg.end.getTime()) / 2)
+        setVisibleYear(mid.getFullYear())
+    }
+
     const counts = useMemo(() => {
-        const c = { visa: 0, document: 0, leave: 0, review: 0 } as Record<EventKind, number>
+        const c: Record<EventKind, number> = { visa: 0, document: 0, leave: 0, review: 0, holiday: 0 }
         for (const e of events) c[(e.extendedProps?.kind as EventKind) ?? 'visa']++
         return c
     }, [events])
 
     const upcomingThisWeek = useMemo(() => {
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const weekEnd = new Date(today)
-        weekEnd.setDate(weekEnd.getDate() + 7)
-        return events.filter((e) => {
+        const today = new Date(); today.setHours(0, 0, 0, 0)
+        const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7)
+        return events.filter(e => {
             const d = new Date(e.start as string)
             return d >= today && d <= weekEnd
         }).length
     }, [events])
 
-    const toggle = (k: EventKind) => setFilter((f) => ({ ...f, [k]: !f[k] }))
-
-    const goPrev = () => calRef.current?.getApi().prev()
-    const goNext = () => calRef.current?.getApi().next()
-    const goToday = () => calRef.current?.getApi().today()
-    const changeView = (v: ViewKey) => {
-        setView(v)
-        calRef.current?.getApi().changeView(v)
-    }
+    const toggle     = (k: EventKind) => setFilter(f => ({ ...f, [k]: !f[k] }))
+    const goPrev     = () => calRef.current?.getApi().prev()
+    const goNext     = () => calRef.current?.getApi().next()
+    const goToday    = () => calRef.current?.getApi().today()
+    const changeView = (v: ViewKey) => { setView(v); calRef.current?.getApi().changeView(v) }
 
     const renderEventContent = (arg: EventContentArg) => {
         const kind = (arg.event.extendedProps.kind as EventKind) ?? 'visa'
         const Icon = KIND_META[kind].icon
+        // Holidays get a slightly different visual to stand out
+        const isHoliday = kind === 'holiday'
         return (
-            <div className="flex items-center gap-1 px-1 py-0.5 overflow-hidden w-full">
+            <div className={`flex items-center gap-1 px-1 py-0.5 overflow-hidden w-full ${isHoliday ? 'font-medium' : ''}`}>
                 <Icon className="h-3 w-3 shrink-0" style={{ color: KIND_META[kind].border }} />
                 <span className="truncate text-[11px] leading-tight">{arg.event.title}</span>
             </div>
@@ -202,7 +244,7 @@ export function CalendarPage() {
             <PageHeader
                 title={t('nav.calendar', { defaultValue: 'Calendar' })}
                 description={t('calendar.description', {
-                    defaultValue: 'Visas, documents, leave, and reviews \u2014 unified.',
+                    defaultValue: 'Visas, documents, leave, reviews and public holidays — unified.',
                 })}
                 actions={
                     <Badge variant="outline" className="text-xs">
@@ -212,9 +254,9 @@ export function CalendarPage() {
                 }
             />
 
-            {/* KPI strip / kind filters */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {(Object.keys(KIND_META) as EventKind[]).map((k) => {
+            {/* Kind filter strip */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {(Object.keys(KIND_META) as EventKind[]).map(k => {
                     const m = KIND_META[k]
                     const Icon = m.icon
                     const active = filter[k]
@@ -263,7 +305,7 @@ export function CalendarPage() {
                             {upcomingThisWeek} this week
                         </Badge>
                         <div className="inline-flex rounded-md border bg-secondary p-0.5">
-                            {(['dayGridMonth', 'timeGridWeek', 'listWeek'] as ViewKey[]).map((v) => (
+                            {(['dayGridMonth', 'timeGridWeek', 'listWeek'] as ViewKey[]).map(v => (
                                 <button
                                     key={v}
                                     type="button"
@@ -289,13 +331,19 @@ export function CalendarPage() {
                         headerToolbar={false}
                         height="auto"
                         events={events}
-                        dayMaxEventRows={3}
+                        dayMaxEventRows={4}
                         eventClick={handleEventClick}
                         eventContent={renderEventContent}
                         nowIndicator
                         weekends
-                        firstDay={1}
-                        datesSet={(arg) => setCurrentTitle(arg.view.title)}
+                        firstDay={0}
+                        datesSet={handleDatesSet}
+                        // Visually highlight days that have a holiday event
+                        dayCellClassNames={(arg) => {
+                            const dateStr = arg.date.toISOString().slice(0, 10)
+                            const isHoliday = (holidays.data ?? []).some(h => h.date === dateStr)
+                            return isHoliday ? ['fc-day-holiday'] : []
+                        }}
                         dateClick={(info) => {
                             calRef.current?.getApi().changeView('listWeek', info.dateStr)
                             setView('listWeek')

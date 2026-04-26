@@ -75,7 +75,7 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
             offset: Number(qs.offset ?? 0),
             after: qs.after,
         })
-        reply.send(result)
+        return reply.send(result)
     })
 
     fastify.post('/', {
