@@ -36,7 +36,7 @@ export async function checkIn(tenantId: string, employeeId: string) {
 export async function checkOut(tenantId: string, employeeId: string) {
     const today = new Date().toISOString().split('T')[0]
     const [existing] = await db.select().from(attendanceRecords)
-        .where(and(eq(attendanceRecords.employeeId, employeeId), eq(attendanceRecords.date, today)))
+        .where(and(eq(attendanceRecords.tenantId, tenantId), eq(attendanceRecords.employeeId, employeeId), eq(attendanceRecords.date, today)))
 
     if (!existing || !existing.checkIn) {
         throw Object.assign(new Error('No check-in found for today'), { statusCode: 422 })
@@ -183,7 +183,7 @@ export async function upsertAttendance(tenantId: string, data: {
         checkOut: co ? new Date(co) : undefined,
     }
     const existing = await db.select().from(attendanceRecords)
-        .where(and(eq(attendanceRecords.employeeId, data.employeeId), eq(attendanceRecords.date, data.date)))
+        .where(and(eq(attendanceRecords.tenantId, tenantId), eq(attendanceRecords.employeeId, data.employeeId), eq(attendanceRecords.date, data.date)))
 
     if (existing.length > 0) {
         const [rec] = await db.update(attendanceRecords)
@@ -243,7 +243,7 @@ export async function externalPunch(tenantId: string, params: {
         }).returning()
         return rec
     } else {
-        if (!existing) return { error: 'No check-in found for today' }
+        if (!existing) throw Object.assign(new Error('No check-in found for today'), { statusCode: 422 })
         const checkInTime = existing.checkIn ? new Date(existing.checkIn) : now
         const hoursWorked = ((now.getTime() - checkInTime.getTime()) / 3600000).toFixed(2)
         const [rec] = await db.update(attendanceRecords)

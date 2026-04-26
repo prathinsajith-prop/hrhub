@@ -160,12 +160,38 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   organizations: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'organizations/new': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   team: ['super_admin', 'hr_manager'],
-  apps: ['super_admin'],
+  apps: ['super_admin', 'hr_manager'],
   'leave-policies': ['super_admin', 'hr_manager'],
   'organization-settings': ['super_admin', 'hr_manager'],
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
+export const ALL_ROLES: UserRole[] = ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee']
+
+export const ALL_PERMISSIONS: Permission[] = [
+  'manage_employees', 'view_employees',
+  'manage_recruitment',
+  'manage_onboarding', 'view_onboarding',
+  'manage_visa',
+  'manage_documents', 'view_documents',
+  'manage_payroll', 'view_payroll',
+  'manage_leave', 'approve_leave', 'view_own_leave',
+  'manage_compliance',
+  'view_reports',
+  'manage_settings', 'manage_users',
+  'view_audit_log',
+  'manage_attendance', 'view_own_attendance',
+  'manage_performance', 'view_own_performance',
+  'manage_assets',
+  'manage_exit',
+  'view_org_chart',
+]
+
+/** Read-only snapshot of the role → permissions matrix (currently hard-coded). */
+export function getRolePermissionMatrix(): Record<UserRole, Permission[]> {
+  return ROLE_PERMISSIONS
+}
+
 export function hasPermission(role: UserRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false
 }

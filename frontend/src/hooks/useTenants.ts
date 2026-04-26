@@ -77,8 +77,17 @@ export function useSwitchTenant() {
         },
         onSuccess: (data) => {
             useAuthStore.getState().login(data.user, data.tenant, data.accessToken, data.refreshToken)
-            // Hard refresh of all queries — server data is now scoped to the new tenant.
-            qc.clear()
+            // Remove all tenant-scoped server state (belongs to the old tenant).
+            // Keep ['tenants', 'mine'] so the org switcher doesn't flash away —
+            // that list is user-scoped, not tenant-scoped, so it's still valid.
+            qc.removeQueries({
+                predicate: (query) => {
+                    const key = query.queryKey
+                    return !(Array.isArray(key) && key[0] === 'tenants' && key[1] === 'mine')
+                },
+            })
+            // Mark the org list as stale so it re-validates in the background.
+            qc.invalidateQueries({ queryKey: ['tenants', 'mine'] })
         },
     })
 }

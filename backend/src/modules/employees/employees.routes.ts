@@ -9,7 +9,7 @@ import { sendWithETag } from '../../lib/etag.js'
 import { uploadObject, buildS3Key } from '../../plugins/s3.js'
 import { loadEnv } from '../../config/env.js'
 import { db } from '../../db/index.js'
-import { entities, employees } from '../../db/schema/index.js'
+import { entities, employees, tenants } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
 import { extname } from 'node:path'
 export default async function (fastify: any): Promise<void> {
@@ -29,7 +29,7 @@ export default async function (fastify: any): Promise<void> {
             after: query.after,
         })
 
-        return sendWithETag(reply, request, result)
+        return reply.send(result)
     })
 
     // GET /api/v1/employees/org-chart
@@ -65,7 +65,9 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Employees'] },
     }, async (request, reply) => {
         const body = validate(createEmployeeSchema, request.body)
-        // Resolve entityId — use provided value or fall back to the tenant's first entity
+        // Resolve entityId — use provided value or fall back to the tenant's first entity.
+        // If the tenant has no entity yet (e.g. self-registered before the
+        // entity-on-register fix), auto-create a default one rather than 400.
         let entityId = body.entityId
         if (!entityId) {
             const [defaultEntity] = await db
@@ -73,8 +75,24 @@ export default async function (fastify: any): Promise<void> {
                 .from(entities)
                 .where(eq(entities.tenantId, request.user.tenantId))
                 .limit(1)
-            if (!defaultEntity) return reply.code(400).send({ error: 'No entity found for this tenant. Please set up an entity first.' })
-            entityId = defaultEntity.id
+            if (defaultEntity) {
+                entityId = defaultEntity.id
+            } else {
+                const [tenantRow] = await db
+                    .select({ name: tenants.name })
+                    .from(tenants)
+                    .where(eq(tenants.id, request.user.tenantId))
+                    .limit(1)
+                const [created] = await db
+                    .insert(entities)
+                    .values({
+                        tenantId: request.user.tenantId,
+                        entityName: tenantRow?.name ?? 'Default Entity',
+                        licenseType: 'mainland',
+                    })
+                    .returning({ id: entities.id })
+                entityId = created.id
+            }
         }
 
         // Auto-generate employeeNo when not supplied. Retry on the rare race

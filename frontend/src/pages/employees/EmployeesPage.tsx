@@ -136,7 +136,7 @@ export function EmployeesPage() {
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_employees')
-  const { data: empData, isLoading } = useEmployees({ limit: 50 })
+  const { data: empData, isLoading, isError, error, refetch } = useEmployees({ limit: 50 })
   const employees: Employee[] = (empData?.data as Employee[]) ?? []
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
   const [editTarget, setEditTarget] = useState<Employee | null>(null)
@@ -319,6 +319,18 @@ export function EmployeesPage() {
           </>
         }
       />
+
+      {/* Error banner */}
+      {isError && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="flex items-center justify-between py-3 px-4">
+            <p className="text-sm text-destructive font-medium">
+              Failed to load employees: {(error as any)?.message ?? 'Unknown error'}
+            </p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

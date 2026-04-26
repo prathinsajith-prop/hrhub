@@ -14,6 +14,9 @@ import {
     FileText,
     UserCircle,
     ArrowRightLeft,
+    KeyRound,
+    Check,
+    Minus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -45,6 +48,8 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { useNavigate } from 'react-router-dom'
 import { useMyTenants, useSwitchTenant } from '@/hooks/useTenants'
 import { api } from '@/lib/api'
+import { ALL_ROLES, ALL_PERMISSIONS, getRolePermissionMatrix, type Permission } from '@/lib/permissions'
+import type { UserRole } from '@/types'
 
 // ─── Shared layout primitives ─────────────────────────────────────────────────
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -653,16 +658,133 @@ function SwitchTab() {
     )
 }
 
+// ─── Roles & Permissions Tab (read-only matrix) ──────────────────────────────
+// Permissions are currently hard-coded in `frontend/src/lib/permissions.ts` and
+// `backend/src/lib/permissions.ts`. Per-tenant editable permissions require a
+// DB-backed permission system.
+const ROLE_LABEL: Record<UserRole, string> = {
+    super_admin: 'Super Admin',
+    hr_manager: 'HR Manager',
+    pro_officer: 'PRO Officer',
+    dept_head: 'Dept Head',
+    employee: 'Employee',
+}
+
+function permGroup(p: Permission): string {
+    if (p.includes('employee') || p.includes('org_chart') || p.includes('exit')) return 'People'
+    if (p.includes('leave') || p.includes('attendance') || p.includes('performance')) return 'Time & Performance'
+    if (p.includes('payroll')) return 'Payroll'
+    if (p.includes('document') || p.includes('visa') || p.includes('compliance')) return 'Compliance & Docs'
+    if (p.includes('recruitment') || p.includes('onboarding')) return 'Hiring'
+    if (p.includes('asset')) return 'Assets'
+    if (p.includes('settings') || p.includes('user') || p.includes('audit')) return 'Administration'
+    if (p.includes('report')) return 'Reports'
+    return 'Other'
+}
+
+function RolesPermissionsTab() {
+    const matrix = getRolePermissionMatrix()
+    const grouped = ALL_PERMISSIONS.reduce<Record<string, Permission[]>>((acc, p) => {
+        const g = permGroup(p)
+        if (!acc[g]) acc[g] = []
+        acc[g].push(p)
+        return acc
+    }, {})
+    return (
+        <div className="space-y-5">
+            <Section
+                icon={KeyRound}
+                title="Built-in Roles & Permissions"
+                description="What each role can do across the workspace. These defaults are managed in code and apply to every organization."
+            >
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 mb-4">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span>Read-only view. Per-tenant role customization is on the roadmap and will appear here once available.</span>
+                </div>
+                <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full text-sm">
+                        <thead className="bg-muted/40 text-xs font-medium text-muted-foreground">
+                            <tr>
+                                <th className="text-start px-3 py-2.5 font-medium sticky start-0 bg-muted/40 min-w-[220px]">Permission</th>
+                                {ALL_ROLES.map((r) => (
+                                    <th key={r} className="px-2 py-2.5 font-medium text-center min-w-[100px]">{ROLE_LABEL[r]}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {Object.entries(grouped).map(([group, perms]) => (
+                                <React.Fragment key={group}>
+                                    <tr className="bg-muted/20">
+                                        <td colSpan={ALL_ROLES.length + 1} className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                            {group}
+                                        </td>
+                                    </tr>
+                                    {perms.map((p) => (
+                                        <tr key={p} className="border-t hover:bg-muted/20">
+                                            <td className="px-3 py-2 text-xs sticky start-0 bg-background">
+                                                {p.replace(/_/g, ' ')}
+                                            </td>
+                                            {ALL_ROLES.map((r) => {
+                                                const granted = matrix[r]?.includes(p) ?? false
+                                                return (
+                                                    <td key={r} className="px-2 py-2 text-center">
+                                                        {granted ? (
+                                                            <Check className="h-4 w-4 text-emerald-600 inline" aria-label="granted" />
+                                                        ) : (
+                                                            <Minus className="h-4 w-4 text-muted-foreground/40 inline" aria-label="denied" />
+                                                        )}
+                                                    </td>
+                                                )
+                                            })}
+                                        </tr>
+                                    ))}
+                                </React.Fragment>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </Section>
+
+            <Section icon={UserCircle} title="Role Summary" description="Quick reference for each role">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {ALL_ROLES.map((r) => {
+                        const count = matrix[r]?.length ?? 0
+                        const blurb =
+                            r === 'super_admin' ? 'Full access to all modules and settings.' :
+                                r === 'hr_manager' ? 'Manages employees, payroll, leave, recruitment.' :
+                                    r === 'pro_officer' ? 'Handles visa, documents and compliance.' :
+                                        r === 'dept_head' ? 'Approves leave and manages team performance.' :
+                                            'Self-service for own leave, attendance, payslips.'
+                        return (
+                            <div key={r} className="rounded-lg border p-4">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <p className="text-sm font-semibold">{ROLE_LABEL[r]}</p>
+                                    <Badge variant="secondary" className="text-[10px]">{count} perms</Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground">{blurb}</p>
+                            </div>
+                        )
+                    })}
+                </div>
+            </Section>
+        </div>
+    )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 const tabs = [
-    { value: 'profile', label: 'Organization Profile', desc: 'Company details & regional settings', icon: Building2 },
-    { value: 'members', label: 'Members', desc: 'Team members, roles & access', icon: Users },
-    { value: 'security', label: 'Security', desc: 'Policies, IP allowlist & data', icon: Shield },
-    { value: 'switch', label: 'Switch Organization', desc: 'Change active workspace', icon: ArrowRightLeft },
+    { value: 'profile', label: 'Organization Profile', desc: 'Company details & regional settings', icon: Building2, requires: 'manage_settings' as Permission | null },
+    { value: 'members', label: 'Members', desc: 'Team members, roles & access', icon: Users, requires: 'manage_users' as Permission | null },
+    { value: 'roles', label: 'Roles & Permissions', desc: 'View built-in role permissions', icon: KeyRound, requires: 'manage_users' as Permission | null },
+    { value: 'security', label: 'Security', desc: 'Policies, IP allowlist & data', icon: Shield, requires: 'manage_settings' as Permission | null },
+    { value: 'switch', label: 'Switch Organization', desc: 'Change active workspace', icon: ArrowRightLeft, requires: null as Permission | null },
 ]
 
 export function OrganizationSettingsPage() {
     const { t } = useTranslation()
+    const { can } = usePermissions()
+    const visibleTabs = tabs.filter((tab) => tab.requires === null || can(tab.requires))
+    const defaultTab = visibleTabs[0]?.value ?? 'switch'
 
     return (
         <PageWrapper width="default">
@@ -673,13 +795,13 @@ export function OrganizationSettingsPage() {
             />
 
             <Tabs
-                defaultValue="profile"
+                defaultValue={defaultTab}
                 orientation="vertical"
                 className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-10 lg:items-start"
             >
                 {/* Mobile: horizontal tabs */}
                 <TabsList className="lg:hidden w-full justify-start border-b rounded-none bg-transparent p-0 h-auto gap-0 overflow-x-auto">
-                    {tabs.map(tab => (
+                    {visibleTabs.map(tab => (
                         <TabsTrigger
                             key={tab.value}
                             value={tab.value}
@@ -695,7 +817,7 @@ export function OrganizationSettingsPage() {
                 <aside className="hidden lg:block sticky top-20 self-start">
                     <div className="rounded-xl border bg-card shadow-sm p-3">
                         <TabsList className="flex flex-col items-stretch h-auto bg-transparent p-0 gap-0.5 w-full">
-                            {tabs.map(tab => (
+                            {visibleTabs.map(tab => (
                                 <TabsTrigger
                                     key={tab.value}
                                     value={tab.value}
@@ -718,6 +840,7 @@ export function OrganizationSettingsPage() {
                 <div className="pt-6 lg:pt-0">
                     <TabsContent value="profile" className="mt-0"><ProfileTab /></TabsContent>
                     <TabsContent value="members" className="mt-0"><MembersTab /></TabsContent>
+                    <TabsContent value="roles" className="mt-0"><RolesPermissionsTab /></TabsContent>
                     <TabsContent value="security" className="mt-0"><SecurityTab /></TabsContent>
                     <TabsContent value="switch" className="mt-0"><SwitchTab /></TabsContent>
                 </div>

@@ -63,10 +63,10 @@ async function request<T>(
         headers['Authorization'] = `Bearer ${accessToken}`
     }
 
-    // Bypass the browser HTTP cache so server-side ETag/304 responses
-    // never leave the JS layer with an empty body. React Query handles
-    // caching for us at the application level.
-    const res = await fetch(`${BASE}${path}`, { cache: 'no-store', ...init, headers })
+    // Always bypass the browser HTTP cache so we never receive a cached
+    // empty-body response. If-None-Match/304 is handled server-side for
+    // optimisation; the browser does not need to store anything here.
+    const res = await fetch(`${BASE}${path}`, { ...init, headers, cache: 'no-store' })
 
     if (res.status === 401 && retry) {
         // Try to refresh the token once
@@ -76,16 +76,48 @@ async function request<T>(
         throw new ApiError(401, 'Session expired')
     }
 
+    // Defensive: 304 should never arrive with cache:'no-store', but browser
+    // extensions, service workers, or the old cached JS bundle can still
+    // inject If-None-Match. Retry once with 'reload' to force a full 200.
+    if (res.status === 304) {
+        const fresh = await fetch(`${BASE}${path}`, { ...init, headers, cache: 'reload' })
+        if (fresh.status === 401 && retry) {
+            const ok = await refreshTokens()
+            if (ok) return request<T>(path, init, false)
+            useAuthStore.getState().logout()
+            throw new ApiError(401, 'Session expired')
+        }
+        if (!fresh.ok) {
+            const errText = await fresh.text().catch(() => '')
+            let errBody: Record<string, unknown> = {}
+            try { errBody = errText ? JSON.parse(errText) : {} } catch { /* ignore */ }
+            throw new ApiError(fresh.status, (errBody as { message?: string })?.message ?? fresh.statusText, errBody)
+        }
+        if (fresh.status === 204) return undefined as T
+        const freshText = await fresh.text()
+        return (freshText ? JSON.parse(freshText) : undefined) as T
+    }
+
     if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new ApiError(res.status, body?.message ?? res.statusText, body)
+        const errText = await res.text().catch(() => '')
+        let errBody: Record<string, unknown> = {}
+        try { errBody = errText ? JSON.parse(errText) : {} } catch { /* ignore */ }
+        throw new ApiError(res.status, (errBody as { message?: string })?.message ?? res.statusText, errBody)
     }
 
     if (res.status === 204) return undefined as T
-    // 304 with no-store means Chrome still sent If-None-Match but we have no cached body —
-    // throw so React Query retains the previous query data instead of replacing it with undefined.
-    if (res.status === 304) throw new ApiError(304, 'Not Modified')
-    return res.json() as Promise<T>
+
+    // Use text() → JSON.parse so an empty body produces a clear error message
+    // instead of the cryptic "Unexpected end of JSON input".
+    const text = await res.text()
+    if (!text || text.trim() === '') {
+        throw new ApiError(res.status, `Empty response from ${path}`)
+    }
+    try {
+        return JSON.parse(text) as T
+    } catch (e) {
+        throw new ApiError(res.status, `Invalid JSON from ${path}: ${(e as Error).message}`)
+    }
 }
 
 export const api = {

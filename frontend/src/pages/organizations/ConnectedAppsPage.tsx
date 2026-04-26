@@ -28,7 +28,7 @@ import { formatDate } from '@/lib/utils'
 export function ConnectedAppsPage() {
     const { t } = useTranslation()
     const me = useAuthStore((s) => s.user)
-    const canManage = me?.role === 'super_admin'
+    const canManage = me?.role === 'super_admin' || me?.role === 'hr_manager'
     const { data: apps, isLoading } = useConnectedApps()
     const createMut = useCreateApp()
     const updateMut = useUpdateApp()

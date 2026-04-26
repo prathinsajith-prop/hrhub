@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt'
 import { eq, and, lt } from 'drizzle-orm'
 import crypto from 'node:crypto'
 import { db } from '../../db/index.js'
-import { users, refreshTokens, tenants, passwordResetTokens } from '../../db/schema/index.js'
+import { users, refreshTokens, tenants, passwordResetTokens, entities } from '../../db/schema/index.js'
 import { sendEmail, passwordResetEmail } from '../../plugins/email.js'
 import { loadEnv } from '../../config/env.js'
 import { recordLoginEvent } from '../audit/audit.service.js'
@@ -153,6 +153,7 @@ export async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ip
         tenant: tenant ? {
             id: tenant.id,
             name: tenant.name,
+            tradeLicenseNo: tenant.tradeLicenseNo,
             jurisdiction: tenant.jurisdiction,
             industryType: tenant.industryType,
             subscriptionPlan: tenant.subscriptionPlan,
@@ -228,6 +229,14 @@ export async function registerTenant(input: { name: string; email: string; passw
             industryType: 'general',
             subscriptionPlan: 'starter',
         }).returning()
+
+        // Every tenant needs at least one entity — employees FK to entities.id.
+        // Without this default row, the Add Employee flow returns 400.
+        await tx.insert(entities).values({
+            tenantId: tenant.id,
+            entityName: input.company,
+            licenseType: 'mainland',
+        })
 
         const [adminUser] = await tx.insert(users).values({
             tenantId: tenant.id,

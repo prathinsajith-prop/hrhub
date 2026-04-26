@@ -76,6 +76,8 @@ const notifGroups = [
 // ─── Company Settings Tab ─────────────────────────────────────────────────────
 function CompanyTab() {
     const { tenant } = useAuthStore()
+    const { can } = usePermissions()
+    const canEdit = can('manage_settings')
     const { data: company, isLoading } = useCompanySettings()
     const updateCompany = useUpdateCompanySettings()
     const { data: regional, isLoading: regionalLoading } = useRegionalSettings()
@@ -127,6 +129,12 @@ function CompanyTab() {
 
     return (
         <div className="space-y-5">
+            {!canEdit && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>You have view-only access. Contact a workspace administrator to update company details.</span>
+                </div>
+            )}
             {/* Card 1: Identity strip + Company Profile */}
             <SettingsCard>
                 <div className="flex items-center gap-4 pb-5 border-b">
@@ -152,19 +160,24 @@ function CompanyTab() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <Label htmlFor="company_name">Company Name</Label>
-                            <Input id="company_name" value={form.name ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('name', e.target.value)} />
+                            <Input id="company_name" value={form.name ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('name', e.target.value)} disabled={!canEdit} />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="trade_license">Trade License No.</Label>
-                            <Input id="trade_license" value={form.tradeLicenseNo ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('tradeLicenseNo', e.target.value)} />
+                            <Input id="trade_license" value={form.tradeLicenseNo ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('tradeLicenseNo', e.target.value)} disabled={!canEdit} />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="jurisdiction">Jurisdiction</Label>
-                            <Input id="jurisdiction" value={form.jurisdiction ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('jurisdiction', e.target.value)} />
+                            <Input id="jurisdiction" value={form.jurisdiction ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('jurisdiction', e.target.value)} disabled={!canEdit} />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="industry">Industry Type</Label>
-                            <Input id="industry" value={form.industryType ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('industryType', e.target.value)} />
+                            <Input id="industry" value={form.industryType ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('industryType', e.target.value)} disabled={!canEdit} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="plan">Subscription Plan</Label>
+                            <Input id="plan" value={company?.subscriptionPlan ?? 'free'} disabled readOnly className="bg-muted/40 capitalize" />
+                            <p className="text-[11px] text-muted-foreground">Managed by billing. Contact support to change.</p>
                         </div>
                     </div>
                 </div>
@@ -188,15 +201,15 @@ function CompanyTab() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="space-y-1.5">
                                 <Label htmlFor="timezone">Time Zone</Label>
-                                <Input id="timezone" value={regionalForm.timezone} onChange={e => setRegionalForm(p => ({ ...p, timezone: e.target.value }))} />
+                                <Input id="timezone" value={regionalForm.timezone} onChange={e => setRegionalForm(p => ({ ...p, timezone: e.target.value }))} disabled={!canEdit} />
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="currency">Currency</Label>
-                                <Input id="currency" value={regionalForm.currency} onChange={e => setRegionalForm(p => ({ ...p, currency: e.target.value }))} />
+                                <Input id="currency" value={regionalForm.currency} onChange={e => setRegionalForm(p => ({ ...p, currency: e.target.value }))} disabled={!canEdit} />
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="dateFormat">Date Format</Label>
-                                <Input id="dateFormat" value={regionalForm.dateFormat} onChange={e => setRegionalForm(p => ({ ...p, dateFormat: e.target.value }))} placeholder="DD/MM/YYYY" />
+                                <Input id="dateFormat" value={regionalForm.dateFormat} onChange={e => setRegionalForm(p => ({ ...p, dateFormat: e.target.value }))} placeholder="DD/MM/YYYY" disabled={!canEdit} />
                             </div>
                         </div>
                     )}
@@ -204,11 +217,13 @@ function CompanyTab() {
             </SettingsCard>
 
             {/* Save bar — outside the cards */}
-            <div className="flex justify-end pt-2">
-                <Button onClick={handleSave} loading={updateCompany.isPending} leftIcon={saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />} variant={saved ? 'success' : 'default'}>
-                    {saved ? 'Saved!' : 'Save Changes'}
-                </Button>
-            </div>
+            {canEdit && (
+                <div className="flex justify-end pt-2">
+                    <Button onClick={handleSave} loading={updateCompany.isPending} leftIcon={saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />} variant={saved ? 'success' : 'default'}>
+                        {saved ? 'Saved!' : 'Save Changes'}
+                    </Button>
+                </div>
+            )}
         </div>
     )
 }

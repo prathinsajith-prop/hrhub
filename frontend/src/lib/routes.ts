@@ -19,25 +19,33 @@ export const ROUTES = {
     orgChart: '/org-chart',
     recruitment: '/recruitment',
     onboarding: '/onboarding',
+    exit: '/exit',
+    calendar: '/calendar',
 
     // Compliance
     visa: '/visa',
     documents: '/documents',
     compliance: '/compliance',
 
-    // Finance
+    // Finance & HR Ops
     payroll: '/payroll',
     leave: '/leave',
+    leavePolicies: '/leave-policies',
     attendance: '/attendance',
-
-    // People ops
     performance: '/performance',
-    exit: '/exit',
+    assets: '/assets',
 
     // Insights
     reports: '/reports',
     audit: '/audit',
-    loginHistory: '/login-history',
+    loginHistory: '/my/login-history',
+
+    // Workspace
+    organizations: '/organizations',
+    organizationsNew: '/organizations/new',
+    organizationSettings: '/organization-settings',
+    team: '/team',
+    apps: '/apps',
 
     // Personal
     notifications: '/notifications',
@@ -57,18 +65,25 @@ export const ROOT_NAV_LABELS: Record<string, string> = {
     'org-chart': 'nav.orgChart',
     recruitment: 'nav.recruitment',
     onboarding: 'nav.onboarding',
+    exit: 'nav.exit',
+    calendar: 'nav.calendar',
     visa: 'nav.visa',
     documents: 'nav.documents',
+    compliance: 'nav.compliance',
     payroll: 'nav.payroll',
     leave: 'nav.leave',
+    'leave-policies': 'nav.leavePolicies',
     attendance: 'nav.attendance',
-    exit: 'nav.exit',
-    compliance: 'nav.compliance',
     performance: 'nav.performance',
+    assets: 'nav.assets',
     reports: 'nav.reports',
     audit: 'nav.auditLog',
     'login-history': 'loginHistory.title',
     notifications: 'profile.notifications',
     settings: 'nav.settings',
     help: 'nav.help',
+    organizations: 'nav.organizations',
+    team: 'nav.team',
+    apps: 'nav.apps',
+    'organization-settings': 'settings.company',
 }

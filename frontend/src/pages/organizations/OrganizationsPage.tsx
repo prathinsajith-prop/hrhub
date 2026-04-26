@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Building2, Plus, Check, ArrowRightLeft } from 'lucide-react'
-import { useMyTenants, useSwitchTenant, useCurrentTenant } from '@/hooks/useTenants'
+import { useMyTenants, useSwitchTenant } from '@/hooks/useTenants'
+import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -14,7 +15,7 @@ export function OrganizationsPage() {
     const { t } = useTranslation()
     const navigate = useNavigate()
     const { data: tenants, isLoading } = useMyTenants()
-    const { data: current } = useCurrentTenant()
+    const currentTenantId = useAuthStore(s => s.tenant?.id)
     const switchMut = useSwitchTenant()
 
     const handleSwitch = async (tenantId: string, name: string) => {
@@ -59,7 +60,7 @@ export function OrganizationsPage() {
                     ) : (
                         <div className="grid sm:grid-cols-2 gap-3">
                             {tenants!.map((m) => {
-                                const isActive = current?.tenant.id === m.tenantId
+                                const isActive = currentTenantId === m.tenantId
                                 return (
                                     <div
                                         key={m.membershipId}

@@ -35,6 +35,13 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
 }
 
 export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRequest, 'tenantId' | 'id'>) {
+    // Basic date sanity checks
+    if (data.startDate && data.endDate && data.startDate > data.endDate) {
+        throw Object.assign(new Error('startDate must be on or before endDate'), { statusCode: 400 })
+    }
+    if (typeof data.days === 'number' && data.days <= 0) {
+        throw Object.assign(new Error('days must be a positive number'), { statusCode: 400 })
+    }
     const [row] = await db.insert(leaveRequests).values({ ...data, tenantId }).returning()
     return row
 }
@@ -74,7 +81,7 @@ export async function approveLeave(tenantId: string, id: string, approvedBy: str
     try {
         const [emp] = await db.select({ email: employees.email, firstName: employees.firstName })
             .from(employees)
-            .where(eq(employees.id, req.employeeId))
+            .where(and(eq(employees.tenantId, tenantId), eq(employees.id, req.employeeId)))
             .limit(1)
         if (emp?.email) {
             await sendEmail({
@@ -294,62 +301,125 @@ export async function getLeaveBalance(tenantId: string, employeeId: string, year
 
 // ─── Year-end rollover ─────────────────────────────────────────────────────
 // Closes `fromYear` and creates `fromYear + 1` rows with carried_forward applied.
+// Uses 4 bulk queries (employees, balances, usage, policies) instead of N×M
+// sequential round-trips so this scales to thousands of employees.
 export async function rolloverYear(tenantId: string, fromYear: number) {
-    const policies = await listLeavePolicies(tenantId)
-    const empRows = await db.select({ id: employees.id, joinDate: employees.joinDate })
-        .from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false)))
+    const yearStart = `${fromYear}-01-01`
+    const yearEnd = `${fromYear}-12-31`
+    const todayIso = new Date().toISOString().slice(0, 10)
 
-    let closed = 0
-    let opened = 0
+    // 1. Load all data in parallel — 3 queries total regardless of headcount.
+    const [policies, empRows, allBalanceRows, allUsageRows] = await Promise.all([
+        listLeavePolicies(tenantId),
+        db.select({ id: employees.id, joinDate: employees.joinDate })
+            .from(employees)
+            .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false))),
+        db.select().from(leaveBalances)
+            .where(and(eq(leaveBalances.tenantId, tenantId), eq(leaveBalances.year, fromYear))),
+        db.select({
+            employeeId: leaveRequests.employeeId,
+            leaveType: leaveRequests.leaveType,
+            status: leaveRequests.status,
+            days: leaveRequests.days,
+        }).from(leaveRequests)
+            .where(and(
+                eq(leaveRequests.tenantId, tenantId),
+                isNull(leaveRequests.deletedAt),
+                gte(leaveRequests.startDate, yearStart),
+                lte(leaveRequests.startDate, yearEnd),
+                inArray(leaveRequests.status, ['approved', 'pending']),
+            )),
+    ])
+
+    // 2. Index loaded data by employeeId for O(1) lookup.
+    const balanceByEmpType = new Map<string, (typeof allBalanceRows)[number]>()
+    for (const r of allBalanceRows) {
+        balanceByEmpType.set(`${r.employeeId}:${r.leaveType}`, r)
+    }
+    const usageByEmpType = new Map<string, { taken: number; pending: number }>()
+    for (const r of allUsageRows) {
+        const key = `${r.employeeId}:${r.leaveType}`
+        const cur = usageByEmpType.get(key) ?? { taken: 0, pending: 0 }
+        if (r.status === 'approved') cur.taken += r.days ?? 0
+        else if (r.status === 'pending') cur.pending += r.days ?? 0
+        usageByEmpType.set(key, cur)
+    }
+
+    // 3. Compute all closing/opening rows in JS (no per-employee DB calls).
+    const closingRows: any[] = []
+    const openingRows: any[] = []
 
     for (const emp of empRows) {
-        const balance = await getLeaveBalance(tenantId, emp.id, fromYear)
-        if (!balance) continue
+        const joinDate = emp.joinDate ? new Date(emp.joinDate) : new Date()
+        const joinYear = joinDate.getFullYear()
+        const today = new Date()
+        const monthsOfService = Math.max(0,
+            (today.getFullYear() - joinDate.getFullYear()) * 12 +
+            (today.getMonth() - joinDate.getMonth()),
+        )
+
         for (const policy of policies) {
-            const b = balance.balance[policy.leaveType]
-            if (!b) continue
-            const closing = b.unlimited ? 0 : Math.max(0, b.accrued + b.carriedForward + b.adjustment - b.taken)
+            const key = `${emp.id}:${policy.leaveType}`
+            const existing = balanceByEmpType.get(key)
+            const usage = usageByEmpType.get(key) ?? { taken: 0, pending: 0 }
 
-            // Persist closing for fromYear
-            await db.insert(leaveBalances).values({
+            const accrued = existing ? Number(existing.accrued) : computeAccrued(policy, monthsOfService, fromYear, joinYear)
+            const carryExpiresOn = existing?.carryExpiresOn ?? null
+            let carried = existing ? Number(existing.carriedForward) : 0
+            if (carryExpiresOn && carryExpiresOn < todayIso) carried = 0
+            const adjustment = existing ? Number(existing.adjustment) : 0
+            const unlimited = policy.accrualRule === 'unlimited'
+            const closing = unlimited ? 0 : Math.max(0, accrued + carried + adjustment - usage.taken)
+
+            closingRows.push({
                 tenantId, employeeId: emp.id, leaveType: policy.leaveType, year: fromYear,
-                accrued: String(b.accrued), carriedForward: String(b.carriedForward),
-                carryExpiresOn: b.carryExpiresOn ?? undefined,
-                taken: String(b.taken), adjustment: String(b.adjustment),
+                accrued: String(accrued), carriedForward: String(carried),
+                carryExpiresOn: carryExpiresOn ?? undefined,
+                taken: String(usage.taken), adjustment: String(adjustment),
                 closingBalance: String(closing), rolledOverAt: new Date(),
-            }).onConflictDoUpdate({
-                target: [leaveBalances.tenantId, leaveBalances.employeeId, leaveBalances.leaveType, leaveBalances.year],
-                set: { closingBalance: String(closing), rolledOverAt: new Date(), updatedAt: new Date() },
-            })
-            closed++
+            } as any)
 
-            // Open next year with carry-forward (capped)
             const carryAmount = Math.min(closing, policy.maxCarryForward)
             if (carryAmount <= 0 && policy.accrualRule !== 'monthly_2_then_30' && policy.accrualRule !== 'flat') continue
 
             const expiresOn = policy.carryExpiresAfterMonths > 0
                 ? new Date(fromYear + 1, 0, 1 + policy.carryExpiresAfterMonths * 30).toISOString().slice(0, 10)
                 : null
-
-            // Compute next-year accrual snapshot (so balance row has it baked in)
-            const joinDate = emp.joinDate ? new Date(emp.joinDate) : new Date()
             const monthsAtNextYearStart = Math.max(0,
                 ((fromYear + 1) - joinDate.getFullYear()) * 12 - joinDate.getMonth(),
             )
-            const nextAccrued = computeAccrued(policy, monthsAtNextYearStart, fromYear + 1, joinDate.getFullYear())
+            const nextAccrued = computeAccrued(policy, monthsAtNextYearStart, fromYear + 1, joinYear)
 
-            await db.insert(leaveBalances).values({
+            openingRows.push({
                 tenantId, employeeId: emp.id, leaveType: policy.leaveType, year: fromYear + 1,
                 openingBalance: String(carryAmount),
                 accrued: String(nextAccrued),
                 carriedForward: String(carryAmount),
                 carryExpiresOn: expiresOn ?? undefined,
                 closingBalance: String(carryAmount + nextAccrued),
-            }).onConflictDoNothing()
-            opened++
+            } as any)
         }
     }
+
+    // 4. Write all rows in 2 bulk upserts — still just 2 queries total.
+    const BATCH = 500
+    let closed = 0
+    let opened = 0
+
+    for (let i = 0; i < (closingRows as any[]).length; i += BATCH) {
+        const chunk = (closingRows as any[]).slice(i, i + BATCH)
+        await db.insert(leaveBalances).values(chunk).onConflictDoUpdate({
+            target: [leaveBalances.tenantId, leaveBalances.employeeId, leaveBalances.leaveType, leaveBalances.year],
+            set: { closingBalance: sql`excluded.closing_balance`, rolledOverAt: sql`excluded.rolled_over_at`, updatedAt: new Date() },
+        })
+        closed += chunk.length
+    }
+    for (let i = 0; i < (openingRows as any[]).length; i += BATCH) {
+        const chunk = (openingRows as any[]).slice(i, i + BATCH)
+        await db.insert(leaveBalances).values(chunk).onConflictDoNothing()
+        opened += chunk.length
+    }
+
     return { fromYear, toYear: fromYear + 1, closed, opened }
 }
 

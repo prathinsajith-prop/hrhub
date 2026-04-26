@@ -16,7 +16,7 @@ export default async function appsRoutes(fastify: any): Promise<void> {
     })
 
     fastify.post('/', {
-        preHandler: [fastify.authenticate, fastify.requireRole('super_admin')],
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['ConnectedApps'] },
     }, async (request: any, reply: any) => {
         const body = request.body as {
@@ -37,7 +37,7 @@ export default async function appsRoutes(fastify: any): Promise<void> {
     })
 
     fastify.patch('/:id', {
-        preHandler: [fastify.authenticate, fastify.requireRole('super_admin')],
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['ConnectedApps'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
@@ -50,7 +50,7 @@ export default async function appsRoutes(fastify: any): Promise<void> {
     })
 
     fastify.post('/:id/regenerate-secret', {
-        preHandler: [fastify.authenticate, fastify.requireRole('super_admin')],
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['ConnectedApps'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
@@ -59,7 +59,7 @@ export default async function appsRoutes(fastify: any): Promise<void> {
     })
 
     fastify.delete('/:id', {
-        preHandler: [fastify.authenticate, fastify.requireRole('super_admin')],
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['ConnectedApps'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }

@@ -16,10 +16,13 @@ export interface User {
 export interface Tenant {
   id: string
   name: string
-  tradeLicenseNo: string
+  tradeLicenseNo?: string
   jurisdiction: 'mainland' | 'freezone'
   industryType: IndustryType
   subscriptionPlan: 'starter' | 'growth' | 'enterprise'
+  // Persisted or resolved URL for the tenant logo used when displaying stored data.
+  logoUrl?: string
+  // Raw/local logo value used during create/update flows before it is uploaded and exposed via `logoUrl`.
   logo?: string
 }
 

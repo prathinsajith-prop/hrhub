@@ -1,5 +1,6 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/store/authStore'
 import type { Employee } from '@/types'
 
 interface ListParams {
@@ -20,6 +21,7 @@ interface PaginatedResult<T> {
 }
 
 export function useEmployees(params: ListParams = {}) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const query = new URLSearchParams()
     if (params.search) query.set('search', params.search)
     if (params.status) query.set('status', params.status)
@@ -28,14 +30,16 @@ export function useEmployees(params: ListParams = {}) {
     query.set('offset', String(params.offset ?? 0))
 
     return useQuery({
-        queryKey: ['employees', params],
+        queryKey: ['employees', tenantId, params],
         queryFn: () => api.get<PaginatedResult<Employee>>(`/employees?${query}`),
+        enabled: !!tenantId,
     })
 }
 
 export function useInfiniteEmployees(params: Omit<ListParams, 'offset'> = {}) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useInfiniteQuery({
-        queryKey: ['employees', 'infinite', params],
+        queryKey: ['employees', tenantId, 'infinite', params],
         queryFn: ({ pageParam }) => {
             const query = new URLSearchParams()
             if (params.search) query.set('search', params.search)
@@ -51,10 +55,11 @@ export function useInfiniteEmployees(params: Omit<ListParams, 'offset'> = {}) {
 }
 
 export function useEmployee(id: string) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useQuery({
-        queryKey: ['employees', id],
+        queryKey: ['employees', tenantId, id],
         queryFn: () => api.get<{ data: Employee }>(`/employees/${id}`).then(r => r.data),
-        enabled: !!id,
+        enabled: !!id && !!tenantId,
     })
 }
 
