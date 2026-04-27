@@ -44,6 +44,7 @@ export async function calculateSettlement(tenantId: string, employeeId: string, 
     const usedLeaveDays = await db.select({ total: sql<number>`coalesce(sum(days), 0)` })
         .from(leaveRequests)
         .where(and(
+            eq(leaveRequests.tenantId, tenantId),
             eq(leaveRequests.employeeId, employeeId),
             eq(leaveRequests.leaveType, 'annual'),
             eq(leaveRequests.status, 'approved')
@@ -129,7 +130,7 @@ export async function approveExit(tenantId: string, id: string, approverId: stri
     if (req) {
         await db.update(employees)
             .set({ status: 'terminated' })
-            .where(eq(employees.id, req.employeeId))
+            .where(and(eq(employees.id, req.employeeId), eq(employees.tenantId, tenantId)))
     }
     return req
 }

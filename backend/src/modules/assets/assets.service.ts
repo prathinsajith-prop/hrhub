@@ -237,13 +237,13 @@ export async function returnAsset(
     const [updated] = await db
         .update(assetAssignments)
         .set(withTimestamp({ status: 'returned', actualReturnDate: returnDate, notes: data.notes ?? assignment.notes }))
-        .where(eq(assetAssignments.id, assignmentId))
+        .where(and(eq(assetAssignments.id, assignmentId), eq(assetAssignments.tenantId, tenantId)))
         .returning()
 
     await db
         .update(assets)
         .set(withTimestamp({ status: 'available' }))
-        .where(eq(assets.id, assignment.assetId))
+        .where(and(eq(assets.id, assignment.assetId), eq(assets.tenantId, tenantId)))
 
     await cacheDel(`dashboard:kpis:${tenantId}`)
     return updated
@@ -262,13 +262,13 @@ export async function markAssetLost(tenantId: string, assignmentId: string) {
     const [updated] = await db
         .update(assetAssignments)
         .set(withTimestamp({ status: 'lost' }))
-        .where(eq(assetAssignments.id, assignmentId))
+        .where(and(eq(assetAssignments.id, assignmentId), eq(assetAssignments.tenantId, tenantId)))
         .returning()
 
     await db
         .update(assets)
         .set(withTimestamp({ status: 'lost' }))
-        .where(eq(assets.id, assignment.assetId))
+        .where(and(eq(assets.id, assignment.assetId), eq(assets.tenantId, tenantId)))
 
     await cacheDel(`dashboard:kpis:${tenantId}`)
     return updated
@@ -341,7 +341,7 @@ export async function createMaintenanceRecord(
     await db
         .update(assets)
         .set(withTimestamp({ status: 'maintenance' }))
-        .where(eq(assets.id, assetId))
+        .where(and(eq(assets.id, assetId), eq(assets.tenantId, tenantId)))
 
     await cacheDel(`dashboard:kpis:${tenantId}`)
     return record
@@ -367,7 +367,7 @@ export async function updateMaintenanceRecord(
     const [updated] = await db
         .update(assetMaintenance)
         .set(withTimestamp(updates))
-        .where(eq(assetMaintenance.id, maintenanceId))
+        .where(and(eq(assetMaintenance.id, maintenanceId), eq(assetMaintenance.tenantId, tenantId)))
         .returning()
 
     // If resolved, set asset back to available

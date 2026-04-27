@@ -456,3 +456,12 @@ html[dir="rtl"] [data-rtl-flip] {
   font-weight: 600;
   font-size: 0.78rem;
 }
+
+/* Public holiday day highlight — soft rose tint on the day cell background */
+.hrhub-fullcalendar .fc-day-holiday {
+  background-color: #fff1f2 !important;
+}
+.hrhub-fullcalendar .fc-day-holiday .fc-daygrid-day-number {
+  color: #f43f5e;
+  font-weight: 600;
+}

@@ -62,7 +62,7 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
     // Mark as processing immediately
     await db.update(payrollRuns)
         .set(withTimestamp({ status: 'processing' as const }))
-        .where(eq(payrollRuns.id, payrollRunId))
+        .where(and(eq(payrollRuns.id, payrollRunId), eq(payrollRuns.tenantId, tenantId)))
 
     // Fetch all active + probation employees for tenant
     const activeEmps = await db.select({
@@ -86,7 +86,7 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
         // Revert to draft if no employees
         await db.update(payrollRuns)
             .set(withTimestamp({ status: 'draft' as const }))
-            .where(eq(payrollRuns.id, payrollRunId))
+            .where(and(eq(payrollRuns.id, payrollRunId), eq(payrollRuns.tenantId, tenantId)))
         return false
     }
 
@@ -185,14 +185,14 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
     if (payslipValues.length === 0) {
         await db.update(payrollRuns)
             .set(withTimestamp({ status: 'draft' as const }))
-            .where(eq(payrollRuns.id, payrollRunId))
+            .where(and(eq(payrollRuns.id, payrollRunId), eq(payrollRuns.tenantId, tenantId)))
         return false
     }
 
     // Atomically replace payslips and finalize the run (BUG-003)
     await db.transaction(async (tx) => {
         // Delete any existing payslips for this run (idempotent)
-        await tx.delete(payslips).where(eq(payslips.payrollRunId, payrollRunId))
+        await tx.delete(payslips).where(and(eq(payslips.payrollRunId, payrollRunId), eq(payslips.tenantId, tenantId)))
 
         // Insert all payslips in one batch
         await tx.insert(payslips).values(payslipValues)
@@ -207,7 +207,7 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
                 totalNet: String(totalNet.toFixed(2)),
                 processedDate: new Date().toISOString().split('T')[0],
             }))
-            .where(eq(payrollRuns.id, payrollRunId))
+            .where(and(eq(payrollRuns.id, payrollRunId), eq(payrollRuns.tenantId, tenantId)))
     })
 
     await cacheDel(`dashboard:kpis:${tenantId}`)
