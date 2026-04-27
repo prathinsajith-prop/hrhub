@@ -98,6 +98,9 @@ export type RouteKey =
   | 'audit'
   | 'notifications'
   | 'my/login-history'
+  | 'my/leave'
+  | 'my/payslips'
+  | 'my/profile'
   | 'assets'
   | 'organizations'
   | 'organizations/new'
@@ -255,6 +258,11 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   apps: ['super_admin', 'hr_manager'],
   'leave-policies': ['super_admin', 'hr_manager'],
   'organization-settings': ['super_admin', 'hr_manager'],
+
+  // Self-service (all authenticated roles)
+  'my/leave': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'my/payslips': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'my/profile': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -337,6 +345,9 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/settings': 'settings',
     '/notifications': 'notifications',
     '/my/login-history': 'my/login-history',
+    '/my/leave': 'my/leave',
+    '/my/payslips': 'my/payslips',
+    '/my/profile': 'my/profile',
     '/organizations': 'organizations',
     '/team': 'team',
     '/apps': 'apps',

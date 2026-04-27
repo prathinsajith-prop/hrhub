@@ -36,6 +36,9 @@ export const documents = pgTable('documents', {
     stepIdx: index('idx_documents_step').on(t.stepId),
     expiryIdx: index('idx_documents_expiry').on(t.expiryDate),
     statusIdx: index('idx_documents_status').on(t.status),
+    tenantCategoryIdx: index('idx_documents_tenant_category').on(t.tenantId, t.category),
+    tenantStatusIdx: index('idx_documents_tenant_status').on(t.tenantId, t.status),
+    tenantEmployeeIdx: index('idx_documents_tenant_employee').on(t.tenantId, t.employeeId),
 }))
 
 export const documentsRelations = relations(documents, ({ one }) => ({

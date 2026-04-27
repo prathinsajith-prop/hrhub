@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { memo, type ReactNode } from 'react'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
@@ -16,7 +16,7 @@ export interface FormFieldProps {
  * Wraps a form control with label + error/hint text. Pass the error from
  * local validation or a mapped ApiError to display a red message inline.
  */
-export function FormField({ label, required, error, hint, className, children, htmlFor }: FormFieldProps) {
+export const FormField = memo(function FormField({ label, required, error, hint, className, children, htmlFor }: FormFieldProps) {
     return (
         <div
             className={cn('space-y-1.5', className)}
@@ -44,4 +44,4 @@ export function FormField({ label, required, error, hint, className, children, h
             ) : null}
         </div>
     )
-}
+})

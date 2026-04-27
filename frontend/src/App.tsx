@@ -48,6 +48,9 @@ const LeavePoliciesPage = lazy(() => import('@/pages/leave/LeavePoliciesPage').t
 const OnboardingUploadPage = lazy(() => import('@/pages/onboarding/OnboardingUploadPage').then(m => ({ default: m.OnboardingUploadPage })))
 const OrganizationSettingsPage = lazy(() => import('@/pages/organizations/OrganizationSettingsPage').then(m => ({ default: m.OrganizationSettingsPage })))
 const SubscriptionPage = lazy(() => import('@/pages/organizations/SubscriptionPage').then(m => ({ default: m.SubscriptionPage })))
+const MyLeavePage = lazy(() => import('@/pages/my/MyLeavePage').then(m => ({ default: m.MyLeavePage })))
+const MyPayslipsPage = lazy(() => import('@/pages/my/MyPayslipsPage').then(m => ({ default: m.MyPayslipsPage })))
+const MyProfilePage = lazy(() => import('@/pages/my/MyProfilePage').then(m => ({ default: m.MyProfilePage })))
 
 function PageLoader() {
   return (
@@ -81,6 +84,9 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/audit': 'audit.title',
   '/notifications': 'notifications.title',
   '/my/login-history': 'loginHistory.title',
+  '/my/leave': 'myLeave.title',
+  '/my/payslips': 'myPayslips.title',
+  '/my/profile': 'myProfile.title',
   '/organizations': 'organizations.title',
   '/organizations/new': 'organizations.new',
   '/team': 'team.title',
@@ -155,6 +161,9 @@ export default function App() {
             <Route path="audit" element={<RoleRoute routeKey="audit"><AuditLogPage /></RoleRoute>} />
             <Route path="notifications" element={<RoleRoute routeKey="notifications"><NotificationsPage /></RoleRoute>} />
             <Route path="my/login-history" element={<RoleRoute routeKey="my/login-history"><LoginHistoryPage /></RoleRoute>} />
+            <Route path="my/leave" element={<RoleRoute routeKey="my/leave"><MyLeavePage /></RoleRoute>} />
+            <Route path="my/payslips" element={<RoleRoute routeKey="my/payslips"><MyPayslipsPage /></RoleRoute>} />
+            <Route path="my/profile" element={<RoleRoute routeKey="my/profile"><MyProfilePage /></RoleRoute>} />
             <Route path="assets" element={<RoleRoute routeKey="assets"><AssetsPage /></RoleRoute>} />
             <Route path="organizations" element={<RoleRoute routeKey="organizations"><OrganizationsPage /></RoleRoute>} />
             <Route path="organizations/new" element={<RoleRoute routeKey="organizations/new"><NewOrganizationPage /></RoleRoute>} />

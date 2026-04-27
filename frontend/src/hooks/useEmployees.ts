@@ -22,17 +22,19 @@ interface PaginatedResult<T> {
 
 export function useEmployees(params: ListParams = {}) {
     const tenantId = useAuthStore(s => s.tenant?.id)
+    const { search, status, department, limit = 20, offset = 0 } = params
     const query = new URLSearchParams()
-    if (params.search) query.set('search', params.search)
-    if (params.status) query.set('status', params.status)
-    if (params.department) query.set('department', params.department)
-    query.set('limit', String(params.limit ?? 20))
-    query.set('offset', String(params.offset ?? 0))
+    if (search) query.set('search', search)
+    if (status) query.set('status', status)
+    if (department) query.set('department', department)
+    query.set('limit', String(limit))
+    query.set('offset', String(offset))
 
     return useQuery({
-        queryKey: ['employees', tenantId, params],
+        queryKey: ['employees', tenantId, search, status, department, limit, offset],
         queryFn: () => api.get<PaginatedResult<Employee>>(`/employees?${query}`),
         enabled: !!tenantId,
+        staleTime: 30_000,
     })
 }
 
@@ -144,6 +146,40 @@ export function useUploadEmployeeAvatar(id: string) {
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['employees'] })
             qc.invalidateQueries({ queryKey: ['employees', id] })
+        },
+    })
+}
+
+// ─── Employee Login Account ───────────────────────────────────────────────────
+
+export interface EmployeeAccount {
+    hasAccount: boolean
+    account: {
+        id: string
+        email: string
+        isActive: boolean
+        lastLoginAt: string | null
+        createdAt: string
+    } | null
+}
+
+export function useEmployeeAccount(employeeId: string | undefined) {
+    return useQuery({
+        queryKey: ['employees', employeeId, 'account'],
+        queryFn: () =>
+            api.get<{ data: EmployeeAccount }>(`/employees/${employeeId}/account`).then(r => r.data),
+        enabled: !!employeeId,
+        staleTime: 30_000,
+    })
+}
+
+export function useInviteEmployee() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ employeeId, email, name }: { employeeId: string; email?: string; name?: string }) =>
+            api.post<{ message: string }>(`/employees/${employeeId}/invite`, { email, name }),
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: ['employees', variables.employeeId, 'account'] })
         },
     })
 }

@@ -48,6 +48,29 @@ export async function getPayslips(tenantId: string, payrollRunId: string) {
         .where(and(eq(payslips.payrollRunId, payrollRunId), eq(payslips.tenantId, tenantId)))
 }
 
+export async function getPayslipsByEmployee(tenantId: string, employeeId: string) {
+    return db
+        .select({
+            id: payslips.id,
+            payrollRunId: payslips.payrollRunId,
+            month: payrollRuns.month,
+            year: payrollRuns.year,
+            runStatus: payrollRuns.status,
+            basicSalary: payslips.basicSalary,
+            housingAllowance: payslips.housingAllowance,
+            transportAllowance: payslips.transportAllowance,
+            otherAllowances: payslips.otherAllowances,
+            grossSalary: payslips.grossSalary,
+            deductions: payslips.deductions,
+            netSalary: payslips.netSalary,
+            daysWorked: payslips.daysWorked,
+        })
+        .from(payslips)
+        .innerJoin(payrollRuns, eq(payslips.payrollRunId, payrollRuns.id))
+        .where(and(eq(payslips.tenantId, tenantId), eq(payslips.employeeId, employeeId)))
+        .orderBy(desc(payrollRuns.year), desc(payrollRuns.month))
+}
+
 // ─── Payroll Calculation Engine (Tasks 7.1–7.4) ────────────────────────────
 // UAE Labour Law rules applied:
 //   Gross = basic + housing + transport + other allowances

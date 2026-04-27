@@ -20,6 +20,7 @@ export interface TenantUser {
     isActive: boolean
     lastLoginAt: string | null
     createdAt: string
+    employeeId: string | null
 }
 
 export function useCompanySettings() {

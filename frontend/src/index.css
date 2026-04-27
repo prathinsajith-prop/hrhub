@@ -465,3 +465,135 @@ html[dir="rtl"] [data-rtl-flip] {
   color: #f43f5e;
   font-weight: 600;
 }
+
+/* ─── Modern micro-interactions & advanced UI ───────────────────────────── */
+
+/* Shimmer skeleton — richer than Tailwind's default pulse */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted-foreground) / 0.08) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Slide-up page entry — smoother than plain fadeIn */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+.page-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Notification badge pulse */
+@keyframes badgePulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--destructive) / 0.4); }
+  50%       { box-shadow: 0 0 0 4px hsl(var(--destructive) / 0);  }
+}
+.badge-pulse {
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+/* Glass-morphism surface — for floating panels */
+.glass {
+  background: hsl(var(--card) / 0.85);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid hsl(var(--border) / 0.6);
+}
+
+/* Sticky header backdrop blur */
+.header-blur {
+  background: hsl(var(--background) / 0.88);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border-bottom: 1px solid hsl(var(--border) / 0.7);
+}
+
+/* Gradient text utility (for KPI numbers / hero labels) */
+.gradient-text {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--info)));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Improved focus ring — respects system reduced-motion */
+@media (prefers-reduced-motion: no-preference) {
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    transition: outline-offset 0.1s ease;
+  }
+}
+
+/* DataTable row smooth hover */
+.data-table-row {
+  transition: background-color 0.1s ease;
+}
+
+/* Status indicator dot — used in sidebar nav, user status */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot-success { background: hsl(var(--success)); }
+.status-dot-warning { background: hsl(var(--warning)); }
+.status-dot-error   { background: hsl(var(--destructive)); }
+.status-dot-muted   { background: hsl(var(--muted-foreground) / 0.4); }
+
+/* Smooth sidebar collapse transition */
+[data-sidebar="sidebar"] {
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Dark mode ──────────────────────────────────────────────────────────── */
+.dark {
+  --background: 222 47% 8%;
+  --foreground: 210 20% 94%;
+  --card: 222 45% 11%;
+  --card-foreground: 210 20% 94%;
+  --popover: 222 45% 11%;
+  --popover-foreground: 210 20% 94%;
+  --primary: 221 83% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 222 40% 18%;
+  --secondary-foreground: 210 20% 80%;
+  --muted: 222 40% 15%;
+  --muted-foreground: 220 12% 56%;
+  --accent: 221 83% 18%;
+  --accent-foreground: 221 83% 70%;
+  --destructive: 0 65% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 58% 42%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 90% 52%;
+  --warning-foreground: 222 47% 8%;
+  --info: 199 80% 50%;
+  --info-foreground: 0 0% 100%;
+  --border: 222 40% 20%;
+  --input: 222 40% 20%;
+  --ring: 221 83% 60%;
+  --sidebar: 222 47% 6%;
+  --sidebar-foreground: 210 20% 88%;
+  --sidebar-accent: 222 40% 14%;
+  --sidebar-border: 222 40% 14%;
+}
+
+.dark .glass {
+  background: hsl(var(--card) / 0.75);
+}
+
+.dark .header-blur {
+  background: hsl(var(--background) / 0.82);
+}

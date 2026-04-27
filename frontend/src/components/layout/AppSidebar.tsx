@@ -23,6 +23,9 @@ import {
   Building2Icon,
   UsersRoundIcon,
   KeyRoundIcon,
+  UserCircleIcon,
+  ReceiptIcon,
+  CalendarIcon,
 } from "lucide-react"
 import { NavUser } from "@/components/layout/NavUser"
 import {
@@ -102,6 +105,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         { title: t('nav.organizations'), url: "/organizations", icon: Building2Icon },
         { title: t('nav.team'), url: "/team", icon: UsersRoundIcon },
         { title: t('nav.apps'), url: "/apps", icon: KeyRoundIcon },
+      ],
+    },
+    {
+      label: t('nav.mySection', { defaultValue: 'My' }),
+      items: [
+        { title: t('nav.myLeave', { defaultValue: 'My Leave' }), url: "/my/leave", icon: CalendarIcon },
+        { title: t('nav.myPayslips', { defaultValue: 'My Payslips' }), url: "/my/payslips", icon: ReceiptIcon },
+        { title: t('nav.myProfile', { defaultValue: 'My Profile' }), url: "/my/profile", icon: UserCircleIcon },
       ],
     },
   ], [t])

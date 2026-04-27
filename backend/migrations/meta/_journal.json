@@ -92,6 +92,13 @@
       "when": 1746576000000,
       "tag": "0012_org_units",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1746662400000,
+      "tag": "0013_composite_indexes",
+      "breakpoints": true
     }
   ]
 }

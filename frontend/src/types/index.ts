@@ -11,6 +11,7 @@ export interface User {
   tenantId: string
   entityId?: string
   department?: string
+  employeeId?: string | null
 }
 
 export interface Tenant {

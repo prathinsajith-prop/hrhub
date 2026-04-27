@@ -9,6 +9,10 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Plane,
+  User,
+  CalendarDays,
+  CreditCard,
+  Info,
 } from 'lucide-react'
 import {
   BarChart,
@@ -39,10 +43,13 @@ import { KpiCardCompact } from '@/components/ui/kpi-card'
 import type { KpiColor } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { cn } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { useDashboardKPIs, useNotifications, usePayrollTrend, useNationalityBreakdown, useDeptHeadcount, useEmiratisation, useOnboardingSummary } from '@/hooks/useDashboard'
 import { useVisas } from '@/hooks/useVisa'
 import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '@/store/authStore'
+import { useMyEmployee, useMyPayslips } from '@/hooks/useMe'
+import { useLeaveBalance } from '@/hooks/useLeave'
 
 /* Token-driven chart palette — keep chart colors in sync with globals.css. */
 const CHART_COLORS = {
@@ -116,7 +123,153 @@ const tooltipStyle: React.CSSProperties = {
   boxShadow: '0 4px 16px -4px hsl(var(--foreground) / 0.1)',
 }
 
-export function DashboardPage() {
+// ─── Employee self-service dashboard ─────────────────────────────────────────
+
+function EmployeeDashboard() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { data: myEmployee, isLoading: empLoading } = useMyEmployee()
+  const { data: payslips, isLoading: payslipsLoading } = useMyPayslips()
+  const { data: leaveBalance, isLoading: leaveLoading } = useLeaveBalance(myEmployee?.id)
+
+  const profileFields = ['phone', 'mobileNo', 'personalEmail', 'emergencyContact', 'homeCountryAddress', 'nationality', 'dateOfBirth', 'maritalStatus'] as const
+  const filled = profileFields.filter(f => !!(myEmployee as Record<string, unknown> | undefined)?.[f]).length
+  const completeness = empLoading ? 100 : Math.round((filled / profileFields.length) * 100)
+
+  type BalanceEntry = { entitled: number; taken: number; available: number; pending: number }
+  const leaveEntries = leaveBalance?.balance
+    ? Object.entries(leaveBalance.balance as Record<string, BalanceEntry>).filter(([, b]) => b.entitled !== 0)
+    : []
+
+  const recentPayslips = (payslips ?? []).slice(0, 3)
+
+  return (
+    <PageWrapper>
+      <PageHeader
+        title={empLoading ? t('dashboard.title') : `Welcome back, ${myEmployee?.firstName ?? ''}!`}
+        description="Your self-service portal"
+      />
+
+      {!empLoading && completeness < 100 && (
+        <div className="flex items-start gap-4 rounded-xl border border-info/20 bg-info/5 px-5 py-4">
+          <Info className="h-5 w-5 text-info shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium">Complete your profile ({completeness}%)</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Some details are missing. Keeping your record up to date helps HR manage your employment accurately.
+            </p>
+            <div className="mt-2 h-1.5 w-full bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-info rounded-full transition-all" style={{ width: `${completeness}%` }} />
+            </div>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => navigate('/my/profile')} className="shrink-0">
+            Update
+          </Button>
+        </div>
+      )}
+
+      <div>
+        <h2 className="text-sm font-semibold mb-3">Leave Balance — {new Date().getFullYear()}</h2>
+        {leaveLoading || empLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          </div>
+        ) : leaveEntries.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No leave balance data available.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {leaveEntries.map(([type, b]) => {
+              const isUnlimited = b.entitled === -1
+              const pct = isUnlimited ? 0 : Math.min(100, Math.round((b.taken / (b.entitled || 1)) * 100))
+              const isLow = !isUnlimited && b.available <= 3 && b.entitled > 0
+              return (
+                <Card key={type}>
+                  <CardContent className="p-4 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">{labelFor(type)}</p>
+                    <div className="flex items-baseline gap-1">
+                      <span className={cn('text-2xl font-bold font-display', isLow ? 'text-destructive' : 'text-foreground')}>
+                        {isUnlimited ? '∞' : b.available}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">/ {isUnlimited ? '∞' : b.entitled} days</span>
+                    </div>
+                    {!isUnlimited && (
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div
+                          className={cn('h-1.5 rounded-full', pct >= 80 ? 'bg-destructive' : pct >= 50 ? 'bg-warning' : 'bg-success')}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    )}
+                    <div className="text-[10px] text-muted-foreground">
+                      Used: <strong className="text-foreground">{b.taken}</strong>
+                      {b.pending > 0 && <span> · Pending: <strong className="text-warning">{b.pending}</strong></span>}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h2 className="text-sm font-semibold mb-3">Quick Actions</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Button variant="outline" className="h-auto py-5 flex-col gap-2.5 border-dashed hover:border-solid" onClick={() => navigate('/my/leave')}>
+            <CalendarDays className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs font-medium">Request Leave</span>
+          </Button>
+          <Button variant="outline" className="h-auto py-5 flex-col gap-2.5 border-dashed hover:border-solid" onClick={() => navigate('/my/profile')}>
+            <User className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs font-medium">My Profile</span>
+          </Button>
+          <Button variant="outline" className="h-auto py-5 flex-col gap-2.5 border-dashed hover:border-solid" onClick={() => navigate('/my/payslips')}>
+            <CreditCard className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs font-medium">Payslips</span>
+          </Button>
+          <Button variant="outline" className="h-auto py-5 flex-col gap-2.5 border-dashed hover:border-solid" onClick={() => navigate('/documents')}>
+            <FileText className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs font-medium">Documents</span>
+          </Button>
+        </div>
+      </div>
+
+      {(recentPayslips.length > 0 || payslipsLoading) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Recent Payslips</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => navigate('/my/payslips')}>View all</Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {payslipsLoading ? (
+              <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12" />)}</div>
+            ) : (
+              <div className="divide-y">
+                {recentPayslips.map(p => (
+                  <div key={p.id} className="flex items-center justify-between py-3">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {new Date(p.year, p.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                      </p>
+                      <p className="text-xs text-muted-foreground capitalize">{p.runStatus}</p>
+                    </div>
+                    <p className="text-sm font-semibold">{formatCurrency(parseFloat(p.netSalary))}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </PageWrapper>
+  )
+}
+
+// ─── HR / admin dashboard ─────────────────────────────────────────────────────
+
+function HRDashboard() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { data: kpis, isLoading: kpisLoading } = useDashboardKPIs()
@@ -572,4 +725,9 @@ export function DashboardPage() {
       </Card>
     </PageWrapper>
   )
+}
+
+export function DashboardPage() {
+  const role = useAuthStore(s => s.user?.role)
+  return role === 'employee' ? <EmployeeDashboard /> : <HRDashboard />
 }

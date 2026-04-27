@@ -575,9 +575,14 @@ function UsersTab() {
                                             </AvatarFallback>
                                         </Avatar>
                                         <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 <p className="text-sm font-medium truncate">{u.name}</p>
                                                 {isSelf && <span className="text-[10px] text-muted-foreground">(you)</span>}
+                                                {u.employeeId && (
+                                                    <Badge variant="info" className="text-[9px] py-0 px-1.5 h-4 font-medium">
+                                                        Employee linked
+                                                    </Badge>
+                                                )}
                                             </div>
                                             <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                                         </div>

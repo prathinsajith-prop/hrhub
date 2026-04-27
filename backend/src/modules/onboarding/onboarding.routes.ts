@@ -248,11 +248,15 @@ export default async function (fastify: any): Promise<void> {
     })
 
     // ── Public: Upload Info ───────────────────────────────────────────────────
-    // GET /onboarding/upload-info/:token  — NO AUTH
-    fastify.get('/upload-info/:token', { schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
+    // GET /onboarding/upload-info?t=<token>  — NO AUTH
+    // NOTE: token is passed as query param (not path param) because JWT tokens
+    // exceed find-my-way's ~255-char path segment limit, causing 404.
+    fastify.get('/upload-info', { schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
+        const rawToken = (request.query as any).t as string | undefined
+        if (!rawToken) return reply.code(400).send({ message: 'Missing token' })
         let claims: { jti?: string; checklistId: string; tenantId: string; employeeId: string }
         try {
-            claims = (fastify as any).jwt.verify(request.params.token)
+            claims = (fastify as any).jwt.verify(rawToken)
         } catch {
             return reply.code(401).send({ message: 'Invalid or expired upload link' })
         }
@@ -403,10 +407,12 @@ export default async function (fastify: any): Promise<void> {
 
     // ── Public: Upload Document Against Step ──────────────────────────────────
     // POST /onboarding/upload/:token  — NO AUTH, multipart
-    fastify.post('/upload/:token', { schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
+    fastify.post('/upload', { schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
+        const rawToken = (request.query as any).t as string | undefined
+        if (!rawToken) return reply.code(400).send({ message: 'Missing token' })
         let claims: { jti?: string; checklistId: string; tenantId: string; employeeId: string }
         try {
-            claims = (fastify as any).jwt.verify(request.params.token)
+            claims = (fastify as any).jwt.verify(rawToken)
         } catch {
             return reply.code(401).send({ message: 'Invalid or expired upload link' })
         }

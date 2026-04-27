@@ -54,7 +54,7 @@ export const activityLogs = pgTable('activity_logs', {
     /** Human-readable entity name (snapshot) */
     entityName: text('entity_name'),
     action: text('action').notNull()
-        .$type<'create' | 'update' | 'delete' | 'view' | 'approve' | 'reject' | 'submit' | 'export' | 'import' | 'login' | 'logout'>(),
+        .$type<'create' | 'update' | 'delete' | 'view' | 'approve' | 'reject' | 'submit' | 'export' | 'import' | 'login' | 'logout' | 'invite'>(),
     /** JSON diff: {field: {from: x, to: y}} */
     changes: jsonb('changes').$type<Record<string, { from: unknown; to: unknown }>>(),
     /** Any additional context */

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import type { CellContext } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
@@ -63,7 +63,7 @@ const EMPLOYEE_STATUS_META: Record<
     visa_expired: { variant: 'destructive', Icon: AlertTriangle },
 }
 
-function EmployeeStatusBadge({ status }: { status: string }) {
+const EmployeeStatusBadge = memo(function EmployeeStatusBadge({ status }: { status: string }) {
     const meta = EMPLOYEE_STATUS_META[status] ?? { variant: 'secondary' as const, Icon: CheckCircle2 }
     const { variant, Icon } = meta
     return (
@@ -72,7 +72,7 @@ function EmployeeStatusBadge({ status }: { status: string }) {
             {labelFor(status)}
         </Badge>
     )
-}
+})
 
 export function ReportsPage() {
     const { t } = useTranslation()

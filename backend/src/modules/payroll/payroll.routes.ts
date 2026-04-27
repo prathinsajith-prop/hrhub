@@ -1,4 +1,4 @@
-import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, getPayslipsWithEmployees, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
+import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, getPayslipsWithEmployees, getPayslipsByEmployee, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
 import { generatePayslipPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { enqueuePayrollRun, getPayrollQueue } from '../../workers/payroll.worker.js'
@@ -23,6 +23,14 @@ export default async function (fastify: any): Promise<void> {
     fastify.get('/:id/payslips', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
         const data = await getPayslipsWithEmployees(request.user.tenantId, id)
+        return reply.send({ data })
+    })
+
+    // GET /api/v1/payroll/my-payslips — employee's own payslips across all runs
+    fastify.get('/my-payslips', { ...auth, schema: { tags: ['Payroll'] } }, async (request: any, reply: any) => {
+        const { employeeId, tenantId } = request.user
+        if (!employeeId) return reply.send({ data: [] })
+        const data = await getPayslipsByEmployee(tenantId, employeeId)
         return reply.send({ data })
     })
 

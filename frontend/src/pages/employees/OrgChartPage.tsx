@@ -1,3 +1,4 @@
+import React, { memo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -30,7 +31,7 @@ const STATUS_DOT: Record<string, string> = {
     visa_expired: 'bg-red-400',
 }
 
-function EmpCard({ node, isRoot }: { node: OrgNode; isRoot?: boolean }) {
+const EmpCard = memo(function EmpCard({ node, isRoot }: { node: OrgNode; isRoot?: boolean }) {
     const initials = node.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
     return (
         <div className="flex flex-col items-center">
@@ -61,7 +62,7 @@ function EmpCard({ node, isRoot }: { node: OrgNode; isRoot?: boolean }) {
             )}
         </div>
     )
-}
+})
 
 function ReportingChart() {
     const { data, isLoading } = useQuery({
@@ -112,7 +113,7 @@ const TYPE_STYLE: Record<string, { icon: React.FC<{ className?: string }>; label
     branch:     { icon: MapPin,  label: 'Branch',     color: 'text-emerald-700',bg: 'bg-emerald-50',  border: 'border-emerald-200' },
 }
 
-function StructureNode({ node, depth = 0 }: { node: OrgUnitNode; depth?: number }) {
+const StructureNode = memo(function StructureNode({ node, depth = 0 }: { node: OrgUnitNode; depth?: number }) {
     const style = TYPE_STYLE[node.type] ?? { icon: GitBranch, label: node.type, color: 'text-gray-700', bg: 'bg-gray-50', border: 'border-gray-200' }
     const Icon = style.icon
 
@@ -152,7 +153,7 @@ function StructureNode({ node, depth = 0 }: { node: OrgUnitNode; depth?: number 
             )}
         </div>
     )
-}
+})
 
 function StructureChart() {
     const { data: roots = [], isLoading } = useOrgUnitTree()
