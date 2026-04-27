@@ -71,6 +71,20 @@
       "when": 1746316800000,
       "tag": "0009_subscription_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1746403200000,
+      "tag": "0010_app_request_logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1746489600000,
+      "tag": "0011_refresh_token_tenant",
+      "breakpoints": true
     }
   ]
 }

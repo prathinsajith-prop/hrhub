@@ -44,14 +44,22 @@ export interface SettlementPreview {
 export function useExitRequests() {
     return useQuery({
         queryKey: ['exit'],
-        queryFn: () => api.get<ExitRequest[]>('/exit'),
+        queryFn: () => api.get<{ data: ExitRequest[] }>('/exit').then(r => r.data ?? []),
+    })
+}
+
+export function useExitRequest(id: string | undefined) {
+    return useQuery({
+        queryKey: ['exit', id],
+        queryFn: () => api.get<{ data: ExitRequest }>(`/exit/${id}`).then(r => r.data),
+        enabled: !!id,
     })
 }
 
 export function useSettlementPreview(employeeId: string | undefined, exitDate: string | undefined, exitType: string | undefined) {
     return useQuery({
         queryKey: ['exit-preview', employeeId, exitDate, exitType],
-        queryFn: () => api.get<SettlementPreview>(`/exit/settlement-preview?employeeId=${employeeId}&exitDate=${exitDate}&exitType=${exitType}`),
+        queryFn: () => api.get<{ data: SettlementPreview }>(`/exit/settlement-preview?employeeId=${employeeId}&exitDate=${exitDate}&exitType=${exitType}`).then(r => r.data),
         enabled: !!employeeId && !!exitDate && !!exitType,
     })
 }
