@@ -1,15 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 export function usePayrollRuns(params: { year?: number; limit?: number; offset?: number } = {}) {
+    const { year, limit = 12, offset = 0 } = params
     const q = new URLSearchParams()
-    if (params.year) q.set('year', String(params.year))
-    q.set('limit', String(params.limit ?? 12))
-    q.set('offset', String(params.offset ?? 0))
+    if (year) q.set('year', String(year))
+    q.set('limit', String(limit))
+    q.set('offset', String(offset))
 
     return useQuery({
-        queryKey: ['payroll', params],
+        queryKey: ['payroll', year, limit, offset],
         queryFn: () => api.get<{ data: unknown[]; total: number }>(`/payroll?${q}`),
+        staleTime: 30_000,
     })
 }
 
@@ -30,6 +33,7 @@ export function useRunPayroll() {
     return useMutation({
         mutationFn: (runId: string) => api.post<{ data: unknown }>(`/payroll/${runId}/run`, {}).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll'] }),
+        onError: (err: Error) => toast.error('Payroll run failed', err?.message ?? 'Could not process the payroll run.'),
     })
 }
 
@@ -54,6 +58,7 @@ export function useUpdatePayrollRun(id: string) {
     return useMutation({
         mutationFn: (data: unknown) => api.patch(`/payroll/${id}`, data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll'] }),
+        onError: (err: Error) => toast.error('Update failed', err?.message ?? 'Could not update the payroll run.'),
     })
 }
 
@@ -62,12 +67,14 @@ export function useSubmitWps() {
     return useMutation({
         mutationFn: (runId: string) => api.post<{ data: unknown }>(`/payroll/${runId}/submit-wps`, {}).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll'] }),
+        onError: (err: Error) => toast.error('WPS submission failed', err?.message ?? 'Could not submit the WPS file.'),
     })
 }
 
 /** Downloads WPS SIF file for the given payroll run and triggers browser save. */
 export function useDownloadWpsSif() {
     return useMutation({
+        onError: () => toast.error('Download failed', 'Could not download the WPS SIF file.'),
         mutationFn: async (runId: string) => {
             const { useAuthStore } = await import('@/store/authStore')
             const token = useAuthStore.getState().accessToken
@@ -92,6 +99,7 @@ export function useDownloadWpsSif() {
 /** Downloads payslip PDF for the given payslip ID and triggers browser save. */
 export function useDownloadPayslip() {
     return useMutation({
+        onError: () => toast.error('Download failed', 'Could not download the payslip.'),
         mutationFn: async (payslipId: string) => {
             const { useAuthStore } = await import('@/store/authStore')
             const token = useAuthStore.getState().accessToken

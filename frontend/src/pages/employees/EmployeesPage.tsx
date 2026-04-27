@@ -12,6 +12,7 @@ import {
   Users,
   Clock,
   Star,
+  UserCheck,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { DataTable } from '@/components/ui/data-table'
@@ -34,6 +35,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { useEmployees, useArchiveEmployee } from '@/hooks/useEmployees'
 import { AddEmployeeDialog, EditEmployeeDialog } from '@/components/shared/action-dialogs'
+import { InviteEmployeeDialog } from '@/components/shared/InviteEmployeeDialog'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import type { FilterConfig } from '@/lib/filters'
@@ -80,11 +82,13 @@ const ActionMenu = memo(function ActionMenu({
   employee,
   onDelete,
   onEdit,
+  onInvite,
   canManage,
 }: {
   employee: Employee
   onDelete: (e: Employee) => void
   onEdit: (e: Employee) => void
+  onInvite: (e: Employee) => void
   canManage: boolean
 }) {
   const navigate = useNavigate()
@@ -95,7 +99,7 @@ const ActionMenu = memo(function ActionMenu({
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onClick={() => navigate(`/employees/${employee.id}`)}>
           <Eye className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           View Profile
@@ -117,6 +121,11 @@ const ActionMenu = memo(function ActionMenu({
         </DropdownMenuItem>
         {canManage && (
           <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onInvite(employee)}>
+              <UserCheck className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+              Manage Login Access
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onDelete(employee)}
@@ -142,6 +151,7 @@ export function EmployeesPage() {
   const employees: Employee[] = employeesRaw
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
   const [editTarget, setEditTarget] = useState<Employee | null>(null)
+  const [inviteTarget, setInviteTarget] = useState<Employee | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const archiveEmployee = useArchiveEmployee()
   const search = useSearchFilters({
@@ -297,7 +307,7 @@ export function EmployeesPage() {
       id: 'actions',
       header: '',
       cell: ({ row }) => (
-        <ActionMenu employee={row.original} onDelete={setDeleteTarget} onEdit={setEditTarget} canManage={canManage} />
+        <ActionMenu employee={row.original} onDelete={setDeleteTarget} onEdit={setEditTarget} onInvite={setInviteTarget} canManage={canManage} />
       ),
       size: 44,
     },
@@ -415,6 +425,13 @@ export function EmployeesPage() {
           open={!!editTarget}
           onOpenChange={(open) => !open && setEditTarget(null)}
           employee={editTarget}
+        />
+      )}
+      {inviteTarget && (
+        <InviteEmployeeDialog
+          employee={inviteTarget}
+          open={!!inviteTarget}
+          onOpenChange={(open) => !open && setInviteTarget(null)}
         />
       )}
     </PageWrapper>

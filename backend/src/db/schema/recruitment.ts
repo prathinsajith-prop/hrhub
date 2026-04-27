@@ -27,6 +27,7 @@ export const recruitmentJobs = pgTable('recruitment_jobs', {
 }, (t) => ({
     tenantIdx: index('idx_jobs_tenant').on(t.tenantId),
     statusIdx: index('idx_jobs_status').on(t.status),
+    tenantStatusIdx: index('idx_jobs_tenant_status').on(t.tenantId, t.status),
 }))
 
 export const jobApplications = pgTable('job_applications', {
@@ -53,6 +54,8 @@ export const jobApplications = pgTable('job_applications', {
     jobIdx: index('idx_applications_job').on(t.jobId),
     tenantIdx: index('idx_applications_tenant').on(t.tenantId),
     stageIdx: index('idx_applications_stage').on(t.stage),
+    tenantStageIdx: index('idx_applications_tenant_stage').on(t.tenantId, t.stage),
+    jobStageIdx: index('idx_applications_job_stage').on(t.jobId, t.stage),
 }))
 
 export const recruitmentJobsRelations = relations(recruitmentJobs, ({ one, many }) => ({

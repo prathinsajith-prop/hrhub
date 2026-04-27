@@ -31,6 +31,7 @@ const DASHBOARD_STALE = 2 * 60 * 1000 // 2 min
 
 // Chart/analytic data changes even less frequently
 const ANALYTICS_STALE = 5 * 60 * 1000 // 5 min
+const ANALYTICS_GC = 30 * 60 * 1000 // 30 min — keep chart data in memory between tab switches
 
 export function useDashboardKPIs() {
     return useQuery({
@@ -44,6 +45,8 @@ export function useNotifications(limit = 10) {
     return useQuery({
         queryKey: ['dashboard', 'notifications', limit],
         queryFn: () => api.get<{ data: unknown[] }>(`/dashboard/notifications?limit=${limit}`).then(r => r.data),
+        staleTime: 60_000,
+        gcTime: 5 * 60 * 1000,
     })
 }
 
@@ -52,6 +55,7 @@ export function usePayrollTrend() {
         queryKey: ['dashboard', 'payroll-trend'],
         queryFn: () => api.get<{ data: PayrollTrendPoint[] }>('/dashboard/payroll-trend').then(r => r.data),
         staleTime: ANALYTICS_STALE,
+        gcTime: ANALYTICS_GC,
     })
 }
 
@@ -60,6 +64,7 @@ export function useNationalityBreakdown() {
         queryKey: ['dashboard', 'nationality-breakdown'],
         queryFn: () => api.get<{ data: NationalityPoint[] }>('/dashboard/nationality-breakdown').then(r => r.data),
         staleTime: ANALYTICS_STALE,
+        gcTime: ANALYTICS_GC,
     })
 }
 
@@ -68,6 +73,7 @@ export function useDeptHeadcount() {
         queryKey: ['dashboard', 'dept-headcount'],
         queryFn: () => api.get<{ data: DeptHeadcountPoint[] }>('/dashboard/dept-headcount').then(r => r.data),
         staleTime: ANALYTICS_STALE,
+        gcTime: ANALYTICS_GC,
     })
 }
 
@@ -86,6 +92,7 @@ export function useEmiratisation() {
         queryKey: ['dashboard', 'emiratisation'],
         queryFn: () => api.get<{ data: EmiratisationStatus }>('/dashboard/emiratisation').then(r => r.data),
         staleTime: ANALYTICS_STALE,
+        gcTime: ANALYTICS_GC,
     })
 }
 

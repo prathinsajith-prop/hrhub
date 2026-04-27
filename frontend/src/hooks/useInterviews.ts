@@ -24,8 +24,8 @@ export function useInterviews(applicationId?: string) {
     return useQuery({
         queryKey: ['interviews', applicationId],
         queryFn: () => applicationId
-            ? api.get<Interview[]>(`/interviews/application/${applicationId}`)
-            : api.get<Interview[]>('/interviews'),
+            ? api.get<{ data: Interview[] }>(`/interviews/application/${applicationId}`).then(r => r.data)
+            : api.get<{ data: Interview[] }>('/interviews').then(r => r.data),
     })
 }
 

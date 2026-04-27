@@ -254,7 +254,7 @@ export interface OnboardingUploadInfo {
 export function useOnboardingUploadInfo(token: string) {
     return useQuery({
         queryKey: ['onboarding-upload', token],
-        queryFn: () => api.get<{ data: OnboardingUploadInfo }>(`/onboarding/upload-info/${token}`).then(r => r.data),
+        queryFn: () => api.get<{ data: OnboardingUploadInfo }>(`/onboarding/upload-info?t=${encodeURIComponent(token)}`).then(r => r.data),
         enabled: !!token,
         retry: false,
     })
@@ -269,7 +269,7 @@ export function useOnboardingPublicUpload(token: string) {
             fd.append('category', input.category)
             fd.append('docType', input.docType)
             if (input.expiryDate) fd.append('expiryDate', input.expiryDate)
-            return api.upload<{ data: unknown }>(`/onboarding/upload/${token}`, fd)
+            return api.upload<{ data: unknown }>(`/onboarding/upload?t=${encodeURIComponent(token)}`, fd)
         },
     })
 }

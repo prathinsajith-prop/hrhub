@@ -607,7 +607,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 </FormField>
                             </div>
                             {/* Org Structure Assignment */}
-                            {divisions.length > 0 && (
+                            {orgUnits.length > 0 && (
                                 <div className="rounded-lg border bg-muted/20 p-3 space-y-2.5">
                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organization Structure</p>
                                     <div className="grid grid-cols-1 gap-2.5">
@@ -825,6 +825,13 @@ export function EditEmployeeDialog({
     })
     const [errors, setErrors] = useState<Record<string, string>>({})
     const updateEmployee = useUpdateEmployee(employee.id)
+    const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const editOrgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
+    const editDivisions = editOrgUnits.filter(u => u.type === 'division' && u.isActive)
+    const editDepartments = editOrgUnits.filter(u => u.type === 'department' && u.isActive &&
+        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
+    const editBranches = editOrgUnits.filter(u => u.type === 'branch' && u.isActive &&
+        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
 
     const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
@@ -872,6 +879,9 @@ export function EditEmployeeDialog({
                 maritalStatus: (form.maritalStatus as Employee['maritalStatus']) || undefined,
                 emergencyContact: form.emergencyContact || undefined,
                 employeeNo: form.employeeNo || undefined,
+                divisionId: form.divisionId || undefined,
+                departmentId: form.departmentId || undefined,
+                branchId: form.branchId || undefined,
                 department: form.department || undefined,
                 designation: form.designation || undefined,
                 joinDate: form.joinDate,
@@ -963,8 +973,51 @@ export function EditEmployeeDialog({
                                 <div className="space-y-1.5"><Label>Employee No</Label><Input value={form.employeeNo} onChange={set('employeeNo')} /></div>
                                 <div className="space-y-1.5"><Label>Join Date *</Label><DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} /></div>
                             </div>
+                            {editOrgUnits.length > 0 && (
+                                <div className="rounded-lg border bg-muted/20 p-3 space-y-2.5">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organization Structure</p>
+                                    <div className="space-y-2.5">
+                                        {editDivisions.length > 0 && (
+                                            <div className="space-y-1.5">
+                                                <Label>Division</Label>
+                                                <Select value={form.divisionId || 'none'} onValueChange={v => setForm(f => ({ ...f, divisionId: v === 'none' ? '' : v, departmentId: '', branchId: '' }))}>
+                                                    <SelectTrigger><SelectValue placeholder="Select division…" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">— None —</SelectItem>
+                                                        {editDivisions.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-2 gap-2.5">
+                                            <div className="space-y-1.5">
+                                                <Label>Department</Label>
+                                                <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v }))}>
+                                                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">— None —</SelectItem>
+                                                        {editDepartments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            {editBranches.length > 0 && (
+                                                <div className="space-y-1.5">
+                                                    <Label>Branch</Label>
+                                                    <Select value={form.branchId || 'none'} onValueChange={v => setForm(f => ({ ...f, branchId: v === 'none' ? '' : v }))}>
+                                                        <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">— None —</SelectItem>
+                                                            {editBranches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Department</Label><Input value={form.department} onChange={set('department')} /></div>
+                                <div className="space-y-1.5"><Label>Department (freeform)</Label><Input value={form.department} onChange={set('department')} placeholder="e.g. Sales" /></div>
                                 <div className="space-y-1.5"><Label>Designation</Label><Input value={form.designation} onChange={set('designation')} /></div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">

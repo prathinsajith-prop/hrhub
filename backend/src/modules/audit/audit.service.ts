@@ -89,7 +89,7 @@ export interface RecordActivityParams {
     entityType: string
     entityId?: string
     entityName?: string
-    action: 'create' | 'update' | 'delete' | 'view' | 'approve' | 'reject' | 'submit' | 'export' | 'import' | 'login' | 'logout'
+    action: 'create' | 'update' | 'delete' | 'view' | 'approve' | 'reject' | 'submit' | 'export' | 'import' | 'login' | 'logout' | 'invite'
     changes?: Record<string, { from: unknown; to: unknown }>
     metadata?: Record<string, unknown>
     ipAddress?: string

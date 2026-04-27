@@ -8,12 +8,9 @@ interface EmptyStateProps {
     action?: ReactNode
     className?: string
     variant?: 'plain' | 'card'
+    size?: 'sm' | 'md' | 'lg'
 }
 
-/**
- * Standardised empty-state block used across pages.
- * Replaces the repeated `flex flex-col items-center gap-3 py-16` pattern.
- */
 function EmptyStateBase({
     icon: Icon,
     title,
@@ -21,18 +18,25 @@ function EmptyStateBase({
     action,
     className,
     variant = 'plain',
+    size = 'md',
 }: EmptyStateProps) {
+    const padding = size === 'sm' ? 'py-8' : size === 'lg' ? 'py-24' : 'py-14'
+    const iconSize = size === 'sm' ? 'h-8 w-8' : size === 'lg' ? 'h-16 w-16' : 'h-11 w-11'
+    const iconInner = size === 'sm' ? 'h-4 w-4' : size === 'lg' ? 'h-8 w-8' : 'h-5 w-5'
+
     const inner = (
-        <div className="flex flex-col items-center gap-3 py-16 text-center px-4">
+        <div className={cn('flex flex-col items-center gap-3 text-center px-4 animate-fade-fast', padding)}>
             {Icon && (
-                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                    <Icon className="h-6 w-6 text-muted-foreground" />
+                <div className={cn('rounded-full bg-muted/80 flex items-center justify-center ring-4 ring-muted/40 shrink-0', iconSize)}>
+                    <Icon className={cn('text-muted-foreground/60', iconInner)} />
                 </div>
             )}
-            {title && <p className="font-medium text-sm">{title}</p>}
-            {description && (
-                <p className="text-xs text-muted-foreground max-w-md">{description}</p>
-            )}
+            <div className="space-y-1">
+                {title && <p className="font-semibold text-sm text-foreground">{title}</p>}
+                {description && (
+                    <p className="text-xs text-muted-foreground max-w-xs leading-relaxed">{description}</p>
+                )}
+            </div>
             {action && <div className="mt-1">{action}</div>}
         </div>
     )

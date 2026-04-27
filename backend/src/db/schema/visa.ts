@@ -28,6 +28,9 @@ export const visaApplications = pgTable('visa_applications', {
     tenantIdx: index('idx_visa_tenant').on(t.tenantId),
     employeeIdx: index('idx_visa_employee').on(t.employeeId),
     statusIdx: index('idx_visa_status').on(t.status),
+    tenantStatusIdx: index('idx_visa_tenant_status').on(t.tenantId, t.status),
+    tenantUrgencyIdx: index('idx_visa_tenant_urgency').on(t.tenantId, t.urgencyLevel),
+    expiryIdx: index('idx_visa_expiry').on(t.expiryDate),
 }))
 
 export const visaApplicationsRelations = relations(visaApplications, ({ one }) => ({

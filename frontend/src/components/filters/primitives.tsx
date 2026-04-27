@@ -81,7 +81,6 @@ export function SelectFilter({ config, value, onChange }: PrimitiveProps) {
                         })}
                     </div>
                     <Select
-                        value=""
                         onValueChange={(val) => {
                             if (!val) return
                             const next = Array.from(new Set([...arrVal, val]))

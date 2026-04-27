@@ -111,8 +111,8 @@ export function SiteHeader() {
   return (
     <header
       className={cn(
-        'sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border px-4 lg:px-6',
-        'bg-background/80 text-foreground backdrop-blur supports-[backdrop-filter]:bg-background/70',
+        'sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 px-4 lg:px-6',
+        'header-blur text-foreground',
       )}
     >
       <SidebarTrigger

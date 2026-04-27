@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
@@ -66,7 +66,7 @@ const DOCUMENT_FILTERS: FilterConfig[] = [
   { name: 'verified', label: 'Verified only', type: 'toggle', field: 'verified' },
 ]
 
-function ExpiryCell({ date }: { date?: string }) {
+const ExpiryCell = memo(function ExpiryCell({ date }: { date?: string }) {
   if (!date) return <span className="text-xs text-muted-foreground">—</span>
   const days = getDaysUntilExpiry(date)
   return (
@@ -76,7 +76,7 @@ function ExpiryCell({ date }: { date?: string }) {
       </p>
     </div>
   )
-}
+})
 
 function UploadDocumentDialog({ open, onOpenChange, defaultEmployeeId, defaultCategory }: { open: boolean; onOpenChange: (o: boolean) => void; defaultEmployeeId?: string; defaultCategory?: string }) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -146,10 +146,10 @@ function UploadDocumentDialog({ open, onOpenChange, defaultEmployeeId, defaultCa
           {/* Employee selector */}
           <div className="space-y-1.5">
             <Label>Employee <span className="text-muted-foreground text-xs">(optional — for company docs leave blank)</span></Label>
-            <Select value={employeeId} onValueChange={setEmployeeId}>
+            <Select value={employeeId || '__none__'} onValueChange={v => setEmployeeId(v === '__none__' ? '' : v)}>
               <SelectTrigger><SelectValue placeholder="Select employee…" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">— Company document (no employee) —</SelectItem>
+                <SelectItem value="__none__">— Company document (no employee) —</SelectItem>
                 {employees.map((e: any) => (
                   <SelectItem key={e.id} value={e.id}>
                     {e.fullName ?? `${e.firstName} ${e.lastName}`}

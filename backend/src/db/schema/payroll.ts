@@ -22,6 +22,8 @@ export const payrollRuns = pgTable('payroll_runs', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
     tenantIdx: index('idx_payroll_tenant').on(t.tenantId),
+    tenantStatusIdx: index('idx_payroll_tenant_status').on(t.tenantId, t.status),
+    tenantYearMonthIdx: index('idx_payroll_tenant_year_month').on(t.tenantId, t.year, t.month),
     monthYearUniq: unique('payroll_month_year_unique').on(t.tenantId, t.month, t.year),
 }))
 
@@ -44,6 +46,8 @@ export const payslips = pgTable('payslips', {
 }, (t) => ({
     runIdx: index('idx_payslips_run').on(t.payrollRunId),
     employeeIdx: index('idx_payslips_employee').on(t.employeeId),
+    tenantEmployeeIdx: index('idx_payslips_tenant_employee').on(t.tenantId, t.employeeId),
+    tenantRunIdx: index('idx_payslips_tenant_run').on(t.tenantId, t.payrollRunId),
 }))
 
 export const payrollRunsRelations = relations(payrollRuns, ({ one, many }) => ({

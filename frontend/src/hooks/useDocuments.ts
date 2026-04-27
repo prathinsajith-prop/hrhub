@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 interface DocParams { employeeId?: string; category?: string; status?: string; limit?: number; offset?: number }
 
@@ -10,9 +11,11 @@ function toQS(params: Record<string, string | number | undefined>) {
 }
 
 export function useDocuments(params: DocParams = {}) {
+    const { employeeId, category, status, limit = 20, offset = 0 } = params
     return useQuery({
-        queryKey: ['documents', params],
-        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/documents?${toQS({ ...params, limit: params.limit ?? 20, offset: params.offset ?? 0 })}`),
+        queryKey: ['documents', employeeId, category, status, limit, offset],
+        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/documents?${toQS({ employeeId, category, status, limit, offset })}`),
+        staleTime: 30_000,
     })
 }
 
@@ -28,6 +31,7 @@ export function useCreateDocument() {
     return useMutation({
         mutationFn: (data: unknown) => api.post('/documents', data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+        onError: (err: Error) => toast.error('Failed to create document', err?.message ?? 'Please try again.'),
     })
 }
 
@@ -44,6 +48,7 @@ export function useUploadDocument() {
             return api.upload<{ data: unknown }>(`/documents/upload`, fd)
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+        onError: (err: Error) => toast.error('Upload failed', err?.message ?? 'Could not upload document.'),
     })
 }
 
@@ -52,6 +57,7 @@ export function useUpdateDocument(id: string) {
     return useMutation({
         mutationFn: (data: Record<string, unknown>) => api.patch(`/documents/${id}`, data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+        onError: (err: Error) => toast.error('Update failed', err?.message ?? 'Could not update document.'),
     })
 }
 
@@ -60,6 +66,7 @@ export function useVerifyDocument() {
     return useMutation({
         mutationFn: (id: string) => api.post(`/documents/${id}/verify`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+        onError: (err: Error) => toast.error('Verification failed', err?.message ?? 'Could not verify document.'),
     })
 }
 
@@ -68,6 +75,7 @@ export function useDeleteDocument() {
     return useMutation({
         mutationFn: (id: string) => api.delete(`/documents/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+        onError: (err: Error) => toast.error('Delete failed', err?.message ?? 'Could not delete document.'),
     })
 }
 
@@ -77,6 +85,7 @@ export function useRejectDocument() {
         mutationFn: (input: { id: string; reason: string }) =>
             api.post(`/documents/${input.id}/reject`, { reason: input.reason }),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+        onError: (err: Error) => toast.error('Rejection failed', err?.message ?? 'Could not reject document.'),
     })
 }
 

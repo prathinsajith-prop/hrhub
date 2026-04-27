@@ -39,11 +39,11 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
 
     // POST /settings/users/invite — invite a new user by email
     fastify.post('/users/invite', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
-        const { name, email, role } = request.body as { name: string; email: string; role: string }
+        const { name, email, role, employeeId } = request.body as { name: string; email: string; role: string; employeeId?: string }
         if (!name || !email || !role) {
             return reply.code(400).send({ message: 'name, email and role are required' })
         }
-        await inviteUser(request.user.tenantId, { name, email, role })
+        await inviteUser(request.user.tenantId, { name, email, role, employeeId })
         return reply.send({ message: 'Invitation sent' })
     })
 

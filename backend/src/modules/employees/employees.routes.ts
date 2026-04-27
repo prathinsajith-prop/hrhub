@@ -9,8 +9,9 @@ import { sendWithETag } from '../../lib/etag.js'
 import { uploadObject, buildS3Key } from '../../plugins/s3.js'
 import { loadEnv } from '../../config/env.js'
 import { db } from '../../db/index.js'
-import { entities, employees, tenants } from '../../db/schema/index.js'
-import { eq } from 'drizzle-orm'
+import { entities, employees, tenants, users } from '../../db/schema/index.js'
+import { eq, and } from 'drizzle-orm'
+import { inviteUser } from '../settings/settings.service.js'
 import { extname } from 'node:path'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 export default async function (fastify: any): Promise<void> {
@@ -33,6 +34,30 @@ export default async function (fastify: any): Promise<void> {
         return reply.send(result)
     })
 
+    // GET /api/v1/employees/me — current user's own employee record
+    fastify.get('/me', { ...auth, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
+        const { employeeId, tenantId } = request.user
+        if (!employeeId) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'No employee record linked to this account.' })
+        const employee = await getEmployee(tenantId, employeeId)
+        if (!employee) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found.' })
+        return reply.send({ data: employee })
+    })
+
+    // PATCH /api/v1/employees/me — update own personal details
+    fastify.patch('/me', { ...auth, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
+        const { employeeId, tenantId } = request.user
+        if (!employeeId) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'No employee record linked to this account.' })
+        const allowed = ['phone', 'mobileNo', 'personalEmail', 'emergencyContact', 'homeCountryAddress']
+        const body = request.body as Record<string, unknown>
+        const patch: Record<string, unknown> = {}
+        for (const key of allowed) {
+            if (key in body) patch[key] = body[key]
+        }
+        const employee = await updateEmployee(tenantId, employeeId, patch)
+        if (!employee) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found.' })
+        return reply.send({ data: employee })
+    })
+
     // GET /api/v1/employees/org-chart
     fastify.get('/org-chart', { ...auth, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
         return reply.send(await getOrgChart(request.user.tenantId))
@@ -49,6 +74,71 @@ export default async function (fastify: any): Promise<void> {
     fastify.get('/next-employee-no', { ...auth, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
         const employeeNo = await generateNextEmployeeNo(request.user.tenantId)
         return reply.send({ data: { employeeNo } })
+    })
+
+    // POST /api/v1/employees/:id/invite — create a login account for this employee
+    fastify.post('/:id/invite', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Employees'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const { email: overrideEmail, name: overrideName } = (request.body ?? {}) as { email?: string; name?: string }
+
+        const [emp] = await db
+            .select({ id: employees.id, firstName: employees.firstName, lastName: employees.lastName, email: employees.email })
+            .from(employees)
+            .where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
+            .limit(1)
+        if (!emp) return reply.code(404).send({ message: 'Employee not found' })
+
+        const inviteEmail = overrideEmail?.trim() || emp.email
+        if (!inviteEmail) return reply.code(400).send({ message: 'Employee has no email address. Provide one explicitly.' })
+
+        const inviteName = overrideName?.trim() || `${emp.firstName} ${emp.lastName}`
+
+        await inviteUser(request.user.tenantId, {
+            name: inviteName,
+            email: inviteEmail,
+            role: 'employee',
+            employeeId: id,
+        })
+
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: id,
+            entityName: inviteName,
+            action: 'invite',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => {})
+
+        return reply.code(201).send({ message: 'Invitation sent' })
+    })
+
+    // GET /api/v1/employees/:id/account — check if employee has a login account
+    fastify.get('/:id/account', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Employees'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+
+        const [account] = await db
+            .select({
+                id: users.id,
+                email: users.email,
+                isActive: users.isActive,
+                lastLoginAt: users.lastLoginAt,
+                createdAt: users.createdAt,
+            })
+            .from(users)
+            .where(and(eq(users.employeeId, id), eq(users.tenantId, request.user.tenantId)))
+            .limit(1)
+
+        return reply.send({ data: { hasAccount: !!account, account: account ?? null } })
     })
 
     // GET /api/v1/employees/:id

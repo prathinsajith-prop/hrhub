@@ -51,6 +51,11 @@ export const ROUTES = {
     notifications: '/notifications',
     settings: '/settings',
     help: '/help',
+
+    // Self-service (employee portal)
+    myLeave: '/my/leave',
+    myPayslips: '/my/payslips',
+    myProfile: '/my/profile',
 } as const
 
 export type RouteKey = keyof typeof ROUTES
@@ -86,4 +91,7 @@ export const ROOT_NAV_LABELS: Record<string, string> = {
     team: 'nav.team',
     apps: 'nav.apps',
     'organization-settings': 'settings.company',
+    'my/leave': 'myLeave.title',
+    'my/payslips': 'myPayslips.title',
+    'my/profile': 'myProfile.title',
 }

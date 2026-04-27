@@ -72,18 +72,27 @@ export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRe
 }
 
 export async function approveLeave(tenantId: string, id: string, approvedBy: string, approverEmail: string, approved: boolean, approverUserEmployeeId?: string | null) {
-    // Fetch the pending leave request first
-    const [req] = await db.select({ employeeId: leaveRequests.employeeId, leaveType: leaveRequests.leaveType, startDate: leaveRequests.startDate })
+    // Fetch leave request + employee contact details in a single JOIN to avoid
+    // a second round-trip after the update when sending the notification email.
+    const [req] = await db
+        .select({
+            employeeId: leaveRequests.employeeId,
+            leaveType: leaveRequests.leaveType,
+            startDate: leaveRequests.startDate,
+            employeeEmail: employees.email,
+            employeeFirstName: employees.firstName,
+        })
         .from(leaveRequests)
+        .innerJoin(employees, eq(employees.id, leaveRequests.employeeId))
         .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId), eq(leaveRequests.status, 'pending')))
         .limit(1)
     if (!req) return null
 
-    // Block self-approval. Prefer the user→employee FK (added in 0014); fall
-    // back to email match for tokens issued before the FK rollout.
+    // Block self-approval. Prefer the user→employee FK; fall back to email match.
     let approverEmployeeId = approverUserEmployeeId ?? null
     if (!approverEmployeeId) {
-        const [approverEmployee] = await db.select({ id: employees.id })
+        const [approverEmployee] = await db
+            .select({ id: employees.id })
             .from(employees)
             .where(and(eq(employees.tenantId, tenantId), eq(employees.email, approverEmail)))
             .limit(1)
@@ -94,31 +103,28 @@ export async function approveLeave(tenantId: string, id: string, approvedBy: str
     }
 
     const status = approved ? ('approved' as const) : ('rejected' as const)
-    const [row] = await db.update(leaveRequests)
-        .set(withTimestamp({ status, approvedBy, approvedAt: new Date() }))
-        .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId), eq(leaveRequests.status, 'pending')))
-        .returning()
+
+    // Run the DB update and cache invalidation in parallel
+    const [[row]] = await Promise.all([
+        db.update(leaveRequests)
+            .set(withTimestamp({ status, approvedBy, approvedAt: new Date() }))
+            .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId), eq(leaveRequests.status, 'pending')))
+            .returning(),
+        cacheDel(`dashboard:kpis:${tenantId}`),
+    ])
     if (!row) return null
 
-    await cacheDel(`dashboard:kpis:${tenantId}`)
-
-    // Send email notification to employee
-    try {
-        const [emp] = await db.select({ email: employees.email, firstName: employees.firstName })
-            .from(employees)
-            .where(and(eq(employees.tenantId, tenantId), eq(employees.id, req.employeeId)))
-            .limit(1)
-        if (emp?.email) {
-            await sendEmail({
-                to: emp.email,
-                subject: `Leave Request ${approved ? 'Approved' : 'Rejected'}`,
-                html: `<p>Hi ${emp.firstName},</p>
-                    <p>Your <strong>${req.leaveType}</strong> leave request starting <strong>${req.startDate}</strong> has been <strong>${approved ? 'approved' : 'rejected'}</strong>.</p>
-                    <p>Please log in to HRHub for more details.</p>`,
-                text: `Your ${req.leaveType} leave request starting ${req.startDate} has been ${approved ? 'approved' : 'rejected'}.`,
-            })
-        }
-    } catch { /* email errors are non-fatal */ }
+    // Send notification using data already fetched in the initial JOIN (no extra DB call)
+    if (req.employeeEmail) {
+        sendEmail({
+            to: req.employeeEmail,
+            subject: `Leave Request ${approved ? 'Approved' : 'Rejected'}`,
+            html: `<p>Hi ${req.employeeFirstName},</p>
+                <p>Your <strong>${req.leaveType}</strong> leave request starting <strong>${req.startDate}</strong> has been <strong>${approved ? 'approved' : 'rejected'}</strong>.</p>
+                <p>Please log in to HRHub for more details.</p>`,
+            text: `Your ${req.leaveType} leave request starting ${req.startDate} has been ${approved ? 'approved' : 'rejected'}.`,
+        }).catch(() => { /* email errors are non-fatal */ })
+    }
 
     return row
 }

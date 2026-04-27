@@ -10,7 +10,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate, cn } from '@/lib/utils'
-import { useVisas, useAdvanceVisaStep, useCancelVisa } from '@/hooks/useVisa'
+import { useVisas, useAdvanceVisaStep, useCancelVisa, useUpdateVisa } from '@/hooks/useVisa'
 import { toast } from '@/components/ui/overlays'
 import type { VisaApplication, VisaStatus } from '@/types'
 
@@ -62,6 +62,7 @@ export function VisaDetailPage() {
     const { data, isLoading } = useVisas({ limit: 100 })
     const advanceStep = useAdvanceVisaStep()
     const cancelVisa = useCancelVisa()
+    const updateVisa = useUpdateVisa()
 
     const visas = (data?.data ?? []) as VisaApplication[]
     const visa = visas.find((v) => v.id === id)
@@ -228,8 +229,10 @@ export function VisaDetailPage() {
                                         onClick={() => {
                                             const ref = window.prompt('Enter MOHRE / GDRFA reference for stamping:')
                                             if (ref && ref.trim()) {
-                                                toast.success(`Reference recorded: ${ref.trim()}`)
-                                                // TODO: wire to useUpdateVisa({ id, mohreRef: ref })
+                                                updateVisa.mutate({ id: visa!.id, data: { notes: ref.trim() } }, {
+                                                    onSuccess: () => toast.success('Reference saved', `Reference recorded: ${ref.trim()}`),
+                                                    onError: () => toast.error('Failed', 'Could not save the reference.'),
+                                                })
                                             }
                                         }}
                                     >
