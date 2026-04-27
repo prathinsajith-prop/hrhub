@@ -12,6 +12,7 @@ import { useCreateJob, useUpdateJob } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useEmployees } from '@/hooks/useEmployees'
+import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { FormField } from '@/components/shared/FormField'
@@ -341,6 +342,9 @@ interface EmpForm {
     emergencyContact: string
     // Step 2 — Employment
     employeeNo: string
+    divisionId: string
+    departmentId: string
+    branchId: string
     department: string
     designation: string
     joinDate: string
@@ -364,7 +368,8 @@ interface EmpForm {
 const EMPTY_FORM: EmpForm = {
     firstName: '', lastName: '', dateOfBirth: '', gender: 'male', nationality: '', passportNo: '',
     mobileNo: '', personalEmail: '', maritalStatus: 'single', emergencyContact: '',
-    employeeNo: '', department: '', designation: '', joinDate: new Date().toISOString().split('T')[0],
+    employeeNo: '', divisionId: '', departmentId: '', branchId: '', department: '', designation: '',
+    joinDate: new Date().toISOString().split('T')[0],
     contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevel: '', status: 'onboarding',
     basicSalary: '', housingAllowance: '', transportAllowance: '', otherAllowances: '',
     paymentMethod: 'bank_transfer', bankName: '', iban: '', emiratisationCategory: 'expat',
@@ -403,6 +408,13 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     const [errors, setErrors] = useState<Record<string, string>>({})
     const createEmployee = useCreateEmployee()
     const navigate = useNavigate()
+    const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
+    const divisions = orgUnits.filter(u => u.type === 'division' && u.isActive)
+    const departments = orgUnits.filter(u => u.type === 'department' && u.isActive &&
+        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
+    const branches = orgUnits.filter(u => u.type === 'branch' && u.isActive &&
+        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
 
     const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
@@ -453,6 +465,9 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 maritalStatus: (form.maritalStatus as Employee['maritalStatus']) || undefined,
                 emergencyContact: form.emergencyContact || undefined,
                 employeeNo: empNo,
+                divisionId: form.divisionId || undefined,
+                departmentId: form.departmentId || undefined,
+                branchId: form.branchId || undefined,
                 department: form.department || undefined,
                 designation: form.designation || undefined,
                 joinDate: form.joinDate,
@@ -591,9 +606,49 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
+                            {/* Org Structure Assignment */}
+                            {divisions.length > 0 && (
+                                <div className="rounded-lg border bg-muted/20 p-3 space-y-2.5">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organization Structure</p>
+                                    <div className="grid grid-cols-1 gap-2.5">
+                                        <div className="space-y-1.5">
+                                            <Label>Division</Label>
+                                            <Select value={form.divisionId || 'none'} onValueChange={v => setForm(f => ({ ...f, divisionId: v === 'none' ? '' : v, departmentId: '', branchId: '' }))}>
+                                                <SelectTrigger><SelectValue placeholder="Select division…" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="none">— None —</SelectItem>
+                                                    {divisions.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2.5">
+                                            <div className="space-y-1.5">
+                                                <Label>Department</Label>
+                                                <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v }))}>
+                                                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">— None —</SelectItem>
+                                                        {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Branch</Label>
+                                                <Select value={form.branchId || 'none'} onValueChange={v => setForm(f => ({ ...f, branchId: v === 'none' ? '' : v }))}>
+                                                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">— None —</SelectItem>
+                                                        {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
-                                    <Label>Department</Label>
+                                    <Label>Department (freeform)</Label>
                                     <Input value={form.department} onChange={set('department')} placeholder="e.g. Sales" />
                                 </div>
                                 <div className="space-y-1.5">
@@ -747,6 +802,9 @@ export function EditEmployeeDialog({
         maritalStatus: employee.maritalStatus ?? 'single',
         emergencyContact: employee.emergencyContact ?? '',
         employeeNo: employee.employeeNo ?? '',
+        divisionId: employee.divisionId ?? '',
+        departmentId: employee.departmentId ?? '',
+        branchId: employee.branchId ?? '',
         department: employee.department ?? '',
         designation: employee.designation ?? '',
         joinDate: employee.joinDate ?? new Date().toISOString().split('T')[0],

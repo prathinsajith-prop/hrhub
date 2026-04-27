@@ -31,7 +31,21 @@ import {
     Users2,
     ExternalLink,
     RefreshCw,
+    Pencil,
+    GitBranch,
+    Layers,
+    MapPin,
+    ChevronDown,
+    ChevronRight as ChevronRightIcon,
 } from 'lucide-react'
+import {
+    useOrgUnits, useCreateOrgUnit, useUpdateOrgUnit, useDeleteOrgUnit,
+    type OrgUnit, type OrgUnitInput, type OrgUnitType,
+} from '@/hooks/useOrgUnits'
+import { useEmployees } from '@/hooks/useEmployees'
+import { Select as UiSelect, SelectContent as UiSelectContent, SelectItem as UiSelectItem, SelectTrigger as UiSelectTrigger, SelectValue as UiSelectValue } from '@/components/ui/select'
+import { Textarea as UiTextarea } from '@/components/ui/textarea'
+import { Dialog as UiDialog, DialogContent as UiDialogContent, DialogHeader as UiDialogHeader, DialogTitle as UiDialogTitle, DialogFooter as UiDialogFooter, DialogDescription as UiDialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -1094,6 +1108,337 @@ const PLAN_ICONS: Record<string, typeof Zap> = {
     enterprise: Building,
 }
 
+// ─── Org Structure Tab ────────────────────────────────────────────────────────
+
+const ORG_TYPE_META: Record<OrgUnitType, { label: string; plural: string; icon: React.FC<{ className?: string }>; color: string }> = {
+    division:   { label: 'Division',   plural: 'Divisions',   icon: Layers,    color: 'text-violet-600 bg-violet-50 border-violet-200' },
+    department: { label: 'Department', plural: 'Departments', icon: Users2,    color: 'text-blue-600 bg-blue-50 border-blue-200' },
+    branch:     { label: 'Branch',     plural: 'Branches',    icon: MapPin,    color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
+}
+
+interface OrgUnitFormState {
+    name: string
+    code: string
+    type: OrgUnitType
+    parentId: string
+    headEmployeeId: string
+    description: string
+    isActive: boolean
+}
+
+const EMPTY_ORG_FORM: OrgUnitFormState = {
+    name: '', code: '', type: 'division', parentId: '', headEmployeeId: '', description: '', isActive: true,
+}
+
+function OrgUnitDialog({
+    open, onClose, editing, defaultType, units, employees: empList,
+}: {
+    open: boolean
+    onClose: () => void
+    editing: OrgUnit | null
+    defaultType: OrgUnitType
+    units: OrgUnit[]
+    employees: Array<{ id: string; firstName: string; lastName: string }>
+}) {
+    const create = useCreateOrgUnit()
+    const update = useUpdateOrgUnit()
+    const [form, setForm] = React.useState<OrgUnitFormState>(EMPTY_ORG_FORM)
+
+    React.useEffect(() => {
+        if (open) {
+            setForm(editing ? {
+                name: editing.name,
+                code: editing.code ?? '',
+                type: editing.type,
+                parentId: editing.parentId ?? '',
+                headEmployeeId: editing.headEmployeeId ?? '',
+                description: editing.description ?? '',
+                isActive: editing.isActive,
+            } : { ...EMPTY_ORG_FORM, type: defaultType })
+        }
+    }, [open, editing, defaultType])
+
+    const s = (k: keyof OrgUnitFormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+        setForm(f => ({ ...f, [k]: e.target.value }))
+
+    async function submit() {
+        if (!form.name.trim()) return toast.error('Name required', 'Please enter a name.')
+        const payload: OrgUnitInput = {
+            name: form.name.trim(),
+            code: form.code.trim() || undefined,
+            type: form.type,
+            parentId: form.parentId || null,
+            headEmployeeId: form.headEmployeeId || null,
+            description: form.description.trim() || undefined,
+            isActive: form.isActive,
+        }
+        try {
+            if (editing) {
+                await update.mutateAsync({ id: editing.id, data: payload })
+                toast.success('Updated', `${form.name} has been updated.`)
+            } else {
+                await create.mutateAsync(payload)
+                toast.success('Created', `${form.name} has been created.`)
+            }
+            onClose()
+        } catch {
+            toast.error('Error', 'Could not save org unit.')
+        }
+    }
+
+    const isPending = create.isPending || update.isPending
+    const meta = ORG_TYPE_META[form.type]
+
+    // Parents: divisions can have no parent; depts/branches can parent to divisions
+    const parentOptions = units.filter(u =>
+        u.type === 'division' && u.id !== editing?.id
+    )
+
+    return (
+        <UiDialog open={open} onOpenChange={o => { if (!o) onClose() }}>
+            <UiDialogContent className="sm:max-w-md">
+                <UiDialogHeader>
+                    <UiDialogTitle>{editing ? 'Edit' : 'Add'} {ORG_TYPE_META[form.type].label}</UiDialogTitle>
+                    <UiDialogDescription>
+                        {editing ? 'Update the details for this org unit.' : 'Create a new org unit in your structure.'}
+                    </UiDialogDescription>
+                </UiDialogHeader>
+                <div className="space-y-3 py-1">
+                    {!editing && (
+                        <div className="space-y-1.5">
+                            <Label>Type</Label>
+                            <UiSelect value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v as OrgUnitType, parentId: '' }))}>
+                                <UiSelectTrigger><UiSelectValue /></UiSelectTrigger>
+                                <UiSelectContent>
+                                    {(Object.keys(ORG_TYPE_META) as OrgUnitType[]).map(t => (
+                                        <UiSelectItem key={t} value={t}>{ORG_TYPE_META[t].label}</UiSelectItem>
+                                    ))}
+                                </UiSelectContent>
+                            </UiSelect>
+                        </div>
+                    )}
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2 space-y-1.5">
+                            <Label>Name <span className="text-destructive">*</span></Label>
+                            <Input value={form.name} onChange={s('name')} placeholder={`e.g. ${meta.label === 'Division' ? 'Sales Division' : meta.label === 'Department' ? 'Marketing' : 'Dubai Branch'}`} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Code</Label>
+                            <Input value={form.code} onChange={s('code')} placeholder="SALES" className="uppercase" />
+                        </div>
+                    </div>
+                    {(form.type === 'department' || form.type === 'branch') && (
+                        <div className="space-y-1.5">
+                            <Label>Parent Division</Label>
+                            <UiSelect value={form.parentId} onValueChange={v => setForm(f => ({ ...f, parentId: v }))}>
+                                <UiSelectTrigger><UiSelectValue placeholder="No parent (standalone)" /></UiSelectTrigger>
+                                <UiSelectContent>
+                                    <UiSelectItem value="">No parent</UiSelectItem>
+                                    {parentOptions.map(u => (
+                                        <UiSelectItem key={u.id} value={u.id}>{u.name}</UiSelectItem>
+                                    ))}
+                                </UiSelectContent>
+                            </UiSelect>
+                        </div>
+                    )}
+                    <div className="space-y-1.5">
+                        <Label>Head / Manager</Label>
+                        <UiSelect value={form.headEmployeeId} onValueChange={v => setForm(f => ({ ...f, headEmployeeId: v }))}>
+                            <UiSelectTrigger><UiSelectValue placeholder="Unassigned" /></UiSelectTrigger>
+                            <UiSelectContent>
+                                <UiSelectItem value="">Unassigned</UiSelectItem>
+                                {empList.map(e => (
+                                    <UiSelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</UiSelectItem>
+                                ))}
+                            </UiSelectContent>
+                        </UiSelect>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Description</Label>
+                        <UiTextarea value={form.description} onChange={s('description')} rows={2} placeholder="Optional description…" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Switch checked={form.isActive} onCheckedChange={v => setForm(f => ({ ...f, isActive: v }))} id="ou-active" />
+                        <Label htmlFor="ou-active">Active</Label>
+                    </div>
+                </div>
+                <UiDialogFooter>
+                    <Button variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button onClick={submit} disabled={isPending}>{isPending ? 'Saving…' : editing ? 'Save Changes' : 'Create'}</Button>
+                </UiDialogFooter>
+            </UiDialogContent>
+        </UiDialog>
+    )
+}
+
+function OrgUnitRow({ unit, units, empList, depth = 0 }: {
+    unit: OrgUnit
+    units: OrgUnit[]
+    empList: Array<{ id: string; firstName: string; lastName: string }>
+    depth?: number
+}) {
+    const deleteMut = useDeleteOrgUnit()
+    const [editing, setEditing] = React.useState(false)
+    const [expanded, setExpanded] = React.useState(true)
+    const meta = ORG_TYPE_META[unit.type]
+    const Icon = meta.icon
+    const children = units.filter(u => u.parentId === unit.id)
+
+    return (
+        <div>
+            <div className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 mb-1.5 bg-card hover:bg-muted/30 transition-colors ${depth > 0 ? 'ml-6' : ''}`}>
+                {children.length > 0 ? (
+                    <button onClick={() => setExpanded(e => !e)} className="shrink-0 text-muted-foreground hover:text-foreground">
+                        {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRightIcon className="h-3.5 w-3.5" />}
+                    </button>
+                ) : <div className="w-3.5 shrink-0" />}
+                <div className={`flex items-center gap-1.5 shrink-0 px-2 py-0.5 rounded-md border text-xs font-medium ${meta.color}`}>
+                    <Icon className="h-3 w-3" />
+                    {meta.label}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium">{unit.name}</span>
+                    {unit.code && <span className="ml-2 text-[11px] text-muted-foreground font-mono">{unit.code}</span>}
+                    {unit.headEmployeeName && (
+                        <span className="ml-2 text-[11px] text-muted-foreground">· {unit.headEmployeeName}</span>
+                    )}
+                </div>
+                {!unit.isActive && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
+                <div className="flex gap-1 shrink-0">
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditing(true)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                        size="sm" variant="ghost"
+                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        disabled={deleteMut.isPending}
+                        onClick={() => {
+                            if (!confirm(`Delete "${unit.name}"? Its child units will become standalone.`)) return
+                            deleteMut.mutate(unit.id, {
+                                onSuccess: () => toast.success('Deleted', `${unit.name} has been removed.`),
+                                onError: () => toast.error('Error', 'Could not delete org unit.'),
+                            })
+                        }}
+                    >
+                        <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                </div>
+            </div>
+            {expanded && children.length > 0 && (
+                <div className="relative">
+                    <div className="absolute left-[11px] top-0 bottom-1 w-px bg-border" />
+                    {children
+                        .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+                        .map(child => (
+                            <OrgUnitRow key={child.id} unit={child} units={units} empList={empList} depth={depth + 1} />
+                        ))}
+                </div>
+            )}
+            {editing && (
+                <OrgUnitDialog
+                    open={editing} onClose={() => setEditing(false)}
+                    editing={unit} defaultType={unit.type} units={units} employees={empList}
+                />
+            )}
+        </div>
+    )
+}
+
+function OrgStructureTab() {
+    const { data: units = [], isLoading } = useOrgUnits()
+    const { data: employees } = useEmployees({ limit: 200 })
+    const [adding, setAdding] = React.useState<OrgUnitType | null>(null)
+
+    const empList = React.useMemo(
+        () => Array.isArray(employees) ? employees : (employees as { data?: Array<{ id: string; firstName: string; lastName: string }> } | undefined)?.data ?? [],
+        [employees],
+    )
+
+    const roots = units.filter(u => !u.parentId)
+    const stats = {
+        divisions: units.filter(u => u.type === 'division').length,
+        departments: units.filter(u => u.type === 'department').length,
+        branches: units.filter(u => u.type === 'branch').length,
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h3 className="text-base font-semibold">Organization Structure</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                    Define your company hierarchy — divisions, departments, and branches. Employees can be assigned to these units during onboarding.
+                </p>
+            </div>
+
+            {/* Summary stats */}
+            <div className="grid grid-cols-3 gap-3">
+                {(Object.keys(ORG_TYPE_META) as OrgUnitType[]).map(type => {
+                    const meta = ORG_TYPE_META[type]
+                    const Icon = meta.icon
+                    return (
+                        <div key={type} className={`rounded-xl border p-4 flex items-center gap-3 ${meta.color}`}>
+                            <Icon className="h-5 w-5 shrink-0" />
+                            <div>
+                                <p className="text-xl font-bold">{stats[`${type}s` as keyof typeof stats]}</p>
+                                <p className="text-xs font-medium">{meta.plural}</p>
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-2 flex-wrap">
+                {(Object.keys(ORG_TYPE_META) as OrgUnitType[]).map(type => {
+                    const meta = ORG_TYPE_META[type]
+                    const Icon = meta.icon
+                    return (
+                        <Button key={type} size="sm" variant="outline" onClick={() => setAdding(type)}
+                            leftIcon={<Icon className="h-3.5 w-3.5" />}>
+                            Add {meta.label}
+                        </Button>
+                    )
+                })}
+            </div>
+
+            {/* Tree */}
+            {isLoading ? (
+                <div className="space-y-2">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="h-11 rounded-lg bg-muted animate-pulse" />
+                    ))}
+                </div>
+            ) : roots.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-12 text-center">
+                    <GitBranch className="h-10 w-10 text-muted-foreground" />
+                    <div>
+                        <p className="font-medium text-sm">No structure defined yet</p>
+                        <p className="text-sm text-muted-foreground mt-1">Start by adding a Division, then nest Departments and Branches under it.</p>
+                    </div>
+                    <Button size="sm" onClick={() => setAdding('division')} leftIcon={<Plus className="h-3.5 w-3.5" />}>
+                        Add your first Division
+                    </Button>
+                </div>
+            ) : (
+                <div className="space-y-1">
+                    {roots
+                        .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+                        .map(unit => (
+                            <OrgUnitRow key={unit.id} unit={unit} units={units} empList={empList} />
+                        ))}
+                </div>
+            )}
+
+            {adding && (
+                <OrgUnitDialog
+                    open={!!adding} onClose={() => setAdding(null)}
+                    editing={null} defaultType={adding} units={units} employees={empList}
+                />
+            )}
+        </div>
+    )
+}
+
 const PLAN_COLORS: Record<string, { badge: string; ring: string; button: string; bg: string }> = {
     starter:    { badge: 'bg-slate-100 text-slate-700',   ring: 'ring-slate-200',  button: '', bg: '#f8fafc' },
     growth:     { badge: 'bg-blue-100 text-blue-700',     ring: 'ring-blue-300',   button: 'bg-blue-600 hover:bg-blue-700 text-white', bg: '#eff6ff' },
@@ -1519,6 +1864,7 @@ function SubscriptionTab() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 const tabs = [
     { value: 'profile', label: 'Organization Profile', desc: 'Company details & regional settings', icon: Building2, requires: 'manage_settings' as Permission | null },
+    { value: 'structure', label: 'Org Structure', desc: 'Divisions, departments & branches', icon: GitBranch, requires: 'manage_settings' as Permission | null },
     { value: 'members', label: 'Members', desc: 'Team members, roles & access', icon: Users, requires: 'manage_users' as Permission | null },
     { value: 'roles', label: 'Roles & Permissions', desc: 'View built-in role permissions', icon: KeyRound, requires: 'manage_users' as Permission | null },
     { value: 'holidays', label: 'Public Holidays', desc: 'Manage company-wide holidays by year', icon: CalendarDays, requires: 'manage_settings' as Permission | null },
@@ -1590,6 +1936,7 @@ export function OrganizationSettingsPage() {
                 {/* Content */}
                 <div className="pt-6 lg:pt-0">
                     <TabsContent value="profile" className="mt-0"><ProfileTab /></TabsContent>
+                    <TabsContent value="structure" className="mt-0"><OrgStructureTab /></TabsContent>
                     <TabsContent value="members" className="mt-0"><MembersTab /></TabsContent>
                     <TabsContent value="roles" className="mt-0"><RolesPermissionsTab /></TabsContent>
                     <TabsContent value="holidays" className="mt-0"><HolidaysTab /></TabsContent>

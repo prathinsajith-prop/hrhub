@@ -60,6 +60,9 @@ export interface Employee {
   department?: string
   designation?: string
   reportingTo?: string
+  divisionId?: string
+  departmentId?: string
+  branchId?: string
   joinDate: string
   status: EmployeeStatus
   basicSalary?: number

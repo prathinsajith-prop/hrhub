@@ -152,11 +152,13 @@ export function RegisterPage() {
     setValue,
     watch,
     trigger,
+    setFocus,
+    getFieldState,
     formState: { errors },
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     defaultValues: { terms: false },
-    mode: 'onTouched',
+    mode: 'onBlur',
   })
 
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -164,7 +166,13 @@ export function RegisterPage() {
 
   const goToStep2 = async () => {
     const valid = await trigger(STEP_1_FIELDS)
-    if (valid) setStep(2)
+    if (valid) {
+      setStep(2)
+    } else {
+      // Focus the first invalid field so the user sees it immediately
+      const firstInvalid = STEP_1_FIELDS.find((f) => getFieldState(f).invalid)
+      if (firstInvalid) setFocus(firstInvalid)
+    }
   }
 
   const onSubmit = async (data: RegisterForm) => {

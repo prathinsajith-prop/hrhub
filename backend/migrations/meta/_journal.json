@@ -85,6 +85,13 @@
       "when": 1746489600000,
       "tag": "0011_refresh_token_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1746576000000,
+      "tag": "0012_org_units",
+      "breakpoints": true
     }
   ]
 }

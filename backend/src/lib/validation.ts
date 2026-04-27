@@ -92,6 +92,9 @@ const employeeBaseSchema = z.object({
     probationEndDate: dateField,
     contractEndDate: dateField,
     avatarUrl: z.string().max(500).optional(),
+    divisionId: z.string().uuid().nullable().optional(),
+    departmentId: z.string().uuid().nullable().optional(),
+    branchId: z.string().uuid().nullable().optional(),
 })
 
 export const createEmployeeSchema = employeeBaseSchema
