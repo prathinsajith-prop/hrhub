@@ -14,6 +14,9 @@ export const tenants = pgTable('tenants', {
     // Maximum active employees allowed. NULL = unlimited (enterprise only).
     // starter default = 5, growth = custom (set by sales on upgrade), enterprise = null
     employeeQuota: integer('employee_quota').default(5),
+    phone: text('phone'),
+    companySize: text('company_size'),
+    subscriptionExpiresAt: timestamp('subscription_expires_at', { withTimezone: true }),
     logoUrl: text('logo_url'),
     ipAllowlist: text('ip_allowlist').array().default([]),
     regionalSettings: jsonb('regional_settings').$type<{

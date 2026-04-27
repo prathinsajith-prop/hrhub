@@ -61,6 +61,7 @@ async function authenticatePlugin(fastify: any): Promise<void> {
             }
         }
     })
+
 }
 
 export default fp(authenticatePlugin, { name: 'authenticate' })

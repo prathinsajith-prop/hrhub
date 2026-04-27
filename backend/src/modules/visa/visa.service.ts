@@ -88,7 +88,28 @@ export async function softDeleteVisa(tenantId: string, id: string) {
     return row ?? null
 }
 
+const TERMINAL_VISA_STATUSES = ['cancelled', 'expired'] as const
+
 export async function createVisa(tenantId: string, data: Omit<NewVisa, 'tenantId' | 'id'>) {
+    // Block creating a new application when a non-terminal one already exists for
+    // this employee + visa type combination.
+    const [existing] = await db
+        .select({ id: visaApplications.id, status: visaApplications.status })
+        .from(visaApplications)
+        .where(and(
+            eq(visaApplications.tenantId, tenantId),
+            eq(visaApplications.employeeId, data.employeeId),
+            eq(visaApplications.visaType, data.visaType as never),
+        ))
+        .limit(1)
+
+    if (existing && !(TERMINAL_VISA_STATUSES as readonly string[]).includes(existing.status)) {
+        throw Object.assign(
+            new Error(`A ${data.visaType} visa application is already in progress for this employee. Cancel or complete it before creating a new one.`),
+            { statusCode: 409, name: 'Conflict' },
+        )
+    }
+
     const [row] = await db.insert(visaApplications).values({ ...data, tenantId }).returning()
     // Invalidate dashboard KPI cache so activeVisas count refreshes (P1-05)
     await cacheDel(`dashboard:kpis:${tenantId}`)

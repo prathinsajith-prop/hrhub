@@ -7,6 +7,7 @@ import {
     buildPermissionMap,
     hasPermission,
 } from '../../lib/permissions.js'
+import { sendEmail, inviteUserEmail } from '../../plugins/email.js'
 
 /* ───────────────────────────────── helpers ────────────────────────────────── */
 
@@ -184,7 +185,7 @@ export async function inviteMember(opts: {
     // create a pending membership keyed by email + invite token.
     const [existingUser] = await db.select().from(users).where(eq(users.email, opts.email.toLowerCase())).limit(1)
 
-    // Reject duplicate active membership.
+    // Reject duplicate membership (by userId if user exists).
     if (existingUser) {
         const [dup] = await db.select({ id: tenantMemberships.id })
             .from(tenantMemberships)
@@ -193,8 +194,20 @@ export async function inviteMember(opts: {
                 eq(tenantMemberships.userId, existingUser.id),
             ))
             .limit(1)
-        if (dup) throw http('User is already a member of this tenant', 409)
+        if (dup) throw http('This person is already a member of your team', 409)
     }
+
+    // Reject duplicate pending invite by email (covers unregistered users and edge cases
+    // where userId is null on the existing pending row).
+    const [pendingDup] = await db.select({ id: tenantMemberships.id })
+        .from(tenantMemberships)
+        .where(and(
+            eq(tenantMemberships.tenantId, opts.tenantId),
+            eq(tenantMemberships.invitedEmail, opts.email.toLowerCase()),
+            eq(tenantMemberships.inviteStatus, 'pending'),
+        ))
+        .limit(1)
+    if (pendingDup) throw http('An invitation is already pending for this email address', 409)
 
     const { raw, hash } = generateInviteToken()
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -212,10 +225,21 @@ export async function inviteMember(opts: {
         isActive: true,
     }).returning()
 
-    // DEV email stub: log a clickable accept link to the server console.
-    const acceptUrl = `${process.env.APP_BASE_URL ?? 'http://localhost:5173'}/invite/accept?token=${raw}`
+    const acceptUrl = `${process.env.APP_URL ?? 'http://localhost:5173'}/invite/accept?token=${raw}`
     // eslint-disable-next-line no-console
     console.log(`\n[invite] tenant=${opts.tenantId} email=${opts.email} role=${opts.role}\n[invite] accept url: ${acceptUrl}\n`)
+
+    // Fetch tenant name for the email subject
+    const [tenant] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, opts.tenantId)).limit(1)
+    const workspaceName = tenant?.name ?? 'HRHub'
+    const emailPayload = inviteUserEmail({
+        inviteeName: opts.email.split('@')[0],
+        workspaceName,
+        role: opts.role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        inviteUrl: acceptUrl,
+    })
+    emailPayload.to = opts.email
+    sendEmail(emailPayload).catch((err) => console.error('[invite] email error:', err))
 
     return {
         membership: row,

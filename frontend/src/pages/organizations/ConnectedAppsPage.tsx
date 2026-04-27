@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
-import { KeyRound, Plus, MoreHorizontal, Copy, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Plus, MoreHorizontal, Copy, RefreshCw, AlertTriangle } from 'lucide-react'
 import {
     useConnectedApps,
     useCreateApp,
@@ -11,11 +12,12 @@ import {
     type ConnectedApp,
 } from '@/hooks/useApps'
 import { usePermissions } from '@/hooks/usePermissions'
+import { ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { DataTable } from '@/components/ui/data-table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -23,10 +25,14 @@ import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { Textarea } from '@/components/ui/textarea'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { ScopeMatrix } from '@/components/apps/ScopeMatrix'
 import { formatDate } from '@/lib/utils'
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function ConnectedAppsPage() {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const { can } = usePermissions()
     const canManage = can('manage_apps')
     const { data: apps, isLoading } = useConnectedApps()
@@ -36,28 +42,33 @@ export function ConnectedAppsPage() {
     const deleteMut = useDeleteApp()
 
     const [createOpen, setCreateOpen] = useState(false)
-    const [form, setForm] = useState({ name: '', description: '', scopes: '', ipAllowlist: '' })
+    const [form, setForm] = useState({ name: '', description: '', ipAllowlist: '' })
+    const [selectedScopes, setSelectedScopes] = useState<string[]>([])
     const [revealedSecret, setRevealedSecret] = useState<{ key: string; secret: string } | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<ConnectedApp | null>(null)
     const [regenTarget, setRegenTarget] = useState<ConnectedApp | null>(null)
 
+    const openCreate = () => {
+        setForm({ name: '', description: '', ipAllowlist: '' })
+        setSelectedScopes([])
+        setCreateOpen(true)
+    }
+
     const submitCreate = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
-            const scopes = form.scopes.split(',').map((s) => s.trim()).filter(Boolean)
-            const ipAllowlist = form.ipAllowlist.split(',').map((s) => s.trim()).filter(Boolean)
+            const ipAllowlist = form.ipAllowlist.split(',').map(s => s.trim()).filter(Boolean)
             const res = await createMut.mutateAsync({
                 name: form.name,
                 description: form.description || undefined,
-                scopes,
+                scopes: selectedScopes,
                 ipAllowlist,
             })
             setRevealedSecret({ key: res.app.appKey, secret: res.appSecret })
-            setForm({ name: '', description: '', scopes: '', ipAllowlist: '' })
             setCreateOpen(false)
             toast.success(t('apps.copySecretNow'))
-        } catch (err: any) {
-            toast.error(err?.message ?? t('apps.createFailed'))
+        } catch (err) {
+            toast.error(err instanceof ApiError ? err.message : t('apps.createFailed'))
         }
     }
 
@@ -65,11 +76,11 @@ export function ConnectedAppsPage() {
         try {
             await updateMut.mutateAsync({
                 id: app.id,
-                patch: { status: app.status === 'active' ? 'revoked' : 'active' } as any,
+                patch: { status: app.status === 'active' ? 'revoked' : 'active' },
             })
             toast.success(app.status === 'active' ? t('apps.appRevoked') : t('apps.appReactivated'))
-        } catch (err: any) {
-            toast.error(err?.message ?? t('common.error'))
+        } catch (err) {
+            toast.error(err instanceof ApiError ? err.message : t('common.error'))
         }
     }
 
@@ -80,8 +91,8 @@ export function ConnectedAppsPage() {
             setRevealedSecret({ key: res.app.appKey, secret: res.appSecret })
             toast.success(t('apps.secretRegenerated'))
             setRegenTarget(null)
-        } catch (err: any) {
-            toast.error(err?.message ?? t('common.error'))
+        } catch (err) {
+            toast.error(err instanceof ApiError ? err.message : t('common.error'))
         }
     }
 
@@ -91,8 +102,8 @@ export function ConnectedAppsPage() {
             await deleteMut.mutateAsync(deleteTarget.id)
             toast.success(t('apps.appDeleted'))
             setDeleteTarget(null)
-        } catch (err: any) {
-            toast.error(err?.message ?? t('common.error'))
+        } catch (err) {
+            toast.error(err instanceof ApiError ? err.message : t('common.error'))
         }
     }
 
@@ -120,7 +131,7 @@ export function ConnectedAppsPage() {
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
-                        onClick={() => { navigator.clipboard.writeText(row.original.appKey); toast.success(t('apps.copied')) }}
+                        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(row.original.appKey); toast.success(t('apps.copied')) }}
                     >
                         <Copy className="h-3 w-3" />
                     </Button>
@@ -178,7 +189,7 @@ export function ConnectedAppsPage() {
                 return (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}>
                                 <MoreHorizontal className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
@@ -207,7 +218,7 @@ export function ConnectedAppsPage() {
                 description={t('apps.description')}
                 actions={
                     canManage && (
-                        <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setCreateOpen(true)}>
+                        <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={openCreate}>
                             {t('apps.newApp')}
                         </Button>
                     )
@@ -215,74 +226,61 @@ export function ConnectedAppsPage() {
             />
 
             <Card>
-                <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <KeyRound className="h-4 w-4" /> {t('apps.appKey')}
-                    </CardTitle>
-                    <CardDescription>
-                        {t('apps.description')}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
+                <CardContent className="p-0 pt-0">
                     <DataTable
                         columns={columns}
                         data={apps ?? []}
                         isLoading={isLoading}
                         emptyMessage={t('common.noData')}
+                        onRowClick={(row: ConnectedApp) => navigate(`/apps/${row.id}`)}
                     />
                 </CardContent>
             </Card>
 
             {/* Create dialog */}
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                <DialogContent>
+                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>{t('apps.createTitle')}</DialogTitle>
-                        <DialogDescription>
-                            {t('apps.createDescription')}
-                        </DialogDescription>
+                        <DialogDescription>{t('apps.createDescription')}</DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={submitCreate} className="space-y-4">
+                    <form id="create-app-form" onSubmit={submitCreate} className="space-y-5">
                         <div className="space-y-1.5">
                             <Label htmlFor="app-name">{t('apps.name')} *</Label>
-                            <Input id="app-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                            <Input
+                                id="app-name"
+                                placeholder="e.g. My ERP Integration"
+                                value={form.name}
+                                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                required
+                            />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="app-desc">{t('apps.descriptionField')}</Label>
                             <Textarea
                                 id="app-desc"
                                 rows={2}
+                                placeholder="What does this app do?"
                                 value={form.description}
                                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                             />
                         </div>
-                        <div className="grid sm:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="app-scopes">{t('apps.scopes')}</Label>
-                                <Input
-                                    id="app-scopes"
-                                    placeholder={t('apps.scopesPlaceholder')}
-                                    value={form.scopes}
-                                    onChange={(e) => setForm({ ...form, scopes: e.target.value })}
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="app-ip">{t('apps.ipAllowlist')}</Label>
-                                <Input
-                                    id="app-ip"
-                                    placeholder={t('apps.ipAllowlistPlaceholder')}
-                                    value={form.ipAllowlist}
-                                    onChange={(e) => setForm({ ...form, ipAllowlist: e.target.value })}
-                                />
-                            </div>
+                        <ScopeMatrix value={selectedScopes} onChange={setSelectedScopes} />
+                        <div className="space-y-1.5">
+                            <Label htmlFor="app-ip">{t('apps.ipAllowlist')}</Label>
+                            <Input
+                                id="app-ip"
+                                placeholder={t('apps.ipAllowlistPlaceholder')}
+                                value={form.ipAllowlist}
+                                onChange={(e) => setForm({ ...form, ipAllowlist: e.target.value })}
+                            />
+                            <p className="text-xs text-muted-foreground">Leave blank to allow requests from any IP.</p>
                         </div>
-                        <DialogFooter>
-                            <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
-                            <Button type="submit" disabled={createMut.isPending}>
-                                {createMut.isPending ? t('leavePolicies.saving') : t('common.add')}
-                            </Button>
-                        </DialogFooter>
                     </form>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
+                        <Button type="submit" form="create-app-form" loading={createMut.isPending}>{t('common.add')}</Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

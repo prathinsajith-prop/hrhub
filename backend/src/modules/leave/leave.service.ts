@@ -42,6 +42,31 @@ export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRe
     if (typeof data.days === 'number' && data.days <= 0) {
         throw Object.assign(new Error('days must be a positive number'), { statusCode: 400 })
     }
+
+    // Overlap check: reject if the employee already has a pending or approved request
+    // covering any part of the requested date range.
+    if (data.employeeId && data.startDate && data.endDate) {
+        const [overlap] = await db
+            .select({ id: leaveRequests.id, startDate: leaveRequests.startDate, endDate: leaveRequests.endDate })
+            .from(leaveRequests)
+            .where(and(
+                eq(leaveRequests.tenantId, tenantId),
+                eq(leaveRequests.employeeId, data.employeeId),
+                inArray(leaveRequests.status, ['pending', 'approved']),
+                isNull(leaveRequests.deletedAt),
+                lte(leaveRequests.startDate, data.endDate),
+                gte(leaveRequests.endDate, data.startDate),
+            ))
+            .limit(1)
+
+        if (overlap) {
+            throw Object.assign(
+                new Error(`A leave request already exists for this employee between ${overlap.startDate} and ${overlap.endDate}. Please adjust the dates.`),
+                { statusCode: 409, name: 'Conflict' },
+            )
+        }
+    }
+
     const [row] = await db.insert(leaveRequests).values({ ...data, tenantId }).returning()
     return row
 }

@@ -37,7 +37,7 @@ async function issueBackupCodes(userId: string): Promise<string[]> {
 
 export async function setupTotp(userId: string): Promise<{ secret: string; otpauthUrl: string; qrDataUrl: string }> {
     const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1)
-    if (!user) throw new Error('User not found')
+    if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 })
 
     const secret = totp.generateSecret()
     const otpauthUrl = totp.toURI({ label: user.email, issuer: APP_NAME, secret })

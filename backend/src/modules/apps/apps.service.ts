@@ -114,6 +114,17 @@ export async function regenerateAppSecret(tenantId: string, appId: string) {
     return { app: publicShape(row), appSecret: secret }
 }
 
+export async function getApp(tenantId: string, appId: string) {
+    // Accept either a UUID (id) or an appKey (app_live_xxx)
+    const isAppKey = appId.startsWith('app_')
+    const whereClause = isAppKey
+        ? and(eq(connectedApps.appKey, appId), eq(connectedApps.tenantId, tenantId))
+        : and(eq(connectedApps.id, appId), eq(connectedApps.tenantId, tenantId))
+    const [row] = await db.select().from(connectedApps).where(whereClause).limit(1)
+    if (!row) throw http('App not found', 404)
+    return publicShape(row)
+}
+
 export async function deleteApp(tenantId: string, appId: string) {
     const [existing] = await db.select().from(connectedApps)
         .where(and(eq(connectedApps.id, appId), eq(connectedApps.tenantId, tenantId)))

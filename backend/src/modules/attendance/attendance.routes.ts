@@ -59,7 +59,26 @@ export async function attendanceRoutes(fastify: any) {
 
     // PATCH /api/v1/attendance — admin upsert
     fastify.patch('/attendance', { ...adminAuth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
-        const data = await upsertAttendance(request.user.tenantId, request.body as any)
+        const { employeeId, date, status, checkIn, checkOut, notes } = request.body as {
+            employeeId?: string
+            date?: string
+            status?: string
+            checkIn?: string
+            checkOut?: string
+            notes?: string
+        }
+        const VALID_STATUSES = ['present', 'absent', 'half_day', 'late', 'wfh', 'on_leave']
+        if (!employeeId || !date || !status) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId, date, and status are required' })
+        }
+        if (!VALID_STATUSES.includes(status)) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `status must be one of: ${VALID_STATUSES.join(', ')}` })
+        }
+        const data = await upsertAttendance(request.user.tenantId, {
+            employeeId, date,
+            status: status as 'present' | 'absent' | 'half_day' | 'late' | 'wfh' | 'on_leave',
+            checkIn, checkOut, notes,
+        })
         return reply.send({ data })
     })
 

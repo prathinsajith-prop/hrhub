@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
+import { ApiError } from '@/lib/api'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { getInitials, formatDate } from '@/lib/utils'
@@ -51,8 +52,8 @@ export function TeamPage() {
             setLastInviteUrl(res.acceptUrl)
             toast.success(t('team.invitationSent'))
             setInviteEmail('')
-        } catch (err: any) {
-            toast.error(err?.message ?? t('team.inviteFailed'))
+        } catch (err) {
+            toast.error(err instanceof ApiError ? err.message : t('team.inviteFailed'))
         }
     }
 
@@ -60,8 +61,8 @@ export function TeamPage() {
         try {
             await roleMut.mutateAsync({ id: row.id, role })
             toast.success(t('team.roleUpdated'))
-        } catch (err: any) {
-            toast.error(err?.message ?? t('team.roleUpdateFailed'))
+        } catch (err) {
+            toast.error(err instanceof ApiError ? err.message : t('team.roleUpdateFailed'))
         }
     }
 
@@ -71,8 +72,8 @@ export function TeamPage() {
             await removeMut.mutateAsync(removeTarget.id)
             toast.success(t('team.memberRemoved'))
             setRemoveTarget(null)
-        } catch (err: any) {
-            toast.error(err?.message ?? t('team.removeFailed'))
+        } catch (err) {
+            toast.error(err instanceof ApiError ? err.message : t('team.removeFailed'))
         }
     }
 
@@ -197,14 +198,15 @@ export function TeamPage() {
 
             {/* Invite dialog */}
             <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-                <DialogContent>
+                <DialogContent className="sm:max-w-lg overflow-hidden">
                     <DialogHeader>
                         <DialogTitle>{t('team.inviteMember')}</DialogTitle>
                         <DialogDescription>
                             {t('team.description')}
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={submitInvite} className="space-y-4">
+
+                    <form id="invite-form" onSubmit={submitInvite} className="space-y-4">
                         <div className="space-y-1.5">
                             <Label htmlFor="invite-email">{t('team.emailLabel')} *</Label>
                             <Input
@@ -227,16 +229,18 @@ export function TeamPage() {
                         </div>
 
                         {lastInviteUrl && (
-                            <div className="rounded-md border bg-muted/50 p-3 space-y-2 text-xs">
-                                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium">
-                                    <Mail className="h-3.5 w-3.5" /> {t('team.copyInviteLink')}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <code className="flex-1 truncate text-[11px] bg-background border rounded px-2 py-1">{lastInviteUrl}</code>
+                            <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
+                                <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                    <Mail className="h-3.5 w-3.5 shrink-0" />
+                                    Invitation sent — share this link if the email doesn't arrive
+                                </p>
+                                <div className="flex min-w-0 items-center gap-2">
+                                    <code className="min-w-0 flex-1 truncate text-[11px] font-mono bg-background border border-border rounded px-2 py-1.5 text-foreground">{lastInviteUrl}</code>
                                     <Button
                                         type="button"
                                         size="sm"
                                         variant="outline"
+                                        className="shrink-0"
                                         onClick={() => { navigator.clipboard.writeText(lastInviteUrl); toast.success(t('team.linkCopied')) }}
                                         leftIcon={<Copy className="h-3.5 w-3.5" />}
                                     >
@@ -245,14 +249,14 @@ export function TeamPage() {
                                 </div>
                             </div>
                         )}
-
-                        <DialogFooter>
-                            <Button type="button" variant="ghost" onClick={() => setInviteOpen(false)}>{t('common.close')}</Button>
-                            <Button type="submit" disabled={inviteMut.isPending}>
-                                {inviteMut.isPending ? t('leavePolicies.saving') : t('team.sendInvite')}
-                            </Button>
-                        </DialogFooter>
                     </form>
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setInviteOpen(false)}>{t('common.close')}</Button>
+                        <Button type="submit" form="invite-form" loading={inviteMut.isPending} leftIcon={<Mail className="h-3.5 w-3.5" />}>
+                            {t('team.sendInvite')}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

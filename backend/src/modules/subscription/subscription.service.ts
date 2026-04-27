@@ -1,6 +1,6 @@
-import { eq, and, count, inArray, desc } from 'drizzle-orm'
+import { eq, and, count, inArray, desc, lte, gte, isNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
-import { tenants, employees, subscriptionEvents } from '../../db/schema/index.js'
+import { tenants, employees, subscriptionEvents, users } from '../../db/schema/index.js'
 import { loadEnv } from '../../config/env.js'
 import { sendEmail } from '../../plugins/email.js'
 import Stripe from 'stripe'
@@ -225,42 +225,54 @@ export async function activateProfessionalFromWebhook(
         .where(eq(tenants.id, tenantId))
         .limit(1)
 
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + 30)
+
     await db
         .update(tenants)
         .set({
             subscriptionPlan: 'growth',
             employeeQuota: desiredQuota,
+            subscriptionExpiresAt: expiresAt,
             updatedAt: new Date(),
         })
         .where(eq(tenants.id, tenantId))
 
+    const monthlyCost = calculateProfessionalCost(desiredQuota)
+    const invoiceRef = generateInvoiceRef(stripeSessionId)
     const eventType = action === 'quota_update' ? 'quota_updated' : 'plan_activated'
+
     await logSubscriptionEvent({
         tenantId,
         eventType,
         planFrom: tenant?.subscriptionPlan ?? 'starter',
         planTo: 'growth',
         employeeQuota: desiredQuota,
-        monthlyCost: calculateProfessionalCost(desiredQuota),
+        monthlyCost,
         stripeSessionId,
         contactEmail: userEmail,
-        metadata: { tenantName, activatedVia: 'stripe_webhook', action },
+        metadata: { tenantName, activatedVia: 'stripe_webhook', action, invoiceRef },
     })
 
     if (userEmail) {
-        if (action === 'quota_update') {
-            await sendEmailLogged({
-                to: userEmail,
-                subject: 'Your HRHub employee capacity has been updated',
-                html: quotaUpdatedViaStripeEmail({ tenantName, desiredQuota, monthlyCost: calculateProfessionalCost(desiredQuota) }),
-            }, 'quota_update_confirmation')
-        } else {
-            await sendEmailLogged({
-                to: userEmail,
-                subject: 'Your HRHub Professional plan is now active',
-                html: activationConfirmationEmail({ tenantName, desiredQuota, monthlyCost: calculateProfessionalCost(desiredQuota) }),
-            }, 'plan_activation_confirmation')
-        }
+        const subject = action === 'quota_update'
+            ? `Invoice ${invoiceRef} — HRHub capacity update`
+            : `Invoice ${invoiceRef} — HRHub Professional plan activated`
+        await sendEmailLogged({
+            to: userEmail,
+            subject,
+            html: subscriptionInvoiceEmail({
+                tenantName,
+                ownerEmail: userEmail,
+                invoiceRef,
+                paidOn: new Date(),
+                expiresAt,
+                desiredQuota,
+                monthlyCost,
+                action,
+                paymentMethod: 'Card (Stripe)',
+            }),
+        }, `invoice_${action}`)
     }
 }
 
@@ -300,9 +312,15 @@ export async function updateProfessionalQuota(params: QuotaUpdateParams): Promis
         throw err
     }
 
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + 30)
+
+    const monthlyCost = calculateProfessionalCost(params.newQuota)
+    const invoiceRef = generateInvoiceRef()
+
     await db
         .update(tenants)
-        .set({ employeeQuota: params.newQuota, updatedAt: new Date() })
+        .set({ employeeQuota: params.newQuota, subscriptionExpiresAt: expiresAt, updatedAt: new Date() })
         .where(eq(tenants.id, params.tenantId))
 
     await logSubscriptionEvent({
@@ -312,17 +330,27 @@ export async function updateProfessionalQuota(params: QuotaUpdateParams): Promis
         planFrom: 'growth',
         planTo: 'growth',
         employeeQuota: params.newQuota,
-        monthlyCost: calculateProfessionalCost(params.newQuota),
+        monthlyCost,
         contactEmail: params.requestorEmail,
         contactName: params.requestorName,
-        metadata: { previousQuota: tenant.employeeQuota, tenantName: params.tenantName },
+        metadata: { previousQuota: tenant.employeeQuota, tenantName: params.tenantName, invoiceRef },
     })
 
     await sendEmailLogged({
         to: params.requestorEmail,
-        subject: 'Your HRHub employee capacity has been updated',
-        html: quotaUpdatedEmail(params),
-    }, 'quota_updated_confirmation')
+        subject: `Invoice ${invoiceRef} — HRHub capacity updated`,
+        html: subscriptionInvoiceEmail({
+            tenantName: params.tenantName,
+            ownerEmail: params.requestorEmail,
+            invoiceRef,
+            paidOn: new Date(),
+            expiresAt,
+            desiredQuota: params.newQuota,
+            monthlyCost,
+            action: 'quota_update',
+            paymentMethod: 'Manual / Admin',
+        }),
+    }, 'quota_update_invoice')
 }
 
 // ─── Upgrade request (fallback when Stripe not configured) ───────────────────
@@ -423,6 +451,130 @@ export async function sendEnterpriseContact(params: EnterpriseContactParams) {
     if (!confirmResult.ok) {
         console.error(`[subscription] Enterprise contact confirmation email failed tenant=${params.tenantId}: ${confirmResult.error}`)
     }
+}
+
+// ─── Subscription expiry reminders ───────────────────────────────────────────
+
+/**
+ * Query all Professional tenants expiring in exactly `daysAhead` days and
+ * send an expiry reminder email to the tenant's super_admin owner.
+ * Called by the BullMQ subscription expiry worker.
+ */
+export async function sendSubscriptionExpiryReminders(daysAhead: number): Promise<void> {
+    const env = loadEnv()
+    const target = new Date()
+    target.setDate(target.getDate() + daysAhead)
+    const startOfDay = new Date(target); startOfDay.setHours(0, 0, 0, 0)
+    const endOfDay = new Date(target); endOfDay.setHours(23, 59, 59, 999)
+
+    const expiring = await db
+        .select({
+            id: tenants.id,
+            name: tenants.name,
+            employeeQuota: tenants.employeeQuota,
+            subscriptionExpiresAt: tenants.subscriptionExpiresAt,
+        })
+        .from(tenants)
+        .where(and(
+            eq(tenants.subscriptionPlan, 'growth'),
+            gte(tenants.subscriptionExpiresAt, startOfDay),
+            lte(tenants.subscriptionExpiresAt, endOfDay),
+        ))
+
+    for (const tenant of expiring) {
+        const [owner] = await db
+            .select({ name: users.name, email: users.email })
+            .from(users)
+            .where(and(
+                eq(users.tenantId, tenant.id),
+                eq(users.role, 'super_admin'),
+                eq(users.isActive, true),
+            ))
+            .limit(1)
+
+        if (!owner?.email) continue
+
+        const expiryDateStr = tenant.subscriptionExpiresAt
+            ? new Date(tenant.subscriptionExpiresAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : ''
+
+        const monthlyCost = calculateProfessionalCost(tenant.employeeQuota ?? FREE_PLAN_QUOTA)
+        const renewUrl = `${env.APP_URL}/settings/organization?tab=subscription`
+
+        await sendEmailLogged({
+            to: owner.email,
+            subject: daysAhead <= 1
+                ? `Action required: Your HRHub subscription expires tomorrow`
+                : `Reminder: Your HRHub subscription expires in ${daysAhead} days`,
+            html: subscriptionExpiryReminderEmail({
+                ownerName: owner.name ?? 'Account Owner',
+                tenantName: tenant.name,
+                daysRemaining: daysAhead,
+                expiryDate: expiryDateStr,
+                quota: tenant.employeeQuota ?? FREE_PLAN_QUOTA,
+                monthlyCost,
+                renewUrl,
+            }),
+        }, `subscription_expiry_${daysAhead}d`)
+    }
+
+    console.log(`[subscription] Expiry reminders sent for ${expiring.length} tenant(s) expiring in ${daysAhead} day(s).`)
+}
+
+// ─── Invoice ref generator ────────────────────────────────────────────────────
+
+function generateInvoiceRef(stripeSessionId?: string): string {
+    const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const suffix = stripeSessionId
+        ? stripeSessionId.slice(-6).toUpperCase()
+        : Math.random().toString(36).slice(2, 8).toUpperCase()
+    return `INV-${datePart}-${suffix}`
+}
+
+// ─── Test email sender (for admin verification) ───────────────────────────────
+
+export async function sendTestSubscriptionEmail(
+    to: string,
+    type: 'invoice' | 'expiry_reminder',
+    ownerName: string,
+    tenantName: string,
+): Promise<{ ok: boolean; error?: string }> {
+    const env = loadEnv()
+    if (type === 'invoice') {
+        const invoiceRef = generateInvoiceRef()
+        const expiresAt = new Date(); expiresAt.setDate(expiresAt.getDate() + 30)
+        return sendEmail({
+            to,
+            subject: `[TEST] Invoice ${invoiceRef} — HRHub Professional plan`,
+            html: subscriptionInvoiceEmail({
+                tenantName,
+                ownerEmail: to,
+                invoiceRef,
+                paidOn: new Date(),
+                expiresAt,
+                desiredQuota: 25,
+                monthlyCost: 50,
+                action: 'upgrade',
+                paymentMethod: 'Card (Test)',
+            }),
+        })
+    }
+    // expiry_reminder
+    const expiryDate = new Date(); expiryDate.setDate(expiryDate.getDate() + 7)
+    const expiryDateStr = expiryDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    return sendEmail({
+        to,
+        subject: `[TEST] Reminder: Your HRHub subscription expires in 7 days`,
+        html: subscriptionExpiryReminderEmail({
+            ownerName,
+            tenantName,
+            daysRemaining: 7,
+            expiryDate: expiryDateStr,
+            quota: 25,
+            monthlyCost: 50,
+            renewUrl: `${env.APP_URL}/settings/organization?tab=subscription`,
+        }),
+    })
 }
 
 // ─── Email templates ──────────────────────────────────────────────────────────
@@ -594,6 +746,194 @@ function enterpriseContactConfirmationEmail(p: EnterpriseContactParams): string 
   </div>
   <p style="color:#6b7280;font-size:13px;">If you have urgent questions, feel free to reply to this email.</p>
   <p style="color:#9ca3af;font-size:12px;border-top:1px solid #e5e7eb;margin-top:24px;padding-top:16px;">HRHub &mdash; UAE HR & PRO Platform</p>
+</div>
+</body></html>`
+}
+
+// ─── Invoice email ────────────────────────────────────────────────────────────
+
+interface InvoiceEmailParams {
+    tenantName: string
+    ownerEmail: string
+    invoiceRef: string
+    paidOn: Date
+    expiresAt: Date
+    desiredQuota: number
+    monthlyCost: number
+    action: 'upgrade' | 'quota_update'
+    paymentMethod: string
+}
+
+function subscriptionInvoiceEmail(p: InvoiceEmailParams): string {
+    const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    const isUpgrade = p.action === 'upgrade'
+    const lineDesc = isUpgrade
+        ? `HRHub Professional Plan — ${p.desiredQuota} employees`
+        : `HRHub Professional — Capacity update to ${p.desiredQuota} employees`
+    return `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/></head>
+<body style="font-family:Arial,sans-serif;background:#f9fafb;padding:32px;margin:0;">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+  <!-- Header -->
+  <div style="background:#1e40af;padding:28px 32px;display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <p style="margin:0;color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">HRHub UAE</p>
+      <p style="margin:4px 0 0;color:#fff;font-size:20px;font-weight:700;">Payment Receipt</p>
+    </div>
+    <div style="text-align:right;">
+      <p style="margin:0;color:#93c5fd;font-size:11px;">Invoice</p>
+      <p style="margin:2px 0 0;color:#fff;font-size:13px;font-weight:600;font-family:monospace;">${p.invoiceRef}</p>
+    </div>
+  </div>
+
+  <div style="padding:28px 32px;">
+
+    <!-- Status badge -->
+    <div style="display:inline-block;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:20px;padding:4px 14px;margin-bottom:24px;">
+      <span style="color:#047857;font-size:12px;font-weight:600;">&#10003; PAID</span>
+    </div>
+
+    <!-- Bill to / dates -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px;">
+      <div>
+        <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Billed To</p>
+        <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">${p.tenantName}</p>
+        <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${p.ownerEmail}</p>
+      </div>
+      <div>
+        <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Payment Date</p>
+        <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">${fmt(p.paidOn)}</p>
+        <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${p.paymentMethod}</p>
+      </div>
+    </div>
+
+    <!-- Line items -->
+    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+      <thead>
+        <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb;">
+          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Description</th>
+          <th style="padding:10px 12px;text-align:center;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Qty</th>
+          <th style="padding:10px 12px;text-align:right;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:14px 12px;">
+            <p style="margin:0;font-size:14px;color:#111827;font-weight:500;">${lineDesc}</p>
+            <p style="margin:3px 0 0;font-size:12px;color:#6b7280;">1-month subscription &bull; AED ${(p.monthlyCost / p.desiredQuota * 5).toFixed(0)} per 5 employees</p>
+          </td>
+          <td style="padding:14px 12px;text-align:center;font-size:14px;color:#374151;">1</td>
+          <td style="padding:14px 12px;text-align:right;font-size:14px;font-weight:600;color:#111827;">AED ${p.monthlyCost}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Total -->
+    <div style="background:#f9fafb;border-radius:8px;padding:16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+      <span style="font-size:14px;color:#6b7280;font-weight:500;">Total Paid</span>
+      <span style="font-size:22px;font-weight:700;color:#111827;">AED ${p.monthlyCost}</span>
+    </div>
+
+    <!-- Subscription period -->
+    <div style="background:#eff6ff;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
+      <p style="margin:0;font-size:12px;color:#1d4ed8;font-weight:600;">Subscription period</p>
+      <p style="margin:4px 0 0;font-size:13px;color:#1e40af;">${fmt(p.paidOn)} &rarr; ${fmt(p.expiresAt)}</p>
+      <p style="margin:4px 0 0;font-size:11px;color:#3b82f6;">Next renewal: ${fmt(p.expiresAt)}</p>
+    </div>
+
+    <!-- Plan summary -->
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr><td style="padding:5px 0;font-size:12px;color:#9ca3af;width:140px;">Plan</td><td style="padding:5px 0;font-size:13px;font-weight:600;color:#2563eb;">Professional</td></tr>
+        <tr><td style="padding:5px 0;font-size:12px;color:#9ca3af;">Employee capacity</td><td style="padding:5px 0;font-size:13px;font-weight:600;color:#111827;">${p.desiredQuota} employees</td></tr>
+        <tr><td style="padding:5px 0;font-size:12px;color:#9ca3af;">Monthly cost</td><td style="padding:5px 0;font-size:13px;font-weight:600;color:#111827;">AED ${p.monthlyCost}</td></tr>
+      </table>
+    </div>
+
+    <p style="font-size:11px;color:#9ca3af;line-height:1.6;">Please keep this receipt for your records. For billing inquiries, reply to this email or contact <a href="mailto:support@hrhub.ae" style="color:#2563eb;">support@hrhub.ae</a>.</p>
+  </div>
+
+  <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
+    <p style="margin:0;font-size:11px;color:#9ca3af;">HRHub &mdash; UAE HR &amp; PRO Platform &bull; hrhub.ae</p>
+  </div>
+</div>
+</body></html>`
+}
+
+// ─── Subscription expiry reminder email ───────────────────────────────────────
+
+interface ExpiryReminderParams {
+    ownerName: string
+    tenantName: string
+    daysRemaining: number
+    expiryDate: string
+    quota: number
+    monthlyCost: number
+    renewUrl: string
+}
+
+function subscriptionExpiryReminderEmail(p: ExpiryReminderParams): string {
+    const urgencyColor = p.daysRemaining <= 1 ? '#dc2626' : p.daysRemaining <= 3 ? '#d97706' : '#2563eb'
+    const urgencyBg   = p.daysRemaining <= 1 ? '#fef2f2' : p.daysRemaining <= 3 ? '#fffbeb' : '#eff6ff'
+    const urgencyText = p.daysRemaining <= 1
+        ? 'Your subscription expires <strong>tomorrow</strong>. Renew now to avoid any service disruption.'
+        : `Your subscription expires in <strong>${p.daysRemaining} days</strong> on <strong>${p.expiryDate}</strong>.`
+
+    return `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/></head>
+<body style="font-family:Arial,sans-serif;background:#f9fafb;padding:32px;margin:0;">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+  <div style="background:#1e40af;padding:24px 32px;">
+    <p style="margin:0;color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">HRHub UAE</p>
+    <p style="margin:4px 0 0;color:#fff;font-size:18px;font-weight:700;">Subscription Renewal Reminder</p>
+  </div>
+
+  <div style="padding:28px 32px;">
+
+    <div style="background:${urgencyBg};border-left:4px solid ${urgencyColor};border-radius:4px;padding:14px 16px;margin-bottom:24px;">
+      <p style="margin:0;color:${urgencyColor};font-size:13px;">${urgencyText}</p>
+    </div>
+
+    <p style="color:#374151;font-size:14px;margin:0 0 20px;">Hi ${p.ownerName},</p>
+    <p style="color:#6b7280;font-size:14px;margin:0 0 20px;">Your <strong>HRHub Professional</strong> subscription for <strong>${p.tenantName}</strong> is coming up for renewal. Renew before the expiry date to keep your team running without interruption.</p>
+
+    <!-- Current plan details -->
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:24px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tr><td style="padding:6px 0;font-size:12px;color:#9ca3af;width:140px;">Plan</td><td style="padding:6px 0;font-size:13px;font-weight:600;color:#2563eb;">Professional</td></tr>
+        <tr><td style="padding:6px 0;font-size:12px;color:#9ca3af;">Employee capacity</td><td style="padding:6px 0;font-size:13px;font-weight:600;color:#111827;">${p.quota} employees</td></tr>
+        <tr><td style="padding:6px 0;font-size:12px;color:#9ca3af;">Monthly cost</td><td style="padding:6px 0;font-size:13px;font-weight:600;color:#111827;">AED ${p.monthlyCost}</td></tr>
+        <tr>
+          <td style="padding:6px 0;font-size:12px;color:#9ca3af;">Expires on</td>
+          <td style="padding:6px 0;font-size:13px;font-weight:700;color:${urgencyColor};">${p.expiryDate}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- CTA -->
+    <div style="text-align:center;margin-bottom:24px;">
+      <a href="${p.renewUrl}" style="display:inline-block;background:${urgencyColor};color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">Renew Subscription</a>
+    </div>
+
+    <!-- What happens if expired -->
+    <div style="background:#f9fafb;border-radius:8px;padding:14px 16px;">
+      <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#374151;">What happens if I don't renew?</p>
+      <ul style="margin:0;padding-left:18px;color:#6b7280;font-size:12px;line-height:2;">
+        <li>Adding new employees will be restricted</li>
+        <li>Your existing data remains safe and accessible</li>
+        <li>You can renew at any time to restore full access</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
+    <p style="margin:0;font-size:11px;color:#9ca3af;">HRHub &mdash; UAE HR &amp; PRO Platform &bull; hrhub.ae</p>
+    <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Questions? Reply to this email or contact <a href="mailto:support@hrhub.ae" style="color:#2563eb;">support@hrhub.ae</a></p>
+  </div>
 </div>
 </body></html>`
 }

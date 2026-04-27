@@ -4,6 +4,7 @@ import { employees, notifications, documents, users } from '../db/schema/index.j
 import { and, eq, lt, lte, gte, ne, or, inArray } from 'drizzle-orm'
 import { loadEnv } from '../config/env.js'
 import { sendEmail, visaExpiryAlertEmail, documentExpiryAlertEmail } from '../plugins/email.js'
+import { sendSubscriptionExpiryReminders } from '../modules/subscription/subscription.service.js'
 
 function getRedisConnection() {
     const env = loadEnv()
@@ -24,6 +25,7 @@ export let visaExpiryQueue: Queue | null = null
 export let documentExpiryQueue: Queue | null = null
 export let contractExpiryQueue: Queue | null = null
 export let passportExpiryQueue: Queue | null = null
+export let subscriptionExpiryQueue: Queue | null = null
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function daysFromNow(days: number): Date {
@@ -315,6 +317,15 @@ async function runPassportExpiryCheck() {
     console.log('[worker] Passport expiry check complete.')
 }
 
+// ─── Subscription Expiry Worker ──────────────────────────────────────────────
+async function runSubscriptionExpiryCheck() {
+    console.log('[worker] Running subscription expiry check...')
+    // Send reminders at 7 days and 1 day before expiry
+    await sendSubscriptionExpiryReminders(7)
+    await sendSubscriptionExpiryReminders(1)
+    console.log('[worker] Subscription expiry check complete.')
+}
+
 // ─── Scheduler: Register all daily workers ────────────────────────────────────
 export async function startExpiryWorkers() {
     const env = loadEnv()
@@ -345,18 +356,21 @@ export async function startExpiryWorkers() {
         documentExpiryQueue = new Queue('document-expiry', { connection })
         contractExpiryQueue = new Queue('contract-expiry', { connection })
         passportExpiryQueue = new Queue('passport-expiry', { connection })
+        subscriptionExpiryQueue = new Queue('subscription-expiry', { connection })
 
         // Enqueue recurring daily jobs at 06:00 UAE time (UTC+4 = 02:00 UTC)
         await visaExpiryQueue.upsertJobScheduler('daily-visa-check', { pattern: '0 2 * * *' }, { name: 'visa-expiry' })
         await documentExpiryQueue.upsertJobScheduler('daily-doc-check', { pattern: '0 2 * * *' }, { name: 'document-expiry' })
         await contractExpiryQueue.upsertJobScheduler('daily-contract-check', { pattern: '0 2 * * *' }, { name: 'contract-expiry' })
         await passportExpiryQueue.upsertJobScheduler('daily-passport-check', { pattern: '0 2 * * *' }, { name: 'passport-expiry' })
+        await subscriptionExpiryQueue.upsertJobScheduler('daily-subscription-check', { pattern: '0 2 * * *' }, { name: 'subscription-expiry' })
 
         // Process workers
         new Worker('visa-expiry', runVisaExpiryCheck, { connection })
         new Worker('document-expiry', runDocumentExpiryCheck, { connection })
         new Worker('contract-expiry', runContractExpiryCheck, { connection })
         new Worker('passport-expiry', runPassportExpiryCheck, { connection })
+        new Worker('subscription-expiry', runSubscriptionExpiryCheck, { connection })
 
         console.log('✅ Expiry alert workers started (daily @ 06:00 UAE)')
     } catch (err) {

@@ -31,7 +31,7 @@ export async function calculateSettlement(tenantId: string, employeeId: string, 
     const [emp] = await db.select().from(employees)
         .where(and(eq(employees.id, employeeId), eq(employees.tenantId, tenantId)))
 
-    if (!emp) throw new Error('Employee not found')
+    if (!emp) throw Object.assign(new Error('Employee not found'), { statusCode: 404 })
 
     const basicSalary = parseFloat(emp.basicSalary ?? '0')
     const joinDate = new Date(emp.joinDate)

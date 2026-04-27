@@ -9,6 +9,7 @@ import {
     updateProfessionalQuota,
     getSubscriptionEvents,
     isStripeEnabled,
+    sendTestSubscriptionEmail,
     PLAN_DISPLAY,
     FREE_PLAN_QUOTA,
     PROFESSIONAL_PRICE_PER_5,
@@ -260,6 +261,39 @@ export default async function subscriptionRoutes(fastify: any): Promise<void> {
         const { limit } = request.query as { limit?: string }
         const events = await getSubscriptionEvents(request.user.tenantId, Math.min(100, Math.max(1, Number(limit ?? 50))))
         return reply.send({ data: events })
+    })
+
+    // POST /api/v1/subscription/test-email — send a test invoice or expiry reminder to the logged-in user
+    fastify.post('/test-email', { ...adminAuth, schema: { tags: ['Subscription'] } }, async (request: any, reply: any) => {
+        const { type } = (request.body ?? {}) as { type?: string }
+        const emailType = type === 'expiry_reminder' ? 'expiry_reminder' : 'invoice'
+
+        const [tenant] = await db
+            .select({ name: tenants.name })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
+            .limit(1)
+
+        const result = await sendTestSubscriptionEmail(
+            request.user.email,
+            emailType,
+            request.user.name ?? 'Account Owner',
+            tenant?.name ?? request.user.tenantId,
+        )
+
+        if (!result.ok) {
+            return reply.code(502).send({
+                statusCode: 502,
+                error: 'Bad Gateway',
+                message: `Email delivery failed: ${result.error ?? 'unknown error'}`,
+            })
+        }
+
+        return reply.send({
+            data: {
+                message: `Test ${emailType === 'invoice' ? 'invoice' : 'expiry reminder'} email sent to ${request.user.email}`,
+            },
+        })
     })
 
     // GET /api/v1/subscription/pricing — pricing calculator

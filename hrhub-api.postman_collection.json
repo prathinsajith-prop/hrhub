@@ -1,40 +1,143 @@
 {
   "info": {
     "name": "HRHub API",
-    "description": "Complete API surface for HRHub — Auth, Employees, Recruitment, Visa, Documents, Payroll, Leave, Onboarding, Compliance, Dashboard, Reports, Notifications, Audit, Attendance, Performance, Exit, Assets, Settings, Tenants (App Management), and Connected Apps.\n\n## Quick start\n1. Set `baseUrl` (default `http://localhost:3000/api/v1`).\n2. Run **Auth → Login** with your email + password. The test script saves `accessToken` + `refreshToken` automatically.\n3. All other requests inherit Bearer auth via `{{accessToken}}`.\n4. Use **Tenants → Switch tenant** to swap active organization (refreshes the token pair).\n\n## Variables\n- `baseUrl` — API root (e.g. `http://localhost:3000/api/v1`)\n- `accessToken` — JWT (auto-set by Login / Switch / Refresh)\n- `refreshToken` — refresh token (auto-set)\n- `tenantId`, `employeeId`, `applicationId`, `jobId`, `documentId`, `visaId`, `leaveId`, `assetId`, `payrollRunId`, `payslipId`, `appId`, `membershipId`, `interviewId`, `performanceId`, `exitId`, `notificationId`, `templateId`, `userId`, `checklistId`, `stepId`, `assignmentId`, `maintenanceId` — collection-level helpers; set per request as needed.",
+    "description": "Complete API surface for HRHub \u2014 Auth, Employees, Recruitment, Visa, Documents, Payroll, Leave, Onboarding, Compliance, Dashboard, Reports, Notifications, Audit, Attendance, Performance, Exit, Assets, Settings, HR, Tenants (App Management), Connected Apps, Subscription, and External API.\n\n## Quick start\n1. Set `baseUrl` (default `http://localhost:4000/api/v1`).\n2. Run **Auth \u2192 Login**. Token auto-saved.\n3. All internal routes use `{{accessToken}}` Bearer auth automatically.\n\n## External API (ext)\nSet `extUrl` = `http://localhost:4000/api/ext` (no /v1).\nSet `appKey` = your `app_live_xxx` key from Connected Apps.\nSet `appSecret` = your `sk_xxx` secret (shown once at creation/regeneration).\nAll ext routes use `X-API-Secret: {{appSecret}}` header \u2014 no JWT needed.\n\n## Variables\n- `baseUrl`, `extUrl`, `accessToken`, `refreshToken`\n- `appKey`, `appSecret` \u2014 ext API credentials\n- `tenantId`, `employeeId`, `appId`, `payrollRunId`, `payslipId`, `leaveId`, `documentId`, `visaId`, `assetId`, `jobId`, `applicationId`, `interviewId`, `performanceId`, `exitId`, `notificationId`, `templateId`, `userId`, `checklistId`, `stepId`, `assignmentId`, `maintenanceId`, `holidayId`",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
     "type": "bearer",
-    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
-    { "key": "accessToken", "value": "" },
-    { "key": "refreshToken", "value": "" },
-    { "key": "tenantId", "value": "" },
-    { "key": "userId", "value": "" },
-    { "key": "employeeId", "value": "" },
-    { "key": "jobId", "value": "" },
-    { "key": "applicationId", "value": "" },
-    { "key": "interviewId", "value": "" },
-    { "key": "visaId", "value": "" },
-    { "key": "documentId", "value": "" },
-    { "key": "templateId", "value": "" },
-    { "key": "payrollRunId", "value": "" },
-    { "key": "payslipId", "value": "" },
-    { "key": "leaveId", "value": "" },
-    { "key": "checklistId", "value": "" },
-    { "key": "stepId", "value": "" },
-    { "key": "performanceId", "value": "" },
-    { "key": "exitId", "value": "" },
-    { "key": "assetId", "value": "" },
-    { "key": "assignmentId", "value": "" },
-    { "key": "maintenanceId", "value": "" },
-    { "key": "categoryId", "value": "" },
-    { "key": "notificationId", "value": "" },
-    { "key": "appId", "value": "" },
-    { "key": "membershipId", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000/api/v1"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "tenantId",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "employeeId",
+      "value": ""
+    },
+    {
+      "key": "jobId",
+      "value": ""
+    },
+    {
+      "key": "applicationId",
+      "value": ""
+    },
+    {
+      "key": "interviewId",
+      "value": ""
+    },
+    {
+      "key": "visaId",
+      "value": ""
+    },
+    {
+      "key": "documentId",
+      "value": ""
+    },
+    {
+      "key": "templateId",
+      "value": ""
+    },
+    {
+      "key": "payrollRunId",
+      "value": ""
+    },
+    {
+      "key": "payslipId",
+      "value": ""
+    },
+    {
+      "key": "leaveId",
+      "value": ""
+    },
+    {
+      "key": "checklistId",
+      "value": ""
+    },
+    {
+      "key": "stepId",
+      "value": ""
+    },
+    {
+      "key": "performanceId",
+      "value": ""
+    },
+    {
+      "key": "exitId",
+      "value": ""
+    },
+    {
+      "key": "assetId",
+      "value": ""
+    },
+    {
+      "key": "assignmentId",
+      "value": ""
+    },
+    {
+      "key": "maintenanceId",
+      "value": ""
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "notificationId",
+      "value": ""
+    },
+    {
+      "key": "appId",
+      "value": ""
+    },
+    {
+      "key": "membershipId",
+      "value": ""
+    },
+    {
+      "key": "holidayId",
+      "value": ""
+    },
+    {
+      "key": "extUrl",
+      "value": "http://localhost:4000/api/ext",
+      "description": "External API base URL (no /v1 prefix)"
+    },
+    {
+      "key": "appSecret",
+      "value": "",
+      "description": "App secret \u2014 shown once at creation or after regeneration"
+    },
+    {
+      "key": "appKey",
+      "value": "",
+      "description": "App key (app_live_xxx) \u2014 shown in Connected Apps"
+    }
   ],
   "item": [
     {
@@ -44,11 +147,21 @@
           "name": "Login",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -76,34 +189,58 @@
               }
             }
           ],
-          "auth": { "type": "noauth" }
+          "auth": {
+            "type": "noauth"
+          }
         },
         {
           "name": "Register",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "register"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Owner\",\n  \"email\": \"owner@example.com\",\n  \"password\": \"ChangeMe123!\",\n  \"companyName\": \"Acme HR\"\n}"
             }
           },
-          "auth": { "type": "noauth" }
+          "auth": {
+            "type": "noauth"
+          }
         },
         {
           "name": "Refresh tokens",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/refresh",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "refresh"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -125,7 +262,9 @@
               }
             }
           ],
-          "auth": { "type": "noauth" }
+          "auth": {
+            "type": "noauth"
+          }
         },
         {
           "name": "Logout",
@@ -133,8 +272,13 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/auth/logout",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "logout"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
             }
           }
         },
@@ -144,8 +288,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "me"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
             }
           }
         },
@@ -153,13 +302,26 @@
           "name": "Update me",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "me"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"New Name\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Name\"\n}"
+            }
           }
         },
         {
@@ -168,12 +330,24 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/auth/me/avatar",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "me", "avatar"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me",
+                "avatar"
+              ]
             },
             "body": {
               "mode": "formdata",
-              "formdata": [{ "key": "file", "type": "file", "src": [] }]
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
             }
           }
         },
@@ -181,45 +355,79 @@
           "name": "Forgot password",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/forgot-password",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "forgot-password"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"user@example.com\"\n}"
             }
           },
-          "auth": { "type": "noauth" }
+          "auth": {
+            "type": "noauth"
+          }
         },
         {
           "name": "Reset password",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/reset-password",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "reset-password"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"token\": \"<token-from-email>\",\n  \"newPassword\": \"NewPass123!\"\n}"
             }
           },
-          "auth": { "type": "noauth" }
+          "auth": {
+            "type": "noauth"
+          }
         },
         {
           "name": "Change password",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/change-password",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "change-password"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -228,49 +436,86 @@
           }
         },
         {
-          "name": "2FA — status",
+          "name": "2FA \u2014 status",
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/auth/2fa/status",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "2fa", "status"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "status"
+              ]
             }
           }
         },
         {
-          "name": "2FA — setup",
+          "name": "2FA \u2014 setup",
           "request": {
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/auth/2fa/setup",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "2fa", "setup"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "setup"
+              ]
             }
           }
         },
         {
-          "name": "2FA — verify",
+          "name": "2FA \u2014 verify",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/2fa/verify",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "2fa", "verify"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "verify"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"code\": \"123456\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}"
+            }
           }
         },
         {
-          "name": "2FA — disable",
+          "name": "2FA \u2014 disable",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/2fa/disable",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "2fa", "disable"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "disable"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -279,53 +524,85 @@
           }
         },
         {
-          "name": "2FA — challenge",
+          "name": "2FA \u2014 challenge",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/2fa/challenge",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "2fa", "challenge"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "challenge"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"mfaToken\": \"{{mfaToken}}\",\n  \"code\": \"123456\"\n}"
             }
           },
-          "auth": { "type": "noauth" }
+          "auth": {
+            "type": "noauth"
+          }
         },
         {
-          "name": "2FA — backup challenge",
+          "name": "2FA \u2014 backup challenge",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/2fa/backup-challenge",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "2fa", "backup-challenge"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "backup-challenge"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"mfaToken\": \"{{mfaToken}}\",\n  \"backupCode\": \"abcd-efgh\"\n}"
             }
           },
-          "auth": { "type": "noauth" }
+          "auth": {
+            "type": "noauth"
+          }
         },
         {
-          "name": "2FA — regenerate backup codes",
+          "name": "2FA \u2014 regenerate backup codes",
           "request": {
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/auth/2fa/backup-codes/regenerate",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "2fa", "backup-codes", "regenerate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "backup-codes",
+                "regenerate"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Tenants (App Management)",
       "item": [
@@ -335,8 +612,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/tenants",
-              "host": ["{{baseUrl}}"],
-              "path": ["tenants"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tenants"
+              ]
             }
           }
         },
@@ -346,8 +627,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/tenants/current",
-              "host": ["{{baseUrl}}"],
-              "path": ["tenants", "current"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tenants",
+                "current"
+              ]
             }
           }
         },
@@ -355,11 +641,20 @@
           "name": "Create tenant",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/tenants",
-              "host": ["{{baseUrl}}"],
-              "path": ["tenants"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tenants"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -371,11 +666,21 @@
           "name": "Switch tenant",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/tenants/switch",
-              "host": ["{{baseUrl}}"],
-              "path": ["tenants", "switch"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tenants",
+                "switch"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -403,11 +708,22 @@
           "name": "Accept invite",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/tenants/invites/accept",
-              "host": ["{{baseUrl}}"],
-              "path": ["tenants", "invites", "accept"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tenants",
+                "invites",
+                "accept"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -421,8 +737,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/tenants/members",
-              "host": ["{{baseUrl}}"],
-              "path": ["tenants", "members"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tenants",
+                "members"
+              ]
             }
           }
         },
@@ -430,11 +751,21 @@
           "name": "Invite member",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/tenants/members",
-              "host": ["{{baseUrl}}"],
-              "path": ["tenants", "members"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tenants",
+                "members"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -446,13 +777,27 @@
           "name": "Change member role",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/tenants/members/{{membershipId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["tenants", "members", "{{membershipId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tenants",
+                "members",
+                "{{membershipId}}"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"role\": \"dept_head\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"dept_head\"\n}"
+            }
           }
         },
         {
@@ -461,14 +806,19 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/tenants/members/{{membershipId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["tenants", "members", "{{membershipId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tenants",
+                "members",
+                "{{membershipId}}"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Connected Apps",
       "item": [
@@ -478,8 +828,28 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/apps",
-              "host": ["{{baseUrl}}"],
-              "path": ["apps"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get app",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps",
+                "{{appId}}"
+              ]
             }
           }
         },
@@ -487,11 +857,20 @@
           "name": "Create app",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/apps",
-              "host": ["{{baseUrl}}"],
-              "path": ["apps"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -515,11 +894,21 @@
           "name": "Update app",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/apps/{{appId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["apps", "{{appId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps",
+                "{{appId}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -533,8 +922,14 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/apps/{{appId}}/regenerate-secret",
-              "host": ["{{baseUrl}}"],
-              "path": ["apps", "{{appId}}", "regenerate-secret"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps",
+                "{{appId}}",
+                "regenerate-secret"
+              ]
             }
           }
         },
@@ -544,14 +939,18 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/apps/{{appId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["apps", "{{appId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "apps",
+                "{{appId}}"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Employees",
       "item": [
@@ -561,14 +960,36 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/employees?limit=20&offset=0",
-              "host": ["{{baseUrl}}"],
-              "path": ["employees"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees"
+              ],
               "query": [
-                { "key": "limit", "value": "20" },
-                { "key": "offset", "value": "0" },
-                { "key": "search", "value": "", "disabled": true },
-                { "key": "status", "value": "", "disabled": true },
-                { "key": "department", "value": "", "disabled": true }
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "department",
+                  "value": "",
+                  "disabled": true
+                }
               ]
             }
           }
@@ -579,8 +1000,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/employees/org-chart",
-              "host": ["{{baseUrl}}"],
-              "path": ["employees", "org-chart"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "org-chart"
+              ]
             }
           }
         },
@@ -590,8 +1016,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/employees/expiring-visas",
-              "host": ["{{baseUrl}}"],
-              "path": ["employees", "expiring-visas"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "expiring-visas"
+              ]
             }
           }
         },
@@ -601,8 +1032,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/employees/next-employee-no",
-              "host": ["{{baseUrl}}"],
-              "path": ["employees", "next-employee-no"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "next-employee-no"
+              ]
             }
           }
         },
@@ -612,8 +1048,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/employees/{{employeeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["employees", "{{employeeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "{{employeeId}}"
+              ]
             }
           }
         },
@@ -621,11 +1062,20 @@
           "name": "Create employee",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/employees",
-              "host": ["{{baseUrl}}"],
-              "path": ["employees"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -637,11 +1087,21 @@
           "name": "Update employee",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/employees/{{employeeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["employees", "{{employeeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "{{employeeId}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -655,8 +1115,13 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/employees/{{employeeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["employees", "{{employeeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "{{employeeId}}"
+              ]
             }
           }
         },
@@ -666,12 +1131,23 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/employees/bulk-import",
-              "host": ["{{baseUrl}}"],
-              "path": ["employees", "bulk-import"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "bulk-import"
+              ]
             },
             "body": {
               "mode": "formdata",
-              "formdata": [{ "key": "file", "type": "file", "src": [] }]
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
             }
           }
         },
@@ -681,18 +1157,73 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/employees/{{employeeId}}/avatar",
-              "host": ["{{baseUrl}}"],
-              "path": ["employees", "{{employeeId}}", "avatar"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "{{employeeId}}",
+                "avatar"
+              ]
             },
             "body": {
               "mode": "formdata",
-              "formdata": [{ "key": "file", "type": "file", "src": [] }]
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get salary history",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/employees/{{employeeId}}/salary-history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "{{employeeId}}",
+                "salary-history"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add salary revision",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/employees/{{employeeId}}/salary-revision",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "{{employeeId}}",
+                "salary-revision"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"effectiveDate\": \"2025-06-01\",\n  \"newBaseSalary\": 12000,\n  \"reason\": \"Annual review\",\n  \"allowances\": {}\n}"
             }
           }
         }
       ]
     },
-
     {
       "name": "Recruitment",
       "item": [
@@ -702,8 +1233,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/jobs",
-              "host": ["{{baseUrl}}"],
-              "path": ["jobs"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "jobs"
+              ]
             }
           }
         },
@@ -713,8 +1248,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/jobs/{{jobId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["jobs", "{{jobId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "jobs",
+                "{{jobId}}"
+              ]
             }
           }
         },
@@ -722,11 +1262,20 @@
           "name": "Create job",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/jobs",
-              "host": ["{{baseUrl}}"],
-              "path": ["jobs"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "jobs"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -738,13 +1287,26 @@
           "name": "Update job",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/jobs/{{jobId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["jobs", "{{jobId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "jobs",
+                "{{jobId}}"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"closed\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"closed\"\n}"
+            }
           }
         },
         {
@@ -753,8 +1315,13 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/jobs/{{jobId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["jobs", "{{jobId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "jobs",
+                "{{jobId}}"
+              ]
             }
           }
         },
@@ -764,9 +1331,18 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/applications?jobId={{jobId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["applications"],
-              "query": [{ "key": "jobId", "value": "{{jobId}}" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "applications"
+              ],
+              "query": [
+                {
+                  "key": "jobId",
+                  "value": "{{jobId}}"
+                }
+              ]
             }
           }
         },
@@ -774,11 +1350,22 @@
           "name": "Apply to job",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/jobs/{{jobId}}/applications",
-              "host": ["{{baseUrl}}"],
-              "path": ["jobs", "{{jobId}}", "applications"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "jobs",
+                "{{jobId}}",
+                "applications"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -790,11 +1377,21 @@
           "name": "Update application",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/applications/{{applicationId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["applications", "{{applicationId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "applications",
+                "{{applicationId}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -806,23 +1403,44 @@
           "name": "Update application stage",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/applications/{{applicationId}}/stage",
-              "host": ["{{baseUrl}}"],
-              "path": ["applications", "{{applicationId}}", "stage"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "applications",
+                "{{applicationId}}",
+                "stage"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"stage\": \"interview\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stage\": \"interview\"\n}"
+            }
           }
         },
         {
           "name": "Convert application to employee",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/applications/{{applicationId}}/convert-to-employee",
-              "host": ["{{baseUrl}}"],
+              "host": [
+                "{{baseUrl}}"
+              ],
               "path": [
                 "applications",
                 "{{applicationId}}",
@@ -841,14 +1459,18 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/applications/{{applicationId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["applications", "{{applicationId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "applications",
+                "{{applicationId}}"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Interviews",
       "item": [
@@ -858,8 +1480,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/interviews",
-              "host": ["{{baseUrl}}"],
-              "path": ["interviews"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "interviews"
+              ]
             }
           }
         },
@@ -869,8 +1495,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/interviews/application/{{applicationId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["interviews", "application", "{{applicationId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "interviews",
+                "application",
+                "{{applicationId}}"
+              ]
             }
           }
         },
@@ -878,11 +1510,20 @@
           "name": "Create interview",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/interviews",
-              "host": ["{{baseUrl}}"],
-              "path": ["interviews"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "interviews"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -894,11 +1535,21 @@
           "name": "Update interview",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/interviews/{{interviewId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["interviews", "{{interviewId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "interviews",
+                "{{interviewId}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -912,14 +1563,18 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/interviews/{{interviewId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["interviews", "{{interviewId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "interviews",
+                "{{interviewId}}"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Onboarding",
       "item": [
@@ -929,8 +1584,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/onboarding/analytics",
-              "host": ["{{baseUrl}}"],
-              "path": ["onboarding", "analytics"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding",
+                "analytics"
+              ]
             }
           }
         },
@@ -938,11 +1598,20 @@
           "name": "Create checklist",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/onboarding",
-              "host": ["{{baseUrl}}"],
-              "path": ["onboarding"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -956,8 +1625,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/onboarding",
-              "host": ["{{baseUrl}}"],
-              "path": ["onboarding"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding"
+              ]
             }
           }
         },
@@ -967,8 +1640,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/onboarding/employee/{{employeeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["onboarding", "employee", "{{employeeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding",
+                "employee",
+                "{{employeeId}}"
+              ]
             }
           }
         },
@@ -976,24 +1655,50 @@
           "name": "Update step",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/onboarding/{{checklistId}}/steps/{{stepId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["onboarding", "{{checklistId}}", "steps", "{{stepId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding",
+                "{{checklistId}}",
+                "steps",
+                "{{stepId}}"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"completed\": true\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completed\": true\n}"
+            }
           }
         },
         {
           "name": "Add step",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/onboarding/{{checklistId}}/steps",
-              "host": ["{{baseUrl}}"],
-              "path": ["onboarding", "{{checklistId}}", "steps"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding",
+                "{{checklistId}}",
+                "steps"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1007,14 +1712,20 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/onboarding/{{checklistId}}/steps/{{stepId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["onboarding", "{{checklistId}}", "steps", "{{stepId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "onboarding",
+                "{{checklistId}}",
+                "steps",
+                "{{stepId}}"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Visa",
       "item": [
@@ -1024,8 +1735,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/visa",
-              "host": ["{{baseUrl}}"],
-              "path": ["visa"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "visa"
+              ]
             }
           }
         },
@@ -1035,8 +1750,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/visa/{{visaId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["visa", "{{visaId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "visa",
+                "{{visaId}}"
+              ]
             }
           }
         },
@@ -1044,11 +1764,20 @@
           "name": "Create visa",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/visa",
-              "host": ["{{baseUrl}}"],
-              "path": ["visa"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "visa"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1060,39 +1789,80 @@
           "name": "Update visa",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/visa/{{visaId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["visa", "{{visaId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "visa",
+                "{{visaId}}"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"active\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}"
+            }
           }
         },
         {
           "name": "Advance stage",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/visa/{{visaId}}/advance",
-              "host": ["{{baseUrl}}"],
-              "path": ["visa", "{{visaId}}", "advance"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "visa",
+                "{{visaId}}",
+                "advance"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"toStage\": \"medical\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"toStage\": \"medical\"\n}"
+            }
           }
         },
         {
           "name": "Cancel visa",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/visa/{{visaId}}/cancel",
-              "host": ["{{baseUrl}}"],
-              "path": ["visa", "{{visaId}}", "cancel"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "visa",
+                "{{visaId}}",
+                "cancel"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"reason\": \"resigned\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"resigned\"\n}"
+            }
           }
         },
         {
@@ -1101,8 +1871,13 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/visa/{{visaId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["visa", "{{visaId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "visa",
+                "{{visaId}}"
+              ]
             }
           }
         },
@@ -1112,14 +1887,18 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/visa/recalc-urgency",
-              "host": ["{{baseUrl}}"],
-              "path": ["visa", "recalc-urgency"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "visa",
+                "recalc-urgency"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Documents",
       "item": [
@@ -1129,8 +1908,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/documents",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents"
+              ]
             }
           }
         },
@@ -1140,8 +1923,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/documents/expiring",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "expiring"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "expiring"
+              ]
             }
           }
         },
@@ -1151,8 +1939,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/documents/{{documentId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "{{documentId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{documentId}}"
+              ]
             }
           }
         },
@@ -1160,11 +1953,20 @@
           "name": "Create document",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/documents",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1176,11 +1978,21 @@
           "name": "Update document",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/documents/{{documentId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "{{documentId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{documentId}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1192,13 +2004,27 @@
           "name": "Verify document",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/documents/{{documentId}}/verify",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "{{documentId}}", "verify"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{documentId}}",
+                "verify"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"verified\": true\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verified\": true\n}"
+            }
           }
         },
         {
@@ -1207,8 +2033,13 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/documents/{{documentId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "{{documentId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{documentId}}"
+              ]
             }
           }
         },
@@ -1218,19 +2049,32 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/documents/upload",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "upload"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "upload"
+              ]
             },
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "file", "type": "file", "src": [] },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                },
                 {
                   "key": "employeeId",
                   "value": "{{employeeId}}",
                   "type": "text"
                 },
-                { "key": "docType", "value": "passport", "type": "text" }
+                {
+                  "key": "docType",
+                  "value": "passport",
+                  "type": "text"
+                }
               ]
             }
           }
@@ -1241,8 +2085,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/documents/{{documentId}}/file",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "{{documentId}}", "file"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{documentId}}",
+                "file"
+              ]
             }
           }
         },
@@ -1250,11 +2100,21 @@
           "name": "Get upload URL (S3)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/documents/upload-url",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "upload-url"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "upload-url"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1268,14 +2128,19 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/documents/{{documentId}}/download-url",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "{{documentId}}", "download-url"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{documentId}}",
+                "download-url"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Document Templates",
       "item": [
@@ -1285,8 +2150,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/documents/templates",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "templates"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates"
+              ]
             }
           }
         },
@@ -1296,8 +2166,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/documents/templates/{{templateId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "templates", "{{templateId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates",
+                "{{templateId}}"
+              ]
             }
           }
         },
@@ -1305,11 +2181,21 @@
           "name": "Create template",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/documents/templates",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "templates"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1321,11 +2207,22 @@
           "name": "Update template",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/documents/templates/{{templateId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "templates", "{{templateId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates",
+                "{{templateId}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1339,8 +2236,14 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/documents/templates/{{templateId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "templates", "{{templateId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates",
+                "{{templateId}}"
+              ]
             }
           }
         },
@@ -1348,11 +2251,23 @@
           "name": "Render template",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/documents/templates/{{templateId}}/render",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "templates", "{{templateId}}", "render"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "templates",
+                "{{templateId}}",
+                "render"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1366,8 +2281,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/documents/{{templateId}}/versions",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "{{templateId}}", "versions"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{templateId}}",
+                "versions"
+              ]
             }
           }
         },
@@ -1375,11 +2296,22 @@
           "name": "Create template version",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/documents/{{templateId}}/versions",
-              "host": ["{{baseUrl}}"],
-              "path": ["documents", "{{templateId}}", "versions"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{templateId}}",
+                "versions"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1389,7 +2321,6 @@
         }
       ]
     },
-
     {
       "name": "Payroll",
       "item": [
@@ -1399,8 +2330,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/payroll",
-              "host": ["{{baseUrl}}"],
-              "path": ["payroll"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payroll"
+              ]
             }
           }
         },
@@ -1410,8 +2345,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/payroll/{{payrollRunId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["payroll", "{{payrollRunId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payroll",
+                "{{payrollRunId}}"
+              ]
             }
           }
         },
@@ -1421,8 +2361,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/payroll/{{payrollRunId}}/payslips",
-              "host": ["{{baseUrl}}"],
-              "path": ["payroll", "{{payrollRunId}}", "payslips"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payroll",
+                "{{payrollRunId}}",
+                "payslips"
+              ]
             }
           }
         },
@@ -1430,11 +2376,20 @@
           "name": "Create payroll run",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/payroll",
-              "host": ["{{baseUrl}}"],
-              "path": ["payroll"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payroll"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1446,13 +2401,26 @@
           "name": "Update payroll run",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/payroll/{{payrollRunId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["payroll", "{{payrollRunId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payroll",
+                "{{payrollRunId}}"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"approved\"\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\"\n}"
+            }
           }
         },
         {
@@ -1461,8 +2429,14 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/payroll/{{payrollRunId}}/run",
-              "host": ["{{baseUrl}}"],
-              "path": ["payroll", "{{payrollRunId}}", "run"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payroll",
+                "{{payrollRunId}}",
+                "run"
+              ]
             }
           }
         },
@@ -1472,8 +2446,14 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/payroll/{{payrollRunId}}/submit-wps",
-              "host": ["{{baseUrl}}"],
-              "path": ["payroll", "{{payrollRunId}}", "submit-wps"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payroll",
+                "{{payrollRunId}}",
+                "submit-wps"
+              ]
             }
           }
         },
@@ -1483,8 +2463,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/payroll/{{payrollRunId}}/wps-sif",
-              "host": ["{{baseUrl}}"],
-              "path": ["payroll", "{{payrollRunId}}", "wps-sif"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payroll",
+                "{{payrollRunId}}",
+                "wps-sif"
+              ]
             }
           }
         },
@@ -1494,11 +2480,22 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/payroll/gratuity-calc?employeeId={{employeeId}}&exitDate=2024-12-31",
-              "host": ["{{baseUrl}}"],
-              "path": ["payroll", "gratuity-calc"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payroll",
+                "gratuity-calc"
+              ],
               "query": [
-                { "key": "employeeId", "value": "{{employeeId}}" },
-                { "key": "exitDate", "value": "2024-12-31" }
+                {
+                  "key": "employeeId",
+                  "value": "{{employeeId}}"
+                },
+                {
+                  "key": "exitDate",
+                  "value": "2024-12-31"
+                }
               ]
             }
           }
@@ -1509,14 +2506,20 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/payroll/payslips/{{payslipId}}/download",
-              "host": ["{{baseUrl}}"],
-              "path": ["payroll", "payslips", "{{payslipId}}", "download"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payroll",
+                "payslips",
+                "{{payslipId}}",
+                "download"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Leave",
       "item": [
@@ -1526,8 +2529,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/leave",
-              "host": ["{{baseUrl}}"],
-              "path": ["leave"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leave"
+              ]
             }
           }
         },
@@ -1535,11 +2542,20 @@
           "name": "Request leave",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/leave",
-              "host": ["{{baseUrl}}"],
-              "path": ["leave"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leave"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1551,11 +2567,22 @@
           "name": "Approve leave",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/leave/{{leaveId}}/approve",
-              "host": ["{{baseUrl}}"],
-              "path": ["leave", "{{leaveId}}", "approve"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leave",
+                "{{leaveId}}",
+                "approve"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1569,8 +2596,14 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/leave/{{leaveId}}/cancel",
-              "host": ["{{baseUrl}}"],
-              "path": ["leave", "{{leaveId}}", "cancel"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leave",
+                "{{leaveId}}",
+                "cancel"
+              ]
             }
           }
         },
@@ -1580,8 +2613,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/leave/balance/{{employeeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["leave", "balance", "{{employeeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leave",
+                "balance",
+                "{{employeeId}}"
+              ]
             }
           }
         },
@@ -1591,8 +2630,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/leave/policies",
-              "host": ["{{baseUrl}}"],
-              "path": ["leave", "policies"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leave",
+                "policies"
+              ]
             }
           }
         },
@@ -1600,11 +2644,21 @@
           "name": "Update leave policies",
           "request": {
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/leave/policies",
-              "host": ["{{baseUrl}}"],
-              "path": ["leave", "policies"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leave",
+                "policies"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1616,11 +2670,21 @@
           "name": "Run year-end rollover",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/leave/rollover",
-              "host": ["{{baseUrl}}"],
-              "path": ["leave", "rollover"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leave",
+                "rollover"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1632,11 +2696,23 @@
           "name": "Adjust leave balance",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/leave/balance/{{employeeId}}/adjust",
-              "host": ["{{baseUrl}}"],
-              "path": ["leave", "balance", "{{employeeId}}", "adjust"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leave",
+                "balance",
+                "{{employeeId}}",
+                "adjust"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1646,7 +2722,6 @@
         }
       ]
     },
-
     {
       "name": "Attendance",
       "item": [
@@ -1656,8 +2731,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/attendance",
-              "host": ["{{baseUrl}}"],
-              "path": ["attendance"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attendance"
+              ]
             }
           }
         },
@@ -1667,11 +2746,22 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/attendance/summary?from=2024-02-01&to=2024-02-29",
-              "host": ["{{baseUrl}}"],
-              "path": ["attendance", "summary"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attendance",
+                "summary"
+              ],
               "query": [
-                { "key": "from", "value": "2024-02-01" },
-                { "key": "to", "value": "2024-02-29" }
+                {
+                  "key": "from",
+                  "value": "2024-02-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2024-02-29"
+                }
               ]
             }
           }
@@ -1680,11 +2770,21 @@
           "name": "Check in",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/attendance/check-in",
-              "host": ["{{baseUrl}}"],
-              "path": ["attendance", "check-in"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attendance",
+                "check-in"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1696,11 +2796,21 @@
           "name": "Check out",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/attendance/check-out",
-              "host": ["{{baseUrl}}"],
-              "path": ["attendance", "check-out"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attendance",
+                "check-out"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1712,11 +2822,20 @@
           "name": "Adjust entry",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/attendance",
-              "host": ["{{baseUrl}}"],
-              "path": ["attendance"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attendance"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1728,11 +2847,21 @@
           "name": "External punch (device)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/attendance/external-punch",
-              "host": ["{{baseUrl}}"],
-              "path": ["attendance", "external-punch"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attendance",
+                "external-punch"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1742,7 +2871,6 @@
         }
       ]
     },
-
     {
       "name": "Performance",
       "item": [
@@ -1752,8 +2880,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/performance",
-              "host": ["{{baseUrl}}"],
-              "path": ["performance"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance"
+              ]
             }
           }
         },
@@ -1761,11 +2893,20 @@
           "name": "Create review",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/performance",
-              "host": ["{{baseUrl}}"],
-              "path": ["performance"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1777,13 +2918,26 @@
           "name": "Update review",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/performance/{{performanceId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["performance", "{{performanceId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance",
+                "{{performanceId}}"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"rating\": 5\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5\n}"
+            }
           }
         },
         {
@@ -1792,14 +2946,18 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/performance/{{performanceId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["performance", "{{performanceId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance",
+                "{{performanceId}}"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Exit",
       "item": [
@@ -1809,11 +2967,22 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/exit/settlement-preview?employeeId={{employeeId}}&exitDate=2024-12-31",
-              "host": ["{{baseUrl}}"],
-              "path": ["exit", "settlement-preview"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exit",
+                "settlement-preview"
+              ],
               "query": [
-                { "key": "employeeId", "value": "{{employeeId}}" },
-                { "key": "exitDate", "value": "2024-12-31" }
+                {
+                  "key": "employeeId",
+                  "value": "{{employeeId}}"
+                },
+                {
+                  "key": "exitDate",
+                  "value": "2024-12-31"
+                }
               ]
             }
           }
@@ -1822,11 +2991,20 @@
           "name": "Create exit",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/exit",
-              "host": ["{{baseUrl}}"],
-              "path": ["exit"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exit"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1840,8 +3018,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/exit",
-              "host": ["{{baseUrl}}"],
-              "path": ["exit"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exit"
+              ]
             }
           }
         },
@@ -1851,8 +3033,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/exit/{{exitId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["exit", "{{exitId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exit",
+                "{{exitId}}"
+              ]
             }
           }
         },
@@ -1860,13 +3047,27 @@
           "name": "Approve exit",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/exit/{{exitId}}/approve",
-              "host": ["{{baseUrl}}"],
-              "path": ["exit", "{{exitId}}", "approve"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exit",
+                "{{exitId}}",
+                "approve"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"approved\": true\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approved\": true\n}"
+            }
           }
         },
         {
@@ -1875,14 +3076,19 @@
             "method": "PATCH",
             "url": {
               "raw": "{{baseUrl}}/exit/{{exitId}}/settlement-paid",
-              "host": ["{{baseUrl}}"],
-              "path": ["exit", "{{exitId}}", "settlement-paid"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "exit",
+                "{{exitId}}",
+                "settlement-paid"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Assets",
       "item": [
@@ -1892,8 +3098,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/assets/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "categories"
+              ]
             }
           }
         },
@@ -1901,11 +3112,21 @@
           "name": "Create category",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/assets/categories",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "categories"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "categories"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1919,8 +3140,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/assets",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets"
+              ]
             }
           }
         },
@@ -1928,11 +3153,20 @@
           "name": "Create asset",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/assets",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1946,8 +3180,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/assets/{{assetId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "{{assetId}}"
+              ]
             }
           }
         },
@@ -1955,11 +3194,21 @@
           "name": "Update asset",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/assets/{{assetId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "{{assetId}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1973,8 +3222,13 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/assets/{{assetId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "{{assetId}}"
+              ]
             }
           }
         },
@@ -1982,11 +3236,22 @@
           "name": "Assign asset",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/assets/{{assetId}}/assign",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetId}}", "assign"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "{{assetId}}",
+                "assign"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1998,11 +3263,23 @@
           "name": "Return assignment",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/assets/assignments/{{assignmentId}}/return",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "assignments", "{{assignmentId}}", "return"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "assignments",
+                "{{assignmentId}}",
+                "return"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2014,11 +3291,23 @@
           "name": "Mark assignment lost",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/assets/assignments/{{assignmentId}}/lost",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "assignments", "{{assignmentId}}", "lost"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "assignments",
+                "{{assignmentId}}",
+                "lost"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2032,8 +3321,15 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/assets/assignments/employee/{{employeeId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "assignments", "employee", "{{employeeId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "assignments",
+                "employee",
+                "{{employeeId}}"
+              ]
             }
           }
         },
@@ -2043,31 +3339,54 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/assets/{{assetId}}/history",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetId}}", "history"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "{{assetId}}",
+                "history"
+              ]
             }
           }
         },
         {
-          "name": "Asset maintenance — list",
+          "name": "Asset maintenance \u2014 list",
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/assets/{{assetId}}/maintenance",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetId}}", "maintenance"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "{{assetId}}",
+                "maintenance"
+              ]
             }
           }
         },
         {
-          "name": "Asset maintenance — create",
+          "name": "Asset maintenance \u2014 create",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/assets/{{assetId}}/maintenance",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "{{assetId}}", "maintenance"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "{{assetId}}",
+                "maintenance"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2076,21 +3395,34 @@
           }
         },
         {
-          "name": "Asset maintenance — update",
+          "name": "Asset maintenance \u2014 update",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/assets/maintenance/{{maintenanceId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["assets", "maintenance", "{{maintenanceId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "assets",
+                "maintenance",
+                "{{maintenanceId}}"
+              ]
             },
-            "body": { "mode": "raw", "raw": "{\n  \"cost\": 700\n}" }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cost\": 700\n}"
+            }
           }
         }
       ]
     },
-
     {
       "name": "Compliance",
       "item": [
@@ -2100,8 +3432,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/compliance/emiratisation",
-              "host": ["{{baseUrl}}"],
-              "path": ["compliance", "emiratisation"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compliance",
+                "emiratisation"
+              ]
             }
           }
         },
@@ -2111,8 +3448,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/compliance/expiry-alerts",
-              "host": ["{{baseUrl}}"],
-              "path": ["compliance", "expiry-alerts"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compliance",
+                "expiry-alerts"
+              ]
             }
           }
         },
@@ -2122,14 +3464,18 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/compliance/report",
-              "host": ["{{baseUrl}}"],
-              "path": ["compliance", "report"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compliance",
+                "report"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Dashboard",
       "item": [
@@ -2139,8 +3485,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/dashboard/kpis",
-              "host": ["{{baseUrl}}"],
-              "path": ["dashboard", "kpis"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "kpis"
+              ]
             }
           }
         },
@@ -2150,8 +3501,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/dashboard/notifications",
-              "host": ["{{baseUrl}}"],
-              "path": ["dashboard", "notifications"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "notifications"
+              ]
             }
           }
         },
@@ -2161,8 +3517,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/dashboard/payroll-trend",
-              "host": ["{{baseUrl}}"],
-              "path": ["dashboard", "payroll-trend"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "payroll-trend"
+              ]
             }
           }
         },
@@ -2172,8 +3533,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/dashboard/nationality-breakdown",
-              "host": ["{{baseUrl}}"],
-              "path": ["dashboard", "nationality-breakdown"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "nationality-breakdown"
+              ]
             }
           }
         },
@@ -2183,8 +3549,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/dashboard/dept-headcount",
-              "host": ["{{baseUrl}}"],
-              "path": ["dashboard", "dept-headcount"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "dept-headcount"
+              ]
             }
           }
         },
@@ -2194,8 +3565,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/dashboard/emiratisation",
-              "host": ["{{baseUrl}}"],
-              "path": ["dashboard", "emiratisation"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "emiratisation"
+              ]
             }
           }
         },
@@ -2205,14 +3581,18 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/dashboard/onboarding-summary",
-              "host": ["{{baseUrl}}"],
-              "path": ["dashboard", "onboarding-summary"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "onboarding-summary"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Reports",
       "item": [
@@ -2222,8 +3602,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/reports/headcount",
-              "host": ["{{baseUrl}}"],
-              "path": ["reports", "headcount"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "headcount"
+              ]
             }
           }
         },
@@ -2233,8 +3618,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/reports/payroll-summary",
-              "host": ["{{baseUrl}}"],
-              "path": ["reports", "payroll-summary"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "payroll-summary"
+              ]
             }
           }
         },
@@ -2244,14 +3634,18 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/reports/visa-expiry",
-              "host": ["{{baseUrl}}"],
-              "path": ["reports", "visa-expiry"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "visa-expiry"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Notifications",
       "item": [
@@ -2261,8 +3655,12 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/notifications",
-              "host": ["{{baseUrl}}"],
-              "path": ["notifications"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications"
+              ]
             }
           }
         },
@@ -2272,8 +3670,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/notifications/unread-count",
-              "host": ["{{baseUrl}}"],
-              "path": ["notifications", "unread-count"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "unread-count"
+              ]
             }
           }
         },
@@ -2283,8 +3686,14 @@
             "method": "PATCH",
             "url": {
               "raw": "{{baseUrl}}/notifications/{{notificationId}}/read",
-              "host": ["{{baseUrl}}"],
-              "path": ["notifications", "{{notificationId}}", "read"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "{{notificationId}}",
+                "read"
+              ]
             }
           }
         },
@@ -2294,14 +3703,18 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/notifications/mark-all-read",
-              "host": ["{{baseUrl}}"],
-              "path": ["notifications", "mark-all-read"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "mark-all-read"
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Audit",
       "item": [
@@ -2311,8 +3724,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/audit/login-history",
-              "host": ["{{baseUrl}}"],
-              "path": ["audit", "login-history"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit",
+                "login-history"
+              ]
             }
           }
         },
@@ -2322,15 +3740,24 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/audit/activity?limit=50",
-              "host": ["{{baseUrl}}"],
-              "path": ["audit", "activity"],
-              "query": [{ "key": "limit", "value": "50" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit",
+                "activity"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
             }
           }
         }
       ]
     },
-
     {
       "name": "Settings",
       "item": [
@@ -2340,8 +3767,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/settings/company",
-              "host": ["{{baseUrl}}"],
-              "path": ["settings", "company"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "company"
+              ]
             }
           }
         },
@@ -2349,11 +3781,21 @@
           "name": "Update company",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/settings/company",
-              "host": ["{{baseUrl}}"],
-              "path": ["settings", "company"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "company"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2367,8 +3809,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/settings/users",
-              "host": ["{{baseUrl}}"],
-              "path": ["settings", "users"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "users"
+              ]
             }
           }
         },
@@ -2376,11 +3823,22 @@
           "name": "Invite user",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/settings/users/invite",
-              "host": ["{{baseUrl}}"],
-              "path": ["settings", "users", "invite"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "users",
+                "invite"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2392,11 +3850,22 @@
           "name": "Update user",
           "request": {
             "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/settings/users/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["settings", "users", "{{userId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "users",
+                "{{userId}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2410,8 +3879,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/settings/ip-allowlist",
-              "host": ["{{baseUrl}}"],
-              "path": ["settings", "ip-allowlist"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "ip-allowlist"
+              ]
             }
           }
         },
@@ -2419,11 +3893,21 @@
           "name": "Set IP allowlist",
           "request": {
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/settings/ip-allowlist",
-              "host": ["{{baseUrl}}"],
-              "path": ["settings", "ip-allowlist"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings",
+                "ip-allowlist"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2433,7 +3917,725 @@
         }
       ]
     },
-
+    {
+      "name": "HR",
+      "item": [
+        {
+          "name": "List public holidays",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/hr/public-holidays?year=2025",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hr",
+                "public-holidays"
+              ],
+              "query": [
+                {
+                  "key": "year",
+                  "value": "2025",
+                  "disabled": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create public holiday",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/hr/public-holidays",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hr",
+                "public-holidays"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"UAE National Day\",\n  \"date\": \"2025-12-02\",\n  \"type\": \"public\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete public holiday",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/hr/public-holidays/{{holidayId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hr",
+                "public-holidays",
+                "{{holidayId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Seed UAE public holidays",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/hr/public-holidays/seed-uae",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hr",
+                "public-holidays",
+                "seed-uae"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"year\": 2025\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subscription",
+      "item": [
+        {
+          "name": "Get plan & usage",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/subscription",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Pricing calculator",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/subscription/pricing?employees=25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription",
+                "pricing"
+              ],
+              "query": [
+                {
+                  "key": "employees",
+                  "value": "25",
+                  "disabled": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Subscription events",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/subscription/events?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription",
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Stripe checkout",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/subscription/checkout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription",
+                "checkout"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"desiredQuota\": 25,\n  \"action\": \"upgrade\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update employee quota",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{baseUrl}}/subscription/quota",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription",
+                "quota"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newQuota\": 30\n}"
+            }
+          }
+        },
+        {
+          "name": "Email upgrade request",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/subscription/upgrade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription",
+                "upgrade"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"desiredQuota\": 20\n}"
+            }
+          }
+        },
+        {
+          "name": "Enterprise contact",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/subscription/enterprise-contact",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription",
+                "enterprise-contact"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contactName\": \"Ahmed Al Rashidi\",\n  \"contactEmail\": \"ahmed@company.ae\",\n  \"companySize\": \"500+\",\n  \"message\": \"We need unlimited HR capabilities for our group.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Send test subscription email",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/subscription/test-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription",
+                "test-email"
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"invoice\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Stripe webhook",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/subscription/webhook",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription",
+                "webhook"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "External API (ext)",
+      "description": "Third-party integration endpoints. Auth: URL contains {{appKey}}, header X-API-Secret: {{appSecret}}. No JWT needed.",
+      "item": [
+        {
+          "name": "App info & granted scopes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "description": "App secret (from Connected Apps \u2192 Regenerate Secret)"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}",
+              "host": [
+                "{{extUrl}}"
+              ],
+              "path": [
+                "{{appKey}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "List employees",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "description": "App secret (from Connected Apps \u2192 Regenerate Secret)"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/employees?page=1&limit=20",
+              "host": [
+                "{{extUrl}}"
+              ],
+              "path": [
+                "{{appKey}}",
+                "employees"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max 100"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Name / email search"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "active | inactive"
+                },
+                {
+                  "key": "department",
+                  "value": "",
+                  "description": "Filter by department"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Get employee",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "description": "App secret (from Connected Apps \u2192 Regenerate Secret)"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/employees/{{employeeId}}",
+              "host": [
+                "{{extUrl}}"
+              ],
+              "path": [
+                "{{appKey}}",
+                "employees",
+                "{{employeeId}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "List payroll runs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "description": "App secret (from Connected Apps \u2192 Regenerate Secret)"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/payroll?page=1&limit=20",
+              "host": [
+                "{{extUrl}}"
+              ],
+              "path": [
+                "{{appKey}}",
+                "payroll"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max 100"
+                },
+                {
+                  "key": "year",
+                  "value": "",
+                  "description": "Filter by year e.g. 2025"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Get payroll run",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "description": "App secret (from Connected Apps \u2192 Regenerate Secret)"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/payroll/{{payrollRunId}}",
+              "host": [
+                "{{extUrl}}"
+              ],
+              "path": [
+                "{{appKey}}",
+                "payroll",
+                "{{payrollRunId}}"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Get payslips for run",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "description": "App secret (from Connected Apps \u2192 Regenerate Secret)"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/payroll/{{payrollRunId}}/payslips?page=1&limit=20",
+              "host": [
+                "{{extUrl}}"
+              ],
+              "path": [
+                "{{appKey}}",
+                "payroll",
+                "{{payrollRunId}}",
+                "payslips"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max 100"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "List leave requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "description": "App secret (from Connected Apps \u2192 Regenerate Secret)"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/leave?page=1&limit=20",
+              "host": [
+                "{{extUrl}}"
+              ],
+              "path": [
+                "{{appKey}}",
+                "leave"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max 100"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "pending | approved | rejected"
+                },
+                {
+                  "key": "employeeId",
+                  "value": "",
+                  "description": "Filter by employee"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "List attendance records",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "description": "App secret (from Connected Apps \u2192 Regenerate Secret)"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/attendance?page=1&limit=20",
+              "host": [
+                "{{extUrl}}"
+              ],
+              "path": [
+                "{{appKey}}",
+                "attendance"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max 100"
+                },
+                {
+                  "key": "from",
+                  "value": "",
+                  "description": "Start date YYYY-MM-DD"
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "description": "End date YYYY-MM-DD"
+                },
+                {
+                  "key": "employeeId",
+                  "value": "",
+                  "description": "Filter by employee"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "present | absent | late | half_day"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "List documents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "description": "App secret (from Connected Apps \u2192 Regenerate Secret)"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/documents?page=1&limit=20",
+              "host": [
+                "{{extUrl}}"
+              ],
+              "path": [
+                "{{appKey}}",
+                "documents"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max 100"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "active | expired | expiring_soon"
+                },
+                {
+                  "key": "employeeId",
+                  "value": "",
+                  "description": "Filter by employee"
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "description": "passport | emirates_id | visa | ..."
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Get organization info",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "description": "App secret (from Connected Apps \u2192 Regenerate Secret)"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/organization",
+              "host": [
+                "{{extUrl}}"
+              ],
+              "path": [
+                "{{appKey}}",
+                "organization"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
     {
       "name": "Health",
       "item": [
@@ -2443,11 +4645,18 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/../health",
-              "host": ["{{baseUrl}}"],
-              "path": ["..", "health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "..",
+                "health"
+              ]
             }
           },
-          "auth": { "type": "noauth" }
+          "auth": {
+            "type": "noauth"
+          }
         },
         {
           "name": "Detailed health",
@@ -2455,11 +4664,19 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/../health/detailed",
-              "host": ["{{baseUrl}}"],
-              "path": ["..", "health", "detailed"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "..",
+                "health",
+                "detailed"
+              ]
             }
           },
-          "auth": { "type": "noauth" }
+          "auth": {
+            "type": "noauth"
+          }
         }
       ]
     }

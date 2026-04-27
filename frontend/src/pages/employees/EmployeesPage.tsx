@@ -91,7 +91,7 @@ const ActionMenu = memo(function ActionMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" className="text-muted-foreground">
+        <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={(e) => e.stopPropagation()}>
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -365,6 +365,7 @@ export function EmployeesPage() {
             pageSize={8}
             emptyMessage="No employees found."
             enableSelection
+            onRowClick={(row: Employee) => navigate(`/employees/${row.id}`)}
             getRowId={(row: Employee) => String(row.id)}
             bulkActions={(selected) => (
               <>

@@ -40,6 +40,7 @@ import { notificationsRoutes } from './modules/notifications/notifications.route
 import assetsRoutes from './modules/assets/assets.routes.js'
 import tenantsRoutes from './modules/tenants/tenants.routes.js'
 import appsRoutes from './modules/apps/apps.routes.js'
+import extRoutes from './modules/apps/ext.routes.js'
 import publicHolidaysRoutes from './modules/hr/public-holidays.routes.js'
 import salaryRevisionsRoutes from './modules/employees/salary-revisions.routes.js'
 import subscriptionRoutes from './modules/subscription/subscription.routes.js'
@@ -212,6 +213,7 @@ async function bootstrap() {
     await app.register(assetsRoutes, { prefix: '/api/v1/assets' })
     await app.register(tenantsRoutes, { prefix: '/api/v1/tenants' })
     await app.register(appsRoutes, { prefix: '/api/v1/apps' })
+    await app.register(extRoutes, { prefix: '/api/ext' })
     await app.register(publicHolidaysRoutes, { prefix: '/api/v1/hr' })
     await app.register(salaryRevisionsRoutes, { prefix: '/api/v1/employees' })
     await app.register(subscriptionRoutes, { prefix: '/api/v1/subscription' })

@@ -73,12 +73,21 @@ export default async function (fastify: any): Promise<void> {
                     email: { type: 'string', format: 'email' },
                     password: { type: 'string', minLength: 8 },
                     company: { type: 'string', minLength: 2 },
+                    industry: { type: 'string' },
+                    jurisdiction: { type: 'string', enum: ['mainland', 'freezone'] },
+                    tradeLicenseNo: { type: 'string' },
+                    phone: { type: 'string' },
+                    companySize: { type: 'string' },
                 },
             },
         },
     }, async (request, reply) => {
-        const { name, email, password, company } = request.body as { name: string; email: string; password: string; company: string }
-        const result = await registerTenant({ name, email, password, company })
+        const { name, email, password, company, industry, jurisdiction, tradeLicenseNo, phone, companySize } = request.body as {
+            name: string; email: string; password: string; company: string
+            industry?: string; jurisdiction?: 'mainland' | 'freezone'
+            tradeLicenseNo?: string; phone?: string; companySize?: string
+        }
+        const result = await registerTenant({ name, email, password, company, industry, jurisdiction, tradeLicenseNo, phone, companySize })
         if (!result.ok) {
             const reason = (result as { ok: false; reason: string }).reason
             if (reason === 'email_taken') {

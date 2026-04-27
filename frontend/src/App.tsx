@@ -43,9 +43,11 @@ const OrganizationsPage = lazy(() => import('@/pages/organizations/Organizations
 const NewOrganizationPage = lazy(() => import('@/pages/organizations/NewOrganizationPage').then(m => ({ default: m.NewOrganizationPage })))
 const TeamPage = lazy(() => import('@/pages/organizations/TeamPage').then(m => ({ default: m.TeamPage })))
 const ConnectedAppsPage = lazy(() => import('@/pages/organizations/ConnectedAppsPage').then(m => ({ default: m.ConnectedAppsPage })))
+const AppDetailPage = lazy(() => import('@/pages/organizations/AppDetailPage').then(m => ({ default: m.AppDetailPage })))
 const LeavePoliciesPage = lazy(() => import('@/pages/leave/LeavePoliciesPage').then(m => ({ default: m.LeavePoliciesPage })))
 const OnboardingUploadPage = lazy(() => import('@/pages/onboarding/OnboardingUploadPage').then(m => ({ default: m.OnboardingUploadPage })))
 const OrganizationSettingsPage = lazy(() => import('@/pages/organizations/OrganizationSettingsPage').then(m => ({ default: m.OrganizationSettingsPage })))
+const SubscriptionPage = lazy(() => import('@/pages/organizations/SubscriptionPage').then(m => ({ default: m.SubscriptionPage })))
 
 function PageLoader() {
   return (
@@ -158,8 +160,10 @@ export default function App() {
             <Route path="organizations/new" element={<RoleRoute routeKey="organizations/new"><NewOrganizationPage /></RoleRoute>} />
             <Route path="team" element={<RoleRoute routeKey="team"><TeamPage /></RoleRoute>} />
             <Route path="apps" element={<RoleRoute routeKey="apps"><ConnectedAppsPage /></RoleRoute>} />
+            <Route path="apps/:id" element={<RoleRoute routeKey="apps"><AppDetailPage /></RoleRoute>} />
             <Route path="leave-policies" element={<RoleRoute routeKey="leave-policies"><LeavePoliciesPage /></RoleRoute>} />
             <Route path="organization-settings" element={<RoleRoute routeKey="organization-settings"><OrganizationSettingsPage /></RoleRoute>} />
+            <Route path="subscription" element={<RoleRoute routeKey="organization-settings"><SubscriptionPage /></RoleRoute>} />
           </Route>
           {/* Public onboarding upload — no auth, no AppLayout */}
           <Route path="onboarding/upload/:token" element={<OnboardingUploadPage />} />

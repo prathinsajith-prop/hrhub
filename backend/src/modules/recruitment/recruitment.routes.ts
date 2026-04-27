@@ -298,7 +298,7 @@ export default async function (fastify: any): Promise<void> {
         } as never)
 
         // Mark the application completed (no more pipeline stage).
-        await updateApplication(tenantId, id, { stage: 'pre_boarding', notes: `${app.notes ?? ''}\n[Converted to employee ${employeeNo} on ${new Date().toISOString().slice(0, 10)}]`.trim() } as never)
+        await updateApplication(tenantId, id, { stage: 'hired', notes: `${app.notes ?? ''}\n[Converted to employee ${employeeNo} on ${new Date().toISOString().slice(0, 10)}]`.trim() } as never)
 
         recordActivity({
             tenantId,

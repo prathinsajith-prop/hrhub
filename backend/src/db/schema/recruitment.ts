@@ -38,7 +38,7 @@ export const jobApplications = pgTable('job_applications', {
     phone: text('phone'),
     nationality: text('nationality'),
     stage: text('stage').notNull().default('received')
-        .$type<'received' | 'screening' | 'interview' | 'assessment' | 'offer' | 'pre_boarding' | 'rejected'>(),
+        .$type<'received' | 'screening' | 'interview' | 'assessment' | 'offer' | 'pre_boarding' | 'hired' | 'rejected'>(),
     score: integer('score').default(0),
     experience: integer('experience'),
     expectedSalary: numeric('expected_salary', { precision: 12, scale: 2 }),

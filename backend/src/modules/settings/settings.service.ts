@@ -91,7 +91,7 @@ export async function inviteUser(tenantId: string, data: { name: string; email: 
 
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, data.email)).limit(1)
     if (existing) {
-        throw new Error('A user with this email already exists')
+        throw Object.assign(new Error('A user with this email already exists'), { statusCode: 409 })
     }
 
     const [user] = await db.insert(users).values({

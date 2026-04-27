@@ -29,6 +29,14 @@ export function useConnectedApps() {
     })
 }
 
+export function useApp(id: string | undefined) {
+    return useQuery({
+        queryKey: ['connected-apps', id],
+        queryFn: () => api.get<{ data: ConnectedApp }>(`/apps/${id}`).then(r => r.data),
+        enabled: !!id,
+    })
+}
+
 export function useCreateApp() {
     const qc = useQueryClient()
     return useMutation({

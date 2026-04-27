@@ -228,7 +228,7 @@ function VisaRowActions({ visa: v }: { visa: VisaApplication }) {
         variant="ghost"
         className="h-8 w-8"
         aria-label="Edit visa application"
-        onClick={() => navigate(`/visa/${v.id}`)}
+        onClick={(e) => { e.stopPropagation(); navigate(`/visa/${v.id}`) }}
       >
         <Edit2 className="h-3.5 w-3.5" />
       </Button>
@@ -274,7 +274,7 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
         variant="ghost"
         className="h-8 w-8"
         aria-label="View visa details"
-        onClick={() => setOpen(true)}
+        onClick={(e) => { e.stopPropagation(); setOpen(true) }}
       >
         <Eye className="h-3.5 w-3.5" />
       </Button>
@@ -375,6 +375,7 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
 
 export function VisaPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('all')
   const [newAppOpen, setNewAppOpen] = useState(false)
   const { data: visaData, isLoading } = useVisas({ limit: 50 })
@@ -512,6 +513,7 @@ export function VisaPage() {
             }}
             pageSize={8}
             enableSelection
+            onRowClick={(row: VisaApplication) => navigate(`/visa/${row.id}`)}
             getRowId={(row) => String(row.id)}
             bulkActions={(selected) => (
               <>

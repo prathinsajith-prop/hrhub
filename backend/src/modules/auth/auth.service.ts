@@ -211,7 +211,17 @@ export async function completeMfaLoginWithBackupCode(
 /**
  * Register a new tenant + super_admin user in a single transaction.
  */
-export async function registerTenant(input: { name: string; email: string; password: string; company: string }) {
+export async function registerTenant(input: {
+    name: string
+    email: string
+    password: string
+    company: string
+    industry?: string
+    jurisdiction?: 'mainland' | 'freezone'
+    tradeLicenseNo?: string
+    phone?: string
+    companySize?: string
+}) {
     const [existing] = await db
         .select({ id: users.id })
         .from(users)
@@ -224,9 +234,11 @@ export async function registerTenant(input: { name: string; email: string; passw
     return db.transaction(async (tx) => {
         const [tenant] = await tx.insert(tenants).values({
             name: input.company,
-            tradeLicenseNo: `PENDING-${crypto.randomBytes(8).toString('hex')}`,
-            jurisdiction: 'mainland',
-            industryType: 'general',
+            tradeLicenseNo: input.tradeLicenseNo?.trim() || `PENDING-${crypto.randomBytes(8).toString('hex')}`,
+            jurisdiction: input.jurisdiction ?? 'mainland',
+            industryType: input.industry ?? 'general',
+            phone: input.phone?.trim() || null,
+            companySize: input.companySize ?? null,
             subscriptionPlan: 'starter',
         }).returning()
 
@@ -235,7 +247,7 @@ export async function registerTenant(input: { name: string; email: string; passw
         await tx.insert(entities).values({
             tenantId: tenant.id,
             entityName: input.company,
-            licenseType: 'mainland',
+            licenseType: input.jurisdiction ?? 'mainland',
         })
 
         const [adminUser] = await tx.insert(users).values({
