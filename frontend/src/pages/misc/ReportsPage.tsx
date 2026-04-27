@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { CellContext } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
+import { labelFor } from '@/lib/enums'
 import { Calendar, Clock, CheckCircle2, XCircle, Download, BarChart3, Users, Shield, AlertTriangle, UserPlus, UserMinus, PauseCircle } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
@@ -68,7 +69,7 @@ function EmployeeStatusBadge({ status }: { status: string }) {
     return (
         <Badge variant={variant} className="capitalize text-[11px] gap-1 inline-flex items-center">
             <Icon className="h-3 w-3" />
-            {status.replace(/_/g, ' ')}
+            {labelFor(status)}
         </Badge>
     )
 }
@@ -271,7 +272,7 @@ export function ReportsPage() {
                                 { accessorKey: 'gross', header: 'Gross (AED)', cell: ({ getValue }: CellContext<PayrollTrendRow, unknown>) => <span className="text-sm font-semibold">{formatCurrency(getValue() as number)}</span> },
                                 { accessorKey: 'deductions', header: 'Deductions (AED)', cell: ({ getValue }: CellContext<PayrollTrendRow, unknown>) => <span className="text-sm text-destructive">{formatCurrency(getValue() as number)}</span> },
                                 { accessorKey: 'net', header: 'Net (AED)', cell: ({ getValue }: CellContext<PayrollTrendRow, unknown>) => <span className="text-sm font-bold text-success">{formatCurrency(getValue() as number)}</span> },
-                                { accessorKey: 'status', header: 'Status', cell: ({ getValue }: CellContext<PayrollTrendRow, unknown>) => <Badge variant="secondary" className="capitalize text-[11px]">{(getValue() as string).replace('_', ' ')}</Badge> },
+                                { accessorKey: 'status', header: 'Status', cell: ({ getValue }: CellContext<PayrollTrendRow, unknown>) => <Badge variant="secondary" className="capitalize text-[11px]">{labelFor(getValue() as string)}</Badge> },
                             ]}
                             data={payrollRows as unknown as PayrollTrendRow[]}
                             pageSize={12}

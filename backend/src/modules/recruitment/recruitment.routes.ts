@@ -1,6 +1,7 @@
 import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication } from './recruitment.service.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
+import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 import { db } from '../../db/index.js'
 import { entities } from '../../db/schema/index.js'
 import { and, eq } from 'drizzle-orm'
@@ -257,6 +258,9 @@ export default async function (fastify: any): Promise<void> {
         if (app.stage !== 'pre_boarding') {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Only pre-boarding candidates can be converted to employees' })
         }
+
+        // Enforce subscription quota before creating the employee record
+        await enforceEmployeeQuota(tenantId)
 
         const body = (request.body as Record<string, unknown>) ?? {}
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ChangeEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
 import { Label, Input } from '@/components/ui/primitives'
 import { NumericInput } from '@/components/ui/numeric-input'
@@ -401,6 +402,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     const [form, setForm] = useState<EmpForm>(EMPTY_FORM)
     const [errors, setErrors] = useState<Record<string, string>>({})
     const createEmployee = useCreateEmployee()
+    const navigate = useNavigate()
 
     const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
@@ -475,7 +477,14 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                     toast.success('Employee added', `${form.firstName} ${form.lastName} has been onboarded.`)
                     close()
                 },
-                onError: (err: Error & { message?: string }) => {
+                onError: (err: Error & { message?: string; statusCode?: number }) => {
+                    // Quota exceeded — guide the user to upgrade
+                    if (err?.statusCode === 402 || (err?.message ?? '').includes('Employee limit reached')) {
+                        toast.error('Employee limit reached', err?.message ?? 'Upgrade your plan to add more employees.')
+                        onOpenChange(false)
+                        navigate('/organization-settings', { state: { tab: 'subscription' } })
+                        return
+                    }
                     const fieldErrors = apiErrorToFieldMap(err)
                     if (Object.keys(fieldErrors).length) {
                         setErrors(fieldErrors)

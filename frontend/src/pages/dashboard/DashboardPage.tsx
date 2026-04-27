@@ -1,4 +1,5 @@
 import React from 'react'
+import { labelFor } from '@/lib/enums'
 import {
   Users,
   Briefcase,
@@ -418,7 +419,7 @@ export function DashboardPage() {
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-foreground truncate">{name}</p>
                           <p className="text-[10px] text-muted-foreground capitalize">
-                            {(v.visaType ?? '').replace(/_/g, ' ')}
+                            {labelFor(v.visaType)}
                           </p>
                         </div>
                         <Badge

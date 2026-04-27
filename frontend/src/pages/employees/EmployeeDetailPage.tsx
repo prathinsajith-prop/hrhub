@@ -1,5 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { labelFor } from '@/lib/enums'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -203,7 +204,7 @@ export function EmployeeDetailPage() {
               {e.fullName}
             </h1>
             <Badge variant={statusVariant[e.status] ?? 'secondary'} className="capitalize text-xs">
-              {e.status?.replace('_', ' ')}
+              {labelFor(e.status)}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -434,7 +435,7 @@ export function EmployeeDetailPage() {
                       <InfoRow label="Join Date" value={formatDate(e.joinDate)} icon={Calendar} />
                       <InfoRow label="Probation End" value={e.probationEndDate ? formatDate(e.probationEndDate) : '—'} icon={Clock} />
                       <InfoRow label="Contract End" value={e.contractEndDate ? formatDate(e.contractEndDate) : '—'} icon={Calendar} />
-                      <InfoRow label="Status" value={e.status?.replace('_', ' ')} icon={Shield} />
+                      <InfoRow label="Status" value={labelFor(e.status)} icon={Shield} />
                       <InfoRow label="Grade / Band" value={e.gradeLevel} />
                       <InfoRow label="Direct Manager" value={e.managerName} icon={User} />
                     </div>
@@ -473,7 +474,7 @@ export function EmployeeDetailPage() {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                     <div>
-                      <InfoRow label="Visa Type" value={e.visaType?.replace(/_/g, ' ')} icon={Plane} />
+                      <InfoRow label="Visa Type" value={labelFor(e.visaType)} icon={Plane} />
                       <InfoRow label="Visa Number" value={e.visaNumber} icon={Hash} />
                       <InfoRow label="Visa Issue Date" value={e.visaIssueDate ? formatDate(e.visaIssueDate) : '—'} icon={Calendar} />
                       <InfoRow label="Visa Expiry" value={e.visaExpiry ? formatDate(e.visaExpiry) : '—'} icon={Calendar} />
@@ -528,7 +529,7 @@ export function EmployeeDetailPage() {
                             <div>
                               <p className="text-sm font-medium">{doc.fileName ?? doc.docType ?? 'Untitled'}</p>
                               <p className="text-xs text-muted-foreground capitalize">
-                                {doc.category?.replace(/_/g, ' ')} · {formatDate(doc.createdAt)}
+                                {labelFor(doc.category)} · {formatDate(doc.createdAt)}
                               </p>
                             </div>
                           </div>
@@ -719,7 +720,7 @@ export function EmployeeDetailPage() {
                           const isUnlimited = b.entitled === -1
                           const pct = isUnlimited ? 0 : Math.min(100, Math.round((b.taken / (b.entitled || 1)) * 100))
                           const available = isUnlimited ? '∞' : b.available
-                          const label = type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')
+                          const label = labelFor(type)
                           const isLow = !isUnlimited && b.available <= 3 && b.entitled > 0
                           return (
                             <div key={type} className="rounded-lg border bg-card p-3 space-y-2">
@@ -775,7 +776,7 @@ export function EmployeeDetailPage() {
                       {(leaveHistoryData.data as Array<{ id: string; leaveType: string; startDate: string; endDate: string; days: number; status: string }>).map((req) => (
                         <div key={req.id} className="py-3 flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-sm font-medium capitalize">{req.leaveType.replace('_', ' ')} Leave</p>
+                            <p className="text-sm font-medium capitalize">{labelFor(req.leaveType)} Leave</p>
                             <p className="text-xs text-muted-foreground">
                               {formatDate(req.startDate)} — {formatDate(req.endDate)} · {req.days} day{req.days !== 1 ? 's' : ''}
                             </p>
@@ -872,7 +873,7 @@ export function EmployeeDetailPage() {
                                   <td className="px-4 py-2.5 font-medium">{formatDate(r.date)}</td>
                                   <td className="px-4 py-2.5">
                                     <Badge variant={statusVariants[r.status] ?? 'secondary'} className="text-[10px] capitalize">
-                                      {r.status.replace('_', ' ')}
+                                      {labelFor(r.status)}
                                     </Badge>
                                   </td>
                                   <td className="px-4 py-2.5 text-muted-foreground hidden sm:table-cell">{checkIn}</td>

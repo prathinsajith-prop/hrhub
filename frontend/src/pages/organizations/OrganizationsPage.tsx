@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { labelFor } from '@/lib/enums'
 import { Building2, Plus, Check, ArrowRightLeft } from 'lucide-react'
 import { useMyTenants, useSwitchTenant } from '@/hooks/useTenants'
 import { useAuthStore } from '@/store/authStore'
@@ -78,7 +79,7 @@ export function OrganizationsPage() {
                                                     {isActive && <Badge variant="secondary" className="text-[10px]">{t('organizations.current')}</Badge>}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground capitalize mt-0.5">
-                                                    {t(`team.roles.${m.role}`, { defaultValue: m.role.replace('_', ' ') })}
+                                                    {t(`team.roles.${m.role}`, { defaultValue: labelFor(m.role) })}
                                                     {m.subscriptionPlan ? ` · ${m.subscriptionPlan}` : ''}
                                                     {m.jurisdiction ? ` · ${m.jurisdiction}` : ''}
                                                 </div>

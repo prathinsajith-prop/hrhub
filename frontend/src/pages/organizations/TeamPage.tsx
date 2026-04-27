@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { labelFor } from '@/lib/enums'
 import { type ColumnDef } from '@tanstack/react-table'
 import { UserPlus, MoreHorizontal, Copy, Mail } from 'lucide-react'
 import { useTenantMembers, useInviteMember, useChangeMemberRole, useRemoveMember, type MemberRole, type MemberRow } from '@/hooks/useTenants'
@@ -102,7 +103,7 @@ export function TeamPage() {
             cell: ({ row }) => {
                 const m = row.original
                 if (!canManage || m.userId === me?.id) {
-                    return <Badge variant="outline" className="capitalize">{t(`team.roles.${m.role}`, { defaultValue: m.role.replace('_', ' ') })}</Badge>
+                    return <Badge variant="outline" className="capitalize">{t(`team.roles.${m.role}`, { defaultValue: labelFor(m.role) })}</Badge>
                 }
                 return (
                     <Select value={m.role} onValueChange={(v) => onRoleChange(m, v as MemberRole)}>

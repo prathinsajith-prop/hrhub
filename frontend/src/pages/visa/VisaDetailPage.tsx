@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { labelFor } from '@/lib/enums'
 import { ArrowLeft, CheckCircle2, Clock, AlertTriangle, XCircle, FileText, Hash } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -119,7 +120,7 @@ export function VisaDetailPage() {
         <PageWrapper>
             <PageHeader
                 title={visa.employeeName}
-                description={`${visa.visaType.replace(/_/g, ' ')} · Application ID: ${visa.id.slice(0, 8).toUpperCase()}`}
+                description={`${labelFor(visa.visaType)} · Application ID: ${visa.id.slice(0, 8).toUpperCase()}`}
                 actions={
                     <Button variant="ghost" size="sm" onClick={() => navigate('/visa')}>
                         <ArrowLeft className="h-4 w-4 mr-2" /> Back

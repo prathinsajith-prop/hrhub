@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight, ArrowRightLeft, Check, Settings2 } from 'lucide-react'
+import { labelFor } from '@/lib/enums'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -342,7 +343,7 @@ export function SiteHeader() {
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium truncate">{m.tenantName}</p>
                           <p className="text-[10px] text-muted-foreground capitalize truncate">
-                            {t(`team.roles.${m.role}`, { defaultValue: m.role.replace('_', ' ') })}
+                            {t(`team.roles.${m.role}`, { defaultValue: labelFor(m.role) })}
                           </p>
                         </div>
                         {m.tenantId === tenant?.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}

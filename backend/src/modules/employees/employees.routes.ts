@@ -12,6 +12,7 @@ import { db } from '../../db/index.js'
 import { entities, employees, tenants } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
 import { extname } from 'node:path'
+import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
@@ -64,6 +65,9 @@ export default async function (fastify: any): Promise<void> {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['Employees'] },
     }, async (request, reply) => {
+        // Enforce subscription quota before creating the employee
+        await enforceEmployeeQuota(request.user.tenantId)
+
         const body = validate(createEmployeeSchema, request.body)
         // Resolve entityId — use provided value or fall back to the tenant's first entity.
         // If the tenant has no entity yet (e.g. self-registered before the

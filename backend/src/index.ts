@@ -9,6 +9,7 @@ import multipart from '@fastify/multipart'
 import compress from '@fastify/compress'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
+import rawBody from 'fastify-raw-body'
 
 import { loadEnv } from './config/env.js'
 import { db } from './db/index.js'
@@ -41,6 +42,7 @@ import tenantsRoutes from './modules/tenants/tenants.routes.js'
 import appsRoutes from './modules/apps/apps.routes.js'
 import publicHolidaysRoutes from './modules/hr/public-holidays.routes.js'
 import salaryRevisionsRoutes from './modules/employees/salary-revisions.routes.js'
+import subscriptionRoutes from './modules/subscription/subscription.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -100,6 +102,8 @@ async function bootstrap() {
 
     // Task 2.3 — Reject mutating requests with wrong Content-Type
     app.addHook('preValidation', async (request: any, reply: any) => {
+        // Skip the Stripe webhook route — it sends application/json but needs raw body
+        if (request.url?.includes('/subscription/webhook')) return
         if (['POST', 'PATCH', 'PUT'].includes(request.method) && request.body !== undefined) {
             const ct: string = request.headers['content-type'] ?? ''
             if (!ct.includes('application/json') && !ct.includes('multipart/form-data')) {
@@ -111,6 +115,9 @@ async function bootstrap() {
             }
         }
     })
+
+    // Raw body capture (used by Stripe webhook signature verification)
+    await app.register(rawBody, { global: false, encoding: false, runFirst: true })
 
     // Multipart (file uploads — max 10 MB)
     await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } })
@@ -207,6 +214,7 @@ async function bootstrap() {
     await app.register(appsRoutes, { prefix: '/api/v1/apps' })
     await app.register(publicHolidaysRoutes, { prefix: '/api/v1/hr' })
     await app.register(salaryRevisionsRoutes, { prefix: '/api/v1/employees' })
+    await app.register(subscriptionRoutes, { prefix: '/api/v1/subscription' })
 
     // Health check — basic
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))

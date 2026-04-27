@@ -1,5 +1,6 @@
 import { useMemo, useState, memo } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
+import { labelFor } from '@/lib/enums'
 import {
   MoreHorizontal,
   UserPlus,
@@ -242,7 +243,7 @@ export function EmployeesPage() {
         const s = getValue() as string
         return (
           <Badge variant={statusVariant[s] ?? 'secondary'} className="capitalize text-[11px]">
-            {s.replace('_', ' ')}
+            {labelFor(s)}
           </Badge>
         )
       },

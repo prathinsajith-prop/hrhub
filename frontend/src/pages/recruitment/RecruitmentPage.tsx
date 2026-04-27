@@ -1,6 +1,7 @@
 import { useMemo, useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { labelFor } from '@/lib/enums'
 import { Plus, Briefcase, Users, Clock, TrendingUp, Star, DollarSign, Eye, Edit2, UserCheck } from 'lucide-react'
 import {
   DndContext,
@@ -266,7 +267,7 @@ const buildJobColumns = (onEdit: (job: Job) => void): ColumnDef<Job>[] => [
       }
       return (
         <Badge variant="outline" className={cn('capitalize text-[11px]', config[s] || config.closed)}>
-          {s.replace('_', ' ')}
+          {labelFor(s)}
         </Badge>
       )
     },
@@ -553,7 +554,7 @@ export function RecruitmentPage() {
     const c = candidates.find((c) => c.id === id)
     // Toast immediately — the optimistic cache update already reflects the move,
     // so the user sees the card jump and the confirmation in the same frame.
-    if (c) toast.success('Candidate moved', `${c.name} moved to ${newStage.replace('_', ' ')} stage.`)
+    if (c) toast.success('Candidate moved', `${c.name} moved to ${labelFor(newStage)} stage.`)
     updateStage.mutate(
       { id, stage: newStage },
       {

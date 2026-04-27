@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, timestamp, jsonb } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, boolean, timestamp, jsonb, integer } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { users } from './users.js'
 import { employees } from './employees.js'
@@ -11,6 +11,9 @@ export const tenants = pgTable('tenants', {
     industryType: text('industry_type').notNull(),
     subscriptionPlan: text('subscription_plan').notNull().default('starter')
         .$type<'starter' | 'growth' | 'enterprise'>(),
+    // Maximum active employees allowed. NULL = unlimited (enterprise only).
+    // starter default = 5, growth = custom (set by sales on upgrade), enterprise = null
+    employeeQuota: integer('employee_quota').default(5),
     logoUrl: text('logo_url'),
     ipAllowlist: text('ip_allowlist').array().default([]),
     regionalSettings: jsonb('regional_settings').$type<{

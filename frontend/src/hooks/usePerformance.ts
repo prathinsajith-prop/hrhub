@@ -27,7 +27,10 @@ export interface PerformanceReview {
 export function usePerformanceReviews(employeeId?: string) {
     return useQuery({
         queryKey: ['performance', employeeId],
-        queryFn: () => api.get<PerformanceReview[]>(`/performance${employeeId ? `?employeeId=${employeeId}` : ''}`),
+        queryFn: () =>
+            api
+                .get<{ data: PerformanceReview[] }>(`/performance${employeeId ? `?employeeId=${employeeId}` : ''}`)
+                .then((res) => res.data ?? []),
     })
 }
 

@@ -1,32 +1,77 @@
 import type { UserRole } from '@/types'
 
+// ─── Role hierarchy ───────────────────────────────────────────────────────────
+/** Numeric level per role — higher = more access. */
+export const ROLE_HIERARCHY: Record<UserRole, number> = {
+  employee: 1,
+  dept_head: 2,
+  pro_officer: 3,
+  hr_manager: 4,
+  super_admin: 5,
+}
+
+export function getRoleLevel(role: UserRole): number {
+  return ROLE_HIERARCHY[role] ?? 0
+}
+
+/** True when the user's role level is ≥ the required role level. */
+export function hasMinRole(userRole: UserRole, minRole: UserRole): boolean {
+  return getRoleLevel(userRole) >= getRoleLevel(minRole)
+}
+
 // ─── Action definitions ───────────────────────────────────────────────────────
 export type Permission =
+  // People & workforce
   | 'manage_employees'
   | 'view_employees'
+  // Recruitment
   | 'manage_recruitment'
+  | 'view_recruitment'
+  // Onboarding
   | 'manage_onboarding'
   | 'view_onboarding'
+  // Visa
   | 'manage_visa'
+  | 'view_visa'
+  // Documents
   | 'manage_documents'
   | 'view_documents'
+  // Payroll
   | 'manage_payroll'
   | 'view_payroll'
+  // Leave
   | 'manage_leave'
   | 'approve_leave'
   | 'view_own_leave'
+  // Compliance
   | 'manage_compliance'
+  | 'view_compliance'
+  // Reports
   | 'view_reports'
+  | 'export_reports'
+  // Settings & admin
   | 'manage_settings'
   | 'manage_users'
   | 'view_audit_log'
+  // Attendance
   | 'manage_attendance'
   | 'view_own_attendance'
+  // Performance
   | 'manage_performance'
   | 'view_own_performance'
+  // Assets
   | 'manage_assets'
+  | 'view_assets'
+  // Exit management
   | 'manage_exit'
+  | 'view_exit'
+  // Org chart
   | 'view_org_chart'
+  // Workspace / app management
+  | 'manage_team'
+  | 'manage_org'
+  | 'manage_apps'
+  | 'invite_members'
 
 // ─── Route keys — must match App.tsx path strings exactly ────────────────────
 export type RouteKey =
@@ -64,59 +109,106 @@ export type RouteKey =
 // ─── Permission matrix ────────────────────────────────────────────────────────
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   super_admin: [
+    // People
     'manage_employees', 'view_employees',
-    'manage_recruitment',
+    // Recruitment
+    'manage_recruitment', 'view_recruitment',
+    // Onboarding
     'manage_onboarding', 'view_onboarding',
-    'manage_visa',
+    // Visa
+    'manage_visa', 'view_visa',
+    // Documents
     'manage_documents', 'view_documents',
+    // Payroll
     'manage_payroll', 'view_payroll',
+    // Leave
     'manage_leave', 'approve_leave', 'view_own_leave',
-    'manage_compliance',
-    'view_reports',
+    // Compliance
+    'manage_compliance', 'view_compliance',
+    // Reports
+    'view_reports', 'export_reports',
+    // Settings & admin
     'manage_settings', 'manage_users',
     'view_audit_log',
+    // Attendance
     'manage_attendance', 'view_own_attendance',
+    // Performance
     'manage_performance', 'view_own_performance',
-    'manage_assets',
-    'manage_exit',
+    // Assets
+    'manage_assets', 'view_assets',
+    // Exit
+    'manage_exit', 'view_exit',
+    // Misc
     'view_org_chart',
+    // Workspace management
+    'manage_team', 'manage_org', 'manage_apps', 'invite_members',
   ],
   hr_manager: [
+    // People
     'manage_employees', 'view_employees',
-    'manage_recruitment',
+    // Recruitment
+    'manage_recruitment', 'view_recruitment',
+    // Onboarding
     'manage_onboarding', 'view_onboarding',
+    // Documents
     'manage_documents', 'view_documents',
+    // Payroll
     'manage_payroll', 'view_payroll',
+    // Leave
     'manage_leave', 'approve_leave', 'view_own_leave',
-    'manage_compliance',
-    'view_reports',
+    // Compliance
+    'manage_compliance', 'view_compliance',
+    // Reports
+    'view_reports', 'export_reports',
+    // Settings & admin
     'manage_settings',
     'view_audit_log',
+    // Attendance
     'manage_attendance', 'view_own_attendance',
+    // Performance
     'manage_performance', 'view_own_performance',
-    'manage_assets',
-    'manage_exit',
+    // Assets
+    'manage_assets', 'view_assets',
+    // Exit
+    'manage_exit', 'view_exit',
+    // Misc
     'view_org_chart',
+    // Workspace management
+    'manage_team', 'manage_org', 'manage_apps', 'invite_members',
   ],
   pro_officer: [
+    // People (read-only)
     'view_employees',
-    'manage_visa',
+    // Visa
+    'manage_visa', 'view_visa',
+    // Documents
     'manage_documents', 'view_documents',
-    'manage_compliance',
+    // Compliance
+    'manage_compliance', 'view_compliance',
+    // Reports (view only)
     'view_reports',
+    // Own data
     'view_own_leave',
     'view_own_attendance',
     'view_own_performance',
+    // Misc
     'view_org_chart',
   ],
   dept_head: [
+    // People (read-only)
     'view_employees',
+    // Onboarding (read + manage)
     'view_onboarding', 'manage_onboarding',
-    'approve_leave', 'view_own_leave',
-    'manage_attendance', 'view_own_attendance',
-    'manage_performance', 'view_own_performance',
-    'view_org_chart',
+    // Documents (read-only)
     'view_documents',
+    // Leave
+    'approve_leave', 'view_own_leave',
+    // Attendance
+    'manage_attendance', 'view_own_attendance',
+    // Performance
+    'manage_performance', 'view_own_performance',
+    // Misc
+    'view_org_chart',
   ],
   employee: [
     'view_own_leave',
@@ -169,22 +261,39 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
 export const ALL_ROLES: UserRole[] = ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee']
 
 export const ALL_PERMISSIONS: Permission[] = [
+  // People
   'manage_employees', 'view_employees',
-  'manage_recruitment',
+  // Recruitment
+  'manage_recruitment', 'view_recruitment',
+  // Onboarding
   'manage_onboarding', 'view_onboarding',
-  'manage_visa',
+  // Visa
+  'manage_visa', 'view_visa',
+  // Documents
   'manage_documents', 'view_documents',
+  // Payroll
   'manage_payroll', 'view_payroll',
+  // Leave
   'manage_leave', 'approve_leave', 'view_own_leave',
-  'manage_compliance',
-  'view_reports',
+  // Compliance
+  'manage_compliance', 'view_compliance',
+  // Reports
+  'view_reports', 'export_reports',
+  // Settings & admin
   'manage_settings', 'manage_users',
   'view_audit_log',
+  // Attendance
   'manage_attendance', 'view_own_attendance',
+  // Performance
   'manage_performance', 'view_own_performance',
-  'manage_assets',
-  'manage_exit',
+  // Assets
+  'manage_assets', 'view_assets',
+  // Exit
+  'manage_exit', 'view_exit',
+  // Misc
   'view_org_chart',
+  // Workspace management
+  'manage_team', 'manage_org', 'manage_apps', 'invite_members',
 ]
 
 /** Read-only snapshot of the role → permissions matrix (currently hard-coded). */

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { labelFor } from '@/lib/enums'
 import {
     Building2,
     Users,
@@ -147,7 +148,7 @@ function CompanyTab() {
                         <p className="font-semibold truncate">{company?.name ?? tenant?.name ?? 'HRHub Demo Company'}</p>
                         <p className="text-sm text-muted-foreground capitalize truncate">
                             {company?.jurisdiction ?? 'UAE'}
-                            {company?.industryType ? ` · ${company.industryType.replace(/_/g, ' ')}` : ''}
+                            {company?.industryType ? ` · ${labelFor(company.industryType)}` : ''}
                         </p>
                     </div>
                     <Badge variant="secondary" className="capitalize shrink-0">
@@ -340,7 +341,7 @@ function ProfileTab() {
                         <p className="text-sm font-semibold truncate">{user?.name ?? '—'}</p>
                         <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
                         <p className="text-[11px] text-muted-foreground capitalize mt-1">
-                            {(user?.role ?? '').replace(/_/g, ' ')}
+                            {labelFor(user?.role)}
                             {user?.department ? ` · ${user.department}` : ''}
                         </p>
                         <div className="mt-3 flex items-center gap-2">
@@ -368,7 +369,7 @@ function ProfileTab() {
                     </div>
                     <div>
                         <Label htmlFor="profile-role">Role</Label>
-                        <Input id="profile-role" value={(user?.role ?? '').replace(/_/g, ' ')} disabled className="capitalize" />
+                        <Input id="profile-role" value={labelFor(user?.role)} disabled className="capitalize" />
                     </div>
                 </div>
 
@@ -456,7 +457,7 @@ function UsersTab() {
     const [deactivateTarget, setDeactivateTarget] = useState<{ id: string; name: string; active: boolean } | null>(null)
 
     const getRoleStyle = (role: string) => roles.find((r) => r.id === role)?.color ?? 'bg-gray-50 text-gray-600'
-    const getRoleLabel = (role: string) => roles.find((r) => r.id === role)?.label ?? role.replace(/_/g, ' ')
+    const getRoleLabel = (role: string) => roles.find((r) => r.id === role)?.label ?? labelFor(role)
 
     async function handleInvite(e: React.FormEvent) {
         e.preventDefault()
@@ -1362,9 +1363,9 @@ function LoginHistoryCard() {
                                     {deviceIcon(h.deviceType)}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="font-medium capitalize">{h.eventType.replace('_', ' ')}</p>
+                                    <p className="font-medium capitalize">{labelFor(h.eventType)}</p>
                                     <p className="text-xs text-muted-foreground truncate">{h.browser} on {h.os} · {h.ipAddress ?? 'unknown IP'}</p>
-                                    {h.failureReason && <p className="text-xs text-red-500">{h.failureReason.replace('_', ' ')}</p>}
+                                    {h.failureReason && <p className="text-xs text-red-500">{labelFor(h.failureReason)}</p>}
                                 </div>
                                 <div className="text-xs text-muted-foreground whitespace-nowrap">
                                     {new Date(h.createdAt).toLocaleString('en-AE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}

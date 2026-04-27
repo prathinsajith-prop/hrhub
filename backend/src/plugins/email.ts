@@ -1,10 +1,11 @@
 /**
- * Email service — supports SMTP (Mailpit in dev, real SMTP in prod) and Resend.
- * Provider is selected by EMAIL_PROVIDER env var (smtp | resend).
+ * Email service — supports SMTP (Mailpit in dev, real SMTP in prod), Resend, and Gmail.
+ * Provider is selected by EMAIL_PROVIDER env var (smtp | resend | gmail).
  *
  * Production checklist:
- *   • EMAIL_PROVIDER=resend  + RESEND_API_KEY=re_...      (recommended)
- *   • EMAIL_PROVIDER=smtp    + SMTP_HOST/PORT/USER/PASS   (Gmail, SES, etc.)
+ *   • EMAIL_PROVIDER=resend  + RESEND_API_KEY=re_...                    (recommended)
+ *   • EMAIL_PROVIDER=gmail   + GMAIL_USER + GMAIL_APP_PASSWORD            (Google App Password)
+ *   • EMAIL_PROVIDER=smtp    + SMTP_HOST/PORT/USER/PASS                   (SES, Mailpit, etc.)
  *   • EMAIL_FROM must match a verified sender on your provider.
  *   • Run verifyEmailConfig() at boot to fail fast on misconfig.
  */
@@ -26,6 +27,16 @@ function getTransporter(): nodemailer.Transporter {
             port: 465,
             secure: true,
             auth: { user: 'resend', pass: env.RESEND_API_KEY },
+        })
+    } else if (env.EMAIL_PROVIDER === 'gmail') {
+        if (!env.GMAIL_USER || !env.GMAIL_APP_PASSWORD) {
+            throw new Error('EMAIL_PROVIDER=gmail but GMAIL_USER or GMAIL_APP_PASSWORD is not set')
+        }
+        transporter = nodemailer.createTransport({
+            host: 'smtp.gmail.com',
+            port: 465,
+            secure: true,
+            auth: { user: env.GMAIL_USER, pass: env.GMAIL_APP_PASSWORD },
         })
     } else {
         // In production, refuse to start with default Mailpit settings
@@ -86,6 +97,10 @@ export async function sendEmail(opts: EmailOptions): Promise<SendResult> {
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error(`[email] Failed to send to ${opts.to}:`, msg)
+        if (env.NODE_ENV !== 'production' && env.EMAIL_DEV_FALLBACK) {
+            console.warn(`[email] DEV_FALLBACK active — returning ok despite transport failure. Subject="${opts.subject}"`)
+            return { ok: true, messageId: 'dev-fallback' }
+        }
         return { ok: false, error: msg }
     }
 }
@@ -97,7 +112,11 @@ export async function sendEmail(opts: EmailOptions): Promise<SendResult> {
 export async function verifyEmailConfig(): Promise<{ ok: boolean; provider: string; host: string; from: string; error?: string }> {
     const env = loadEnv()
     const provider = env.EMAIL_PROVIDER
-    const host = provider === 'resend' ? 'smtp.resend.com' : `${env.SMTP_HOST}:${env.SMTP_PORT}`
+    const host = provider === 'resend'
+        ? 'smtp.resend.com'
+        : provider === 'gmail'
+            ? 'smtp.gmail.com'
+            : `${env.SMTP_HOST}:${env.SMTP_PORT}`
     try {
         const t = getTransporter()
         await t.verify()

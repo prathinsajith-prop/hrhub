@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { labelFor } from '@/lib/enums'
 import { Clock, CheckCircle2, Plus, ArrowLeft, Trash2, Mail, Phone, FileText, Activity, Sparkles, Send, Upload, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
@@ -650,7 +651,7 @@ function StepDocPanel({
                                         variant={d.status === 'valid' ? 'success' : d.status === 'expired' ? 'destructive' : 'secondary'}
                                         className="text-[10px] capitalize shrink-0"
                                     >
-                                        {d.status?.replace(/_/g, ' ')}
+                                        {labelFor(d.status)}
                                     </Badge>
                                 </div>
                             ))}
@@ -810,7 +811,7 @@ function DocumentsTab({ checklist }: { checklist: OnboardingChecklist }) {
                                         {d.expiryDate ? ` · Expires ${formatDate(d.expiryDate)}` : ''}
                                     </p>
                                 </div>
-                                <Badge variant="secondary" className="text-[10px] capitalize shrink-0">{d.status?.replace(/_/g, ' ')}</Badge>
+                                <Badge variant="secondary" className="text-[10px] capitalize shrink-0">{labelFor(d.status)}</Badge>
                             </div>
                         ))}
                     </div>

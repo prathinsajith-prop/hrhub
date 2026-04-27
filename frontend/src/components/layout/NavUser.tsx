@@ -6,6 +6,9 @@ import {
   UserCircleIcon,
   ShieldIcon,
   GlobeIcon,
+  Building2Icon,
+  CheckIcon,
+  Loader2Icon,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -16,6 +19,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu"
 import {
   SidebarMenu,
@@ -27,6 +34,10 @@ import { useAuthStore } from "@/store/authStore"
 import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { applyLanguageDirection } from "@/lib/i18n"
+import { useMyTenants, useSwitchTenant } from "@/hooks/useTenants"
+import { useState } from "react"
+import { labelFor } from "@/lib/enums"
+import { cn } from "@/lib/utils"
 
 export function NavUser({
   user,
@@ -34,9 +45,13 @@ export function NavUser({
   user: { name: string; email: string; avatar: string }
 }) {
   const { isMobile } = useSidebar()
-  const { logout } = useAuthStore()
+  const { logout, tenant } = useAuthStore()
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
+  const [switchingId, setSwitchingId] = useState<string | null>(null)
+
+  const { data: tenants } = useMyTenants()
+  const switchTenant = useSwitchTenant()
 
   const initials = user.name
     .split(" ")
@@ -56,7 +71,17 @@ export function NavUser({
     applyLanguageDirection(next)
   }
 
+  const handleSwitchOrg = (tenantId: string) => {
+    if (tenantId === tenant?.id || switchingId) return
+    setSwitchingId(tenantId)
+    switchTenant.mutate(tenantId, {
+      onSuccess: () => { window.location.assign('/dashboard') },
+      onError: () => setSwitchingId(null),
+    })
+  }
+
   const isArabic = i18n.language === 'ar'
+  const myTenants = tenants ?? []
 
   return (
     <SidebarMenu>
@@ -76,7 +101,7 @@ export function NavUser({
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{user.name}</span>
                 <span className="truncate text-xs text-sidebar-foreground/60">
-                  {user.email}
+                  {tenant?.name ?? user.email}
                 </span>
               </div>
               <ChevronsUpDown className="ml-auto size-4 text-sidebar-foreground/50" />
@@ -96,14 +121,71 @@ export function NavUser({
                     {initials}
                   </AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
+                <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
                   <span className="truncate font-semibold">{user.name}</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {user.email}
-                  </span>
+                  <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                  {tenant?.name && (
+                    <span className="truncate text-[11px] text-primary/70 font-medium mt-0.5">
+                      {tenant.name}
+                    </span>
+                  )}
                 </div>
               </div>
             </DropdownMenuLabel>
+
+            {/* Organisation switcher — only shown when user belongs to >1 org */}
+            {myTenants.length > 1 && (
+              <>
+                <DropdownMenuSeparator className="my-1.5" />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="gap-2.5 rounded-md h-9 px-2.5 cursor-pointer">
+                    <Building2Icon className="size-4 text-muted-foreground" />
+                    <span className="flex-1 text-sm">Switch Organisation</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent className="min-w-52 rounded-xl p-1.5 shadow-lg">
+                      {myTenants.map((org) => {
+                        const isCurrent = org.tenantId === tenant?.id
+                        const isSwitching = switchingId === org.tenantId
+                        return (
+                          <DropdownMenuItem
+                            key={org.tenantId}
+                            onClick={() => handleSwitchOrg(org.tenantId)}
+                            disabled={isCurrent || !!switchingId}
+                            className={cn(
+                              "gap-2.5 rounded-md px-2.5 py-2 cursor-pointer",
+                              isCurrent && "bg-primary/8 text-primary font-medium cursor-default",
+                            )}
+                          >
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border bg-background overflow-hidden">
+                              {org.logoUrl ? (
+                                <img src={org.logoUrl} alt={org.tenantName} className="h-full w-full object-contain" />
+                              ) : (
+                                <Building2Icon className="size-3.5 text-muted-foreground" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="truncate text-sm leading-tight">{org.tenantName}</p>
+                              <p className="truncate text-[11px] text-muted-foreground capitalize leading-tight">
+                                {labelFor(org.role)}
+                              </p>
+                            </div>
+                            <span className="ml-auto shrink-0">
+                              {isSwitching ? (
+                                <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+                              ) : isCurrent ? (
+                                <CheckIcon className="size-3.5 text-primary" />
+                              ) : null}
+                            </span>
+                          </DropdownMenuItem>
+                        )
+                      })}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
+              </>
+            )}
+
             <DropdownMenuSeparator className="my-1.5" />
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={() => navigate('/settings')} className="gap-2.5 rounded-md h-9 px-2.5 cursor-pointer">

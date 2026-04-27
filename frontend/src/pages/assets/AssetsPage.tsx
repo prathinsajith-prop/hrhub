@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
+import { labelFor } from '@/lib/enums'
 import {
     Package, Plus, CheckCircle2, Wrench,
     Edit2, Trash2, UserPlus, RotateCcw, History
@@ -410,7 +411,7 @@ function MaintenanceDialog({
                                 <div className="flex items-center justify-between gap-2">
                                     <p className="font-medium">{r.issueDescription}</p>
                                     <Badge variant={r.status === 'resolved' ? 'success' : r.status === 'in_progress' ? 'warning' : 'secondary'}>
-                                        {r.status.replace('_', ' ')}
+                                        {labelFor(r.status)}
                                     </Badge>
                                 </div>
                                 {r.notes && <p className="text-muted-foreground">{r.notes}</p>}

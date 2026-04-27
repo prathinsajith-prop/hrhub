@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { labelFor } from '@/lib/enums'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Plane, Clock, AlertTriangle, CheckCircle2, Plus, RefreshCw, Eye, Edit2 } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
@@ -97,7 +98,7 @@ function VisaTimeline({ application }: { application: VisaApplication }) {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="font-semibold text-sm text-foreground">{application.employeeName}</h3>
-          <p className="text-xs text-muted-foreground capitalize">{application.visaType.replace('_', ' ')}</p>
+          <p className="text-xs text-muted-foreground capitalize">{labelFor(application.visaType)}</p>
         </div>
         <Badge variant="outline" className={statusStyles[application.status]}>
           {statusLabel[application.status]}
@@ -158,7 +159,7 @@ const columns: ColumnDef<VisaApplication>[] = [
     accessorKey: 'visaType',
     header: 'Visa Type',
     cell: ({ getValue }) => (
-      <span className="text-sm capitalize text-foreground">{(getValue() as string).replace(/_/g, ' ')}</span>
+      <span className="text-sm capitalize text-foreground">{labelFor(getValue() as string)}</span>
     ),
   },
   {
@@ -282,7 +283,7 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader className="mb-4">
             <SheetTitle>{v.employeeName}</SheetTitle>
-            <p className="text-sm text-muted-foreground capitalize">{v.visaType.replace(/_/g, ' ')}</p>
+            <p className="text-sm text-muted-foreground capitalize">{labelFor(v.visaType)}</p>
           </SheetHeader>
 
           {/* Priority badge */}
@@ -396,8 +397,8 @@ export function VisaPage() {
     const headers = ['Employee', 'Visa Type', 'Status', 'Current Step', 'Total Steps', 'Urgency', 'Expiry Date', 'MOHRE Ref', 'GDRFA Ref']
     const rows = selected.map(v => [
       v.employeeName ?? '',
-      v.visaType.replace(/_/g, ' '),
-      v.status.replace(/_/g, ' '),
+      v.visaType ? labelFor(v.visaType) : '',
+      v.status ? labelFor(v.status) : '',
       String(v.currentStep),
       String(v.totalSteps),
       v.urgencyLevel ?? '',

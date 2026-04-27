@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { labelFor } from '@/lib/enums'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -435,7 +436,7 @@ function ActivityRow({ log }: { log: ActivityLog }) {
                                 {log.actorRole && (
                                     <span className="inline-flex items-center gap-1">
                                         <UserIcon className="h-3 w-3" />
-                                        <span className="capitalize">{log.actorRole.replace('_', ' ')}</span>
+                                        <span className="capitalize">{labelFor(log.actorRole)}</span>
                                     </span>
                                 )}
                                 {log.ipAddress && (

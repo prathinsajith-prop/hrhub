@@ -10,7 +10,7 @@ import {
     useDeleteApp,
     type ConnectedApp,
 } from '@/hooks/useApps'
-import { useAuthStore } from '@/store/authStore'
+import { usePermissions } from '@/hooks/usePermissions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,8 +27,8 @@ import { formatDate } from '@/lib/utils'
 
 export function ConnectedAppsPage() {
     const { t } = useTranslation()
-    const me = useAuthStore((s) => s.user)
-    const canManage = me?.role === 'super_admin' || me?.role === 'hr_manager'
+    const { can } = usePermissions()
+    const canManage = can('manage_apps')
     const { data: apps, isLoading } = useConnectedApps()
     const createMut = useCreateApp()
     const updateMut = useUpdateApp()

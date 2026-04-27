@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { labelFor } from '@/lib/enums'
 import {
     CheckCircle2, XCircle, AlertTriangle, FileText, User, Calendar, Clock, Eye,
     Download, ExternalLink, Loader2, Shield, History,
@@ -201,7 +202,7 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
                                                     <Icon className="h-3 w-3" />
                                                 </span>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-[11px] font-medium text-gray-800 capitalize">{e.action.replace('_', ' ')}</p>
+                                                    <p className="text-[11px] font-medium text-gray-800 capitalize">{labelFor(e.action)}</p>
                                                     <p className="text-[10px] text-gray-500 truncate">
                                                         {e.actorLabel ?? 'system'} · {formatDate(e.createdAt)}
                                                     </p>

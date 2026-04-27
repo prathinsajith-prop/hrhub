@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { labelFor } from '@/lib/enums'
 import { CheckCircle2, Clock, Upload, FileText, AlertCircle, ChevronDown, ChevronUp, CalendarDays, Building2, XCircle } from 'lucide-react'
 import { useOnboardingUploadInfo, useOnboardingPublicUpload, type UploadInfoStep } from '@/hooks/useOnboarding'
 import { DOC_TYPE_CATALOG, type DocCategory } from '@/lib/docTypes'
@@ -248,7 +249,7 @@ function StepUploadArea({
                                             <span className={cn(
                                                 'text-[10px] capitalize px-1.5 py-0.5 rounded shrink-0',
                                                 rejected ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-400',
-                                            )}>{d.status.replace('_', ' ')}</span>
+                                            )}>{labelFor(d.status)}</span>
                                         </div>
                                     )
                                 })}
@@ -271,7 +272,7 @@ function StepUploadArea({
                                     <option value="">Select category…</option>
                                     {(Object.keys(DOC_TYPE_CATALOG) as DocCategory[]).map(cat => (
                                         <option key={cat} value={cat} className="capitalize">
-                                            {cat.charAt(0).toUpperCase() + cat.slice(1).replace(/_/g, ' ')}
+                                            {labelFor(cat)}
                                         </option>
                                     ))}
                                 </select>

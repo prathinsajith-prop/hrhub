@@ -20,7 +20,7 @@ const envSchema = z.object({
     S3_SECRET_KEY: z.string().default('hrhub_minio_secret'),
     S3_PUBLIC_URL: z.string().default('http://localhost:9000/hrhub'),
     // Email
-    EMAIL_PROVIDER: z.enum(['smtp', 'resend']).default('smtp'),
+    EMAIL_PROVIDER: z.enum(['smtp', 'resend', 'gmail']).default('smtp'),
     EMAIL_FROM: z.string().email().default('noreply@hrhub.ae'),
     EMAIL_FROM_NAME: z.string().default('HRHub'),
     SMTP_HOST: z.string().default('localhost'),
@@ -28,11 +28,21 @@ const envSchema = z.object({
     SMTP_USER: z.string().default(''),
     SMTP_PASS: z.string().default(''),
     RESEND_API_KEY: z.string().default(''),
+    GMAIL_USER: z.string().default(''),
+    GMAIL_APP_PASSWORD: z.string().default(''),
+    // When true, in development a transport error logs the message and returns ok
+    // instead of failing — useful when SMTP is unreachable but you still want UX flows to proceed.
+    EMAIL_DEV_FALLBACK: z.coerce.boolean().default(false),
     // Redis — leave empty to disable BullMQ workers (payroll runs synchronously,
     // expiry alert schedulers are skipped). Set to redis://… to enable.
     REDIS_URL: z.string().default(''),
     // App
     APP_URL: z.string().url().default('http://localhost:5174'),
+    // Sales / subscription
+    SALES_EMAIL: z.string().email().default('sales@hrhub.ae'),
+    // Stripe — leave empty to disable self-service checkout (falls back to email request flow)
+    STRIPE_SECRET_KEY: z.string().default(''),
+    STRIPE_WEBHOOK_SECRET: z.string().default(''),
     // Observability (optional). If SENTRY_DSN is set, the error handler
     // will forward 5xx errors — requires `@sentry/node` package.
     SENTRY_DSN: z.string().default(''),
