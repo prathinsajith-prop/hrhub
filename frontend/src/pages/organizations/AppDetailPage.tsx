@@ -8,7 +8,7 @@ import {
 import {
     ArrowLeft, RefreshCw, Edit2, KeyRound, Trash2, Activity,
     CheckCircle2, AlertTriangle, Zap, Copy, AlertCircle,
-    BarChart2, TrendingUp, Layers, Globe, Hash, PieChart, ShieldCheck, ShieldOff, MoreHorizontal,
+    BarChart2, TrendingUp, Layers, Hash, PieChart, ShieldCheck, ShieldOff, MoreHorizontal,
     Terminal, BookOpen, ChevronRight,
 } from 'lucide-react'
 import { useApp, useUpdateApp, useRegenerateAppSecret, useDeleteApp, useAppAnalytics, useAppRequestLogs, type AppRequestLog } from '@/hooks/useApps'
