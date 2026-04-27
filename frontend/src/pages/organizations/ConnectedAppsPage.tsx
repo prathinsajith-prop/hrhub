@@ -286,7 +286,7 @@ export function ConnectedAppsPage() {
 
             {/* Reveal secret modal */}
             <Dialog open={!!revealedSecret} onOpenChange={(o) => !o && setRevealedSecret(null)}>
-                <DialogContent>
+                <DialogContent className="sm:max-w-xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4 text-amber-500" /> {t('apps.secretRevealedTitle')}
@@ -300,7 +300,7 @@ export function ConnectedAppsPage() {
                             <div className="space-y-1">
                                 <Label className="text-xs">{t('apps.appKey')}</Label>
                                 <div className="flex gap-2">
-                                    <code className="flex-1 text-xs bg-muted rounded px-2 py-2 truncate">{revealedSecret.key}</code>
+                                    <code className="flex-1 text-xs bg-muted rounded px-2 py-2 break-all">{revealedSecret.key}</code>
                                     <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(revealedSecret.key); toast.success(t('apps.copied')) }}>
                                         <Copy className="h-3.5 w-3.5" />
                                     </Button>
@@ -309,7 +309,7 @@ export function ConnectedAppsPage() {
                             <div className="space-y-1">
                                 <Label className="text-xs">{t('apps.appSecret')}</Label>
                                 <div className="flex gap-2">
-                                    <code className="flex-1 text-xs bg-muted rounded px-2 py-2 truncate">{revealedSecret.secret}</code>
+                                    <code className="flex-1 text-xs bg-muted rounded px-2 py-2 break-all">{revealedSecret.secret}</code>
                                     <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(revealedSecret.secret); toast.success(t('apps.copied')) }}>
                                         <Copy className="h-3.5 w-3.5" />
                                     </Button>
