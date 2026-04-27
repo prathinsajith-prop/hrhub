@@ -123,7 +123,7 @@ export async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ip
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 7)
 
-    await db.insert(refreshTokens).values({ userId: user.id, tokenHash, expiresAt })
+    await db.insert(refreshTokens).values({ userId: user.id, tenantId: user.tenantId, tokenHash, expiresAt })
 
     recordLoginEvent({
         tenantId: user.tenantId,
@@ -294,10 +294,14 @@ export async function refreshAccessToken(fastify: AnyFastify, rawToken: string) 
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 7)
 
-    await db.insert(refreshTokens).values({ userId: user.id, tokenHash: newTokenHash, expiresAt })
+    // Preserve the tenant context the user was in when this refresh token was issued
+    // (may differ from user.tenantId when the user switched organizations).
+    const tenantId = tokenRecord.tenantId ?? user.tenantId
+
+    await db.insert(refreshTokens).values({ userId: user.id, tenantId, tokenHash: newTokenHash, expiresAt })
 
     const accessToken = fastify.jwt.sign(
-        { sub: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email },
+        { sub: user.id, tenantId, role: user.role, name: user.name, email: user.email },
         { expiresIn: '15m' }
     )
 
@@ -333,9 +337,10 @@ export async function requestPasswordReset(email: string) {
     const env = loadEnv()
     const resetUrl = `${env.APP_URL}/reset-password?token=${rawToken}`
     const emailTmpl = passwordResetEmail({ name: user.name, resetUrl, expiresInMinutes: 60 })
-    await sendEmail({ ...emailTmpl, to: user.email })
+    const emailResult = await sendEmail({ ...emailTmpl, to: user.email })
 
-    return { sent: true, devToken: null as string | null }
+    const devToken = env.NODE_ENV !== 'production' ? rawToken : null
+    return { sent: emailResult.ok, devToken }
 }
 
 export async function resetPasswordWithToken(rawToken: string, newPassword: string) {

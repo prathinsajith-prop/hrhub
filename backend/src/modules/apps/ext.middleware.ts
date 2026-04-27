@@ -27,7 +27,7 @@ export interface AppContext {
     scopes: string[]
 }
 
-function clientIp(request: any): string {
+export function clientIp(request: any): string {
     const forwarded = request.headers['x-forwarded-for']
     if (forwarded) return (Array.isArray(forwarded) ? forwarded[0] : forwarded).split(',')[0].trim()
     return request.socket?.remoteAddress ?? '0.0.0.0'
@@ -115,6 +115,9 @@ export async function extAuthenticate(request: any, reply: any) {
         name: app.name,
         scopes: app.scopes,
     } satisfies AppContext
+
+    // Record start time so onResponse hook can calculate latency
+    request.extStart = Date.now()
 
     // Fire-and-forget: update lastUsedAt + increment requestCount
     db.update(connectedApps)

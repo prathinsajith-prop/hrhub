@@ -56,6 +56,8 @@ export const refreshTokens = pgTable('refresh_tokens', {
     id: uuid('id').primaryKey().defaultRandom(),
     userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     tokenHash: text('token_hash').unique().notNull(),
+    /** Tracks which tenant context this refresh token belongs to (set on all new tokens). */
+    tenantId: uuid('tenant_id'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({

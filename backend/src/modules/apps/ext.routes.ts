@@ -10,14 +10,14 @@
  * Pagination: ?page=1&limit=20 (default limit: 20, max: 100)
  */
 
-import { extAuthenticate, requireScope } from './ext.middleware.js'
+import { extAuthenticate, requireScope, clientIp } from './ext.middleware.js'
 import { listEmployees, getEmployee } from '../employees/employees.service.js'
 import { listPayrollRuns, getPayrollRun, getPayslipsWithEmployees } from '../payroll/payroll.service.js'
 import { listLeaveRequests } from '../leave/leave.service.js'
 import { getAttendance } from '../attendance/attendance.service.js'
 import { listDocuments } from '../documents/documents.service.js'
 import { db } from '../../db/index.js'
-import { employees, tenants } from '../../db/schema/index.js'
+import { employees, tenants, appRequestLogs } from '../../db/schema/index.js'
 import { eq, count } from 'drizzle-orm'
 
 /** Convert page + limit → offset */
@@ -29,6 +29,34 @@ function pagination(query: any): { limit: number; offset: number } {
 
 export default async function extRoutes(fastify: any): Promise<void> {
     const auth = [extAuthenticate]
+
+    // ── Request logger — fires after every response in this plugin ────────────
+    fastify.addHook('onResponse', async (request: any, reply: any) => {
+        const ctx = request.appCtx
+        if (!ctx) return // unauthenticated request — skip
+
+        const latencyMs = request.extStart != null ? Date.now() - (request.extStart as number) : undefined
+        const statusCode: number = reply.statusCode
+
+        // Strip query string and /api/ext/:appKey prefix → normalised path
+        const withoutQuery = (request.url as string).split('?')[0]
+        const parts = withoutQuery.split('/')
+        // ['', 'api', 'ext', 'app_live_xxx', ...rest]
+        const pathParts = parts.slice(4)
+        const path = pathParts.length > 0 ? '/' + pathParts.join('/') : '/'
+
+        db.insert(appRequestLogs)
+            .values({
+                appId: ctx.appId,
+                tenantId: ctx.tenantId,
+                method: request.method,
+                path,
+                statusCode,
+                latencyMs,
+                ipAddress: clientIp(request),
+            })
+            .catch(() => { /* non-fatal */ })
+    })
 
     // ── GET /api/ext/:appKey — app info & granted scopes ─────────────────────
     fastify.get('/:appKey', {

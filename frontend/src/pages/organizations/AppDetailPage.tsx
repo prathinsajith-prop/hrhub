@@ -2,12 +2,16 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    PieChart as RechartsPie, Pie, Cell,
+} from 'recharts'
+import {
     ArrowLeft, RefreshCw, Edit2, KeyRound, Trash2, Activity,
     CheckCircle2, AlertTriangle, Zap, Copy, AlertCircle,
-    BarChart2, TrendingUp, Layers, Globe, Hash, PieChart, ShieldCheck, MoreHorizontal,
+    BarChart2, TrendingUp, Layers, Globe, Hash, PieChart, ShieldCheck, ShieldOff, MoreHorizontal,
     Terminal, BookOpen, ChevronRight,
 } from 'lucide-react'
-import { useApp, useUpdateApp, useRegenerateAppSecret, useDeleteApp } from '@/hooks/useApps'
+import { useApp, useUpdateApp, useRegenerateAppSecret, useDeleteApp, useAppAnalytics, useAppRequestLogs, type AppRequestLog } from '@/hooks/useApps'
 import { ApiError } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { ScopeMatrix } from '@/components/apps/ScopeMatrix'
@@ -306,7 +310,17 @@ export function AppDetailPage() {
     const { can } = usePermissions()
     const canManage = can('manage_apps')
 
-    const { data: app, isLoading, refetch } = useApp(id)
+    const { data: app, isLoading, refetch: refetchApp } = useApp(id)
+    const { data: analytics, refetch: refetchAnalytics } = useAppAnalytics(id)
+    const { data: logsData, refetch: refetchLogs } = useAppRequestLogs(id, { limit: 50 })
+    const { data: errorsData, refetch: refetchErrors } = useAppRequestLogs(id, { status: 'errors', limit: 50 })
+
+    const handleRefresh = () => {
+        refetchApp()
+        refetchAnalytics()
+        refetchLogs()
+        refetchErrors()
+    }
     const updateMut = useUpdateApp()
     const regenMut = useRegenerateAppSecret()
     const deleteMut = useDeleteApp()
@@ -450,10 +464,13 @@ export function AppDetailPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleRefresh}>
+                        <RefreshCw className="h-4 w-4" />
+                    </Button>
                     {canManage && (
                         <>
-                            <Button variant="outline" size="sm" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={openEdit}>
-                                Edit
+                            <Button variant="outline" size="sm" leftIcon={<KeyRound className="h-3.5 w-3.5" />} onClick={() => setRegenConfirm(true)}>
+                                Regenerate Secret
                             </Button>
                             <Button variant="outline" size="sm" leftIcon={<ShieldCheck className="h-3.5 w-3.5" />} onClick={openScopeEdit}>
                                 Permissions
@@ -465,14 +482,14 @@ export function AppDetailPage() {
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48">
-                                    <DropdownMenuItem onClick={() => refetch()}>
-                                        <RefreshCw className="h-3.5 w-3.5 mr-2" /> Refresh
+                                    <DropdownMenuItem onClick={openEdit}>
+                                        <Edit2 className="h-3.5 w-3.5 mr-2" /> Edit
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => setRegenConfirm(true)}>
-                                        <KeyRound className="h-3.5 w-3.5 mr-2" /> Regenerate secret
-                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => setRevokeConfirm(true)}>
-                                        {isActive ? 'Revoke access' : 'Reactivate app'}
+                                        {isActive
+                                            ? <><ShieldOff className="h-3.5 w-3.5 mr-2" /> Revoke access</>
+                                            : <><ShieldCheck className="h-3.5 w-3.5 mr-2" /> Reactivate app</>}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem className="text-destructive" onClick={() => setDeleteConfirm(true)}>
@@ -523,11 +540,41 @@ export function AppDetailPage() {
 
             {/* Metric cards */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
-                <StatCard label="Total Requests" value={app.requestCount.toLocaleString()} sub={`${app.requestCount} last 7d`} icon={Activity} iconColor="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" />
-                <StatCard label="Last 24 Hours" value={0} sub="Stable" icon={TrendingUp} iconColor="bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400" />
-                <StatCard label="Success Rate" value="0%" sub="0 successful" icon={CheckCircle2} iconColor="bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" />
-                <StatCard label="Total Errors" value={0} sub="No traffic" icon={AlertTriangle} iconColor="bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400" />
-                <StatCard label="Avg Latency" value="0ms" sub="0ms – 0ms range" icon={Zap} iconColor="bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400" />
+                <StatCard
+                    label="Total Requests"
+                    value={(analytics?.stats.totalRequests ?? app.requestCount).toLocaleString()}
+                    sub={`${analytics?.stats.last7d ?? 0} last 7d`}
+                    icon={Activity}
+                    iconColor="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                />
+                <StatCard
+                    label="Last 24 Hours"
+                    value={(analytics?.stats.last24h ?? 0).toLocaleString()}
+                    sub={analytics?.stats.last24h ? 'Active' : 'No recent traffic'}
+                    icon={TrendingUp}
+                    iconColor="bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400"
+                />
+                <StatCard
+                    label="Success Rate"
+                    value={`${analytics?.stats.successRate ?? 0}%`}
+                    sub={`${(analytics?.stats.totalRequests ?? 0) - (analytics?.stats.totalErrors ?? 0)} successful`}
+                    icon={CheckCircle2}
+                    iconColor="bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+                />
+                <StatCard
+                    label="Total Errors"
+                    value={(analytics?.stats.totalErrors ?? 0).toLocaleString()}
+                    sub={analytics?.stats.totalErrors ? 'Check Errors tab' : 'No errors'}
+                    icon={AlertTriangle}
+                    iconColor="bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+                />
+                <StatCard
+                    label="Avg Latency"
+                    value={`${analytics?.stats.avgLatencyMs ?? 0}ms`}
+                    sub={`${analytics?.stats.minLatencyMs ?? 0}ms – ${analytics?.stats.maxLatencyMs ?? 0}ms range`}
+                    icon={Zap}
+                    iconColor="bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
+                />
             </div>
 
             {/* Tab nav */}
@@ -552,6 +599,7 @@ export function AppDetailPage() {
             {/* Tab content */}
             {activeTab === 'overview' && (
                 <div className="space-y-4">
+                    {/* Traffic Over Time */}
                     <Card>
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm flex items-center gap-2">
@@ -560,48 +608,99 @@ export function AppDetailPage() {
                             <CardDescription className="text-xs">Daily request volume (last 30 days)</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <EmptyChart label="No data yet — make some API calls to see traffic trends." />
+                            {analytics && analytics.dailyVolume.length > 0 ? (
+                                <ResponsiveContainer width="100%" height={180}>
+                                    <BarChart data={analytics.dailyVolume} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                                        <XAxis dataKey="date" tick={{ fontSize: 10 }}
+                                            tickFormatter={(d: string) => { const [, m, day] = d.split('-'); return `${['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+m]} ${+day}` }}
+                                        />
+                                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                                        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }}
+                                            labelFormatter={(d) => { const s = String(d); const [, m, day] = s.split('-'); return `${['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+m]} ${+day}` }}
+                                        />
+                                        <Bar dataKey="count" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} name="Requests" />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <EmptyChart label="No data yet — make some API calls to see traffic trends." />
+                            )}
                         </CardContent>
                     </Card>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* By Path */}
                         <Card>
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-sm">Hourly Requests (7d)</CardTitle>
-                                <CardDescription className="text-xs">Requests per hour over the last 7 days</CardDescription>
+                                <CardTitle className="text-sm flex items-center gap-2"><Layers className="h-3.5 w-3.5 text-muted-foreground" /> Top Paths</CardTitle>
+                                <CardDescription className="text-xs">Most-called endpoints</CardDescription>
                             </CardHeader>
-                            <CardContent><EmptyChart label="No data yet" /></CardContent>
+                            <CardContent>
+                                {analytics && analytics.byPath.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {analytics.byPath.slice(0, 6).map((p) => {
+                                            const pct = analytics.stats.totalRequests > 0
+                                                ? Math.round((p.count / analytics.stats.totalRequests) * 100)
+                                                : 0
+                                            return (
+                                                <div key={p.path} className="flex items-center gap-2">
+                                                    <code className="text-[11px] font-mono truncate flex-1 min-w-0 text-muted-foreground">{p.path}</code>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                                                            <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                                                        </div>
+                                                        <span className="text-xs text-muted-foreground w-7 text-right">{p.count}</span>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                ) : (
+                                    <EmptyChart label="No data yet" />
+                                )}
+                            </CardContent>
                         </Card>
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm">Avg Latency Trend (30d)</CardTitle>
-                                <CardDescription className="text-xs">Average response time per day</CardDescription>
-                            </CardHeader>
-                            <CardContent><EmptyChart label="No data yet" /></CardContent>
-                        </Card>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm flex items-center gap-2"><Layers className="h-3.5 w-3.5 text-muted-foreground" /> By Module</CardTitle>
-                            </CardHeader>
-                            <CardContent><EmptyChart label="No data yet" /></CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm flex items-center gap-2"><Globe className="h-3.5 w-3.5 text-muted-foreground" /> By Method</CardTitle>
-                            </CardHeader>
-                            <CardContent><EmptyChart label="No data yet" /></CardContent>
-                        </Card>
+                        {/* Status Codes */}
                         <Card>
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-sm flex items-center gap-2"><PieChart className="h-3.5 w-3.5 text-muted-foreground" /> Status Codes</CardTitle>
+                                <CardDescription className="text-xs">Response code distribution</CardDescription>
                             </CardHeader>
-                            <CardContent><EmptyChart label="No data yet" /></CardContent>
+                            <CardContent>
+                                {analytics && analytics.byStatusCode.length > 0 ? (() => {
+                                    const STATUS_COLORS: Record<string, string> = { '2': '#22c55e', '4': '#f59e0b', '5': '#ef4444' }
+                                    const pieData = analytics.byStatusCode.map((s) => ({
+                                        name: String(s.statusCode),
+                                        value: s.count,
+                                        color: STATUS_COLORS[String(s.statusCode)[0]] ?? '#94a3b8',
+                                    }))
+                                    return (
+                                        <div className="flex items-center gap-4">
+                                            <RechartsPie width={100} height={100}>
+                                                <Pie data={pieData} dataKey="value" cx={45} cy={45} innerRadius={25} outerRadius={45}>
+                                                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                                                </Pie>
+                                            </RechartsPie>
+                                            <div className="space-y-1.5 flex-1">
+                                                {pieData.map((entry) => (
+                                                    <div key={entry.name} className="flex items-center gap-2">
+                                                        <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: entry.color }} />
+                                                        <span className="text-xs font-mono">{entry.name}</span>
+                                                        <span className="text-xs text-muted-foreground ml-auto">{entry.value}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )
+                                })() : (
+                                    <EmptyChart label="No data yet" />
+                                )}
+                            </CardContent>
                         </Card>
                     </div>
 
+                    {/* Performance Summary */}
                     <Card>
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm">Performance Summary</CardTitle>
@@ -609,12 +708,12 @@ export function AppDetailPage() {
                         <CardContent>
                             <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
                                 {[
-                                    { label: 'Min Latency', value: '0ms', color: 'text-green-600' },
-                                    { label: 'Avg Latency', value: '0ms', color: 'text-blue-600' },
-                                    { label: 'Max Latency', value: '0ms', color: 'text-red-500' },
-                                    { label: 'Last 24h', value: '0' },
-                                    { label: 'Last 7 Days', value: '0' },
-                                    { label: 'All Time', value: app.requestCount.toLocaleString() },
+                                    { label: 'Min Latency', value: `${analytics?.stats.minLatencyMs ?? 0}ms`, color: 'text-green-600' },
+                                    { label: 'Avg Latency', value: `${analytics?.stats.avgLatencyMs ?? 0}ms`, color: 'text-blue-600' },
+                                    { label: 'Max Latency', value: `${analytics?.stats.maxLatencyMs ?? 0}ms`, color: 'text-red-500' },
+                                    { label: 'Last 24h', value: (analytics?.stats.last24h ?? 0).toLocaleString() },
+                                    { label: 'Last 7 Days', value: (analytics?.stats.last7d ?? 0).toLocaleString() },
+                                    { label: 'All Time', value: (analytics?.stats.totalRequests ?? app.requestCount).toLocaleString() },
                                 ].map((m) => (
                                     <div key={m.label} className="text-center">
                                         <p className={cn('text-2xl font-bold', m.color ?? 'text-foreground')}>{m.value}</p>
@@ -633,20 +732,105 @@ export function AppDetailPage() {
 
             {activeTab === 'request-logs' && (
                 <Card>
-                    <CardContent className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
-                        <Hash className="h-8 w-8 opacity-30" />
-                        <p className="text-sm">No request logs yet</p>
-                        <p className="text-xs opacity-70">Logs will appear once this app starts making API calls.</p>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2"><Hash className="h-4 w-4 text-muted-foreground" /> Request Logs</CardTitle>
+                        <CardDescription className="text-xs">Last 50 API requests from this app</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        {logsData && logsData.data.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                    <thead>
+                                        <tr className="border-b border-border bg-muted/40">
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Method</th>
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Path</th>
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Latency</th>
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">IP</th>
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {logsData.data.map((log: AppRequestLog) => (
+                                            <tr key={log.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                                                <td className="px-4 py-2.5">
+                                                    <span className="font-mono bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 px-1.5 py-0.5 rounded text-[10px]">{log.method}</span>
+                                                </td>
+                                                <td className="px-4 py-2.5 font-mono max-w-[200px] truncate text-muted-foreground">{log.path}</td>
+                                                <td className="px-4 py-2.5">
+                                                    <span className={cn('font-mono px-1.5 py-0.5 rounded text-[10px]',
+                                                        log.statusCode < 300 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' :
+                                                            log.statusCode < 500 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' :
+                                                                'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                                                    )}>{log.statusCode}</span>
+                                                </td>
+                                                <td className="px-4 py-2.5 text-muted-foreground">{log.latencyMs != null ? `${log.latencyMs}ms` : '—'}</td>
+                                                <td className="px-4 py-2.5 text-muted-foreground font-mono">{log.ipAddress ?? '—'}</td>
+                                                <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{new Date(log.createdAt).toLocaleString()}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
+                                <Hash className="h-8 w-8 opacity-30" />
+                                <p className="text-sm">No request logs yet</p>
+                                <p className="text-xs opacity-70">Logs will appear once this app starts making API calls.</p>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             )}
 
             {activeTab === 'errors' && (
                 <Card>
-                    <CardContent className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
-                        <CheckCircle2 className="h-8 w-8 opacity-30" />
-                        <p className="text-sm">No errors recorded</p>
-                        <p className="text-xs opacity-70">Error details will appear when API calls fail.</p>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-muted-foreground" /> Errors</CardTitle>
+                        <CardDescription className="text-xs">Requests with status 400+</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        {errorsData && errorsData.data.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                    <thead>
+                                        <tr className="border-b border-border bg-muted/40">
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Method</th>
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Path</th>
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Latency</th>
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">IP</th>
+                                            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {errorsData.data.map((log: AppRequestLog) => (
+                                            <tr key={log.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                                                <td className="px-4 py-2.5">
+                                                    <span className="font-mono bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 px-1.5 py-0.5 rounded text-[10px]">{log.method}</span>
+                                                </td>
+                                                <td className="px-4 py-2.5 font-mono max-w-[200px] truncate text-muted-foreground">{log.path}</td>
+                                                <td className="px-4 py-2.5">
+                                                    <span className={cn('font-mono px-1.5 py-0.5 rounded text-[10px]',
+                                                        log.statusCode < 500 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' :
+                                                            'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                                                    )}>{log.statusCode}</span>
+                                                </td>
+                                                <td className="px-4 py-2.5 text-muted-foreground">{log.latencyMs != null ? `${log.latencyMs}ms` : '—'}</td>
+                                                <td className="px-4 py-2.5 text-muted-foreground font-mono">{log.ipAddress ?? '—'}</td>
+                                                <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{new Date(log.createdAt).toLocaleString()}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
+                                <CheckCircle2 className="h-8 w-8 opacity-30" />
+                                <p className="text-sm">No errors recorded</p>
+                                <p className="text-xs opacity-70">Error details will appear when API calls fail.</p>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             )}

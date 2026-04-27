@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, bigint, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, bigint, integer, index } from 'drizzle-orm/pg-core'
 import { sql, relations } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { users } from './users.js'
@@ -34,4 +34,24 @@ export const connectedApps = pgTable('connected_apps', {
 export const connectedAppsRelations = relations(connectedApps, ({ one }) => ({
     tenant: one(tenants, { fields: [connectedApps.tenantId], references: [tenants.id] }),
     creator: one(users, { fields: [connectedApps.createdBy], references: [users.id] }),
+}))
+
+/**
+ * app_request_logs — one row per authenticated ext API call.
+ * Powers the analytics charts in Connected Apps → App Detail.
+ */
+export const appRequestLogs = pgTable('app_request_logs', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    appId: uuid('app_id').notNull().references(() => connectedApps.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenant_id').notNull(),
+    method: text('method').notNull(),
+    path: text('path').notNull(),
+    statusCode: integer('status_code').notNull(),
+    latencyMs: integer('latency_ms'),
+    ipAddress: text('ip_address'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    appTimeIdx: index('idx_app_req_logs_app_time').on(t.appId, t.createdAt),
+    tenantTimeIdx: index('idx_app_req_logs_tenant_time').on(t.tenantId, t.createdAt),
+    statusIdx: index('idx_app_req_logs_status').on(t.appId, t.statusCode),
 }))

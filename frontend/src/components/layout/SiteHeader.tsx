@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight, ArrowRightLeft, Check, Settings2 } from 'lucide-react'
+import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight, Check, Settings2 } from 'lucide-react'
 import { labelFor } from '@/lib/enums'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -97,7 +97,7 @@ export function SiteHeader() {
     try {
       await switchMut.mutateAsync(tenantId)
       toast.success(t('organizations.switched', { name: tenantName }))
-      navigate('/dashboard', { replace: true })
+      window.location.assign('/dashboard')
     } catch {
       toast.error(t('organizations.switchFailed', { defaultValue: 'Failed to switch organization' }))
     }
@@ -317,12 +317,22 @@ export function SiteHeader() {
               {/* Organization switcher — only shown when user belongs to multiple orgs */}
               {hasMultipleOrgs && (
                 <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md w-full flex items-center text-sm">
-                    <ArrowRightLeft className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span>{t('organizations.switch', { defaultValue: 'Switch Organization' })}</span>
-                    {switchMut.isPending && (
-                      <span className="ms-auto h-3.5 w-3.5 border border-muted-foreground/40 border-t-muted-foreground rounded-full animate-spin" />
-                    )}
+                  <DropdownMenuSubTrigger className="rounded-md px-0 py-0 h-auto focus:bg-accent data-[state=open]:bg-accent cursor-pointer">
+                    <div className="flex w-full items-center gap-2.5 px-2.5 py-2">
+                      <div className="h-8 w-8 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
+                        {tenant?.logoUrl
+                          ? <img src={tenant.logoUrl} alt="" className="h-full w-full object-cover" />
+                          : (tenant?.name?.[0] ?? '?').toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="truncate text-sm font-medium leading-tight">{tenant?.name ?? '—'}</p>
+                        <p className="text-[11px] text-muted-foreground leading-tight">
+                          {switchMut.isPending
+                            ? t('organizations.switching', { defaultValue: 'Switching…' })
+                            : t('organizations.switchHint', { defaultValue: 'Switch organization' })}
+                        </p>
+                      </div>
+                    </div>
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className="w-56 p-1">
                     {/* Current org */}

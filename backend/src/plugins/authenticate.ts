@@ -3,7 +3,7 @@ import type { JwtPayload, RequestUser } from '../types/index.js'
 import { cacheGet, cacheSet } from '../lib/redis.js'
 import { db } from '../db/index.js'
 import { users } from '../db/schema/index.js'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 async function authenticatePlugin(fastify: any): Promise<void> {
     /**
@@ -25,7 +25,7 @@ async function authenticatePlugin(fastify: any): Promise<void> {
                 const [user] = await db
                     .select({ isActive: users.isActive })
                     .from(users)
-                    .where(and(eq(users.id, payload.sub), eq(users.tenantId, payload.tenantId)))
+                    .where(eq(users.id, payload.sub))
                     .limit(1)
                 isActive = user?.isActive ?? false
                 await cacheSet(cacheKey, isActive, 300) // cache for 5 minutes

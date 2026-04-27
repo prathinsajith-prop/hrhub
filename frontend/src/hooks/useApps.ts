@@ -75,3 +75,52 @@ export function useDeleteApp() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['connected-apps'] }),
     })
 }
+
+export interface AppAnalytics {
+    stats: {
+        totalRequests: number
+        last24h: number
+        last7d: number
+        successRate: number
+        totalErrors: number
+        avgLatencyMs: number
+        minLatencyMs: number
+        maxLatencyMs: number
+    }
+    dailyVolume: { date: string; count: number }[]
+    byPath: { path: string; count: number }[]
+    byStatusCode: { statusCode: number; count: number }[]
+}
+
+export interface AppRequestLog {
+    id: string
+    appId: string
+    tenantId: string
+    method: string
+    path: string
+    statusCode: number
+    latencyMs: number | null
+    ipAddress: string | null
+    createdAt: string
+}
+
+export function useAppAnalytics(id: string | undefined) {
+    return useQuery({
+        queryKey: ['app-analytics', id],
+        queryFn: () => api.get<{ data: AppAnalytics }>(`/apps/${id}/analytics`).then(r => r.data),
+        enabled: !!id,
+        staleTime: 30_000,
+    })
+}
+
+export function useAppRequestLogs(id: string | undefined, params: { page?: number; limit?: number; status?: string } = {}) {
+    const qs = new URLSearchParams()
+    if (params.page) qs.set('page', String(params.page))
+    if (params.limit) qs.set('limit', String(params.limit))
+    if (params.status) qs.set('status', params.status)
+    return useQuery({
+        queryKey: ['app-request-logs', id, params],
+        queryFn: () => api.get<{ data: AppRequestLog[]; meta: { page: number; limit: number; total: number } }>(`/apps/${id}/request-logs?${qs}`).then(r => r),
+        enabled: !!id,
+    })
+}
