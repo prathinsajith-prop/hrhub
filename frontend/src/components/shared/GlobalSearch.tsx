@@ -62,7 +62,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
         search: query.length >= 2 ? query : undefined,
         limit: 5,
     })
-    const employees = query.length >= 2 ? ((empData?.data as any[]) ?? []) : []
+    const employees = query.length >= 2 ? (empData?.data ?? []) : []
 
     const handleSelect = useCallback((path: string) => {
         navigate(path)
@@ -116,7 +116,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                     <>
                         <CommandSeparator />
                         <CommandGroup heading="Employees">
-                            {employees.map((emp: any) => (
+                            {employees.map((emp) => (
                                 <CommandItem
                                     key={emp.id}
                                     value={`emp-${emp.id}`}
@@ -129,7 +129,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                                             {emp.fullName ?? `${emp.firstName} ${emp.lastName}`}
                                         </span>
                                         <span className="block text-xs text-muted-foreground truncate">
-                                            {emp.jobTitle}{emp.department ? ` · ${emp.department}` : ''}
+                                            {emp.designation}{emp.department ? ` · ${emp.department}` : ''}
                                         </span>
                                     </div>
                                 </CommandItem>

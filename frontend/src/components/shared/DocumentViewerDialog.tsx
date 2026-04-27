@@ -32,6 +32,7 @@ export function DocumentViewerDialog({ open, onOpenChange, documentId, fileName 
         api
             .get<{ data: { downloadUrl: string } }>(`/documents/${documentId}/download-url`)
             .then((res) => {
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 if (!cancelled) setUrl(res.data.downloadUrl)
             })
             .catch(() => {

@@ -146,7 +146,7 @@ export const api = {
         }
         if (!res.ok) {
             const body = await res.json().catch(() => ({}))
-            throw new ApiError(res.status, (body as any)?.message ?? res.statusText, body)
+            throw new ApiError(res.status, (body as { message?: string })?.message ?? res.statusText, body)
         }
         if (res.status === 204) return undefined as T
         return res.json() as Promise<T>

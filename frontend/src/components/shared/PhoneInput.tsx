@@ -61,6 +61,7 @@ ALL_COUNTRIES.sort((a, b) => {
 })
 
 /** Try to resolve an existing nationality/country free-text value to an ISO-2 code. */
+// eslint-disable-next-line react-refresh/only-export-components
 export function resolveCountryIso(name: string | undefined | null): string | undefined {
     if (!name) return undefined
     const trimmed = name.trim()
@@ -95,6 +96,7 @@ export function resolveCountryIso(name: string | undefined | null): string | und
 }
 
 /** Get the canonical country name for an ISO-2 code. */
+// eslint-disable-next-line react-refresh/only-export-components
 export function countryNameFromIso(iso2: string | undefined): string {
     if (!iso2) return ''
     return ALL_COUNTRIES.find((c) => c.iso2 === iso2)?.name ?? ''

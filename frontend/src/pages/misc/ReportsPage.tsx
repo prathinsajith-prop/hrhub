@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { CellContext } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { Calendar, Clock, CheckCircle2, XCircle, Download, BarChart3, Users, Shield, AlertTriangle, UserPlus, UserMinus, PauseCircle } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
@@ -11,6 +12,7 @@ import { formatDate, formatCurrency, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useHeadcountReport, usePayrollSummaryReport, useVisaExpiryReport } from '@/hooks/useReports'
+import type { PayrollTrendRow, VisaExpiryEmployee } from '@/hooks/useReports'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { InitialsAvatar } from '@/components/shared/Avatar'
@@ -86,21 +88,24 @@ export function ReportsPage() {
         availableFilters: VISA_REPORT_FILTERS,
     })
 
+    const payrollTrend = useMemo<PayrollTrendRow[]>(() => payrollSummary?.trend ?? [], [payrollSummary?.trend])
+    const visaEmployees = useMemo<VisaExpiryEmployee[]>(() => visaExpiry?.employees ?? [], [visaExpiry?.employees])
+
     const payrollRows = useMemo(
-        () => applyClientFilters((payrollSummary?.trend ?? []) as any[], {
+        () => applyClientFilters(payrollTrend as unknown as Record<string, unknown>[], {
             searchInput: payrollSearch.searchInput,
             appliedFilters: payrollSearch.appliedFilters,
             searchFields: ['period', 'status'],
         }),
-        [payrollSummary?.trend, payrollSearch.appliedFilters, payrollSearch.searchInput],
+        [payrollTrend, payrollSearch.appliedFilters, payrollSearch.searchInput],
     )
     const visaReportRows = useMemo(
-        () => applyClientFilters((visaExpiry?.employees ?? []) as any[], {
+        () => applyClientFilters(visaEmployees as unknown as Record<string, unknown>[], {
             searchInput: visaReportSearch.searchInput,
             appliedFilters: visaReportSearch.appliedFilters,
             searchFields: ['fullName', 'employeeNo', 'department', 'visaType'],
         }),
-        [visaExpiry?.employees, visaReportSearch.appliedFilters, visaReportSearch.searchInput],
+        [visaEmployees, visaReportSearch.appliedFilters, visaReportSearch.searchInput],
     )
 
     const exportCsv = (rows: object[], filename: string) => {
@@ -261,14 +266,14 @@ export function ReportsPage() {
                         <DataTable
                             isLoading={prLoading}
                             columns={[
-                                { accessorKey: 'period', header: 'Period', cell: ({ getValue }: any) => <span className="font-medium text-sm">{getValue()}</span> },
-                                { accessorKey: 'headcount', header: 'Employees', cell: ({ getValue }: any) => <span className="text-sm">{getValue()}</span> },
-                                { accessorKey: 'gross', header: 'Gross (AED)', cell: ({ getValue }: any) => <span className="text-sm font-semibold">{formatCurrency(getValue() as number)}</span> },
-                                { accessorKey: 'deductions', header: 'Deductions (AED)', cell: ({ getValue }: any) => <span className="text-sm text-destructive">{formatCurrency(getValue() as number)}</span> },
-                                { accessorKey: 'net', header: 'Net (AED)', cell: ({ getValue }: any) => <span className="text-sm font-bold text-success">{formatCurrency(getValue() as number)}</span> },
-                                { accessorKey: 'status', header: 'Status', cell: ({ getValue }: any) => <Badge variant="secondary" className="capitalize text-[11px]">{(getValue() as string).replace('_', ' ')}</Badge> },
+                                { accessorKey: 'period', header: 'Period', cell: ({ getValue }: CellContext<PayrollTrendRow, unknown>) => <span className="font-medium text-sm">{getValue() as string}</span> },
+                                { accessorKey: 'headcount', header: 'Employees', cell: ({ getValue }: CellContext<PayrollTrendRow, unknown>) => <span className="text-sm">{getValue() as number}</span> },
+                                { accessorKey: 'gross', header: 'Gross (AED)', cell: ({ getValue }: CellContext<PayrollTrendRow, unknown>) => <span className="text-sm font-semibold">{formatCurrency(getValue() as number)}</span> },
+                                { accessorKey: 'deductions', header: 'Deductions (AED)', cell: ({ getValue }: CellContext<PayrollTrendRow, unknown>) => <span className="text-sm text-destructive">{formatCurrency(getValue() as number)}</span> },
+                                { accessorKey: 'net', header: 'Net (AED)', cell: ({ getValue }: CellContext<PayrollTrendRow, unknown>) => <span className="text-sm font-bold text-success">{formatCurrency(getValue() as number)}</span> },
+                                { accessorKey: 'status', header: 'Status', cell: ({ getValue }: CellContext<PayrollTrendRow, unknown>) => <Badge variant="secondary" className="capitalize text-[11px]">{(getValue() as string).replace('_', ' ')}</Badge> },
                             ]}
-                            data={payrollRows}
+                            data={payrollRows as unknown as PayrollTrendRow[]}
                             pageSize={12}
                             advancedFilter={{
                                 search: payrollSearch,
@@ -303,24 +308,24 @@ export function ReportsPage() {
                                     id: 'employee',
                                     accessorKey: 'fullName',
                                     header: 'Employee',
-                                    cell: ({ row: { original: e } }: any) => (
+                                    cell: ({ row: { original: e } }: CellContext<VisaExpiryEmployee, unknown>) => (
                                         <div className="flex items-center gap-2.5 min-w-0">
-                                            <InitialsAvatar name={e.fullName || '—'} src={e.avatarUrl} size="sm" />
+                                            <InitialsAvatar name={e.fullName || '—'} size="sm" />
                                             <div className="min-w-0">
                                                 <p className="text-sm font-medium truncate">{e.fullName}</p>
                                                 <p className="text-[11px] text-muted-foreground truncate">
-                                                    {e.employeeNo}{e.employeeNo && e.designation ? ' · ' : ''}{e.designation}
+                                                    {e.designation}
                                                 </p>
                                             </div>
                                         </div>
                                     ),
                                 },
-                                { accessorKey: 'department', header: 'Department', cell: ({ getValue }: any) => <span className="text-sm">{getValue() ?? '—'}</span> },
-                                { accessorKey: 'nationality', header: 'Nationality', cell: ({ getValue }: any) => <span className="text-sm">{getValue() ?? '—'}</span> },
-                                { accessorKey: 'visaExpiry', header: 'Visa Expiry', cell: ({ getValue }: any) => <span className="text-sm">{formatDate(getValue() as string)}</span> },
+                                { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => <span className="text-sm">{(getValue() as string | null) ?? '—'}</span> },
+                                { accessorKey: 'nationality', header: 'Nationality', cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => <span className="text-sm">{(getValue() as string | null) ?? '—'}</span> },
+                                { accessorKey: 'visaExpiry', header: 'Visa Expiry', cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => <span className="text-sm">{formatDate(getValue() as string)}</span> },
                                 {
                                     accessorKey: 'daysLeft', header: 'Days Left',
-                                    cell: ({ getValue }: any) => {
+                                    cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => {
                                         const d = getValue() as number | null
                                         if (d === null) return <span className="text-muted-foreground text-sm">—</span>
                                         return (
@@ -334,14 +339,14 @@ export function ReportsPage() {
                                 },
                                 {
                                     accessorKey: 'urgency', header: 'Urgency',
-                                    cell: ({ getValue }: any) => {
+                                    cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => {
                                         const u = getValue() as string
-                                        const v = u === 'expired' ? 'destructive' : u === 'critical' ? 'destructive' : u === 'urgent' ? 'warning' : 'success'
-                                        return <Badge variant={v as any} className="capitalize text-[11px]">{u}</Badge>
+                                        const v: 'destructive' | 'warning' | 'success' = u === 'expired' ? 'destructive' : u === 'critical' ? 'destructive' : u === 'urgent' ? 'warning' : 'success'
+                                        return <Badge variant={v} className="capitalize text-[11px]">{u}</Badge>
                                     }
                                 },
                             ]}
-                            data={visaReportRows}
+                            data={visaReportRows as unknown as VisaExpiryEmployee[]}
                             pageSize={10}
                             advancedFilter={{
                                 search: visaReportSearch,

@@ -53,7 +53,7 @@ const JOB_FILTERS: FilterConfig[] = [
   { name: 'minSalary', label: 'Min salary (AED)', type: 'number_range', field: 'minSalary', min: 0, prefix: 'AED' },
   { name: 'closingDate', label: 'Closing date', type: 'date_range', field: 'closingDate' },
 ]
-import type { Candidate, ApplicationStage } from '@/types'
+import type { Candidate, ApplicationStage, Job } from '@/types'
 import type { ColumnDef } from '@tanstack/react-table'
 
 const stages: { id: ApplicationStage; label: string; bgClass: string }[] = [
@@ -243,7 +243,7 @@ function StageColumn({
   )
 }
 
-const buildJobColumns = (onEdit: (job: any) => void): ColumnDef<any>[] => [
+const buildJobColumns = (onEdit: (job: Job) => void): ColumnDef<Job>[] => [
   {
     accessorKey: 'title',
     header: 'Position',
@@ -299,7 +299,7 @@ const buildJobColumns = (onEdit: (job: any) => void): ColumnDef<any>[] => [
   },
 ]
 
-function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpenChange: (o: boolean) => void; jobs: any[] }) {
+function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpenChange: (o: boolean) => void; jobs: Job[] }) {
   const [jobId, setJobId] = useState('')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -337,8 +337,8 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
       toast.success('Candidate added', `${name.trim()} added to the pipeline.`)
       reset()
       onOpenChange(false)
-    } catch (err: any) {
-      const msg = err?.message ?? 'Please try again.'
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message ?? 'Please try again.'
       toast.error('Could not add candidate', msg)
     }
   }
@@ -358,7 +358,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
                 {jobs.length === 0 ? (
                   <SelectItem value="__none" disabled>No open jobs</SelectItem>
                 ) : (
-                  jobs.map((j: any) => (
+                  jobs.map((j) => (
                     <SelectItem key={j.id} value={j.id}>{j.title} · {j.department}</SelectItem>
                   ))
                 )}
@@ -459,12 +459,13 @@ function ConvertCandidateDialog({
             },
             {
               onSuccess: (res) => {
-                const empNo = (res as any)?.data?.employee?.employeeNo
-                const empId = (res as any)?.data?.employee?.id
+                const resData = (res as { data?: { employee?: { employeeNo?: string; id?: string } } })?.data?.employee
+                const empNo = resData?.employeeNo
+                const empId = resData?.id
                 toast.success('Candidate converted', empNo ? `Employee ${empNo} created.` : 'Employee created.')
                 onConverted(empId)
               },
-              onError: (err: any) => toast.error('Conversion failed', err?.message ?? 'Could not create employee.'),
+              onError: (err: unknown) => toast.error('Conversion failed', (err as { message?: string })?.message ?? 'Could not create employee.'),
             },
           )
         },
@@ -521,7 +522,7 @@ export function RecruitmentPage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('pipeline')
   const [jobDialogOpen, setJobDialogOpen] = useState(false)
-  const [editJob, setEditJob] = useState<any | null>(null)
+  const [editJob, setEditJob] = useState<Job | null>(null)
   const [closeConfirm, setCloseConfirm] = useState<string[] | null>(null)
   const [addCandidateOpen, setAddCandidateOpen] = useState(false)
   const [convertCandidateId, setConvertCandidateId] = useState<string | null>(null)
@@ -532,32 +533,32 @@ export function RecruitmentPage() {
   const updateStage = useUpdateApplicationStage()
   const updateJob = useUpdateJob()
   const createJob = useCreateJob()
-  const jobs: any[] = (jobsData?.data as any[]) ?? []
+  const jobs = useMemo<Job[]>(() => (jobsData?.data as Job[]) ?? [], [jobsData?.data])
   const jobSearch = useSearchFilters({
     storageKey: 'hrhub.recruitment.jobs.searchHistory',
     availableFilters: JOB_FILTERS,
   })
   const filteredJobs = useMemo(
-    () => applyClientFilters(jobs as any[], {
+    () => applyClientFilters(jobs as unknown as Record<string, unknown>[], {
       searchInput: jobSearch.searchInput,
       appliedFilters: jobSearch.appliedFilters,
       searchFields: ['title', 'department', 'location'],
-    }),
+    }) as unknown as Job[],
     [jobs, jobSearch.appliedFilters, jobSearch.searchInput],
   )
   const candidates: Candidate[] = (appsData?.data as Candidate[]) ?? []
   const jobColumns = useMemo(() => buildJobColumns((j) => setEditJob(j)), [])
 
   const moveCandidate = (id: string, newStage: ApplicationStage) => {
-    const c = candidates.find((c: any) => c.id === id)
+    const c = candidates.find((c) => c.id === id)
     // Toast immediately — the optimistic cache update already reflects the move,
     // so the user sees the card jump and the confirmation in the same frame.
-    if (c) toast.success('Candidate moved', `${(c as any).name} moved to ${newStage.replace('_', ' ')} stage.`)
+    if (c) toast.success('Candidate moved', `${c.name} moved to ${newStage.replace('_', ' ')} stage.`)
     updateStage.mutate(
       { id, stage: newStage },
       {
         onError: () => {
-          if (c) toast.error('Move failed', `Could not move ${(c as any).name}. Reverted.`)
+          if (c) toast.error('Move failed', `Could not move ${c.name}. Reverted.`)
         },
       },
     )
@@ -591,9 +592,9 @@ export function RecruitmentPage() {
     moveCandidate(candidate.id, targetStage)
   }
 
-  const openJobs = jobs.filter((j: any) => j.status === 'open').length
-  const inInterview = candidates.filter((c: any) => c.stage === 'interview').length
-  const inOffer = candidates.filter((c: any) => c.stage === 'offer' || c.stage === 'pre_boarding').length
+  const openJobs = jobs.filter((j) => j.status === 'open').length
+  const inInterview = candidates.filter((c) => c.stage === 'interview').length
+  const inOffer = candidates.filter((c) => c.stage === 'offer' || c.stage === 'pre_boarding').length
 
   return (
     <PageWrapper>
@@ -602,7 +603,7 @@ export function RecruitmentPage() {
         description={t('recruitment.description')}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2" onClick={() => setAddCandidateOpen(true)} disabled={jobs.filter((j: any) => j.status === 'open').length === 0}>
+            <Button variant="outline" className="gap-2" onClick={() => setAddCandidateOpen(true)} disabled={jobs.filter((j) => j.status === 'open').length === 0}>
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Add Candidate</span>
             </Button>
@@ -652,7 +653,7 @@ export function RecruitmentPage() {
           <div className="overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
             <div className="flex gap-3 min-w-max">
               {stages.map(stage => {
-                const stageCandidates = candidates.filter((c: any) => c.stage === stage.id)
+                const stageCandidates = candidates.filter((c) => c.stage === stage.id)
                 return (
                   <StageColumn
                     key={stage.id}
@@ -663,7 +664,7 @@ export function RecruitmentPage() {
                     onEdit={(id) => setEditCandidateId(id)}
                     showAdd={stage.id === 'received'}
                     onAdd={() => setAddCandidateOpen(true)}
-                    addDisabled={jobs.filter((j: any) => j.status === 'open').length === 0}
+                    addDisabled={jobs.filter((j) => j.status === 'open').length === 0}
                   />
                 )
               })}
@@ -691,7 +692,7 @@ export function RecruitmentPage() {
             }}
             pageSize={8}
             enableSelection
-            getRowId={(row: any) => String(row.id)}
+            getRowId={(row) => String(row.id)}
             toolbar={
               <Button size="sm" className="gap-1.5" onClick={() => setJobDialogOpen(true)}>
                 <Plus className="h-3.5 w-3.5" />
@@ -701,13 +702,13 @@ export function RecruitmentPage() {
             bulkActions={(selected) => (
               <>
                 <Button variant="outline" size="sm"
-                  onClick={() => setCloseConfirm(selected.map((r: any) => r.id))}>
+                  onClick={() => setCloseConfirm(selected.map((r) => r.id))}>
                   Close
                 </Button>
                 <Button variant="outline" size="sm"
                   onClick={async () => {
                     try {
-                      await Promise.all(selected.map((r: any) => createJob.mutateAsync({
+                      await Promise.all(selected.map((r) => createJob.mutateAsync({
                         title: `${r.title} (Copy)`,
                         department: r.department,
                         location: r.location,
@@ -738,7 +739,7 @@ export function RecruitmentPage() {
       <AddCandidateDialog
         open={addCandidateOpen}
         onOpenChange={setAddCandidateOpen}
-        jobs={jobs.filter((j: any) => j.status === 'open')}
+        jobs={jobs.filter((j) => j.status === 'open')}
       />
       <ConvertCandidateDialog
         key={convertCandidateId ?? 'none'}

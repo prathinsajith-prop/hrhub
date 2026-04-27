@@ -50,6 +50,7 @@ export function ResetPasswordPage() {
     const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
         resolver: zodResolver(schema),
     })
+    // eslint-disable-next-line react-hooks/incompatible-library
     const pw = watch('password') ?? ''
     const strength = useMemo(() => strengthScore(pw), [pw])
 
@@ -64,8 +65,8 @@ export function ResetPasswordPage() {
             setDone(true)
             toast.success('Password reset', 'You can now sign in with your new password.')
             setTimeout(() => navigate('/login'), 1800)
-        } catch (e: any) {
-            toast.error('Reset failed', e?.message ?? 'Link may be expired. Please request a new one.')
+        } catch (e: unknown) {
+            toast.error('Reset failed', (e instanceof Error ? e.message : null) ?? 'Link may be expired. Please request a new one.')
         } finally {
             setLoading(false)
         }

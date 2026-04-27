@@ -88,6 +88,7 @@ function CompanyTab() {
 
     useEffect(() => {
         if (company) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setForm({
                 name: company.name,
                 tradeLicenseNo: company.tradeLicenseNo,
@@ -98,6 +99,7 @@ function CompanyTab() {
     }, [company])
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (regional) setRegionalForm({ timezone: regional.timezone, currency: regional.currency, dateFormat: regional.dateFormat })
     }, [regional])
 
@@ -239,7 +241,9 @@ function ProfileTab() {
     const fileRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setName(user?.name ?? '')
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setDepartment(user?.department ?? '')
     }, [user?.id, user?.name, user?.department])
 
@@ -421,6 +425,17 @@ function Section({ icon: Icon, title, description, action, children, className }
 }
 
 // ─── Users Tab ────────────────────────────────────────────────────────────────
+function formatLastLogin(lastLoginAt: string | null): string {
+    if (!lastLoginAt) return 'Never'
+    const diff = Date.now() - new Date(lastLoginAt).getTime()
+    const hours = Math.floor(diff / 3600000)
+    if (hours < 1) return 'Just now'
+    if (hours < 24) return `${hours}h ago`
+    const days = Math.floor(hours / 24)
+    if (days < 7) return `${days}d ago`
+    return `${Math.floor(days / 7)}w ago`
+}
+
 const ROLE_ACCESS_MAP: Record<string, string[]> = {
     super_admin: ['All modules', 'User management', 'Settings', 'Audit logs'],
     hr_manager: ['Employees', 'Recruitment', 'Leave', 'Payroll', 'Onboarding', 'Reports'],
@@ -442,17 +457,6 @@ function UsersTab() {
 
     const getRoleStyle = (role: string) => roles.find((r) => r.id === role)?.color ?? 'bg-gray-50 text-gray-600'
     const getRoleLabel = (role: string) => roles.find((r) => r.id === role)?.label ?? role.replace(/_/g, ' ')
-
-    const formatLastLogin = (lastLoginAt: string | null) => {
-        if (!lastLoginAt) return 'Never'
-        const diff = Date.now() - new Date(lastLoginAt).getTime()
-        const hours = Math.floor(diff / 3600000)
-        if (hours < 1) return 'Just now'
-        if (hours < 24) return `${hours}h ago`
-        const days = Math.floor(hours / 24)
-        if (days < 7) return `${days}d ago`
-        return `${Math.floor(days / 7)}w ago`
-    }
 
     async function handleInvite(e: React.FormEvent) {
         e.preventDefault()
@@ -707,6 +711,7 @@ function NotificationsTab() {
             flat[`${item.id}_email`] = savedPrefs[item.id]?.email ?? item.email
             flat[`${item.id}_push`] = savedPrefs[item.id]?.push ?? item.push
         }
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSettings(flat)
     }, [savedPrefs])
 

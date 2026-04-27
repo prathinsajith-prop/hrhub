@@ -134,11 +134,13 @@ export function DashboardPage() {
   }))
   const departmentData = deptRaw ?? []
 
-  const notifList = (notifications as any[]) ?? []
+  type NotifItem = { isRead?: boolean; type?: string; title?: string }
+  const notifList = (notifications as NotifItem[] | undefined) ?? []
   const urgentAlerts = notifList.filter(
-    (n: any) => !n.isRead && (n.type === 'warning' || n.type === 'error'),
+    (n) => !n.isRead && (n.type === 'warning' || n.type === 'error'),
   )
-  const visaList = (visaData?.data as any[]) ?? []
+  type VisaItem = { id?: string; employee?: { firstName?: string; lastName?: string }; employeeName?: string; visaType?: string; urgencyLevel?: string; totalSteps?: number; currentStep?: number }
+  const visaList = (visaData?.data as VisaItem[] | undefined) ?? []
   const totalNat = nationalityData.reduce((a, d) => a + d.value, 0)
 
   return (
@@ -179,7 +181,7 @@ export function DashboardPage() {
           <KpiCardCompact
             key={key}
             label={t(labelKey, { defaultValue: labelFallback })}
-            value={(kpis as any)?.[key] ?? '—'}
+            value={((kpis as unknown as Record<string, string | number | null | undefined>)?.[key]) ?? '—'}
             hint={t(subKey, { defaultValue: subFallback })}
             icon={icon}
             color={color}
@@ -245,7 +247,7 @@ export function DashboardPage() {
                     tickFormatter={(v) => `${v}M`}
                   />
                   <Tooltip
-                    formatter={(v: any) => [`AED ${v}M`, 'Payroll']}
+                    formatter={(v: string | number | readonly (string | number)[] | undefined) => [`AED ${v}M`, 'Payroll']}
                     contentStyle={tooltipStyle}
                     cursor={{ stroke: CHART_COLORS.primary, strokeWidth: 1, strokeDasharray: '3 3' }}
                   />
@@ -294,7 +296,7 @@ export function DashboardPage() {
                           <Cell key={i} fill={entry.fill} stroke="none" />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(v: any) => [v, 'Employees']} contentStyle={tooltipStyle} />
+                      <Tooltip formatter={(v: string | number | readonly (string | number)[] | undefined) => [v, 'Employees']} contentStyle={tooltipStyle} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -399,11 +401,11 @@ export function DashboardPage() {
               ))
             ) : (
               <>
-                {visaList.slice(0, 5).map((v: any) => {
+                {visaList.slice(0, 5).map((v) => {
                   const name = v.employee
                     ? `${v.employee.firstName ?? ''} ${v.employee.lastName ?? ''}`.trim()
                     : v.employeeName ?? 'Unknown'
-                  const pct = v.totalSteps ? Math.round((v.currentStep / v.totalSteps) * 100) : 0
+                  const pct = v.totalSteps ? Math.round(((v.currentStep ?? 0) / v.totalSteps) * 100) : 0
                   const barClass =
                     v.urgencyLevel === 'critical'
                       ? 'bg-destructive'

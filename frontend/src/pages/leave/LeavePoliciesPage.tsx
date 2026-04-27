@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CalendarClock, Save, RotateCcw } from 'lucide-react'
 import { useLeavePolicies, useSaveLeavePolicies, useRolloverYear, type LeavePolicy, type AccrualRule } from '@/hooks/useLeave'
@@ -19,12 +19,13 @@ export function LeavePoliciesPage() {
     const { data: policies, isLoading } = useLeavePolicies()
     const saveMut = useSaveLeavePolicies()
     const rolloverMut = useRolloverYear()
-    const [draft, setDraft] = useState<LeavePolicy[]>([])
+    const [draft, setDraft] = useState<LeavePolicy[]>(() => policies ?? [])
     const [rolloverOpen, setRolloverOpen] = useState(false)
-
-    useEffect(() => {
+    const [prevPolicies, setPrevPolicies] = useState(policies)
+    if (policies !== prevPolicies) {
+        setPrevPolicies(policies)
         if (policies) setDraft(policies)
-    }, [policies])
+    }
 
     const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(policies ?? []), [draft, policies])
 

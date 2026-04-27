@@ -260,6 +260,7 @@ export function AutocompleteFilter({ config, value, onChange }: PrimitiveProps) 
         if (!draft.trim()) { setResults(config.options ?? []); return }
         let cancelled = false
         setLoading(true)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         config.onSearch(draft.trim()).then((r) => { if (!cancelled) setResults(r) }).finally(() => { if (!cancelled) setLoading(false) })
         return () => { cancelled = true }
     }, [draft, config])

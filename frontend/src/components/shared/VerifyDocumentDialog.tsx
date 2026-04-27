@@ -67,8 +67,11 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
 
     useEffect(() => {
         if (!open) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPreviewUrl(null)
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setRejectMode(false)
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setReason('')
             return
         }
@@ -203,7 +206,7 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
                                                         {e.actorLabel ?? 'system'} · {formatDate(e.createdAt)}
                                                     </p>
                                                     {e.details && typeof e.details === 'object' && 'reason' in e.details && (
-                                                        <p className="text-[10px] text-red-600 mt-0.5">"{String((e.details as any).reason)}"</p>
+                                                        <p className="text-[10px] text-red-600 mt-0.5">"{String((e.details as Record<string, unknown>).reason)}"</p>
                                                     )}
                                                 </div>
                                             </div>

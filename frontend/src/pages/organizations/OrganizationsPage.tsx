@@ -24,8 +24,8 @@ export function OrganizationsPage() {
             toast.success(t('organizations.switched', { name }))
             // Re-fetch is handled by the hook; force a soft navigate to dashboard.
             navigate('/dashboard')
-        } catch (err: any) {
-            toast.error(err?.message ?? t('organizations.switchFailed'))
+        } catch (err: unknown) {
+            toast.error((err instanceof Error ? err.message : null) ?? t('organizations.switchFailed'))
         }
     }
 

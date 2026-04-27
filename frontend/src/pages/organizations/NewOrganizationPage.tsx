@@ -30,8 +30,8 @@ export function NewOrganizationPage() {
             await createMut.mutateAsync(form)
             toast.success('Organization created')
             navigate('/organizations')
-        } catch (err: any) {
-            toast.error(err?.message ?? 'Failed to create organization')
+        } catch (err: unknown) {
+            toast.error((err instanceof Error ? err.message : null) ?? 'Failed to create organization')
         }
     }
 

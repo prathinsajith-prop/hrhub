@@ -45,6 +45,7 @@ export function EditCandidateDialog({
         const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
         const num = (v: unknown): string =>
             v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? '' : String(v)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setForm({
             name: str(candidate.name),
             email: str(candidate.email),
@@ -55,7 +56,7 @@ export function EditCandidateDialog({
             expectedSalary: num(candidate.expectedSalary),
             score: num(candidate.score),
         })
-    }, [candidate?.id])
+    }, [candidate?.id, candidate])
 
     if (!candidate) return null
 

@@ -27,9 +27,10 @@ import { EditDocumentDialog } from '@/components/shared/action-dialogs'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { VerifyDocumentDialog } from '@/components/shared/VerifyDocumentDialog'
-import type { Document, DocStatus } from '@/types'
+import type { Document, DocStatus, Employee } from '@/types'
 
-const statusBadge: Record<DocStatus, { variant: any; label: string }> = {
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info'
+const statusBadge: Record<DocStatus, { variant: BadgeVariant; label: string }> = {
   valid: { variant: 'success', label: 'Valid' },
   expiring_soon: { variant: 'warning', label: 'Expiring Soon' },
   expired: { variant: 'destructive', label: 'Expired' },
@@ -85,7 +86,7 @@ function UploadDocumentDialog({ open, onOpenChange, defaultEmployeeId, defaultCa
   const [expiryDate, setExpiryDate] = useState('')
   const [saving, setSaving] = useState(false)
   const { data: empData } = useEmployees({ limit: 100 })
-  const employees = (empData?.data as any[]) ?? []
+  const employees = (empData?.data as Employee[]) ?? []
   const qc = useQueryClient()
 
   const categoryDocs = category ? DOC_TYPE_CATALOG[category] : []
@@ -94,6 +95,7 @@ function UploadDocumentDialog({ open, onOpenChange, defaultEmployeeId, defaultCa
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (defaultEmployeeId) setEmployeeId(defaultEmployeeId)
       if (defaultCategory) setCategory(defaultCategory as DocCategory)
     }
@@ -371,16 +373,16 @@ export function DocumentsPage() {
   const [viewTarget, setViewTarget] = useState<Document | null>(null)
   const [verifyTarget, setVerifyTarget] = useState<Document | null>(null)
   const { data: docsData, isLoading } = useDocuments({ limit: 100 })
-  const documents: Document[] = (docsData?.data as Document[]) ?? []
-  const expiring = documents.filter((d: any) => d.status === 'expiring_soon').length
-  const expired = documents.filter((d: any) => d.status === 'expired').length
+  const documents = useMemo<Document[]>(() => (docsData?.data as Document[]) ?? [], [docsData?.data])
+  const expiring = documents.filter((d) => d.status === 'expiring_soon').length
+  const expired = documents.filter((d) => d.status === 'expired').length
   const deleteDoc = useDeleteDocument()
   const search = useSearchFilters({
     storageKey: 'hrhub.documents.searchHistory',
     availableFilters: DOCUMENT_FILTERS,
   })
   const filteredDocuments = useMemo(
-    () => applyClientFilters(documents as any[], {
+    () => applyClientFilters(documents as unknown as Record<string, unknown>[], {
       searchInput: search.searchInput,
       appliedFilters: search.appliedFilters,
       searchFields: ['employeeName', 'employeeNo', 'docType', 'fileName', 'category'],

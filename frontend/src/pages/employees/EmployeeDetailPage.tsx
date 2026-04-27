@@ -47,7 +47,7 @@ import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 
-const statusVariant: Record<string, any> = {
+const statusVariant: Record<string, 'success' | 'warning' | 'info' | 'destructive' | 'secondary'> = {
   active: 'success',
   probation: 'warning',
   onboarding: 'info',
@@ -108,7 +108,17 @@ export function EmployeeDetailPage() {
   const avatarInputRef = React.useRef<HTMLInputElement>(null)
   const docInputRef = React.useRef<HTMLInputElement>(null)
 
-  const e = employee as any
+  const e = employee
+
+  const [visaDays, setVisaDays] = React.useState<number | null>(null)
+  React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVisaDays(
+      e?.visaExpiry
+        ? Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000)
+        : null,
+    )
+  }, [e?.visaExpiry])
 
   const handleAvatarChange = (ev: React.ChangeEvent<HTMLInputElement>) => {
     const file = ev.target.files?.[0]
@@ -119,7 +129,7 @@ export function EmployeeDetailPage() {
     }
     uploadAvatar.mutate(file, {
       onSuccess: () => toast.success('Profile image updated'),
-      onError: (err: any) => toast.error(err?.message ?? 'Upload failed'),
+      onError: (err: Error) => toast.error(err?.message ?? 'Upload failed'),
     })
     ev.target.value = ''
   }
@@ -135,7 +145,7 @@ export function EmployeeDetailPage() {
       { file, employeeId: id, category: 'other', docType: file.name },
       {
         onSuccess: () => toast.success('Document uploaded'),
-        onError: (err: any) => toast.error(err?.message ?? 'Upload failed'),
+        onError: (err: Error) => toast.error(err?.message ?? 'Upload failed'),
       },
     )
     ev.target.value = ''
@@ -173,11 +183,6 @@ export function EmployeeDetailPage() {
       </PageWrapper>
     )
   }
-
-  // eslint-disable-next-line react-hooks/purity
-  const visaDays = e.visaExpiry
-    ? Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000)
-    : null
 
   return (
     <PageWrapper>
@@ -393,7 +398,7 @@ export function EmployeeDetailPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                     <div>
                       <InfoRow label="Full Name" value={e.fullName} icon={User} />
-                      <InfoRow label="Date of Birth" value={formatDate(e.dateOfBirth)} icon={Calendar} />
+                      <InfoRow label="Date of Birth" value={e.dateOfBirth ? formatDate(e.dateOfBirth) : '—'} icon={Calendar} />
                       <InfoRow label="Gender" value={e.gender} icon={User} />
                       <InfoRow label="Nationality" value={e.nationality} icon={MapPin} />
                       <InfoRow label="Marital Status" value={e.maritalStatus} />
@@ -421,14 +426,14 @@ export function EmployeeDetailPage() {
                       <InfoRow label="Employee No." value={e.employeeNo} icon={Hash} />
                       <InfoRow label="Designation" value={e.designation} icon={Briefcase} />
                       <InfoRow label="Department" value={e.department} icon={Building2} />
-                      <InfoRow label="Company" value={e.entityName ?? '—'} icon={Building2} />
+                      <InfoRow label="Company" value={(e as unknown as Record<string, unknown>)['entityName'] as string ?? '—'} icon={Building2} />
                       <InfoRow label="Contract Type" value={e.contractType} />
                       <InfoRow label="Work Location" value={e.workLocation} icon={MapPin} />
                     </div>
                     <div>
                       <InfoRow label="Join Date" value={formatDate(e.joinDate)} icon={Calendar} />
-                      <InfoRow label="Probation End" value={formatDate(e.probationEndDate)} icon={Clock} />
-                      <InfoRow label="Contract End" value={formatDate(e.contractEndDate)} icon={Calendar} />
+                      <InfoRow label="Probation End" value={e.probationEndDate ? formatDate(e.probationEndDate) : '—'} icon={Clock} />
+                      <InfoRow label="Contract End" value={e.contractEndDate ? formatDate(e.contractEndDate) : '—'} icon={Calendar} />
                       <InfoRow label="Status" value={e.status?.replace('_', ' ')} icon={Shield} />
                       <InfoRow label="Grade / Band" value={e.gradeLevel} />
                       <InfoRow label="Direct Manager" value={e.managerName} icon={User} />
@@ -470,15 +475,15 @@ export function EmployeeDetailPage() {
                     <div>
                       <InfoRow label="Visa Type" value={e.visaType?.replace(/_/g, ' ')} icon={Plane} />
                       <InfoRow label="Visa Number" value={e.visaNumber} icon={Hash} />
-                      <InfoRow label="Visa Issue Date" value={formatDate(e.visaIssueDate)} icon={Calendar} />
-                      <InfoRow label="Visa Expiry" value={formatDate(e.visaExpiry)} icon={Calendar} />
+                      <InfoRow label="Visa Issue Date" value={e.visaIssueDate ? formatDate(e.visaIssueDate) : '—'} icon={Calendar} />
+                      <InfoRow label="Visa Expiry" value={e.visaExpiry ? formatDate(e.visaExpiry) : '—'} icon={Calendar} />
                       <InfoRow label="Sponsoring Entity" value={e.sponsoringEntity} icon={Building2} />
                     </div>
                     <div>
                       <InfoRow label="Emirates ID" value={e.emiratesId} icon={Hash} />
-                      <InfoRow label="EID Expiry" value={formatDate(e.emiratesIdExpiry)} icon={Calendar} />
+                      <InfoRow label="EID Expiry" value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : '—'} icon={Calendar} />
                       <InfoRow label="Passport No." value={e.passportNo} icon={Hash} />
-                      <InfoRow label="Passport Expiry" value={formatDate(e.passportExpiry)} icon={Calendar} />
+                      <InfoRow label="Passport Expiry" value={e.passportExpiry ? formatDate(e.passportExpiry) : '—'} icon={Calendar} />
                       <InfoRow label="Labour Card No." value={e.labourCardNumber} icon={Hash} />
                     </div>
                   </div>
@@ -767,10 +772,10 @@ export function EmployeeDetailPage() {
                     </div>
                   ) : (
                     <div className="divide-y">
-                      {(leaveHistoryData.data as Array<any>).map((req) => (
+                      {(leaveHistoryData.data as Array<{ id: string; leaveType: string; startDate: string; endDate: string; days: number; status: string }>).map((req) => (
                         <div key={req.id} className="py-3 flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-sm font-medium capitalize">{(req.leaveType as string).replace('_', ' ')} Leave</p>
+                            <p className="text-sm font-medium capitalize">{req.leaveType.replace('_', ' ')} Leave</p>
                             <p className="text-xs text-muted-foreground">
                               {formatDate(req.startDate)} — {formatDate(req.endDate)} · {req.days} day{req.days !== 1 ? 's' : ''}
                             </p>
@@ -852,7 +857,7 @@ export function EmployeeDetailPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(attendanceRecords as Array<any>)
+                          {(attendanceRecords as Array<{ id: string; date: string; status: string; checkIn?: string; checkOut?: string; hoursWorked?: string }>)
                             .slice()
                             .sort((a, b) => b.date.localeCompare(a.date))
                             .map((r) => {

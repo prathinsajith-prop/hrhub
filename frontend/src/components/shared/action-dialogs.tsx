@@ -155,7 +155,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
     const today = new Date().toISOString().split('T')[0]
     const { data: empData } = useEmployees({ limit: 100 })
-    const employees = (empData?.data as any[]) ?? []
+    const employees = (empData?.data as Employee[]) ?? []
     const createVisa = useCreateVisa()
 
     const submit = () => {
@@ -244,7 +244,7 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
     const [reason, setReason] = useState('')
     const today = new Date().toISOString().split('T')[0]
     const { data: empData } = useEmployees({ limit: 100 })
-    const employees = (empData?.data as any[]) ?? []
+    const employees = (empData?.data as Employee[]) ?? []
     const createLeave = useCreateLeave()
 
     const submit = () => {
@@ -443,39 +443,39 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
             {
                 firstName: form.firstName, lastName: form.lastName,
                 dateOfBirth: form.dateOfBirth || undefined,
-                gender: (form.gender as any) || undefined,
+                gender: (form.gender as Employee['gender']) || undefined,
                 nationality: form.nationality || undefined,
                 passportNo: form.passportNo || undefined,
                 mobileNo: form.mobileNo || undefined,
                 personalEmail: form.personalEmail || undefined,
-                maritalStatus: (form.maritalStatus as any) || undefined,
+                maritalStatus: (form.maritalStatus as Employee['maritalStatus']) || undefined,
                 emergencyContact: form.emergencyContact || undefined,
                 employeeNo: empNo,
                 department: form.department || undefined,
                 designation: form.designation || undefined,
                 joinDate: form.joinDate,
-                contractType: (form.contractType as any) || undefined,
+                contractType: (form.contractType as Employee['contractType']) || undefined,
                 workLocation: form.workLocation || undefined,
                 managerName: form.managerName || undefined,
-                reportingTo: form.reportingTo || null,
+                reportingTo: form.reportingTo || undefined,
                 gradeLevel: form.gradeLevel || undefined,
-                status: form.status as any,
+                status: form.status as Employee['status'],
                 basicSalary: basic || undefined,
                 housingAllowance: housing || undefined,
                 transportAllowance: transport || undefined,
                 otherAllowances: other || undefined,
                 totalSalary: basic + housing + transport + other || undefined,
-                paymentMethod: (form.paymentMethod as any) || undefined,
+                paymentMethod: (form.paymentMethod as Employee['paymentMethod']) || undefined,
                 bankName: form.bankName || undefined,
                 iban: form.iban || undefined,
-                emiratisationCategory: (form.emiratisationCategory as any) || 'expat',
-            } as any,
+                emiratisationCategory: (form.emiratisationCategory as Employee['emiratisationCategory']) || 'expat',
+            },
             {
                 onSuccess: () => {
                     toast.success('Employee added', `${form.firstName} ${form.lastName} has been onboarded.`)
                     close()
                 },
-                onError: (err: any) => {
+                onError: (err: Error & { message?: string }) => {
                     const fieldErrors = apiErrorToFieldMap(err)
                     if (Object.keys(fieldErrors).length) {
                         setErrors(fieldErrors)
@@ -797,39 +797,39 @@ export function EditEmployeeDialog({
             {
                 firstName: form.firstName, lastName: form.lastName,
                 dateOfBirth: form.dateOfBirth || undefined,
-                gender: (form.gender as any) || undefined,
+                gender: (form.gender as Employee['gender']) || undefined,
                 nationality: form.nationality || undefined,
                 passportNo: form.passportNo || undefined,
                 mobileNo: form.mobileNo || undefined,
                 personalEmail: form.personalEmail || undefined,
-                maritalStatus: (form.maritalStatus as any) || undefined,
+                maritalStatus: (form.maritalStatus as Employee['maritalStatus']) || undefined,
                 emergencyContact: form.emergencyContact || undefined,
                 employeeNo: form.employeeNo || undefined,
                 department: form.department || undefined,
                 designation: form.designation || undefined,
                 joinDate: form.joinDate,
-                contractType: (form.contractType as any) || undefined,
+                contractType: (form.contractType as Employee['contractType']) || undefined,
                 workLocation: form.workLocation || undefined,
                 managerName: form.managerName || undefined,
-                reportingTo: form.reportingTo || null,
+                reportingTo: form.reportingTo || undefined,
                 gradeLevel: form.gradeLevel || undefined,
-                status: form.status as any,
+                status: form.status as Employee['status'],
                 basicSalary: basic || undefined,
                 housingAllowance: housing || undefined,
                 transportAllowance: transport || undefined,
                 otherAllowances: other || undefined,
                 totalSalary: basic + housing + transport + other || undefined,
-                paymentMethod: (form.paymentMethod as any) || undefined,
+                paymentMethod: (form.paymentMethod as Employee['paymentMethod']) || undefined,
                 bankName: form.bankName || undefined,
                 iban: form.iban || undefined,
-                emiratisationCategory: (form.emiratisationCategory as any) || 'expat',
-            } as any,
+                emiratisationCategory: (form.emiratisationCategory as Employee['emiratisationCategory']) || 'expat',
+            },
             {
                 onSuccess: () => {
                     toast.success('Employee updated', `${form.firstName} ${form.lastName} has been updated.`)
                     close()
                 },
-                onError: (err: any) => {
+                onError: (err: Error & { message?: string }) => {
                     const fieldErrors = apiErrorToFieldMap(err)
                     if (Object.keys(fieldErrors).length) setErrors(fieldErrors)
                     toast.error('Failed to update employee', err?.message ?? 'Please try again.')
@@ -1031,7 +1031,7 @@ export function EditJobDialog({
                     toast.success('Job updated', `${title} has been saved.`)
                     onOpenChange(false)
                 },
-                onError: (err: any) => toast.error('Failed to update job', err?.message ?? 'Please try again.'),
+                onError: (err: Error & { message?: string }) => toast.error('Failed to update job', err?.message ?? 'Please try again.'),
             },
         )
     }
@@ -1144,7 +1144,7 @@ export function EditDocumentDialog({
                     toast.success('Document updated', 'Changes have been saved.')
                     onOpenChange(false)
                 },
-                onError: (err: any) => toast.error('Failed to update document', err?.message ?? 'Please try again.'),
+                onError: (err: Error & { message?: string }) => toast.error('Failed to update document', err?.message ?? 'Please try again.'),
             },
         )
     }

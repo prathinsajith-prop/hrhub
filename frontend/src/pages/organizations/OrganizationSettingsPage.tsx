@@ -18,7 +18,6 @@ import {
     Check,
     Minus,
     CalendarDays,
-    RefreshCw,
     ChevronLeft,
     ChevronRight,
     Repeat2,
@@ -117,11 +116,11 @@ function ProfileTab() {
     const [saved, setSaved] = useState(false)
 
     useEffect(() => {
-        if (company) setForm({ name: company.name, tradeLicenseNo: company.tradeLicenseNo, jurisdiction: company.jurisdiction, industryType: company.industryType })
+        setForm({ name: company?.name ?? '', tradeLicenseNo: company?.tradeLicenseNo ?? '', jurisdiction: company?.jurisdiction ?? '', industryType: company?.industryType ?? '' })
     }, [company])
 
     useEffect(() => {
-        if (regional) setRegionalForm({ timezone: regional.timezone, currency: regional.currency, dateFormat: regional.dateFormat })
+        setRegionalForm({ timezone: regional?.timezone ?? 'Asia/Dubai', currency: regional?.currency ?? 'AED', dateFormat: regional?.dateFormat ?? 'DD/MM/YYYY' })
     }, [regional])
 
     const set = (field: keyof CompanySettings, value: string) => setForm(p => ({ ...p, [field]: value }))
@@ -188,7 +187,7 @@ function ProfileTab() {
             <Section icon={Globe} title="Regional Settings" description="Defaults applied across the workspace">
                 {regionalLoading ? (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+                        {[1, 2, 3].map(n => <Skeleton key={n} className="h-10 w-full" />)}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -327,8 +326,8 @@ function MembersTab() {
             >
                 {isLoading ? (
                     <div className="divide-y border rounded-lg">
-                        {[1, 2, 3].map(i => (
-                            <div key={i} className="flex items-center gap-3 px-4 py-3.5">
+                        {[1, 2, 3].map(n => (
+                            <div key={n} className="flex items-center gap-3 px-4 py-3.5">
                                 <Skeleton className="h-9 w-9 rounded-full" />
                                 <div className="space-y-1 flex-1">
                                     <Skeleton className="h-4 w-32" />
@@ -626,7 +625,7 @@ function SwitchTab() {
             <Section icon={ArrowRightLeft} title="Switch Organization" description="Select a workspace to switch into">
                 {isLoading ? (
                     <div className="grid sm:grid-cols-2 gap-3">
-                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+                        {[1, 2, 3].map(n => <Skeleton key={n} className="h-20 w-full" />)}
                     </div>
                 ) : (tenants ?? []).length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">You don't belong to any organization yet.</p>
@@ -635,13 +634,15 @@ function SwitchTab() {
                         {(tenants ?? []).map((m: any) => {
                             const isActive = currentTenant?.id === m.tenantId
                             return (
-                                <div
+                                <button
                                     key={m.membershipId}
+                                    type="button"
+                                    disabled={isActive || switchMut.isPending}
                                     className={cn(
-                                        'flex items-center justify-between gap-3 rounded-lg border p-4 transition-colors',
+                                        'flex items-center justify-between gap-3 rounded-lg border p-4 transition-colors text-left w-full',
                                         isActive ? 'border-primary/40 bg-primary/5' : 'hover:border-primary/30 hover:bg-muted/30 cursor-pointer',
                                     )}
-                                    onClick={() => !isActive && handleSwitch(m.tenantId, m.tenantName)}
+                                    onClick={() => handleSwitch(m.tenantId, m.tenantName)}
                                 >
                                     <div className="flex items-center gap-3 min-w-0">
                                         <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0 text-sm font-semibold text-muted-foreground">
@@ -655,11 +656,9 @@ function SwitchTab() {
                                     {isActive ? (
                                         <Badge variant="secondary" className="text-[10px] shrink-0">Current</Badge>
                                     ) : (
-                                        <Button size="sm" variant="outline" disabled={switchMut.isPending} className="shrink-0 h-7 text-xs">
-                                            Switch
-                                        </Button>
+                                        <Badge variant="outline" className="text-[10px] shrink-0">Switch</Badge>
                                     )}
-                                </div>
+                                </button>
                             )
                         })}
                     </div>
@@ -972,7 +971,7 @@ function HolidaysTab() {
             {/* Holiday list */}
             {isLoading ? (
                 <div className="space-y-3">
-                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}
+                    {[1, 2, 3].map(n => <Skeleton key={n} className="h-14 w-full" />)}
                 </div>
             ) : sorted.length === 0 ? (
                 <Card>

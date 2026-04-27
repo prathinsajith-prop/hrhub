@@ -35,11 +35,11 @@ const KIND_META: Record<EventKind, {
     border: string
     text: string
 }> = {
-    visa:     { label: 'Visa',            icon: Plane,          bg: '#ecfeff', border: '#06b6d4', text: '#155e75' },
-    document: { label: 'Document',        icon: FileText,       bg: '#fffbeb', border: '#f59e0b', text: '#854d0e' },
-    leave:    { label: 'Leave',           icon: CalendarCheck2, bg: '#ecfdf5', border: '#10b981', text: '#065f46' },
-    review:   { label: 'Review',          icon: Star,           bg: '#f5f3ff', border: '#8b5cf6', text: '#5b21b6' },
-    holiday:  { label: 'Public Holiday',  icon: CalendarDays,   bg: '#fff1f2', border: '#f43f5e', text: '#9f1239' },
+    visa: { label: 'Visa', icon: Plane, bg: '#ecfeff', border: '#06b6d4', text: '#155e75' },
+    document: { label: 'Document', icon: FileText, bg: '#fffbeb', border: '#f59e0b', text: '#854d0e' },
+    leave: { label: 'Leave', icon: CalendarCheck2, bg: '#ecfdf5', border: '#10b981', text: '#065f46' },
+    review: { label: 'Review', icon: Star, bg: '#f5f3ff', border: '#8b5cf6', text: '#5b21b6' },
+    holiday: { label: 'Public Holiday', icon: CalendarDays, bg: '#fff1f2', border: '#f43f5e', text: '#9f1239' },
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -68,12 +68,12 @@ export function CalendarPage() {
     // Track which year the calendar is currently showing so we fetch the right holidays.
     const [visibleYear, setVisibleYear] = useState<number>(new Date().getFullYear())
 
-    const visas     = useVisas({ limit: 100 })
+    const visas = useVisas({ limit: 100 })
     const documents = useDocuments({ limit: 100 })
-    const leaves    = useLeaveRequests({ limit: 100 })
-    const reviews   = usePerformanceReviews()
+    const leaves = useLeaveRequests({ limit: 100 })
+    const reviews = usePerformanceReviews()
     // Fetch holidays for the visible calendar year (updates when user navigates months).
-    const holidays  = usePublicHolidays(visibleYear)
+    const holidays = usePublicHolidays(visibleYear)
 
     const isLoading =
         visas.isLoading || documents.isLoading ||
@@ -83,50 +83,53 @@ export function CalendarPage() {
 
     const events = useMemo<EventInput[]>(() => {
         const out: EventInput[] = []
+        // Helper to safely read a property as string | null | undefined
+        const str = (v: unknown): string | undefined =>
+            typeof v === 'string' ? v : undefined
 
         if (filter.visa) {
-            const rows = ((visas.data as any)?.data ?? []) as any[]
+            const rows = ((visas.data as { data?: unknown })?.data ?? []) as Record<string, unknown>[]
             for (const v of rows) {
-                const date = safeISO(v.expiryDate)
+                const date = safeISO(str(v.expiryDate))
                 if (!date) continue
                 const c = KIND_META.visa
                 out.push({
-                    id: `visa-${v.id}`,
-                    title: `Visa expires — ${v.employeeName ?? 'Employee'}`,
+                    id: `visa-${str(v.id)}`,
+                    title: `Visa expires — ${str(v.employeeName) ?? 'Employee'}`,
                     start: date,
                     allDay: true,
                     backgroundColor: c.bg,
                     borderColor: c.border,
                     textColor: c.text,
-                    extendedProps: { kind: 'visa' as EventKind, href: `/visa/${v.id}`, sub: v.employeeName },
+                    extendedProps: { kind: 'visa' as EventKind, href: `/visa/${str(v.id)}`, sub: str(v.employeeName) },
                 })
             }
         }
 
         if (filter.document) {
-            const rows = ((documents.data as any)?.data ?? []) as any[]
+            const rows = ((documents.data as { data?: unknown })?.data ?? []) as Record<string, unknown>[]
             for (const d of rows) {
-                const date = safeISO(d.expiryDate)
+                const date = safeISO(str(d.expiryDate))
                 if (!date) continue
                 const c = KIND_META.document
                 out.push({
-                    id: `doc-${d.id}`,
-                    title: `${d.docType ?? d.category ?? 'Document'} expires`,
+                    id: `doc-${str(d.id)}`,
+                    title: `${str(d.docType) ?? str(d.category) ?? 'Document'} expires`,
                     start: date,
                     allDay: true,
                     backgroundColor: c.bg,
                     borderColor: c.border,
                     textColor: c.text,
-                    extendedProps: { kind: 'document' as EventKind, href: '/documents', sub: d.employeeName },
+                    extendedProps: { kind: 'document' as EventKind, href: '/documents', sub: str(d.employeeName) },
                 })
             }
         }
 
         if (filter.leave) {
-            const rows = ((leaves.data as any)?.data ?? []) as any[]
+            const rows = ((leaves.data as { data?: unknown })?.data ?? []) as Record<string, unknown>[]
             for (const l of rows) {
-                const start = safeISO(l.startDate)
-                const end   = safeISO(l.endDate)
+                const start = safeISO(str(l.startDate))
+                const end = safeISO(str(l.endDate))
                 if (!start) continue
                 let endExclusive: string | undefined
                 if (end) {
@@ -136,47 +139,47 @@ export function CalendarPage() {
                 }
                 const c = KIND_META.leave
                 out.push({
-                    id: `leave-${l.id}`,
-                    title: `${l.employeeName ?? 'Employee'} — ${l.leaveType ?? 'leave'}`,
+                    id: `leave-${str(l.id)}`,
+                    title: `${str(l.employeeName) ?? 'Employee'} — ${str(l.leaveType) ?? 'leave'}`,
                     start,
                     end: endExclusive,
                     allDay: true,
                     backgroundColor: c.bg,
                     borderColor: c.border,
                     textColor: c.text,
-                    extendedProps: { kind: 'leave' as EventKind, href: '/leave', sub: l.employeeName },
+                    extendedProps: { kind: 'leave' as EventKind, href: '/leave', sub: str(l.employeeName) },
                 })
             }
         }
 
         if (filter.review) {
-            const rows = (Array.isArray(reviews.data) ? reviews.data : []) as any[]
+            const rows = (Array.isArray(reviews.data) ? reviews.data : []) as unknown as Record<string, unknown>[]
             for (const r of rows) {
-                const date = safeISO(r.reviewDate)
+                const date = safeISO(str(r.reviewDate))
                 if (!date) continue
                 const c = KIND_META.review
                 out.push({
-                    id: `review-${r.id}`,
-                    title: `Review — ${r.period ?? ''}`,
+                    id: `review-${str(r.id)}`,
+                    title: `Review — ${str(r.period) ?? ''}`,
                     start: date,
                     allDay: true,
                     backgroundColor: c.bg,
                     borderColor: c.border,
                     textColor: c.text,
-                    extendedProps: { kind: 'review' as EventKind, href: '/performance', sub: r.period },
+                    extendedProps: { kind: 'review' as EventKind, href: '/performance', sub: str(r.period) },
                 })
             }
         }
 
         if (filter.holiday) {
-            const rows = (holidays.data ?? []) as any[]
+            const rows = (holidays.data ?? []) as unknown as Record<string, unknown>[]
             for (const h of rows) {
-                const date = safeISO(h.date)
+                const date = safeISO(str(h.date))
                 if (!date) continue
                 const c = KIND_META.holiday
                 out.push({
-                    id: `holiday-${h.id}`,
-                    title: h.name,
+                    id: `holiday-${str(h.id)}`,
+                    title: str(h.name) ?? '',
                     start: date,
                     allDay: true,
                     backgroundColor: c.bg,
@@ -220,10 +223,10 @@ export function CalendarPage() {
         }).length
     }, [events])
 
-    const toggle     = (k: EventKind) => setFilter(f => ({ ...f, [k]: !f[k] }))
-    const goPrev     = () => calRef.current?.getApi().prev()
-    const goNext     = () => calRef.current?.getApi().next()
-    const goToday    = () => calRef.current?.getApi().today()
+    const toggle = (k: EventKind) => setFilter(f => ({ ...f, [k]: !f[k] }))
+    const goPrev = () => calRef.current?.getApi().prev()
+    const goNext = () => calRef.current?.getApi().next()
+    const goToday = () => calRef.current?.getApi().today()
     const changeView = (v: ViewKey) => { setView(v); calRef.current?.getApi().changeView(v) }
 
     const renderEventContent = (arg: EventContentArg) => {

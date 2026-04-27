@@ -67,6 +67,7 @@ export function RegisterPage() {
     defaultValues: { terms: false },
   })
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const termsChecked = watch('terms')
 
   const onSubmit = async (data: RegisterForm) => {

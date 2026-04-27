@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
+import type { User, Tenant } from '@/types'
 
 export type MemberRole = 'super_admin' | 'hr_manager' | 'pro_officer' | 'dept_head' | 'employee'
 
@@ -70,8 +71,8 @@ export function useSwitchTenant() {
             const res = await api.post<{
                 accessToken: string
                 refreshToken: string
-                user: any
-                tenant: any
+                user: User
+                tenant: Tenant
             }>('/tenants/switch', { tenantId })
             return res
         },

@@ -19,7 +19,7 @@ import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { ApplyLeaveDialog } from '@/components/shared/action-dialogs'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { usePermissions } from '@/hooks/usePermissions'
-import type { LeaveRequest } from '@/types'
+import type { Employee, LeaveRequest } from '@/types'
 
 const LEAVE_FILTERS: FilterConfig[] = [
     { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
@@ -56,7 +56,7 @@ const LEAVE_LABELS: Record<string, string> = {
 function LeaveBalancePanel() {
     const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>()
     const { data: empData } = useEmployees({ limit: 100, status: 'active' })
-    const employees = (empData?.data as any[]) ?? []
+    const employees = (empData?.data as Employee[]) ?? []
     const { data: balanceData, isLoading: balanceLoading } = useLeaveBalance(selectedEmployee)
     const balance = balanceData?.balance
 
@@ -69,7 +69,7 @@ function LeaveBalancePanel() {
                         <SelectValue placeholder="Select employee…" />
                     </SelectTrigger>
                     <SelectContent>
-                        {employees.map((e: any) => (
+                        {employees.map((e: Employee) => (
                             <SelectItem key={e.id} value={e.id}>{e.fullName ?? `${e.firstName} ${e.lastName}`}</SelectItem>
                         ))}
                     </SelectContent>
@@ -115,7 +115,7 @@ function LeaveBalancePanel() {
     )
 }
 
-const leaveStatusVariant: Record<string, any> = {
+const leaveStatusVariant: Record<string, string> = {
     pending: 'warning',
     approved: 'success',
     rejected: 'destructive',
@@ -137,7 +137,7 @@ export function LeavePage() {
     const { can } = usePermissions()
     const canApprove = can('approve_leave')
     const { data: leaveData, isLoading: leaveLoading } = useLeaveRequests({ limit: 50 })
-    const leaves: LeaveRequest[] = (leaveData?.data as LeaveRequest[]) ?? []
+    const leaves = useMemo<LeaveRequest[]>(() => (leaveData?.data as LeaveRequest[]) ?? [], [leaveData?.data])
     const approveLeave = useApproveLeave()
     const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null)
     const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null)
@@ -149,7 +149,7 @@ export function LeavePage() {
         availableFilters: LEAVE_FILTERS,
     })
     const filteredLeaves = useMemo(
-        () => applyClientFilters(leaves as any[], {
+        () => applyClientFilters(leaves as unknown as Record<string, unknown>[], {
             searchInput: leaveSearch.searchInput,
             appliedFilters: leaveSearch.appliedFilters,
             searchFields: ['employeeName', 'leaveType', 'status', 'reason'],
@@ -163,11 +163,11 @@ export function LeavePage() {
             header: 'Employee',
             cell: ({ row: { original: l } }) => (
                 <div className="flex items-center gap-2.5 min-w-0">
-                    <InitialsAvatar name={l.employeeName || '—'} src={(l as any).employeeAvatarUrl} size="sm" />
+                    <InitialsAvatar name={l.employeeName || '—'} src={l.employeeAvatarUrl ?? undefined} size="sm" />
                     <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{l.employeeName || '—'}</p>
-                        {(l as any).employeeDepartment && (
-                            <p className="text-[11px] text-muted-foreground truncate">{(l as any).employeeDepartment}</p>
+                        {l.employeeDepartment && (
+                            <p className="text-[11px] text-muted-foreground truncate">{l.employeeDepartment}</p>
                         )}
                     </div>
                 </div>
@@ -201,7 +201,7 @@ export function LeavePage() {
             header: 'Status',
             cell: ({ getValue }) => {
                 const s = getValue() as string
-                return <Badge variant={leaveStatusVariant[s]} className="capitalize text-[11px]">{s}</Badge>
+                return <Badge variant={leaveStatusVariant[s] as 'warning' | 'success' | 'destructive' | 'secondary'} className="capitalize text-[11px]">{s}</Badge>
             },
         },
         {
@@ -239,22 +239,22 @@ export function LeavePage() {
             />
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <KpiCardCompact label="Pending" value={leaves.filter((l: any) => l.status === 'pending').length} icon={Clock} color="amber" />
-                <KpiCardCompact label="Approved" value={leaves.filter((l: any) => l.status === 'approved').length} icon={CheckCircle2} color="green" />
-                <KpiCardCompact label="Days Used" value={leaves.filter((l: any) => l.status === 'approved').reduce((a: number, l: any) => a + (l.days ?? 0), 0)} icon={Calendar} color="blue" />
-                <KpiCardCompact label="Rejected" value={leaves.filter((l: any) => l.status === 'rejected').length} icon={XCircle} color="red" />
+                <KpiCardCompact label="Pending" value={leaves.filter((l) => l.status === 'pending').length} icon={Clock} color="amber" />
+                <KpiCardCompact label="Approved" value={leaves.filter((l) => l.status === 'approved').length} icon={CheckCircle2} color="green" />
+                <KpiCardCompact label="Days Used" value={leaves.filter((l) => l.status === 'approved').reduce((a: number, l: LeaveRequest) => a + (l.days ?? 0), 0)} icon={Calendar} color="blue" />
+                <KpiCardCompact label="Rejected" value={leaves.filter((l) => l.status === 'rejected').length} icon={XCircle} color="red" />
             </div>
 
             {/* Leave type breakdown for this year */}
             {!leaveLoading && leaves.length > 0 && (() => {
                 const thisYear = new Date().getFullYear().toString()
-                const yearLeaves = leaves.filter((l: any) => l.startDate?.startsWith(thisYear))
+                const yearLeaves = leaves.filter((l) => l.startDate?.startsWith(thisYear))
                 const types = ['annual', 'sick', 'maternity', 'paternity', 'compassionate', 'hajj', 'unpaid']
                 const usedByType: Record<string, number> = {}
                 for (const l of yearLeaves) {
-                    if ((l as any).status === 'approved') {
-                        const t = (l as any).leaveType as string
-                        usedByType[t] = (usedByType[t] ?? 0) + ((l as any).days ?? 0)
+                    if (l.status === 'approved') {
+                        const t = l.leaveType as string
+                        usedByType[t] = (usedByType[t] ?? 0) + (l.days ?? 0)
                     }
                 }
                 const hasAny = types.some(t => usedByType[t])
@@ -288,7 +288,7 @@ export function LeavePage() {
             <Card className="p-4">
                 <DataTable
                     columns={columns}
-                    data={filteredLeaves}
+                    data={filteredLeaves as unknown as LeaveRequest[]}
                     isLoading={leaveLoading}
                     advancedFilter={{
                         search: leaveSearch,
@@ -297,15 +297,15 @@ export function LeavePage() {
                     }}
                     pageSize={8}
                     enableSelection
-                    getRowId={(row: any) => String(row.id)}
+                    getRowId={(row: LeaveRequest) => String(row.id)}
                     bulkActions={(selected) => (
                         <>
                             <Button variant="outline" size="sm" leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
-                                onClick={() => setBulkAction({ ids: selected.map((l: any) => l.id), approve: true })}>
+                                onClick={() => setBulkAction({ ids: selected.map((l: LeaveRequest) => l.id), approve: true })}>
                                 Approve
                             </Button>
                             <Button variant="destructive" size="sm" leftIcon={<XCircle className="h-3.5 w-3.5" />}
-                                onClick={() => setBulkAction({ ids: selected.map((l: any) => l.id), approve: false })}>
+                                onClick={() => setBulkAction({ ids: selected.map((l: LeaveRequest) => l.id), approve: false })}>
                                 Reject
                             </Button>
                         </>

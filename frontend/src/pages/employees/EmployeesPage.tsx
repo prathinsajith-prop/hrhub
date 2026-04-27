@@ -137,7 +137,8 @@ export function EmployeesPage() {
   const { can } = usePermissions()
   const canManage = can('manage_employees')
   const { data: empData, isLoading, isError, error, refetch } = useEmployees({ limit: 50 })
-  const employees: Employee[] = (empData?.data as Employee[]) ?? []
+  const employeesRaw = useMemo(() => (empData?.data as Employee[]) ?? [], [empData?.data])
+  const employees: Employee[] = employeesRaw
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
   const [editTarget, setEditTarget] = useState<Employee | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -150,7 +151,7 @@ export function EmployeesPage() {
   const filtered = useMemo(() => {
     const f = search.appliedFilters
     const q = search.searchInput.trim().toLowerCase()
-    return employees.filter((e: any) => {
+    return employees.filter((e: Employee) => {
       if (q && !`${e.fullName} ${e.employeeNo} ${e.email ?? ''}`.toLowerCase().includes(q)) return false
       if (f.status?.value && e.status !== f.status.value) return false
       if (f.department?.value && !String(e.department ?? '').toLowerCase().includes(String(f.department.value).toLowerCase())) return false
@@ -177,10 +178,10 @@ export function EmployeesPage() {
     })
   }, [employees, search.appliedFilters, search.searchInput])
 
-  const active = employees.filter((e: any) => e.status === 'active').length
-  const onboarding = employees.filter((e: any) => e.status === 'onboarding').length
-  const probation = employees.filter((e: any) => e.status === 'probation').length
-  const emiratis = employees.filter((e: any) => e.emiratisationCategory === 'emirati').length
+  const active = employees.filter((e: Employee) => e.status === 'active').length
+  const onboarding = employees.filter((e: Employee) => e.status === 'onboarding').length
+  const probation = employees.filter((e: Employee) => e.status === 'probation').length
+  const emiratis = employees.filter((e: Employee) => e.emiratisationCategory === 'emirati').length
 
   const handleDelete = () => {
     if (!deleteTarget) return
@@ -325,7 +326,7 @@ export function EmployeesPage() {
         <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="flex items-center justify-between py-3 px-4">
             <p className="text-sm text-destructive font-medium">
-              Failed to load employees: {(error as any)?.message ?? 'Unknown error'}
+              Failed to load employees: {(error as Error)?.message ?? 'Unknown error'}
             </p>
             <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
           </CardContent>
@@ -363,7 +364,7 @@ export function EmployeesPage() {
             pageSize={8}
             emptyMessage="No employees found."
             enableSelection
-            getRowId={(row: any) => String(row.id)}
+            getRowId={(row: Employee) => String(row.id)}
             bulkActions={(selected) => (
               <>
                 <Button

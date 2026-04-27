@@ -5,6 +5,10 @@ import { CreditCard, CheckCircle2, Clock, Play, FileDown, Send, TrendingUp } fro
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, CardHeader, CardTitle, CardContent } from '@/components/ui/primitives'
+import type { badgeVariants } from '@/components/ui/badge'
+import type { VariantProps } from 'class-variance-authority'
+
+type BadgeVariant = VariantProps<typeof badgeVariants>['variant']
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -56,7 +60,7 @@ async function downloadWpsSif(payrollRunId: string, token: string | null) {
   URL.revokeObjectURL(url)
 }
 
-const statusConfig: Record<string, { variant: any; label: string; icon: React.ElementType }> = {
+const statusConfig: Record<string, { variant: BadgeVariant; label: string; icon: React.ElementType }> = {
   draft: { variant: 'secondary', label: 'Draft', icon: Clock },
   processing: { variant: 'info', label: 'Processing', icon: Clock },
   approved: { variant: 'success', label: 'Approved', icon: CheckCircle2 },
@@ -169,55 +173,55 @@ export function PayrollPage() {
   const { data: payrollData, isLoading } = usePayrollRuns({ year: new Date().getFullYear() })
   const { data: trendRaw } = usePayrollTrend()
   const runPayroll = useRunPayroll()
-  const payrollRuns: PayrollRun[] = (payrollData?.data as PayrollRun[]) ?? []
+  const payrollRuns = useMemo<PayrollRun[]>(() => (payrollData?.data as PayrollRun[]) ?? [], [payrollData?.data])
   const search = useSearchFilters({
     storageKey: 'hrhub.payroll.searchHistory',
     availableFilters: PAYROLL_FILTERS,
   })
   const filteredRuns = useMemo(
-    () => applyClientFilters(payrollRuns as any[], {
+    () => applyClientFilters(payrollRuns as unknown as Record<string, unknown>[], {
       searchInput: search.searchInput,
       appliedFilters: search.appliedFilters,
       searchFields: ['wpsFileRef', 'status'],
-    }),
+    }) as unknown as PayrollRun[],
     [payrollRuns, search.appliedFilters, search.searchInput],
   )
 
   // Build gross/net chart from backend trend (which returns { month, amount } in millions)
   const chartData = (trendRaw ?? []).map((t) => {
     // amount is already net in AED millions — try to find matching run for gross
-    const run = payrollRuns.find((r: any) =>
+    const run = payrollRuns.find((r) =>
       new Date(r.year ?? new Date().getFullYear(), (r.month ?? 1) - 1).toLocaleDateString('en-AE', { month: 'short' }) === t.month,
     )
     return {
       month: t.month,
-      gross: run ? Number((run as any).totalGross) : t.amount * 1_000_000 * 1.03,
+      gross: run ? Number(run.totalGross) : t.amount * 1_000_000 * 1.03,
       net: t.amount * 1_000_000,
     }
   })
 
   // KPIs from real runs
-  const lastRun = payrollRuns.find((r: any) => r.status === 'paid' || r.status === 'wps_submitted')
-  const draftRun = payrollRuns.find((r: any) => r.status === 'draft')
+  const lastRun = payrollRuns.find((r) => r.status === 'paid' || r.status === 'wps_submitted')
+  const draftRun = payrollRuns.find((r) => r.status === 'draft')
   const ytdNet = payrollRuns
-    .filter((r: any) => r.status === 'paid' || r.status === 'wps_submitted')
-    .reduce((a: number, r: any) => a + Number(r.totalNet ?? 0), 0)
-  const paidCount = payrollRuns.filter((r: any) => r.status === 'paid' || r.status === 'wps_submitted').length
+    .filter((r) => r.status === 'paid' || r.status === 'wps_submitted')
+    .reduce((a: number, r) => a + Number(r.totalNet ?? 0), 0)
+  const paidCount = payrollRuns.filter((r) => r.status === 'paid' || r.status === 'wps_submitted').length
   const wpsPct = payrollRuns.length > 0 ? Math.round((paidCount / payrollRuns.length) * 100) : 100
 
   const draftLabel = draftRun
-    ? new Date((draftRun as any).year, (draftRun as any).month - 1).toLocaleDateString('en-AE', { month: 'short', year: 'numeric' })
+    ? new Date(draftRun.year, draftRun.month - 1).toLocaleDateString('en-AE', { month: 'short', year: 'numeric' })
     : '—'
 
   const handleExportWps = async () => {
-    const targetRun = payrollRuns.find((r: any) => r.status === 'approved' || r.status === 'wps_submitted' || r.status === 'paid')
+    const targetRun = payrollRuns.find((r) => r.status === 'approved' || r.status === 'wps_submitted' || r.status === 'paid')
     if (!targetRun) {
       toast.warning('No approved run', 'Approve a payroll run first before exporting WPS SIF.')
       return
     }
     setWpsExporting(true)
     try {
-      await downloadWpsSif((targetRun as any).id, accessToken)
+      await downloadWpsSif(targetRun.id, accessToken)
       toast.success('WPS SIF exported', 'Salary information file downloaded.')
     } catch {
       toast.error('Export failed', 'Could not generate WPS SIF file.')
@@ -232,17 +236,17 @@ export function PayrollPage() {
       setRunConfirmOpen(false)
       return
     }
-    runPayroll.mutate((draftRun as any).id, {
+    runPayroll.mutate(draftRun.id, {
       onSuccess: (result) => {
-        const updated = result as any
+        const updated = result as { totalEmployees?: number; totalNet?: number }
         toast.success(
           'Payroll processed',
           `${updated?.totalEmployees ?? 0} payslips calculated. Total net: AED ${Number(updated?.totalNet ?? 0).toLocaleString()}.`,
         )
         setRunConfirmOpen(false)
       },
-      onError: (err: any) => {
-        toast.error('Payroll failed', err?.message ?? 'Could not process payroll. Check employee salary data.')
+      onError: (err: unknown) => {
+        toast.error('Payroll failed', (err as { message?: string })?.message ?? 'Could not process payroll. Check employee salary data.')
         setRunConfirmOpen(false)
       },
     })
@@ -269,7 +273,7 @@ export function PayrollPage() {
           ))
         ) : (
           <>
-            <KpiCardCompact label="Last Net Payroll" value={lastRun ? formatCurrency(Number((lastRun as any).totalNet)) : '—'} icon={CreditCard} color="blue" />
+            <KpiCardCompact label="Last Net Payroll" value={lastRun ? formatCurrency(Number(lastRun.totalNet)) : '—'} icon={CreditCard} color="blue" />
             <KpiCardCompact label="WPS Compliance" value={`${wpsPct}%`} icon={CheckCircle2} color="green" />
             <KpiCardCompact label="Pending Run" value={draftLabel} icon={Clock} color="amber" />
             <KpiCardCompact label="YTD Payroll" value={ytdNet > 0 ? formatCurrency(ytdNet) : '—'} icon={TrendingUp} color="purple" />
@@ -289,7 +293,7 @@ export function PayrollPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 92%)" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000000).toFixed(1)}M`} />
-                <Tooltip formatter={(v: any) => [formatCurrency(v)]} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                <Tooltip formatter={(v: unknown) => [formatCurrency(Number(v))]} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
                 <Bar dataKey="gross" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Gross" />
                 <Bar dataKey="net" fill="#10b981" radius={[4, 4, 0, 0]} name="Net" />
               </BarChart>
@@ -304,11 +308,11 @@ export function PayrollPage() {
               <div>
                 <Badge variant="warning" className="mb-3">Draft</Badge>
                 <h3 className="text-lg font-bold mb-1">{draftLabel} Payroll</h3>
-                <p className="text-sm text-muted-foreground mb-4">{(draftRun as any).totalEmployees ?? 0} employees · Ready to process</p>
+                <p className="text-sm text-muted-foreground mb-4">{draftRun.totalEmployees ?? 0} employees · Ready to process</p>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Estimated Gross</span><span className="font-medium">{formatCurrency(Number((draftRun as any).totalGross ?? 0))}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Deductions</span><span className="font-medium text-red-500">-{formatCurrency(Number((draftRun as any).totalDeductions ?? 0))}</span></div>
-                  <div className="flex justify-between border-t pt-2"><span className="font-semibold">Est. Net Pay</span><span className="font-bold text-emerald-600">{formatCurrency(Number((draftRun as any).totalNet ?? 0))}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Estimated Gross</span><span className="font-medium">{formatCurrency(Number(draftRun.totalGross ?? 0))}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Deductions</span><span className="font-medium text-red-500">-{formatCurrency(Number(draftRun.totalDeductions ?? 0))}</span></div>
+                  <div className="flex justify-between border-t pt-2"><span className="font-semibold">Est. Net Pay</span><span className="font-bold text-emerald-600">{formatCurrency(Number(draftRun.totalNet ?? 0))}</span></div>
                 </div>
               </div>
               {canManagePayroll && (
@@ -340,7 +344,7 @@ export function PayrollPage() {
             placeholder: 'Search payroll runs…',
           }}
           enableSelection
-          getRowId={(row: any) => String(row.id)}
+          getRowId={(row) => String(row.id)}
           toolbar={
             <Button variant="outline" size="sm" leftIcon={<FileDown className="h-3.5 w-3.5" />}
               loading={wpsExporting} onClick={handleExportWps}>Export WPS</Button>
@@ -361,7 +365,7 @@ export function PayrollPage() {
         onOpenChange={(o) => { if (!runPayroll.isPending) setRunConfirmOpen(o) }}
         title={`Run ${draftLabel} Payroll`}
         description={draftRun
-          ? `This will calculate payslips for all active employees and mark the run as approved. Estimated net: ${formatCurrency(Number((draftRun as any).totalNet ?? 0))}.`
+          ? `This will calculate payslips for all active employees and mark the run as approved. Estimated net: ${formatCurrency(Number(draftRun.totalNet ?? 0))}.`
           : 'There is no draft run to process.'}
         confirmLabel={runPayroll.isPending ? 'Processing…' : 'Run Payroll'}
         cancelLabel="Cancel"

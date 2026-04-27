@@ -140,12 +140,18 @@ export function PerformancePage() {
         }
     }
 
-    const empList = Array.isArray(employees) ? employees : (employees as any)?.data ?? []
-    const reviewList: PerformanceReview[] = Array.isArray(reviews) ? reviews : []
+    const empList = useMemo(
+        () => Array.isArray(employees) ? employees : (employees as { data?: Array<{ id: string; firstName: string; lastName: string }> } | undefined)?.data ?? [],
+        [employees],
+    )
+    const reviewList: PerformanceReview[] = useMemo(
+        () => Array.isArray(reviews) ? reviews : [],
+        [reviews],
+    )
 
     const enrichedReviews = useMemo(
         () => reviewList.map((r) => {
-            const emp = empList.find((e: any) => e.id === r.employeeId)
+            const emp = empList.find((e) => e.id === r.employeeId)
             return { ...r, employeeName: emp ? `${emp.firstName} ${emp.lastName}` : '' }
         }),
         [reviewList, empList],
@@ -272,7 +278,7 @@ export function PerformancePage() {
                                 <Select value={form.employeeId} onValueChange={v => set('employeeId', v)} disabled={!!lockedEmployeeId}>
                                     <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
                                     <SelectContent>
-                                        {empList.map((e: any) => (
+                                        {empList.map((e) => (
                                             <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
                                         ))}
                                     </SelectContent>

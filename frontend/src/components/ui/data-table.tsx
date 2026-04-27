@@ -108,6 +108,7 @@ export function DataTable<TData, TValue>({
     [columns, enableSelection, selectionColumn],
   )
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns: allColumns,

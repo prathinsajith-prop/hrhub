@@ -286,9 +286,9 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
           </SheetHeader>
 
           {/* Priority badge */}
-          {(v as any).urgencyLevel !== 'normal' && (
-            <div className={cn('text-xs font-semibold mb-4', urgencyStyles[(v as any).urgencyLevel ?? 'normal'])}>
-              ⚠ {((v as any).urgencyLevel as string).toUpperCase()} PRIORITY
+          {v.urgencyLevel !== 'normal' && (
+            <div className={cn('text-xs font-semibold mb-4', urgencyStyles[v.urgencyLevel ?? 'normal'])}>
+              ⚠ {v.urgencyLevel.toUpperCase()} PRIORITY
             </div>
           )}
 
@@ -303,19 +303,19 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
                 <p className="text-sm font-semibold">{formatDate(v.expiryDate)}</p>
               </div>
             )}
-            {((v as any).mohreRef || (v as any).gdfrRef) && (
+            {(v.mohreRef || v.gdfrRef) && (
               <div className="rounded-lg border border-border p-3 space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">Government References</p>
-                {(v as any).mohreRef && (
+                {v.mohreRef && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">MOHRE Ref</span>
-                    <span className="font-mono text-xs font-medium">{(v as any).mohreRef}</span>
+                    <span className="font-mono text-xs font-medium">{v.mohreRef}</span>
                   </div>
                 )}
-                {(v as any).gdfrRef && (
+                {v.gdfrRef && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">GDRFA Ref</span>
-                    <span className="font-mono text-xs font-medium">{(v as any).gdfrRef}</span>
+                    <span className="font-mono text-xs font-medium">{v.gdfrRef}</span>
                   </div>
                 )}
               </div>
@@ -400,10 +400,10 @@ export function VisaPage() {
       v.status.replace(/_/g, ' '),
       String(v.currentStep),
       String(v.totalSteps),
-      (v as any).urgencyLevel ?? '',
+      v.urgencyLevel ?? '',
       v.expiryDate ? formatDate(v.expiryDate) : '',
-      (v as any).mohreRef ?? '',
-      (v as any).gdfrRef ?? '',
+      v.mohreRef ?? '',
+      v.gdfrRef ?? '',
     ])
     const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -417,8 +417,8 @@ export function VisaPage() {
   }, [])
 
   const filtered = activeTab === 'all' ? visaApplications :
-    activeTab === 'critical' ? visaApplications.filter((v: any) => v.urgencyLevel === 'critical') :
-      activeTab === 'active' ? visaApplications.filter((v: any) => v.status === 'active' || v.status === 'expiring_soon') :
+    activeTab === 'critical' ? visaApplications.filter((v) => v.urgencyLevel === 'critical') :
+      activeTab === 'active' ? visaApplications.filter((v) => v.status === 'active' || v.status === 'expiring_soon') :
         visaApplications
 
   const search = useSearchFilters({
@@ -426,18 +426,18 @@ export function VisaPage() {
     availableFilters: VISA_FILTERS,
   })
   const filteredVisas = useMemo(
-    () => applyClientFilters(filtered as any[], {
+    () => applyClientFilters(filtered as unknown as Record<string, unknown>[], {
       searchInput: search.searchInput,
       appliedFilters: search.appliedFilters,
       searchFields: ['employeeName', 'employeeNo', 'visaType', 'mohreRef', 'gdfrRef'],
-    }),
+    }) as unknown as VisaApplication[],
     [filtered, search.appliedFilters, search.searchInput],
   )
 
-  const activeCount = visaApplications.filter((v: any) => v.status === 'active').length
-  const processingCount = visaApplications.filter((v: any) => !['active', 'expired', 'cancelled'].includes(v.status)).length
-  const criticalCount = visaApplications.filter((v: any) => v.urgencyLevel === 'critical').length
-  const expiringCount = visaApplications.filter((v: any) => v.status === 'expiring_soon').length
+  const activeCount = visaApplications.filter((v) => v.status === 'active').length
+  const processingCount = visaApplications.filter((v) => !['active', 'expired', 'cancelled'].includes(v.status)).length
+  const criticalCount = visaApplications.filter((v) => v.urgencyLevel === 'critical').length
+  const expiringCount = visaApplications.filter((v) => v.status === 'expiring_soon').length
 
   return (
     <PageWrapper>
@@ -451,7 +451,7 @@ export function VisaPage() {
               size="sm"
               className="gap-1.5"
               onClick={() => recalcUrgency.mutate(undefined, {
-                onSuccess: (r) => toast.success(`Urgency updated for ${(r as any).data?.updated ?? 0} visa(s)`),
+                onSuccess: (r) => toast.success(`Urgency updated for ${(r as { data?: { updated?: number } })?.data?.updated ?? 0} visa(s)`),
                 onError: () => toast.error('Recalculation failed'),
               })}
               disabled={recalcUrgency.isPending}
@@ -495,7 +495,7 @@ export function VisaPage() {
               <p className="text-muted-foreground">No visa applications found</p>
             </Card>
           ) : (
-            visaApplications.map((v: any) => <VisaTimeline key={v.id} application={v} />)
+            visaApplications.map((v) => <VisaTimeline key={v.id} application={v} />)
           )}
         </div>
       ) : (
@@ -511,7 +511,7 @@ export function VisaPage() {
             }}
             pageSize={8}
             enableSelection
-            getRowId={(row: any) => String(row.id)}
+            getRowId={(row) => String(row.id)}
             bulkActions={(selected) => (
               <>
                 <Button variant="outline" size="sm" leftIcon={<RefreshCw className="h-3.5 w-3.5" />}

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
@@ -165,11 +165,11 @@ export function AttendancePage() {
         availableFilters: ATTENDANCE_FILTERS,
     })
     const filteredAttendance = useMemo(
-        () => applyClientFilters(filteredList as any[], {
+        () => applyClientFilters(filteredList as unknown as Record<string, unknown>[], {
             searchInput: search.searchInput,
             appliedFilters: search.appliedFilters,
             searchFields: ['employeeName', 'employeeNo', 'employeeDepartment', 'status'],
-        }),
+        }) as unknown as AttendanceRecord[],
         [filteredList, search.appliedFilters, search.searchInput],
     )
 
@@ -690,6 +690,7 @@ export function AttendancePage() {
             </Card>
 
             <EditAttendanceDialog
+                key={editing?.id ?? 'none'}
                 record={editing}
                 onClose={() => setEditing(null)}
                 employeeName={
@@ -710,8 +711,8 @@ export function AttendancePage() {
                         })
                         toast.success('Attendance updated', `${editing.date} saved.`)
                         setEditing(null)
-                    } catch (err: any) {
-                        toast.error('Update failed', err?.message ?? 'Could not save attendance.')
+                    } catch (err: unknown) {
+                        toast.error('Update failed', (err as { message?: string })?.message ?? 'Could not save attendance.')
                     }
                 }}
                 saving={upsert.isPending}
@@ -738,20 +739,10 @@ function EditAttendanceDialog({
     onSave: (patch: { status: AttendanceRecord['status']; checkIn: string; checkOut: string; notes: string }) => void
     saving: boolean
 }) {
-    const [status, setStatus] = useState<AttendanceRecord['status']>('present')
-    const [checkIn, setCheckIn] = useState('')
-    const [checkOut, setCheckOut] = useState('')
-    const [notes, setNotes] = useState('')
-
-    // Reset form when a new record is opened
-    useEffect(() => {
-        if (record) {
-            setStatus(record.status)
-            setCheckIn(toLocalDateTimeInput(record.checkIn))
-            setCheckOut(toLocalDateTimeInput(record.checkOut))
-            setNotes(record.notes ?? '')
-        }
-    }, [record])
+    const [status, setStatus] = useState<AttendanceRecord['status']>(record?.status ?? 'present')
+    const [checkIn, setCheckIn] = useState(() => toLocalDateTimeInput(record?.checkIn))
+    const [checkOut, setCheckOut] = useState(() => toLocalDateTimeInput(record?.checkOut))
+    const [notes, setNotes] = useState(record?.notes ?? '')
 
     return (
         <Dialog open={!!record} onOpenChange={(o) => { if (!o) onClose() }}>

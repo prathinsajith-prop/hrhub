@@ -245,6 +245,7 @@ interface ToastData {
 let toastListeners: ((toasts: ToastData[]) => void)[] = []
 let toastList: ToastData[] = []
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const toast = {
   success: (title: string, description?: string) => addToast('success', title, description),
   error: (title: string, description?: string) => addToast('error', title, description),

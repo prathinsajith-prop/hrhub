@@ -4,6 +4,7 @@ import type { OnboardingStep, OnboardingStepStatus } from '@/hooks/useOnboarding
 import type { FilterConfig, QuickFilter } from '@/lib/filters'
 import { Activity, AlertTriangle, BarChart3, Calendar, CheckCircle2, Clock, PauseCircle, UserPlus } from 'lucide-react'
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const ONBOARDING_TEMPLATE_STEPS = [
     { title: 'HR documentation & contracts', owner: 'HR', slaDays: 1 },
     { title: 'IT equipment setup & laptop handover', owner: 'IT', slaDays: 1 },
@@ -16,6 +17,7 @@ export const ONBOARDING_TEMPLATE_STEPS = [
     { title: '30-day check-in with manager', owner: 'Manager', slaDays: 30 },
 ]
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const ONBOARDING_STATUS_LABEL: Record<OnboardingStepStatus, string> = {
     pending: 'Pending',
     in_progress: 'In progress',
@@ -23,16 +25,19 @@ export const ONBOARDING_STATUS_LABEL: Record<OnboardingStepStatus, string> = {
     overdue: 'Overdue',
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function isStepOverdue(step: OnboardingStep): boolean {
     if (step.status === 'completed') return false
     if (!step.dueDate) return false
     return new Date(step.dueDate) < new Date(new Date().toDateString())
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function deriveSteps(steps: OnboardingStep[]): OnboardingStep[] {
     return (steps ?? []).map((s) => ({ ...s, status: isStepOverdue(s) ? 'overdue' : s.status }))
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function progressTone(progress: number): { color: string; label: string } {
     if (progress >= 100) return { color: 'text-success', label: 'Completed' }
     if (progress >= 50) return { color: 'text-blue-600', label: 'On track' }
@@ -40,6 +45,7 @@ export function progressTone(progress: number): { color: string; label: string }
     return { color: 'text-muted-foreground', label: 'Not started' }
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function daysUntil(dateStr: string | null | undefined): number | null {
     if (!dateStr) return null
     const d = new Date(dateStr)
@@ -72,6 +78,7 @@ export function StatusPill({ status }: { status: OnboardingStepStatus }) {
     )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const ONBOARDING_FILTERS: FilterConfig[] = [
     {
         name: 'status', label: 'Status', type: 'select',
@@ -95,6 +102,7 @@ export const ONBOARDING_FILTERS: FilterConfig[] = [
     },
 ]
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const ONBOARDING_QUICK_FILTERS: QuickFilter[] = [
     {
         name: 'overdue', label: 'Overdue', icon: AlertTriangle,

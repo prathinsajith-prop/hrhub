@@ -18,6 +18,7 @@ import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { useExitRequests, useInitiateExit, useApproveExit, useMarkSettlementPaid, useSettlementPreview, type ExitRequest } from '@/hooks/useExit'
 import { useEmployees } from '@/hooks/useEmployees'
+import type { Employee } from '@/types'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -129,12 +130,18 @@ export function ExitPage() {
         setStep('form')
     }
 
-    const empList = Array.isArray(employees) ? employees : (employees as any)?.data ?? []
-    const exitList: ExitRequest[] = Array.isArray(exits) ? exits : (exits as any)?.data ?? []
+    const empList = useMemo(
+        () => Array.isArray(employees) ? employees : (employees as { data?: Employee[] } | undefined)?.data ?? [],
+        [employees],
+    )
+    const exitList: ExitRequest[] = useMemo(
+        () => Array.isArray(exits) ? exits : (exits as { data?: ExitRequest[] } | undefined)?.data ?? [],
+        [exits],
+    )
 
     const enrichedExits = useMemo(
         () => exitList.map((e) => {
-            const emp = empList.find((em: any) => em.id === e.employeeId)
+            const emp = empList.find((em: Employee) => em.id === e.employeeId)
             return {
                 ...e,
                 employeeName: emp ? `${emp.firstName} ${emp.lastName}` : '—',
@@ -146,7 +153,7 @@ export function ExitPage() {
     )
 
     const filteredExits = useMemo(
-        () => applyClientFilters(enrichedExits as any[], {
+        () => applyClientFilters(enrichedExits as unknown as Record<string, unknown>[], {
             searchInput: exitSearch.searchInput,
             appliedFilters: exitSearch.appliedFilters,
             searchFields: ['employeeName', 'exitType', 'status', 'reason'],
@@ -303,7 +310,7 @@ export function ExitPage() {
                 <CardContent>
                     <DataTable
                         columns={columns as ColumnDef<ExitRequest>[]}
-                        data={filteredExits as ExitRequest[]}
+                        data={filteredExits as unknown as ExitRequest[]}
                         isLoading={isLoading}
                         advancedFilter={{
                             search: exitSearch,
@@ -332,7 +339,7 @@ export function ExitPage() {
                                 <Select value={form.employeeId} onValueChange={v => set('employeeId', v)}>
                                     <SelectTrigger><SelectValue placeholder="Select employee…" /></SelectTrigger>
                                     <SelectContent>
-                                        {empList.map((e: any) => (
+                                        {empList.map((e: Employee) => (
                                             <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
                                         ))}
                                     </SelectContent>

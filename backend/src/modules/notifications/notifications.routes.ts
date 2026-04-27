@@ -6,7 +6,7 @@ export async function notificationsRoutes(fastify: any): Promise<void> {
     // GET /api/v1/notifications?limit=&offset=&unreadOnly=
     fastify.get('/', { ...auth, schema: { tags: ['Notifications'] } }, async (request: any, reply: any) => {
         const { limit = '20', offset = '0', unreadOnly } = request.query as Record<string, string>
-        const data = await getNotifications(
+        const result = await getNotifications(
             request.user.tenantId,
             request.user.id,
             {
@@ -15,7 +15,7 @@ export async function notificationsRoutes(fastify: any): Promise<void> {
                 unreadOnly: unreadOnly === 'true',
             },
         )
-        return reply.send({ data })
+        return reply.send(result)
     })
 
     // GET /api/v1/notifications/unread-count

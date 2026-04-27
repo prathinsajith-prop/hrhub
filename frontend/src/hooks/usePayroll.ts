@@ -19,7 +19,7 @@ export function usePayrollRun(id: string | undefined) {
         queryFn: () => api.get<{ data: unknown }>(`/payroll/${id}`).then(r => r.data),
         enabled: !!id,
         refetchInterval: (query) => {
-            const run = query.state.data as any
+            const run = query.state.data as { status?: string }
             return run?.status === 'processing' ? 3000 : false
         },
     })
