@@ -51,7 +51,14 @@ export const useAuthStore = create<AuthState>()(
           })
           if (!res.ok) return false
           const { data } = await res.json()
-          set({ accessToken: data.accessToken, refreshToken: data.refreshToken })
+          // Also sync employeeId onto the user object if the refresh response
+          // returns it (backend now includes it) — fixes stale persisted state.
+          const currentUser = get().user
+          if (currentUser && !currentUser.employeeId && data.employeeId) {
+            set({ accessToken: data.accessToken, refreshToken: data.refreshToken, user: { ...currentUser, employeeId: data.employeeId } })
+          } else {
+            set({ accessToken: data.accessToken, refreshToken: data.refreshToken })
+          }
           return true
         } catch {
           return false
