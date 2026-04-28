@@ -9,15 +9,11 @@ function calculateGratuity(basicSalary: number, yearsOfService: number, exitType
     // Termination by employer: full gratuity
     // Resignation: partial gratuity (50% for 1-3y, 75% for 3-5y, 100% for 5y+)
     const dailyWage = basicSalary / 30
-    let gratuity = 0
-
-    if (yearsOfService <= 5) {
-        gratuity = dailyWage * 21 * yearsOfService
-    } else {
-        gratuity = (dailyWage * 21 * 5) + (dailyWage * 30 * (yearsOfService - 5))
-    }
+    const base = yearsOfService <= 5
+        ? dailyWage * 21 * yearsOfService
+        : (dailyWage * 21 * 5) + (dailyWage * 30 * (yearsOfService - 5))
     // Cap at 2 years salary
-    gratuity = Math.min(gratuity, basicSalary * 24)
+    const gratuity = Math.min(base, basicSalary * 24)
 
     if (exitType === 'resignation') {
         if (yearsOfService < 3) return gratuity * 0.5

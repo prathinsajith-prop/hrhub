@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
-import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Textarea } from '@/components/ui/textarea'
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
@@ -79,11 +79,11 @@ function ApplyDialog({ employeeId, onClose }: { employeeId: string; onClose: () 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Start Date</Label>
-                            <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
+                            <DatePicker value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v }))} placeholder="Select start date" />
                         </div>
                         <div className="space-y-1.5">
                             <Label>End Date</Label>
-                            <Input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
+                            <DatePicker value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} min={form.startDate || undefined} placeholder="Select end date" />
                         </div>
                     </div>
                     <div className="space-y-1.5">
@@ -107,7 +107,7 @@ function BalanceSummary({ employeeId }: { employeeId: string }) {
     const { data: balanceData, isLoading } = useLeaveBalance(employeeId, year)
     const balance = balanceData?.balance
 
-    if (isLoading) return <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+    if (isLoading) return <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
     if (!balance) return null
 
     return (
@@ -161,7 +161,7 @@ export function MyLeavePage() {
                     <div>
                         <p className="text-sm font-semibold mb-3">My Requests</p>
                         {isLoading ? (
-                            <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+                            <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
                         ) : leaves.length === 0 ? (
                             <div className="flex flex-col items-center gap-2 py-12 text-center">
                                 <Calendar className="h-9 w-9 text-muted-foreground" />

@@ -500,11 +500,12 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-muted-foreground">SLA days</label>
                                 <input
-                                    type="number"
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
                                     value={newSlaDays}
-                                    onChange={(e) => setNewSlaDays(e.target.value)}
+                                    onChange={(e) => setNewSlaDays(e.target.value.replace(/\D/g, ''))}
                                     placeholder="e.g. 3"
-                                    min={0}
                                     className="w-full h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring/40"
                                 />
                             </div>

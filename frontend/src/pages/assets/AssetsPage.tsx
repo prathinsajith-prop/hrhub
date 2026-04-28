@@ -94,7 +94,7 @@ function AssetFormDialog({
                 <form onSubmit={handleSubmit}>
                     <DialogBody className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <Label>Asset Code *</Label>
+                            <Label required>Asset Code</Label>
                             <Input
                                 value={form.assetCode ?? ''}
                                 onChange={e => set('assetCode', e.target.value)}
@@ -103,7 +103,7 @@ function AssetFormDialog({
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Name *</Label>
+                            <Label required>Name</Label>
                             <Input
                                 value={form.name ?? ''}
                                 onChange={e => set('name', e.target.value)}
@@ -234,7 +234,7 @@ function AssignAssetDialog({
                 <form onSubmit={handleSubmit}>
                     <DialogBody className="space-y-4">
                         <div className="space-y-1.5">
-                            <Label>Employee *</Label>
+                            <Label required>Employee</Label>
                             <Select value={employeeId} onValueChange={setEmployeeId}>
                                 <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
                                 <SelectContent>
@@ -381,7 +381,7 @@ function MaintenanceDialog({
                     <form onSubmit={handleCreate} className="space-y-3 border rounded-lg p-4 bg-muted/30">
                         <p className="text-sm font-medium">Log New Issue</p>
                         <div className="space-y-1.5">
-                            <Label>Issue Description *</Label>
+                            <Label required>Issue Description</Label>
                             <Textarea
                                 value={issueDescription}
                                 onChange={e => setIssueDescription(e.target.value)}

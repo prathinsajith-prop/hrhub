@@ -204,6 +204,9 @@ export function EmployeeDetailPage() {
 
   const e = employee
 
+  // Terminated or suspended employees must not be granted/managed system access
+  const isAccessRestricted = ['terminated', 'suspended'].includes(e?.status ?? '')
+
   const visaDays = e?.visaExpiry ? Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000) : null
   const visaLabel = visaDays === null ? 'N/A' : visaDays < 0 ? 'Expired' : `${visaDays}d left`
   const visaClass = visaDays === null ? '' : visaDays < 0 ? 'text-destructive' : visaDays < 90 ? 'text-warning' : 'text-success'
@@ -323,7 +326,7 @@ export function EmployeeDetailPage() {
                   <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportCSV(e as unknown as Record<string, unknown>)}>
                     Export
                   </Button>
-                  {canManage && !accountLoading && (() => {
+                  {canManage && !accountLoading && !isAccessRestricted && (() => {
                     if (!accountData?.hasAccount) {
                       // No account — invite not yet sent
                       return (
@@ -742,7 +745,7 @@ export function EmployeeDetailPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">Login Account</CardTitle>
-                    {!accountLoading && accountData?.hasAccount && (
+                    {!accountLoading && accountData?.hasAccount && !isAccessRestricted && (
                       <Button size="sm" leftIcon={<UserCheck className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
                         Manage Access
                       </Button>
@@ -754,6 +757,16 @@ export function EmployeeDetailPage() {
                     <div className="space-y-3">
                       <Skeleton className="h-5 w-40" />
                       <Skeleton className="h-16 w-full" />
+                    </div>
+                  ) : isAccessRestricted ? (
+                    <div className="flex items-start gap-4 rounded-xl border border-destructive/20 bg-destructive/5 p-5">
+                      <Shield className="h-9 w-9 text-destructive/40 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium">Access unavailable</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Login access cannot be granted or managed for <span className="capitalize font-medium">{e.status}</span> employees.
+                        </p>
+                      </div>
                     </div>
                   ) : !accountData?.hasAccount ? (
                     <div className="flex items-start gap-4 rounded-xl border bg-muted/30 p-5">

@@ -1219,7 +1219,7 @@ function OrgUnitDialog({
                     {/* Type selector — only when creating */}
                     {!editing && (
                         <div className="space-y-1.5">
-                            <Label>Type <span className="text-destructive">*</span></Label>
+                            <Label required>Type</Label>
                             <UiSelect
                                 value={form.type}
                                 onValueChange={v => setForm(f => ({ ...f, type: v as OrgUnitType, parentId: '' }))}
@@ -1246,7 +1246,7 @@ function OrgUnitDialog({
 
                     {/* Name */}
                     <div className="space-y-1.5">
-                        <Label>Name <span className="text-destructive">*</span></Label>
+                        <Label required>Name</Label>
                         <Input
                             value={form.name}
                             onChange={s('name')}

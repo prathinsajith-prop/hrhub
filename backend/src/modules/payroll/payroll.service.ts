@@ -276,17 +276,12 @@ export async function getPayslipsWithEmployees(tenantId: string, payrollRunId: s
  */
 export function calculateGratuity(basicSalary: number, yearsOfService: number): number {
     const dailyRate = basicSalary / 30
-    let gratuity = 0
-
-    if (yearsOfService <= 5) {
-        gratuity = dailyRate * 21 * yearsOfService
-    } else {
-        gratuity = dailyRate * 21 * 5 + dailyRate * 30 * (yearsOfService - 5)
-    }
+    const gratuity = yearsOfService <= 5
+        ? dailyRate * 21 * yearsOfService
+        : dailyRate * 21 * 5 + dailyRate * 30 * (yearsOfService - 5)
 
     // Cap at 2 years total salary
-    const cap = basicSalary * 24
-    return Math.min(gratuity, cap)
+    return Math.min(gratuity, basicSalary * 24)
 }
 
 /**

@@ -352,7 +352,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
         </DialogHeader>
         <DialogBody className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Job *</Label>
+            <Label required>Job</Label>
             <Select value={jobId} onValueChange={setJobId}>
               <SelectTrigger><SelectValue placeholder="Select an open job" /></SelectTrigger>
               <SelectContent>
@@ -368,11 +368,11 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Full name *</Label>
+              <Label required>Full name</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
             </div>
             <div className="space-y-1.5">
-              <Label>Email *</Label>
+              <Label required>Email</Label>
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" />
             </div>
             <div className="space-y-1.5">
@@ -503,7 +503,7 @@ function ConvertCandidateDialog({
             <Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Engineering" />
           </div>
           <div className="space-y-1.5">
-            <Label>Conversion Note <span className="text-destructive">*</span></Label>
+            <Label required>Conversion Note</Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="Reason / context for conversion" />
           </div>
         </DialogBody>

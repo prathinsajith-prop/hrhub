@@ -3,7 +3,7 @@
  * Tests for formatDate, formatCurrency, getInitials, getExpiryStatus.
  */
 import { describe, it, expect } from 'vitest'
-import { formatCurrency, getInitials, getExpiryStatus, getDaysUntilExpiry } from '@/lib/utils'
+import { formatCurrency, formatDate, getInitials, getExpiryStatus, getDaysUntilExpiry } from '@/lib/utils'
 
 describe('formatCurrency', () => {
     it('formats AED with no decimals', () => {
@@ -82,5 +82,57 @@ describe('getDaysUntilExpiry', () => {
         const d = new Date()
         d.setDate(d.getDate() - 5)
         expect(getDaysUntilExpiry(d.toISOString())).toBeLessThan(0)
+    })
+})
+
+describe('formatDate', () => {
+    const knownDate = '2024-03-15'
+
+    it('short format includes day, month abbreviation, and year', () => {
+        const result = formatDate(knownDate, 'short')
+        expect(result).toContain('2024')
+        expect(result).toMatch(/Mar|15/)
+    })
+
+    it('long format includes full month name and year', () => {
+        const result = formatDate(knownDate, 'long')
+        expect(result).toContain('March')
+        expect(result).toContain('2024')
+    })
+
+    it('relative format returns "Today" for today', () => {
+        const today = new Date().toISOString()
+        expect(formatDate(today, 'relative')).toBe('Today')
+    })
+
+    it('relative format returns "Yesterday" for 1 day ago', () => {
+        const d = new Date()
+        d.setDate(d.getDate() - 1)
+        expect(formatDate(d.toISOString(), 'relative')).toBe('Yesterday')
+    })
+
+    it('relative format returns "N days ago" for recent past', () => {
+        const d = new Date()
+        d.setDate(d.getDate() - 5)
+        expect(formatDate(d.toISOString(), 'relative')).toBe('5 days ago')
+    })
+
+    it('relative format returns weeks for 7-29 day old dates', () => {
+        const d = new Date()
+        d.setDate(d.getDate() - 14)
+        expect(formatDate(d.toISOString(), 'relative')).toBe('2 weeks ago')
+    })
+
+    it('defaults to short format when no format is specified', () => {
+        const short = formatDate(knownDate, 'short')
+        const defaultResult = formatDate(knownDate)
+        expect(defaultResult).toBe(short)
+    })
+
+    it('accepts a Date object as input', () => {
+        const d = new Date('2024-06-01')
+        const result = formatDate(d, 'long')
+        expect(result).toContain('2024')
+        expect(result).toContain('June')
     })
 })

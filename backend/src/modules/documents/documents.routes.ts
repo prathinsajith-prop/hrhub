@@ -333,7 +333,7 @@ export default async function (fastify: any): Promise<void> {
     // Auth via Bearer header OR short-lived token query param (for window.open).
     fastify.get('/:id/file', { schema: { tags: ['Documents'] } }, async (request: any, reply: any) => {
         // Resolve auth: Bearer token or ?token=
-        let claims: { tenantId: string } | null = null
+        let claims!: { tenantId: string }
         try {
             if (request.headers.authorization?.startsWith('Bearer ')) {
                 await request.jwtVerify()

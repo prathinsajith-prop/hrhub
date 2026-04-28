@@ -157,6 +157,7 @@ export function VisaDetailPage() {
                 }
             />
 
+            <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left: Summary */}
                 <div className="lg:col-span-1 space-y-4">
@@ -294,8 +295,8 @@ export function VisaDetailPage() {
                     )}
                 </div>
 
-                {/* Right: Timeline + Cost Log */}
-                <div className="lg:col-span-2 space-y-4">
+                {/* Right: Timeline */}
+                <div className="lg:col-span-2">
                 <Card className="p-6">
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-2">
@@ -362,129 +363,132 @@ export function VisaDetailPage() {
                         })}
                     </div>
                 </Card>
+                </div>
+            </div>
 
-                {/* Cost Log */}
-                <Card className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                            <Receipt className="h-5 w-5 text-primary" />
-                            <div>
-                                <h3 className="font-semibold">Cost Log</h3>
-                                {costList.length > 0 && (
-                                    <p className="text-xs text-muted-foreground">Total: {formatCurrency(costTotal)}</p>
-                                )}
-                            </div>
+            {/* ── Cost Log — separate section, not part of the process timeline ── */}
+            <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                        <Receipt className="h-5 w-5 text-primary" />
+                        <div>
+                            <h3 className="font-semibold">Cost Log</h3>
+                            <p className="text-xs text-muted-foreground">
+                                {costList.length > 0
+                                    ? `${costList.length} entr${costList.length === 1 ? 'y' : 'ies'} · Total: ${formatCurrency(costTotal)}`
+                                    : 'Track expenses for this visa application'}
+                            </p>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => setShowAddCost(v => !v)}>
-                            <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Cost
-                        </Button>
                     </div>
+                    <Button size="sm" variant="outline" onClick={() => setShowAddCost(v => !v)}>
+                        <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Cost
+                    </Button>
+                </div>
 
-                    {/* Inline add form */}
-                    {showAddCost && (
-                        <div className="mb-4 rounded-xl border bg-muted/30 p-4 space-y-3">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">New Expense</p>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                    <label className="text-xs text-muted-foreground">Category</label>
-                                    <select
-                                        className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
-                                        value={costForm.category}
-                                        onChange={e => setCostForm(f => ({ ...f, category: e.target.value as CostCategory }))}
-                                    >
-                                        {CATEGORIES.map(c => (
-                                            <option key={c} value={c}>{COST_CATEGORY_LABELS[c]}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs text-muted-foreground">Amount (AED)</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
-                                        value={costForm.amount || ''}
-                                        onChange={e => setCostForm(f => ({ ...f, amount: Number(e.target.value) }))}
-                                        placeholder="0.00"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs text-muted-foreground">Paid Date</label>
-                                    <input
-                                        type="date"
-                                        className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
-                                        value={costForm.paidDate}
-                                        onChange={e => setCostForm(f => ({ ...f, paidDate: e.target.value }))}
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs text-muted-foreground">Receipt Ref (optional)</label>
-                                    <input
-                                        type="text"
-                                        className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
-                                        value={costForm.receiptRef ?? ''}
-                                        onChange={e => setCostForm(f => ({ ...f, receiptRef: e.target.value || undefined }))}
-                                        placeholder="INV-001"
-                                    />
-                                </div>
+                {/* Inline add form */}
+                {showAddCost && (
+                    <div className="mb-4 rounded-xl border bg-muted/30 p-4 space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">New Expense</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">Category</label>
+                                <select
+                                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                                    value={costForm.category}
+                                    onChange={e => setCostForm(f => ({ ...f, category: e.target.value as CostCategory }))}
+                                >
+                                    {CATEGORIES.map(c => (
+                                        <option key={c} value={c}>{COST_CATEGORY_LABELS[c]}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs text-muted-foreground">Description (optional)</label>
+                                <label className="text-xs text-muted-foreground">Amount (AED)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                                    value={costForm.amount || ''}
+                                    onChange={e => setCostForm(f => ({ ...f, amount: Number(e.target.value) }))}
+                                    placeholder="0.00"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">Paid Date</label>
+                                <input
+                                    type="date"
+                                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                                    value={costForm.paidDate}
+                                    onChange={e => setCostForm(f => ({ ...f, paidDate: e.target.value }))}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs text-muted-foreground">Receipt Ref (optional)</label>
                                 <input
                                     type="text"
                                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
-                                    value={costForm.description ?? ''}
-                                    onChange={e => setCostForm(f => ({ ...f, description: e.target.value || undefined }))}
-                                    placeholder="e.g. GDRFA entry permit fee"
+                                    value={costForm.receiptRef ?? ''}
+                                    onChange={e => setCostForm(f => ({ ...f, receiptRef: e.target.value || undefined }))}
+                                    placeholder="INV-001"
                                 />
                             </div>
-                            <div className="flex gap-2 justify-end">
-                                <Button size="sm" variant="ghost" onClick={() => setShowAddCost(false)}>Cancel</Button>
-                                <Button size="sm" onClick={handleAddCost} disabled={addCost.isPending || costForm.amount <= 0}>
-                                    {addCost.isPending ? 'Saving…' : 'Save Cost'}
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground">Description (optional)</label>
+                            <input
+                                type="text"
+                                className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                                value={costForm.description ?? ''}
+                                onChange={e => setCostForm(f => ({ ...f, description: e.target.value || undefined }))}
+                                placeholder="e.g. GDRFA entry permit fee"
+                            />
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                            <Button size="sm" variant="ghost" onClick={() => setShowAddCost(false)}>Cancel</Button>
+                            <Button size="sm" onClick={handleAddCost} disabled={addCost.isPending || costForm.amount <= 0}>
+                                {addCost.isPending ? 'Saving…' : 'Save Cost'}
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Cost list */}
+                {costsLoading ? (
+                    <div className="space-y-2">
+                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}
+                    </div>
+                ) : costList.length === 0 ? (
+                    <div className="py-8 text-center">
+                        <DollarSign className="h-7 w-7 text-muted-foreground/40 mx-auto mb-2" />
+                        <p className="text-xs text-muted-foreground">No costs recorded for this application</p>
+                    </div>
+                ) : (
+                    <div className="divide-y divide-border/50">
+                        {costList.map(cost => (
+                            <div key={cost.id} className="flex items-center gap-3 py-2.5">
+                                <div className="h-8 w-8 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
+                                    <Receipt className="h-3.5 w-3.5 text-primary" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium">{COST_CATEGORY_LABELS[cost.category]}{cost.description ? ` — ${cost.description}` : ''}</p>
+                                    <p className="text-[11px] text-muted-foreground">{formatDate(cost.paidDate)}{cost.receiptRef ? ` · ${cost.receiptRef}` : ''}</p>
+                                </div>
+                                <span className="text-sm font-bold tabular-figures shrink-0">{formatCurrency(Number(cost.amount))}</span>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
+                                    onClick={() => deleteCost.mutate(cost.id, { onSuccess: () => toast.success('Removed'), onError: () => toast.error('Failed') })}
+                                    disabled={deleteCost.isPending}
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                             </div>
-                        </div>
-                    )}
-
-                    {/* Cost list */}
-                    {costsLoading ? (
-                        <div className="space-y-2">
-                            {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}
-                        </div>
-                    ) : costList.length === 0 ? (
-                        <div className="py-8 text-center">
-                            <DollarSign className="h-7 w-7 text-muted-foreground/40 mx-auto mb-2" />
-                            <p className="text-xs text-muted-foreground">No costs recorded for this application</p>
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-border/50">
-                            {costList.map(cost => (
-                                <div key={cost.id} className="flex items-center gap-3 py-2.5">
-                                    <div className="h-8 w-8 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
-                                        <Receipt className="h-3.5 w-3.5 text-primary" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium">{COST_CATEGORY_LABELS[cost.category]}{cost.description ? ` — ${cost.description}` : ''}</p>
-                                        <p className="text-[11px] text-muted-foreground">{formatDate(cost.paidDate)}{cost.receiptRef ? ` · ${cost.receiptRef}` : ''}</p>
-                                    </div>
-                                    <span className="text-sm font-bold tabular-figures shrink-0">{formatCurrency(Number(cost.amount))}</span>
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
-                                        onClick={() => deleteCost.mutate(cost.id, { onSuccess: () => toast.success('Removed'), onError: () => toast.error('Failed') })}
-                                        disabled={deleteCost.isPending}
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </Card>
-                </div>
+                        ))}
+                    </div>
+                )}
+            </Card>
             </div>
         </PageWrapper>
     )

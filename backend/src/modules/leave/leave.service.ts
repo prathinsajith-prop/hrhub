@@ -67,7 +67,16 @@ export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRe
         }
     }
 
-    const [row] = await db.insert(leaveRequests).values({ ...data, tenantId }).returning()
+    // Compute `days` if not provided (inclusive day count between start and end).
+    let days = typeof data.days === 'number' ? data.days : undefined
+    if (days === undefined && data.startDate && data.endDate) {
+        const start = new Date(data.startDate)
+        const end = new Date(data.endDate)
+        const ms = end.getTime() - start.getTime()
+        days = Math.max(1, Math.round(ms / (1000 * 60 * 60 * 24)) + 1)
+    }
+
+    const [row] = await db.insert(leaveRequests).values({ ...data, tenantId, days: days ?? 1 }).returning()
     return row
 }
 

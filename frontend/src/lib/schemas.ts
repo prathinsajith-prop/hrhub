@@ -7,6 +7,7 @@ import { z } from 'zod'
 export const employeeStep1Schema = z.object({
     firstName: z.string().trim().min(1, 'First name is required').max(100),
     lastName: z.string().trim().min(1, 'Last name is required').max(100),
+    nationality: z.string().trim().optional().or(z.literal('')),
     personalEmail: z
         .string()
         .trim()

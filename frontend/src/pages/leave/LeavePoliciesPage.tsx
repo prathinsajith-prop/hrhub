@@ -97,11 +97,15 @@ export function LeavePoliciesPage() {
                                     <div className="space-y-1.5">
                                         <Label>{t('leavePolicies.daysPerYear')}</Label>
                                         <Input
-                                            type="number"
-                                            min={0}
-                                            max={365}
-                                            value={p.daysPerYear}
-                                            onChange={(e) => update(i, { daysPerYear: Number(e.target.value) || 0 })}
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            value={String(p.daysPerYear)}
+                                            onChange={(e) => {
+                                                const v = e.target.value.replace(/\D/g, '')
+                                                const n = Math.min(365, Number(v) || 0)
+                                                update(i, { daysPerYear: n })
+                                            }}
                                             disabled={p.accrualRule === 'unlimited' || p.accrualRule === 'none'}
                                         />
                                     </div>
@@ -119,21 +123,28 @@ export function LeavePoliciesPage() {
                                     <div className="space-y-1.5">
                                         <Label>{t('leavePolicies.maxCarryForward')}</Label>
                                         <Input
-                                            type="number"
-                                            min={0}
-                                            max={p.daysPerYear || 365}
-                                            value={p.maxCarryForward}
-                                            onChange={(e) => update(i, { maxCarryForward: Number(e.target.value) || 0 })}
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            value={String(p.maxCarryForward)}
+                                            onChange={(e) => {
+                                                const v = e.target.value.replace(/\D/g, '')
+                                                const cap = p.daysPerYear || 365
+                                                update(i, { maxCarryForward: Math.min(cap, Number(v) || 0) })
+                                            }}
                                         />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label>{t('leavePolicies.carryExpiresAfter')}</Label>
                                         <Input
-                                            type="number"
-                                            min={0}
-                                            max={36}
-                                            value={p.carryExpiresAfterMonths}
-                                            onChange={(e) => update(i, { carryExpiresAfterMonths: Number(e.target.value) || 0 })}
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            value={String(p.carryExpiresAfterMonths)}
+                                            onChange={(e) => {
+                                                const v = e.target.value.replace(/\D/g, '')
+                                                update(i, { carryExpiresAfterMonths: Math.min(36, Number(v) || 0) })
+                                            }}
                                         />
                                         <p className="text-xs text-muted-foreground">{t('leavePolicies.neverExpires')}</p>
                                     </div>
