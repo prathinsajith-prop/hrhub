@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, ArrowRight, Users, FileCheck, Shield, Zap, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, Users, FileCheck, Shield, Zap, ShieldCheck, Mail, Lock, LogIn } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/components/ui/overlays'
 import { cn } from '@/lib/utils'
@@ -282,10 +282,13 @@ export function LoginPage() {
     >
       {/* Heading */}
       <div className="mb-7">
-        <h2 className="text-2xl font-bold text-foreground mb-1.5 font-display">
+        <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary mb-4 ring-1 ring-primary/15">
+          {mfaStep ? <ShieldCheck className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
+        </div>
+        <h2 className="text-[22px] font-bold text-foreground tracking-tight font-display">
           {mfaStep ? 'Verify your identity' : 'Welcome back'}
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
           {mfaStep
             ? (useBackupCode
               ? 'Enter one of your saved single-use backup codes to continue.'
@@ -378,15 +381,18 @@ export function LoginPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email">Work Email</Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@company.ae"
-              {...register('email')}
-              aria-invalid={!!errors.email}
-              className={cn(errors.email && 'border-destructive focus-visible:ring-destructive')}
-            />
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@company.ae"
+                {...register('email')}
+                aria-invalid={!!errors.email}
+                className={cn('pl-9', errors.email && 'border-destructive focus-visible:ring-destructive')}
+              />
+            </div>
             {errors.email && (
               <p className="text-xs text-destructive">{errors.email.message}</p>
             )}
@@ -403,6 +409,7 @@ export function LoginPage() {
               </Link>
             </div>
             <div className="relative">
+              <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
@@ -411,7 +418,7 @@ export function LoginPage() {
                 {...register('password')}
                 aria-invalid={!!errors.password}
                 className={cn(
-                  'pr-10',
+                  'pl-9 pr-10',
                   errors.password && 'border-destructive focus-visible:ring-destructive',
                 )}
               />
@@ -432,7 +439,7 @@ export function LoginPage() {
 
           <Button
             type="submit"
-            className="w-full font-semibold"
+            className="w-full font-semibold mt-2"
             loading={loading}
             rightIcon={!loading ? <ArrowRight className="h-4 w-4" /> : undefined}
           >
@@ -443,14 +450,20 @@ export function LoginPage() {
 
       {!mfaStep && (
         <>
-          <p className="mt-5 text-center text-sm text-muted-foreground">
-            {"Don't have an account? "}
-            <Link to="/register" className="text-primary font-medium hover:underline">
-              Create account
+          <div className="my-6 flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">or</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+
+          <p className="text-center text-sm text-muted-foreground">
+            {"New to HRHub? "}
+            <Link to="/register" className="text-primary font-semibold hover:underline">
+              Create an account
             </Link>
           </p>
 
-          <p className="mt-3 text-center text-[11px] text-muted-foreground/70">
+          <p className="mt-5 text-center text-[11px] text-muted-foreground/70 leading-relaxed">
             By signing in you agree to our{' '}
             <a href="#" className="text-primary/80 hover:underline">
               Terms

@@ -1,4 +1,4 @@
-import { getHeadcountReport, getPayrollSummaryReport, getVisaExpiryReport } from './reports.service.js'
+import { getHeadcountReport, getPayrollSummaryReport, getVisaExpiryReport, getPROCostReport } from './reports.service.js'
 
 export default async function (fastify: any): Promise<void> {
     // GET /api/v1/reports/headcount
@@ -29,6 +29,15 @@ export default async function (fastify: any): Promise<void> {
         const tenantId = request.user.tenantId
         const days = Number((request.query as any).days ?? 90)
         const data = await getVisaExpiryReport(tenantId, days)
+        return reply.send({ data })
+    })
+
+    // GET /api/v1/reports/pro-costs
+    fastify.get('/pro-costs', {
+        schema: { tags: ['Reports'] },
+        preHandler: [fastify.authenticate, (fastify as any).requireRole('hr_manager', 'pro_officer', 'super_admin')],
+    }, async (request: any, reply: any) => {
+        const data = await getPROCostReport(request.user.tenantId)
         return reply.send({ data })
     })
 }

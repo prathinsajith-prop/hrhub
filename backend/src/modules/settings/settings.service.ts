@@ -140,3 +140,37 @@ export async function inviteUser(
     const emailOpts = inviteUserEmail({ inviteeName: data.name, workspaceName: 'HRHub', role: data.role, inviteUrl })
     await sendEmail({ ...emailOpts, to: data.email })
 }
+
+/**
+ * Resend an invite to an employee whose account exists but is still inactive
+ * (i.e. they haven't completed the password-reset / onboarding link yet).
+ * Generates a fresh 48-hour token and emails a new invite link.
+ */
+export async function resendInvite(tenantId: string, employeeId: string) {
+    const env = loadEnv()
+
+    // Find the linked account — must be inactive (invite not yet accepted)
+    const [user] = await db
+        .select({ id: users.id, email: users.email, name: users.name, isActive: users.isActive })
+        .from(users)
+        .where(and(eq(users.employeeId, employeeId), eq(users.tenantId, tenantId)))
+        .limit(1)
+
+    if (!user) {
+        throw Object.assign(new Error('No account found for this employee'), { statusCode: 404 })
+    }
+    if (user.isActive) {
+        throw Object.assign(new Error('Account is already active — invite already accepted'), { statusCode: 409 })
+    }
+
+    // Issue a fresh token (old ones remain but will eventually expire)
+    const rawToken = randomBytes(32).toString('hex')
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex')
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
+
+    await db.insert(passwordResetTokens).values({ userId: user.id, tokenHash, expiresAt })
+
+    const inviteUrl = `${env.APP_URL}/reset-password?token=${rawToken}`
+    const emailOpts = inviteUserEmail({ inviteeName: user.name, workspaceName: 'HRHub', role: 'employee', inviteUrl })
+    await sendEmail({ ...emailOpts, to: user.email })
+}

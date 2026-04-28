@@ -183,3 +183,14 @@ export function useInviteEmployee() {
         },
     })
 }
+
+export function useResendInvite() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ employeeId }: { employeeId: string }) =>
+            api.post<{ message: string }>(`/employees/${employeeId}/resend-invite`),
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: ['employees', variables.employeeId, 'account'] })
+        },
+    })
+}

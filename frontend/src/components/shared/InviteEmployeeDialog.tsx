@@ -1,13 +1,10 @@
-import { useState } from 'react'
-import { UserCheck, Mail, ShieldOff, RefreshCw, Shield } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, toast } from '@/components/ui/overlays'
+import { UserCheck, Mail, ShieldOff, RefreshCw, Shield, Clock, Calendar, Send } from 'lucide-react'
+import { Dialog, DialogContent, DialogTitle, toast } from '@/components/ui/overlays'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Label } from '@/components/ui/primitives'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/utils'
-import { useEmployeeAccount, useInviteEmployee } from '@/hooks/useEmployees'
+import { useEmployeeAccount, useInviteEmployee, useResendInvite } from '@/hooks/useEmployees'
 import { useUpdateUser } from '@/hooks/useSettings'
 import type { Employee } from '@/types'
 
@@ -17,138 +14,202 @@ interface Props {
     onOpenChange: (o: boolean) => void
 }
 
+// Three distinct account states
+type AccountState = 'no-account' | 'invite-pending' | 'active'
+
 export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
     const { data: accountData, isLoading } = useEmployeeAccount(employee.id)
     const invite = useInviteEmployee()
+    const resend = useResendInvite()
     const updateUser = useUpdateUser()
-    const [emailOverride, setEmailOverride] = useState(employee.email ?? '')
 
+    const inviteEmail = employee.workEmail ?? employee.email ?? employee.personalEmail ?? ''
     const close = () => onOpenChange(false)
+
+    const account = accountData?.account
+    const employeeName =
+        employee.fullName ||
+        `${employee.firstName ?? ''} ${employee.lastName ?? ''}`.trim() ||
+        'Employee'
+
+    // Derive state clearly
+    const state: AccountState = !accountData?.hasAccount
+        ? 'no-account'
+        : !account?.isActive
+            ? 'invite-pending'
+            : 'active'
 
     async function handleInvite() {
         try {
-            await invite.mutateAsync({ employeeId: employee.id, email: emailOverride || undefined })
-            toast.success('Invitation sent', `An invite email has been sent to ${emailOverride || employee.email}.`)
+            await invite.mutateAsync({ employeeId: employee.id, email: inviteEmail || undefined })
+            toast.success('Invitation sent', `An invite email has been sent to ${inviteEmail || 'the employee'}.`)
             close()
         } catch (err: unknown) {
             toast.error('Invite failed', (err as { message?: string })?.message ?? 'Could not send the invitation.')
         }
     }
 
+    async function handleResend() {
+        try {
+            await resend.mutateAsync({ employeeId: employee.id })
+            toast.success('Invite resent', 'A fresh invite link has been emailed.')
+            close()
+        } catch (err: unknown) {
+            toast.error('Resend failed', (err as { message?: string })?.message ?? 'Could not resend the invitation.')
+        }
+    }
+
     async function handleToggleActive(userId: string, activate: boolean) {
         try {
             await updateUser.mutateAsync({ id: userId, isActive: activate })
-            toast.success(activate ? 'Account reactivated' : 'Account deactivated', `Login access has been ${activate ? 'restored' : 'revoked'}.`)
+            toast.success(
+                activate ? 'Account reactivated' : 'Access revoked',
+                `Login access has been ${activate ? 'restored' : 'revoked'}.`,
+            )
             close()
         } catch {
             toast.error('Update failed', 'Could not update the account status.')
         }
     }
 
-    const account = accountData?.account
-
     return (
         <Dialog open={open} onOpenChange={o => !o && close()}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <UserCheck className="h-4 w-4" />
-                        Login Access — {employee.firstName} {employee.lastName}
-                    </DialogTitle>
-                    <DialogDescription>
-                        Manage this employee's ability to log in to the self-service portal.
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden gap-0">
 
-                <div className="py-2">
+                {/* ── Header ── */}
+                <div className="flex items-center gap-3.5 px-6 py-5 border-b">
+                    <div className="h-9 w-9 rounded-xl bg-primary/10 ring-1 ring-primary/15 flex items-center justify-center text-primary shrink-0">
+                        <UserCheck className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground leading-none mb-1">
+                            Login Access
+                        </p>
+                        <DialogTitle className="text-sm font-semibold leading-none truncate">
+                            {employeeName}
+                        </DialogTitle>
+                    </div>
+                </div>
+
+                {/* ── Body ── */}
+                <div className="px-6 py-5">
                     {isLoading ? (
-                        <div className="space-y-3">
-                            <Skeleton className="h-5 w-32" />
-                            <Skeleton className="h-10 w-full" />
+                        <div className="space-y-2.5">
+                            <Skeleton className="h-4 w-1/2" />
+                            <Skeleton className="h-3.5 w-full" />
+                            <Skeleton className="h-3.5 w-4/5" />
                         </div>
-                    ) : accountData?.hasAccount && account ? (
-                        /* ── Has an account ── */
-                        <div className="space-y-4">
-                            <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-sm font-medium">Account status</p>
-                                    <Badge variant={account.isActive ? 'success' : 'secondary'}>
-                                        {account.isActive ? 'Active' : 'Inactive'}
-                                    </Badge>
+                    ) : state === 'no-account' ? (
+                        /* ── State 1: No account ── */
+                        <div className="flex gap-4">
+                            <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                                <Shield className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                            <div className="min-w-0 space-y-1.5">
+                                <p className="text-sm font-semibold">No login account yet</p>
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                    Send an invitation so this employee can log in and access their leave, payslips, and profile.
+                                </p>
+                                {inviteEmail && (
+                                    <div className="flex items-center gap-2 pt-0.5">
+                                        <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                        <span className="text-xs text-muted-foreground truncate">{inviteEmail}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : state === 'invite-pending' ? (
+                        /* ── State 2: Invite sent, password not yet set ── */
+                        <div className="flex gap-4">
+                            <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center shrink-0">
+                                <Send className="h-5 w-5 text-warning" />
+                            </div>
+                            <div className="min-w-0 space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                    <p className="text-sm font-semibold">Invite pending</p>
+                                    <Badge variant="warning" className="text-[10px]">Awaiting setup</Badge>
                                 </div>
-                                <div className="space-y-1 text-sm text-muted-foreground">
-                                    <p className="flex items-center gap-2">
-                                        <Mail className="h-3.5 w-3.5 shrink-0" />
-                                        {account.email}
-                                    </p>
-                                    <p>Last login: {account.lastLoginAt ? formatDate(account.lastLoginAt) : 'Never'}</p>
-                                    <p>Created: {formatDate(account.createdAt)}</p>
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                    An invite was sent but the employee hasn't set their password yet. You can resend a fresh link.
+                                </p>
+                                {account?.email && (
+                                    <div className="flex items-center gap-2 pt-0.5">
+                                        <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                        <span className="text-xs text-muted-foreground truncate">{account.email}</span>
+                                    </div>
+                                )}
+                                <div className="flex items-center gap-2 pt-0.5">
+                                    <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <span className="text-xs text-muted-foreground">Invited {formatDate(account?.createdAt ?? '')}</span>
                                 </div>
                             </div>
                         </div>
                     ) : (
-                        /* ── No account yet ── */
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-3 rounded-xl border bg-muted/30 p-4">
-                                <Shield className="h-8 w-8 text-muted-foreground/40 shrink-0" />
-                                <div>
-                                    <p className="text-sm font-medium">No account yet</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        Send an invitation so this employee can log in and view their leave, payslips, and profile.
-                                    </p>
-                                </div>
+                        /* ── State 3: Active account ── */
+                        <div className="space-y-3.5">
+                            <div className="flex items-center gap-2">
+                                <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                                <span className="text-sm font-medium">Active</span>
+                                <Badge variant="success" className="text-[10px]">Can log in</Badge>
                             </div>
-                            <div className="space-y-1.5">
-                                <Label>Invite email</Label>
-                                <Input
-                                    type="email"
-                                    value={emailOverride}
-                                    onChange={e => setEmailOverride(e.target.value)}
-                                    placeholder="employee@company.com"
-                                />
-                                <p className="text-[11px] text-muted-foreground">
-                                    Pre-filled from employee record. Edit if different.
-                                </p>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex items-center gap-2.5">
+                                    <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <span className="truncate">{account?.email}</span>
+                                </div>
+                                <div className="flex items-center gap-2.5 text-muted-foreground">
+                                    <Clock className="h-3.5 w-3.5 shrink-0" />
+                                    <span>Last login: {account?.lastLoginAt ? formatDate(account.lastLoginAt) : 'Never'}</span>
+                                </div>
+                                <div className="flex items-center gap-2.5 text-muted-foreground">
+                                    <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                    <span>Created {formatDate(account?.createdAt ?? '')}</span>
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
 
-                <DialogFooter className="gap-2">
-                    <Button variant="outline" onClick={close}>Cancel</Button>
-                    {!isLoading && (
-                        <>
-                            {accountData?.hasAccount && account ? (
-                                account.isActive ? (
-                                    <Button
-                                        variant="destructive"
-                                        leftIcon={<ShieldOff className="h-3.5 w-3.5" />}
-                                        onClick={() => handleToggleActive(account.id, false)}
-                                        disabled={updateUser.isPending}
-                                    >
-                                        Deactivate
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
-                                        onClick={() => handleToggleActive(account.id, true)}
-                                        disabled={updateUser.isPending}
-                                    >
-                                        Reactivate
-                                    </Button>
-                                )
-                            ) : (
-                                <Button
-                                    leftIcon={<Mail className="h-3.5 w-3.5" />}
-                                    onClick={handleInvite}
-                                    disabled={invite.isPending || !emailOverride.trim()}
-                                >
-                                    {invite.isPending ? 'Sending…' : 'Send Invite'}
-                                </Button>
-                            )}
-                        </>
+                {/* ── Footer ── */}
+                <div className="flex items-center justify-end gap-2 px-6 py-4 border-t bg-muted/30">
+                    <Button variant="ghost" size="sm" onClick={close}>Cancel</Button>
+
+                    {!isLoading && state === 'no-account' && (
+                        <Button
+                            size="sm"
+                            leftIcon={<Mail className="h-3.5 w-3.5" />}
+                            onClick={handleInvite}
+                            loading={invite.isPending}
+                            disabled={!inviteEmail}
+                        >
+                            Send Invite
+                        </Button>
                     )}
-                </DialogFooter>
+
+                    {!isLoading && state === 'invite-pending' && (
+                        <Button
+                            size="sm"
+                            leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
+                            onClick={handleResend}
+                            loading={resend.isPending}
+                        >
+                            Resend Invite
+                        </Button>
+                    )}
+
+                    {!isLoading && state === 'active' && account && (
+                        <Button
+                            size="sm"
+                            variant="destructive"
+                            leftIcon={<ShieldOff className="h-3.5 w-3.5" />}
+                            onClick={() => handleToggleActive(account.id, false)}
+                            loading={updateUser.isPending}
+                        >
+                            Revoke Access
+                        </Button>
+                    )}
+                </div>
+
             </DialogContent>
         </Dialog>
     )

@@ -1,6 +1,9 @@
 import { eq, and, count, lte, gte, sql, desc, isNotNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, payrollRuns } from '../../db/schema/index.js'
+import { getPROCostReport } from '../visa/visa_costs.service.js'
+
+export { getPROCostReport }
 
 export async function getHeadcountReport(tenantId: string) {
     // Use SQL GROUP BY instead of loading all rows into JS memory (BUG-03)

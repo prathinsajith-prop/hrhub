@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl -s 'http://localhost:4000/api/v1/employees?limit=50&offset=0' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwNmIxZWViYi0zMTQwLTQ0OGYtOGM5OC1iMDQ3YjVmNmY0ZjEiLCJ0ZW5hbnRJZCI6IjBkNTZjYjYyLWZjNTYtNDVhZC04NTc3LWIyODlkYzVkMGZjYSIsInJvbGUiOiJocl9tYW5hZ2VyIiwibmFtZSI6IlNhcmFoIEpvaG5zb24iLCJlbWFpbCI6ImFkbWluQGhyaHViLmFlIiwiaWF0IjoxNzc3MDI3OTYyLCJleHAiOjE3NzcwMjg4NjJ9.ScGiv_5S7dwvZ7c208sC9ILYbSaF475mZWdP1ESaaZI')"
+      "Bash(curl -s 'http://localhost:4000/api/v1/employees?limit=50&offset=0' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwNmIxZWViYi0zMTQwLTQ0OGYtOGM5OC1iMDQ3YjVmNmY0ZjEiLCJ0ZW5hbnRJZCI6IjBkNTZjYjYyLWZjNTYtNDVhZC04NTc3LWIyODlkYzVkMGZjYSIsInJvbGUiOiJocl9tYW5hZ2VyIiwibmFtZSI6IlNhcmFoIEpvaG5zb24iLCJlbWFpbCI6ImFkbWluQGhyaHViLmFlIiwiaWF0IjoxNzc3MDI3OTYyLCJleHAiOjE3NzcwMjg4NjJ9.ScGiv_5S7dwvZ7c208sC9ILYbSaF475mZWdP1ESaaZI')",
+      "Bash(npm run *)",
+      "Bash(npx -y react-doctor@latest . --verbose --diff)",
+      "Bash(npx react-doctor@latest . --verbose --diff)",
+      "Bash(pnpm lint *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(pnpm build *)",
+      "Bash(npx react-doctor@latest . --diff)"
     ]
   }
 }

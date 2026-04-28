@@ -45,6 +45,7 @@ import publicHolidaysRoutes from './modules/hr/public-holidays.routes.js'
 import salaryRevisionsRoutes from './modules/employees/salary-revisions.routes.js'
 import subscriptionRoutes from './modules/subscription/subscription.routes.js'
 import { orgUnitsRoutes } from './modules/orgUnits/orgUnits.routes.js'
+import { designationsRoutes } from './modules/designations/designations.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -219,6 +220,7 @@ async function bootstrap() {
     await app.register(salaryRevisionsRoutes, { prefix: '/api/v1/employees' })
     await app.register(subscriptionRoutes, { prefix: '/api/v1/subscription' })
     await app.register(orgUnitsRoutes, { prefix: '/api/v1' })
+    await app.register(designationsRoutes, { prefix: '/api/v1' })
 
     // Health check — basic
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))

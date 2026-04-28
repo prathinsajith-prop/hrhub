@@ -1,4 +1,5 @@
 import { listVisas, getVisa, createVisa, updateVisa, advanceVisaStep, softDeleteVisa, cancelVisa, recalcVisaUrgency } from './visa.service.js'
+import { listVisaCosts, addVisaCost, deleteVisaCost } from './visa_costs.service.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { sendWithETag } from '../../lib/etag.js'
 import { cacheDel } from '../../lib/redis.js'
@@ -153,6 +154,74 @@ export default async function (fastify: any): Promise<void> {
     }, async (request, reply) => {
         const result = await recalcVisaUrgency(request.user.tenantId)
         return reply.send({ data: result })
+    })
+
+    // ─── Visa Cost Tracking ───────────────────────────────────────────────────
+
+    fastify.get('/:id/costs', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'pro_officer', 'super_admin')],
+        schema: { tags: ['Visa'] },
+    }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const costs = await listVisaCosts(request.user.tenantId, id)
+        return reply.send({ data: costs })
+    })
+
+    fastify.post('/:id/costs', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'pro_officer', 'super_admin')],
+        schema: {
+            tags: ['Visa'],
+            body: {
+                type: 'object',
+                required: ['employeeId', 'category', 'amount', 'paidDate'],
+                properties: {
+                    employeeId: { type: 'string', format: 'uuid' },
+                    category: { type: 'string', enum: ['govt_fee', 'medical', 'typing', 'translation', 'other'] },
+                    description: { type: 'string' },
+                    amount: { type: 'number', minimum: 0 },
+                    currency: { type: 'string' },
+                    paidDate: { type: 'string', format: 'date' },
+                    receiptRef: { type: 'string' },
+                },
+            },
+        },
+    }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const body = request.body as Record<string, unknown>
+        const cost = await addVisaCost(request.user.tenantId, {
+            visaApplicationId: id,
+            employeeId: body.employeeId as string,
+            category: body.category as 'govt_fee' | 'medical' | 'typing' | 'translation' | 'other',
+            description: body.description as string | undefined,
+            amount: Number(body.amount),
+            currency: body.currency as string | undefined,
+            paidDate: body.paidDate as string,
+            receiptRef: body.receiptRef as string | undefined,
+            createdBy: request.user.id,
+        })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'visa',
+            entityId: id,
+            entityName: `Visa cost — ${body.category} AED ${body.amount}`,
+            action: 'create',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(201).send({ data: cost })
+    })
+
+    fastify.delete('/costs/:costId', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'pro_officer', 'super_admin')],
+        schema: { tags: ['Visa'] },
+    }, async (request, reply) => {
+        const { costId } = request.params as { costId: string }
+        const deleted = await deleteVisaCost(request.user.tenantId, costId)
+        if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Cost record not found' })
+        return reply.code(204).send()
     })
 }
 

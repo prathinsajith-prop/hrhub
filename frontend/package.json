@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.30.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "NODE_OPTIONS=--max-http-header-size=65536 vite",
     "build": "tsc -p tsconfig.app.json --noEmit && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

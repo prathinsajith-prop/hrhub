@@ -89,17 +89,50 @@ export function AuthLayout({
       </aside>
 
       {/* ── Form panel ── */}
-      <main className="flex items-center justify-center p-6 sm:p-8 relative">
-        <div className="w-full max-w-sm animate-fade-in">
-          {/* Mobile logo bar */}
-          <div className="flex items-center gap-2.5 mb-8 lg:hidden">
+      <main className="relative flex flex-col bg-muted/20">
+        {/* Soft accent halo (subtle, no gradients on primary) */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 overflow-hidden"
+        >
+          <div className="absolute -top-32 -right-32 h-72 w-72 rounded-full bg-primary/[0.06] blur-3xl" />
+          <div className="absolute -bottom-32 -left-32 h-72 w-72 rounded-full bg-primary/[0.04] blur-3xl" />
+        </div>
+
+        {/* Top utility bar */}
+        <div className="relative flex items-center justify-between px-6 sm:px-10 pt-6">
+          {/* Mobile logo */}
+          <div className="flex items-center gap-2.5 lg:invisible">
             <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground">
               <BuildingIcon className="h-4 w-4" />
             </div>
-            <p className="text-xl font-bold text-foreground font-display">HRHub.ae</p>
+            <p className="text-base font-bold text-foreground font-display">HRHub.ae</p>
           </div>
+          <a
+            href="mailto:support@hrhub.ae"
+            className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Need help?
+          </a>
+        </div>
 
-          {children}
+        {/* Centered form card */}
+        <div className="relative flex-1 flex items-center justify-center px-6 sm:px-10 py-8">
+          <div className="w-full max-w-md animate-fade-in">
+            <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-7 sm:p-9">
+              {children}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer security strip */}
+        <div className="relative px-6 sm:px-10 pb-6 flex items-center justify-between gap-4 text-[11px] text-muted-foreground/70">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+            All systems operational
+          </span>
+          <span className="hidden sm:inline">256-bit TLS · ISO 27001</span>
+          <span>v1.0</span>
         </div>
       </main>
     </div>

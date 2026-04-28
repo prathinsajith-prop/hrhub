@@ -359,7 +359,7 @@ export async function resetPasswordWithToken(rawToken: string, newPassword: stri
 
     const passwordHash = await bcrypt.hash(newPassword, 10)
     await db.update(users)
-        .set(withTimestamp({ passwordHash }))
+        .set(withTimestamp({ passwordHash, isActive: true }))
         .where(eq(users.id, record.userId))
     await db.update(passwordResetTokens)
         .set({ usedAt: new Date() })

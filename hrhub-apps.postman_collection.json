@@ -1,0 +1,770 @@
+{
+  "info": {
+    "name": "HRHub — App Management & External API",
+    "_postman_id": "apps-mgmt-ext-api-v1",
+    "description": "### HRHub Connected Apps — full reference\n\n#### Internal API (`/api/v1/apps`)\nRequires a JWT obtained from **Auth → Login**. The token must belong to a user with `hr_manager` or `super_admin` role.\n\nSpecial: `GET /apps/:id` also accepts `Authorization: Bearer sk_...` (app-secret) so an app can look up its own record without a JWT.\n\n#### External API (`/api/ext/:appKey`)\nNo JWT required. Authenticate with:\n```\nX-API-Secret: sk_xxxx\n```\nThe `appKey` goes in the URL path. The secret is only shown once — at creation or after regeneration.\n\n#### Available scopes\n| Scope | Grants access to |\n|---|---|\n| `employees:read` | Employee list + individual records |\n| `payroll:read` | Payroll runs, payslips |\n| `leave:read` | Leave requests |\n| `attendance:read` | Attendance records |\n| `documents:read` | HR documents |\n| `organization:read` | Tenant / company info |\n\n#### Pagination\nAll list endpoints accept `?page=1&limit=20` (max limit: 100).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "extUrl",
+      "value": "http://localhost:4000/api/ext",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string",
+      "description": "JWT — auto-set by the Login request's test script."
+    },
+    {
+      "key": "appId",
+      "value": "",
+      "type": "string",
+      "description": "UUID of a connected app (set by Create App test script)."
+    },
+    {
+      "key": "appKey",
+      "value": "",
+      "type": "string",
+      "description": "app_live_xxx key (set by Create App test script)."
+    },
+    {
+      "key": "appSecret",
+      "value": "",
+      "type": "string",
+      "description": "sk_xxx secret — set by Create App or Regenerate Secret."
+    },
+    { "key": "employeeId", "value": "", "type": "string" },
+    { "key": "payrollRunId", "value": "", "type": "string" },
+    { "key": "leaveId", "value": "", "type": "string" },
+    { "key": "documentId", "value": "", "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "0 — Auth",
+      "description": "Get a JWT before calling any internal route.",
+      "item": [
+        {
+          "name": "Login (saves token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', body.data.accessToken);",
+                  "    console.log('accessToken saved');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@hrhub.ae\",\n  \"password\": \"Admin@12345\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 — Connected Apps (Internal)",
+      "description": "CRUD for connected apps. Requires `hr_manager` or `super_admin` JWT.\n\nRun **0 — Auth → Login** first.",
+      "item": [
+        {
+          "name": "List apps",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/apps",
+              "host": ["{{baseUrl}}"],
+              "path": ["apps"]
+            },
+            "description": "Returns all connected apps for the authenticated user's tenant."
+          }
+        },
+        {
+          "name": "Create app (saves appId, appKey, appSecret)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.app) {",
+                  "    pm.collectionVariables.set('appId',     body.data.app.id);",
+                  "    pm.collectionVariables.set('appKey',    body.data.app.appKey);",
+                  "    pm.collectionVariables.set('appSecret', body.data.appSecret);",
+                  "    console.log('app created:', body.data.app.id, body.data.app.appKey);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Integration\",\n  \"description\": \"Created from Postman\",\n  \"scopes\": [\n    \"employees:read\",\n    \"payroll:read\",\n    \"leave:read\",\n    \"attendance:read\",\n    \"documents:read\",\n    \"organization:read\"\n  ],\n  \"ipAllowlist\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/apps",
+              "host": ["{{baseUrl}}"],
+              "path": ["apps"]
+            },
+            "description": "Creates a new connected app. The `appSecret` (sk_...) is **only returned here** — save it immediately.\n\nThe test script auto-saves `appId`, `appKey`, and `appSecret` collection variables."
+          }
+        },
+        {
+          "name": "Get app by UUID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["apps", "{{appId}}"]
+            },
+            "description": "Fetch a single app by its UUID. Requires JWT."
+          }
+        },
+        {
+          "name": "Get app by appKey (JWT auth)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appKey}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["apps", "{{appKey}}"]
+            },
+            "description": "Fetch a single app using its `app_live_xxx` key instead of a UUID. Requires JWT."
+          }
+        },
+        {
+          "name": "Get app by appKey (app-secret auth)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{appSecret}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appKey}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["apps", "{{appKey}}"]
+            },
+            "description": "An app can look up its own record using `Authorization: Bearer sk_...` instead of a user JWT.\n\nRequires the appKey (not UUID) in the path."
+          }
+        },
+        {
+          "name": "Update app",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Integration (updated)\",\n  \"description\": \"Updated description\",\n  \"scopes\": [\n    \"employees:read\",\n    \"payroll:read\"\n  ],\n  \"ipAllowlist\": [],\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["apps", "{{appId}}"]
+            },
+            "description": "Update name, description, scopes, ipAllowlist, or status (`active` | `revoked`)."
+          }
+        },
+        {
+          "name": "Revoke app",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"revoked\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["apps", "{{appId}}"]
+            },
+            "description": "Revoke an app immediately. All ext API calls with this app's key will return 403."
+          }
+        },
+        {
+          "name": "Restore app (set active)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["apps", "{{appId}}"]
+            }
+          }
+        },
+        {
+          "name": "Regenerate secret (saves appSecret)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.appSecret) {",
+                  "    pm.collectionVariables.set('appSecret', body.data.appSecret);",
+                  "    console.log('new appSecret saved — old secret is now invalid');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appId}}/regenerate-secret",
+              "host": ["{{baseUrl}}"],
+              "path": ["apps", "{{appId}}", "regenerate-secret"]
+            },
+            "description": "Generates a new `sk_...` secret and invalidates the previous one. The new secret is returned **once** — save it.\n\nThe test script auto-saves it to `appSecret`."
+          }
+        },
+        {
+          "name": "Delete app",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/apps/{{appId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["apps", "{{appId}}"]
+            },
+            "description": "Permanently deletes the connected app. Returns 204 No Content."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 — External API (ext)",
+      "description": "Routes under `/api/ext/:appKey`. No JWT required.\n\n**Auth:** `X-API-Secret: sk_xxx` header (or `Authorization: Bearer sk_xxx`).\n\nAll requests in this folder use the `X-API-Secret: {{appSecret}}` header and the `{{appKey}}` path variable — set these after creating an app or regenerating a secret.",
+      "item": [
+        {
+          "name": "App info & granted scopes",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}",
+              "host": ["{{extUrl}}"],
+              "path": ["{{appKey}}"]
+            },
+            "description": "Returns the app name, tenant ID, granted scopes, and API version. No scope required."
+          }
+        },
+        {
+          "name": "Employees — List",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/employees?page=1&limit=20",
+              "host": ["{{extUrl}}"],
+              "path": ["{{appKey}}", "employees"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Name / email search"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true,
+                  "description": "active | inactive | on_leave"
+                },
+                { "key": "department", "value": "", "disabled": true }
+              ]
+            },
+            "description": "Requires scope: `employees:read`\n\nReturns paginated list of employees for the tenant."
+          }
+        },
+        {
+          "name": "Employees — Get by ID",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/employees/{{employeeId}}",
+              "host": ["{{extUrl}}"],
+              "path": ["{{appKey}}", "employees", "{{employeeId}}"]
+            },
+            "description": "Requires scope: `employees:read`\n\nReturns full detail for a single employee."
+          }
+        },
+        {
+          "name": "Payroll — List runs",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/payroll?page=1&limit=20",
+              "host": ["{{extUrl}}"],
+              "path": ["{{appKey}}", "payroll"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "Requires scope: `payroll:read`\n\nReturns paginated list of payroll runs."
+          }
+        },
+        {
+          "name": "Payroll — Get run by ID",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/payroll/{{payrollRunId}}",
+              "host": ["{{extUrl}}"],
+              "path": ["{{appKey}}", "payroll", "{{payrollRunId}}"]
+            },
+            "description": "Requires scope: `payroll:read`"
+          }
+        },
+        {
+          "name": "Payroll — Get payslips for run",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/payroll/{{payrollRunId}}/payslips?page=1&limit=20",
+              "host": ["{{extUrl}}"],
+              "path": ["{{appKey}}", "payroll", "{{payrollRunId}}", "payslips"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "Requires scope: `payroll:read`\n\nReturns all payslips (with employee details) for a specific payroll run."
+          }
+        },
+        {
+          "name": "Leave — List requests",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/leave?page=1&limit=20",
+              "host": ["{{extUrl}}"],
+              "path": ["{{appKey}}", "leave"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true,
+                  "description": "pending | approved | rejected"
+                },
+                { "key": "employeeId", "value": "", "disabled": true }
+              ]
+            },
+            "description": "Requires scope: `leave:read`"
+          }
+        },
+        {
+          "name": "Attendance — List records",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/attendance?page=1&limit=20",
+              "host": ["{{extUrl}}"],
+              "path": ["{{appKey}}", "attendance"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                {
+                  "key": "from",
+                  "value": "",
+                  "disabled": true,
+                  "description": "ISO date: 2026-01-01"
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "disabled": true,
+                  "description": "ISO date: 2026-12-31"
+                },
+                { "key": "employeeId", "value": "", "disabled": true },
+                {
+                  "key": "status",
+                  "value": "",
+                  "disabled": true,
+                  "description": "present | absent | late"
+                }
+              ]
+            },
+            "description": "Requires scope: `attendance:read`"
+          }
+        },
+        {
+          "name": "Documents — List",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/documents?page=1&limit=20",
+              "host": ["{{extUrl}}"],
+              "path": ["{{appKey}}", "documents"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "", "disabled": true },
+                { "key": "employeeId", "value": "", "disabled": true },
+                { "key": "category", "value": "", "disabled": true }
+              ]
+            },
+            "description": "Requires scope: `documents:read`"
+          }
+        },
+        {
+          "name": "Organization — Get info",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Secret",
+                "value": "{{appSecret}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{extUrl}}/{{appKey}}/organization",
+              "host": ["{{extUrl}}"],
+              "path": ["{{appKey}}", "organization"]
+            },
+            "description": "Requires scope: `organization:read`\n\nReturns tenant name, industry, country, and total employee count."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 — Workflow Examples",
+      "description": "Step-by-step flows to demonstrate common scenarios end-to-end.",
+      "item": [
+        {
+          "name": "FLOW A — Create app & call ext API",
+          "item": [
+            {
+              "name": "Step 1 — Login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const t = pm.response.json()?.data?.accessToken;",
+                      "if (t) pm.collectionVariables.set('accessToken', t);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": { "type": "noauth" },
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@hrhub.ae\",\n  \"password\": \"Admin@12345\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/auth/login",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["auth", "login"]
+                }
+              }
+            },
+            {
+              "name": "Step 2 — Create app (employees:read only)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const b = pm.response.json();",
+                      "if (b.data?.app) {",
+                      "    pm.collectionVariables.set('appId',     b.data.app.id);",
+                      "    pm.collectionVariables.set('appKey',    b.data.app.appKey);",
+                      "    pm.collectionVariables.set('appSecret', b.data.appSecret);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Flow A Test App\",\n  \"scopes\": [\"employees:read\"]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/apps",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["apps"]
+                }
+              }
+            },
+            {
+              "name": "Step 3 — Call ext employees (succeeds)",
+              "request": {
+                "auth": { "type": "noauth" },
+                "method": "GET",
+                "header": [{ "key": "X-API-Secret", "value": "{{appSecret}}" }],
+                "url": {
+                  "raw": "{{extUrl}}/{{appKey}}/employees?limit=5",
+                  "host": ["{{extUrl}}"],
+                  "path": ["{{appKey}}", "employees"],
+                  "query": [{ "key": "limit", "value": "5" }]
+                }
+              }
+            },
+            {
+              "name": "Step 4 — Call ext payroll (should 403 — no scope)",
+              "request": {
+                "auth": { "type": "noauth" },
+                "method": "GET",
+                "header": [{ "key": "X-API-Secret", "value": "{{appSecret}}" }],
+                "url": {
+                  "raw": "{{extUrl}}/{{appKey}}/payroll",
+                  "host": ["{{extUrl}}"],
+                  "path": ["{{appKey}}", "payroll"]
+                },
+                "description": "Expect 403 — app only has `employees:read`."
+              }
+            },
+            {
+              "name": "Step 5 — Revoke app (ext calls now 403)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": { "mode": "raw", "raw": "{ \"status\": \"revoked\" }" },
+                "url": {
+                  "raw": "{{baseUrl}}/apps/{{appId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["apps", "{{appId}}"]
+                }
+              }
+            },
+            {
+              "name": "Step 6 — Call ext after revoke (should 403)",
+              "request": {
+                "auth": { "type": "noauth" },
+                "method": "GET",
+                "header": [{ "key": "X-API-Secret", "value": "{{appSecret}}" }],
+                "url": {
+                  "raw": "{{extUrl}}/{{appKey}}/employees",
+                  "host": ["{{extUrl}}"],
+                  "path": ["{{appKey}}", "employees"]
+                },
+                "description": "Expect 403 — app is revoked."
+              }
+            },
+            {
+              "name": "Step 7 — Delete app (cleanup)",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{baseUrl}}/apps/{{appId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["apps", "{{appId}}"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "FLOW B — Secret rotation",
+          "item": [
+            {
+              "name": "Step 1 — Login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const t = pm.response.json()?.data?.accessToken;",
+                      "if (t) pm.collectionVariables.set('accessToken', t);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": { "type": "noauth" },
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@hrhub.ae\",\n  \"password\": \"Admin@12345\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/auth/login",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["auth", "login"]
+                }
+              }
+            },
+            {
+              "name": "Step 2 — Regenerate secret (saves new appSecret)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const b = pm.response.json();",
+                      "if (b.data?.appSecret) {",
+                      "    pm.collectionVariables.set('appSecret', b.data.appSecret);",
+                      "    console.log('appSecret rotated — old secret is now invalid');",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/apps/{{appId}}/regenerate-secret",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["apps", "{{appId}}", "regenerate-secret"]
+                },
+                "description": "Invalidates the previous secret. Use the returned `appSecret` immediately."
+              }
+            },
+            {
+              "name": "Step 3 — Verify new secret works (ext call)",
+              "request": {
+                "auth": { "type": "noauth" },
+                "method": "GET",
+                "header": [{ "key": "X-API-Secret", "value": "{{appSecret}}" }],
+                "url": {
+                  "raw": "{{extUrl}}/{{appKey}}",
+                  "host": ["{{extUrl}}"],
+                  "path": ["{{appKey}}"]
+                },
+                "description": "Should return app info with 200."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

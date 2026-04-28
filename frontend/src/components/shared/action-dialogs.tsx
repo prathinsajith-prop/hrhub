@@ -13,6 +13,7 @@ import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useEmployees } from '@/hooks/useEmployees'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
+import { useDesignations } from '@/hooks/useDesignations'
 import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { FormField } from '@/components/shared/FormField'
@@ -409,6 +410,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     const createEmployee = useCreateEmployee()
     const navigate = useNavigate()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const { data: designationList = [] } = useDesignations()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const divisions = orgUnits.filter(u => u.type === 'division' && u.isActive)
     const departments = orgUnits.filter(u => u.type === 'department' && u.isActive &&
@@ -653,7 +655,15 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Designation / Title</Label>
-                                    <Input value={form.designation} onChange={set('designation')} placeholder="e.g. Sales Manager" />
+                                    <Select value={form.designation || 'none'} onValueChange={v => setForm(f => ({ ...f, designation: v === 'none' ? '' : v }))}>
+                                        <SelectTrigger><SelectValue placeholder="Select designation…" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">— None —</SelectItem>
+                                            {(Array.isArray(designationList) ? designationList : []).filter((d: { isActive: boolean }) => d.isActive).map((d: { id: string; name: string }) => (
+                                                <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -826,6 +836,7 @@ export function EditEmployeeDialog({
     const [errors, setErrors] = useState<Record<string, string>>({})
     const updateEmployee = useUpdateEmployee(employee.id)
     const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const { data: designationList = [] } = useDesignations()
     const editOrgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const editDivisions = editOrgUnits.filter(u => u.type === 'division' && u.isActive)
     const editDepartments = editOrgUnits.filter(u => u.type === 'department' && u.isActive &&
@@ -1018,7 +1029,18 @@ export function EditEmployeeDialog({
                             )}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Department (freeform)</Label><Input value={form.department} onChange={set('department')} placeholder="e.g. Sales" /></div>
-                                <div className="space-y-1.5"><Label>Designation</Label><Input value={form.designation} onChange={set('designation')} /></div>
+                                <div className="space-y-1.5">
+                                    <Label>Designation</Label>
+                                    <Select value={form.designation || 'none'} onValueChange={v => setForm(f => ({ ...f, designation: v === 'none' ? '' : v }))}>
+                                        <SelectTrigger><SelectValue placeholder="Select designation…" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">— None —</SelectItem>
+                                            {(Array.isArray(designationList) ? designationList : []).filter((d: { isActive: boolean }) => d.isActive).map((d: { id: string; name: string }) => (
+                                                <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
