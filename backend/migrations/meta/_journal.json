@@ -113,6 +113,13 @@
       "when": 1746835200000,
       "tag": "0015_designations",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1746921600000,
+      "tag": "0016_visa_step_history",
+      "breakpoints": true
     }
   ]
 }

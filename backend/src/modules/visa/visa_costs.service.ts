@@ -13,6 +13,10 @@ export interface CreateCostInput {
     currency?: string
     paidDate: string
     receiptRef?: string
+    /** 1-based step index this cost belongs to; snapshot at recording time. */
+    stepNumber?: number
+    /** Human-readable step label snapshot. */
+    stepLabel?: string
     createdBy?: string
 }
 
@@ -28,6 +32,8 @@ export async function listVisaCosts(tenantId: string, visaApplicationId: string)
             currency: visaCosts.currency,
             paidDate: visaCosts.paidDate,
             receiptRef: visaCosts.receiptRef,
+            stepNumber: visaCosts.stepNumber,
+            stepLabel: visaCosts.stepLabel,
             createdAt: visaCosts.createdAt,
         })
         .from(visaCosts)
@@ -51,10 +57,21 @@ export async function addVisaCost(tenantId: string, input: CreateCostInput) {
             currency: input.currency ?? 'AED',
             paidDate: input.paidDate,
             receiptRef: input.receiptRef ?? null,
+            stepNumber: input.stepNumber ?? null,
+            stepLabel: input.stepLabel ?? null,
             createdBy: input.createdBy ?? null,
         })
         .returning()
     return row
+}
+
+export async function getVisaCost(tenantId: string, costId: string) {
+    const [row] = await db
+        .select()
+        .from(visaCosts)
+        .where(and(eq(visaCosts.id, costId), eq(visaCosts.tenantId, tenantId)))
+        .limit(1)
+    return row ?? null
 }
 
 export async function deleteVisaCost(tenantId: string, costId: string) {

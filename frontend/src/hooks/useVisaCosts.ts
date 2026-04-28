@@ -21,6 +21,8 @@ export interface VisaCostItem {
     currency: string
     paidDate: string
     receiptRef: string | null
+    stepNumber: number | null
+    stepLabel: string | null
     createdAt: string
 }
 
@@ -31,6 +33,10 @@ export interface AddCostInput {
     amount: number
     paidDate: string
     receiptRef?: string
+    /** Stage at which the cost was incurred (1-based step). */
+    stepNumber?: number
+    /** Human-readable label snapshot. */
+    stepLabel?: string
 }
 
 export function useVisaCosts(visaApplicationId: string) {
