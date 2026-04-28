@@ -24,12 +24,18 @@ export interface PerformanceReview {
     updatedAt: string
 }
 
-export function usePerformanceReviews(employeeId?: string) {
+export function usePerformanceReviews(params: { employeeId?: string; from?: string; to?: string } = {}) {
+    const { employeeId, from, to } = params
+    const qs = new URLSearchParams()
+    if (employeeId) qs.set('employeeId', employeeId)
+    if (from) qs.set('from', from)
+    if (to) qs.set('to', to)
+    const search = qs.toString()
     return useQuery({
-        queryKey: ['performance', employeeId],
+        queryKey: ['performance', employeeId, from, to],
         queryFn: () =>
             api
-                .get<{ data: PerformanceReview[] }>(`/performance${employeeId ? `?employeeId=${employeeId}` : ''}`)
+                .get<{ data: PerformanceReview[] }>(`/performance${search ? `?${search}` : ''}`)
                 .then((res) => res.data ?? []),
     })
 }

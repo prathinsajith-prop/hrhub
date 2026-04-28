@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
 import { type ColumnDef } from '@tanstack/react-table'
-import { UserPlus, MoreHorizontal, Copy, Mail } from 'lucide-react'
+import { UserPlus, MoreHorizontal, Copy, Mail, RefreshCcw } from 'lucide-react'
 import { useTenantMembers, useInviteMember, useChangeMemberRole, useRemoveMember, type MemberRole, type MemberRow } from '@/hooks/useTenants'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
@@ -32,7 +32,7 @@ const STATUS_VARIANT: Record<MemberRow['status'], 'default' | 'secondary' | 'des
 export function TeamPage() {
     const { t } = useTranslation()
     const me = useAuthStore((s) => s.user)
-    const { data: members, isLoading } = useTenantMembers()
+    const { data: members, isLoading, isFetching, refetch } = useTenantMembers()
     const inviteMut = useInviteMember()
     const roleMut = useChangeMemberRole()
     const removeMut = useRemoveMember()
@@ -169,11 +169,16 @@ export function TeamPage() {
                 title={t('team.title')}
                 description={t('team.description')}
                 actions={
-                    canManage && (
-                        <Button size="sm" leftIcon={<UserPlus className="h-3.5 w-3.5" />} onClick={() => { setInviteOpen(true); setLastInviteUrl(null) }}>
-                            {t('team.inviteMember')}
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                            Refresh
                         </Button>
-                    )
+                        {canManage && (
+                            <Button size="sm" leftIcon={<UserPlus className="h-3.5 w-3.5" />} onClick={() => { setInviteOpen(true); setLastInviteUrl(null) }}>
+                                {t('team.inviteMember')}
+                            </Button>
+                        )}
+                    </div>
                 }
             />
 

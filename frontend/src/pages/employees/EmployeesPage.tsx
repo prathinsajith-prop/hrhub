@@ -13,6 +13,7 @@ import {
   Clock,
   Star,
   UserCheck,
+  RefreshCcw,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { DataTable } from '@/components/ui/data-table'
@@ -146,7 +147,7 @@ export function EmployeesPage() {
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_employees')
-  const { data: empData, isLoading, isError, error, refetch } = useEmployees({ limit: 50 })
+  const { data: empData, isLoading, isFetching, isError, error, refetch } = useEmployees({ limit: 50 })
   const employeesRaw = useMemo(() => (empData?.data as Employee[]) ?? [], [empData?.data])
   const employees: Employee[] = employeesRaw
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
@@ -353,6 +354,9 @@ export function EmployeesPage() {
         description={t('employees.description')}
         actions={
           <>
+            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+              Refresh
+            </Button>
             <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}>
               Export
             </Button>

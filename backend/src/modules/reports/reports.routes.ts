@@ -40,4 +40,21 @@ export default async function (fastify: any): Promise<void> {
         const data = await getPROCostReport(request.user.tenantId)
         return reply.send({ data })
     })
+
+    // BFF aggregator — single round trip for the full reports page.
+    // Uses the same hr_manager+ role guard as pro-costs (the most restrictive of the four).
+    fastify.get('/summary', {
+        schema: { tags: ['Reports'] },
+        preHandler: [fastify.authenticate, (fastify as any).requireRole('hr_manager', 'pro_officer', 'super_admin')],
+    }, async (request: any, reply: any) => {
+        const tenantId: string = request.user.tenantId
+        const days = Number((request.query as any).days ?? 90)
+        const [headcount, payrollSummary, visaExpiry, proCosts] = await Promise.all([
+            getHeadcountReport(tenantId),
+            getPayrollSummaryReport(tenantId),
+            getVisaExpiryReport(tenantId, days),
+            getPROCostReport(tenantId),
+        ])
+        return reply.send({ headcount, payrollSummary, visaExpiry, proCosts })
+    })
 }

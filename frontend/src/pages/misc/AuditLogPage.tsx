@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
+import { AUDIT_ACTION_OPTIONS, AUDIT_ENTITY_TYPE_OPTIONS, ROLE_OPTIONS } from '@/lib/options'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -24,6 +25,7 @@ import {
     Activity,
     User as UserIcon,
     X,
+    RefreshCcw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
@@ -54,36 +56,11 @@ const FALLBACK_META: ActionMeta = {
     pill: 'bg-slate-50 text-slate-600 ring-1 ring-slate-200',
 }
 
-const ENTITY_TYPES = ['employee', 'leave', 'payroll', 'visa', 'document', 'recruitment', 'onboarding', 'compliance', 'user', 'tenant']
-
-const ACTION_OPTIONS = [
-    { value: 'create', label: 'Create' },
-    { value: 'update', label: 'Update' },
-    { value: 'delete', label: 'Delete' },
-    { value: 'approve', label: 'Approve' },
-    { value: 'reject', label: 'Reject' },
-    { value: 'submit', label: 'Submit' },
-    { value: 'view', label: 'View' },
-    { value: 'export', label: 'Export' },
-    { value: 'import', label: 'Import' },
-    { value: 'login', label: 'Login' },
-    { value: 'logout', label: 'Logout' },
-]
-
 const AUDIT_FILTERS: FilterConfig[] = [
-    { name: 'entityType', label: 'Entity', type: 'select', field: 'entityType', options: ENTITY_TYPES.map(et => ({ value: et, label: et[0].toUpperCase() + et.slice(1) })) },
-    { name: 'action', label: 'Action', type: 'select', field: 'action', options: ACTION_OPTIONS },
+    { name: 'entityType', label: 'Entity', type: 'select', field: 'entityType', options: AUDIT_ENTITY_TYPE_OPTIONS },
+    { name: 'action', label: 'Action', type: 'select', field: 'action', options: AUDIT_ACTION_OPTIONS },
     { name: 'actorName', label: 'Actor name', type: 'text', field: 'actorName' },
-    {
-        name: 'actorRole', label: 'Actor role', type: 'select', field: 'actorRole',
-        options: [
-            { value: 'super_admin', label: 'Super admin' },
-            { value: 'hr_manager', label: 'HR manager' },
-            { value: 'pro_officer', label: 'PRO officer' },
-            { value: 'manager', label: 'Manager' },
-            { value: 'employee', label: 'Employee' },
-        ],
-    },
+    { name: 'actorRole', label: 'Actor role', type: 'select', field: 'actorRole', options: ROLE_OPTIONS },
     { name: 'entityName', label: 'Entity name', type: 'text', field: 'entityName' },
     { name: 'createdAt', label: 'Date range', type: 'date_range', field: 'createdAt' },
     { name: 'ipAddress', label: 'IP address', type: 'text', field: 'ipAddress' },
@@ -156,7 +133,7 @@ export function AuditLogPage() {
     const ipFilter = (auditSearch.appliedFilters.ipAddress?.value as string | undefined) ?? ''
     const createdAtRange = (auditSearch.appliedFilters.createdAt?.value as [string | null, string | null] | undefined) ?? null
 
-    const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteActivityLogs({
+    const { data, isLoading, isFetching, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteActivityLogs({
         entityType: entityTypeFilter || undefined,
         pageSize: 30,
     })
@@ -289,6 +266,11 @@ export function AuditLogPage() {
                 eyebrow="Insights"
                 title={t('audit.title')}
                 description={t('audit.description')}
+                actions={
+                    <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                        Refresh
+                    </Button>
+                }
             />
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">

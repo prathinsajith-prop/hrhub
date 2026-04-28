@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plane, Clock, AlertTriangle, CheckCircle2, Plus, RefreshCw, Eye, Edit2 } from 'lucide-react'
+import { Plane, Clock, AlertTriangle, CheckCircle2, Plus, RefreshCw, RefreshCcw, Eye, Edit2 } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -378,7 +378,7 @@ export function VisaPage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('all')
   const [newAppOpen, setNewAppOpen] = useState(false)
-  const { data: visaData, isLoading } = useVisas({ limit: 50 })
+  const { data: visaData, isLoading, isFetching, refetch } = useVisas({ limit: 50 })
   const recalcUrgency = useRecalcVisaUrgency()
   const updateVisa = useUpdateVisa()
   const visaApplications: VisaApplication[] = (visaData?.data as VisaApplication[]) ?? []
@@ -448,6 +448,9 @@ export function VisaPage() {
         description={t('visa.description')}
         actions={
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+              Refresh
+            </Button>
             <Button
               variant="outline"
               size="sm"

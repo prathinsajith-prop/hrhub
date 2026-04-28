@@ -18,11 +18,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useVisas } from '@/hooks/useVisa'
-import { useDocuments } from '@/hooks/useDocuments'
-import { useLeaveRequests } from '@/hooks/useLeave'
-import { usePerformanceReviews } from '@/hooks/usePerformance'
-import { usePublicHolidays } from '@/hooks/useHr'
+import { useCalendarEvents } from '@/hooks/useCalendar'
 
 // ─── Event kinds ──────────────────────────────────────────────────────────────
 
@@ -65,30 +61,20 @@ export function CalendarPage() {
     })
     const [currentTitle, setCurrentTitle] = useState<string>('')
     const [view, setView] = useState<ViewKey>('dayGridMonth')
-    // Track which year the calendar is currently showing so we fetch the right holidays.
-    const [visibleYear, setVisibleYear] = useState<number>(new Date().getFullYear())
+    // Track the visible date range so we can scope fetches to just the visible window.
+    const [visibleRange, setVisibleRange] = useState<{ from: string; to: string } | undefined>(undefined)
 
-    const visas = useVisas({ limit: 100 })
-    const documents = useDocuments({ limit: 100 })
-    const leaves = useLeaveRequests({ limit: 100 })
-    const reviews = usePerformanceReviews()
-    // Fetch holidays for the visible calendar year (updates when user navigates months).
-    const holidays = usePublicHolidays(visibleYear)
-
-    const isLoading =
-        visas.isLoading || documents.isLoading ||
-        leaves.isLoading || reviews.isLoading || holidays.isLoading
+    const { data: calendarData, isLoading } = useCalendarEvents(visibleRange)
 
     // ─── Build calendar events ─────────────────────────────────────────────────
 
     const events = useMemo<EventInput[]>(() => {
         const out: EventInput[] = []
-        // Helper to safely read a property as string | null | undefined
         const str = (v: unknown): string | undefined =>
             typeof v === 'string' ? v : undefined
 
         if (filter.visa) {
-            const rows = ((visas.data as { data?: unknown })?.data ?? []) as Record<string, unknown>[]
+            const rows = (calendarData?.visas ?? []) as Record<string, unknown>[]
             for (const v of rows) {
                 const date = safeISO(str(v.expiryDate))
                 if (!date) continue
@@ -107,7 +93,7 @@ export function CalendarPage() {
         }
 
         if (filter.document) {
-            const rows = ((documents.data as { data?: unknown })?.data ?? []) as Record<string, unknown>[]
+            const rows = (calendarData?.documents ?? []) as Record<string, unknown>[]
             for (const d of rows) {
                 const date = safeISO(str(d.expiryDate))
                 if (!date) continue
@@ -126,8 +112,10 @@ export function CalendarPage() {
         }
 
         if (filter.leave) {
-            const rows = ((leaves.data as { data?: unknown })?.data ?? []) as Record<string, unknown>[]
+            const rows = (calendarData?.leaves ?? []) as Record<string, unknown>[]
             for (const l of rows) {
+                // Only show approved leaves on the calendar
+                if (str(l.status) !== 'approved') continue
                 const start = safeISO(str(l.startDate))
                 const end = safeISO(str(l.endDate))
                 if (!start) continue
@@ -153,7 +141,7 @@ export function CalendarPage() {
         }
 
         if (filter.review) {
-            const rows = (Array.isArray(reviews.data) ? reviews.data : []) as unknown as Record<string, unknown>[]
+            const rows = (calendarData?.reviews ?? []) as Record<string, unknown>[]
             for (const r of rows) {
                 const date = safeISO(str(r.reviewDate))
                 if (!date) continue
@@ -172,7 +160,7 @@ export function CalendarPage() {
         }
 
         if (filter.holiday) {
-            const rows = (holidays.data ?? []) as unknown as Record<string, unknown>[]
+            const rows = (calendarData?.holidays ?? []) as unknown as Record<string, unknown>[]
             for (const h of rows) {
                 const date = safeISO(str(h.date))
                 if (!date) continue
@@ -192,7 +180,7 @@ export function CalendarPage() {
         }
 
         return out
-    }, [visas.data, documents.data, leaves.data, reviews.data, holidays.data, filter])
+    }, [calendarData, filter])
 
     // ─── Toolbar actions ───────────────────────────────────────────────────────
 
@@ -203,9 +191,11 @@ export function CalendarPage() {
 
     const handleDatesSet = (arg: DatesSetArg) => {
         setCurrentTitle(arg.view.title)
-        // Derive the year from the middle of the visible range to handle month boundaries correctly.
-        const mid = new Date((arg.start.getTime() + arg.end.getTime()) / 2)
-        setVisibleYear(mid.getFullYear())
+        const from = arg.start.toISOString().slice(0, 10)
+        // arg.end is exclusive in FullCalendar — subtract one day for inclusive upper bound.
+        const endInclusive = new Date(arg.end.getTime() - 86_400_000)
+        const to = endInclusive.toISOString().slice(0, 10)
+        setVisibleRange(prev => (prev?.from === from && prev?.to === to ? prev : { from, to }))
     }
 
     const counts = useMemo(() => {
@@ -344,7 +334,7 @@ export function CalendarPage() {
                         // Visually highlight days that have a holiday event
                         dayCellClassNames={(arg) => {
                             const dateStr = arg.date.toISOString().slice(0, 10)
-                            const isHoliday = (holidays.data ?? []).some(h => h.date === dateStr)
+                            const isHoliday = (calendarData?.holidays ?? []).some(h => h.date === dateStr)
                             return isHoliday ? ['fc-day-holiday'] : []
                         }}
                         dateClick={(info) => {

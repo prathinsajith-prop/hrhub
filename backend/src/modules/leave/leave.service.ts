@@ -9,12 +9,16 @@ import type { InferInsertModel } from 'drizzle-orm'
 
 type NewLeaveRequest = InferInsertModel<typeof leaveRequests>
 
-export async function listLeaveRequests(tenantId: string, params: { employeeId?: string; status?: string; leaveType?: string; limit: number; offset: number }) {
-    const { employeeId, status, leaveType, limit, offset } = params
+export async function listLeaveRequests(tenantId: string, params: { employeeId?: string; status?: string; leaveType?: string; from?: string; to?: string; limit: number; offset: number }) {
+    const { employeeId, status, leaveType, from, to, limit, offset } = params
     const conditions = [eq(leaveRequests.tenantId, tenantId), isNull(leaveRequests.deletedAt)]
     if (employeeId) conditions.push(eq(leaveRequests.employeeId, employeeId))
     if (status) conditions.push(eq(leaveRequests.status, status as never))
     if (leaveType) conditions.push(eq(leaveRequests.leaveType, leaveType as never))
+    // Date-range overlap: include any request that intersects [from, to].
+    // (startDate <= to) AND (endDate >= from)
+    if (to) conditions.push(lte(leaveRequests.startDate, to))
+    if (from) conditions.push(gte(leaveRequests.endDate, from))
 
     const rows = await db.select({
         ...getTableColumns(leaveRequests),
@@ -30,8 +34,9 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
         .orderBy(desc(leaveRequests.createdAt))
         .limit(limit).offset(offset)
 
-    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
-    return { data: rows, total, limit, offset, hasMore: offset + limit < total }
+    const total = rows.length > 0 ? Number(rows[0].totalCount ?? 0) : 0
+    const data = rows.map(({ totalCount: _tc, ...row }) => row)
+    return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 
 export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRequest, 'tenantId' | 'id'>) {

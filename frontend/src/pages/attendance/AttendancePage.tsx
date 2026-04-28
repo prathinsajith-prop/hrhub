@@ -29,20 +29,11 @@ import { useAttendance, useUpsertAttendance, type AttendanceRecord } from '@/hoo
 import { useEmployees } from '@/hooks/useEmployees'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { ATTENDANCE_STATUS_OPTIONS } from '@/lib/options'
 
 const ATTENDANCE_FILTERS: FilterConfig[] = [
     { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
-    {
-        name: 'status', label: 'Status', type: 'select', field: 'status',
-        options: [
-            { value: 'present', label: 'Present' },
-            { value: 'absent', label: 'Absent' },
-            { value: 'late', label: 'Late' },
-            { value: 'wfh', label: 'WFH' },
-            { value: 'half_day', label: 'Half day' },
-            { value: 'on_leave', label: 'On leave' },
-        ],
-    },
+    { name: 'status', label: 'Status', type: 'select', field: 'status', options: ATTENDANCE_STATUS_OPTIONS },
     { name: 'date', label: 'Date', type: 'date_range', field: 'date' },
     { name: 'hoursWorked', label: 'Hours worked', type: 'number_range', field: 'hoursWorked', min: 0, max: 24 },
     { name: 'overtimeHours', label: 'Has overtime', type: 'toggle', field: 'overtimeHours' },
@@ -761,12 +752,9 @@ function EditAttendanceDialog({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="present">Present</SelectItem>
-                                <SelectItem value="absent">Absent</SelectItem>
-                                <SelectItem value="late">Late</SelectItem>
-                                <SelectItem value="half_day">Half Day</SelectItem>
-                                <SelectItem value="wfh">WFH</SelectItem>
-                                <SelectItem value="on_leave">On Leave</SelectItem>
+                                {ATTENDANCE_STATUS_OPTIONS.map(o => (
+                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>

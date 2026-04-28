@@ -11,6 +11,7 @@
  */
 import nodemailer from 'nodemailer'
 import { loadEnv } from '../config/env.js'
+import { log } from '../lib/logger.js'
 
 let transporter: nodemailer.Transporter | null = null
 let configWarned = false
@@ -41,7 +42,7 @@ function getTransporter(): nodemailer.Transporter {
     } else {
         // In production, refuse to start with default Mailpit settings
         if (env.NODE_ENV === 'production' && env.SMTP_HOST === 'localhost' && !configWarned) {
-            console.warn('[email] WARNING: SMTP_HOST=localhost in production — emails will silently fail.')
+            log.warn('SMTP_HOST=localhost in production — emails will silently fail')
             configWarned = true
         }
         transporter = nodemailer.createTransport({
@@ -91,14 +92,14 @@ export async function sendEmail(opts: EmailOptions): Promise<SendResult> {
             text: opts.text ?? opts.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
         })
         if (env.NODE_ENV !== 'production') {
-            console.log(`[email] Sent to ${opts.to} subject="${opts.subject}" id=${info.messageId}`)
+            log.info({ to: opts.to, subject: opts.subject, messageId: info.messageId }, 'email sent')
         }
         return { ok: true, messageId: info.messageId }
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        console.error(`[email] Failed to send to ${opts.to}:`, msg)
+        log.error({ to: opts.to, err: msg }, 'email send failed')
         if (env.NODE_ENV !== 'production' && env.EMAIL_DEV_FALLBACK) {
-            console.warn(`[email] DEV_FALLBACK active — returning ok despite transport failure. Subject="${opts.subject}"`)
+            log.warn({ subject: opts.subject }, 'email DEV_FALLBACK active — returning ok despite transport failure')
             return { ok: true, messageId: 'dev-fallback' }
         }
         return { ok: false, error: msg }

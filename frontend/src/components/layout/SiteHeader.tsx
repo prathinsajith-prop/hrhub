@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight, Check, Settings2 } from 'lucide-react'
+import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight, Check, Settings2, SunIcon, MoonIcon, MonitorIcon } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { labelFor } from '@/lib/enums'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -56,6 +57,7 @@ export function SiteHeader() {
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const [searchOpen, setSearchOpen] = useState(false)
+  const { theme, setTheme } = useTheme()
 
   const crumbs = useMemo(() => {
     const segments = location.pathname.split('/').filter(Boolean)
@@ -188,6 +190,38 @@ export function SiteHeader() {
         </Button>
 
         <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
+
+        {/* Theme switcher */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className={iconBtn}
+              aria-label="Toggle theme"
+            >
+              <SunIcon className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <MoonIcon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={8} className="w-36">
+            <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setTheme('light')}>
+              <SunIcon className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Light</span>
+              {theme === 'light' && <Check className="ms-auto h-3.5 w-3.5 text-primary" />}
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setTheme('dark')}>
+              <MoonIcon className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Dark</span>
+              {theme === 'dark' && <Check className="ms-auto h-3.5 w-3.5 text-primary" />}
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setTheme('system')}>
+              <MonitorIcon className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">System</span>
+              {theme === 'system' && <Check className="ms-auto h-3.5 w-3.5 text-primary" />}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Notifications */}
         <Popover>

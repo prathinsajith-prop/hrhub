@@ -60,6 +60,7 @@ async function request<T>(
     path: string,
     init: RequestInit = {},
     retry = true,
+    cacheBustRetry = true,
 ): Promise<T> {
     const { accessToken } = useAuthStore.getState() as {
         accessToken: string | null
@@ -79,16 +80,21 @@ async function request<T>(
         headers['Authorization'] = `Bearer ${accessToken}`
     }
 
-    // Always bypass the browser HTTP cache so we never receive a cached
-    // empty-body response. If-None-Match/304 is handled server-side for
-    // optimisation; the browser does not need to store anything here.
+    // Triple-belt cache bypass:
+    //   1. fetch cache: 'no-store' — browser HTTP cache is skipped entirely
+    //   2. Pragma + Cache-Control request headers — pre-HTTP/1.1 proxies
+    //   3. NEVER send If-None-Match (we omit it; backend would honour it)
+    // This guarantees we never receive a stale cached empty body or a 304.
+    if (!headers['Pragma']) headers['Pragma'] = 'no-cache'
+    if (!headers['Cache-Control']) headers['Cache-Control'] = 'no-cache'
+
     const res = await fetch(`${BASE}${path}`, { ...init, headers, cache: 'no-store' })
 
     if (res.status === 401 && retry) {
         // Try to refresh the token once — using the shared singleton so
         // concurrent 401s don't each attempt their own refresh (race condition).
         const ok = await sharedRefresh()
-        if (ok) return request<T>(path, init, false)
+        if (ok) return request<T>(path, init, false, cacheBustRetry)
         useAuthStore.getState().logout()
         throw new ApiError(401, 'Session expired')
     }
@@ -100,7 +106,7 @@ async function request<T>(
         const fresh = await fetch(`${BASE}${path}`, { ...init, headers, cache: 'reload' })
         if (fresh.status === 401 && retry) {
             const ok = await sharedRefresh()
-            if (ok) return request<T>(path, init, false)
+            if (ok) return request<T>(path, init, false, cacheBustRetry)
             useAuthStore.getState().logout()
             throw new ApiError(401, 'Session expired')
         }
@@ -128,6 +134,15 @@ async function request<T>(
     // instead of the cryptic "Unexpected end of JSON input".
     const text = await res.text()
     if (!text || text.trim() === '') {
+        // Empty 200 body should be impossible from our backend, but Chrome has
+        // been observed to return cached entries as 200 with no body even when
+        // cache: 'no-store' is requested. One forced cache-busted retry avoids
+        // surfacing this as a user-facing failure.
+        if (cacheBustRetry) {
+            const sep = path.includes('?') ? '&' : '?'
+            const buster = `${sep}_=${Date.now()}`
+            return request<T>(path + buster, init, retry, false)
+        }
         throw new ApiError(res.status, `Empty response from ${path}`)
     }
     try {

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
 
-interface DocParams { employeeId?: string; category?: string; status?: string; limit?: number; offset?: number }
+interface DocParams { employeeId?: string; category?: string; status?: string; from?: string; to?: string; limit?: number; offset?: number }
 
 function toQS(params: Record<string, string | number | undefined>) {
     const q = new URLSearchParams()
@@ -11,10 +11,10 @@ function toQS(params: Record<string, string | number | undefined>) {
 }
 
 export function useDocuments(params: DocParams = {}) {
-    const { employeeId, category, status, limit = 20, offset = 0 } = params
+    const { employeeId, category, status, from, to, limit = 20, offset = 0 } = params
     return useQuery({
-        queryKey: ['documents', employeeId, category, status, limit, offset],
-        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/documents?${toQS({ employeeId, category, status, limit, offset })}`),
+        queryKey: ['documents', employeeId, category, status, from, to, limit, offset],
+        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/documents?${toQS({ employeeId, category, status, from, to, limit, offset })}`),
         staleTime: 30_000,
     })
 }

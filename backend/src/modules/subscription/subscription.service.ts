@@ -1,4 +1,5 @@
 import { eq, and, count, inArray, desc, lte, gte, isNull } from 'drizzle-orm'
+import { log } from '../../lib/logger.js'
 import { db } from '../../db/index.js'
 import { tenants, employees, subscriptionEvents, users } from '../../db/schema/index.js'
 import { loadEnv } from '../../config/env.js'
@@ -64,7 +65,7 @@ export async function getSubscriptionEvents(tenantId: string, limit = 50) {
 async function sendEmailLogged(opts: Parameters<typeof sendEmail>[0], context: string): Promise<void> {
     const result = await sendEmail(opts)
     if (!result.ok) {
-        console.error(`[subscription] Email failed (${context}) to=${opts.to}: ${result.error}`)
+        log.error({ context, to: opts.to, err: result.error }, 'subscription: email send failed')
     }
 }
 
@@ -409,7 +410,7 @@ export async function sendUpgradeRequest(params: UpgradeRequestParams) {
         html: upgradeRequestConfirmationEmail({ ...params, monthlyCost }),
     })
     if (!confirmResult.ok) {
-        console.error(`[subscription] Confirmation email failed for upgrade request tenant=${params.tenantId}: ${confirmResult.error}`)
+        log.error({ tenantId: params.tenantId, err: confirmResult.error }, 'subscription: upgrade confirmation email failed')
     }
 
     return { monthlyCost, desiredQuota: params.desiredQuota }
@@ -449,7 +450,7 @@ export async function sendEnterpriseContact(params: EnterpriseContactParams) {
         html: enterpriseContactConfirmationEmail(params),
     })
     if (!confirmResult.ok) {
-        console.error(`[subscription] Enterprise contact confirmation email failed tenant=${params.tenantId}: ${confirmResult.error}`)
+        log.error({ tenantId: params.tenantId, err: confirmResult.error }, 'subscription: enterprise contact email failed')
     }
 }
 
@@ -518,7 +519,7 @@ export async function sendSubscriptionExpiryReminders(daysAhead: number): Promis
         }, `subscription_expiry_${daysAhead}d`)
     }
 
-    console.log(`[subscription] Expiry reminders sent for ${expiring.length} tenant(s) expiring in ${daysAhead} day(s).`)
+    log.info({ count: expiring.length, daysAhead }, 'subscription: expiry reminders sent')
 }
 
 // ─── Invoice ref generator ────────────────────────────────────────────────────

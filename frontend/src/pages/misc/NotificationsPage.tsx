@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDistanceToNow, format } from 'date-fns'
-import { BellIcon, CheckCheckIcon, InfoIcon, AlertTriangleIcon, XCircleIcon, CheckCircleIcon } from 'lucide-react'
+import { BellIcon, CheckCheckIcon, InfoIcon, AlertTriangleIcon, XCircleIcon, CheckCircleIcon, RefreshCcw } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -29,7 +29,7 @@ export function NotificationsPage() {
     const [page, setPage] = useState(0)
     const limit = 20
 
-    const { data, isLoading } = useNotificationsList({ limit, offset: page * limit, unreadOnly })
+    const { data, isLoading, isFetching, refetch } = useNotificationsList({ limit, offset: page * limit, unreadOnly })
     const markRead = useMarkNotificationRead()
     const markAll = useMarkAllRead()
 
@@ -45,15 +45,20 @@ export function NotificationsPage() {
                 title={t('profile.notifications', 'Notifications')}
                 description={`${total} total — ${unreadCount} unread`}
                 actions={
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => markAll.mutate()}
-                        disabled={markAll.isPending || unreadCount === 0}
-                    >
-                        <CheckCheckIcon className="size-4 mr-2" />
-                        Mark all as read
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                            Refresh
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => markAll.mutate()}
+                            disabled={markAll.isPending || unreadCount === 0}
+                        >
+                            <CheckCheckIcon className="size-4 mr-2" />
+                            Mark all as read
+                        </Button>
+                    </div>
                 }
             />
 
@@ -139,6 +144,7 @@ export function NotificationsPage() {
                                     size="icon"
                                     className="shrink-0 mt-0.5 h-7 w-7"
                                     title="Mark as read"
+                                    aria-label="Mark as read"
                                     onClick={e => { e.stopPropagation(); markRead.mutate(n.id) }}
                                 >
                                     <CheckCircleIcon className="size-4" />

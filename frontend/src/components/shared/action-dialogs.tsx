@@ -19,6 +19,16 @@ import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from
 import { FormField } from '@/components/shared/FormField'
 import { apiErrorToFieldMap } from '@/lib/api'
 import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, jobPostSchema, visaApplicationSchema, leaveRequestSchema, documentMetaSchema, zodToFieldErrors } from '@/lib/schemas'
+import {
+    JOB_TYPE_OPTIONS, JOB_STATUS_OPTIONS,
+    VISA_APPLICATION_TYPE_OPTIONS, VISA_PRIORITY_OPTIONS,
+    LEAVE_TYPE_OPTIONS,
+    GENDER_OPTIONS, MARITAL_STATUS_OPTIONS, CONTRACT_TYPE_OPTIONS,
+    PAYMENT_METHOD_OPTIONS, EMIRATISATION_OPTIONS,
+    NEW_EMPLOYEE_STATUS_OPTIONS, EDIT_EMPLOYEE_STATUS_OPTIONS,
+    EDIT_DOC_CATEGORY_OPTIONS,
+    type SelectOption,
+} from '@/lib/options'
 import type { Employee } from '@/types'
 
 // Reporting-manager picker: searchable employee dropdown writing the chosen
@@ -116,10 +126,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             <Select value={type} onValueChange={setType}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="full_time">Full-time</SelectItem>
-                                    <SelectItem value="part_time">Part-time</SelectItem>
-                                    <SelectItem value="contract">Contract</SelectItem>
-                                    <SelectItem value="internship">Internship</SelectItem>
+                                    {JOB_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -204,11 +211,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
                             <Select value={visaType} onValueChange={setVisaType}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="employment_new">Employment (New)</SelectItem>
-                                    <SelectItem value="employment_renewal">Employment (Renewal)</SelectItem>
-                                    <SelectItem value="dependant">Dependant</SelectItem>
-                                    <SelectItem value="visit">Visit</SelectItem>
-                                    <SelectItem value="cancellation">Cancellation</SelectItem>
+                                    {VISA_APPLICATION_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -217,9 +220,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
                             <Select value={urgencyLevel} onValueChange={setUrgencyLevel}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="normal">Normal</SelectItem>
-                                    <SelectItem value="urgent">Urgent</SelectItem>
-                                    <SelectItem value="critical">Critical</SelectItem>
+                                    {VISA_PRIORITY_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -293,12 +294,7 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
                         <Select value={leaveType} onValueChange={setLeaveType}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="annual">Annual</SelectItem>
-                                <SelectItem value="sick">Sick</SelectItem>
-                                <SelectItem value="compassionate">Compassionate</SelectItem>
-                                <SelectItem value="maternity">Maternity</SelectItem>
-                                <SelectItem value="paternity">Paternity</SelectItem>
-                                <SelectItem value="unpaid">Unpaid</SelectItem>
+                                {LEAVE_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -548,8 +544,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v }))}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="male">Male</SelectItem>
-                                            <SelectItem value="female">Female</SelectItem>
+                                            {GENDER_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -558,10 +553,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <Select value={form.maritalStatus} onValueChange={v => setForm(f => ({ ...f, maritalStatus: v }))}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="single">Single</SelectItem>
-                                            <SelectItem value="married">Married</SelectItem>
-                                            <SelectItem value="divorced">Divorced</SelectItem>
-                                            <SelectItem value="widowed">Widowed</SelectItem>
+                                            {MARITAL_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -675,9 +667,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v }))}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="permanent">Permanent</SelectItem>
-                                            <SelectItem value="contract">Contract</SelectItem>
-                                            <SelectItem value="part_time">Part-time</SelectItem>
+                                            {CONTRACT_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -704,9 +694,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="onboarding">Onboarding</SelectItem>
-                                        <SelectItem value="probation">Probation</SelectItem>
-                                        <SelectItem value="active">Active</SelectItem>
+                                        {NEW_EMPLOYEE_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -746,9 +734,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 <Select value={form.paymentMethod} onValueChange={v => setForm(f => ({ ...f, paymentMethod: v }))}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="bank_transfer">Bank Transfer (WPS)</SelectItem>
-                                        <SelectItem value="cash">Cash</SelectItem>
-                                        <SelectItem value="cheque">Cheque</SelectItem>
+                                        {PAYMENT_METHOD_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -769,8 +755,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 <Select value={form.emiratisationCategory} onValueChange={v => setForm(f => ({ ...f, emiratisationCategory: v }))}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="expat">Expat</SelectItem>
-                                        <SelectItem value="emirati">Emirati (UAE National)</SelectItem>
+                                        {EMIRATISATION_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -956,8 +941,7 @@ export function EditEmployeeDialog({
                                     <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v }))}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="male">Male</SelectItem>
-                                            <SelectItem value="female">Female</SelectItem>
+                                            {GENDER_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -966,10 +950,7 @@ export function EditEmployeeDialog({
                                     <Select value={form.maritalStatus} onValueChange={v => setForm(f => ({ ...f, maritalStatus: v }))}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="single">Single</SelectItem>
-                                            <SelectItem value="married">Married</SelectItem>
-                                            <SelectItem value="divorced">Divorced</SelectItem>
-                                            <SelectItem value="widowed">Widowed</SelectItem>
+                                            {MARITAL_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -1067,9 +1048,7 @@ export function EditEmployeeDialog({
                                     <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v }))}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="permanent">Permanent</SelectItem>
-                                            <SelectItem value="contract">Contract</SelectItem>
-                                            <SelectItem value="part_time">Part-time</SelectItem>
+                                            {CONTRACT_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -1084,11 +1063,7 @@ export function EditEmployeeDialog({
                                 <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="active">Active</SelectItem>
-                                        <SelectItem value="onboarding">Onboarding</SelectItem>
-                                        <SelectItem value="probation">Probation</SelectItem>
-                                        <SelectItem value="suspended">Suspended</SelectItem>
-                                        <SelectItem value="terminated">Terminated</SelectItem>
+                                        {EDIT_EMPLOYEE_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1116,9 +1091,7 @@ export function EditEmployeeDialog({
                                 <Select value={form.paymentMethod} onValueChange={v => setForm(f => ({ ...f, paymentMethod: v }))}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="bank_transfer">Bank Transfer (WPS)</SelectItem>
-                                        <SelectItem value="cash">Cash</SelectItem>
-                                        <SelectItem value="cheque">Cheque</SelectItem>
+                                        {PAYMENT_METHOD_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1133,8 +1106,7 @@ export function EditEmployeeDialog({
                                 <Select value={form.emiratisationCategory} onValueChange={v => setForm(f => ({ ...f, emiratisationCategory: v }))}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="expat">Expat</SelectItem>
-                                        <SelectItem value="emirati">Emirati (UAE National)</SelectItem>
+                                        {EMIRATISATION_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1224,10 +1196,7 @@ export function EditJobDialog({
                             <Select value={type} onValueChange={setType}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="full_time">Full-time</SelectItem>
-                                    <SelectItem value="part_time">Part-time</SelectItem>
-                                    <SelectItem value="contract">Contract</SelectItem>
-                                    <SelectItem value="internship">Internship</SelectItem>
+                                    {JOB_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -1240,9 +1209,7 @@ export function EditJobDialog({
                             <Select value={status} onValueChange={setStatus}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="open">Open</SelectItem>
-                                    <SelectItem value="paused">Paused</SelectItem>
-                                    <SelectItem value="closed">Closed</SelectItem>
+                                    {JOB_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -1327,12 +1294,7 @@ export function EditDocumentDialog({
                             <Select value={category} onValueChange={setCategory}>
                                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="personal">Personal</SelectItem>
-                                    <SelectItem value="visa">Visa</SelectItem>
-                                    <SelectItem value="contract">Contract</SelectItem>
-                                    <SelectItem value="certificate">Certificate</SelectItem>
-                                    <SelectItem value="payroll">Payroll</SelectItem>
-                                    <SelectItem value="other">Other</SelectItem>
+                                    {EDIT_DOC_CATEGORY_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>

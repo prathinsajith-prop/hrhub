@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, MoreHorizontal, Copy, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Plus, MoreHorizontal, Copy, RefreshCw, AlertTriangle, RefreshCcw } from 'lucide-react'
 import {
     useConnectedApps,
     useCreateApp,
@@ -35,7 +35,7 @@ export function ConnectedAppsPage() {
     const navigate = useNavigate()
     const { can } = usePermissions()
     const canManage = can('manage_apps')
-    const { data: apps, isLoading } = useConnectedApps()
+    const { data: apps, isLoading, isFetching, refetch } = useConnectedApps()
     const createMut = useCreateApp()
     const updateMut = useUpdateApp()
     const regenMut = useRegenerateAppSecret()
@@ -131,6 +131,7 @@ export function ConnectedAppsPage() {
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
+                        aria-label="Copy app key"
                         onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(row.original.appKey); toast.success(t('apps.copied')) }}
                     >
                         <Copy className="h-3 w-3" />
@@ -217,11 +218,16 @@ export function ConnectedAppsPage() {
                 title={t('apps.title')}
                 description={t('apps.description')}
                 actions={
-                    canManage && (
-                        <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={openCreate}>
-                            {t('apps.newApp')}
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                            Refresh
                         </Button>
-                    )
+                        {canManage && (
+                            <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={openCreate}>
+                                {t('apps.newApp')}
+                            </Button>
+                        )}
+                    </div>
                 }
             />
 

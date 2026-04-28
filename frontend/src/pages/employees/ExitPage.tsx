@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
-import { LogOut, DollarSign, CheckCircle2, Clock, UserMinus, Eye, CalendarDays, FileText } from 'lucide-react'
+import { LogOut, DollarSign, CheckCircle2, Clock, UserMinus, Eye, CalendarDays, FileText, RefreshCcw } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -25,17 +25,11 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { toast } from '@/components/ui/overlays'
 import { ApiError } from '@/lib/api'
+import { EXIT_TYPE_LABELS } from '@/lib/enums'
+import { EXIT_TYPE_OPTIONS } from '@/lib/options'
 
 const EXIT_FILTERS: FilterConfig[] = [
-    {
-        name: 'exitType', label: 'Exit type', type: 'select', field: 'exitType',
-        options: [
-            { value: 'resignation', label: 'Resignation' },
-            { value: 'termination', label: 'Termination' },
-            { value: 'contract_end', label: 'Contract End' },
-            { value: 'retirement', label: 'Retirement' },
-        ],
-    },
+    { name: 'exitType', label: 'Exit type', type: 'select', field: 'exitType', options: EXIT_TYPE_OPTIONS },
     {
         name: 'status', label: 'Status', type: 'select', field: 'status',
         options: [
@@ -55,12 +49,7 @@ const statusVariant: Record<string, 'warning' | 'info' | 'destructive' | 'succes
     completed: 'success',
 }
 
-const exitTypeLabel: Record<string, string> = {
-    resignation: 'Resignation',
-    termination: 'Termination',
-    contract_end: 'Contract End',
-    retirement: 'Retirement',
-}
+const exitTypeLabel = EXIT_TYPE_LABELS
 
 const exitTypeColor: Record<string, string> = {
     resignation: 'bg-amber-100 text-amber-700',
@@ -110,7 +99,7 @@ export function ExitPage() {
     const { can } = usePermissions()
     const canManage = can('manage_exit')
 
-    const { data: exits, isLoading } = useExitRequests()
+    const { data: exits, isLoading, isFetching, refetch } = useExitRequests()
     const { data: employees } = useEmployees({ limit: 100 })
     const initiate = useInitiateExit()
     const approve = useApproveExit()
@@ -311,11 +300,16 @@ export function ExitPage() {
                 title={t('exit.title')}
                 description={t('exit.description')}
                 actions={
-                    canManage && (
-                        <Button size="sm" leftIcon={<UserMinus className="h-3.5 w-3.5" />} onClick={() => { setShowDialog(true); setStep('form') }}>
-                            Initiate Exit
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                            Refresh
                         </Button>
-                    )
+                        {canManage && (
+                            <Button size="sm" leftIcon={<UserMinus className="h-3.5 w-3.5" />} onClick={() => { setShowDialog(true); setStep('form') }}>
+                                Initiate Exit
+                            </Button>
+                        )}
+                    </div>
                 }
             />
 
@@ -502,10 +496,9 @@ export function ExitPage() {
                                 <Select value={form.exitType} onValueChange={v => set('exitType', v)}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="resignation">Resignation</SelectItem>
-                                        <SelectItem value="termination">Termination</SelectItem>
-                                        <SelectItem value="contract_end">Contract End</SelectItem>
-                                        <SelectItem value="retirement">Retirement</SelectItem>
+                                        {EXIT_TYPE_OPTIONS.map(o => (
+                                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>

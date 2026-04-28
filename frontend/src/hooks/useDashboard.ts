@@ -108,3 +108,21 @@ export function useOnboardingSummary() {
         staleTime: DASHBOARD_STALE,
     })
 }
+
+export interface DashboardSummary {
+    kpis: KPIs
+    payrollTrend: PayrollTrendPoint[]
+    nationalityBreakdown: NationalityPoint[]
+    deptHeadcount: DeptHeadcountPoint[]
+    emiratisation: EmiratisationStatus
+    onboardingSummary: OnboardingSummary
+}
+
+export function useDashboardSummary() {
+    return useQuery({
+        queryKey: ['dashboard', 'summary'],
+        queryFn: () => api.get<DashboardSummary>('/dashboard/summary'),
+        staleTime: DASHBOARD_STALE,
+        gcTime: ANALYTICS_GC,
+    })
+}

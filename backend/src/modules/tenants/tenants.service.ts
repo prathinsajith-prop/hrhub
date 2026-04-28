@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { eq, and, desc, isNull, sql } from 'drizzle-orm'
+import { log } from '../../lib/logger.js'
 import { db } from '../../db/index.js'
 import { tenants, users, tenantMemberships } from '../../db/schema/index.js'
 import {
@@ -226,8 +227,7 @@ export async function inviteMember(opts: {
     }).returning()
 
     const acceptUrl = `${process.env.APP_URL ?? 'http://localhost:5173'}/invite/accept?token=${raw}`
-    // eslint-disable-next-line no-console
-    console.log(`\n[invite] tenant=${opts.tenantId} email=${opts.email} role=${opts.role}\n[invite] accept url: ${acceptUrl}\n`)
+    log.info({ tenantId: opts.tenantId, email: opts.email, role: opts.role, acceptUrl }, 'invite created')
 
     // Fetch tenant name for the email subject
     const [tenant] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, opts.tenantId)).limit(1)
@@ -239,7 +239,7 @@ export async function inviteMember(opts: {
         inviteUrl: acceptUrl,
     })
     emailPayload.to = opts.email
-    sendEmail(emailPayload).catch((err) => console.error('[invite] email error:', err))
+    sendEmail(emailPayload).catch((err) => log.error({ err }, 'invite email send failed'))
 
     return {
         membership: row,

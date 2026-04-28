@@ -1,6 +1,7 @@
 import { pgTable, uuid, text, boolean, timestamp, numeric, date, index, uniqueIndex, check, type AnyPgColumn } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 import { tenants, entities } from './tenants.js'
+import { orgUnits } from './orgUnits.js'
 
 export const employees = pgTable('employees', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -57,9 +58,9 @@ export const employees = pgTable('employees', {
     workLocation: text('work_location'),
     probationEndDate: date('probation_end_date'),
     contractEndDate: date('contract_end_date'),
-    divisionId: uuid('division_id'),
-    departmentId: uuid('department_id'),
-    branchId: uuid('branch_id'),
+    divisionId: uuid('division_id').references(() => orgUnits.id, { onDelete: 'set null' }),
+    departmentId: uuid('department_id').references(() => orgUnits.id, { onDelete: 'set null' }),
+    branchId: uuid('branch_id').references(() => orgUnits.id, { onDelete: 'set null' }),
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

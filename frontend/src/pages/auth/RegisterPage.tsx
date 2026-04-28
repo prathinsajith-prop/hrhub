@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AuthLayout } from '@/components/layout/AuthLayout'
+import { INDUSTRY_OPTIONS, COMPANY_SIZE_OPTIONS } from '@/lib/options'
 
 // ─── Schema ─────────────────────────────────────────────────────────────────
 
@@ -45,33 +46,6 @@ type RegisterForm = z.infer<typeof registerSchema>
 const STEP_1_FIELDS: (keyof RegisterForm)[] = ['fullName', 'email', 'password', 'confirmPassword']
 
 // ─── Static data ─────────────────────────────────────────────────────────────
-
-const INDUSTRIES = [
-  { value: 'technology', label: 'Technology & Software' },
-  { value: 'financial_services', label: 'Financial Services & Banking' },
-  { value: 'real_estate', label: 'Real Estate & Construction' },
-  { value: 'retail', label: 'Retail & E-commerce' },
-  { value: 'healthcare', label: 'Healthcare & Life Sciences' },
-  { value: 'education', label: 'Education & Training' },
-  { value: 'hospitality', label: 'Hospitality & Tourism' },
-  { value: 'manufacturing', label: 'Manufacturing & Industrial' },
-  { value: 'oil_gas', label: 'Oil, Gas & Energy' },
-  { value: 'logistics', label: 'Transportation & Logistics' },
-  { value: 'media', label: 'Media, Marketing & Advertising' },
-  { value: 'professional_services', label: 'Professional Services & Consulting' },
-  { value: 'government', label: 'Government & Public Sector' },
-  { value: 'telecom', label: 'Telecommunications' },
-  { value: 'other', label: 'Other' },
-]
-
-const COMPANY_SIZES = [
-  { value: '1-10', label: '1 – 10 employees' },
-  { value: '11-50', label: '11 – 50 employees' },
-  { value: '51-200', label: '51 – 200 employees' },
-  { value: '201-500', label: '201 – 500 employees' },
-  { value: '501-1000', label: '501 – 1,000 employees' },
-  { value: '1000+', label: '1,000+ employees' },
-]
 
 const perks = [
   {
@@ -389,7 +363,7 @@ export function RegisterPage() {
                   <SelectValue placeholder="Select industry" />
                 </SelectTrigger>
                 <SelectContent>
-                  {INDUSTRIES.map((i) => (
+                  {INDUSTRY_OPTIONS.map((i) => (
                     <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -407,7 +381,7 @@ export function RegisterPage() {
                   <SelectValue placeholder="Team size" />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMPANY_SIZES.map((s) => (
+                  {COMPANY_SIZE_OPTIONS.map((s) => (
                     <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                   ))}
                 </SelectContent>

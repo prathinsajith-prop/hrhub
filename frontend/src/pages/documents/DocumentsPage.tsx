@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
-import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus, ShieldCheck, Edit2, AlertCircle } from 'lucide-react'
+import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus, ShieldCheck, Edit2, AlertCircle, RefreshCcw } from 'lucide-react'
 import { DOC_TYPE_CATALOG, CATEGORY_LABELS, type DocCategory } from '@/lib/docTypes'
 import { DataTable } from '@/components/ui/data-table'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -23,6 +23,7 @@ import { useDocuments, useDeleteDocument } from '@/hooks/useDocuments'
 import { useEmployees } from '@/hooks/useEmployees'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { DOC_CATEGORY_OPTIONS, DOC_STATUS_OPTIONS } from '@/lib/options'
 import { EditDocumentDialog } from '@/components/shared/action-dialogs'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
@@ -41,27 +42,8 @@ const statusBadge: Record<DocStatus, { variant: BadgeVariant; label: string }> =
 
 const DOCUMENT_FILTERS: FilterConfig[] = [
   { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
-  {
-    name: 'category', label: 'Category', type: 'select', field: 'category',
-    options: [
-      { value: 'identity', label: 'Identity' },
-      { value: 'visa', label: 'Visa' },
-      { value: 'employment', label: 'Employment' },
-      { value: 'compliance', label: 'Compliance' },
-      { value: 'financial', label: 'Financial' },
-      { value: 'qualification', label: 'Qualification' },
-    ],
-  },
-  {
-    name: 'status', label: 'Status', type: 'select', field: 'status',
-    options: [
-      { value: 'valid', label: 'Valid' },
-      { value: 'expiring_soon', label: 'Expiring soon' },
-      { value: 'expired', label: 'Expired' },
-      { value: 'under_review', label: 'Under review' },
-      { value: 'pending_upload', label: 'Pending upload' },
-    ],
-  },
+  { name: 'category', label: 'Category', type: 'select', field: 'category', options: DOC_CATEGORY_OPTIONS },
+  { name: 'status', label: 'Status', type: 'select', field: 'status', options: DOC_STATUS_OPTIONS },
   { name: 'expiryDate', label: 'Expiry date', type: 'date_range', field: 'expiryDate' },
   { name: 'verified', label: 'Verified only', type: 'toggle', field: 'verified' },
 ]
@@ -372,7 +354,7 @@ export function DocumentsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
   const [viewTarget, setViewTarget] = useState<Document | null>(null)
   const [verifyTarget, setVerifyTarget] = useState<Document | null>(null)
-  const { data: docsData, isLoading } = useDocuments({ limit: 100 })
+  const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: 100 })
   const documents = useMemo<Document[]>(() => (docsData?.data as Document[]) ?? [], [docsData?.data])
   const expiring = documents.filter((d) => d.status === 'expiring_soon').length
   const expired = documents.filter((d) => d.status === 'expired').length
@@ -443,9 +425,14 @@ export function DocumentsPage() {
         title={t('documents.title')}
         description={t('documents.description')}
         actions={
-          <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setUploadOpen(true)}>
-            Upload Document
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+              Refresh
+            </Button>
+            <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setUploadOpen(true)}>
+              Upload Document
+            </Button>
+          </div>
         }
       />
 

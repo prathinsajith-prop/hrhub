@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { toast } from '@/components/ui/overlays'
+import { ORG_JURISDICTION_OPTIONS, ORG_INDUSTRY_OPTIONS, ORG_PLAN_OPTIONS } from '@/lib/options'
 
 export function NewOrganizationPage() {
     const navigate = useNavigate()
@@ -66,9 +67,9 @@ export function NewOrganizationPage() {
                                 <Select value={form.jurisdiction} onValueChange={(v) => setForm({ ...form, jurisdiction: v })}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Mainland">Mainland</SelectItem>
-                                        <SelectItem value="Free Zone">Free Zone</SelectItem>
-                                        <SelectItem value="Offshore">Offshore</SelectItem>
+                                        {ORG_JURISDICTION_OPTIONS.map(o => (
+                                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -78,12 +79,9 @@ export function NewOrganizationPage() {
                                 <Select value={form.industryType} onValueChange={(v) => setForm({ ...form, industryType: v })}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Technology">Technology</SelectItem>
-                                        <SelectItem value="Construction">Construction</SelectItem>
-                                        <SelectItem value="Hospitality">Hospitality</SelectItem>
-                                        <SelectItem value="Retail">Retail</SelectItem>
-                                        <SelectItem value="Healthcare">Healthcare</SelectItem>
-                                        <SelectItem value="Other">Other</SelectItem>
+                                        {ORG_INDUSTRY_OPTIONS.map(o => (
+                                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -94,10 +92,9 @@ export function NewOrganizationPage() {
                             <Select value={form.subscriptionPlan} onValueChange={(v) => setForm({ ...form, subscriptionPlan: v })}>
                                 <SelectTrigger className="max-w-xs"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="free">Free</SelectItem>
-                                    <SelectItem value="starter">Starter</SelectItem>
-                                    <SelectItem value="pro">Pro</SelectItem>
-                                    <SelectItem value="enterprise">Enterprise</SelectItem>
+                                    {ORG_PLAN_OPTIONS.map(o => (
+                                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
