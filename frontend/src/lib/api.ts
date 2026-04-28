@@ -39,14 +39,30 @@ export function apiErrorToFieldMap(err: unknown): Record<string, string> {
     return out
 }
 
+// Singleton in-flight refresh promise.  When multiple concurrent requests all
+// receive a 401, they must share the SAME refresh call — otherwise the second
+// caller sends the already-rotated refresh token and the backend rejects it,
+// triggering a spurious logout.  The promise is cleared once it settles so the
+// next genuine expiry triggers a fresh refresh.
+let _refreshPromise: Promise<boolean> | null = null
+
+function sharedRefresh(): Promise<boolean> {
+    if (!_refreshPromise) {
+        _refreshPromise = useAuthStore
+            .getState()
+            .refreshTokens()
+            .finally(() => { _refreshPromise = null })
+    }
+    return _refreshPromise
+}
+
 async function request<T>(
     path: string,
     init: RequestInit = {},
     retry = true,
 ): Promise<T> {
-    const { accessToken, refreshTokens } = useAuthStore.getState() as {
+    const { accessToken } = useAuthStore.getState() as {
         accessToken: string | null
-        refreshTokens: () => Promise<boolean>
     }
 
     const headers: Record<string, string> = {
@@ -69,8 +85,9 @@ async function request<T>(
     const res = await fetch(`${BASE}${path}`, { ...init, headers, cache: 'no-store' })
 
     if (res.status === 401 && retry) {
-        // Try to refresh the token once
-        const ok = await refreshTokens()
+        // Try to refresh the token once — using the shared singleton so
+        // concurrent 401s don't each attempt their own refresh (race condition).
+        const ok = await sharedRefresh()
         if (ok) return request<T>(path, init, false)
         useAuthStore.getState().logout()
         throw new ApiError(401, 'Session expired')
@@ -82,7 +99,7 @@ async function request<T>(
     if (res.status === 304) {
         const fresh = await fetch(`${BASE}${path}`, { ...init, headers, cache: 'reload' })
         if (fresh.status === 401 && retry) {
-            const ok = await refreshTokens()
+            const ok = await sharedRefresh()
             if (ok) return request<T>(path, init, false)
             useAuthStore.getState().logout()
             throw new ApiError(401, 'Session expired')

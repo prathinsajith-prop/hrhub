@@ -301,11 +301,11 @@ export async function refreshAccessToken(fastify: AnyFastify, rawToken: string) 
     await db.insert(refreshTokens).values({ userId: user.id, tenantId, tokenHash: newTokenHash, expiresAt })
 
     const accessToken = fastify.jwt.sign(
-        { sub: user.id, tenantId, role: user.role, name: user.name, email: user.email },
+        { sub: user.id, tenantId, role: user.role, name: user.name, email: user.email, employeeId: user.employeeId },
         { expiresIn: '15m' }
     )
 
-    return { accessToken, refreshToken: newRawToken }
+    return { accessToken, refreshToken: newRawToken, employeeId: user.employeeId }
 }
 
 export async function revokeRefreshToken(rawToken: string) {

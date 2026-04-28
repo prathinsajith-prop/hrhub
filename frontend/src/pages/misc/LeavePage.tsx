@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Calendar, Clock, CheckCircle2, XCircle, Plus } from 'lucide-react'
+import { Calendar, Clock, CheckCircle2, XCircle, Plus, AlertCircle, RefreshCcw } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
@@ -136,7 +137,9 @@ export function LeavePage() {
     const { t } = useTranslation()
     const { can } = usePermissions()
     const canApprove = can('approve_leave')
-    const { data: leaveData, isLoading: leaveLoading } = useLeaveRequests({ limit: 50 })
+    const [searchParams] = useSearchParams()
+    const urlEmployeeId = searchParams.get('employeeId') ?? undefined
+    const { data: leaveData, isLoading: leaveLoading, isError: leaveError, refetch } = useLeaveRequests({ limit: 50, employeeId: urlEmployeeId })
     const leaves = useMemo<LeaveRequest[]>(() => (leaveData?.data as LeaveRequest[]) ?? [], [leaveData?.data])
     const approveLeave = useApproveLeave()
     const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null)
@@ -237,6 +240,14 @@ export function LeavePage() {
                     <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setApplyOpen(true)}>Apply Leave</Button>
                 }
             />
+
+            {leaveError && (
+                <div className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span className="flex-1">Failed to load leave requests. Your session may have expired.</span>
+                    <Button size="sm" variant="outline" onClick={() => refetch()} leftIcon={<RefreshCcw className="h-3.5 w-3.5" />}>Retry</Button>
+                </div>
+            )}
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <KpiCardCompact label="Pending" value={leaves.filter((l) => l.status === 'pending').length} icon={Clock} color="amber" />

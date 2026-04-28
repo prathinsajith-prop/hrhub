@@ -229,7 +229,7 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
 
   employees: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head'],
   'employees/:id': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head'],
-  'org-chart': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head'],
+  'org-chart': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   recruitment: ['super_admin', 'hr_manager'],
   'recruitment/candidates/:id': ['super_admin', 'hr_manager'],
   onboarding: ['super_admin', 'hr_manager', 'dept_head'],
@@ -242,9 +242,9 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   compliance: ['super_admin', 'hr_manager', 'pro_officer'],
 
   payroll: ['super_admin', 'hr_manager'],
-  leave: ['super_admin', 'hr_manager', 'dept_head', 'employee'],
-  attendance: ['super_admin', 'hr_manager', 'dept_head', 'employee'],
-  performance: ['super_admin', 'hr_manager', 'dept_head', 'employee'],
+  leave: ['super_admin', 'hr_manager', 'dept_head'],
+  attendance: ['super_admin', 'hr_manager', 'dept_head'],
+  performance: ['super_admin', 'hr_manager', 'dept_head'],
   assets: ['super_admin', 'hr_manager'],
 
   reports: ['super_admin', 'hr_manager', 'pro_officer'],
