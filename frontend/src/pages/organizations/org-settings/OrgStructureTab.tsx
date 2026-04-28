@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { toast } from '@/components/ui/overlays'
+import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import {
     useOrgUnits, useCreateOrgUnit, useUpdateOrgUnit, useDeleteOrgUnit,
     type OrgUnit, type OrgUnitInput, type OrgUnitType,
@@ -248,6 +248,7 @@ function OrgUnitRow({ unit, units, empList, depth = 0 }: {
     const deleteMut = useDeleteOrgUnit()
     const [editing, setEditing] = React.useState(false)
     const [expanded, setExpanded] = React.useState(true)
+    const [confirmDelete, setConfirmDelete] = React.useState(false)
     const meta = ORG_TYPE_META[unit.type]
     const Icon = meta.icon
     const children = units.filter(u => u.parentId === unit.id)
@@ -280,13 +281,7 @@ function OrgUnitRow({ unit, units, empList, depth = 0 }: {
                         size="sm" variant="ghost"
                         className="h-7 w-7 p-0 text-destructive hover:text-destructive"
                         disabled={deleteMut.isPending}
-                        onClick={() => {
-                            if (!confirm(`Delete "${unit.name}"? Its child units will become standalone.`)) return
-                            deleteMut.mutate(unit.id, {
-                                onSuccess: () => toast.success('Deleted', `${unit.name} has been removed.`),
-                                onError: () => toast.error('Error', 'Could not delete org unit.'),
-                            })
-                        }}
+                        onClick={() => setConfirmDelete(true)}
                     >
                         <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -308,6 +303,22 @@ function OrgUnitRow({ unit, units, empList, depth = 0 }: {
                     editing={unit} defaultType={unit.type} units={units} employees={empList}
                 />
             )}
+            <ConfirmDialog
+                open={confirmDelete}
+                onOpenChange={setConfirmDelete}
+                title={`Delete "${unit.name}"?`}
+                description="Its child units will become standalone. This action cannot be undone."
+                confirmLabel="Delete"
+                onConfirm={() => {
+                    deleteMut.mutate(unit.id, {
+                        onSuccess: () => {
+                            toast.success('Deleted', `${unit.name} has been removed.`)
+                            setConfirmDelete(false)
+                        },
+                        onError: () => toast.error('Error', 'Could not delete org unit.'),
+                    })
+                }}
+            />
         </div>
     )
 }

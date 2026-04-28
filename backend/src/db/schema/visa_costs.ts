@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, numeric, date, timestamp, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, numeric, date, timestamp, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
@@ -16,6 +16,14 @@ export const visaCosts = pgTable('visa_costs', {
     currency: text('currency').notNull().default('AED'),
     paidDate: date('paid_date').notNull(),
     receiptRef: text('receipt_ref'),
+    /**
+     * Stage of the visa workflow this cost belongs to (1-based step index at
+     * the moment the cost was recorded). Nullable for legacy rows captured
+     * before stage tracking was introduced.
+     */
+    stepNumber: integer('step_number'),
+    /** Human-readable step label snapshot, e.g. "Medical Fitness Test". */
+    stepLabel: text('step_label'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
@@ -23,6 +31,7 @@ export const visaCosts = pgTable('visa_costs', {
     visaIdx: index('idx_visa_costs_visa').on(t.visaApplicationId),
     employeeIdx: index('idx_visa_costs_employee').on(t.employeeId),
     paidDateIdx: index('idx_visa_costs_paid_date').on(t.paidDate),
+    stepIdx: index('idx_visa_costs_step').on(t.visaApplicationId, t.stepNumber),
 }))
 
 export const visaCostsRelations = relations(visaCosts, ({ one }) => ({

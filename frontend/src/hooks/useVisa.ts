@@ -40,6 +40,83 @@ export function useAdvanceVisaStep() {
     })
 }
 
+export interface AdvanceWithCostsInput {
+    id: string
+    notes?: string
+    costs: Array<{
+        employeeId: string
+        category: 'govt_fee' | 'medical' | 'typing' | 'translation' | 'other'
+        description?: string
+        amount: number
+        currency?: string
+        paidDate: string
+        receiptRef?: string
+    }>
+}
+
+export interface AdvanceWithCostsResponse {
+    data: unknown
+    transition: {
+        advanced: boolean
+        fromStep: number
+        toStep: number
+        fromStepLabel: string
+        toStepLabel: string
+        historyId: string | null
+    }
+    costs: Array<{ id: string; amount: string; category: string; stepLabel: string | null }>
+}
+
+/**
+ * Atomic stage-advance with optional cost capture. Replaces the legacy
+ * "POST /costs N times then POST /advance" sequence with a single round-trip
+ * that writes a `visa_step_history` row and an audit-log entry per cost +
+ * one for the transition itself.
+ */
+export function useAdvanceVisaWithCosts() {
+    const qc = useQueryClient()
+    return useMutation<AdvanceWithCostsResponse, Error, AdvanceWithCostsInput>({
+        mutationFn: ({ id, notes, costs }) =>
+            api.post<AdvanceWithCostsResponse>(`/visa/${id}/advance`, { notes, costs }),
+        onSuccess: (_, variables) => {
+            qc.invalidateQueries({ queryKey: ['visa'] })
+            qc.invalidateQueries({ queryKey: ['visa', variables.id, 'costs'] })
+            qc.invalidateQueries({ queryKey: ['visa', variables.id, 'history'] })
+            qc.invalidateQueries({ queryKey: ['reports', 'pro-costs'] })
+            qc.invalidateQueries({ queryKey: ['dashboard'] })
+        },
+        onError: (err) => toast.error('Advance failed', err?.message ?? 'Could not advance the visa step.'),
+    })
+}
+
+export interface VisaStepHistoryItem {
+    id: string
+    visaApplicationId: string
+    fromStep: number
+    toStep: number
+    fromStepLabel: string
+    toStepLabel: string | null
+    fromStatus: string
+    toStatus: string
+    costsTotal: string
+    costsCount: number
+    notes: string | null
+    advancedBy: string | null
+    advancedByName: string | null
+    advancedByRole: string | null
+    createdAt: string
+}
+
+export function useVisaHistory(visaId: string) {
+    return useQuery({
+        queryKey: ['visa', visaId, 'history'],
+        queryFn: () =>
+            api.get<{ data: VisaStepHistoryItem[] }>(`/visa/${visaId}/history`).then(r => r.data),
+        enabled: !!visaId,
+        staleTime: 30_000,
+    })
+}
+
 export function useCancelVisa() {
     const qc = useQueryClient()
     return useMutation({

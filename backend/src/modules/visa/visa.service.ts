@@ -1,8 +1,10 @@
 import { eq, and, desc, isNull, sql, getTableColumns, or, lt, gte, lte } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
-import { visaApplications, employees } from '../../db/schema/index.js'
+import { visaApplications, employees, visaStepHistory, visaCosts } from '../../db/schema/index.js'
 import { cacheDel } from '../../lib/redis.js'
+import { VISA_STEP_LABELS, visaStepLabel } from './visa.constants.js'
+import { addVisaCost, type CreateCostInput } from './visa_costs.service.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewVisa = InferInsertModel<typeof visaApplications>
@@ -129,15 +131,7 @@ export async function updateVisa(tenantId: string, id: string, data: Partial<New
 
 /**
  * Step → Status mapping for the standard 8-step UAE work-visa workflow.
- * Keep in sync with `visaSteps` in the frontend (VisaPage / VisaDetailPage).
- *   1 Entry Permit Application
- *   2 Entry Permit Approval
- *   3 Employee Entry to UAE
- *   4 Medical Fitness Test
- *   5 Emirates ID Biometrics
- *   6 Visa Stamping
- *   7 Labour Card Issuance
- *   8 Completion
+ * Step labels live in `visa.constants.ts` and are shared with the frontend.
  */
 const STEP_TO_STATUS: Record<number, 'entry_permit' | 'medical_pending' | 'eid_pending' | 'stamping' | 'active'> = {
     1: 'entry_permit',
@@ -150,24 +144,152 @@ const STEP_TO_STATUS: Record<number, 'entry_permit' | 'medical_pending' | 'eid_p
     8: 'active',
 }
 
-export async function advanceVisaStep(tenantId: string, id: string) {
+export interface AdvanceContext {
+    userId?: string
+    userName?: string
+    userRole?: string
+    notes?: string
+}
+
+export interface AdvanceResult {
+    visa: typeof visaApplications.$inferSelect
+    fromStep: number
+    toStep: number
+    fromStepLabel: string
+    toStepLabel: string
+    fromStatus: string
+    toStatus: string
+    historyId: string | null
+    advanced: boolean
+}
+
+/**
+ * Advance the visa to the next step and append a `visa_step_history` row
+ * capturing the transition. `costsTotal` / `costsCount` may be supplied when
+ * costs were recorded as part of this transition (see `advanceVisaStepWithCosts`).
+ */
+export async function advanceVisaStep(
+    tenantId: string,
+    id: string,
+    ctx: AdvanceContext = {},
+    costsSummary: { total: number; count: number } = { total: 0, count: 0 },
+): Promise<AdvanceResult | null> {
     const visa = await getVisa(tenantId, id)
     if (!visa) return null
 
-    // Don't advance terminal states.
-    if (visa.status === 'cancelled' || visa.status === 'expired') return visa
-    if (visa.currentStep >= visa.totalSteps) return visa
+    const fromStep = visa.currentStep
+    const fromStatus = visa.status
+    const fromStepLabel = visaStepLabel(fromStep)
 
-    const newStep = visa.currentStep + 1
-    const mappedStatus = STEP_TO_STATUS[newStep] ?? visa.status
+    // Don't advance terminal states or beyond the final step — return the
+    // visa unchanged so the caller can react.
+    const noop = visa.status === 'cancelled'
+        || visa.status === 'expired'
+        || visa.currentStep >= visa.totalSteps
 
-    const [row] = await db.update(visaApplications)
-        .set(withTimestamp({ currentStep: newStep, status: mappedStatus }))
+    if (noop) {
+        return {
+            visa,
+            fromStep,
+            toStep: fromStep,
+            fromStepLabel,
+            toStepLabel: fromStepLabel,
+            fromStatus,
+            toStatus: fromStatus,
+            historyId: null,
+            advanced: false,
+        }
+    }
+
+    const toStep = fromStep + 1
+    const toStatus = STEP_TO_STATUS[toStep] ?? fromStatus
+    const toStepLabel = visaStepLabel(toStep)
+
+    const [updated] = await db.update(visaApplications)
+        .set(withTimestamp({ currentStep: toStep, status: toStatus }))
         .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId)))
         .returning()
 
-    return row
+    const [historyRow] = await db.insert(visaStepHistory).values({
+        tenantId,
+        visaApplicationId: id,
+        fromStep,
+        toStep,
+        fromStepLabel,
+        toStepLabel,
+        fromStatus,
+        toStatus,
+        costsTotal: String(costsSummary.total ?? 0),
+        costsCount: costsSummary.count ?? 0,
+        notes: ctx.notes ?? null,
+        advancedBy: ctx.userId ?? null,
+        advancedByName: ctx.userName ?? null,
+        advancedByRole: ctx.userRole ?? null,
+    }).returning({ id: visaStepHistory.id })
+
+    return {
+        visa: updated,
+        fromStep,
+        toStep,
+        fromStepLabel,
+        toStepLabel,
+        fromStatus,
+        toStatus,
+        historyId: historyRow?.id ?? null,
+        advanced: true,
+    }
 }
+
+/**
+ * Atomic: persist any provided costs against the *current* step of the visa,
+ * then advance to the next step writing the totals into the step history row.
+ * Costs are tagged with the step they were incurred in (i.e. the step *being
+ * completed*, not the step being entered).
+ */
+export async function advanceVisaStepWithCosts(
+    tenantId: string,
+    id: string,
+    costs: Array<Omit<CreateCostInput, 'visaApplicationId' | 'stepNumber' | 'stepLabel'>>,
+    ctx: AdvanceContext = {},
+): Promise<{ result: AdvanceResult | null; savedCosts: Array<typeof visaCosts.$inferSelect> }> {
+    const visa = await getVisa(tenantId, id)
+    if (!visa) return { result: null, savedCosts: [] }
+
+    const stepNumber = visa.currentStep
+    const stepLabel = visaStepLabel(stepNumber)
+
+    const savedCosts: Array<typeof visaCosts.$inferSelect> = []
+    let total = 0
+    for (const c of costs) {
+        const saved = await addVisaCost(tenantId, {
+            ...c,
+            visaApplicationId: id,
+            stepNumber,
+            stepLabel,
+            createdBy: ctx.userId,
+        })
+        if (saved) {
+            savedCosts.push(saved)
+            total += Number(saved.amount)
+        }
+    }
+
+    const result = await advanceVisaStep(tenantId, id, ctx, { total, count: savedCosts.length })
+    return { result, savedCosts }
+}
+
+export async function listVisaStepHistory(tenantId: string, visaApplicationId: string) {
+    return db
+        .select()
+        .from(visaStepHistory)
+        .where(and(
+            eq(visaStepHistory.tenantId, tenantId),
+            eq(visaStepHistory.visaApplicationId, visaApplicationId),
+        ))
+        .orderBy(desc(visaStepHistory.createdAt))
+}
+
+export { VISA_STEP_LABELS }
 
 export async function cancelVisa(tenantId: string, id: string, reason?: string) {
     const visa = await getVisa(tenantId, id)
