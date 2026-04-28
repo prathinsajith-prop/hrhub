@@ -92,7 +92,7 @@ function AssetFormDialog({
                     <DialogTitle>{isEdit ? 'Edit Asset' : 'New Asset'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
-                    <DialogBody className="grid grid-cols-2 gap-4">
+                    <DialogBody className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <Label required>Asset Code</Label>
                             <Input

@@ -213,7 +213,7 @@ export function SubscriptionTab() {
                                     {plan.key === 'growth' ? (
                                         <Button
                                             size="sm"
-                                            className={cn('w-full text-xs', colors?.button)}
+                                            className={cn('w-full text-xs whitespace-normal h-auto py-2 leading-tight', colors?.button)}
                                             onClick={() => { setDesiredQuota(10); setUpgradeModal(true) }}
                                         >
                                             <Zap className="h-3.5 w-3.5 mr-1.5" />
@@ -223,7 +223,7 @@ export function SubscriptionTab() {
                                         <Button
                                             size="sm"
                                             variant="outline"
-                                            className="w-full text-xs border-purple-300 text-purple-700 hover:bg-purple-50"
+                                            className="w-full text-xs whitespace-normal h-auto py-2 leading-tight border-purple-300 text-purple-700 hover:bg-purple-50"
                                             onClick={() => setEnterpriseModal(true)}
                                         >
                                             <Send className="h-3.5 w-3.5 mr-1.5" />
@@ -238,7 +238,7 @@ export function SubscriptionTab() {
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        className="w-full text-xs"
+                                        className="w-full text-xs whitespace-normal h-auto py-2 leading-tight"
                                         onClick={() => { setDesiredQuota(current.quota ?? 10); setUpgradeModal(true) }}
                                     >
                                         <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
@@ -261,7 +261,7 @@ export function SubscriptionTab() {
             {/* ── Upgrade / Update capacity modal ─────────────────────── */}
             {upgradeModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-                    <div className="bg-background rounded-2xl border shadow-xl max-w-md w-full p-6 space-y-5">
+                    <div className="bg-background rounded-2xl border shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-5">
                         <div className="flex items-center justify-between">
                             <h2 className="font-semibold text-base">
                                 {isOnProfessional ? 'Update employee capacity' : 'Upgrade to Professional'}
@@ -364,7 +364,7 @@ export function SubscriptionTab() {
             {/* ── Enterprise contact modal ──────────────────────────── */}
             {enterpriseModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-                    <div className="bg-background rounded-2xl border shadow-xl max-w-md w-full p-6 space-y-5">
+                    <div className="bg-background rounded-2xl border shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-5">
                         <div className="flex items-center justify-between">
                             <div>
                                 <h2 className="font-semibold text-base">Contact Sales — Enterprise</h2>
@@ -376,7 +376,7 @@ export function SubscriptionTab() {
                         </div>
 
                         <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Your name</Label>
                                     <Input

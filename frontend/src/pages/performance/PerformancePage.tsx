@@ -270,7 +270,7 @@ export function PerformancePage() {
                         <DialogTitle>New Performance Review</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-2">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label>Employee</Label>
                                 <Select value={form.employeeId} onValueChange={v => set('employeeId', v)} disabled={!!lockedEmployeeId}>
@@ -290,7 +290,7 @@ export function PerformancePage() {
                                 <Input value={form.period} onChange={e => set('period', e.target.value)} placeholder="2024-Q2" />
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label>Review Date</Label>
                                 <DatePicker value={form.reviewDate} max={new Date().toISOString().split('T')[0]} onChange={v => set('reviewDate', v)} />
@@ -301,7 +301,7 @@ export function PerformancePage() {
                                     onChange={e => set('overallRating', Number(e.target.value))} className="accent-primary" />
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {(['qualityScore', 'productivityScore', 'teamworkScore', 'attendanceScore', 'initiativeScore'] as const).map(k => (
                                 <div key={k} className="space-y-1.5">
                                     <Label className="capitalize">{k.replace('Score', '').replace(/([A-Z])/g, ' $1')}: {form[k]}/5</Label>

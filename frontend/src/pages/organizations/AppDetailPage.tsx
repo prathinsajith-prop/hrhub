@@ -422,7 +422,7 @@ export function AppDetailPage() {
                 <div className="space-y-4">
                     <Skeleton className="h-8 w-48" />
                     <Skeleton className="h-24 w-full" />
-                    <div className="grid grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
                     </div>
                 </div>

@@ -352,7 +352,7 @@ export function RegisterPage() {
           </div>
 
           {/* Industry + Company size — 2-col grid */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Industry</Label>
               <Select
@@ -393,7 +393,7 @@ export function RegisterPage() {
           {/* Business type / jurisdiction */}
           <div className="space-y-1.5">
             <Label>Business Type</Label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {([
                 { value: 'mainland', label: 'Mainland (LLC)', desc: 'DED / Federal licence' },
                 { value: 'freezone', label: 'Free Zone', desc: 'JAFZA, DIFC, ADGM & others' },
@@ -421,7 +421,7 @@ export function RegisterPage() {
           </div>
 
           {/* Trade license + Phone — optional 2-col */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="tradeLicenseNo">
                 Trade License No

@@ -74,7 +74,7 @@ function ApplyDialog({ employeeId, onClose }: { employeeId: string; onClose: () 
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Start Date</Label>
                             <DatePicker value={form.startDate} onChange={v => setForm(f => ({ ...f, startDate: v }))} placeholder="Select start date" />

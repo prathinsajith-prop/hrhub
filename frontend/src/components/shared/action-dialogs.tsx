@@ -110,7 +110,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         <Label required>Job Title</Label>
                         <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Property Consultant" />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label required>Department</Label>
                             <Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Sales" />
@@ -120,7 +120,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Dubai Marina" />
                         </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="space-y-1.5">
                             <Label>Type</Label>
                             <Select value={type} onValueChange={setType}>
@@ -205,7 +205,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Visa Type</Label>
                             <Select value={visaType} onValueChange={setVisaType}>
@@ -298,7 +298,7 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label required>Start Date</Label>
                             <DatePicker value={startDate} min={today} onChange={setStartDate} />
@@ -527,7 +527,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
 
                     {step === 1 && (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <FormField label="First Name" required error={errors.firstName}>
                                     <Input value={form.firstName} onChange={set('firstName')} placeholder="Ahmed" aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />
                                 </FormField>
@@ -535,7 +535,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <Input value={form.lastName} onChange={set('lastName')} placeholder="Al Mansouri" aria-invalid={!!errors.lastName} className={errors.lastName ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <FormField label="Date of Birth" error={errors.dateOfBirth}>
                                     <DatePicker value={form.dateOfBirth} max={(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 10); return d.toISOString().split('T')[0] })()} min="1950-01-01" onChange={setDate('dateOfBirth')} aria-invalid={!!errors.dateOfBirth} className={errors.dateOfBirth ? 'border-destructive' : ''} />
                                 </FormField>
@@ -558,7 +558,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     </Select>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <FormField label="Nationality" required error={errors.nationality}>
                                     <CountrySelect
                                         value={resolveCountryIso(form.nationality)}
@@ -574,7 +574,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <Input value={form.passportNo} onChange={set('passportNo')} placeholder="A12345678" />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <FormField label="Mobile" error={errors.mobileNo}>
                                     <PhoneInput
                                         value={form.mobileNo}
@@ -595,7 +595,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
 
                     {step === 2 && (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <FormField label="Employee No" error={errors.employeeNo} hint="Auto-generated if blank">
                                     <Input value={form.employeeNo} onChange={set('employeeNo')} placeholder="EMP-2604-1234" />
                                 </FormField>
@@ -618,7 +618,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-2.5">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                             <div className="space-y-1.5">
                                                 <Label>Department</Label>
                                                 <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v }))}>
@@ -643,7 +643,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     </div>
                                 </div>
                             )}
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Department (freeform)</Label>
                                     <Input value={form.department} onChange={set('department')} placeholder="e.g. Sales" />
@@ -661,7 +661,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     </Select>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Contract Type</Label>
                                     <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v }))}>
@@ -676,7 +676,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <Input value={form.workLocation} onChange={set('workLocation')} placeholder="e.g. Dubai HQ" />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Reporting Manager</Label>
                                     <ManagerPicker
@@ -703,7 +703,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
 
                     {step === 3 && (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Basic Salary (AED)</Label>
                                     <NumericInput value={form.basicSalary} onChange={set('basicSalary')} placeholder="0.00" />
@@ -713,7 +713,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <NumericInput value={form.housingAllowance} onChange={set('housingAllowance')} placeholder="0.00" />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Transport Allowance (AED)</Label>
                                     <NumericInput value={form.transportAllowance} onChange={set('transportAllowance')} placeholder="0.00" />
@@ -739,7 +739,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 </Select>
                             </div>
                             {form.paymentMethod === 'bank_transfer' && (
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
                                         <Label>Bank Name</Label>
                                         <Input value={form.bankName} onChange={set('bankName')} placeholder="e.g. Emirates NBD" />
@@ -926,7 +926,7 @@ export function EditEmployeeDialog({
 
                     {step === 1 && (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <FormField label="First Name" required error={errors.firstName}>
                                     <Input value={form.firstName} onChange={set('firstName')} aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />
                                 </FormField>
@@ -934,7 +934,7 @@ export function EditEmployeeDialog({
                                     <Input value={form.lastName} onChange={set('lastName')} aria-invalid={!!errors.lastName} className={errors.lastName ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="space-y-1.5"><Label>Date of Birth</Label><DatePicker value={form.dateOfBirth} max={(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 10); return d.toISOString().split('T')[0] })()} min="1950-01-01" onChange={setDate('dateOfBirth')} /></div>
                                 <div className="space-y-1.5">
                                     <Label>Gender</Label>
@@ -955,7 +955,7 @@ export function EditEmployeeDialog({
                                     </Select>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <FormField label="Nationality" required error={errors.nationality}>
                                     <CountrySelect
                                         value={resolveCountryIso(form.nationality)}
@@ -968,7 +968,7 @@ export function EditEmployeeDialog({
                                 </FormField>
                                 <div className="space-y-1.5"><Label>Passport No</Label><Input value={form.passportNo} onChange={set('passportNo')} /></div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Mobile</Label><PhoneInput value={form.mobileNo} onChange={(v) => setForm((f) => ({ ...f, mobileNo: v }))} defaultCountry={resolveCountryIso(form.nationality) ?? 'AE'} /></div>
                                 <div className="space-y-1.5"><Label>Personal Email</Label><Input type="email" value={form.personalEmail} onChange={set('personalEmail')} /></div>
                             </div>
@@ -978,7 +978,7 @@ export function EditEmployeeDialog({
 
                     {step === 2 && (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Employee No</Label><Input value={form.employeeNo} onChange={set('employeeNo')} /></div>
                                 <FormField label="Join Date" required error={errors.joinDate}>
                                     <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
@@ -1000,7 +1000,7 @@ export function EditEmployeeDialog({
                                                 </Select>
                                             </div>
                                         )}
-                                        <div className="grid grid-cols-2 gap-2.5">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                             <div className="space-y-1.5">
                                                 <Label>Department</Label>
                                                 <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v }))}>
@@ -1027,7 +1027,7 @@ export function EditEmployeeDialog({
                                     </div>
                                 </div>
                             )}
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Department (freeform)</Label><Input value={form.department} onChange={set('department')} placeholder="e.g. Sales" /></div>
                                 <div className="space-y-1.5">
                                     <Label>Designation</Label>
@@ -1042,7 +1042,7 @@ export function EditEmployeeDialog({
                                     </Select>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label>Contract Type</Label>
                                     <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v }))}>
@@ -1054,7 +1054,7 @@ export function EditEmployeeDialog({
                                 </div>
                                 <div className="space-y-1.5"><Label>Work Location</Label><Input value={form.workLocation} onChange={set('workLocation')} /></div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Reporting Manager</Label><ManagerPicker value={form.reportingTo} excludeId={employee.id} onChange={(id, name) => setForm((f) => ({ ...f, reportingTo: id, managerName: name }))} /></div>
                                 <div className="space-y-1.5"><Label>Grade Level</Label><Input value={form.gradeLevel} onChange={set('gradeLevel')} /></div>
                             </div>
@@ -1072,11 +1072,11 @@ export function EditEmployeeDialog({
 
                     {step === 3 && (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Basic Salary (AED)</Label><NumericInput value={form.basicSalary} onChange={set('basicSalary')} /></div>
                                 <div className="space-y-1.5"><Label>Housing Allowance (AED)</Label><NumericInput value={form.housingAllowance} onChange={set('housingAllowance')} /></div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Transport Allowance (AED)</Label><NumericInput value={form.transportAllowance} onChange={set('transportAllowance')} /></div>
                                 <div className="space-y-1.5"><Label>Other Allowances (AED)</Label><NumericInput value={form.otherAllowances} onChange={set('otherAllowances')} /></div>
                             </div>
@@ -1096,7 +1096,7 @@ export function EditEmployeeDialog({
                                 </Select>
                             </div>
                             {form.paymentMethod === 'bank_transfer' && (
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div className="space-y-1.5"><Label>Bank Name</Label><Input value={form.bankName} onChange={set('bankName')} /></div>
                                     <div className="space-y-1.5"><Label>IBAN</Label><Input value={form.iban} onChange={set('iban')} /></div>
                                 </div>
@@ -1180,7 +1180,7 @@ export function EditJobDialog({
                         <Label required>Job Title</Label>
                         <Input value={title} onChange={(e) => setTitle(e.target.value)} />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label required>Department</Label>
                             <Input value={department} onChange={(e) => setDepartment(e.target.value)} />
@@ -1190,7 +1190,7 @@ export function EditJobDialog({
                             <Input value={location ?? ''} onChange={(e) => setLocation(e.target.value)} />
                         </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="space-y-1.5">
                             <Label>Type</Label>
                             <Select value={type} onValueChange={setType}>
@@ -1214,7 +1214,7 @@ export function EditJobDialog({
                             </Select>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Min Salary (AED)</Label>
                             <NumericInput value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} />
@@ -1288,7 +1288,7 @@ export function EditDocumentDialog({
                         <Label>File Name</Label>
                         <Input value={fileName} onChange={(e) => setFileName(e.target.value)} />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label required>Category</Label>
                             <Select value={category} onValueChange={setCategory}>
