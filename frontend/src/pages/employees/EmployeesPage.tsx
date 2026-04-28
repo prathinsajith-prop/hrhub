@@ -233,13 +233,46 @@ export function EmployeesPage() {
     },
     {
       accessorKey: 'designation',
-      header: 'Role',
-      cell: ({ row: { original: e } }) => (
-        <div>
-          <p className="text-sm font-medium">{e.designation}</p>
-          <p className="text-[11px] text-muted-foreground">{e.department}</p>
-        </div>
-      ),
+      header: 'Designation',
+      cell: ({ getValue }) => {
+        const val = getValue() as string | null
+        if (!val) return <span className="text-xs text-muted-foreground">—</span>
+        return (
+          <Badge variant="secondary" className="text-[11px] font-medium px-2 py-0.5 rounded-md">
+            {val}
+          </Badge>
+        )
+      },
+      size: 160,
+    },
+    {
+      accessorKey: 'department',
+      header: 'Department',
+      cell: ({ getValue }) => {
+        const val = getValue() as string | null
+        return <span className="text-sm text-muted-foreground">{val ?? '—'}</span>
+      },
+      size: 140,
+    },
+    {
+      accessorKey: 'email',
+      header: 'Email',
+      cell: ({ getValue }) => {
+        const email = getValue() as string | null
+        if (!email) return <span className="text-xs text-muted-foreground">—</span>
+        return (
+          <a
+            href={`mailto:${email}`}
+            className="flex items-center gap-1.5 text-xs text-primary hover:underline truncate max-w-[180px]"
+            onClick={e => e.stopPropagation()}
+            title={email}
+          >
+            <Mail className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <span className="truncate">{email}</span>
+          </a>
+        )
+      },
+      size: 190,
     },
     {
       accessorKey: 'nationality',

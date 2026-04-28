@@ -154,6 +154,24 @@
   }
 }
 
+/* ─── Autofill ───────────────────────────────────────────────────────────── */
+/*
+  Chrome/Edge apply a forced yellow or grey background on autofilled inputs.
+  The only reliable override is a large inset box-shadow that paints over it,
+  plus -webkit-text-fill-color to restore the text colour.
+*/
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 9999px hsl(var(--background)) inset !important;
+  box-shadow: 0 0 0 9999px hsl(var(--background)) inset !important;
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  caret-color: hsl(var(--foreground));
+  transition: background-color 0s 600000s;
+  /* delays Chrome's own fade */
+}
+
 /* ─── Scrollbar ───────────────────────────────────────────────────────────── */
 * {
   scrollbar-width: thin;
@@ -326,6 +344,7 @@ html[dir="rtl"] .recharts-surface {
 html[dir="rtl"] [data-rtl-flip] {
   transform: scaleX(-1);
 }
+
 /* ─── FullCalendar theme — modern, flat, brand-aligned ──────────────────── */
 .hrhub-fullcalendar .fc {
   --fc-border-color: hsl(var(--border));
@@ -337,6 +356,7 @@ html[dir="rtl"] [data-rtl-flip] {
   --fc-event-border-color: transparent;
   font-family: var(--font-body);
 }
+
 .hrhub-fullcalendar .fc .fc-toolbar-title {
   font-family: var(--font-display);
   font-size: 1.05rem;
@@ -344,6 +364,7 @@ html[dir="rtl"] [data-rtl-flip] {
   letter-spacing: -0.01em;
   color: hsl(var(--foreground));
 }
+
 .hrhub-fullcalendar .fc .fc-button {
   background: hsl(var(--secondary));
   color: hsl(var(--secondary-foreground));
@@ -356,11 +377,13 @@ html[dir="rtl"] [data-rtl-flip] {
   box-shadow: none;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
+
 .hrhub-fullcalendar .fc .fc-button:hover {
   background: hsl(var(--accent));
   color: hsl(var(--accent-foreground));
   border-color: hsl(var(--accent-foreground) / 0.3);
 }
+
 .hrhub-fullcalendar .fc .fc-button-primary:not(:disabled).fc-button-active,
 .hrhub-fullcalendar .fc .fc-button-primary:not(:disabled):active {
   background: hsl(var(--primary));
@@ -368,16 +391,19 @@ html[dir="rtl"] [data-rtl-flip] {
   border-color: hsl(var(--primary));
   box-shadow: none;
 }
+
 .hrhub-fullcalendar .fc .fc-button:focus,
 .hrhub-fullcalendar .fc .fc-button-primary:not(:disabled).fc-button-active:focus {
   outline: 2px solid hsl(var(--ring) / 0.4);
   outline-offset: 1px;
   box-shadow: none;
 }
+
 .hrhub-fullcalendar .fc .fc-col-header-cell {
   background: hsl(var(--muted) / 0.5);
   border-color: hsl(var(--border));
 }
+
 .hrhub-fullcalendar .fc .fc-col-header-cell-cushion {
   font-size: 0.7rem;
   font-weight: 600;
@@ -386,15 +412,18 @@ html[dir="rtl"] [data-rtl-flip] {
   color: hsl(var(--muted-foreground));
   padding: 0.5rem 0.4rem;
 }
+
 .hrhub-fullcalendar .fc .fc-daygrid-day-number {
   font-size: 0.78rem;
   font-weight: 500;
   color: hsl(var(--foreground));
   padding: 0.4rem 0.5rem 0;
 }
+
 .hrhub-fullcalendar .fc .fc-day-other .fc-daygrid-day-number {
   color: hsl(var(--muted-foreground) / 0.55);
 }
+
 .hrhub-fullcalendar .fc .fc-day-today .fc-daygrid-day-number {
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
@@ -408,12 +437,15 @@ html[dir="rtl"] [data-rtl-flip] {
   font-weight: 700;
   padding: 0;
 }
+
 .hrhub-fullcalendar .fc .fc-daygrid-day {
   transition: background 0.15s;
 }
+
 .hrhub-fullcalendar .fc .fc-daygrid-day:hover {
   background: hsl(var(--muted) / 0.6);
 }
+
 .hrhub-fullcalendar .fc-event {
   border-radius: 6px;
   padding: 1px 0;
@@ -423,11 +455,16 @@ html[dir="rtl"] [data-rtl-flip] {
   cursor: pointer;
   transition: transform 0.1s, box-shadow 0.15s;
 }
+
 .hrhub-fullcalendar .fc-event:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 6px hsl(var(--foreground) / 0.08);
 }
-.hrhub-fullcalendar .fc-daygrid-event-dot { display: none; }
+
+.hrhub-fullcalendar .fc-daygrid-event-dot {
+  display: none;
+}
+
 .hrhub-fullcalendar .fc-list-day-cushion {
   background: hsl(var(--muted) / 0.5) !important;
   font-size: 0.78rem;
@@ -436,20 +473,24 @@ html[dir="rtl"] [data-rtl-flip] {
   letter-spacing: 0.03em;
   color: hsl(var(--muted-foreground));
 }
+
 .hrhub-fullcalendar .fc-list-event-title,
 .hrhub-fullcalendar .fc-list-event-time {
   font-size: 0.82rem;
 }
+
 .hrhub-fullcalendar .fc-scrollgrid {
   border-radius: 8px;
   overflow: hidden;
 }
+
 .hrhub-fullcalendar .fc-popover {
   border-radius: 10px;
   border: 1px solid hsl(var(--border));
   box-shadow: 0 10px 30px hsl(var(--foreground) / 0.12);
   overflow: hidden;
 }
+
 .hrhub-fullcalendar .fc-popover-header {
   background: hsl(var(--muted));
   padding: 0.5rem 0.75rem;
@@ -461,6 +502,7 @@ html[dir="rtl"] [data-rtl-flip] {
 .hrhub-fullcalendar .fc-day-holiday {
   background-color: #fff1f2 !important;
 }
+
 .hrhub-fullcalendar .fc-day-holiday .fc-daygrid-day-number {
   color: #f43f5e;
   font-weight: 600;
@@ -470,34 +512,54 @@ html[dir="rtl"] [data-rtl-flip] {
 
 /* Shimmer skeleton — richer than Tailwind's default pulse */
 @keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
 }
+
 .skeleton-shimmer {
-  background: linear-gradient(
-    90deg,
-    hsl(var(--muted)) 25%,
-    hsl(var(--muted-foreground) / 0.08) 50%,
-    hsl(var(--muted)) 75%
-  );
+  background: linear-gradient(90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted-foreground) / 0.08) 50%,
+      hsl(var(--muted)) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
 }
 
 /* Slide-up page entry — smoother than plain fadeIn */
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0);    }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
+
 .page-slide-up {
   animation: slideUp 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 /* Notification badge pulse */
 @keyframes badgePulse {
-  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--destructive) / 0.4); }
-  50%       { box-shadow: 0 0 0 4px hsl(var(--destructive) / 0);  }
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--destructive) / 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px hsl(var(--destructive) / 0);
+  }
 }
+
 .badge-pulse {
   animation: badgePulse 2s ease-in-out infinite;
 }
@@ -547,10 +609,22 @@ html[dir="rtl"] [data-rtl-flip] {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.status-dot-success { background: hsl(var(--success)); }
-.status-dot-warning { background: hsl(var(--warning)); }
-.status-dot-error   { background: hsl(var(--destructive)); }
-.status-dot-muted   { background: hsl(var(--muted-foreground) / 0.4); }
+
+.status-dot-success {
+  background: hsl(var(--success));
+}
+
+.status-dot-warning {
+  background: hsl(var(--warning));
+}
+
+.status-dot-error {
+  background: hsl(var(--destructive));
+}
+
+.status-dot-muted {
+  background: hsl(var(--muted-foreground) / 0.4);
+}
 
 /* Smooth sidebar collapse transition */
 [data-sidebar="sidebar"] {

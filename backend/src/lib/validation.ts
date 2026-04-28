@@ -153,7 +153,7 @@ export const listEmployeesSchema = paginationSchema.extend({
 // ── Leave ─────────────────────────────────────────────────────────────────────
 export const createLeaveSchema = z.object({
     employeeId: uuidSchema,
-    leaveType: z.enum(['annual', 'sick', 'maternity', 'paternity', 'unpaid', 'emergency', 'bereavement', 'hajj']),
+    leaveType: z.enum(['annual', 'sick', 'maternity', 'paternity', 'unpaid', 'compassionate', 'emergency', 'bereavement', 'hajj']),
     startDate: z.string().date('Must be a valid date (YYYY-MM-DD)'),
     endDate: z.string().date('Must be a valid date (YYYY-MM-DD)'),
     reason: z.string().max(500).optional(),

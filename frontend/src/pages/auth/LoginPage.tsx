@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, ArrowRight, Users, FileCheck, Shield, Zap, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, Users, FileCheck, Shield, Zap, ShieldCheck, Mail, Lock, Building2 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/components/ui/overlays'
 import { cn } from '@/lib/utils'
@@ -108,9 +108,9 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>
 
 const stats = [
-  { value: '12,000+', label: 'Active Employees' },
-  { value: '98%', label: 'WPS Compliance' },
-  { value: '60%', label: 'Faster PRO' },
+  { icon: Users, value: '12,000+', label: 'Active Employees' },
+  { icon: Shield, value: '98%', label: 'WPS Compliance' },
+  { icon: Zap, value: '60%', label: 'Faster PRO' },
 ]
 
 const features = [
@@ -125,6 +125,7 @@ export function LoginPage() {
   const { login } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
   // MFA challenge state
   const [mfaStep, setMfaStep] = useState(false)
   const [mfaToken, setMfaToken] = useState('')
@@ -250,6 +251,9 @@ export function LoginPage() {
                 key={s.label}
                 className="rounded-xl p-4 bg-white/[0.04] border border-white/10 backdrop-blur-sm hover:bg-white/[0.07] transition-colors"
               >
+                <div className="h-8 w-8 rounded-lg flex items-center justify-center mb-2.5 bg-primary/20 text-primary ring-1 ring-primary/30">
+                  <s.icon className="h-4 w-4" />
+                </div>
                 <p className="text-2xl font-bold font-display text-white">
                   {s.value}
                 </p>
@@ -281,11 +285,14 @@ export function LoginPage() {
       }
     >
       {/* Heading */}
-      <div className="mb-7">
-        <h2 className="text-2xl font-bold text-foreground mb-1.5 font-display">
+      <div className="mb-6 text-center">
+        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4 ring-1 ring-primary/15 shadow-inner">
+          {mfaStep ? <ShieldCheck className="h-8 w-8" /> : <Lock className="h-8 w-8" />}
+        </div>
+        <h2 className="text-2xl font-bold text-foreground tracking-tight font-display">
           {mfaStep ? 'Verify your identity' : 'Welcome back'}
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
           {mfaStep
             ? (useBackupCode
               ? 'Enter one of your saved single-use backup codes to continue.'
@@ -378,15 +385,18 @@ export function LoginPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email">Work Email</Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@company.ae"
-              {...register('email')}
-              aria-invalid={!!errors.email}
-              className={cn(errors.email && 'border-destructive focus-visible:ring-destructive')}
-            />
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@company.ae"
+                {...register('email')}
+                aria-invalid={!!errors.email}
+                className={cn('pl-9', errors.email && 'border-destructive focus-visible:ring-destructive')}
+              />
+            </div>
             {errors.email && (
               <p className="text-xs text-destructive">{errors.email.message}</p>
             )}
@@ -403,6 +413,7 @@ export function LoginPage() {
               </Link>
             </div>
             <div className="relative">
+              <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
@@ -411,7 +422,7 @@ export function LoginPage() {
                 {...register('password')}
                 aria-invalid={!!errors.password}
                 className={cn(
-                  'pr-10',
+                  'pl-9 pr-10',
                   errors.password && 'border-destructive focus-visible:ring-destructive',
                 )}
               />
@@ -430,6 +441,30 @@ export function LoginPage() {
             )}
           </div>
 
+          {/* Remember me */}
+          <label className="flex items-center gap-2.5 cursor-pointer select-none group">
+            <div
+              role="checkbox"
+              aria-checked={rememberMe}
+              tabIndex={0}
+              onClick={() => setRememberMe(v => !v)}
+              onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') setRememberMe(v => !v) }}
+              className={cn(
+                'h-4 w-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer',
+                rememberMe ? 'bg-primary border-primary' : 'border-input bg-background group-hover:border-primary/60'
+              )}
+            >
+              {rememberMe && (
+                <svg className="h-2.5 w-2.5 text-primary-foreground" viewBox="0 0 12 12" fill="none">
+                  <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </div>
+            <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+              Keep me signed in
+            </span>
+          </label>
+
           <Button
             type="submit"
             className="w-full font-semibold"
@@ -443,22 +478,27 @@ export function LoginPage() {
 
       {!mfaStep && (
         <>
-          <p className="mt-5 text-center text-sm text-muted-foreground">
-            {"Don't have an account? "}
-            <Link to="/register" className="text-primary font-medium hover:underline">
-              Create account
-            </Link>
-          </p>
+          <div className="my-5 flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">or</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
 
-          <p className="mt-3 text-center text-[11px] text-muted-foreground/70">
-            By signing in you agree to our{' '}
-            <a href="#" className="text-primary/80 hover:underline">
-              Terms
-            </a>{' '}
-            &amp;{' '}
-            <a href="#" className="text-primary/80 hover:underline">
-              Privacy Policy
-            </a>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full font-medium gap-2"
+            onClick={() => toast.info('SSO login', 'Contact your administrator to configure SSO for your organization.')}
+          >
+            <Building2 className="h-4 w-4" />
+            Sign in with SSO
+          </Button>
+
+          <p className="mt-5 text-center text-sm text-muted-foreground">
+            {"New to HRHub? "}
+            <Link to="/register" className="text-primary font-semibold hover:underline">
+              Create an account
+            </Link>
           </p>
         </>
       )}

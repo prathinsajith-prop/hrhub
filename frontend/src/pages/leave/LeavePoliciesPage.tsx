@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { CalendarClock, Save, RotateCcw } from 'lucide-react'
 import { useLeavePolicies, useSaveLeavePolicies, useRolloverYear, type LeavePolicy, type AccrualRule } from '@/hooks/useLeave'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -96,12 +96,13 @@ export function LeavePoliciesPage() {
                                 <div className="grid gap-4 md:grid-cols-4">
                                     <div className="space-y-1.5">
                                         <Label>{t('leavePolicies.daysPerYear')}</Label>
-                                        <Input
-                                            type="number"
-                                            min={0}
-                                            max={365}
-                                            value={p.daysPerYear}
-                                            onChange={(e) => update(i, { daysPerYear: Number(e.target.value) || 0 })}
+                                        <NumericInput
+                                            decimal={false}
+                                            value={String(p.daysPerYear)}
+                                            onChange={(e) => {
+                                                const n = Math.min(365, Number(e.target.value) || 0)
+                                                update(i, { daysPerYear: n })
+                                            }}
                                             disabled={p.accrualRule === 'unlimited' || p.accrualRule === 'none'}
                                         />
                                     </div>
@@ -118,22 +119,23 @@ export function LeavePoliciesPage() {
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label>{t('leavePolicies.maxCarryForward')}</Label>
-                                        <Input
-                                            type="number"
-                                            min={0}
-                                            max={p.daysPerYear || 365}
-                                            value={p.maxCarryForward}
-                                            onChange={(e) => update(i, { maxCarryForward: Number(e.target.value) || 0 })}
+                                        <NumericInput
+                                            decimal={false}
+                                            value={String(p.maxCarryForward)}
+                                            onChange={(e) => {
+                                                const cap = p.daysPerYear || 365
+                                                update(i, { maxCarryForward: Math.min(cap, Number(e.target.value) || 0) })
+                                            }}
                                         />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label>{t('leavePolicies.carryExpiresAfter')}</Label>
-                                        <Input
-                                            type="number"
-                                            min={0}
-                                            max={36}
-                                            value={p.carryExpiresAfterMonths}
-                                            onChange={(e) => update(i, { carryExpiresAfterMonths: Number(e.target.value) || 0 })}
+                                        <NumericInput
+                                            decimal={false}
+                                            value={String(p.carryExpiresAfterMonths)}
+                                            onChange={(e) => {
+                                                update(i, { carryExpiresAfterMonths: Math.min(36, Number(e.target.value) || 0) })
+                                            }}
                                         />
                                         <p className="text-xs text-muted-foreground">{t('leavePolicies.neverExpires')}</p>
                                     </div>

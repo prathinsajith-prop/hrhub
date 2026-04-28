@@ -18,7 +18,7 @@ export const SCOPE_GROUPS: ScopeGroup[] = [
     { label: 'Recruitment', modules: [{ key: 'recruitment', label: 'Recruitment' }, { key: 'assets', label: 'Assets' }] },
     { label: 'Documents & Compliance', modules: [{ key: 'documents', label: 'Documents' }, { key: 'compliance', label: 'Compliance' }, { key: 'visa', label: 'Visa & Immigration' }] },
     { label: 'Reports & Analytics', modules: [{ key: 'reports', label: 'Reports' }, { key: 'audit', label: 'Audit Logs' }] },
-    { label: 'Organization', modules: [{ key: 'team', label: 'Team Management' }, { key: 'settings', label: 'Settings' }] },
+    { label: 'Organization', modules: [{ key: 'team', label: 'User Management' }, { key: 'settings', label: 'Settings' }] },
 ]
 
 export const ALL_SCOPES = SCOPE_GROUPS.flatMap(g =>

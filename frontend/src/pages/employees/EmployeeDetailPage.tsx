@@ -204,6 +204,9 @@ export function EmployeeDetailPage() {
 
   const e = employee
 
+  // Terminated or suspended employees must not be granted/managed system access
+  const isAccessRestricted = ['terminated', 'suspended'].includes(e?.status ?? '')
+
   const visaDays = e?.visaExpiry ? Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000) : null
   const visaLabel = visaDays === null ? 'N/A' : visaDays < 0 ? 'Expired' : `${visaDays}d left`
   const visaClass = visaDays === null ? '' : visaDays < 0 ? 'text-destructive' : visaDays < 90 ? 'text-warning' : 'text-success'
@@ -323,6 +326,27 @@ export function EmployeeDetailPage() {
                   <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportCSV(e as unknown as Record<string, unknown>)}>
                     Export
                   </Button>
+                  {canManage && !accountLoading && !isAccessRestricted && (() => {
+                    if (!accountData?.hasAccount) {
+                      // No account — invite not yet sent
+                      return (
+                        <Button variant="outline" size="sm" leftIcon={<UserCheck className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
+                          Grant Access
+                        </Button>
+                      )
+                    }
+                    if (!accountData?.account?.isActive) {
+                      // Invite sent but password not yet set
+                      return (
+                        <Button variant="outline" size="sm" leftIcon={<Clock className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}
+                          className="text-warning border-warning/40 bg-warning/5 hover:bg-warning/10 hover:text-warning">
+                          Invite Pending
+                        </Button>
+                      )
+                    }
+                    // Active — no button needed here; manage via Account tab
+                    return null
+                  })()}
                   <Button size="sm" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditOpen(true)}>
                     Edit
                   </Button>
@@ -348,15 +372,15 @@ export function EmployeeDetailPage() {
           <CardContent className="p-0">
             <TabsList className="h-auto bg-transparent p-0 w-full justify-start overflow-x-auto rounded-none border-b border-border/60 px-5">
               {[
-                { value: 'personal',    icon: User,          label: 'Personal' },
-                { value: 'employment',  icon: Briefcase,     label: 'Employment' },
-                { value: 'visa',        icon: Plane,         label: 'Visa & ID' },
-                { value: 'documents',   icon: FileText,      label: 'Documents' },
-                { value: 'payroll',     icon: CreditCard,    label: 'Payroll' },
-                { value: 'performance', icon: Star,          label: 'Performance' },
-                { value: 'assets',      icon: Package,       label: 'Assets' },
-                { value: 'leave',       icon: CalendarDays,  label: 'Leave' },
-                { value: 'attendance',  icon: ClipboardList, label: 'Attendance' },
+                { value: 'personal', icon: User, label: 'Personal' },
+                { value: 'employment', icon: Briefcase, label: 'Employment' },
+                { value: 'visa', icon: Plane, label: 'Visa & ID' },
+                { value: 'documents', icon: FileText, label: 'Documents' },
+                { value: 'payroll', icon: CreditCard, label: 'Payroll' },
+                { value: 'performance', icon: Star, label: 'Performance' },
+                { value: 'assets', icon: Package, label: 'Assets' },
+                { value: 'leave', icon: CalendarDays, label: 'Leave' },
+                { value: 'attendance', icon: ClipboardList, label: 'Attendance' },
                 ...(canManage ? [{ value: 'account', icon: UserCheck, label: 'Account' }] : []),
               ].map(tab => (
                 <TabsTrigger
@@ -381,18 +405,18 @@ export function EmployeeDetailPage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
                   <div>
-                    <InfoRow label="Full Name"      value={e.fullName}                                         icon={User} />
-                    <InfoRow label="Date of Birth"  value={e.dateOfBirth ? formatDate(e.dateOfBirth) : null}  icon={Calendar} />
-                    <InfoRow label="Gender"         value={e.gender}                                           icon={User} />
-                    <InfoRow label="Nationality"    value={e.nationality}                                      icon={MapPin} />
-                    <InfoRow label="Marital Status" value={e.maritalStatus}                                    icon={User} />
+                    <InfoRow label="Full Name" value={e.fullName} icon={User} />
+                    <InfoRow label="Date of Birth" value={e.dateOfBirth ? formatDate(e.dateOfBirth) : null} icon={Calendar} />
+                    <InfoRow label="Gender" value={e.gender} icon={User} />
+                    <InfoRow label="Nationality" value={e.nationality} icon={MapPin} />
+                    <InfoRow label="Marital Status" value={e.maritalStatus} icon={User} />
                   </div>
                   <div>
-                    <InfoRow label="Mobile"            value={e.mobileNo ?? e.phone}  icon={Phone} />
-                    <InfoRow label="Personal Email"    value={e.personalEmail}        icon={Mail} />
-                    <InfoRow label="Work Email"        value={e.workEmail ?? e.email} icon={Mail} />
-                    <InfoRow label="Emergency Contact" value={e.emergencyContact}     icon={Phone} />
-                    <InfoRow label="Address"           value={e.homeCountryAddress}   icon={MapPin} />
+                    <InfoRow label="Mobile" value={e.mobileNo ?? e.phone} icon={Phone} />
+                    <InfoRow label="Personal Email" value={e.personalEmail} icon={Mail} />
+                    <InfoRow label="Work Email" value={e.workEmail ?? e.email} icon={Mail} />
+                    <InfoRow label="Emergency Contact" value={e.emergencyContact} icon={Phone} />
+                    <InfoRow label="Address" value={e.homeCountryAddress} icon={MapPin} />
                   </div>
                 </div>
               </CardContent>
@@ -406,20 +430,20 @@ export function EmployeeDetailPage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
-                    <InfoRow label="Employee No."  value={e.employeeNo}                                            icon={Hash} />
-                    <InfoRow label="Designation"   value={e.designation}                                           icon={Briefcase} />
-                    <InfoRow label="Department"    value={e.department}                                            icon={Building2} />
-                    <InfoRow label="Company"       value={(e as unknown as Record<string, unknown>)['entityName'] as string ?? '—'} icon={Building2} />
+                    <InfoRow label="Employee No." value={e.employeeNo} icon={Hash} />
+                    <InfoRow label="Designation" value={e.designation} icon={Briefcase} />
+                    <InfoRow label="Department" value={e.department} icon={Building2} />
+                    <InfoRow label="Company" value={(e as unknown as Record<string, unknown>)['entityName'] as string ?? '—'} icon={Building2} />
                     <InfoRow label="Contract Type" value={e.contractType} />
-                    <InfoRow label="Work Location" value={e.workLocation}                                          icon={MapPin} />
+                    <InfoRow label="Work Location" value={e.workLocation} icon={MapPin} />
                   </div>
                   <div>
-                    <InfoRow label="Join Date"      value={formatDate(e.joinDate)}                                        icon={Calendar} />
-                    <InfoRow label="Probation End"  value={e.probationEndDate ? formatDate(e.probationEndDate) : null}   icon={Clock} />
-                    <InfoRow label="Contract End"   value={e.contractEndDate ? formatDate(e.contractEndDate) : null}     icon={Calendar} />
-                    <InfoRow label="Status"         value={labelFor(e.status)}                                            icon={Shield} />
-                    <InfoRow label="Grade / Band"   value={e.gradeLevel} />
-                    <InfoRow label="Direct Manager" value={e.managerName}                                                 icon={User} />
+                    <InfoRow label="Join Date" value={formatDate(e.joinDate)} icon={Calendar} />
+                    <InfoRow label="Probation End" value={e.probationEndDate ? formatDate(e.probationEndDate) : null} icon={Clock} />
+                    <InfoRow label="Contract End" value={e.contractEndDate ? formatDate(e.contractEndDate) : null} icon={Calendar} />
+                    <InfoRow label="Status" value={labelFor(e.status)} icon={Shield} />
+                    <InfoRow label="Grade / Band" value={e.gradeLevel} />
+                    <InfoRow label="Direct Manager" value={e.managerName} icon={User} />
                   </div>
                 </div>
               </CardContent>
@@ -445,18 +469,18 @@ export function EmployeeDetailPage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
-                    <InfoRow label="Visa Type"        value={labelFor(e.visaType)}                                icon={Plane} />
-                    <InfoRow label="Visa Number"      value={e.visaNumber}                                        icon={Hash} />
-                    <InfoRow label="Visa Issue Date"  value={e.visaIssueDate ? formatDate(e.visaIssueDate) : null} icon={Calendar} />
-                    <InfoRow label="Visa Expiry"      value={e.visaExpiry ? formatDate(e.visaExpiry) : null}      icon={Calendar} />
-                    <InfoRow label="Sponsoring Entity" value={e.sponsoringEntity}                                 icon={Building2} />
+                    <InfoRow label="Visa Type" value={labelFor(e.visaType)} icon={Plane} />
+                    <InfoRow label="Visa Number" value={e.visaNumber} icon={Hash} />
+                    <InfoRow label="Visa Issue Date" value={e.visaIssueDate ? formatDate(e.visaIssueDate) : null} icon={Calendar} />
+                    <InfoRow label="Visa Expiry" value={e.visaExpiry ? formatDate(e.visaExpiry) : null} icon={Calendar} />
+                    <InfoRow label="Sponsoring Entity" value={e.sponsoringEntity} icon={Building2} />
                   </div>
                   <div>
-                    <InfoRow label="Emirates ID"     value={e.emiratesId}                                             icon={Hash} />
-                    <InfoRow label="EID Expiry"      value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : null} icon={Calendar} />
-                    <InfoRow label="Passport No."    value={e.passportNo}                                             icon={Hash} />
-                    <InfoRow label="Passport Expiry" value={e.passportExpiry ? formatDate(e.passportExpiry) : null}   icon={Calendar} />
-                    <InfoRow label="Labour Card No." value={e.labourCardNumber}                                       icon={Hash} />
+                    <InfoRow label="Emirates ID" value={e.emiratesId} icon={Hash} />
+                    <InfoRow label="EID Expiry" value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : null} icon={Calendar} />
+                    <InfoRow label="Passport No." value={e.passportNo} icon={Hash} />
+                    <InfoRow label="Passport Expiry" value={e.passportExpiry ? formatDate(e.passportExpiry) : null} icon={Calendar} />
+                    <InfoRow label="Labour Card No." value={e.labourCardNumber} icon={Hash} />
                   </div>
                 </div>
               </CardContent>
@@ -481,7 +505,7 @@ export function EmployeeDetailPage() {
               </CardHeader>
               <CardContent>
                 {docsLoading ? (
-                  <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
                 ) : docs.length === 0 ? (
                   <div className="text-center py-10 text-muted-foreground">
                     <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
@@ -525,16 +549,16 @@ export function EmployeeDetailPage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
-                    <InfoRow label="Basic Salary"     value={formatCurrency(e.basicSalary ?? 0)}        icon={CreditCard} />
-                    <InfoRow label="Housing Allow."   value={formatCurrency(e.housingAllowance ?? 0)} />
+                    <InfoRow label="Basic Salary" value={formatCurrency(e.basicSalary ?? 0)} icon={CreditCard} />
+                    <InfoRow label="Housing Allow." value={formatCurrency(e.housingAllowance ?? 0)} />
                     <InfoRow label="Transport Allow." value={formatCurrency(e.transportAllowance ?? 0)} />
-                    <InfoRow label="Other Allow."     value={formatCurrency(e.otherAllowances ?? 0)} />
+                    <InfoRow label="Other Allow." value={formatCurrency(e.otherAllowances ?? 0)} />
                   </div>
                   <div>
-                    <InfoRow label="Total Salary"    value={formatCurrency(e.totalSalary ?? 0)} icon={CreditCard} />
-                    <InfoRow label="Payment Method"  value={e.paymentMethod} />
-                    <InfoRow label="Bank"            value={e.bankName}                         icon={Building2} />
-                    <InfoRow label="IBAN"            value={e.iban}                             icon={Hash} />
+                    <InfoRow label="Total Salary" value={formatCurrency(e.totalSalary ?? 0)} icon={CreditCard} />
+                    <InfoRow label="Payment Method" value={e.paymentMethod} />
+                    <InfoRow label="Bank" value={e.bankName} icon={Building2} />
+                    <InfoRow label="IBAN" value={e.iban} icon={Hash} />
                   </div>
                 </div>
               </CardContent>
@@ -554,7 +578,7 @@ export function EmployeeDetailPage() {
               </CardHeader>
               <CardContent>
                 {reviewsLoading ? (
-                  <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
+                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
                 ) : !reviews || reviews.length === 0 ? (
                   <div className="text-center py-10 text-muted-foreground">
                     <Star className="h-10 w-10 mx-auto mb-3 opacity-30" />
@@ -590,7 +614,7 @@ export function EmployeeDetailPage() {
               <CardHeader><CardTitle className="text-base">Assigned Assets</CardTitle></CardHeader>
               <CardContent>
                 {assetsLoading ? (
-                  <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
                 ) : !employeeAssignments || employeeAssignments.length === 0 ? (
                   <div className="text-center py-10 text-muted-foreground">
                     <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
@@ -629,7 +653,7 @@ export function EmployeeDetailPage() {
               <CardContent>
                 {leaveBalanceLoading ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {[1,2,3,4].map(i => <Skeleton key={i} className="h-20 rounded-lg" />)}
+                    {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 rounded-lg" />)}
                   </div>
                 ) : !leaveBalanceData?.balance ? (
                   <p className="text-sm text-muted-foreground text-center py-6">No leave data available</p>
@@ -684,7 +708,7 @@ export function EmployeeDetailPage() {
               </CardHeader>
               <CardContent>
                 {leaveHistoryLoading ? (
-                  <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
                 ) : !leaveHistoryData?.data || leaveHistoryData.data.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-30" />
@@ -721,7 +745,7 @@ export function EmployeeDetailPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">Login Account</CardTitle>
-                    {!accountLoading && (
+                    {!accountLoading && accountData?.hasAccount && !isAccessRestricted && (
                       <Button size="sm" leftIcon={<UserCheck className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
                         Manage Access
                       </Button>
@@ -734,13 +758,23 @@ export function EmployeeDetailPage() {
                       <Skeleton className="h-5 w-40" />
                       <Skeleton className="h-16 w-full" />
                     </div>
+                  ) : isAccessRestricted ? (
+                    <div className="flex items-start gap-4 rounded-xl border border-destructive/20 bg-destructive/5 p-5">
+                      <Shield className="h-9 w-9 text-destructive/40 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium">Access unavailable</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Login access cannot be granted or managed for <span className="capitalize font-medium">{e.status}</span> employees.
+                        </p>
+                      </div>
+                    </div>
                   ) : !accountData?.hasAccount ? (
                     <div className="flex items-start gap-4 rounded-xl border bg-muted/30 p-5">
                       <Shield className="h-9 w-9 text-muted-foreground/40 shrink-0 mt-0.5" />
                       <div>
                         <p className="text-sm font-medium">No login account yet</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          This employee cannot log in to the self-service portal. Click "Manage Access" to send an invitation.
+                          Use the "Grant Access" button above to send an invitation to this employee.
                         </p>
                       </div>
                     </div>
@@ -789,7 +823,7 @@ export function EmployeeDetailPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {attendanceLoading ? (
-                  <div className="p-4 space-y-2">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
+                  <div className="p-4 space-y-2">{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
                 ) : attendanceRecords.length === 0 ? (
                   <div className="text-center py-10 text-muted-foreground">
                     <ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-30" />

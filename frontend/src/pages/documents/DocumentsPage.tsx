@@ -162,7 +162,7 @@ function UploadDocumentDialog({ open, onOpenChange, defaultEmployeeId, defaultCa
           {/* Category + Doc type in a 2-col grid */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Category *</Label>
+              <Label required>Category</Label>
               <Select value={category} onValueChange={(v) => { setCategory(v as DocCategory); setDocType('') }}>
                 <SelectTrigger><SelectValue placeholder="Select category…" /></SelectTrigger>
                 <SelectContent>
@@ -173,7 +173,7 @@ function UploadDocumentDialog({ open, onOpenChange, defaultEmployeeId, defaultCa
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Document Type *</Label>
+              <Label required>Document Type</Label>
               <Select value={docType} onValueChange={setDocType} disabled={!category}>
                 <SelectTrigger><SelectValue placeholder={category ? 'Select type…' : 'Select category first'} /></SelectTrigger>
                 <SelectContent>
@@ -210,7 +210,7 @@ function UploadDocumentDialog({ open, onOpenChange, defaultEmployeeId, defaultCa
 
           {/* File upload */}
           <div className="space-y-1.5">
-            <Label>Document File *</Label>
+            <Label required>Document File</Label>
             <ImageUpload
               variant="document"
               accept=".pdf,.jpg,.jpeg,.png"

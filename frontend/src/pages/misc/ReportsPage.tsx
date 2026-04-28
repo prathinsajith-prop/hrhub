@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react'
 import type { CellContext } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
-import { Calendar, Clock, CheckCircle2, XCircle, Download, BarChart3, Users, Shield, AlertTriangle, UserPlus, UserMinus, PauseCircle } from 'lucide-react'
+import { Calendar, Clock, CheckCircle2, XCircle, Download, BarChart3, Users, Shield, AlertTriangle, UserPlus, UserMinus, PauseCircle, Receipt, TrendingUp } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card } from '@/components/ui/primitives'
@@ -14,6 +14,8 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useHeadcountReport, usePayrollSummaryReport, useVisaExpiryReport } from '@/hooks/useReports'
 import type { PayrollTrendRow, VisaExpiryEmployee } from '@/hooks/useReports'
+import { usePROCostReport, COST_CATEGORY_LABELS } from '@/hooks/useVisaCosts'
+import type { CostReportEmployee } from '@/hooks/useVisaCosts'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { InitialsAvatar } from '@/components/shared/Avatar'
@@ -79,6 +81,7 @@ export function ReportsPage() {
     const { data: headcount, isLoading: hcLoading } = useHeadcountReport()
     const { data: payrollSummary, isLoading: prLoading } = usePayrollSummaryReport()
     const { data: visaExpiry, isLoading: veLoading } = useVisaExpiryReport(90)
+    const { data: proCosts, isLoading: pcLoading } = usePROCostReport()
 
     const payrollSearch = useSearchFilters({
         storageKey: 'hrhub.reports.payroll.searchHistory',
@@ -146,6 +149,12 @@ export function ReportsPage() {
                         className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors"
                     >
                         <Shield className="h-4 w-4" /> Visa Expiry
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="pro-costs"
+                        className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors"
+                    >
+                        <Receipt className="h-4 w-4" /> PRO Costs
                     </TabsTrigger>
                 </TabsList>
 
@@ -355,6 +364,137 @@ export function ReportsPage() {
                                 placeholder: 'Search employees…',
                             }}
                         />
+                    </Card>
+                </TabsContent>
+                {/* ── PRO Costs ── */}
+                <TabsContent value="pro-costs" className="space-y-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <KpiCardCompact label="YTD Total" value={formatCurrency(proCosts?.ytdTotal ?? 0)} icon={Receipt} color="blue" loading={pcLoading} hint="All categories" />
+                        <KpiCardCompact label="Avg/Employee" value={formatCurrency(proCosts?.avgPerEmployee ?? 0)} icon={TrendingUp} color="purple" loading={pcLoading} hint="This year" />
+                        <KpiCardCompact label="Transactions" value={proCosts?.totalTransactions ?? 0} icon={BarChart3} color="amber" loading={pcLoading} hint="YTD records" />
+                        <KpiCardCompact label="Employees" value={proCosts?.byEmployee.length ?? 0} icon={Users} color="green" loading={pcLoading} hint="With costs recorded" />
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* By category breakdown */}
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">By Category</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="h-3.5 w-3.5" />}
+                                    onClick={() => exportCsv(proCosts?.byCategory ?? [], 'pro-costs-by-category.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            {pcLoading ? (
+                                <div className="space-y-3">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-8 w-full rounded-lg" />)}</div>
+                            ) : (proCosts?.byCategory ?? []).length === 0 ? (
+                                <p className="text-xs text-muted-foreground text-center py-6">No costs recorded this year</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {(proCosts?.byCategory ?? []).map(cat => {
+                                        const pct = proCosts?.ytdTotal ? Math.round((cat.total / proCosts.ytdTotal) * 100) : 0
+                                        return (
+                                            <div key={cat.label} className="space-y-1">
+                                                <div className="flex items-center justify-between text-xs">
+                                                    <span className="text-muted-foreground font-medium">{COST_CATEGORY_LABELS[cat.label as keyof typeof COST_CATEGORY_LABELS] ?? cat.label}</span>
+                                                    <span className="font-bold tabular-figures">{formatCurrency(cat.total)} <span className="text-muted-foreground font-normal">({cat.count})</span></span>
+                                                </div>
+                                                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                                                    <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </Card>
+
+                        {/* Monthly trend */}
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Monthly Trend (YTD)</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="h-3.5 w-3.5" />}
+                                    onClick={() => exportCsv(proCosts?.byMonth ?? [], 'pro-costs-by-month.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            {pcLoading ? (
+                                <div className="space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-8 w-full rounded-lg" />)}</div>
+                            ) : (proCosts?.byMonth ?? []).length === 0 ? (
+                                <p className="text-xs text-muted-foreground text-center py-6">No monthly data available</p>
+                            ) : (() => {
+                                const maxTotal = Math.max(...(proCosts?.byMonth ?? []).map(m => m.total), 1)
+                                return (
+                                    <div className="space-y-2">
+                                        {(proCosts?.byMonth ?? []).map(m => (
+                                            <div key={m.period} className="flex items-center gap-3">
+                                                <span className="text-xs w-20 text-muted-foreground shrink-0">{m.period}</span>
+                                                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                                    <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${Math.round((m.total / maxTotal) * 100)}%` }} />
+                                                </div>
+                                                <span className="text-xs font-semibold tabular-figures w-24 text-right shrink-0">{formatCurrency(m.total)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )
+                            })()}
+                        </Card>
+                    </div>
+
+                    {/* Per-employee cost table */}
+                    <Card className="p-4">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-sm">Per Employee</h3>
+                            <Button size="sm" variant="outline" leftIcon={<Download className="h-3.5 w-3.5" />}
+                                onClick={() => exportCsv(
+                                    (proCosts?.byEmployee ?? []).map(e => ({ name: e.employeeName, total: e.total, count: e.count })),
+                                    'pro-costs-by-employee.csv',
+                                )}>
+                                Export
+                            </Button>
+                        </div>
+                        {pcLoading ? (
+                            <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div>
+                        ) : (proCosts?.byEmployee ?? []).length === 0 ? (
+                            <div className="py-10 text-center">
+                                <Receipt className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+                                <p className="text-sm text-muted-foreground">No cost records for this year</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">Add costs via the Visa detail page</p>
+                            </div>
+                        ) : (
+                            <DataTable
+                                isLoading={pcLoading}
+                                columns={[
+                                    {
+                                        id: 'employee',
+                                        accessorKey: 'employeeName',
+                                        header: 'Employee',
+                                        cell: ({ row: { original: e } }: CellContext<CostReportEmployee, unknown>) => (
+                                            <div className="flex items-center gap-2.5">
+                                                <InitialsAvatar name={e.employeeName || '—'} size="sm" />
+                                                <span className="text-sm font-medium">{e.employeeName}</span>
+                                            </div>
+                                        ),
+                                    },
+                                    {
+                                        accessorKey: 'count',
+                                        header: 'Transactions',
+                                        cell: ({ getValue }: CellContext<CostReportEmployee, unknown>) => (
+                                            <span className="text-sm">{getValue() as number}</span>
+                                        ),
+                                    },
+                                    {
+                                        accessorKey: 'total',
+                                        header: 'Total Spent (AED)',
+                                        cell: ({ getValue }: CellContext<CostReportEmployee, unknown>) => (
+                                            <span className="text-sm font-bold">{formatCurrency(getValue() as number)}</span>
+                                        ),
+                                    },
+                                ]}
+                                data={proCosts?.byEmployee ?? []}
+                                pageSize={10}
+                            />
+                        )}
                     </Card>
                 </TabsContent>
             </Tabs>

@@ -501,7 +501,7 @@ function UsersTab() {
                 <SettingsCard className="bg-muted/30">
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-semibold">Invite Team Member</h3>
+                            <h3 className="text-sm font-semibold">Invite User</h3>
                             <Button variant="ghost" size="sm" onClick={() => setShowInvite(false)}>Cancel</Button>
                         </div>
                         <form onSubmit={handleInvite} className="space-y-4">
@@ -534,8 +534,8 @@ function UsersTab() {
 
             <Section
                 icon={Users}
-                title="Team Members"
-                description="Manage roles and access for all workspace members"
+                title="Users"
+                description="Manage roles and access for all workspace users"
                 action={canManageUsers && !showInvite && (
                     <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setShowInvite(true)}>
                         Invite User
@@ -557,7 +557,7 @@ function UsersTab() {
                 ) : (tenantUsers ?? []).length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground border rounded-lg">
                         <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No team members found</p>
+                        <p className="text-sm">No users found</p>
                     </div>
                 ) : (
                     <div className="divide-y border rounded-lg overflow-hidden">
@@ -1398,7 +1398,7 @@ export function SettingsPage() {
     const tabs = [
         { value: 'profile', label: 'My Profile', icon: UserCircle, desc: 'Photo, name & department' },
         { value: 'company', label: 'Company', icon: Building2, desc: 'Profile, regional & legal info' },
-        { value: 'users', label: 'Users & Roles', icon: Users, desc: 'Team members, permissions' },
+        { value: 'users', label: 'Users & Roles', icon: Users, desc: 'Users, roles & permissions' },
         { value: 'notifications', label: 'Notifications', icon: Bell, desc: 'Email & push preferences' },
         { value: 'security', label: 'Security', icon: Shield, desc: 'Password, 2FA, IP allowlist' },
         { value: 'activity', label: 'Activity', icon: Clock, desc: 'Login & session history' },

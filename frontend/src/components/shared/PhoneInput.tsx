@@ -117,6 +117,8 @@ export interface CountrySelectProps {
     name?: string
     /** Compact trigger: show only flag + calling code (for phone prefix pickers). */
     compact?: boolean
+    /** Show the calling code (+971) next to the country name. Default false — only needed for phone prefix pickers. */
+    showCallingCode?: boolean
     /** Error state for red border. */
     invalid?: boolean
 }
@@ -130,6 +132,7 @@ export function CountrySelect({
     id,
     name,
     compact,
+    showCallingCode = false,
     invalid,
 }: CountrySelectProps) {
     const [open, setOpen] = useState(false)
@@ -190,7 +193,7 @@ export function CountrySelect({
                         <>
                             <FlagImg iso2={selected.iso2} size={20} />
                             <span className="truncate text-left flex-1">{selected.name}</span>
-                            <span className="text-xs text-muted-foreground">{selected.callingCode}</span>
+                            {showCallingCode && <span className="text-xs text-muted-foreground">{selected.callingCode}</span>}
                         </>
                     )
                 ) : (
@@ -240,7 +243,7 @@ export function CountrySelect({
                                     >
                                         <FlagImg iso2={c.iso2} size={20} />
                                         <span className="truncate flex-1">{c.name}</span>
-                                        <span className="text-xs text-muted-foreground">{c.callingCode}</span>
+                                        {showCallingCode && <span className="text-xs text-muted-foreground">{c.callingCode}</span>}
                                         {active && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
                                     </button>
                                 )

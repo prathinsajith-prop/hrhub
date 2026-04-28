@@ -37,11 +37,14 @@ import {
     MapPin,
     ChevronDown,
     ChevronRight as ChevronRightIcon,
+    Briefcase,
 } from 'lucide-react'
 import {
     useOrgUnits, useCreateOrgUnit, useUpdateOrgUnit, useDeleteOrgUnit,
     type OrgUnit, type OrgUnitInput, type OrgUnitType,
 } from '@/hooks/useOrgUnits'
+import { useDesignations, useCreateDesignation, useUpdateDesignation, useDeleteDesignation } from '@/hooks/useDesignations'
+import type { Designation } from '@/hooks/useDesignations'
 import { useEmployees } from '@/hooks/useEmployees'
 import { Select as UiSelect, SelectContent as UiSelectContent, SelectItem as UiSelectItem, SelectTrigger as UiSelectTrigger, SelectValue as UiSelectValue } from '@/components/ui/select'
 import { Textarea as UiTextarea } from '@/components/ui/textarea'
@@ -308,7 +311,7 @@ function MembersTab() {
                 <Card className="bg-muted/30">
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-semibold">Invite Team Member</h3>
+                            <h3 className="text-sm font-semibold">Invite User</h3>
                             <Button variant="ghost" size="sm" onClick={() => setShowInvite(false)}>Cancel</Button>
                         </div>
                         <form onSubmit={handleInvite} className="space-y-4">
@@ -341,8 +344,8 @@ function MembersTab() {
 
             <Section
                 icon={Users}
-                title="Team Members"
-                description="Manage roles and access for all workspace members"
+                title="Users"
+                description="Manage roles and access for all workspace users"
                 action={canManageUsers && !showInvite ? (
                     <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setShowInvite(true)}>
                         Invite
@@ -364,7 +367,7 @@ function MembersTab() {
                 ) : (tenantUsers ?? []).length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground border rounded-lg">
                         <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No team members found</p>
+                        <p className="text-sm">No users found</p>
                     </div>
                 ) : (
                     <div className="divide-y border rounded-lg overflow-hidden">
@@ -1216,7 +1219,7 @@ function OrgUnitDialog({
                     {/* Type selector — only when creating */}
                     {!editing && (
                         <div className="space-y-1.5">
-                            <Label>Type <span className="text-destructive">*</span></Label>
+                            <Label required>Type</Label>
                             <UiSelect
                                 value={form.type}
                                 onValueChange={v => setForm(f => ({ ...f, type: v as OrgUnitType, parentId: '' }))}
@@ -1243,7 +1246,7 @@ function OrgUnitDialog({
 
                     {/* Name */}
                     <div className="space-y-1.5">
-                        <Label>Name <span className="text-destructive">*</span></Label>
+                        <Label required>Name</Label>
                         <Input
                             value={form.name}
                             onChange={s('name')}
@@ -1400,6 +1403,143 @@ function OrgUnitRow({ unit, units, empList, depth = 0 }: {
     )
 }
 
+function DesignationsSection() {
+    const { data: items = [], isLoading } = useDesignations()
+    const designations = Array.isArray(items) ? items as Designation[] : []
+    const create = useCreateDesignation()
+    const update = useUpdateDesignation()
+    const del = useDeleteDesignation()
+
+    const [newName, setNewName] = React.useState('')
+    const [addingNew, setAddingNew] = React.useState(false)
+    const [editingId, setEditingId] = React.useState<string | null>(null)
+    const [editName, setEditName] = React.useState('')
+
+    function handleAdd() {
+        const name = newName.trim()
+        if (!name) return
+        create.mutate({ name }, {
+            onSuccess: () => { setNewName(''); setAddingNew(false); toast.success('Designation added') },
+            onError: (err: Error & { message?: string }) => toast.error(err?.message?.includes('unique') ? 'Designation already exists' : 'Failed to add'),
+        })
+    }
+
+    function handleUpdate(id: string) {
+        const name = editName.trim()
+        if (!name) return
+        update.mutate({ id, data: { name } }, {
+            onSuccess: () => { setEditingId(null); toast.success('Updated') },
+            onError: (err: Error & { message?: string }) => toast.error(err?.message?.includes('unique') ? 'Name already exists' : 'Failed to update'),
+        })
+    }
+
+    function handleToggle(d: Designation) {
+        update.mutate({ id: d.id, data: { isActive: !d.isActive } })
+    }
+
+    function handleDelete(d: Designation) {
+        del.mutate(d.id, {
+            onSuccess: () => toast.success(`"${d.name}" removed`),
+            onError: () => toast.error('Failed to delete'),
+        })
+    }
+
+    return (
+        <Section icon={Briefcase} title="Designations" description="Define job titles employees can be assigned. These appear as a dropdown when adding or editing employees.">
+            <div className="space-y-2">
+                {isLoading ? (
+                    <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-9 rounded-lg bg-muted animate-pulse" />)}</div>
+                ) : designations.length === 0 && !addingNew ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No designations yet. Add one to get started.</p>
+                ) : (
+                    <div className="divide-y divide-border/50 rounded-lg border bg-background">
+                        {designations.map(d => (
+                            <div key={d.id} className="flex items-center gap-3 px-3 py-2.5">
+                                {editingId === d.id ? (
+                                    <>
+                                        <input
+                                            autoFocus
+                                            className="flex-1 rounded-md border bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                                            value={editName}
+                                            onChange={e => setEditName(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') handleUpdate(d.id); if (e.key === 'Escape') setEditingId(null) }}
+                                        />
+                                        <button onClick={() => handleUpdate(d.id)} className="text-success hover:text-success/80 shrink-0">
+                                            <Check className="h-4 w-4" />
+                                        </button>
+                                        <button onClick={() => setEditingId(null)} className="text-muted-foreground hover:text-foreground shrink-0">
+                                            <XCircle className="h-4 w-4" />
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className={cn('flex-1 text-sm font-medium', !d.isActive && 'line-through text-muted-foreground')}>{d.name}</span>
+                                        {!d.isActive && (
+                                            <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-medium shrink-0">Inactive</span>
+                                        )}
+                                        <button
+                                            onClick={() => { setEditingId(d.id); setEditName(d.name) }}
+                                            className="text-muted-foreground hover:text-foreground shrink-0 transition-colors"
+                                            title="Rename"
+                                        >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleToggle(d)}
+                                            className={cn('text-xs shrink-0 px-2 py-0.5 rounded-full border font-medium transition-colors', d.isActive ? 'border-success/30 text-success hover:bg-success/10' : 'border-muted-foreground/30 text-muted-foreground hover:bg-muted')}
+                                            title={d.isActive ? 'Deactivate' : 'Activate'}
+                                        >
+                                            {d.isActive ? 'Active' : 'Inactive'}
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(d)}
+                                            className="text-muted-foreground hover:text-destructive shrink-0 transition-colors"
+                                            title="Delete"
+                                            disabled={del.isPending}
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {addingNew ? (
+                    <div className="flex items-center gap-2 mt-2">
+                        <input
+                            autoFocus
+                            className="flex-1 rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                            placeholder="e.g. Senior Engineer"
+                            value={newName}
+                            onChange={e => setNewName(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAddingNew(false); setNewName('') } }}
+                        />
+                        <button
+                            onClick={handleAdd}
+                            disabled={!newName.trim() || create.isPending}
+                            className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50 hover:bg-primary/90 transition-colors"
+                        >
+                            {create.isPending ? '…' : 'Add'}
+                        </button>
+                        <button onClick={() => { setAddingNew(false); setNewName('') }} className="text-muted-foreground hover:text-foreground transition-colors">
+                            <XCircle className="h-4 w-4" />
+                        </button>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => setAddingNew(true)}
+                        className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 font-medium mt-1 transition-colors"
+                    >
+                        <Plus className="h-3.5 w-3.5" /> Add designation
+                    </button>
+                )}
+            </div>
+        </Section>
+    )
+}
+
 function OrgStructureTab() {
     const { data: units = [], isLoading } = useOrgUnits()
     const { data: employees } = useEmployees({ limit: 200 })
@@ -1491,6 +1631,8 @@ function OrgStructureTab() {
                     editing={null} defaultType={adding} units={units} employees={empList}
                 />
             )}
+
+            <DesignationsSection />
         </div>
     )
 }
@@ -1921,7 +2063,7 @@ function SubscriptionTab() {
 const tabs = [
     { value: 'profile', label: 'Organization Profile', desc: 'Company details & regional settings', icon: Building2, requires: 'manage_settings' as Permission | null },
     { value: 'structure', label: 'Org Structure', desc: 'Divisions, departments & branches', icon: GitBranch, requires: 'manage_settings' as Permission | null },
-    { value: 'members', label: 'Members', desc: 'Team members, roles & access', icon: Users, requires: 'manage_users' as Permission | null },
+    { value: 'members', label: 'Users', desc: 'Users, roles & access', icon: Users, requires: 'manage_users' as Permission | null },
     { value: 'roles', label: 'Roles & Permissions', desc: 'View built-in role permissions', icon: KeyRound, requires: 'manage_users' as Permission | null },
     { value: 'holidays', label: 'Public Holidays', desc: 'Manage company-wide holidays by year', icon: CalendarDays, requires: 'manage_settings' as Permission | null },
     { value: 'subscription', label: 'Subscription', desc: 'Plan, usage & billing', icon: CreditCard, requires: 'manage_settings' as Permission | null },

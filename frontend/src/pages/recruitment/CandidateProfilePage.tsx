@@ -532,7 +532,7 @@ export function CandidateProfilePage() {
                         </p>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label>Join Date *</Label>
+                                <Label required>Join Date</Label>
                                 <DatePicker
                                     value={convertForm.joinDate}
                                     onChange={(v) => setConvertForm((f) => ({ ...f, joinDate: v }))}

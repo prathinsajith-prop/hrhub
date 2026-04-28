@@ -13,6 +13,7 @@ import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useEmployees } from '@/hooks/useEmployees'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
+import { useDesignations } from '@/hooks/useDesignations'
 import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { FormField } from '@/components/shared/FormField'
@@ -96,12 +97,12 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 </DialogHeader>
                 <DialogBody className="space-y-3">
                     <div className="space-y-1.5">
-                        <Label>Job Title *</Label>
+                        <Label required>Job Title</Label>
                         <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Property Consultant" />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <Label>Department *</Label>
+                            <Label required>Department</Label>
                             <Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Sales" />
                         </div>
                         <div className="space-y-1.5">
@@ -187,7 +188,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
                 </DialogHeader>
                 <DialogBody className="space-y-3">
                     <div className="space-y-1.5">
-                        <Label>Employee *</Label>
+                        <Label required>Employee</Label>
                         <Select value={employeeId} onValueChange={setEmployeeId}>
                             <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
                             <SelectContent>
@@ -277,7 +278,7 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
                 </DialogHeader>
                 <DialogBody className="space-y-3">
                     <div className="space-y-1.5">
-                        <Label>Employee *</Label>
+                        <Label required>Employee</Label>
                         <Select value={employeeId} onValueChange={setEmployeeId}>
                             <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
                             <SelectContent>
@@ -303,11 +304,11 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <Label>Start Date *</Label>
+                            <Label required>Start Date</Label>
                             <DatePicker value={startDate} min={today} onChange={setStartDate} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>End Date *</Label>
+                            <Label required>End Date</Label>
                             <DatePicker value={endDate} min={startDate || today} onChange={setEndDate} />
                         </div>
                     </div>
@@ -409,6 +410,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     const createEmployee = useCreateEmployee()
     const navigate = useNavigate()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const { data: designationList = [] } = useDesignations()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const divisions = orgUnits.filter(u => u.type === 'division' && u.isActive)
     const departments = orgUnits.filter(u => u.type === 'department' && u.isActive &&
@@ -431,6 +433,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
         const { ok, errors: errs } = zodToFieldErrors(employeeStep1Schema, {
             firstName: form.firstName,
             lastName: form.lastName,
+            nationality: form.nationality,
             personalEmail: form.personalEmail,
             mobileNo: form.mobileNo,
             dateOfBirth: form.dateOfBirth,
@@ -564,14 +567,16 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Nationality</Label>
+                                <FormField label="Nationality" required error={errors.nationality}>
                                     <CountrySelect
                                         value={resolveCountryIso(form.nationality)}
-                                        onChange={(iso) => setForm((f) => ({ ...f, nationality: countryNameFromIso(iso) }))}
+                                        onChange={(iso) => {
+                                            setForm((f) => ({ ...f, nationality: countryNameFromIso(iso) }))
+                                            if (errors.nationality) setErrors(prev => { const n = { ...prev }; delete n.nationality; return n })
+                                        }}
                                         placeholder="Select nationality"
                                     />
-                                </div>
+                                </FormField>
                                 <div className="space-y-1.5">
                                     <Label>Passport No</Label>
                                     <Input value={form.passportNo} onChange={set('passportNo')} placeholder="A12345678" />
@@ -653,7 +658,15 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Designation / Title</Label>
-                                    <Input value={form.designation} onChange={set('designation')} placeholder="e.g. Sales Manager" />
+                                    <Select value={form.designation || 'none'} onValueChange={v => setForm(f => ({ ...f, designation: v === 'none' ? '' : v }))}>
+                                        <SelectTrigger><SelectValue placeholder="Select designation…" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">— None —</SelectItem>
+                                            {(Array.isArray(designationList) ? designationList : []).filter((d: { isActive: boolean }) => d.isActive).map((d: { id: string; name: string }) => (
+                                                <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -826,6 +839,7 @@ export function EditEmployeeDialog({
     const [errors, setErrors] = useState<Record<string, string>>({})
     const updateEmployee = useUpdateEmployee(employee.id)
     const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const { data: designationList = [] } = useDesignations()
     const editOrgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const editDivisions = editOrgUnits.filter(u => u.type === 'division' && u.isActive)
     const editDepartments = editOrgUnits.filter(u => u.type === 'department' && u.isActive &&
@@ -854,6 +868,7 @@ export function EditEmployeeDialog({
         const step1 = zodToFieldErrors(employeeStep1Schema, {
             firstName: form.firstName,
             lastName: form.lastName,
+            nationality: form.nationality,
             personalEmail: form.personalEmail,
             mobileNo: form.mobileNo,
             dateOfBirth: form.dateOfBirth,
@@ -927,8 +942,12 @@ export function EditEmployeeDialog({
                     {step === 1 && (
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>First Name *</Label><Input value={form.firstName} onChange={set('firstName')} /></div>
-                                <div className="space-y-1.5"><Label>Last Name *</Label><Input value={form.lastName} onChange={set('lastName')} /></div>
+                                <FormField label="First Name" required error={errors.firstName}>
+                                    <Input value={form.firstName} onChange={set('firstName')} aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />
+                                </FormField>
+                                <FormField label="Last Name" required error={errors.lastName}>
+                                    <Input value={form.lastName} onChange={set('lastName')} aria-invalid={!!errors.lastName} className={errors.lastName ? 'border-destructive' : ''} />
+                                </FormField>
                             </div>
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="space-y-1.5"><Label>Date of Birth</Label><DatePicker value={form.dateOfBirth} max={(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 10); return d.toISOString().split('T')[0] })()} min="1950-01-01" onChange={setDate('dateOfBirth')} /></div>
@@ -956,7 +975,16 @@ export function EditEmployeeDialog({
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Nationality</Label><CountrySelect value={resolveCountryIso(form.nationality)} onChange={(iso) => setForm((f) => ({ ...f, nationality: countryNameFromIso(iso) }))} placeholder="Select" /></div>
+                                <FormField label="Nationality" required error={errors.nationality}>
+                                    <CountrySelect
+                                        value={resolveCountryIso(form.nationality)}
+                                        onChange={(iso) => {
+                                            setForm((f) => ({ ...f, nationality: countryNameFromIso(iso) }))
+                                            if (errors.nationality) setErrors(prev => { const n = { ...prev }; delete n.nationality; return n })
+                                        }}
+                                        placeholder="Select"
+                                    />
+                                </FormField>
                                 <div className="space-y-1.5"><Label>Passport No</Label><Input value={form.passportNo} onChange={set('passportNo')} /></div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -971,7 +999,9 @@ export function EditEmployeeDialog({
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Employee No</Label><Input value={form.employeeNo} onChange={set('employeeNo')} /></div>
-                                <div className="space-y-1.5"><Label>Join Date *</Label><DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} /></div>
+                                <FormField label="Join Date" required error={errors.joinDate}>
+                                    <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
+                                </FormField>
                             </div>
                             {editOrgUnits.length > 0 && (
                                 <div className="rounded-lg border bg-muted/20 p-3 space-y-2.5">
@@ -1018,7 +1048,18 @@ export function EditEmployeeDialog({
                             )}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5"><Label>Department (freeform)</Label><Input value={form.department} onChange={set('department')} placeholder="e.g. Sales" /></div>
-                                <div className="space-y-1.5"><Label>Designation</Label><Input value={form.designation} onChange={set('designation')} /></div>
+                                <div className="space-y-1.5">
+                                    <Label>Designation</Label>
+                                    <Select value={form.designation || 'none'} onValueChange={v => setForm(f => ({ ...f, designation: v === 'none' ? '' : v }))}>
+                                        <SelectTrigger><SelectValue placeholder="Select designation…" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">— None —</SelectItem>
+                                            {(Array.isArray(designationList) ? designationList : []).filter((d: { isActive: boolean }) => d.isActive).map((d: { id: string; name: string }) => (
+                                                <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
@@ -1164,12 +1205,12 @@ export function EditJobDialog({
                 </DialogHeader>
                 <DialogBody className="space-y-3">
                     <div className="space-y-1.5">
-                        <Label>Job Title *</Label>
+                        <Label required>Job Title</Label>
                         <Input value={title} onChange={(e) => setTitle(e.target.value)} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <Label>Department *</Label>
+                            <Label required>Department</Label>
                             <Input value={department} onChange={(e) => setDepartment(e.target.value)} />
                         </div>
                         <div className="space-y-1.5">
@@ -1282,7 +1323,7 @@ export function EditDocumentDialog({
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <Label>Category *</Label>
+                            <Label required>Category</Label>
                             <Select value={category} onValueChange={setCategory}>
                                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                 <SelectContent>
@@ -1296,7 +1337,7 @@ export function EditDocumentDialog({
                             </Select>
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Document Type *</Label>
+                            <Label required>Document Type</Label>
                             <Input value={docType} onChange={(e) => setDocType(e.target.value)} placeholder="e.g. passport" />
                         </div>
                     </div>

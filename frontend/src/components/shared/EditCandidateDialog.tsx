@@ -114,11 +114,11 @@ export function EditCandidateDialog({
                 <DialogBody className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <Label>Name <span className="text-destructive">*</span></Label>
+                            <Label required>Name</Label>
                             <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Email <span className="text-destructive">*</span></Label>
+                            <Label required>Email</Label>
                             <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
                         </div>
                     </div>

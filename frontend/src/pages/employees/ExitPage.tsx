@@ -487,7 +487,7 @@ export function ExitPage() {
                     {step === 'form' && (
                         <div className="space-y-4 py-2">
                             <div className="space-y-1.5">
-                                <Label>Employee <span className="text-destructive">*</span></Label>
+                                <Label required>Employee</Label>
                                 <Select value={form.employeeId} onValueChange={v => set('employeeId', v)}>
                                     <SelectTrigger><SelectValue placeholder="Select employee…" /></SelectTrigger>
                                     <SelectContent>
@@ -498,7 +498,7 @@ export function ExitPage() {
                                 </Select>
                             </div>
                             <div className="space-y-1.5">
-                                <Label>Exit Type <span className="text-destructive">*</span></Label>
+                                <Label required>Exit Type</Label>
                                 <Select value={form.exitType} onValueChange={v => set('exitType', v)}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
@@ -511,11 +511,11 @@ export function ExitPage() {
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
-                                    <Label>Exit Date <span className="text-destructive">*</span></Label>
+                                    <Label required>Exit Date</Label>
                                     <DatePicker value={form.exitDate} min={new Date().toISOString().split('T')[0]} onChange={v => set('exitDate', v)} />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <Label>Last Working Day <span className="text-destructive">*</span></Label>
+                                    <Label required>Last Working Day</Label>
                                     <DatePicker value={form.lastWorkingDay} min={form.exitDate || new Date().toISOString().split('T')[0]} onChange={v => set('lastWorkingDay', v)} />
                                 </div>
                             </div>

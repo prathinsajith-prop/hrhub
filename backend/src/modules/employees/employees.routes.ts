@@ -11,7 +11,7 @@ import { loadEnv } from '../../config/env.js'
 import { db } from '../../db/index.js'
 import { entities, employees, tenants, users } from '../../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
-import { inviteUser } from '../settings/settings.service.js'
+import { inviteUser, resendInvite } from '../settings/settings.service.js'
 import { extname } from 'node:path'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 export default async function (fastify: any): Promise<void> {
@@ -114,9 +114,19 @@ export default async function (fastify: any): Promise<void> {
             action: 'invite',
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
-        }).catch(() => {})
+        }).catch(() => { })
 
         return reply.code(201).send({ message: 'Invitation sent' })
+    })
+
+    // POST /api/v1/employees/:id/resend-invite — resend invite to inactive (pending) account
+    fastify.post('/:id/resend-invite', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Employees'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        await resendInvite(request.user.tenantId, id)
+        return reply.code(200).send({ message: 'Invite resent' })
     })
 
     // GET /api/v1/employees/:id/account — check if employee has a login account
