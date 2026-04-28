@@ -1,4 +1,5 @@
 import { Queue, Worker } from 'bullmq'
+import { log } from '../lib/logger.js'
 import { db } from '../db/index.js'
 import { employees, notifications, documents, users } from '../db/schema/index.js'
 import { and, eq, lt, lte, gte, ne, or, inArray } from 'drizzle-orm'
@@ -89,7 +90,7 @@ async function notifyHrManagers(tenantId: string, entityId: string, notifType: s
 
 // ─── Visa Expiry Worker ───────────────────────────────────────────────────────
 async function runVisaExpiryCheck() {
-    console.log('[worker] Running visa expiry check...')
+    log.info('worker: running visa expiry check')
     const thresholds = [90, 60, 30, 14, 7]
     const today = new Date()
 
@@ -155,12 +156,12 @@ async function runVisaExpiryCheck() {
             } catch { /* email errors non-fatal */ }
         }
     }
-    console.log('[worker] Visa expiry check complete.')
+    log.info('worker: visa expiry check complete')
 }
 
 // ─── Document Expiry Worker ───────────────────────────────────────────────────
 async function runDocumentExpiryCheck() {
-    console.log('[worker] Running document expiry check...')
+    log.info('worker: running document expiry check')
     const thresholds = [90, 60, 30]
 
     for (const days of thresholds) {
@@ -239,12 +240,12 @@ async function runDocumentExpiryCheck() {
         .set({ status: 'expired' as any })
         .where(lt(documents.expiryDate, new Date().toISOString().split('T')[0]))
 
-    console.log('[worker] Document expiry check complete.')
+    log.info('worker: document expiry check complete')
 }
 
 // ─── Contract Expiry Worker ───────────────────────────────────────────────────
 async function runContractExpiryCheck() {
-    console.log('[worker] Running contract expiry check...')
+    log.info('worker: running contract expiry check')
     const thresholds = [90, 30]
 
     for (const days of thresholds) {
@@ -277,12 +278,12 @@ async function runContractExpiryCheck() {
             )
         }
     }
-    console.log('[worker] Contract expiry check complete.')
+    log.info('worker: contract expiry check complete')
 }
 
 // ─── Passport Expiry Worker ───────────────────────────────────────────────────
 async function runPassportExpiryCheck() {
-    console.log('[worker] Running passport expiry check...')
+    log.info('worker: running passport expiry check')
     const thresholds = [180, 90, 30]
 
     for (const days of thresholds) {
@@ -314,23 +315,23 @@ async function runPassportExpiryCheck() {
             )
         }
     }
-    console.log('[worker] Passport expiry check complete.')
+    log.info('worker: passport expiry check complete')
 }
 
 // ─── Subscription Expiry Worker ──────────────────────────────────────────────
 async function runSubscriptionExpiryCheck() {
-    console.log('[worker] Running subscription expiry check...')
+    log.info('worker: running subscription expiry check')
     // Send reminders at 7 days and 1 day before expiry
     await sendSubscriptionExpiryReminders(7)
     await sendSubscriptionExpiryReminders(1)
-    console.log('[worker] Subscription expiry check complete.')
+    log.info('worker: subscription expiry check complete')
 }
 
 // ─── Scheduler: Register all daily workers ────────────────────────────────────
 export async function startExpiryWorkers() {
     const env = loadEnv()
     if (!env.REDIS_URL) {
-        console.warn('⚠️  REDIS_URL not set — expiry alert workers disabled')
+        log.warn('REDIS_URL not set — expiry alert workers disabled')
         return
     }
 
@@ -346,7 +347,7 @@ export async function startExpiryWorkers() {
     })
 
     if (!redisAvailable) {
-        console.warn('⚠️  Redis unavailable — BullMQ workers disabled (expiry alerts will not run)')
+        log.warn('Redis unavailable — BullMQ workers disabled')
         return
     }
 
@@ -372,8 +373,8 @@ export async function startExpiryWorkers() {
         new Worker('passport-expiry', runPassportExpiryCheck, { connection })
         new Worker('subscription-expiry', runSubscriptionExpiryCheck, { connection })
 
-        console.log('✅ Expiry alert workers started (daily @ 06:00 UAE)')
+        log.info('expiry alert workers started (daily 06:00 UAE)')
     } catch (err) {
-        console.warn('⚠️  Could not start BullMQ workers (Redis unavailable):', (err as Error).message)
+        log.warn({ err: (err as Error).message }, 'could not start BullMQ workers')
     }
 }

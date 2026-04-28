@@ -4,6 +4,7 @@
  */
 import { and, eq, isNull, inArray, gt, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
+import { log } from '../../lib/logger.js'
 import {
     onboardingStepRequiredDocs,
     onboardingSteps,
@@ -289,7 +290,7 @@ export async function logDocumentAction(input: {
         })
     } catch (e) {
         // Audit log must never break primary flow
-        console.error('[doc-audit] failed to write log entry:', e)
+        log.error({ err: e }, 'doc-audit: failed to write log entry')
     }
 }
 

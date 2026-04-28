@@ -109,7 +109,7 @@ export async function getEmployee(tenantId: string, id: string) {
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .limit(1)
 
-    return row ? withFullName(row) : null
+    return row ? withFullName(row as typeof row & { firstName: string; lastName: string }) : null
 }
 
 export async function createEmployee(tenantId: string, data: Omit<NewEmployee, 'tenantId' | 'id'>) {

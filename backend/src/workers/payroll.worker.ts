@@ -4,6 +4,7 @@
  * The worker processes the job in the background and updates the payroll run status.
  */
 import { Queue, Worker } from 'bullmq'
+import { log } from '../lib/logger.js'
 import { loadEnv } from '../config/env.js'
 import { runPayroll } from '../modules/payroll/payroll.service.js'
 
@@ -46,7 +47,7 @@ export async function enqueuePayrollRun(tenantId: string, payrollRunId: string):
 export async function startPayrollWorker(): Promise<void> {
     const env = loadEnv()
     if (!env.REDIS_URL) {
-        console.warn('⚠️  REDIS_URL not set — payroll worker disabled')
+        log.warn('REDIS_URL not set — payroll worker disabled')
         return
     }
 
@@ -66,7 +67,7 @@ export async function startPayrollWorker(): Promise<void> {
         }
     })
     if (!reachable) {
-        console.warn('⚠️  Redis unreachable — payroll worker disabled')
+        log.warn('Redis unreachable — payroll worker disabled')
         return
     }
 
@@ -74,7 +75,7 @@ export async function startPayrollWorker(): Promise<void> {
     try {
         connection = getRedisConnection()
     } catch {
-        console.warn('⚠️  Redis unavailable — payroll worker disabled')
+        log.warn('Redis unavailable — payroll worker disabled')
         return
     }
 
@@ -84,9 +85,9 @@ export async function startPayrollWorker(): Promise<void> {
         PAYROLL_QUEUE_NAME,
         async (job) => {
             const { tenantId, payrollRunId } = job.data
-            console.log(`[payroll-worker] Processing payroll run ${payrollRunId} for tenant ${tenantId}`)
+            log.info({ payrollRunId, tenantId }, 'payroll-worker: processing run')
             await runPayroll(tenantId, payrollRunId)
-            console.log(`[payroll-worker] Completed payroll run ${payrollRunId}`)
+            log.info({ payrollRunId }, 'payroll-worker: run complete')
         },
         {
             connection,
@@ -95,12 +96,12 @@ export async function startPayrollWorker(): Promise<void> {
     )
 
     worker.on('failed', (job, err) => {
-        console.error(`[payroll-worker] Job ${job?.id} failed:`, err?.message)
+        log.error({ jobId: job?.id, err: err?.message }, 'payroll-worker: job failed')
     })
 
     worker.on('error', (err) => {
-        console.error('[payroll-worker] Worker error:', err?.message)
+        log.error({ err: err?.message }, 'payroll-worker: worker error')
     })
 
-    console.log('[payroll-worker] Worker started')
+    log.info('payroll-worker: started')
 }

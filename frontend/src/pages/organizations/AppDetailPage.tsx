@@ -117,6 +117,7 @@ function CodeBlock({ code, onCopy }: { code: string; onCopy: (s: string) => void
                 variant="ghost"
                 size="icon"
                 className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-white hover:bg-zinc-700"
+                aria-label="Copy code"
                 onClick={() => onCopy(code)}
             >
                 <Copy className="h-3 w-3" />
@@ -448,7 +449,7 @@ export function AppDetailPage() {
             {/* Header */}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
                 <div className="flex items-start gap-3">
-                    <Button variant="ghost" size="icon" className="mt-0.5 shrink-0" onClick={() => navigate('/apps')}>
+                    <Button variant="ghost" size="icon" className="mt-0.5 shrink-0" aria-label="Back to apps" onClick={() => navigate('/apps')}>
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
                     <div className="min-w-0">
@@ -464,7 +465,7 @@ export function AppDetailPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleRefresh}>
+                    <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Refresh" onClick={handleRefresh}>
                         <RefreshCw className="h-4 w-4" />
                     </Button>
                     {canManage && (
@@ -511,6 +512,7 @@ export function AppDetailPage() {
                             <div className="flex items-center gap-1.5 mt-1">
                                 <code className="text-xs font-mono truncate">{app.appKey}</code>
                                 <Button type="button" variant="ghost" size="icon" className="h-5 w-5 shrink-0"
+                                    aria-label="Copy app key"
                                     onClick={() => { navigator.clipboard.writeText(app.appKey); toast.success(t('apps.copied')) }}>
                                     <Copy className="h-3 w-3" />
                                 </Button>
@@ -863,6 +865,7 @@ export function AppDetailPage() {
                                     <div className="flex items-center gap-2">
                                         <code className="text-xs font-mono truncate max-w-[180px]">{app.appKey}</code>
                                         <Button type="button" variant="ghost" size="icon" className="h-5 w-5 shrink-0"
+                                            aria-label="Copy app key"
                                             onClick={() => { navigator.clipboard.writeText(app.appKey); toast.success(t('apps.copied')) }}>
                                             <Copy className="h-3 w-3" />
                                         </Button>

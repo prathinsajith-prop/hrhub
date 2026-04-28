@@ -131,6 +131,7 @@ export function ConnectedAppsPage() {
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
+                        aria-label="Copy app key"
                         onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(row.original.appKey); toast.success(t('apps.copied')) }}
                     >
                         <Copy className="h-3 w-3" />

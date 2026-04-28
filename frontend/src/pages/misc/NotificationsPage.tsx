@@ -144,6 +144,7 @@ export function NotificationsPage() {
                                     size="icon"
                                     className="shrink-0 mt-0.5 h-7 w-7"
                                     title="Mark as read"
+                                    aria-label="Mark as read"
                                     onClick={e => { e.stopPropagation(); markRead.mutate(n.id) }}
                                 >
                                     <CheckCircleIcon className="size-4" />
