@@ -451,7 +451,7 @@ function DesignationsSection() {
 
 export function OrgStructureTab() {
     const { data: units = [], isLoading } = useOrgUnits()
-    const { data: employees } = useEmployees({ limit: 200 })
+    const { data: employees } = useEmployees({ limit: 100 })
     const [adding, setAdding] = React.useState<OrgUnitType | null>(null)
 
     const empList = React.useMemo(
