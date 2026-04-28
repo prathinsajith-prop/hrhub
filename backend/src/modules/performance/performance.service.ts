@@ -1,11 +1,14 @@
 import { db } from '../../db/index.js'
 import { performanceReviews } from '../../db/schema/index.js'
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, and, desc, gte, lte } from 'drizzle-orm'
 
-export async function getReviews(tenantId: string, params: { employeeId?: string; limit?: number; offset?: number }) {
-    const { employeeId, limit = 20, offset = 0 } = params
+export async function getReviews(tenantId: string, params: { employeeId?: string; from?: string; to?: string; limit?: number; offset?: number }) {
+    const { employeeId, from, to, limit = 20, offset = 0 } = params
     const conditions = [eq(performanceReviews.tenantId, tenantId)]
     if (employeeId) conditions.push(eq(performanceReviews.employeeId, employeeId))
+    // Calendar uses reviewDate as the event date; filter by [from, to] when provided.
+    if (from) conditions.push(gte(performanceReviews.reviewDate, from))
+    if (to) conditions.push(lte(performanceReviews.reviewDate, to))
 
     const rows = await db.select().from(performanceReviews)
         .where(and(...conditions))

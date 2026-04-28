@@ -38,5 +38,22 @@ export default async function (fastify: any): Promise<void> {
         const data = await getOnboardingSummary(request.user.tenantId)
         return reply.send({ data })
     })
+
+    // BFF aggregator — single round trip for the full dashboard view.
+    // Notifications are intentionally excluded: they are shared with the header
+    // and have a separate cache lifecycle.
+    fastify.get('/summary', { ...auth, schema: { tags: ['Dashboard'] } }, async (request: any, reply: any) => {
+        const tenantId: string = request.user.tenantId
+        const [kpis, payrollTrend, nationalityBreakdown, deptHeadcount, emiratisation, onboardingSummary] =
+            await Promise.all([
+                getDashboardKPIs(tenantId),
+                getPayrollTrend(tenantId),
+                getNationalityBreakdown(tenantId),
+                getDeptHeadcount(tenantId),
+                getEmiratisationStatus(tenantId),
+                getOnboardingSummary(tenantId),
+            ])
+        return reply.send({ kpis, payrollTrend, nationalityBreakdown, deptHeadcount, emiratisation, onboardingSummary })
+    })
 }
 

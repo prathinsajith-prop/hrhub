@@ -12,7 +12,9 @@ import {
     ShieldAlertIcon,
     KeyRoundIcon,
     AlertTriangleIcon,
+    RefreshCcw,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useLoginHistory, type LoginHistoryRecord } from '@/hooks/useAudit'
 import {
     Table,
@@ -46,7 +48,7 @@ export function LoginHistoryPage() {
     const { t, i18n } = useTranslation()
     const [filter, setFilter] = useState<string>('all')
 
-    const { data: records = [], isLoading } = useLoginHistory({ limit: 100 })
+    const { data: records = [], isLoading, isFetching, refetch } = useLoginHistory({ limit: 100 })
 
     const isArabic = i18n.language === 'ar'
     const dateFnsLocale = isArabic ? arSA : undefined
@@ -91,7 +93,11 @@ export function LoginHistoryPage() {
                         <CardTitle>{t('loginHistory.title')}</CardTitle>
                         <CardDescription>{t('loginHistory.allDevices')}</CardDescription>
                     </div>
-                    <Select value={filter} onValueChange={setFilter}>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+                            <RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+                        </Button>
+                        <Select value={filter} onValueChange={setFilter}>
                         <SelectTrigger className="w-48">
                             <SelectValue placeholder={t('loginHistory.filterEvent')} />
                         </SelectTrigger>
@@ -104,6 +110,7 @@ export function LoginHistoryPage() {
                             <SelectItem value="password_reset">{t('loginHistory.passwordReset')}</SelectItem>
                         </SelectContent>
                     </Select>
+                    </div>
                 </CardHeader>
                 <CardContent className="p-0">
                     {isLoading ? (

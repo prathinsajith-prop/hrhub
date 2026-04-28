@@ -8,8 +8,8 @@ export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
-        const { employeeId, status, leaveType, limit = '20', offset = '0' } = request.query as Record<string, string>
-        const result = await listLeaveRequests(request.user.tenantId, { employeeId, status, leaveType, limit: Number(limit), offset: Number(offset) })
+        const { employeeId, status, leaveType, from, to, limit = '20', offset = '0' } = request.query as Record<string, string>
+        const result = await listLeaveRequests(request.user.tenantId, { employeeId, status, leaveType, from, to, limit: Number(limit), offset: Number(offset) })
         return sendWithETag(reply, request, result)
     })
 

@@ -6,12 +6,15 @@ import type { InferInsertModel } from 'drizzle-orm'
 
 type NewDocument = InferInsertModel<typeof documents>
 
-export async function listDocuments(tenantId: string, params: { employeeId?: string; category?: string; status?: string; limit: number; offset: number; after?: string }) {
-    const { employeeId, category, status, limit, offset, after } = params
+export async function listDocuments(tenantId: string, params: { employeeId?: string; category?: string; status?: string; from?: string; to?: string; limit: number; offset: number; after?: string }) {
+    const { employeeId, category, status, from, to, limit, offset, after } = params
     const conditions = [eq(documents.tenantId, tenantId), isNull(documents.deletedAt)]
     if (employeeId) conditions.push(eq(documents.employeeId, employeeId))
     if (category) conditions.push(eq(documents.category, category as never))
     if (status) conditions.push(eq(documents.status, status as never))
+    // Calendar uses expiryDate as the event date; filter by [from, to] when provided.
+    if (from) conditions.push(gte(documents.expiryDate, from))
+    if (to) conditions.push(lte(documents.expiryDate, to))
 
     const cursor = after ? decodeCursor(after) : null
     if (cursor) {

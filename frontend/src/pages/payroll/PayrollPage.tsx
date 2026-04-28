@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
-import { CreditCard, CheckCircle2, Clock, Play, FileDown, Send, TrendingUp } from 'lucide-react'
+import { CreditCard, CheckCircle2, Clock, Play, FileDown, Send, TrendingUp, RefreshCcw } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, CardHeader, CardTitle, CardContent } from '@/components/ui/primitives'
@@ -23,18 +23,10 @@ import { useAuthStore } from '@/store/authStore'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import type { PayrollRun } from '@/types'
+import { PAYROLL_STATUS_OPTIONS } from '@/lib/options'
 
 const PAYROLL_FILTERS: FilterConfig[] = [
-  {
-    name: 'status', label: 'Status', type: 'select', field: 'status',
-    options: [
-      { value: 'draft', label: 'Draft' },
-      { value: 'processing', label: 'Processing' },
-      { value: 'approved', label: 'Approved' },
-      { value: 'wps_submitted', label: 'WPS submitted' },
-      { value: 'paid', label: 'Paid' },
-    ],
-  },
+  { name: 'status', label: 'Status', type: 'select', field: 'status', options: PAYROLL_STATUS_OPTIONS },
   { name: 'year', label: 'Year', type: 'number_range', field: 'year', min: 2020, max: 2100 },
   { name: 'totalEmployees', label: 'Headcount', type: 'number_range', field: 'totalEmployees', min: 0 },
   { name: 'totalNet', label: 'Net pay (AED)', type: 'number_range', field: 'totalNet', min: 0, prefix: 'AED' },
@@ -170,7 +162,7 @@ export function PayrollPage() {
   const [runConfirmOpen, setRunConfirmOpen] = useState(false)
   const [wpsExporting, setWpsExporting] = useState(false)
   const { accessToken } = useAuthStore()
-  const { data: payrollData, isLoading } = usePayrollRuns({ year: new Date().getFullYear() })
+  const { data: payrollData, isLoading, isFetching, refetch } = usePayrollRuns({ year: new Date().getFullYear() })
   const { data: trendRaw } = usePayrollTrend()
   const runPayroll = useRunPayroll()
   const payrollRuns = useMemo<PayrollRun[]>(() => (payrollData?.data as PayrollRun[]) ?? [], [payrollData?.data])
@@ -257,6 +249,11 @@ export function PayrollPage() {
       <PageHeader
         title={t('payroll.title')}
         description={t('payroll.description')}
+        actions={
+          <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+            Refresh
+          </Button>
+        }
       />
 
       {/* KPIs */}

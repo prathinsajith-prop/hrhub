@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
 
-interface VisaParams { status?: string; urgencyLevel?: string; limit?: number; offset?: number }
+interface VisaParams { status?: string; urgencyLevel?: string; from?: string; to?: string; limit?: number; offset?: number }
 
 function toQS(params: Record<string, string | number | undefined>) {
     const q = new URLSearchParams()
@@ -11,10 +11,10 @@ function toQS(params: Record<string, string | number | undefined>) {
 }
 
 export function useVisas(params: VisaParams = {}) {
-    const { status, urgencyLevel, limit = 20, offset = 0 } = params
+    const { status, urgencyLevel, from, to, limit = 20, offset = 0 } = params
     return useQuery({
-        queryKey: ['visa', status, urgencyLevel, limit, offset],
-        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/visa?${toQS({ status, urgencyLevel, limit, offset })}`),
+        queryKey: ['visa', status, urgencyLevel, from, to, limit, offset],
+        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/visa?${toQS({ status, urgencyLevel, from, to, limit, offset })}`),
         staleTime: 30_000,
     })
 }

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
-import { Building2, Plus, Check, ArrowRightLeft } from 'lucide-react'
+import { Building2, Plus, Check, ArrowRightLeft, RefreshCcw } from 'lucide-react'
 import { useMyTenants, useSwitchTenant } from '@/hooks/useTenants'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import { toast } from '@/components/ui/overlays'
 export function OrganizationsPage() {
     const { t } = useTranslation()
     const navigate = useNavigate()
-    const { data: tenants, isLoading } = useMyTenants()
+    const { data: tenants, isLoading, isFetching, refetch } = useMyTenants()
     const currentTenantId = useAuthStore(s => s.tenant?.id)
     const switchMut = useSwitchTenant()
 
@@ -36,9 +36,14 @@ export function OrganizationsPage() {
                 title={t('organizations.title')}
                 description={t('organizations.description')}
                 actions={
-                    <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => navigate('/organizations/new')}>
-                        {t('organizations.new')}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                            Refresh
+                        </Button>
+                        <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => navigate('/organizations/new')}>
+                            {t('organizations.new')}
+                        </Button>
+                    </div>
                 }
             />
 

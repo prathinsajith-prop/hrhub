@@ -4,12 +4,14 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Calendar, Clock, CheckCircle2, XCircle, Ban } from 'lucide-react'
+import { Plus, Calendar, Clock, CheckCircle2, XCircle, Ban, X, RefreshCcw } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
-import { toast } from '@/components/ui/overlays'
+import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { useCurrentEmployeeId } from '@/hooks/useCurrentEmployeeId'
-import { useLeaveRequests, useCreateLeave, useLeaveBalance } from '@/hooks/useLeave'
+import { useLeaveRequests, useCreateLeave, useLeaveBalance, useCancelLeave } from '@/hooks/useLeave'
 import type { LeaveRequest } from '@/types'
+import { LEAVE_TYPE_LABELS } from '@/lib/enums'
+import { LEAVE_TYPE_OPTIONS, type SelectOption } from '@/lib/options'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog'
@@ -18,10 +20,6 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { DatePicker } from '@/components/ui/date-picker'
 import { Textarea } from '@/components/ui/textarea'
 
-const LEAVE_TYPE_LABELS: Record<string, string> = {
-    annual: 'Annual Leave', sick: 'Sick Leave', maternity: 'Maternity Leave',
-    paternity: 'Paternity Leave', hajj: 'Hajj Leave', compassionate: 'Compassionate Leave', unpaid: 'Unpaid Leave',
-}
 const LEAVE_TYPE_COLORS: Record<string, string> = {
     annual: 'bg-blue-100 text-blue-700',
     sick: 'bg-red-100 text-red-700',
@@ -70,8 +68,8 @@ function ApplyDialog({ employeeId, onClose }: { employeeId: string; onClose: () 
                         <Select value={form.leaveType} onValueChange={v => setForm(f => ({ ...f, leaveType: v }))}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                                {Object.entries(LEAVE_TYPE_LABELS).map(([v, l]) => (
-                                    <SelectItem key={v} value={v}>{l}</SelectItem>
+                                {LEAVE_TYPE_OPTIONS.map((o: SelectOption) => (
+                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -132,8 +130,10 @@ function BalanceSummary({ employeeId }: { employeeId: string }) {
 export function MyLeavePage() {
     const employeeId = useCurrentEmployeeId()
     const [applying, setApplying] = useState(false)
+    const [cancelTarget, setCancelTarget] = useState<string | null>(null)
+    const cancelLeave = useCancelLeave()
 
-    const { data, isLoading } = useLeaveRequests({ employeeId: employeeId ?? undefined, limit: 50 })
+    const { data, isLoading, isFetching, refetch } = useLeaveRequests({ employeeId: employeeId ?? undefined, limit: 50 })
     const leaves = (data?.data ?? []) as LeaveRequest[]
 
     return (
@@ -142,11 +142,16 @@ export function MyLeavePage() {
                 title="My Leave"
                 description="View your leave balance and manage your requests."
                 actions={
-                    employeeId ? (
-                        <Button onClick={() => setApplying(true)} leftIcon={<Plus className="h-4 w-4" />}>
-                            Apply for Leave
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                            Refresh
                         </Button>
-                    ) : undefined
+                        {employeeId && (
+                            <Button onClick={() => setApplying(true)} leftIcon={<Plus className="h-4 w-4" />}>
+                                Apply for Leave
+                            </Button>
+                        )}
+                    </div>
                 }
             />
 
@@ -186,6 +191,17 @@ export function MyLeavePage() {
                                                 <StatusIcon className="h-3 w-3" />
                                                 {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
                                             </Badge>
+                                            {req.status === 'pending' && (
+                                                <Button
+                                                    size="icon-sm"
+                                                    variant="ghost"
+                                                    className="text-muted-foreground hover:text-destructive shrink-0"
+                                                    onClick={() => setCancelTarget(req.id)}
+                                                    aria-label="Cancel request"
+                                                >
+                                                    <X className="h-3.5 w-3.5" />
+                                                </Button>
+                                            )}
                                         </div>
                                     )
                                 })}
@@ -203,6 +219,22 @@ export function MyLeavePage() {
             )}
 
             {applying && employeeId && <ApplyDialog employeeId={employeeId} onClose={() => setApplying(false)} />}
+
+            <ConfirmDialog
+                open={!!cancelTarget}
+                onOpenChange={o => !o && setCancelTarget(null)}
+                title="Cancel Leave Request"
+                description="Are you sure you want to cancel this leave request?"
+                confirmLabel="Cancel Request"
+                variant="destructive"
+                onConfirm={() => {
+                    if (!cancelTarget) return
+                    cancelLeave.mutate(cancelTarget, {
+                        onSuccess: () => toast.success('Request cancelled', 'Your leave request has been cancelled.'),
+                    })
+                    setCancelTarget(null)
+                }}
+            />
         </PageWrapper>
     )
 }

@@ -1,5 +1,4 @@
 import { recordActivity } from '../audit/audit.service.js'
-import { sendWithETag } from '../../lib/etag.js'
 import {
     listAssets,
     getAsset,

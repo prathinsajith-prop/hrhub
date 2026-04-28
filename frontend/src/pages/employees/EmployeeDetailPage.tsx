@@ -174,7 +174,7 @@ export function EmployeeDetailPage() {
 
   const { data: employee, isLoading } = useEmployee(id!)
   const { data: docsResult, isLoading: docsLoading } = useDocuments({ employeeId: id })
-  const { data: reviews, isLoading: reviewsLoading } = usePerformanceReviews(id)
+  const { data: reviews, isLoading: reviewsLoading } = usePerformanceReviews({ employeeId: id })
   const { data: employeeAssignments, isLoading: assetsLoading } = useEmployeeAssets(id!)
   const { data: leaveBalanceData, isLoading: leaveBalanceLoading } = useLeaveBalance(id)
   const { data: leaveHistoryData, isLoading: leaveHistoryLoading } = useLeaveRequests({ employeeId: id, limit: 20 })

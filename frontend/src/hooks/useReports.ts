@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import type { PROCostReport } from '@/hooks/useVisaCosts'
 
 export interface HeadcountEmployee {
     id: string
@@ -79,6 +80,21 @@ export function useVisaExpiryReport(days = 90) {
     return useQuery({
         queryKey: ['reports', 'visa-expiry', days],
         queryFn: () => api.get<{ data: VisaExpiryReport }>(`/reports/visa-expiry?days=${days}`).then(r => r.data),
-        staleTime: 5 * 60_000, // 5 minutes
+        staleTime: 5 * 60_000,
+    })
+}
+
+export interface ReportsSummary {
+    headcount: HeadcountReport
+    payrollSummary: PayrollSummaryReport
+    visaExpiry: VisaExpiryReport
+    proCosts: PROCostReport
+}
+
+export function useReportsSummary(days = 90) {
+    return useQuery({
+        queryKey: ['reports', 'summary', days],
+        queryFn: () => api.get<ReportsSummary>(`/reports/summary?days=${days}`),
+        staleTime: 5 * 60_000,
     })
 }

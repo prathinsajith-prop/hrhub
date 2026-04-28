@@ -1,15 +1,14 @@
 import { listVisas, getVisa, createVisa, updateVisa, advanceVisaStep, softDeleteVisa, cancelVisa, recalcVisaUrgency } from './visa.service.js'
 import { listVisaCosts, addVisaCost, deleteVisaCost } from './visa_costs.service.js'
 import { recordActivity } from '../audit/audit.service.js'
-import { sendWithETag } from '../../lib/etag.js'
 import { cacheDel } from '../../lib/redis.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/', { ...auth, schema: { tags: ['Visa'] } }, async (request, reply) => {
-        const { status, urgencyLevel, limit = '20', offset = '0', after } = request.query as Record<string, string>
-        const result = await listVisas(request.user.tenantId, { status, urgencyLevel, limit: Number(limit), offset: Number(offset), after })
+        const { status, urgencyLevel, from, to, limit = '20', offset = '0', after } = request.query as Record<string, string>
+        const result = await listVisas(request.user.tenantId, { status, urgencyLevel, from, to, limit: Number(limit), offset: Number(offset), after })
         return reply.send({ data: result.data, total: result.total, hasMore: result.hasMore, nextCursor: result.nextCursor })
     })
 

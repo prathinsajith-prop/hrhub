@@ -14,22 +14,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { usePerformanceReviews, useCreateReview, useUpdateReview, type PerformanceReview } from '@/hooks/usePerformance'
 import { useEmployees } from '@/hooks/useEmployees'
-import { Star, TrendingUp, Plus, CheckCircle2, Clock, Send, FileText } from 'lucide-react'
+import { Star, TrendingUp, Plus, CheckCircle2, Clock, Send, FileText, RefreshCcw } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig, type QuickFilter } from '@/lib/filters'
+import { PERFORMANCE_STATUS_OPTIONS } from '@/lib/options'
 
 const PERFORMANCE_FILTERS: FilterConfig[] = [
-    {
-        name: 'status', label: 'Status', type: 'select', field: 'status',
-        options: [
-            { value: 'draft', label: 'Draft' },
-            { value: 'submitted', label: 'Submitted' },
-            { value: 'acknowledged', label: 'Acknowledged' },
-            { value: 'completed', label: 'Completed' },
-        ],
-    },
+    { name: 'status', label: 'Status', type: 'select', field: 'status', options: PERFORMANCE_STATUS_OPTIONS },
     { name: 'period', label: 'Period', type: 'text', field: 'period', placeholder: 'e.g. 2024-Q2' },
     { name: 'overallRating', label: 'Overall rating', type: 'number_range', field: 'overallRating', min: 1, max: 5, step: 1 },
     { name: 'reviewDate', label: 'Review date', type: 'date_range', field: 'reviewDate' },
@@ -102,7 +95,7 @@ export function PerformancePage() {
     const { t } = useTranslation()
     const [searchParams, setSearchParams] = useSearchParams()
     const lockedEmployeeId = searchParams.get('employeeId') ?? ''
-    const { data: reviews, isLoading } = usePerformanceReviews()
+    const { data: reviews, isLoading, isFetching, refetch } = usePerformanceReviews()
     const { data: employees } = useEmployees({ limit: 100 })
     const createReview = useCreateReview()
     const updateReview = useUpdateReview()
@@ -187,9 +180,14 @@ export function PerformancePage() {
                 title={t('performance.title')}
                 description={t('performance.description')}
                 actions={
-                    <Button onClick={() => setShowDialog(true)}>
-                        <Plus className="h-4 w-4 mr-2" /> New Review
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                            Refresh
+                        </Button>
+                        <Button onClick={() => setShowDialog(true)}>
+                            <Plus className="h-4 w-4 mr-2" /> New Review
+                        </Button>
+                    </div>
                 }
             />
 

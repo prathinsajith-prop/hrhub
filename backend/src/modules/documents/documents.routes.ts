@@ -7,7 +7,6 @@ import { sendEmail, documentVerifiedEmail, documentRejectedEmail } from '../../p
 import { db } from '../../db/index.js'
 import { employees, tenants } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
-import { sendWithETag } from '../../lib/etag.js'
 import { extname } from 'path'
 
 export default async function (fastify: any): Promise<void> {
@@ -17,8 +16,8 @@ export default async function (fastify: any): Promise<void> {
     await fastify.register(templateRoutes)
 
     fastify.get('/', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {
-        const { employeeId, category, status, limit = '20', offset = '0', after } = request.query as Record<string, string>
-        const result = await listDocuments(request.user.tenantId, { employeeId, category, status, limit: Number(limit), offset: Number(offset), after })
+        const { employeeId, category, status, from, to, limit = '20', offset = '0', after } = request.query as Record<string, string>
+        const result = await listDocuments(request.user.tenantId, { employeeId, category, status, from, to, limit: Number(limit), offset: Number(offset), after })
         return reply.send(result)
     })
 

@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import { Receipt, Download } from 'lucide-react'
+import { Receipt, Download, RefreshCcw } from 'lucide-react'
 import { useMyPayslips } from '@/hooks/useMe'
 import { useAuthStore } from '@/store/authStore'
 import { useDownloadPayslip } from '@/hooks/usePayroll'
@@ -26,7 +26,7 @@ function fmt(val: string | number) {
 export function MyPayslipsPage() {
     const user = useAuthStore(s => s.user)
     const employeeId = (user as { employeeId?: string } | null)?.employeeId
-    const { data: payslips = [], isLoading } = useMyPayslips()
+    const { data: payslips = [], isLoading, isFetching, refetch } = useMyPayslips()
     const download = useDownloadPayslip()
 
     return (
@@ -34,6 +34,11 @@ export function MyPayslipsPage() {
             <PageHeader
                 title="My Payslips"
                 description="View and download your monthly payslips."
+                actions={
+                    <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                        Refresh
+                    </Button>
+                }
             />
 
             {!employeeId ? (

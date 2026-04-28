@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
-import { CheckCircle2, Plus, Users, UserPlus, AlertTriangle, Eye, Sparkles, TrendingUp } from 'lucide-react'
+import { CheckCircle2, Plus, Users, UserPlus, AlertTriangle, Eye, Sparkles, TrendingUp, RefreshCcw } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
@@ -28,7 +28,7 @@ import {
 export function OnboardingPage() {
     const { t } = useTranslation()
     const navigate = useNavigate()
-    const { data: onboardingList, isLoading: onboardingLoading } = useOnboardingChecklists()
+    const { data: onboardingList, isLoading: onboardingLoading, isFetching: onboardingFetching, refetch: refetchOnboarding } = useOnboardingChecklists()
     const { data: analyticsData } = useOnboardingAnalytics()
     const analytics = analyticsData
     const createChecklist = useCreateOnboardingChecklist()
@@ -182,9 +182,14 @@ export function OnboardingPage() {
                 title={t('onboarding.title')}
                 description={t('onboarding.description')}
                 actions={
-                    <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setNewOpen(true)}>
-                        New Onboarding
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={onboardingFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetchOnboarding()} disabled={onboardingFetching}>
+                            Refresh
+                        </Button>
+                        <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setNewOpen(true)}>
+                            New Onboarding
+                        </Button>
+                    </div>
                 }
             />
 

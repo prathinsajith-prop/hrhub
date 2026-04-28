@@ -2,7 +2,7 @@ import { useMemo, useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
-import { Plus, Briefcase, Users, Clock, TrendingUp, Star, DollarSign, Eye, Edit2, UserCheck } from 'lucide-react'
+import { Plus, Briefcase, Users, Clock, TrendingUp, Star, DollarSign, Eye, Edit2, UserCheck, RefreshCcw } from 'lucide-react'
 import {
   DndContext,
   PointerSensor,
@@ -37,18 +37,11 @@ import { NewJobDialog, EditJobDialog } from '@/components/shared/action-dialogs'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { JOB_STATUS_OPTIONS } from '@/lib/options'
 
 const JOB_FILTERS: FilterConfig[] = [
   { name: 'title', label: 'Job title', type: 'text', field: 'title' },
-  {
-    name: 'status', label: 'Status', type: 'select', field: 'status',
-    options: [
-      { value: 'open', label: 'Open' },
-      { value: 'on_hold', label: 'On hold' },
-      { value: 'closed', label: 'Closed' },
-      { value: 'draft', label: 'Draft' },
-    ],
-  },
+  { name: 'status', label: 'Status', type: 'select', field: 'status', options: JOB_STATUS_OPTIONS },
   { name: 'department', label: 'Department', type: 'text', field: 'department' },
   { name: 'location', label: 'Location', type: 'text', field: 'location' },
   { name: 'openings', label: 'Openings', type: 'number_range', field: 'openings', min: 1 },
@@ -529,8 +522,8 @@ export function RecruitmentPage() {
   const [addCandidateOpen, setAddCandidateOpen] = useState(false)
   const [convertCandidateId, setConvertCandidateId] = useState<string | null>(null)
   const [editCandidateId, setEditCandidateId] = useState<string | null>(null)
-  const { data: jobsData, isLoading: jobsLoading } = useJobs({ limit: 50 })
-  const { data: appsData, isLoading: appsLoading } = useApplications({ limit: 100 })
+  const { data: jobsData, isLoading: jobsLoading, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({ limit: 50 })
+  const { data: appsData, isLoading: appsLoading, refetch: refetchApps } = useApplications({ limit: 100 })
   const isLoading = jobsLoading || appsLoading
   const updateStage = useUpdateApplicationStage()
   const updateJob = useUpdateJob()
@@ -605,6 +598,9 @@ export function RecruitmentPage() {
         description={t('recruitment.description')}
         actions={
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={jobsFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => { void refetchJobs(); void refetchApps() }} disabled={jobsFetching}>
+              Refresh
+            </Button>
             <Button variant="outline" className="gap-2" onClick={() => setAddCandidateOpen(true)} disabled={jobs.filter((j) => j.status === 'open').length === 0}>
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Add Candidate</span>

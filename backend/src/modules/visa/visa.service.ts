@@ -1,4 +1,4 @@
-import { eq, and, desc, isNull, sql, getTableColumns, or, lt } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns, or, lt, gte, lte } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { visaApplications, employees } from '../../db/schema/index.js'
@@ -7,11 +7,14 @@ import type { InferInsertModel } from 'drizzle-orm'
 
 type NewVisa = InferInsertModel<typeof visaApplications>
 
-export async function listVisas(tenantId: string, params: { status?: string; urgencyLevel?: string; limit: number; offset: number; after?: string }) {
-    const { status, urgencyLevel, limit, offset, after } = params
+export async function listVisas(tenantId: string, params: { status?: string; urgencyLevel?: string; from?: string; to?: string; limit: number; offset: number; after?: string }) {
+    const { status, urgencyLevel, from, to, limit, offset, after } = params
     const conditions = [eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)]
     if (status) conditions.push(eq(visaApplications.status, status as never))
     if (urgencyLevel) conditions.push(eq(visaApplications.urgencyLevel, urgencyLevel as never))
+    // Calendar uses expiryDate as the event date; filter by [from, to] when provided.
+    if (from) conditions.push(gte(visaApplications.expiryDate, from))
+    if (to) conditions.push(lte(visaApplications.expiryDate, to))
 
     const cursor = after ? decodeCursor(after) : null
     if (cursor) {

@@ -21,38 +21,16 @@ import { ApplyLeaveDialog } from '@/components/shared/action-dialogs'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { Employee, LeaveRequest } from '@/types'
+import { LEAVE_TYPE_LABELS } from '@/lib/enums'
+import { LEAVE_TYPE_OPTIONS, LEAVE_STATUS_OPTIONS } from '@/lib/options'
 
 const LEAVE_FILTERS: FilterConfig[] = [
     { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
-    {
-        name: 'leaveType', label: 'Leave type', type: 'select', field: 'leaveType',
-        options: [
-            { value: 'annual', label: 'Annual' },
-            { value: 'sick', label: 'Sick' },
-            { value: 'maternity', label: 'Maternity' },
-            { value: 'paternity', label: 'Paternity' },
-            { value: 'hajj', label: 'Hajj' },
-            { value: 'compassionate', label: 'Compassionate' },
-            { value: 'unpaid', label: 'Unpaid' },
-        ],
-    },
-    {
-        name: 'status', label: 'Status', type: 'select', field: 'status',
-        options: [
-            { value: 'pending', label: 'Pending' },
-            { value: 'approved', label: 'Approved' },
-            { value: 'rejected', label: 'Rejected' },
-            { value: 'cancelled', label: 'Cancelled' },
-        ],
-    },
+    { name: 'leaveType', label: 'Leave type', type: 'select', field: 'leaveType', options: LEAVE_TYPE_OPTIONS },
+    { name: 'status', label: 'Status', type: 'select', field: 'status', options: LEAVE_STATUS_OPTIONS },
     { name: 'startDate', label: 'Start date', type: 'date_range', field: 'startDate' },
     { name: 'days', label: 'Duration (days)', type: 'number_range', field: 'days', min: 1 },
 ]
-
-const LEAVE_LABELS: Record<string, string> = {
-    annual: 'Annual', sick: 'Sick', maternity: 'Maternity', paternity: 'Paternity',
-    compassionate: 'Compassionate', hajj: 'Hajj', unpaid: 'Unpaid',
-}
 
 function LeaveBalancePanel() {
     const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>()
@@ -89,14 +67,14 @@ function LeaveBalancePanel() {
 
             {selectedEmployee && balance && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {Object.entries(balance).filter(([t]) => LEAVE_LABELS[t]).map(([type, b]) => {
+                    {Object.entries(balance).filter(([t]) => LEAVE_TYPE_LABELS[t]).map(([type, b]) => {
                         const entitled = b.entitled === -1 ? '∞' : b.entitled
                         const available = b.available === -1 ? '∞' : b.available
                         const pct = b.entitled > 0 && b.entitled !== -1 ? Math.min(100, Math.round((b.taken / b.entitled) * 100)) : 0
                         return (
                             <div key={type} className="border rounded-xl p-3 space-y-2">
                                 <div className="flex justify-between text-xs">
-                                    <span className="font-semibold">{LEAVE_LABELS[type]}</span>
+                                    <span className="font-semibold">{LEAVE_TYPE_LABELS[type]}</span>
                                     <span className={cn('font-mono', b.available === 0 ? 'text-destructive' : 'text-success')}>{available}d left</span>
                                 </div>
                                 {b.entitled !== -1 && <Progress value={pct} className="h-1" />}
@@ -139,7 +117,7 @@ export function LeavePage() {
     const canApprove = can('approve_leave')
     const [searchParams] = useSearchParams()
     const urlEmployeeId = searchParams.get('employeeId') ?? undefined
-    const { data: leaveData, isLoading: leaveLoading, isError: leaveError, refetch } = useLeaveRequests({ limit: 50, employeeId: urlEmployeeId })
+    const { data: leaveData, isLoading: leaveLoading, isError: leaveError, isFetching, error: leaveErrorObj, refetch } = useLeaveRequests({ limit: 50, employeeId: urlEmployeeId })
     const leaves = useMemo<LeaveRequest[]>(() => (leaveData?.data as LeaveRequest[]) ?? [], [leaveData?.data])
     const approveLeave = useApproveLeave()
     const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null)
@@ -241,10 +219,14 @@ export function LeavePage() {
                 }
             />
 
-            {leaveError && (
+            {leaveError && !isFetching && (
                 <div className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                     <AlertCircle className="h-4 w-4 shrink-0" />
-                    <span className="flex-1">Failed to load leave requests. Your session may have expired.</span>
+                    <span className="flex-1">
+                        {(leaveErrorObj as Error)?.message
+                            ? `Failed to load leave requests: ${(leaveErrorObj as Error).message}`
+                            : 'Failed to load leave requests. Please try again.'}
+                    </span>
                     <Button size="sm" variant="outline" onClick={() => refetch()} leftIcon={<RefreshCcw className="h-3.5 w-3.5" />}>Retry</Button>
                 </div>
             )}

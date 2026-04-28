@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react'
 import type { CellContext } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
-import { Calendar, Clock, CheckCircle2, XCircle, Download, BarChart3, Users, Shield, AlertTriangle, UserPlus, UserMinus, PauseCircle, Receipt, TrendingUp } from 'lucide-react'
+import { Calendar, Clock, CheckCircle2, XCircle, Download, BarChart3, Users, Shield, AlertTriangle, UserPlus, UserMinus, PauseCircle, Receipt, TrendingUp, RefreshCcw } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card } from '@/components/ui/primitives'
@@ -12,9 +12,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { formatDate, formatCurrency, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { useHeadcountReport, usePayrollSummaryReport, useVisaExpiryReport } from '@/hooks/useReports'
+import { useReportsSummary } from '@/hooks/useReports'
 import type { PayrollTrendRow, VisaExpiryEmployee } from '@/hooks/useReports'
-import { usePROCostReport, COST_CATEGORY_LABELS } from '@/hooks/useVisaCosts'
+import { COST_CATEGORY_LABELS } from '@/hooks/useVisaCosts'
 import type { CostReportEmployee } from '@/hooks/useVisaCosts'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
@@ -78,10 +78,17 @@ const EmployeeStatusBadge = memo(function EmployeeStatusBadge({ status }: { stat
 
 export function ReportsPage() {
     const { t } = useTranslation()
-    const { data: headcount, isLoading: hcLoading } = useHeadcountReport()
-    const { data: payrollSummary, isLoading: prLoading } = usePayrollSummaryReport()
-    const { data: visaExpiry, isLoading: veLoading } = useVisaExpiryReport(90)
-    const { data: proCosts, isLoading: pcLoading } = usePROCostReport()
+    const { data: reportsSummary, isLoading: summaryLoading, isFetching: summaryFetching, refetch: refetchSummary } = useReportsSummary(90)
+    const headcount = reportsSummary?.headcount
+    const payrollSummary = reportsSummary?.payrollSummary
+    const visaExpiry = reportsSummary?.visaExpiry
+    const proCosts = reportsSummary?.proCosts
+    const hcLoading = summaryLoading
+    const prLoading = summaryLoading
+    const veLoading = summaryLoading
+    const pcLoading = summaryLoading
+    const isRefreshing = summaryFetching
+    const handleRefresh = () => { void refetchSummary() }
 
     const payrollSearch = useSearchFilters({
         storageKey: 'hrhub.reports.payroll.searchHistory',
@@ -128,6 +135,11 @@ export function ReportsPage() {
             <PageHeader
                 title={t('reports.title')}
                 description={t('reports.description')}
+                actions={
+                    <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isRefreshing ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={handleRefresh} disabled={isRefreshing}>
+                        Refresh
+                    </Button>
+                }
             />
 
             <Tabs defaultValue="headcount">

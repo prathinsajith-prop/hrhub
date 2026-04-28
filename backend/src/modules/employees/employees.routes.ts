@@ -5,7 +5,6 @@ import {
 } from './employees.service.js'
 import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSchema } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
-import { sendWithETag } from '../../lib/etag.js'
 import { uploadObject, buildS3Key } from '../../plugins/s3.js'
 import { loadEnv } from '../../config/env.js'
 import { db } from '../../db/index.js'

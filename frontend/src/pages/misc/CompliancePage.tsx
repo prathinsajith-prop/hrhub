@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
+import { RefreshCcw } from 'lucide-react'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -8,7 +10,7 @@ import { useComplianceReport } from '@/hooks/useCompliance'
 
 export function CompliancePage() {
     const { t } = useTranslation()
-    const { data: report, isLoading } = useComplianceReport()
+    const { data: report, isLoading, isFetching, refetch } = useComplianceReport()
     const checks = report?.checks ?? []
     const overall = report?.overall ?? 0
 
@@ -17,6 +19,11 @@ export function CompliancePage() {
             <PageHeader
                 title={t('compliance.title')}
                 description={t('compliance.description')}
+                actions={
+                    <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                        Refresh
+                    </Button>
+                }
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

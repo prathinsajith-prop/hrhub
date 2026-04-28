@@ -3,7 +3,7 @@ import { type ColumnDef } from '@tanstack/react-table'
 import { labelFor } from '@/lib/enums'
 import {
     Package, Plus, CheckCircle2, Wrench,
-    Edit2, Trash2, UserPlus, RotateCcw, History
+    Edit2, Trash2, UserPlus, RotateCcw, History, RefreshCcw,
 } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -481,7 +481,7 @@ export function AssetsPage() {
         offset: number
     }>({ offset: 0 })
 
-    const { data, isLoading } = useAssets({ ...params, limit: 25 })
+    const { data, isLoading, isFetching, refetch } = useAssets({ ...params, limit: 25 })
     const { data: categories } = useAssetCategories()
     const deleteAsset = useDeleteAsset()
 
@@ -596,10 +596,15 @@ export function AssetsPage() {
                 title="Asset Management"
                 description="Track and manage company assets"
                 actions={
-                    <Button onClick={() => setCreateOpen(true)}>
-                        <Plus className="h-4 w-4 mr-1.5" />
-                        New Asset
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                            Refresh
+                        </Button>
+                        <Button onClick={() => setCreateOpen(true)}>
+                            <Plus className="h-4 w-4 mr-1.5" />
+                            New Asset
+                        </Button>
+                    </div>
                 }
             />
 

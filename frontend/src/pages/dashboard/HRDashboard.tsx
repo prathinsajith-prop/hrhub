@@ -18,10 +18,7 @@ import type { KpiColor } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'
-import {
-  useDashboardKPIs, useNotifications, usePayrollTrend,
-  useNationalityBreakdown, useDeptHeadcount, useEmiratisation, useOnboardingSummary,
-} from '@/hooks/useDashboard'
+import { useDashboardSummary, useNotifications } from '@/hooks/useDashboard'
 import { useVisas } from '@/hooks/useVisa'
 import { useNavigate } from 'react-router-dom'
 import { CHART_COLORS, NAT_FILLS, tooltipStyle } from './_shared'
@@ -43,14 +40,23 @@ const kpiCards: Array<{
 export function HRDashboard() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { data: kpis, isLoading: kpisLoading } = useDashboardKPIs()
+  const { data: summary, isLoading: dashLoading } = useDashboardSummary()
   const { data: notifications } = useNotifications(20)
   const { data: visaData, isLoading: visasLoading } = useVisas({ limit: 10 })
-  const { data: payrollTrendRaw, isLoading: trendLoading } = usePayrollTrend()
-  const { data: nationalityRaw, isLoading: natLoading } = useNationalityBreakdown()
-  const { data: deptRaw, isLoading: deptLoading } = useDeptHeadcount()
-  const { data: emiratisation, isLoading: emirLoading } = useEmiratisation()
-  const { data: onboardingSummary, isLoading: onboardingLoading } = useOnboardingSummary()
+
+  const kpis = summary?.kpis
+  const payrollTrendRaw = summary?.payrollTrend
+  const nationalityRaw = summary?.nationalityBreakdown
+  const deptRaw = summary?.deptHeadcount
+  const emiratisation = summary?.emiratisation
+  const onboardingSummary = summary?.onboardingSummary
+
+  const kpisLoading = dashLoading
+  const trendLoading = dashLoading
+  const natLoading = dashLoading
+  const deptLoading = dashLoading
+  const emirLoading = dashLoading
+  const onboardingLoading = dashLoading
 
   const payrollTrend = payrollTrendRaw ?? []
   const nationalityData = (nationalityRaw ?? []).map((d, i) => ({ ...d, fill: NAT_FILLS[i] ?? CHART_COLORS.muted }))

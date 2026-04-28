@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
 
-interface LeaveParams { employeeId?: string; status?: string; leaveType?: string; limit?: number; offset?: number }
+interface LeaveParams { employeeId?: string; status?: string; leaveType?: string; from?: string; to?: string; limit?: number; offset?: number }
 
 function toQS(params: Record<string, string | number | undefined>) {
     const q = new URLSearchParams()
@@ -11,10 +11,10 @@ function toQS(params: Record<string, string | number | undefined>) {
 }
 
 export function useLeaveRequests(params: LeaveParams = {}) {
-    const { employeeId, status, leaveType, limit = 20, offset = 0 } = params
+    const { employeeId, status, leaveType, from, to, limit = 20, offset = 0 } = params
     return useQuery({
-        queryKey: ['leave', employeeId, status, leaveType, limit, offset],
-        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/leave?${toQS({ employeeId, status, leaveType, limit, offset })}`),
+        queryKey: ['leave', employeeId, status, leaveType, from, to, limit, offset],
+        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/leave?${toQS({ employeeId, status, leaveType, from, to, limit, offset })}`),
         staleTime: 30_000,
     })
 }
@@ -38,6 +38,15 @@ export function useApproveLeave() {
             qc.invalidateQueries({ queryKey: ['dashboard'] })
         },
         onError: (err: Error) => toast.error('Action failed', err?.message ?? 'Could not update the leave request.'),
+    })
+}
+
+export function useCancelLeave() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (id: string) => api.post(`/leave/${id}/cancel`, {}),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['leave'] }),
+        onError: (err: Error) => toast.error('Cancel failed', err?.message ?? 'Could not cancel the leave request.'),
     })
 }
 
