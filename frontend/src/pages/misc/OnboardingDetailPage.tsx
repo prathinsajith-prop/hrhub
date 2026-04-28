@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { DatePicker } from '@/components/ui/date-picker'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { Textarea } from '@/components/ui/textarea'
 import { formatDate, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -499,14 +500,12 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-muted-foreground">SLA days</label>
-                                <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    pattern="[0-9]*"
+                                <NumericInput
+                                    decimal={false}
                                     value={newSlaDays}
-                                    onChange={(e) => setNewSlaDays(e.target.value.replace(/\D/g, ''))}
+                                    onChange={(e) => setNewSlaDays(e.target.value)}
                                     placeholder="e.g. 3"
-                                    className="w-full h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring/40"
+                                    className="h-9"
                                 />
                             </div>
                         </div>

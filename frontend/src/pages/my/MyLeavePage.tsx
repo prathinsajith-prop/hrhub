@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Plus, Calendar, Clock, CheckCircle2, XCircle, Ban } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { toast } from '@/components/ui/overlays'
-import { useAuthStore } from '@/store/authStore'
+import { useCurrentEmployeeId } from '@/hooks/useCurrentEmployeeId'
 import { useLeaveRequests, useCreateLeave, useLeaveBalance } from '@/hooks/useLeave'
 import type { LeaveRequest } from '@/types'
 import {
@@ -130,8 +130,7 @@ function BalanceSummary({ employeeId }: { employeeId: string }) {
 }
 
 export function MyLeavePage() {
-    const user = useAuthStore(s => s.user) as { employeeId?: string } | null
-    const employeeId = user?.employeeId
+    const employeeId = useCurrentEmployeeId()
     const [applying, setApplying] = useState(false)
 
     const { data, isLoading } = useLeaveRequests({ employeeId: employeeId ?? undefined, limit: 50 })
