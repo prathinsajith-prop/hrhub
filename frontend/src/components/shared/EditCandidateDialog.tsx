@@ -112,7 +112,7 @@ export function EditCandidateDialog({
                     <DialogTitle>Edit Candidate</DialogTitle>
                 </DialogHeader>
                 <DialogBody className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label required>Name</Label>
                             <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
@@ -122,7 +122,7 @@ export function EditCandidateDialog({
                             <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Phone</Label>
                             <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
@@ -132,7 +132,7 @@ export function EditCandidateDialog({
                             <Input value={form.nationality} onChange={(e) => setForm((f) => ({ ...f, nationality: e.target.value }))} />
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Experience (years)</Label>
                             <NumericInput value={form.experience} onChange={(e) => setForm((f) => ({ ...f, experience: e.target.value }))} />
@@ -142,7 +142,7 @@ export function EditCandidateDialog({
                             <NumericInput value={form.score} onChange={(e) => setForm((f) => ({ ...f, score: e.target.value }))} />
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Current Salary (AED)</Label>
                             <NumericInput value={form.currentSalary} onChange={(e) => setForm((f) => ({ ...f, currentSalary: e.target.value }))} />

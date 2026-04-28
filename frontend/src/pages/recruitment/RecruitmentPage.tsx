@@ -360,7 +360,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label required>Full name</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
@@ -478,7 +478,7 @@ function ConvertCandidateDialog({
           <DialogTitle>Convert {candidate.name} to Employee</DialogTitle>
         </DialogHeader>
         <DialogBody className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Join Date</Label>
               <DatePicker value={joinDate} onChange={setJoinDate} placeholder="Select join date" />

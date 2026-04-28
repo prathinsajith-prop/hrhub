@@ -100,7 +100,7 @@ export function MyProfilePage() {
             {isLoading ? (
                 <div className="space-y-4">
                     <Skeleton className="h-24 rounded-xl" />
-                    <div className="grid grid-cols-2 gap-4">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
                 </div>
             ) : !employee ? (
                 <div className="flex flex-col items-center gap-3 py-16 text-center">
@@ -171,7 +171,7 @@ export function MyProfilePage() {
                     {(employee.bankName || employee.iban) && (
                         <div className="rounded-xl border bg-card p-5">
                             <p className="text-sm font-semibold mb-4">Banking</p>
-                            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                                 <Field label="Bank" value={employee.bankName} />
                                 <Field label="IBAN" value={employee.iban} />
                             </div>

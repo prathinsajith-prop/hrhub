@@ -245,7 +245,7 @@ export function LoginPage() {
       heroContent={
         <div className="space-y-6">
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {stats.map((s) => (
               <div
                 key={s.label}
@@ -263,7 +263,7 @@ export function LoginPage() {
           </div>
 
           {/* Feature grid */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {features.map((f) => (
               <div
                 key={f.title}

@@ -502,7 +502,7 @@ export function ExitPage() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label required>Exit Date</Label>
                                     <DatePicker value={form.exitDate} min={new Date().toISOString().split('T')[0]} onChange={v => set('exitDate', v)} />

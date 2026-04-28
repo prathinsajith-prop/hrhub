@@ -58,10 +58,10 @@ export function OrganizationSettingsPage() {
             <Tabs
                 defaultValue={defaultTab}
                 orientation="vertical"
-                className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-10 lg:items-start"
+                className="xl:grid xl:grid-cols-[240px_minmax(0,1fr)] xl:gap-8 xl:items-start"
             >
-                {/* Mobile: horizontal tabs */}
-                <TabsList className="lg:hidden w-full justify-start border-b rounded-none bg-transparent p-0 h-auto gap-0 overflow-x-auto">
+                {/* Mobile/Tablet: horizontal tabs */}
+                <TabsList className="xl:hidden w-full justify-start border-b rounded-none bg-transparent p-0 h-auto gap-0 overflow-x-auto">
                     {visibleTabs.map(tab => (
                         <TabsTrigger
                             key={tab.value}
@@ -75,7 +75,7 @@ export function OrganizationSettingsPage() {
                 </TabsList>
 
                 {/* Desktop: sticky vertical nav rail */}
-                <aside className="hidden lg:block sticky top-20 self-start">
+                <aside className="hidden xl:block sticky top-20 self-start">
                     <div className="rounded-xl border bg-card shadow-sm p-3">
                         <TabsList className="flex flex-col items-stretch h-auto bg-transparent p-0 gap-0.5 w-full">
                             {visibleTabs.map(tab => (
@@ -98,7 +98,7 @@ export function OrganizationSettingsPage() {
                 </aside>
 
                 {/* Content */}
-                <div className="pt-6 lg:pt-0">
+                <div className="pt-6 xl:pt-0 min-w-0">
                     <TabsContent value="profile" className="mt-0"><ProfileTab /></TabsContent>
                     <TabsContent value="structure" className="mt-0"><OrgStructureTab /></TabsContent>
                     <TabsContent value="members" className="mt-0"><MembersTab /></TabsContent>

@@ -294,7 +294,7 @@ export function HRDashboard() {
               <div className="space-y-4">
                 <Skeleton className="h-12 w-24 mx-auto rounded-xl" />
                 <Skeleton className="h-2 w-full rounded-full" />
-                <div className="grid grid-cols-3 gap-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
               </div>
             ) : (
               <>
@@ -314,7 +314,7 @@ export function HRDashboard() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center text-xs">
                   <div className="p-2.5 rounded-xl bg-muted">
                     <p className="text-base font-bold text-success font-display">{emiratisation?.emiratis ?? 0}</p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">Emiratis</p>
@@ -363,7 +363,7 @@ export function HRDashboard() {
           {onboardingLoading ? (
             <div className="flex gap-4"><Skeleton className="h-16 flex-1 rounded-xl" /><Skeleton className="h-16 flex-1 rounded-xl" /></div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="rounded-xl bg-primary/5 border border-primary/10 p-4 text-center">
                 <p className="text-3xl font-bold font-display text-primary">{onboardingSummary?.active ?? 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">Active Checklists</p>

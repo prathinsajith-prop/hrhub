@@ -243,7 +243,7 @@ function TwoFactorCard() {
                                     </p>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 rounded-md border border-border bg-background p-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-md border border-border bg-background p-3">
                                 {backupCodes.map((c) => (
                                     <code key={c} className="text-sm font-mono text-foreground tracking-wider text-center py-1">
                                         {c}

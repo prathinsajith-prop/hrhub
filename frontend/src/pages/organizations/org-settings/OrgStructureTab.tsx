@@ -451,7 +451,7 @@ function DesignationsSection() {
 
 export function OrgStructureTab() {
     const { data: units = [], isLoading } = useOrgUnits()
-    const { data: employees } = useEmployees({ limit: 200 })
+    const { data: employees } = useEmployees({ limit: 100 })
     const [adding, setAdding] = React.useState<OrgUnitType | null>(null)
 
     const empList = React.useMemo(
@@ -476,7 +476,7 @@ export function OrgStructureTab() {
             </div>
 
             {/* Summary stats */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {(Object.keys(ORG_TYPE_META) as OrgUnitType[]).map(type => {
                     const meta = ORG_TYPE_META[type]
                     const Icon = meta.icon

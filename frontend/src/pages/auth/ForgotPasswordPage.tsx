@@ -51,7 +51,7 @@ export function ForgotPasswordPage() {
             heroTitle={<>Locked out?<br />We&rsquo;ll get you back in.</>}
             heroSubtitle="Reset links expire in 60 minutes and can only be used once. Your existing sessions will be revoked for security."
             heroContent={
-                <div className="grid grid-cols-2 gap-4 max-w-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-sm">
                     {[
                         { v: '60 min', l: 'Link Validity' },
                         { v: 'One-time', l: 'Single Use' },

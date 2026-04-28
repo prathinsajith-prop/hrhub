@@ -257,7 +257,7 @@ export function OnboardingPage() {
                                 <p className="text-xs text-muted-foreground">All active employees already have a checklist.</p>
                             )}
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-muted-foreground">Start date</label>
                                 <DatePicker value={newStartDate} onChange={setNewStartDate} className="h-9" />

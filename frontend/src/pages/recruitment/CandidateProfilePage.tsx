@@ -530,7 +530,7 @@ export function CandidateProfilePage() {
                             Create an employee record for <strong>{candidate.name}</strong>. The new employee
                             will start in the <em>onboarding</em> status with an auto-generated employee number.
                         </p>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label required>Join Date</Label>
                                 <DatePicker

@@ -142,7 +142,7 @@ function UploadDocumentDialog({ open, onOpenChange, defaultEmployeeId, defaultCa
           </div>
 
           {/* Category + Doc type in a 2-col grid */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label required>Category</Label>
               <Select value={category} onValueChange={(v) => { setCategory(v as DocCategory); setDocType('') }}>
