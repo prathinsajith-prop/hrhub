@@ -21,9 +21,11 @@ import {
   CalendarClockIcon,
   Building2Icon,
   UsersRoundIcon,
+  ShieldIcon,
   KeyRoundIcon,
   UserCircleIcon,
   ReceiptIcon,
+  MessageSquareWarningIcon,
 } from "lucide-react"
 import { NavUser } from "@/components/layout/NavUser"
 import {
@@ -95,6 +97,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       items: [
         { title: t('nav.reports'), url: "/reports", icon: BarChart3Icon },
         { title: t('nav.auditLog'), url: "/audit", icon: ClipboardListIcon },
+        { title: t('nav.complaints', { defaultValue: 'Complaints' }), url: "/complaints", icon: MessageSquareWarningIcon },
       ],
     },
     {
@@ -102,6 +105,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       items: [
         { title: t('nav.organizations'), url: "/organizations", icon: Building2Icon },
         { title: t('nav.team'), url: "/team", icon: UsersRoundIcon },
+        { title: t('nav.users', { defaultValue: 'Users & Roles' }), url: "/users", icon: ShieldIcon },
         { title: t('nav.apps'), url: "/apps", icon: KeyRoundIcon },
       ],
     },

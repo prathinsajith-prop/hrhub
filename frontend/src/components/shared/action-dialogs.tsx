@@ -408,11 +408,15 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const { data: designationList = [] } = useDesignations()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
-    const divisions = orgUnits.filter(u => u.type === 'division' && u.isActive)
+    // Branch → Division → Department cascade:
+    //   branches  = root level, no filter
+    //   divisions = children of selected branch (or all active if no branch picked)
+    //   departments = children of selected division (or all active if no division picked)
+    const branches = orgUnits.filter(u => u.type === 'branch' && u.isActive)
+    const divisions = orgUnits.filter(u => u.type === 'division' && u.isActive &&
+        (!form.branchId || u.parentId === form.branchId))
     const departments = orgUnits.filter(u => u.type === 'department' && u.isActive &&
-        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
-    const branches = orgUnits.filter(u => u.type === 'branch' && u.isActive &&
-        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
+        (!form.divisionId || u.parentId === form.divisionId))
 
     const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
@@ -603,14 +607,24 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
-                            {/* Org Structure Assignment */}
+                            {/* Org Structure Assignment — Branch → Division → Department */}
                             {orgUnits.length > 0 && (
                                 <div className="rounded-lg border bg-muted/20 p-3 space-y-2.5">
                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organization Structure</p>
                                     <div className="grid grid-cols-1 gap-2.5">
                                         <div className="space-y-1.5">
+                                            <Label>Branch</Label>
+                                            <Select value={form.branchId || 'none'} onValueChange={v => setForm(f => ({ ...f, branchId: v === 'none' ? '' : v, divisionId: '', departmentId: '' }))}>
+                                                <SelectTrigger><SelectValue placeholder="Select branch…" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="none">— None —</SelectItem>
+                                                    {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-1.5">
                                             <Label>Division</Label>
-                                            <Select value={form.divisionId || 'none'} onValueChange={v => setForm(f => ({ ...f, divisionId: v === 'none' ? '' : v, departmentId: '', branchId: '' }))}>
+                                            <Select value={form.divisionId || 'none'} onValueChange={v => setForm(f => ({ ...f, divisionId: v === 'none' ? '' : v, departmentId: '' }))}>
                                                 <SelectTrigger><SelectValue placeholder="Select division…" /></SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="none">— None —</SelectItem>
@@ -618,27 +632,15 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                            <div className="space-y-1.5">
-                                                <Label>Department</Label>
-                                                <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v }))}>
-                                                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="none">— None —</SelectItem>
-                                                        {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label>Branch</Label>
-                                                <Select value={form.branchId || 'none'} onValueChange={v => setForm(f => ({ ...f, branchId: v === 'none' ? '' : v }))}>
-                                                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="none">— None —</SelectItem>
-                                                        {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
+                                        <div className="space-y-1.5">
+                                            <Label>Department</Label>
+                                            <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v }))}>
+                                                <SelectTrigger><SelectValue placeholder="Select department…" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="none">— None —</SelectItem>
+                                                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                     </div>
                                 </div>
@@ -826,11 +828,12 @@ export function EditEmployeeDialog({
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const { data: designationList = [] } = useDesignations()
     const editOrgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
-    const editDivisions = editOrgUnits.filter(u => u.type === 'division' && u.isActive)
+    // Branch → Division → Department cascade (edit dialog)
+    const editBranches = editOrgUnits.filter(u => u.type === 'branch' && u.isActive)
+    const editDivisions = editOrgUnits.filter(u => u.type === 'division' && u.isActive &&
+        (!form.branchId || u.parentId === form.branchId))
     const editDepartments = editOrgUnits.filter(u => u.type === 'department' && u.isActive &&
-        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
-    const editBranches = editOrgUnits.filter(u => u.type === 'branch' && u.isActive &&
-        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
+        (!form.divisionId || u.parentId === form.divisionId))
 
     const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
@@ -984,45 +987,40 @@ export function EditEmployeeDialog({
                                     <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
+                            {/* Org Structure — Branch → Division → Department */}
                             {editOrgUnits.length > 0 && (
                                 <div className="rounded-lg border bg-muted/20 p-3 space-y-2.5">
                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organization Structure</p>
                                     <div className="space-y-2.5">
-                                        {editDivisions.length > 0 && (
-                                            <div className="space-y-1.5">
-                                                <Label>Division</Label>
-                                                <Select value={form.divisionId || 'none'} onValueChange={v => setForm(f => ({ ...f, divisionId: v === 'none' ? '' : v, departmentId: '', branchId: '' }))}>
-                                                    <SelectTrigger><SelectValue placeholder="Select division…" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="none">— None —</SelectItem>
-                                                        {editDivisions.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        )}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                            <div className="space-y-1.5">
-                                                <Label>Department</Label>
-                                                <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v }))}>
-                                                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="none">— None —</SelectItem>
-                                                        {editDepartments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            {editBranches.length > 0 && (
-                                                <div className="space-y-1.5">
-                                                    <Label>Branch</Label>
-                                                    <Select value={form.branchId || 'none'} onValueChange={v => setForm(f => ({ ...f, branchId: v === 'none' ? '' : v }))}>
-                                                        <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="none">— None —</SelectItem>
-                                                            {editBranches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            )}
+                                        <div className="space-y-1.5">
+                                            <Label>Branch</Label>
+                                            <Select value={form.branchId || 'none'} onValueChange={v => setForm(f => ({ ...f, branchId: v === 'none' ? '' : v, divisionId: '', departmentId: '' }))}>
+                                                <SelectTrigger><SelectValue placeholder="Select branch…" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="none">— None —</SelectItem>
+                                                    {editBranches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label>Division</Label>
+                                            <Select value={form.divisionId || 'none'} onValueChange={v => setForm(f => ({ ...f, divisionId: v === 'none' ? '' : v, departmentId: '' }))}>
+                                                <SelectTrigger><SelectValue placeholder="Select division…" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="none">— None —</SelectItem>
+                                                    {editDivisions.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label>Department</Label>
+                                            <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v }))}>
+                                                <SelectTrigger><SelectValue placeholder="Select department…" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="none">— None —</SelectItem>
+                                                    {editDepartments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                     </div>
                                 </div>

@@ -148,6 +148,17 @@ export async function updateStep(tenantId: string, checklistId: string, stepId: 
         .set(withTimestamp({ progress }))
         .where(eq(onboardingChecklists.id, checklistId))
 
+    // When all steps complete, graduate employee from probation → active
+    if (progress === 100 && checklist.employeeId) {
+        await db.update(employees)
+            .set({ status: 'active', updatedAt: new Date() })
+            .where(and(
+                eq(employees.id, checklist.employeeId),
+                eq(employees.tenantId, tenantId),
+                eq(employees.status, 'probation'),
+            ))
+    }
+
     return { step, progress }
 }
 

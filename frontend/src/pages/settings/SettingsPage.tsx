@@ -1,19 +1,11 @@
 import { useTranslation } from 'react-i18next'
-import {
-    Building2,
-    Users,
-    Bell,
-    Shield,
-    UserCircle,
-    Clock,
-} from 'lucide-react'
+import { Building2, Bell, Shield, UserCircle, Clock } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 
 import { CompanyTab } from './sections/CompanyTab'
 import { ProfileTab } from './sections/ProfileTab'
-import { UsersTab } from './sections/UsersTab'
 import { NotificationsTab } from './sections/NotificationsTab'
 import { SecurityTab, ActivityTab } from './sections/SecurityTab'
 
@@ -24,7 +16,6 @@ export function SettingsPage() {
     const tabs = [
         { value: 'profile', label: 'My Profile', icon: UserCircle, desc: 'Photo, name & department' },
         { value: 'company', label: 'Company', icon: Building2, desc: 'Profile, regional & legal info' },
-        { value: 'users', label: 'Users & Roles', icon: Users, desc: 'Users, roles & permissions' },
         { value: 'notifications', label: 'Notifications', icon: Bell, desc: 'Email & push preferences' },
         { value: 'security', label: 'Security', icon: Shield, desc: 'Password, 2FA, IP allowlist' },
         { value: 'activity', label: 'Activity', icon: Clock, desc: 'Login & session history' },
@@ -84,7 +75,6 @@ export function SettingsPage() {
                 <div className="pt-6 lg:pt-0">
                     <TabsContent value="profile" className="mt-0"><ProfileTab /></TabsContent>
                     <TabsContent value="company" className="mt-0"><CompanyTab /></TabsContent>
-                    <TabsContent value="users" className="mt-0"><UsersTab /></TabsContent>
                     <TabsContent value="notifications" className="mt-0"><NotificationsTab /></TabsContent>
                     <TabsContent value="security" className="mt-0"><SecurityTab /></TabsContent>
                     <TabsContent value="activity" className="mt-0"><ActivityTab /></TabsContent>

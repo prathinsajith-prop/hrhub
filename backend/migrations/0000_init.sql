@@ -1,14 +1,13 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 0000_init — Full schema bootstrap
+-- 0000_init — Full schema bootstrap (single consolidated migration)
 --
--- Single migration that creates every table, index, and constraint from
--- scratch. Dependency order:
+-- Dependency order:
 --   extensions → tenants/entities → org_units (no head FK yet) →
 --   designations → employees → org_units head FK → users/tokens →
 --   memberships → leave/attendance/performance → onboarding →
 --   documents/doc-lifecycle → payroll → public_holidays → salary_revisions →
 --   teams → visa → recruitment → assets → exit → audit/notifications/apps →
---   subscription_events
+--   subscription_events → complaints
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── Extensions ───────────────────────────────────────────────────────────────
@@ -322,7 +321,9 @@ CREATE TABLE IF NOT EXISTS "leave_requests" (
     "approved_by"  uuid REFERENCES "users"("id"),
     "approved_at"  timestamp with time zone,
     "applied_date" date NOT NULL DEFAULT CURRENT_DATE,
-    "deleted_at"   timestamp with time zone,
+    "deleted_at"    timestamp with time zone,
+    "handover_to"   uuid REFERENCES "employees"("id") ON DELETE SET NULL,
+    "handover_notes" text,
     "created_at"   timestamp with time zone NOT NULL DEFAULT now(),
     "updated_at"   timestamp with time zone NOT NULL DEFAULT now()
 );
@@ -337,6 +338,8 @@ CREATE INDEX IF NOT EXISTS "idx_leave_status"          ON "leave_requests" ("sta
 CREATE INDEX IF NOT EXISTS "idx_leave_tenant_status"   ON "leave_requests" ("tenant_id", "status");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_leave_tenant_employee" ON "leave_requests" ("tenant_id", "employee_id");
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_leave_handover_to"     ON "leave_requests" ("handover_to") WHERE "handover_to" IS NOT NULL;
 --> statement-breakpoint
 
 -- ── leave_balances ────────────────────────────────────────────────────────────
@@ -1204,3 +1207,38 @@ CREATE TABLE IF NOT EXISTS "subscription_events" (
     "metadata"          jsonb DEFAULT '{}',
     "created_at"        timestamp with time zone NOT NULL DEFAULT now()
 );
+--> statement-breakpoint
+
+-- ── complaints ────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS "complaints" (
+    "id"                      uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "tenant_id"               uuid NOT NULL REFERENCES "tenants"("id") ON DELETE CASCADE,
+    "submitted_by_employee_id" uuid REFERENCES "employees"("id") ON DELETE SET NULL,
+    "subject_employee_id"     uuid REFERENCES "employees"("id") ON DELETE SET NULL,
+    "title"                   text NOT NULL,
+    "category"                text NOT NULL,
+    "severity"                text NOT NULL,
+    "confidentiality"         text NOT NULL DEFAULT 'confidential',
+    "description"             text NOT NULL,
+    "status"                  text NOT NULL DEFAULT 'draft',
+    "assigned_to_id"          uuid REFERENCES "users"("id") ON DELETE SET NULL,
+    "resolution_notes"        text,
+    "acknowledged_at"         timestamp with time zone,
+    "resolved_at"             timestamp with time zone,
+    "sla_due_at"              timestamp with time zone,
+    "created_at"              timestamp with time zone NOT NULL DEFAULT now(),
+    "updated_at"              timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT "complaints_category_check"        CHECK (category IN ('harassment','pay_dispute','leave_dispute','working_conditions','discrimination','other')),
+    CONSTRAINT "complaints_severity_check"        CHECK (severity IN ('low','medium','high','critical')),
+    CONSTRAINT "complaints_confidentiality_check" CHECK (confidentiality IN ('anonymous','named','confidential')),
+    CONSTRAINT "complaints_status_check"          CHECK (status IN ('draft','submitted','under_review','escalated','resolved'))
+);
+--> statement-breakpoint
+
+CREATE INDEX IF NOT EXISTS "idx_complaints_tenant"       ON "complaints" ("tenant_id");
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_complaints_submitted_by" ON "complaints" ("submitted_by_employee_id");
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_complaints_status"       ON "complaints" ("tenant_id", "status");
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_complaints_severity"     ON "complaints" ("tenant_id", "severity");

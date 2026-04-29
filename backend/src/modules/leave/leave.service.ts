@@ -85,6 +85,27 @@ export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRe
         days = Math.max(1, Math.round(ms / (1000 * 60 * 60 * 24)) + 1)
     }
 
+    // Balance check — block if employee doesn't have enough leave available.
+    // unpaid and public_holiday are exempt (unlimited / system-managed).
+    const UNLIMITED_TYPES = ['unpaid', 'public_holiday']
+    if (days && data.employeeId && data.startDate && data.leaveType && !UNLIMITED_TYPES.includes(data.leaveType as string)) {
+        const year = new Date(data.startDate).getFullYear()
+        const balances = await getLeaveBalance(tenantId, data.employeeId, year)
+        if (balances) {
+            const typeBalance = balances.balance[data.leaveType as string]
+            if (typeBalance && !typeBalance.unlimited && typeBalance.available < days) {
+                throw Object.assign(
+                    new Error(
+                        `Insufficient ${data.leaveType} leave balance. ` +
+                        `Available: ${typeBalance.available} day${typeBalance.available === 1 ? '' : 's'}, ` +
+                        `Requested: ${days} day${days === 1 ? '' : 's'}.`
+                    ),
+                    { statusCode: 422 },
+                )
+            }
+        }
+    }
+
     const [row] = await db.insert(leaveRequests).values({ ...data, tenantId, days: days ?? 1 }).returning()
     return row
 }
@@ -132,6 +153,19 @@ export async function approveLeave(tenantId: string, id: string, approvedBy: str
     ])
     if (!row) return null
 
+    // Keep leave_balances.taken in sync when approving so year-end rollover has accurate snapshots.
+    if (approved && row.days) {
+        const year = new Date(row.startDate).getFullYear()
+        await db.update(leaveBalances)
+            .set({ taken: sql`taken + ${String(row.days)}`, updatedAt: new Date() })
+            .where(and(
+                eq(leaveBalances.tenantId, tenantId),
+                eq(leaveBalances.employeeId, row.employeeId),
+                eq(leaveBalances.leaveType, row.leaveType),
+                eq(leaveBalances.year, year),
+            ))
+    }
+
     // Send notification using data already fetched in the initial JOIN (no extra DB call)
     if (req.employeeEmail) {
         sendEmail({
@@ -149,7 +183,13 @@ export async function approveLeave(tenantId: string, id: string, approvedBy: str
 
 export async function cancelLeave(tenantId: string, id: string, requesterEmail: string, requesterRole: string, requesterUserEmployeeId?: string | null) {
     // Fetch the leave request to check ownership
-    const [req] = await db.select({ employeeId: leaveRequests.employeeId, status: leaveRequests.status })
+    const [req] = await db.select({
+        employeeId: leaveRequests.employeeId,
+        status: leaveRequests.status,
+        leaveType: leaveRequests.leaveType,
+        startDate: leaveRequests.startDate,
+        days: leaveRequests.days,
+    })
         .from(leaveRequests)
         .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId), isNull(leaveRequests.deletedAt)))
         .limit(1)
@@ -175,7 +215,22 @@ export async function cancelLeave(tenantId: string, id: string, requesterEmail: 
         .set(withTimestamp({ status: 'cancelled' as const }))
         .where(and(eq(leaveRequests.id, id), eq(leaveRequests.tenantId, tenantId)))
         .returning()
-    return row ?? null
+    if (!row) return null
+
+    // If the leave was already approved, restore the taken count in the balance snapshot
+    if (req.status === 'approved' && req.days) {
+        const year = new Date(req.startDate).getFullYear()
+        await db.update(leaveBalances)
+            .set({ taken: sql`GREATEST(taken - ${String(req.days)}, 0)`, updatedAt: new Date() })
+            .where(and(
+                eq(leaveBalances.tenantId, tenantId),
+                eq(leaveBalances.employeeId, req.employeeId),
+                eq(leaveBalances.leaveType, req.leaveType),
+                eq(leaveBalances.year, year),
+            ))
+    }
+
+    return row
 }
 
 export async function softDeleteLeaveRequest(tenantId: string, id: string) {

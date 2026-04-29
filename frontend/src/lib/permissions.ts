@@ -106,10 +106,13 @@ export type RouteKey =
   | 'organizations'
   | 'organizations/new'
   | 'team'
+  | 'users'
   | 'apps'
   | 'leave-policies'
   | 'organization-settings'
   | 'subscription'
+  | 'complaints'
+  | 'my/complaints'
 
 // ─── Permission matrix ────────────────────────────────────────────────────────
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -263,16 +266,19 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   organizations: ['super_admin', 'hr_manager', 'pro_officer'],
   'organizations/new': ['super_admin', 'hr_manager'],
   team: ['super_admin', 'hr_manager', 'dept_head', 'pro_officer', 'employee'],
+  users: ['super_admin', 'hr_manager'],
   apps: ['super_admin', 'hr_manager'],
   'leave-policies': ['super_admin', 'hr_manager'],
   'organization-settings': ['super_admin', 'hr_manager'],
   subscription: ['super_admin', 'hr_manager'],
+  complaints: ['super_admin', 'hr_manager'],
 
   // Self-service (all authenticated roles)
   'my/account': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/leave': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/payslips': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/profile': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'my/complaints': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -361,10 +367,13 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/my/profile': 'my/profile',
     '/organizations': 'organizations',
     '/team': 'team',
+    '/users': 'users',
     '/apps': 'apps',
     '/leave-policies': 'leave-policies',
     '/organization-settings': 'organization-settings',
     '/subscription': 'subscription',
+    '/complaints': 'complaints',
+    '/my/complaints': 'my/complaints',
   }
   return map[url] ?? null
 }

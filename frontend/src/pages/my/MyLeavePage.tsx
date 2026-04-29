@@ -54,6 +54,17 @@ function ApplyDialog({ employeeId, currentEmployeeId, onClose }: { employeeId: s
         handoverNotes: '',
     })
 
+    const year = form.startDate ? new Date(form.startDate).getFullYear() : new Date().getFullYear()
+    const { data: balanceData } = useLeaveBalance(employeeId, year)
+    const typeBalance = balanceData?.balance?.[form.leaveType]
+
+    const requestedDays = (form.startDate && form.endDate && form.endDate >= form.startDate)
+        ? Math.max(1, Math.round((new Date(form.endDate).getTime() - new Date(form.startDate).getTime()) / 86400000) + 1)
+        : 0
+    const availableDays = typeBalance?.available ?? -1
+    const isUnlimited = typeBalance?.unlimited ?? false
+    const insufficientBalance = !isUnlimited && availableDays !== -1 && requestedDays > 0 && requestedDays > availableDays
+
     async function submit() {
         if (!form.startDate || !form.endDate) return toast.error('Dates required', 'Please select start and end dates.')
         if (form.endDate < form.startDate) return toast.error('Invalid dates', 'End date must be after start date.')
@@ -66,8 +77,9 @@ function ApplyDialog({ employeeId, currentEmployeeId, onClose }: { employeeId: s
             })
             toast.success('Submitted', 'Your leave request has been submitted.')
             onClose()
-        } catch {
-            toast.error('Error', 'Could not submit leave request.')
+        } catch (err: unknown) {
+            const msg = (err as { message?: string })?.message
+            toast.error('Could not submit', msg ?? 'Could not submit leave request.')
         }
     }
 
@@ -100,6 +112,20 @@ function ApplyDialog({ employeeId, currentEmployeeId, onClose }: { employeeId: s
                             <DatePicker value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} min={form.startDate || undefined} placeholder="Select end date" />
                         </div>
                     </div>
+                    {typeBalance && !isUnlimited && (
+                        <div className={cn(
+                            'flex items-center justify-between rounded-lg px-3 py-2 text-sm border',
+                            insufficientBalance
+                                ? 'bg-destructive/10 border-destructive/30 text-destructive'
+                                : 'bg-muted/50 border-border text-muted-foreground',
+                        )}>
+                            <span>Available {LEAVE_TYPE_LABELS[form.leaveType] ?? form.leaveType} balance</span>
+                            <span className="font-semibold">
+                                {availableDays} day{availableDays === 1 ? '' : 's'}
+                                {requestedDays > 0 && ` · Requested: ${requestedDays}`}
+                            </span>
+                        </div>
+                    )}
                     <div className="space-y-1.5">
                         <Label>Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
                         <Textarea rows={2} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder="Brief reason for leave…" />
@@ -141,8 +167,8 @@ function ApplyDialog({ employeeId, currentEmployeeId, onClose }: { employeeId: s
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button onClick={submit} disabled={create.isPending}>
-                        {create.isPending ? 'Submitting…' : 'Submit Request'}
+                    <Button onClick={submit} disabled={create.isPending || insufficientBalance}>
+                        {create.isPending ? 'Submitting…' : insufficientBalance ? 'Insufficient Balance' : 'Submit Request'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

@@ -46,7 +46,7 @@ interface OrgUnitFormState {
 }
 
 const EMPTY_ORG_FORM: OrgUnitFormState = {
-    name: '', type: 'division', parentId: '', headEmployeeId: '', description: '', isActive: true,
+    name: '', type: 'branch', parentId: '', headEmployeeId: '', description: '', isActive: true,
 }
 
 function OrgUnitDialog({
@@ -108,12 +108,29 @@ function OrgUnitDialog({
     const isPending = create.isPending || update.isPending
     const meta = ORG_TYPE_META[form.type]
 
-    const parentOptions = units.filter(u => u.type === 'division' && u.id !== editing?.id)
+    // Parent options are type-aware:
+    //   Branch    → no parent (always root)
+    //   Division  → parent must be a Branch
+    //   Department → parent must be a Division
+    const parentBranches = units.filter(u => u.type === 'branch' && u.id !== editing?.id)
+    const parentDivisions = units.filter(u => u.type === 'division' && u.id !== editing?.id)
+
     const PLACEHOLDERS: Record<OrgUnitType, string> = {
-        division: 'e.g. Sales Division',
-        department: 'e.g. Marketing',
         branch: 'e.g. Dubai Branch',
+        division: 'e.g. Enterprise Solutions Division',
+        department: 'e.g. Backend Engineering',
     }
+
+    const PARENT_LABEL: Partial<Record<OrgUnitType, string>> = {
+        division: 'Parent Branch',
+        department: 'Parent Division',
+    }
+
+    const parentOptions = form.type === 'division' ? parentBranches : parentDivisions
+    const parentLabel = PARENT_LABEL[form.type]
+    const noParentHint = form.type === 'division'
+        ? 'No branches yet — create a branch first to nest divisions under it.'
+        : 'No divisions yet — create a division first to nest departments under it.'
 
     return (
         <UiDialog open={open} onOpenChange={o => { if (!o) onClose() }}>
@@ -137,7 +154,7 @@ function OrgUnitDialog({
                                     <UiSelectValue />
                                 </UiSelectTrigger>
                                 <UiSelectContent>
-                                    {(Object.keys(ORG_TYPE_META) as OrgUnitType[]).map(t => {
+                                    {(['branch', 'division', 'department'] as OrgUnitType[]).map(t => {
                                         const Icon = ORG_TYPE_META[t].icon
                                         return (
                                             <UiSelectItem key={t} value={t}>
@@ -150,6 +167,12 @@ function OrgUnitDialog({
                                     })}
                                 </UiSelectContent>
                             </UiSelect>
+                            {/* Hierarchy hint */}
+                            <p className="text-[11px] text-muted-foreground">
+                                Hierarchy: <span className="text-emerald-600 font-medium">Branch</span>
+                                {' → '}<span className="text-violet-600 font-medium">Division</span>
+                                {' → '}<span className="text-blue-600 font-medium">Department</span>
+                            </p>
                         </div>
                     )}
 
@@ -164,10 +187,10 @@ function OrgUnitDialog({
                         />
                     </div>
 
-                    {/* Parent Division — only for departments & branches */}
-                    {(form.type === 'department' || form.type === 'branch') && (
+                    {/* Parent — Division needs a Branch parent; Department needs a Division parent; Branch has no parent */}
+                    {(form.type === 'division' || form.type === 'department') && (
                         <div className="space-y-1.5">
-                            <Label>Parent Division</Label>
+                            <Label>{parentLabel}</Label>
                             <UiSelect
                                 value={form.parentId || NONE}
                                 onValueChange={v => setForm(f => ({ ...f, parentId: v === NONE ? '' : v }))}
@@ -183,7 +206,7 @@ function OrgUnitDialog({
                                 </UiSelectContent>
                             </UiSelect>
                             {parentOptions.length === 0 && (
-                                <p className="text-[11px] text-muted-foreground">No divisions yet — create a division first to nest under it.</p>
+                                <p className="text-[11px] text-muted-foreground">{noParentHint}</p>
                             )}
                         </div>
                     )}
@@ -482,13 +505,17 @@ export function OrgStructureTab() {
             <div>
                 <h3 className="text-base font-semibold">Organization Structure</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                    Define your company hierarchy — divisions, departments, and branches. Employees can be assigned to these units during onboarding.
+                    Three-level hierarchy:
+                    <span className="text-emerald-600 font-medium"> Branch</span>
+                    {' → '}<span className="text-violet-600 font-medium">Division</span>
+                    {' → '}<span className="text-blue-600 font-medium">Department</span>.
+                    Start with branches, add divisions under each branch, then departments under each division.
                 </p>
             </div>
 
-            {/* Summary stats */}
+            {/* Summary stats — in hierarchy order: branch → division → department */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {(Object.keys(ORG_TYPE_META) as OrgUnitType[]).map(type => {
+                {(['branch', 'division', 'department'] as OrgUnitType[]).map(type => {
                     const meta = ORG_TYPE_META[type]
                     const Icon = meta.icon
                     return (
@@ -503,9 +530,9 @@ export function OrgStructureTab() {
                 })}
             </div>
 
-            {/* Action buttons */}
+            {/* Action buttons — in hierarchy order */}
             <div className="flex gap-2 flex-wrap">
-                {(Object.keys(ORG_TYPE_META) as OrgUnitType[]).map(type => {
+                {(['branch', 'division', 'department'] as OrgUnitType[]).map(type => {
                     const meta = ORG_TYPE_META[type]
                     const Icon = meta.icon
                     return (
@@ -529,10 +556,10 @@ export function OrgStructureTab() {
                     <GitBranch className="h-10 w-10 text-muted-foreground" />
                     <div>
                         <p className="font-medium text-sm">No structure defined yet</p>
-                        <p className="text-sm text-muted-foreground mt-1">Start by adding a Division, then nest Departments and Branches under it.</p>
+                        <p className="text-sm text-muted-foreground mt-1">Start by adding a Branch, then add Divisions under it, then Departments under each Division.</p>
                     </div>
-                    <Button size="sm" onClick={() => setAdding('division')} leftIcon={<Plus className="h-3.5 w-3.5" />}>
-                        Add your first Division
+                    <Button size="sm" onClick={() => setAdding('branch')} leftIcon={<Plus className="h-3.5 w-3.5" />}>
+                        Add your first Branch
                     </Button>
                 </div>
             ) : (
