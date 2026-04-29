@@ -3,6 +3,20 @@ import { db } from '../../db/index.js'
 import { tenants, users } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
 
+const VALID_ROLES = ['employee', 'dept_head', 'pro_officer', 'hr_manager', 'super_admin'] as const
+type ValidRole = typeof VALID_ROLES[number]
+
+function validateRoleAssignment(callerRole: string, targetRole: string): string | null {
+    if (!VALID_ROLES.includes(targetRole as ValidRole)) {
+        return `Invalid role: ${targetRole}`
+    }
+    // hr_manager cannot assign super_admin
+    if (callerRole === 'hr_manager' && targetRole === 'super_admin') {
+        return 'You do not have permission to assign the super_admin role'
+    }
+    return null
+}
+
 export default async function settingsRoutes(fastify: any): Promise<void> {
     const hrAdmin = {
         preHandler: [
@@ -49,6 +63,8 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         if (!employeeId || !role) {
             return reply.code(400).send({ message: 'employeeId and role are required' })
         }
+        const roleError = validateRoleAssignment(request.user.role, role)
+        if (roleError) return reply.code(403).send({ message: roleError })
         try {
             const result = await inviteUser(request.user.tenantId, { employeeId, role })
             return reply.code(201).send({ data: result })
@@ -63,6 +79,8 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         if (!Array.isArray(employeeIds) || employeeIds.length === 0 || !role) {
             return reply.code(400).send({ message: 'employeeIds (array) and role are required' })
         }
+        const roleError = validateRoleAssignment(request.user.role, role)
+        if (roleError) return reply.code(403).send({ message: roleError })
         const results = await inviteUserBulk(request.user.tenantId, employeeIds, role)
         return reply.code(207).send({ data: results })
     })
@@ -86,6 +104,11 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         // Prevent super_admin from deactivating themselves
         if (id === request.user.id && isActive === false) {
             return reply.code(400).send({ message: 'You cannot deactivate your own account' })
+        }
+
+        if (role) {
+            const roleError = validateRoleAssignment(request.user.role, role)
+            if (roleError) return reply.code(403).send({ message: roleError })
         }
 
         const updated = await updateUserStatus(request.user.tenantId, id, { isActive, role })
