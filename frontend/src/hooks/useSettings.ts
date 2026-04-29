@@ -16,11 +16,28 @@ export interface TenantUser {
     name: string
     email: string
     role: string
-    department: string | null
     isActive: boolean
     lastLoginAt: string | null
     createdAt: string
-    employeeId: string | null
+    employeeId: string
+    employeeNo: string | null
+    designation: string | null
+    department: string | null
+    avatarUrl: string | null
+}
+
+export interface InvitableEmployee {
+    id: string
+    employeeNo: string | null
+    firstName: string
+    lastName: string
+    email: string | null
+    workEmail: string | null
+    department: string | null
+    designation: string | null
+    avatarUrl: string | null
+    fullName: string
+    inviteEmail: string | null
 }
 
 export function useCompanySettings() {
@@ -56,6 +73,52 @@ export function useUpdateUser() {
         mutationFn: ({ id, ...data }: { id: string; isActive?: boolean; role?: string }) =>
             api.patch<{ data: TenantUser }>(`/settings/users/${id}`, data).then((r) => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'users'] }),
+    })
+}
+
+export function useInvitableEmployees(options?: { enabled?: boolean }) {
+    return useQuery({
+        queryKey: ['settings', 'invitable-employees'],
+        queryFn: () =>
+            api.get<{ data: InvitableEmployee[] }>('/settings/invitable-employees').then((r) => r.data),
+        staleTime: 30_000,
+        enabled: options?.enabled ?? true,
+    })
+}
+
+export function useInviteUser() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: { employeeId: string; role: string }) =>
+            api.post<{ data: TenantUser }>('/settings/users/invite', data).then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['settings', 'users'] })
+            qc.invalidateQueries({ queryKey: ['settings', 'invitable-employees'] })
+        },
+    })
+}
+
+export interface BulkInviteResult {
+    succeeded: Array<{ employeeId: string; name: string; email: string }>
+    failed: Array<{ employeeId: string; reason: string }>
+}
+
+export function useInviteUserBulk() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: { employeeIds: string[]; role: string }) =>
+            api.post<{ data: BulkInviteResult }>('/settings/users/invite-bulk', data).then((r) => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['settings', 'users'] })
+            qc.invalidateQueries({ queryKey: ['settings', 'invitable-employees'] })
+        },
+    })
+}
+
+export function useResendInvite() {
+    return useMutation({
+        mutationFn: (employeeId: string) =>
+            api.post(`/settings/users/${employeeId}/resend-invite`, {}).then(() => undefined),
     })
 }
 

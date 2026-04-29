@@ -51,6 +51,7 @@ const SubscriptionPage = lazy(() => import('@/pages/organizations/SubscriptionPa
 const MyLeavePage = lazy(() => import('@/pages/my/MyLeavePage').then(m => ({ default: m.MyLeavePage })))
 const MyPayslipsPage = lazy(() => import('@/pages/my/MyPayslipsPage').then(m => ({ default: m.MyPayslipsPage })))
 const MyProfilePage = lazy(() => import('@/pages/my/MyProfilePage').then(m => ({ default: m.MyProfilePage })))
+const MyAccountPage = lazy(() => import('@/pages/my/MyAccountPage').then(m => ({ default: m.MyAccountPage })))
 
 function PageLoader() {
   return (
@@ -84,6 +85,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/audit': 'audit.title',
   '/notifications': 'notifications.title',
   '/my/login-history': 'loginHistory.title',
+  '/my/account': 'myAccount.title',
   '/my/leave': 'myLeave.title',
   '/my/payslips': 'myPayslips.title',
   '/my/profile': 'myProfile.title',
@@ -161,6 +163,7 @@ export default function App() {
             <Route path="audit" element={<RoleRoute routeKey="audit"><AuditLogPage /></RoleRoute>} />
             <Route path="notifications" element={<RoleRoute routeKey="notifications"><NotificationsPage /></RoleRoute>} />
             <Route path="my/login-history" element={<RoleRoute routeKey="my/login-history"><LoginHistoryPage /></RoleRoute>} />
+            <Route path="my/account" element={<RoleRoute routeKey="my/account"><MyAccountPage /></RoleRoute>} />
             <Route path="my/leave" element={<RoleRoute routeKey="my/leave"><MyLeavePage /></RoleRoute>} />
             <Route path="my/payslips" element={<RoleRoute routeKey="my/payslips"><MyPayslipsPage /></RoleRoute>} />
             <Route path="my/profile" element={<RoleRoute routeKey="my/profile"><MyProfilePage /></RoleRoute>} />
@@ -172,7 +175,7 @@ export default function App() {
             <Route path="apps/:id" element={<RoleRoute routeKey="apps"><AppDetailPage /></RoleRoute>} />
             <Route path="leave-policies" element={<RoleRoute routeKey="leave-policies"><LeavePoliciesPage /></RoleRoute>} />
             <Route path="organization-settings" element={<RoleRoute routeKey="organization-settings"><OrganizationSettingsPage /></RoleRoute>} />
-            <Route path="subscription" element={<RoleRoute routeKey="organization-settings"><SubscriptionPage /></RoleRoute>} />
+            <Route path="subscription" element={<RoleRoute routeKey="subscription"><SubscriptionPage /></RoleRoute>} />
           </Route>
           {/* Public onboarding upload — no auth, no AppLayout */}
           <Route path="onboarding/upload/:token" element={<OnboardingUploadPage />} />

@@ -11,7 +11,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate, formatCurrency, cn } from '@/lib/utils'
-import { useVisas, useAdvanceVisaWithCosts, useCancelVisa, useUpdateVisa, useVisaHistory } from '@/hooks/useVisa'
+import { useVisas, useAdvanceVisaWithCosts, useCancelVisa, useUpdateVisa, useVisaHistory, useVisaStepLabels } from '@/hooks/useVisa'
 import { useVisaCosts, useAddVisaCost, useDeleteVisaCost, COST_CATEGORY_LABELS } from '@/hooks/useVisaCosts'
 import type { CostCategory, AddCostInput } from '@/hooks/useVisaCosts'
 import { toast } from '@/components/ui/overlays'
@@ -43,7 +43,7 @@ const statusStyles: Record<VisaStatus, string> = {
     cancelled: 'bg-muted text-muted-foreground',
 }
 
-const visaSteps = [
+const FALLBACK_VISA_STEPS = [
     'Entry Permit Application',
     'Entry Permit Approval',
     'Employee Entry to UAE',
@@ -70,6 +70,11 @@ export function VisaDetailPage() {
     const advanceWithCosts = useAdvanceVisaWithCosts()
     const cancelVisa = useCancelVisa()
     const updateVisa = useUpdateVisa()
+    const { data: stepLabels } = useVisaStepLabels()
+    // Convert the backend Record<number,string> into a 0-based array for index access
+    const visaSteps = stepLabels
+        ? Object.keys(stepLabels).sort((a, b) => Number(a) - Number(b)).map(k => stepLabels[Number(k)])
+        : FALLBACK_VISA_STEPS
 
     const { data: costs, isLoading: costsLoading } = useVisaCosts(id ?? '')
     const { data: history } = useVisaHistory(id ?? '')

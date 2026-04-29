@@ -52,42 +52,115 @@ async function seed() {
         isActive: true,
     }).returning()
 
-    // ── 3. Users (one per role) ────────────────────────────────
+    // ── 3. Employees — created BEFORE users so IDs can be linked at insert ──
+    // Every user must have a 1:1 employee record (enforced by migration 0018).
+    // The first 5 employees correspond to the 5 seed user accounts.
     const passwordHash = await bcrypt.hash('Admin@12345', 12)
 
+    // Admin-level employees (linked to the 5 user accounts)
+    const [empAlex] = await db.insert(employees).values({
+        tenantId: tenant.id, entityId: entity.id, employeeNo: 'EMP-001',
+        firstName: 'Alex', lastName: 'Thompson', email: 'superadmin@hrhub.ae',
+        department: 'Executive', designation: 'Chief Executive Officer',
+        joinDate: '2019-01-01', status: 'active', nationality: 'British',
+        emiratisationCategory: 'expat',
+    }).returning()
+
+    const [empSarah] = await db.insert(employees).values({
+        tenantId: tenant.id, entityId: entity.id, employeeNo: 'EMP-002',
+        firstName: 'Sarah', lastName: 'Johnson', email: 'admin@hrhub.ae',
+        department: 'HR', designation: 'HR Manager',
+        joinDate: '2020-03-01', status: 'active', nationality: 'British',
+        emiratisationCategory: 'expat',
+    }).returning()
+
+    const [empKhalid] = await db.insert(employees).values({
+        tenantId: tenant.id, entityId: entity.id, employeeNo: 'EMP-003',
+        firstName: 'Khalid', lastName: 'Al Mansoori', email: 'pro@hrhub.ae',
+        department: 'PRO', designation: 'PRO Officer',
+        joinDate: '2021-06-01', status: 'active', nationality: 'Emirati',
+        emiratisationCategory: 'emirati',
+    }).returning()
+
+    const [empJames] = await db.insert(employees).values({
+        tenantId: tenant.id, entityId: entity.id, employeeNo: 'EMP-004',
+        firstName: 'James', lastName: 'Williams', email: 'manager@hrhub.ae',
+        phone: '+971 58 789 0123', nationality: 'American', passportNo: 'US33445566',
+        dateOfBirth: '1980-06-14', gender: 'male' as const,
+        department: 'Legal', designation: 'Legal Counsel',
+        joinDate: '2020-11-01', status: 'active' as const,
+        basicSalary: '22000', totalSalary: '32000', housingAllowance: '7000', transportAllowance: '2000',
+        bankName: 'HSBC', visaStatus: 'active' as const, visaExpiry: '2026-11-01', passportExpiry: '2027-06-14',
+        emiratisationCategory: 'expat' as const,
+    }).returning()
+
+    const [empAhmed] = await db.insert(employees).values({
+        tenantId: tenant.id, entityId: entity.id, employeeNo: 'EMP-005',
+        firstName: 'Ahmed', lastName: 'Al Mansouri', email: 'employee@hrhub.ae',
+        phone: '+971 50 123 4567', nationality: 'Emirati', passportNo: 'AE12345678',
+        emiratesId: '784-1985-1234567-1', dateOfBirth: '1985-03-15', gender: 'male' as const,
+        department: 'Sales', designation: 'Senior Property Consultant',
+        joinDate: '2022-01-10', status: 'active' as const,
+        basicSalary: '12000', totalSalary: '18000', housingAllowance: '4000', transportAllowance: '1500',
+        bankName: 'Emirates NBD', visaStatus: 'active' as const, visaExpiry: '2026-01-10', passportExpiry: '2027-03-15',
+        emiratisationCategory: 'emirati' as const,
+    }).returning()
+
+    // Additional employees without user accounts (HR-managed records)
+    const additionalEmployees = await db.insert(employees).values([
+        { tenantId: tenant.id, entityId: entity.id, employeeNo: 'EMP-006', firstName: 'Rahul', lastName: 'Sharma', email: 'rahul.s@company.ae', phone: '+971 52 345 6789', nationality: 'Indian', passportNo: 'IN11223344', dateOfBirth: '1988-11-05', gender: 'male' as const, department: 'Finance', designation: 'Senior Accountant', joinDate: '2020-03-15', status: 'active' as const, basicSalary: '10000', totalSalary: '15000', housingAllowance: '3000', transportAllowance: '1000', bankName: 'ADCB', visaStatus: 'active' as const, visaExpiry: '2026-03-15', passportExpiry: '2026-11-05', emiratisationCategory: 'expat' as const },
+        { tenantId: tenant.id, entityId: entity.id, employeeNo: 'EMP-007', firstName: 'Maria', lastName: 'Santos', email: 'maria.s@company.ae', phone: '+971 56 456 7890', nationality: 'Filipino', passportNo: 'PH55667788', dateOfBirth: '1993-04-18', gender: 'female' as const, department: 'Admin', designation: 'Executive Assistant', joinDate: '2023-02-01', status: 'probation' as const, basicSalary: '6000', totalSalary: '9000', housingAllowance: '2000', transportAllowance: '800', bankName: 'FAB', visaStatus: 'active' as const, visaExpiry: '2026-02-01', passportExpiry: '2027-04-18', emiratisationCategory: 'expat' as const },
+        { tenantId: tenant.id, entityId: entity.id, employeeNo: 'EMP-008', firstName: 'Mohammad', lastName: 'Al Rashidi', email: 'mo.rashidi@company.ae', phone: '+971 50 567 8901', nationality: 'Emirati', passportNo: 'AE99887766', emiratesId: '784-1987-3456789-3', dateOfBirth: '1987-09-30', gender: 'male' as const, department: 'Operations', designation: 'Operations Manager', joinDate: '2019-08-20', status: 'active' as const, basicSalary: '18000', totalSalary: '26000', housingAllowance: '5000', transportAllowance: '2000', bankName: 'Dubai Islamic Bank', visaStatus: 'active' as const, visaExpiry: '2026-08-20', passportExpiry: '2028-09-30', emiratisationCategory: 'emirati' as const },
+        { tenantId: tenant.id, entityId: entity.id, employeeNo: 'EMP-009', firstName: 'Priya', lastName: 'Nair', email: 'priya.n@company.ae', phone: '+971 54 678 9012', nationality: 'Indian', passportNo: 'IN44556677', dateOfBirth: '1992-12-08', gender: 'female' as const, department: 'Marketing', designation: 'Marketing Executive', joinDate: '2023-08-01', status: 'onboarding' as const, basicSalary: '8000', totalSalary: '12000', housingAllowance: '2500', transportAllowance: '1000', bankName: 'Mashreq', visaStatus: 'entry_permit' as const, passportExpiry: '2027-12-08', emiratisationCategory: 'expat' as const },
+        { tenantId: tenant.id, entityId: entity.id, employeeNo: 'EMP-010', firstName: 'Fatima', lastName: 'Al Zaabi', email: 'fatima.z@company.ae', phone: '+971 55 890 1234', nationality: 'Emirati', passportNo: 'AE11334455', emiratesId: '784-1995-4567890-4', dateOfBirth: '1995-02-28', gender: 'female' as const, department: 'Customer Service', designation: 'Customer Relations Manager', joinDate: '2022-09-15', status: 'active' as const, basicSalary: '11000', totalSalary: '17000', housingAllowance: '3500', transportAllowance: '1200', bankName: 'Emirates NBD', visaStatus: 'active' as const, visaExpiry: '2026-09-15', passportExpiry: '2028-02-28', emiratisationCategory: 'emirati' as const },
+    ]).returning()
+
+    const insertedEmployees = [empAlex, empSarah, empKhalid, empJames, empAhmed, ...additionalEmployees]
+    console.log(`✓ ${insertedEmployees.length} employees created`)
+
+    // ── 4. Users — each linked to their employee at INSERT time ───────────────
     const [superAdmin] = await db.insert(users).values({
         tenantId: tenant.id, entityId: entity.id,
         email: 'superadmin@hrhub.ae', passwordHash,
         name: 'Alex Thompson', role: 'super_admin', department: 'Executive',
+        employeeId: empAlex.id,
     }).returning()
 
     const [hrManager] = await db.insert(users).values({
         tenantId: tenant.id, entityId: entity.id,
         email: 'admin@hrhub.ae', passwordHash,
         name: 'Sarah Johnson', role: 'hr_manager', department: 'HR',
+        employeeId: empSarah.id,
     }).returning()
 
     const [proOfficer] = await db.insert(users).values({
         tenantId: tenant.id, entityId: entity.id,
         email: 'pro@hrhub.ae', passwordHash,
         name: 'Khalid Al Mansoori', role: 'pro_officer', department: 'PRO',
+        employeeId: empKhalid.id,
     }).returning()
 
     const [deptHead] = await db.insert(users).values({
         tenantId: tenant.id, entityId: entity.id,
         email: 'manager@hrhub.ae', passwordHash,
         name: 'James Williams', role: 'dept_head', department: 'Legal',
+        employeeId: empJames.id,
     }).returning()
 
     const [employeeUser] = await db.insert(users).values({
         tenantId: tenant.id, entityId: entity.id,
         email: 'employee@hrhub.ae', passwordHash,
         name: 'Ahmed Al Mansouri', role: 'employee', department: 'Sales',
+        employeeId: empAhmed.id,
     }).returning()
 
-    console.log('✓ Users created (5 roles)')
+    console.log('✓ Users created (5 roles, all linked to employees)')
 
-    // ── 4. Tenant memberships (required for multi-tenant auth) ─
+    // Convenience aliases used later in the seed
+    const ahmed = empAhmed
+    const james = empJames
+
+    // ── 5. Tenant memberships (required for multi-tenant auth) ─
     await db.insert(tenantMemberships).values([
         { tenantId: tenant.id, userId: superAdmin.id, role: 'super_admin', inviteStatus: 'accepted', isActive: true, acceptedAt: new Date() },
         { tenantId: tenant.id, userId: hrManager.id, role: 'hr_manager', inviteStatus: 'accepted', isActive: true, acceptedAt: new Date() },
@@ -96,35 +169,6 @@ async function seed() {
         { tenantId: tenant.id, userId: employeeUser.id, role: 'employee', inviteStatus: 'accepted', isActive: true, acceptedAt: new Date() },
     ])
     console.log('✓ Tenant memberships created')
-
-    // ── 5. Employees ───────────────────────────────────────────
-    const employeeData = [
-        { firstName: 'Ahmed', lastName: 'Al Mansouri', email: 'ahmed.mansouri@company.ae', phone: '+971 50 123 4567', nationality: 'Emirati', passportNo: 'AE12345678', emiratesId: '784-1985-1234567-1', dateOfBirth: '1985-03-15', gender: 'male' as const, department: 'Sales', designation: 'Senior Property Consultant', joinDate: '2022-01-10', status: 'active' as const, basicSalary: '12000', totalSalary: '18000', housingAllowance: '4000', transportAllowance: '1500', bankName: 'Emirates NBD', visaStatus: 'active' as const, visaExpiry: '2026-01-10', passportExpiry: '2027-03-15', emiratisationCategory: 'emirati' as const },
-        { firstName: 'Rahul', lastName: 'Sharma', email: 'rahul.s@company.ae', phone: '+971 52 345 6789', nationality: 'Indian', passportNo: 'IN11223344', dateOfBirth: '1988-11-05', gender: 'male' as const, department: 'Finance', designation: 'Senior Accountant', joinDate: '2020-03-15', status: 'active' as const, basicSalary: '10000', totalSalary: '15000', housingAllowance: '3000', transportAllowance: '1000', bankName: 'ADCB', visaStatus: 'active' as const, visaExpiry: '2026-03-15', passportExpiry: '2026-11-05', emiratisationCategory: 'expat' as const },
-        { firstName: 'Maria', lastName: 'Santos', email: 'maria.s@company.ae', phone: '+971 56 456 7890', nationality: 'Filipino', passportNo: 'PH55667788', dateOfBirth: '1993-04-18', gender: 'female' as const, department: 'Admin', designation: 'Executive Assistant', joinDate: '2023-02-01', status: 'probation' as const, basicSalary: '6000', totalSalary: '9000', housingAllowance: '2000', transportAllowance: '800', bankName: 'FAB', visaStatus: 'active' as const, visaExpiry: '2026-02-01', passportExpiry: '2027-04-18', emiratisationCategory: 'expat' as const },
-        { firstName: 'Mohammad', lastName: 'Al Rashidi', email: 'mo.rashidi@company.ae', phone: '+971 50 567 8901', nationality: 'Emirati', passportNo: 'AE99887766', emiratesId: '784-1987-3456789-3', dateOfBirth: '1987-09-30', gender: 'male' as const, department: 'Operations', designation: 'Operations Manager', joinDate: '2019-08-20', status: 'active' as const, basicSalary: '18000', totalSalary: '26000', housingAllowance: '5000', transportAllowance: '2000', bankName: 'Dubai Islamic Bank', visaStatus: 'active' as const, visaExpiry: '2026-08-20', passportExpiry: '2028-09-30', emiratisationCategory: 'emirati' as const },
-        { firstName: 'Priya', lastName: 'Nair', email: 'priya.n@company.ae', phone: '+971 54 678 9012', nationality: 'Indian', passportNo: 'IN44556677', dateOfBirth: '1992-12-08', gender: 'female' as const, department: 'Marketing', designation: 'Marketing Executive', joinDate: '2023-08-01', status: 'onboarding' as const, basicSalary: '8000', totalSalary: '12000', housingAllowance: '2500', transportAllowance: '1000', bankName: 'Mashreq', visaStatus: 'entry_permit' as const, passportExpiry: '2027-12-08', emiratisationCategory: 'expat' as const },
-        { firstName: 'James', lastName: 'Williams', email: 'james.w@company.ae', phone: '+971 58 789 0123', nationality: 'American', passportNo: 'US33445566', dateOfBirth: '1980-06-14', gender: 'male' as const, department: 'Legal', designation: 'Legal Counsel', joinDate: '2020-11-01', status: 'active' as const, basicSalary: '22000', totalSalary: '32000', housingAllowance: '7000', transportAllowance: '2000', bankName: 'HSBC', visaStatus: 'active' as const, visaExpiry: '2026-11-01', passportExpiry: '2027-06-14', emiratisationCategory: 'expat' as const },
-        { firstName: 'Fatima', lastName: 'Al Zaabi', email: 'fatima.z@company.ae', phone: '+971 55 890 1234', nationality: 'Emirati', passportNo: 'AE11334455', emiratesId: '784-1995-4567890-4', dateOfBirth: '1995-02-28', gender: 'female' as const, department: 'Customer Service', designation: 'Customer Relations Manager', joinDate: '2022-09-15', status: 'active' as const, basicSalary: '11000', totalSalary: '17000', housingAllowance: '3500', transportAllowance: '1200', bankName: 'Emirates NBD', visaStatus: 'active' as const, visaExpiry: '2026-09-15', passportExpiry: '2028-02-28', emiratisationCategory: 'emirati' as const },
-    ]
-
-    const insertedEmployees = await db.insert(employees).values(
-        employeeData.map((e, i) => ({
-            ...e,
-            tenantId: tenant.id,
-            entityId: entity.id,
-            employeeNo: `HR-00${i + 1}`,
-        }))
-    ).returning()
-
-    // Link employee records to their corresponding user accounts
-    const ahmed = insertedEmployees.find(e => e.firstName === 'Ahmed')!
-    const james = insertedEmployees.find(e => e.firstName === 'James')!
-
-    await db.update(users).set({ employeeId: ahmed.id }).where(eq(users.id, employeeUser.id))
-    await db.update(users).set({ employeeId: james.id }).where(eq(users.id, deptHead.id))
-
-    console.log(`✓ ${insertedEmployees.length} employees created`)
 
     // ── 6. Leave policies (UAE Labour Law defaults) ────────────
     await db.insert(leavePolicies).values([

@@ -50,9 +50,12 @@ export function ManagerDashboard() {
   const user = useAuthStore(s => s.user)
   const department = user?.department ?? ''
 
-  const { data: leaveData, isLoading: leaveLoading } = useLeaveRequests({ status: 'pending', limit: 10 })
+  // Scope leave and employee queries to this manager's department.
+  // The backend also enforces this for dept_head regardless of what params are sent,
+  // but passing it explicitly makes the query key stable and avoids a double-render.
+  const { data: leaveData, isLoading: leaveLoading } = useLeaveRequests({ status: 'pending', department: department || undefined, limit: 10 })
   const { data: attendanceSummary, isLoading: attLoading } = useAttendanceSummary()
-  const { data: employeesData, isLoading: empLoading } = useEmployees({ department, limit: 100 })
+  const { data: employeesData, isLoading: empLoading } = useEmployees({ department: department || undefined, limit: 100 })
   const { data: onboarding, isLoading: onboardingLoading } = useOnboardingSummary()
   const approveLeave = useApproveLeave()
 

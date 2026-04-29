@@ -11,7 +11,6 @@ import {
   CalendarCheckIcon,
   ShieldCheckIcon,
   BarChart3Icon,
-  SettingsIcon,
   BuildingIcon,
   ClipboardListIcon,
   GitBranchIcon,
@@ -25,7 +24,6 @@ import {
   KeyRoundIcon,
   UserCircleIcon,
   ReceiptIcon,
-  CalendarIcon,
 } from "lucide-react"
 import { NavUser } from "@/components/layout/NavUser"
 import {
@@ -107,14 +105,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         { title: t('nav.apps'), url: "/apps", icon: KeyRoundIcon },
       ],
     },
-    {
-      label: t('nav.mySection', { defaultValue: 'My' }),
-      items: [
-        { title: t('nav.myLeave', { defaultValue: 'My Leave' }), url: "/my/leave", icon: CalendarIcon },
-        { title: t('nav.myPayslips', { defaultValue: 'My Payslips' }), url: "/my/payslips", icon: ReceiptIcon },
-        { title: t('nav.myProfile', { defaultValue: 'My Profile' }), url: "/my/profile", icon: UserCircleIcon },
-      ],
-    },
   ], [t])
 
   // Filter groups + items by role. Groups with no visible items are hidden.
@@ -131,16 +121,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       .filter((group) => group.items.length > 0)
   }, [allNavGroups, role])
 
-  const navSecondary = React.useMemo(() => {
-    if (!role) return []
-    const items = [
-      { title: t('nav.settings'), url: "/settings", icon: SettingsIcon },
-    ]
-    return items.filter((item) => {
-      const routeKey = getNavRouteKey(item.url)
-      return routeKey ? canAccessRoute(role, routeKey) : true
-    })
-  }, [t, role])
 
   const userData = React.useMemo(() => ({
     name: user?.name ?? "HR Admin",
@@ -211,20 +191,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroup>
         ))}
 
-        <SidebarGroup className="mt-auto">
-          <SidebarMenu>
-            {navSecondary.map((item) => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton asChild tooltip={item.title}>
-                  <NavLink to={item.url}>
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">

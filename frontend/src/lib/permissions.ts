@@ -98,6 +98,7 @@ export type RouteKey =
   | 'audit'
   | 'notifications'
   | 'my/login-history'
+  | 'my/account'
   | 'my/leave'
   | 'my/payslips'
   | 'my/profile'
@@ -108,6 +109,7 @@ export type RouteKey =
   | 'apps'
   | 'leave-policies'
   | 'organization-settings'
+  | 'subscription'
 
 // ─── Permission matrix ────────────────────────────────────────────────────────
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -198,20 +200,26 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_org_chart',
   ],
   dept_head: [
-    // People (read-only)
+    // People (read-only, scoped to their department server-side)
     'view_employees',
-    // Onboarding (read + manage)
+    // Onboarding (read + manage for dept)
     'view_onboarding', 'manage_onboarding',
     // Documents (read-only)
     'view_documents',
-    // Leave
-    'approve_leave', 'view_own_leave',
-    // Attendance
+    // Leave (approve for dept + own)
+    'approve_leave', 'manage_leave', 'view_own_leave',
+    // Attendance (manage for dept)
     'manage_attendance', 'view_own_attendance',
-    // Performance
+    // Performance (manage for dept)
     'manage_performance', 'view_own_performance',
+    // Reports (dept-level read only)
+    'view_reports',
+    // Assets (read-only)
+    'view_assets',
     // Misc
     'view_org_chart',
+    // Teams (manage dept-scoped teams)
+    'manage_team',
   ],
   employee: [
     'view_own_leave',
@@ -245,21 +253,23 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   leave: ['super_admin', 'hr_manager', 'dept_head'],
   attendance: ['super_admin', 'hr_manager', 'dept_head'],
   performance: ['super_admin', 'hr_manager', 'dept_head'],
-  assets: ['super_admin', 'hr_manager'],
+  assets: ['super_admin', 'hr_manager', 'dept_head'],
 
-  reports: ['super_admin', 'hr_manager', 'pro_officer'],
+  reports: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head'],
   audit: ['super_admin', 'hr_manager'],
   settings: ['super_admin', 'hr_manager'],
 
   // App Management
-  organizations: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
-  'organizations/new': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
-  team: ['super_admin', 'hr_manager'],
+  organizations: ['super_admin', 'hr_manager', 'pro_officer'],
+  'organizations/new': ['super_admin', 'hr_manager'],
+  team: ['super_admin', 'hr_manager', 'dept_head', 'pro_officer', 'employee'],
   apps: ['super_admin', 'hr_manager'],
   'leave-policies': ['super_admin', 'hr_manager'],
   'organization-settings': ['super_admin', 'hr_manager'],
+  subscription: ['super_admin', 'hr_manager'],
 
   // Self-service (all authenticated roles)
+  'my/account': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/leave': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/payslips': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/profile': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
@@ -345,6 +355,7 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/settings': 'settings',
     '/notifications': 'notifications',
     '/my/login-history': 'my/login-history',
+    '/my/account': 'my/account',
     '/my/leave': 'my/leave',
     '/my/payslips': 'my/payslips',
     '/my/profile': 'my/profile',
@@ -353,6 +364,7 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/apps': 'apps',
     '/leave-policies': 'leave-policies',
     '/organization-settings': 'organization-settings',
+    '/subscription': 'subscription',
   }
   return map[url] ?? null
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Calendar, Clock, CheckCircle2, XCircle, Plus, AlertCircle, RefreshCcw } from 'lucide-react'
+import { Calendar, Clock, CheckCircle2, XCircle, Plus, AlertCircle, RefreshCcw, ArrowRightLeft, Users } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
@@ -111,10 +111,69 @@ const leaveTypeColor: Record<string, string> = {
     unpaid: 'bg-gray-100 text-gray-600',
 }
 
+function PendingActionsPanel({ leaves, canApprove, onApprove, onReject }: {
+    leaves: LeaveRequest[]
+    canApprove: boolean
+    onApprove: (l: LeaveRequest) => void
+    onReject: (l: LeaveRequest) => void
+}) {
+    const pending = leaves.filter(l => l.status === 'pending')
+    if (!canApprove || pending.length === 0) return null
+
+    return (
+        <Card className="p-4 border-amber-200 bg-amber-50/40 dark:bg-amber-950/10 dark:border-amber-900/40">
+            <div className="flex items-center gap-2 mb-3">
+                <Clock className="h-4 w-4 text-amber-600" />
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-400">
+                    Needs Action — {pending.length} pending request{pending.length !== 1 ? 's' : ''}
+                </p>
+            </div>
+            <div className="space-y-2">
+                {pending.map(l => (
+                    <div key={l.id} className="flex items-center gap-3 rounded-lg border bg-background px-3 py-2.5 flex-wrap">
+                        <InitialsAvatar name={l.employeeName || '—'} src={l.employeeAvatarUrl ?? undefined} size="sm" />
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-medium">{l.employeeName}</p>
+                                {l.employeeDepartment && (
+                                    <span className="text-[11px] text-muted-foreground">{l.employeeDepartment}</span>
+                                )}
+                                <span className={cn('px-1.5 py-0.5 rounded text-[11px] font-medium', leaveTypeColor[l.leaveType] || 'bg-gray-100 text-gray-700')}>
+                                    {LEAVE_TYPE_LABELS[l.leaveType] ?? l.leaveType}
+                                </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                {formatDate(l.startDate)} → {formatDate(l.endDate)} · {l.days} day{l.days !== 1 ? 's' : ''}
+                                {l.reason && <span> · {l.reason}</span>}
+                            </p>
+                            {l.handoverToName && (
+                                <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                    <ArrowRightLeft className="h-3 w-3" />
+                                    Handover: <span className="font-medium text-foreground">{l.handoverToName}</span>
+                                    {l.handoverNotes && <span className="truncate max-w-xs">· {l.handoverNotes}</span>}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                            <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 h-7 px-2.5" onClick={() => onApprove(l)}>
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve
+                            </Button>
+                            <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 h-7 px-2.5" onClick={() => onReject(l)}>
+                                <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
+                            </Button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </Card>
+    )
+}
+
 export function LeavePage() {
     const { t } = useTranslation()
-    const { can } = usePermissions()
+    const { can, hasRole } = usePermissions()
     const canApprove = can('approve_leave')
+    const isDeptHead = hasRole('dept_head')
     const [searchParams] = useSearchParams()
     const urlEmployeeId = searchParams.get('employeeId') ?? undefined
     const { data: leaveData, isLoading: leaveLoading, isError: leaveError, isFetching, error: leaveErrorObj, refetch } = useLeaveRequests({ limit: 50, employeeId: urlEmployeeId })
@@ -159,7 +218,7 @@ export function LeavePage() {
             header: 'Type',
             cell: ({ getValue }) => {
                 const t = getValue() as string
-                return <span className={cn('px-2 py-0.5 rounded-full text-[11px] font-medium capitalize', leaveTypeColor[t] || 'bg-gray-100 text-gray-700')}>{t}</span>
+                return <span className={cn('px-2 py-0.5 rounded-full text-[11px] font-medium capitalize', leaveTypeColor[t] || 'bg-gray-100 text-gray-700')}>{LEAVE_TYPE_LABELS[t] ?? t}</span>
             },
         },
         {
@@ -173,9 +232,19 @@ export function LeavePage() {
             ),
         },
         {
-            accessorKey: 'reason',
-            header: 'Reason',
-            cell: ({ getValue }) => <span className="text-xs">{getValue() as string}</span>,
+            id: 'details',
+            header: 'Details',
+            cell: ({ row: { original: l } }) => (
+                <div className="space-y-0.5 min-w-0">
+                    {l.reason && <p className="text-xs truncate max-w-[160px]">{l.reason}</p>}
+                    {l.handoverToName && (
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                            <ArrowRightLeft className="h-3 w-3 shrink-0" />
+                            <span className="truncate max-w-[140px]">{l.handoverToName}</span>
+                        </p>
+                    )}
+                </div>
+            ),
         },
         {
             accessorKey: 'status',
@@ -205,17 +274,25 @@ export function LeavePage() {
                     </div>
                 )
             },
-            size: 110,
+            size: 80,
         },
     ], [canApprove])
 
     return (
         <PageWrapper>
             <PageHeader
-                title={t('leave.title')}
-                description={t('leave.description')}
+                title={isDeptHead ? 'My Department Leave' : t('leave.title')}
+                description={isDeptHead ? 'Review and approve leave requests for your team.' : t('leave.description')}
                 actions={
-                    <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setApplyOpen(true)}>Apply Leave</Button>
+                    <div className="flex items-center gap-2">
+                        {isDeptHead && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground border rounded-lg px-2.5 py-1.5">
+                                <Users className="h-3.5 w-3.5" />
+                                <span>Dept. view</span>
+                            </div>
+                        )}
+                        <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setApplyOpen(true)}>Apply Leave</Button>
+                    </div>
                 }
             />
 
@@ -237,6 +314,16 @@ export function LeavePage() {
                 <KpiCardCompact label="Days Used" value={leaves.filter((l) => l.status === 'approved').reduce((a: number, l: LeaveRequest) => a + (l.days ?? 0), 0)} icon={Calendar} color="blue" />
                 <KpiCardCompact label="Rejected" value={leaves.filter((l) => l.status === 'rejected').length} icon={XCircle} color="red" />
             </div>
+
+            {/* Pending requests panel — shown to dept_head and approvers */}
+            {!leaveLoading && (
+                <PendingActionsPanel
+                    leaves={leaves}
+                    canApprove={canApprove}
+                    onApprove={setApproveTarget}
+                    onReject={setRejectTarget}
+                />
+            )}
 
             {/* Leave type breakdown for this year */}
             {!leaveLoading && leaves.length > 0 && (() => {
@@ -264,7 +351,7 @@ export function LeavePage() {
                                 return (
                                     <div key={type} className="space-y-1.5">
                                         <div className="flex justify-between text-xs">
-                                            <span className="capitalize font-medium">{type}</span>
+                                            <span className="capitalize font-medium">{LEAVE_TYPE_LABELS[type] ?? type}</span>
                                             <span className="text-muted-foreground">{taken}/{entitled}d</span>
                                         </div>
                                         <Progress value={pct} className="h-1.5" />
@@ -355,6 +442,6 @@ export function LeavePage() {
                 }}
             />
             <ApplyLeaveDialog open={applyOpen} onOpenChange={setApplyOpen} />
-        </PageWrapper >
+        </PageWrapper>
     )
 }

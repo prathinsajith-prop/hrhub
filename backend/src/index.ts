@@ -47,6 +47,7 @@ import subscriptionRoutes from './modules/subscription/subscription.routes.js'
 import { orgUnitsRoutes } from './modules/orgUnits/orgUnits.routes.js'
 import { designationsRoutes } from './modules/designations/designations.routes.js'
 import calendarRoutes from './modules/calendar/calendar.routes.js'
+import teamsModuleRoutes from './modules/teams/teams.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -223,6 +224,7 @@ async function bootstrap() {
     await app.register(orgUnitsRoutes, { prefix: '/api/v1' })
     await app.register(designationsRoutes, { prefix: '/api/v1' })
     await app.register(calendarRoutes, { prefix: '/api/v1' })
+    await app.register(teamsModuleRoutes, { prefix: '/api/v1' })
 
     // Health check — basic
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))

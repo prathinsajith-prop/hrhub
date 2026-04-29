@@ -2,7 +2,7 @@ import { getReviews, createReview, updateReview, deleteReview } from './performa
 
 export async function performanceRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
-    const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
+    const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')] }
 
     // GET /api/v1/performance
     // Admins see all reviews; employees only see their own (via employeeId JWT claim).

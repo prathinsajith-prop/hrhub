@@ -20,6 +20,8 @@ export interface ComplianceCheck {
     score: number
     status: 'pass' | 'warning' | 'fail'
     desc: string
+    route?: string
+    counts?: Record<string, number>
 }
 
 export interface ComplianceReport {

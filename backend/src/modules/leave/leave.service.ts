@@ -1,4 +1,4 @@
-import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns } from 'drizzle-orm'
+import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns, aliasedTable } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
@@ -9,10 +9,11 @@ import type { InferInsertModel } from 'drizzle-orm'
 
 type NewLeaveRequest = InferInsertModel<typeof leaveRequests>
 
-export async function listLeaveRequests(tenantId: string, params: { employeeId?: string; status?: string; leaveType?: string; from?: string; to?: string; limit: number; offset: number }) {
-    const { employeeId, status, leaveType, from, to, limit, offset } = params
+export async function listLeaveRequests(tenantId: string, params: { employeeId?: string; department?: string; status?: string; leaveType?: string; from?: string; to?: string; limit: number; offset: number }) {
+    const { employeeId, department, status, leaveType, from, to, limit, offset } = params
     const conditions = [eq(leaveRequests.tenantId, tenantId), isNull(leaveRequests.deletedAt)]
     if (employeeId) conditions.push(eq(leaveRequests.employeeId, employeeId))
+    if (department) conditions.push(eq(employees.department, department))
     if (status) conditions.push(eq(leaveRequests.status, status as never))
     if (leaveType) conditions.push(eq(leaveRequests.leaveType, leaveType as never))
     // Date-range overlap: include any request that intersects [from, to].
@@ -20,16 +21,19 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
     if (to) conditions.push(lte(leaveRequests.startDate, to))
     if (from) conditions.push(gte(leaveRequests.endDate, from))
 
+    const handoverEmployee = aliasedTable(employees, 'handover_emp')
     const rows = await db.select({
         ...getTableColumns(leaveRequests),
         employeeName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.lastName}, '')`.as('employee_name'),
         employeeNo: employees.employeeNo,
         employeeAvatarUrl: employees.avatarUrl,
         employeeDepartment: employees.department,
+        handoverToName: sql<string | null>`COALESCE(${handoverEmployee.firstName} || ' ' || ${handoverEmployee.lastName}, NULL)`.as('handover_to_name'),
         totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
     })
         .from(leaveRequests)
         .leftJoin(employees, eq(employees.id, leaveRequests.employeeId))
+        .leftJoin(handoverEmployee, eq(handoverEmployee.id, leaveRequests.handoverTo))
         .where(and(...conditions))
         .orderBy(desc(leaveRequests.createdAt))
         .limit(limit).offset(offset)
@@ -485,4 +489,15 @@ export async function adjustLeaveBalance(tenantId: string, employeeId: string, l
         })
     }
     return getLeaveBalance(tenantId, employeeId, year)
+}
+
+/** Returns the employee department for a leave request — used for dept_head scope guard. */
+export async function getLeaveRequestOwnerDept(tenantId: string, leaveId: string): Promise<string | null> {
+    const [row] = await db
+        .select({ department: employees.department })
+        .from(leaveRequests)
+        .leftJoin(employees, eq(employees.id, leaveRequests.employeeId))
+        .where(and(eq(leaveRequests.id, leaveId), eq(leaveRequests.tenantId, tenantId)))
+        .limit(1)
+    return row?.department ?? null
 }

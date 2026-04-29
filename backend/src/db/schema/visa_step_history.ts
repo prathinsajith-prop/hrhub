@@ -20,7 +20,7 @@ export const visaStepHistory = pgTable('visa_step_history', {
     fromStep: integer('from_step').notNull(),
     toStep: integer('to_step').notNull(),
     fromStepLabel: text('from_step_label').notNull(),
-    toStepLabel: text('to_step_label'),
+    toStepLabel: text('to_step_label').notNull(),
     fromStatus: text('from_status').notNull(),
     toStatus: text('to_status').notNull(),
     /** Sum of costs (in tenant base currency) recorded for this transition. */

@@ -1,4 +1,4 @@
-import { listLeaveRequests, createLeaveRequest, approveLeave, cancelLeave, getLeaveBalance, listLeavePolicies, upsertLeavePolicies, rolloverYear, adjustLeaveBalance } from './leave.service.js'
+import { listLeaveRequests, createLeaveRequest, approveLeave, cancelLeave, getLeaveBalance, listLeavePolicies, upsertLeavePolicies, rolloverYear, adjustLeaveBalance, getLeaveRequestOwnerDept } from './leave.service.js'
 import { validate, createLeaveSchema, leaveActionSchema } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { sendWithETag } from '../../lib/etag.js'
@@ -8,8 +8,12 @@ export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
-        const { employeeId, status, leaveType, from, to, limit = '20', offset = '0' } = request.query as Record<string, string>
-        const result = await listLeaveRequests(request.user.tenantId, { employeeId, status, leaveType, from, to, limit: Number(limit), offset: Number(offset) })
+        const { employeeId, department, status, leaveType, from, to, limit = '20', offset = '0' } = request.query as Record<string, string>
+        // dept_head can only see leave requests for their own department.
+        const resolvedDepartment = (request as any).user.role === 'dept_head'
+            ? ((request as any).user.department ?? department)
+            : department
+        const result = await listLeaveRequests(request.user.tenantId, { employeeId, department: resolvedDepartment, status, leaveType, from, to, limit: Number(limit), offset: Number(offset) })
         return sendWithETag(reply, request, result)
     })
 
@@ -28,6 +32,15 @@ export default async function (fastify: any): Promise<void> {
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
         const { approved, notes } = validate(leaveActionSchema, request.body)
+
+        // dept_head can only approve leave for employees in their own department.
+        if ((request as any).user.role === 'dept_head') {
+            const dept = await getLeaveRequestOwnerDept(request.user.tenantId, id)
+            if (dept && dept !== (request as any).user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only approve leave for employees in your department' })
+            }
+        }
+
         const updated = await approveLeave(request.user.tenantId, id, request.user.id, request.user.email, approved, request.user.employeeId ?? null)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Leave request not found or already processed' })
         // Invalidate dashboard KPI cache — pendingLeave count changed

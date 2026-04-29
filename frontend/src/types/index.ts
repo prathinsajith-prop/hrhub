@@ -248,6 +248,9 @@ export interface LeaveRequest {
   reason: string
   approvedBy?: string
   appliedDate: string
+  handoverTo?: string | null
+  handoverToName?: string | null
+  handoverNotes?: string | null
 }
 
 // Onboarding

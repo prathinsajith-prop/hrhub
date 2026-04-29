@@ -20,11 +20,17 @@ export default async function (fastify: any): Promise<void> {
     fastify.get('/', { ...auth, schema: { tags: ['Employees'] } }, async (request, reply) => {
         const query = validate(listEmployeesSchema, request.query)
 
+        // dept_head can only see employees in their own department — enforced at
+        // the API layer regardless of what the client sends as a filter param.
+        const department = (request as any).user.role === 'dept_head'
+            ? ((request as any).user.department ?? query.department)
+            : query.department
+
         const result = await listEmployees({
             tenantId: request.user.tenantId,
             search: query.search,
             status: query.status,
-            department: query.department,
+            department,
             limit: query.limit,
             offset: query.offset,
             after: query.after,
@@ -81,26 +87,13 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Employees'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const { email: overrideEmail, name: overrideName } = (request.body ?? {}) as { email?: string; name?: string }
-
-        const [emp] = await db
-            .select({ id: employees.id, firstName: employees.firstName, lastName: employees.lastName, email: employees.email })
-            .from(employees)
-            .where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
-            .limit(1)
-        if (!emp) return reply.code(404).send({ message: 'Employee not found' })
-
-        const inviteEmail = overrideEmail?.trim() || emp.email
-        if (!inviteEmail) return reply.code(400).send({ message: 'Employee has no email address. Provide one explicitly.' })
-
-        const inviteName = overrideName?.trim() || `${emp.firstName} ${emp.lastName}`
-
-        await inviteUser(request.user.tenantId, {
-            name: inviteName,
-            email: inviteEmail,
-            role: 'employee',
-            employeeId: id,
-        })
+        let result: { name: string }
+        try {
+            result = await inviteUser(request.user.tenantId, { employeeId: id, role: 'employee' })
+        } catch (err: any) {
+            return reply.code(err.statusCode ?? 500).send({ message: err.message })
+        }
+        const inviteName = result.name
 
         recordActivity({
             tenantId: request.user.tenantId,

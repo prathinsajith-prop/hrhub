@@ -10,7 +10,7 @@ import {
     recalcVisaUrgency,
 } from './visa.service.js'
 import { listVisaCosts, addVisaCost, deleteVisaCost, getVisaCost } from './visa_costs.service.js'
-import { visaStepLabel } from './visa.constants.js'
+import { visaStepLabel, VISA_STEP_LABELS, VISA_TOTAL_STEPS } from './visa.constants.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { cacheDel } from '../../lib/redis.js'
 
@@ -48,6 +48,11 @@ export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     // ─── List & detail (read-only, not audited) ───────────────────────────────
+
+    // Step label catalogue — served once, cached indefinitely client-side.
+    fastify.get('/steps', { ...auth, schema: { tags: ['Visa'] } }, async (_request: any, reply: any) => {
+        return reply.send({ data: VISA_STEP_LABELS, totalSteps: VISA_TOTAL_STEPS })
+    })
 
     fastify.get('/', { ...auth, schema: { tags: ['Visa'] } }, async (request: any, reply: any) => {
         const { status, urgencyLevel, from, to, limit = '20', offset = '0', after } = request.query as Record<string, string>
@@ -147,7 +152,7 @@ export default async function (fastify: any): Promise<void> {
                                 employeeId: { type: 'string', format: 'uuid' },
                                 category: { type: 'string', enum: COST_CATEGORIES as unknown as string[] },
                                 description: { type: 'string' },
-                                amount: { type: 'number', minimum: 0 },
+                                amount: { type: 'number', exclusiveMinimum: 0 },
                                 currency: { type: 'string' },
                                 paidDate: { type: 'string', format: 'date' },
                                 receiptRef: { type: 'string' },
@@ -325,16 +330,13 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const body = request.body as Record<string, unknown>
 
-        // Default stepNumber/stepLabel from the current visa stage when missing.
-        let stepNumber = body.stepNumber as number | undefined
-        let stepLabel = body.stepLabel as string | undefined
-        if (stepNumber === undefined || stepLabel === undefined) {
-            const visa = await getVisa(request.user.tenantId, id)
-            if (visa) {
-                if (stepNumber === undefined) stepNumber = visa.currentStep
-                if (stepLabel === undefined) stepLabel = visaStepLabel(stepNumber)
-            }
-        }
+        // Always verify the visa exists before creating the cost record.
+        // This prevents orphaned costs that would corrupt the PRO cost report.
+        const visa = await getVisa(request.user.tenantId, id)
+        if (!visa) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Visa application not found' })
+
+        let stepNumber = (body.stepNumber as number | undefined) ?? visa.currentStep
+        let stepLabel = (body.stepLabel as string | undefined) ?? visaStepLabel(stepNumber)
 
         const cost = await addVisaCost(request.user.tenantId, {
             visaApplicationId: id,

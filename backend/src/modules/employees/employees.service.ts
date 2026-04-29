@@ -4,6 +4,7 @@ import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
 import { employees, entities } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
+import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
 
 type Employee = InferSelectModel<typeof employees>
 type NewEmployee = InferInsertModel<typeof employees>
@@ -149,6 +150,11 @@ export async function updateEmployee(tenantId: string, id: string, data: Partial
         .set(withTimestamp(data))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .returning()
+
+    // Auto-exit: if department changed, remove from teams that no longer match
+    if (row && 'departmentId' in data) {
+        removeEmployeeFromMismatchedTeams(tenantId, id, data.departmentId ?? null).catch(() => { })
+    }
 
     return row ?? null
 }

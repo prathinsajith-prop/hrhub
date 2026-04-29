@@ -23,23 +23,19 @@ function fmt(val: string | number) {
     return Number(val).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export function MyPayslipsPage() {
+export function MyPayslipsContent() {
     const user = useAuthStore(s => s.user)
     const employeeId = (user as { employeeId?: string } | null)?.employeeId
     const { data: payslips = [], isLoading, isFetching, refetch } = useMyPayslips()
     const download = useDownloadPayslip()
 
     return (
-        <PageWrapper>
-            <PageHeader
-                title="My Payslips"
-                description="View and download your monthly payslips."
-                actions={
-                    <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
-                        Refresh
-                    </Button>
-                }
-            />
+        <div>
+            <div className="flex justify-end mb-4">
+                <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                    Refresh
+                </Button>
+            </div>
 
             {!employeeId ? (
                 <div className="flex flex-col items-center gap-3 py-16 text-center">
@@ -90,6 +86,15 @@ export function MyPayslipsPage() {
                     ))}
                 </div>
             )}
+        </div>
+    )
+}
+
+export function MyPayslipsPage() {
+    return (
+        <PageWrapper>
+            <PageHeader title="My Payslips" description="View and download your monthly payslips." />
+            <MyPayslipsContent />
         </PageWrapper>
     )
 }

@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt'
 import { eq, and, lt } from 'drizzle-orm'
 import crypto from 'node:crypto'
 import { db } from '../../db/index.js'
-import { users, refreshTokens, tenants, passwordResetTokens, entities } from '../../db/schema/index.js'
+import { users, refreshTokens, tenants, passwordResetTokens, entities, employees } from '../../db/schema/index.js'
 import { sendEmail, passwordResetEmail } from '../../plugins/email.js'
 import { loadEnv } from '../../config/env.js'
 import { recordLoginEvent } from '../audit/audit.service.js'
@@ -109,13 +109,13 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
     return issueTokens(fastify, user, input)
 }
 
-type UserRow = { id: string; name: string; email: string; role: string; tenantId: string; entityId: string | null; employeeId: string | null; department: string | null; avatarUrl: string | null }
+type UserRow = { id: string; name: string; email: string; role: string; tenantId: string; entityId: string | null; employeeId: string; department: string | null; avatarUrl: string | null }
 
 export async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ipAddress?: string; userAgent?: string }) {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, user.tenantId)).limit(1)
 
     const accessToken = fastify.jwt.sign(
-        { sub: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email, employeeId: user.employeeId },
+        { sub: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email, employeeId: user.employeeId, department: user.department ?? null },
         { expiresIn: '15m' }
     )
     const rawRefreshToken = crypto.randomBytes(48).toString('hex')
@@ -244,11 +244,34 @@ export async function registerTenant(input: {
 
         // Every tenant needs at least one entity — employees FK to entities.id.
         // Without this default row, the Add Employee flow returns 400.
-        await tx.insert(entities).values({
+        const [entity] = await tx.insert(entities).values({
             tenantId: tenant.id,
             entityName: input.company,
             licenseType: input.jurisdiction ?? 'mainland',
-        })
+        }).returning({ id: entities.id })
+
+        // Derive first / last name from the registrant's full name.
+        // Single-word names (e.g. "Madonna") reuse the first name as last name
+        // so the NOT NULL constraint on employees.last_name is satisfied.
+        const nameParts = input.name.trim().split(/\s+/)
+        const firstName = nameParts[0]
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0]
+
+        // Auto-generate EMP-00001 for the first employee of this tenant
+        const employeeNo = 'EMP-00001'
+        const today = new Date().toISOString().split('T')[0]
+
+        const [adminEmployee] = await tx.insert(employees).values({
+            tenantId: tenant.id,
+            entityId: entity.id,
+            employeeNo,
+            firstName,
+            lastName,
+            email: input.email.toLowerCase(),
+            joinDate: today,
+            status: 'active',
+            designation: 'Administrator',
+        }).returning({ id: employees.id })
 
         const [adminUser] = await tx.insert(users).values({
             tenantId: tenant.id,
@@ -256,6 +279,7 @@ export async function registerTenant(input: {
             email: input.email.toLowerCase(),
             passwordHash,
             role: 'super_admin',
+            employeeId: adminEmployee.id,
         }).returning({ id: users.id })
 
         // Seed default document templates for the new tenant (non-fatal if it fails)

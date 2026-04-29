@@ -35,7 +35,7 @@ function EditableField({
     )
 }
 
-export function MyProfilePage() {
+export function MyProfileContent() {
     const { data: employee, isLoading } = useMyEmployee()
     const update = useUpdateMyProfile()
     const [editing, setEditing] = useState(false)
@@ -77,25 +77,21 @@ export function MyProfilePage() {
     }
 
     return (
-        <PageWrapper>
-            <PageHeader
-                title="My Profile"
-                description="View your employment details and update your personal contact information."
-                actions={
-                    !editing ? (
-                        <Button variant="outline" onClick={() => setEditing(true)} leftIcon={<Pencil className="h-4 w-4" />}>
-                            Edit Contact Info
+        <div>
+            <div className="flex justify-end mb-4">
+                {!editing ? (
+                    <Button variant="outline" onClick={() => setEditing(true)} leftIcon={<Pencil className="h-4 w-4" />}>
+                        Edit Contact Info
+                    </Button>
+                ) : (
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => setEditing(false)} leftIcon={<X className="h-4 w-4" />}>Cancel</Button>
+                        <Button onClick={save} disabled={update.isPending} leftIcon={<Save className="h-4 w-4" />}>
+                            {update.isPending ? 'Saving…' : 'Save'}
                         </Button>
-                    ) : (
-                        <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => setEditing(false)} leftIcon={<X className="h-4 w-4" />}>Cancel</Button>
-                            <Button onClick={save} disabled={update.isPending} leftIcon={<Save className="h-4 w-4" />}>
-                                {update.isPending ? 'Saving…' : 'Save'}
-                            </Button>
-                        </div>
-                    )
-                }
-            />
+                    </div>
+                )}
+            </div>
 
             {isLoading ? (
                 <div className="space-y-4">
@@ -180,6 +176,15 @@ export function MyProfilePage() {
                     )}
                 </div>
             )}
+        </div>
+    )
+}
+
+export function MyProfilePage() {
+    return (
+        <PageWrapper>
+            <PageHeader title="My Profile" description="View your employment details and update your personal contact information." />
+            <MyProfileContent />
         </PageWrapper>
     )
 }
