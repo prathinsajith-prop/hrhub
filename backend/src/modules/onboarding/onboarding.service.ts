@@ -1,4 +1,4 @@
-import { eq, and, inArray, isNull, or, desc } from 'drizzle-orm'
+import { eq, and, inArray, isNull, isNotNull, or, desc } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { onboardingChecklists, onboardingSteps, employees } from '../../db/schema/index.js'
@@ -199,7 +199,7 @@ export async function listChecklists(tenantId: string, params: { limit: number; 
             eq(employees.tenantId, tenantId),
             eq(employees.isArchived, false),
             // Include: employees in onboarding status OR employees who have a checklist
-            or(eq(employees.status, 'onboarding'), and(isNull(onboardingChecklists.id).not())),
+            or(eq(employees.status, 'onboarding'), isNotNull(onboardingChecklists.id)),
         ))
         .orderBy(desc(onboardingChecklists.createdAt))
         .limit(params.limit)

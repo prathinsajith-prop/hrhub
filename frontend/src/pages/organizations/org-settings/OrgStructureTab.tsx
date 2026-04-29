@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, type ChangeEvent } from 'react'
-import { Plus, Trash2, Pencil, GitBranch, Check, XCircle, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
+import { Plus, Trash2, Pencil, GitBranch, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -16,7 +16,6 @@ import { Select as UiSelect, SelectContent as UiSelectContent, SelectItem as UiS
 import { Textarea as UiTextarea } from '@/components/ui/textarea'
 import { Dialog as UiDialog, DialogContent as UiDialogContent, DialogHeader as UiDialogHeader, DialogTitle as UiDialogTitle, DialogFooter as UiDialogFooter, DialogDescription as UiDialogDescription } from '@/components/ui/dialog'
 import { ApiError } from '@/lib/api'
-import { Section } from './_shared'
 import { ORG_TYPE_META, ORG_HIERARCHY, genOrgCode, type OrgUnitType } from '@/lib/org-unit-meta'
 
 // ─── Org Unit Dialog ──────────────────────────────────────────────────────────
