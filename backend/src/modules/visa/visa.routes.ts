@@ -335,8 +335,8 @@ export default async function (fastify: any): Promise<void> {
         const visa = await getVisa(request.user.tenantId, id)
         if (!visa) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Visa application not found' })
 
-        let stepNumber = (body.stepNumber as number | undefined) ?? visa.currentStep
-        let stepLabel = (body.stepLabel as string | undefined) ?? visaStepLabel(stepNumber)
+        const stepNumber = (body.stepNumber as number | undefined) ?? visa.currentStep
+        const stepLabel = (body.stepLabel as string | undefined) ?? visaStepLabel(stepNumber)
 
         const cost = await addVisaCost(request.user.tenantId, {
             visaApplicationId: id,

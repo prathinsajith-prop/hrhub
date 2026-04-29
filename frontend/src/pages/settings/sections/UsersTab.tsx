@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Users, Plus, XCircle, CheckCircle2, UserCircle, Shield, Search, MailCheck, UserPlus, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,11 +20,10 @@ import {
     useInvitableEmployees,
     useInviteUserBulk,
     useResendInvite,
-    type InvitableEmployee,
 } from '@/hooks/useSettings'
 import { usePermissions } from '@/hooks/usePermissions'
 import { labelFor } from '@/lib/enums'
-import { SettingsCard, Section } from './_shared'
+import { Section } from './_shared'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatLastLogin(lastLoginAt: string | null): string {

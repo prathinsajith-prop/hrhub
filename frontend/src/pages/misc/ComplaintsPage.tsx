@@ -1,10 +1,10 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/overlays'
 import {
     AlertCircle, AlertTriangle, CheckCircle2, Clock, ChevronRight,
-    Search, ShieldAlert, Users2, ArrowUpRight,
+    Search, ShieldAlert, ArrowUpRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -63,23 +63,6 @@ const STATUS_STYLE: Record<string, string> = {
     resolved:     'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
 }
 
-const STATUS_LABELS: Record<string, string> = {
-    draft:        'Draft',
-    submitted:    'Submitted',
-    under_review: 'Under Review',
-    escalated:    'Escalated',
-    resolved:     'Resolved',
-}
-
-const CATEGORY_LABELS: Record<string, string> = {
-    harassment:         'Harassment',
-    pay_dispute:        'Pay Dispute',
-    leave_dispute:      'Leave Dispute',
-    working_conditions: 'Working Conditions',
-    discrimination:     'Discrimination',
-    other:              'Other',
-}
-
 function isOverdue(slaDueAt: string | null, status: string): boolean {
     if (!slaDueAt || status === 'resolved') return false
     return new Date(slaDueAt) < new Date()
@@ -88,41 +71,42 @@ function isOverdue(slaDueAt: string | null, status: string): boolean {
 // ─── Resolve Dialog ───────────────────────────────────────────────────────────
 
 function ResolveDialog({ complaint, onClose }: { complaint: Complaint; onClose: () => void }) {
+    const { t } = useTranslation()
     const [notes, setNotes] = useState('')
     const qc = useQueryClient()
 
     const { mutate, isPending } = useMutation({
         mutationFn: () => api.post(`/complaints/${complaint.id}/resolve`, { resolutionNotes: notes }),
         onSuccess: () => {
-            toast.success('Complaint resolved')
+            toast.success(t('complaints.resolveDialog.success'))
             qc.invalidateQueries({ queryKey: ['complaints'] })
             onClose()
         },
-        onError: (err: any) => toast.error('Failed to resolve', err?.message),
+        onError: (err: any) => toast.error(t('complaints.resolveDialog.error'), err?.message),
     })
 
     return (
         <Dialog open onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[480px]">
                 <DialogHeader>
-                    <DialogTitle>Resolve Complaint</DialogTitle>
+                    <DialogTitle>{t('complaints.resolveDialog.title')}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
                     <p className="text-sm text-muted-foreground">{complaint.title}</p>
                     <div className="space-y-1.5">
-                        <Label>Resolution Notes <span className="text-destructive">*</span></Label>
+                        <Label>{t('complaints.resolveDialog.notesLabel')} <span className="text-destructive">*</span></Label>
                         <Textarea
                             rows={4}
-                            placeholder="Describe the resolution and outcome…"
+                            placeholder={t('complaints.resolveDialog.notesPlaceholder')}
                             value={notes}
                             onChange={e => setNotes(e.target.value)}
                         />
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button variant="outline" onClick={onClose}>{t('complaints.resolveDialog.cancel')}</Button>
                     <Button onClick={() => mutate()} disabled={notes.trim().length < 5 || isPending}>
-                        {isPending ? 'Resolving…' : 'Mark Resolved'}
+                        {isPending ? t('complaints.resolveDialog.resolving') : t('complaints.resolveDialog.markResolved')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -133,18 +117,19 @@ function ResolveDialog({ complaint, onClose }: { complaint: Complaint; onClose: 
 // ─── Detail Sheet ─────────────────────────────────────────────────────────────
 
 function ComplaintDetail({ complaint, onClose }: { complaint: Complaint; onClose: () => void }) {
+    const { t } = useTranslation()
     const [resolving, setResolving] = useState(false)
     const qc = useQueryClient()
 
     const acknowledge = useMutation({
         mutationFn: () => api.post(`/complaints/${complaint.id}/acknowledge`, {}),
-        onSuccess: () => { toast.success('Acknowledged'); qc.invalidateQueries({ queryKey: ['complaints'] }) },
+        onSuccess: () => { toast.success(t('complaints.detail.acknowledged')); qc.invalidateQueries({ queryKey: ['complaints'] }) },
         onError: (err: any) => toast.error('Failed', err?.message),
     })
 
     const escalate = useMutation({
         mutationFn: () => api.post(`/complaints/${complaint.id}/escalate`, {}),
-        onSuccess: () => { toast.success('Escalated'); qc.invalidateQueries({ queryKey: ['complaints'] }) },
+        onSuccess: () => { toast.success(t('complaints.detail.escalated')); qc.invalidateQueries({ queryKey: ['complaints'] }) },
         onError: (err: any) => toast.error('Failed', err?.message),
     })
 
@@ -160,17 +145,17 @@ function ComplaintDetail({ complaint, onClose }: { complaint: Complaint; onClose
                         {/* Status row */}
                         <div className="flex flex-wrap gap-2 items-center">
                             <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', STATUS_STYLE[complaint.status])}>
-                                {STATUS_LABELS[complaint.status]}
+                                {t(`complaints.status.${complaint.status}`)}
                             </span>
                             <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', SEVERITY_STYLE[complaint.severity])}>
-                                {complaint.severity.toUpperCase()}
+                                {t(`complaints.severity.${complaint.severity}`).toUpperCase()}
                             </span>
                             <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-muted text-muted-foreground">
-                                {CATEGORY_LABELS[complaint.category] ?? complaint.category}
+                                {t(`complaints.category.${complaint.category}`, { defaultValue: complaint.category })}
                             </span>
                             {isOverdue(complaint.slaDueAt, complaint.status) && (
                                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-700 ring-1 ring-red-200 flex items-center gap-1">
-                                    <Clock className="h-3 w-3" /> Overdue
+                                    <Clock className="h-3 w-3" /> {t('complaints.detail.overdue')}
                                 </span>
                             )}
                         </div>
@@ -178,24 +163,24 @@ function ComplaintDetail({ complaint, onClose }: { complaint: Complaint; onClose
                         {/* Meta */}
                         <div className="grid grid-cols-2 gap-3 text-sm">
                             <div>
-                                <p className="text-xs text-muted-foreground">Submitted by</p>
+                                <p className="text-xs text-muted-foreground">{t('complaints.detail.submittedBy')}</p>
                                 <p className="font-medium">{complaint.submittedByName ?? '—'}</p>
                             </div>
                             {complaint.subjectName && (
                                 <div>
-                                    <p className="text-xs text-muted-foreground">Subject</p>
+                                    <p className="text-xs text-muted-foreground">{t('complaints.detail.subject')}</p>
                                     <p className="font-medium">{complaint.subjectName}</p>
                                 </div>
                             )}
                             {complaint.assigneeName && (
                                 <div>
-                                    <p className="text-xs text-muted-foreground">Assigned to</p>
+                                    <p className="text-xs text-muted-foreground">{t('complaints.detail.assignedTo')}</p>
                                     <p className="font-medium">{complaint.assigneeName}</p>
                                 </div>
                             )}
                             {complaint.slaDueAt && (
                                 <div>
-                                    <p className="text-xs text-muted-foreground">SLA due</p>
+                                    <p className="text-xs text-muted-foreground">{t('complaints.detail.slaDue')}</p>
                                     <p className={cn('font-medium', isOverdue(complaint.slaDueAt, complaint.status) && 'text-red-600')}>
                                         {new Date(complaint.slaDueAt).toLocaleDateString()}
                                     </p>
@@ -205,14 +190,14 @@ function ComplaintDetail({ complaint, onClose }: { complaint: Complaint; onClose
 
                         {/* Description */}
                         <div className="rounded-lg border bg-muted/30 p-4">
-                            <p className="text-xs text-muted-foreground mb-1.5">Description</p>
+                            <p className="text-xs text-muted-foreground mb-1.5">{t('complaints.detail.description')}</p>
                             <p className="text-sm whitespace-pre-wrap leading-relaxed">{complaint.description}</p>
                         </div>
 
                         {/* Resolution */}
                         {complaint.resolutionNotes && (
                             <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4">
-                                <p className="text-xs text-emerald-600 font-semibold mb-1.5">Resolution</p>
+                                <p className="text-xs text-emerald-600 font-semibold mb-1.5">{t('complaints.detail.resolution')}</p>
                                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{complaint.resolutionNotes}</p>
                             </div>
                         )}
@@ -228,7 +213,7 @@ function ComplaintDetail({ complaint, onClose }: { complaint: Complaint; onClose
                                     onClick={() => acknowledge.mutate()}
                                     disabled={acknowledge.isPending}
                                 >
-                                    Acknowledge
+                                    {t('complaints.detail.acknowledge')}
                                 </Button>
                             )}
                             {['submitted', 'under_review'].includes(complaint.status) && (
@@ -240,12 +225,12 @@ function ComplaintDetail({ complaint, onClose }: { complaint: Complaint; onClose
                                     disabled={escalate.isPending}
                                 >
                                     <ArrowUpRight className="h-3.5 w-3.5 mr-1.5" />
-                                    Escalate
+                                    {t('complaints.detail.escalate')}
                                 </Button>
                             )}
                             <Button size="sm" onClick={() => setResolving(true)}>
                                 <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                                Resolve
+                                {t('complaints.detail.resolve')}
                             </Button>
                         </DialogFooter>
                     )}
@@ -260,6 +245,7 @@ function ComplaintDetail({ complaint, onClose }: { complaint: Complaint; onClose
 // ─── Row ──────────────────────────────────────────────────────────────────────
 
 function ComplaintRow({ c, onClick }: { c: Complaint; onClick: () => void }) {
+    const { t } = useTranslation()
     const overdue = isOverdue(c.slaDueAt, c.status)
     return (
         <tr
@@ -269,7 +255,7 @@ function ComplaintRow({ c, onClick }: { c: Complaint; onClick: () => void }) {
             <td className="px-4 py-3 max-w-[240px]">
                 <p className="text-sm font-medium truncate">{c.title}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                    {CATEGORY_LABELS[c.category] ?? c.category}
+                    {t(`complaints.category.${c.category}`, { defaultValue: c.category })}
                 </p>
             </td>
             <td className="px-4 py-3">
@@ -277,12 +263,12 @@ function ComplaintRow({ c, onClick }: { c: Complaint; onClick: () => void }) {
             </td>
             <td className="px-4 py-3">
                 <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', SEVERITY_STYLE[c.severity])}>
-                    {c.severity.toUpperCase()}
+                    {t(`complaints.severity.${c.severity}`).toUpperCase()}
                 </span>
             </td>
             <td className="px-4 py-3">
                 <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', STATUS_STYLE[c.status])}>
-                    {STATUS_LABELS[c.status]}
+                    {t(`complaints.status.${c.status}`)}
                 </span>
             </td>
             <td className="px-4 py-3">
@@ -305,6 +291,7 @@ function ComplaintRow({ c, onClick }: { c: Complaint; onClick: () => void }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function ComplaintsPage() {
+    const { t } = useTranslation()
     const [search, setSearch] = useState('')
     const [status, setStatus] = useState('all')
     const [severity, setSeverity] = useState('all')
@@ -328,8 +315,8 @@ export function ComplaintsPage() {
     return (
         <PageWrapper>
             <PageHeader
-                title="Complaints & Grievances"
-                description="Review, investigate, and resolve employee complaints and grievances."
+                title={t('complaints.pageTitle')}
+                description={t('complaints.pageDesc')}
             />
 
             {/* KPI strip */}
@@ -337,10 +324,10 @@ export function ComplaintsPage() {
                 {statsLoading
                     ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)
                     : ([
-                        { label: 'Total', value: stats?.total ?? 0, icon: ShieldAlert, color: 'blue' },
-                        { label: 'Open', value: stats?.open ?? 0, icon: AlertCircle, color: 'blue' },
-                        { label: 'Critical', value: stats?.critical ?? 0, icon: AlertTriangle, color: 'red' },
-                        { label: 'Overdue', value: stats?.overdue ?? 0, icon: Clock, color: 'amber' },
+                        { label: t('complaints.stats.total'),    value: stats?.total ?? 0,    icon: ShieldAlert,    color: 'blue' },
+                        { label: t('complaints.stats.open'),     value: stats?.open ?? 0,     icon: AlertCircle,    color: 'blue' },
+                        { label: t('complaints.stats.critical'), value: stats?.critical ?? 0, icon: AlertTriangle,  color: 'red' },
+                        { label: t('complaints.stats.overdue'),  value: stats?.overdue ?? 0,  icon: Clock,          color: 'amber' },
                     ] as const).map(s => (
                         <KpiCardCompact
                             key={s.label}
@@ -358,7 +345,7 @@ export function ComplaintsPage() {
                 <div className="relative flex-1 min-w-[200px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search complaints…"
+                        placeholder={t('complaints.filters.search')}
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         className="pl-9"
@@ -366,26 +353,26 @@ export function ComplaintsPage() {
                 </div>
                 <Select value={status} onValueChange={setStatus}>
                     <SelectTrigger className="w-[160px]">
-                        <SelectValue placeholder="All statuses" />
+                        <SelectValue placeholder={t('complaints.filters.allStatuses')} />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">All statuses</SelectItem>
-                        <SelectItem value="submitted">Submitted</SelectItem>
-                        <SelectItem value="under_review">Under Review</SelectItem>
-                        <SelectItem value="escalated">Escalated</SelectItem>
-                        <SelectItem value="resolved">Resolved</SelectItem>
+                        <SelectItem value="all">{t('complaints.filters.allStatuses')}</SelectItem>
+                        <SelectItem value="submitted">{t('complaints.status.submitted')}</SelectItem>
+                        <SelectItem value="under_review">{t('complaints.status.under_review')}</SelectItem>
+                        <SelectItem value="escalated">{t('complaints.status.escalated')}</SelectItem>
+                        <SelectItem value="resolved">{t('complaints.status.resolved')}</SelectItem>
                     </SelectContent>
                 </Select>
                 <Select value={severity} onValueChange={setSeverity}>
                     <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="All severity" />
+                        <SelectValue placeholder={t('complaints.filters.allSeverity')} />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">All severity</SelectItem>
-                        <SelectItem value="critical">Critical</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="all">{t('complaints.filters.allSeverity')}</SelectItem>
+                        <SelectItem value="critical">{t('complaints.severity.critical')}</SelectItem>
+                        <SelectItem value="high">{t('complaints.severity.high')}</SelectItem>
+                        <SelectItem value="medium">{t('complaints.severity.medium')}</SelectItem>
+                        <SelectItem value="low">{t('complaints.severity.low')}</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
@@ -395,11 +382,11 @@ export function ComplaintsPage() {
                 <table className="w-full text-sm">
                     <thead className="bg-muted/50 border-b">
                         <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Complaint</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Submitted by</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Severity</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">SLA Due</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.complaint')}</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.submittedBy')}</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.severity')}</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.status')}</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.slaDue')}</th>
                             <th className="w-8" />
                         </tr>
                     </thead>
@@ -418,7 +405,7 @@ export function ComplaintsPage() {
                                     <tr>
                                         <td colSpan={6} className="text-center py-16">
                                             <ShieldAlert className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                                            <p className="text-muted-foreground text-sm">No complaints found</p>
+                                            <p className="text-muted-foreground text-sm">{t('complaints.noComplaints')}</p>
                                         </td>
                                     </tr>
                                 )

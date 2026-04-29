@@ -84,7 +84,6 @@ export function SiteHeader() {
   const notifications = notifData?.data ?? []
   const { user, tenant, logout } = useAuthStore()
   const isAdmin = user?.role === 'super_admin' || user?.role === 'hr_manager'
-  const isBillingAdmin = user?.role === 'super_admin' || user?.role === 'hr_manager'
   const profileRoute = isAdmin ? ROUTES.settings : '/my/account'
   const { data: myTenants } = useMyTenants()
   const switchMut = useSwitchTenant()

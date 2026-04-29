@@ -23,8 +23,6 @@ import {
   UsersRoundIcon,
   ShieldIcon,
   KeyRoundIcon,
-  UserCircleIcon,
-  ReceiptIcon,
   MessageSquareWarningIcon,
 } from "lucide-react"
 import { NavUser } from "@/components/layout/NavUser"

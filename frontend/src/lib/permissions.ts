@@ -210,7 +210,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     // Documents (read-only)
     'view_documents',
     // Leave (approve for dept + own)
-    'approve_leave', 'manage_leave', 'view_own_leave',
+    'approve_leave', 'view_own_leave',
     // Attendance (manage for dept)
     'manage_attendance', 'view_own_attendance',
     // Performance (manage for dept)

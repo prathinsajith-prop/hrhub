@@ -117,7 +117,7 @@
     "deselectAll": "إلغاء تحديد الكل",
     "language": "اللغة",
     "switchLanguage": "Switch to English / الإنجليزية",
-    "english": "English",
+    "english": "الإنجليزية",
     "arabic": "العربية",
     "current": "الحالي",
     "na": "—",
@@ -693,6 +693,103 @@
       "monthly_2_then_30": "السنوية الإماراتية — يومان شهرياً في السنة الأولى، ثم 30 يوماً سنوياً",
       "unlimited": "غير محدودة (لا تتبع رصيد)",
       "none": "غير متتبعة"
+    }
+  },
+  "complaints": {
+    "pageTitle": "الشكاوى والتظلمات",
+    "pageDesc": "مراجعة وتحقيق وحل شكاوى وتظلمات الموظفين.",
+    "myPageTitle": "شكاواي",
+    "myPageDesc": "تقديم وتتبع شكاواك وتظلماتك بسرية تامة.",
+    "newComplaint": "شكوى جديدة",
+    "noComplaints": "لا توجد شكاوى",
+    "noMyComplaints": "لا توجد شكاوى بعد",
+    "noMyComplaintsHint": "استخدم الزر أعلاه لتقديم شكوى أو تظلم إلى الموارد البشرية.",
+    "stats": {
+      "total": "الإجمالي",
+      "open": "المفتوحة",
+      "critical": "الحرجة",
+      "overdue": "المتأخرة"
+    },
+    "filters": {
+      "search": "بحث في الشكاوى…",
+      "allStatuses": "جميع الحالات",
+      "allSeverity": "جميع درجات الخطورة"
+    },
+    "table": {
+      "complaint": "الشكوى",
+      "submittedBy": "مقدم من",
+      "severity": "درجة الخطورة",
+      "status": "الحالة",
+      "slaDue": "موعد SLA"
+    },
+    "detail": {
+      "submittedBy": "مقدم من",
+      "subject": "المعني",
+      "assignedTo": "مسند إلى",
+      "slaDue": "موعد SLA",
+      "description": "الوصف",
+      "resolution": "الحل",
+      "overdue": "متأخرة",
+      "acknowledge": "إقرار",
+      "escalate": "تصعيد",
+      "resolve": "حل",
+      "acknowledged": "تم الإقرار",
+      "escalated": "تم التصعيد"
+    },
+    "resolveDialog": {
+      "title": "حل الشكوى",
+      "notesLabel": "ملاحظات الحل",
+      "notesPlaceholder": "صف الحل والنتيجة…",
+      "cancel": "إلغاء",
+      "resolving": "جار الحل…",
+      "markResolved": "وضع علامة محلول",
+      "success": "تم حل الشكوى",
+      "error": "فشل في الحل"
+    },
+    "newDialog": {
+      "titleNew": "شكوى جديدة",
+      "titleReview": "مراجعة وتقديم",
+      "titleLabel": "العنوان",
+      "titlePlaceholder": "ملخص موجز للمشكلة…",
+      "category": "الفئة",
+      "severity": "درجة الخطورة",
+      "confidentiality": "السرية",
+      "confidentialOpt": "سري — الموارد البشرية تعرف هويتك",
+      "anonymousOpt": "مجهول — الهوية مخفية عن الجميع",
+      "namedOpt": "مُعرَّف — الاسم مرئي لجميع الأطراف",
+      "descriptionLabel": "الوصف",
+      "descriptionPlaceholder": "صف المشكلة بالتفصيل، بما في ذلك التواريخ والأشخاص المعنيين وأي سياق داعم…",
+      "draftHint": "تُحفظ شكواك كمسودة أولاً. راجعها قبل التقديم — بعد التقديم لا يمكن تعديلها.",
+      "readyToSubmit": "هل أنت مستعد للتقديم؟ بعد التقديم، ستُبلَّغ الموارد البشرية وستقرّ الاستلام خلال يومي عمل.",
+      "cancel": "إلغاء",
+      "saving": "جار الحفظ…",
+      "saveDraft": "حفظ كمسودة",
+      "submitting": "جار التقديم…",
+      "submitComplaint": "تقديم الشكوى",
+      "submitSuccess": "تم تقديم الشكوى. ستراجعها الموارد البشرية قريباً.",
+      "saveError": "فشل في الحفظ",
+      "submitError": "فشل في التقديم"
+    },
+    "status": {
+      "draft": "مسودة",
+      "submitted": "مقدمة",
+      "under_review": "قيد المراجعة",
+      "escalated": "مصعَّدة",
+      "resolved": "محلولة"
+    },
+    "category": {
+      "harassment": "تحرش",
+      "pay_dispute": "نزاع راتب",
+      "leave_dispute": "نزاع إجازة",
+      "working_conditions": "ظروف العمل",
+      "discrimination": "تمييز",
+      "other": "أخرى"
+    },
+    "severity": {
+      "critical": "حرجة",
+      "high": "عالية",
+      "medium": "متوسطة",
+      "low": "منخفضة"
     }
   }
 }

@@ -694,5 +694,102 @@
       "unlimited": "Unlimited (no balance tracking)",
       "none": "Not tracked"
     }
+  },
+  "complaints": {
+    "pageTitle": "Complaints & Grievances",
+    "pageDesc": "Review, investigate, and resolve employee complaints and grievances.",
+    "myPageTitle": "My Complaints",
+    "myPageDesc": "Submit and track your complaints and grievances confidentially.",
+    "newComplaint": "New Complaint",
+    "noComplaints": "No complaints found",
+    "noMyComplaints": "No complaints yet",
+    "noMyComplaintsHint": "Use the button above to submit a complaint or grievance to HR.",
+    "stats": {
+      "total": "Total",
+      "open": "Open",
+      "critical": "Critical",
+      "overdue": "Overdue"
+    },
+    "filters": {
+      "search": "Search complaints…",
+      "allStatuses": "All statuses",
+      "allSeverity": "All severity"
+    },
+    "table": {
+      "complaint": "Complaint",
+      "submittedBy": "Submitted by",
+      "severity": "Severity",
+      "status": "Status",
+      "slaDue": "SLA Due"
+    },
+    "detail": {
+      "submittedBy": "Submitted by",
+      "subject": "Subject",
+      "assignedTo": "Assigned to",
+      "slaDue": "SLA due",
+      "description": "Description",
+      "resolution": "Resolution",
+      "overdue": "Overdue",
+      "acknowledge": "Acknowledge",
+      "escalate": "Escalate",
+      "resolve": "Resolve",
+      "acknowledged": "Acknowledged",
+      "escalated": "Escalated"
+    },
+    "resolveDialog": {
+      "title": "Resolve Complaint",
+      "notesLabel": "Resolution Notes",
+      "notesPlaceholder": "Describe the resolution and outcome…",
+      "cancel": "Cancel",
+      "resolving": "Resolving…",
+      "markResolved": "Mark Resolved",
+      "success": "Complaint resolved",
+      "error": "Failed to resolve"
+    },
+    "newDialog": {
+      "titleNew": "New Complaint",
+      "titleReview": "Review & Submit",
+      "titleLabel": "Title",
+      "titlePlaceholder": "Brief summary of the issue…",
+      "category": "Category",
+      "severity": "Severity",
+      "confidentiality": "Confidentiality",
+      "confidentialOpt": "Confidential — HR sees your name",
+      "anonymousOpt": "Anonymous — name hidden from all",
+      "namedOpt": "Named — name visible to all parties",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Describe the issue in detail, including dates, people involved, and any supporting context…",
+      "draftHint": "Your complaint is saved as a draft first. Review it before submitting — once submitted, it cannot be edited.",
+      "readyToSubmit": "Ready to submit? Once submitted, HR will be notified and will acknowledge within 2 working days.",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "saveDraft": "Save Draft",
+      "submitting": "Submitting…",
+      "submitComplaint": "Submit Complaint",
+      "submitSuccess": "Complaint submitted. HR will review shortly.",
+      "saveError": "Failed to save",
+      "submitError": "Failed to submit"
+    },
+    "status": {
+      "draft": "Draft",
+      "submitted": "Submitted",
+      "under_review": "Under Review",
+      "escalated": "Escalated",
+      "resolved": "Resolved"
+    },
+    "category": {
+      "harassment": "Harassment",
+      "pay_dispute": "Pay Dispute",
+      "leave_dispute": "Leave Dispute",
+      "working_conditions": "Working Conditions",
+      "discrimination": "Discrimination",
+      "other": "Other"
+    },
+    "severity": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    }
   }
 }
