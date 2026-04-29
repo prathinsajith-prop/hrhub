@@ -5,6 +5,7 @@ import { leaveRequests } from '../../db/schema/leave.js'
 import type { InferInsertModel } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
+import { calculateGratuity as calcGratuityFromExit } from '../exit/exit.service.js'
 
 type NewPayrollRun = InferInsertModel<typeof payrollRuns>
 
@@ -268,20 +269,9 @@ export async function getPayslipsWithEmployees(tenantId: string, payrollRunId: s
     }))
 }
 
-/**
- * UAE Labour Law gratuity calculation.
- * - 21 days basic salary per year (first 5 years)
- * - 30 days basic salary per year (after 5 years)
- * - Capped at 2 years total salary
- */
+/** Re-export from exit service so there is a single canonical implementation. */
 export function calculateGratuity(basicSalary: number, yearsOfService: number): number {
-    const dailyRate = basicSalary / 30
-    const gratuity = yearsOfService <= 5
-        ? dailyRate * 21 * yearsOfService
-        : dailyRate * 21 * 5 + dailyRate * 30 * (yearsOfService - 5)
-
-    // Cap at 2 years total salary
-    return Math.min(gratuity, basicSalary * 24)
+    return calcGratuityFromExit(basicSalary, yearsOfService)
 }
 
 /**

@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/primitives'
 import { api } from '@/lib/api'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
 import { useDocuments, useDeleteDocument } from '@/hooks/useDocuments'
+import { usePermissions } from '@/hooks/usePermissions'
 import { useEmployees } from '@/hooks/useEmployees'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
@@ -218,6 +219,7 @@ const columns = (
   onVerify: (d: Document) => void,
   onEdit: (d: Document) => void,
   onDownload: (d: Document) => void,
+  canManage: boolean,
 ): ColumnDef<Document>[] => [
     {
       accessorKey: 'docType',
@@ -309,16 +311,18 @@ const columns = (
           >
             <Download className="h-3.5 w-3.5" />
           </Button>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Edit document"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => onEdit(d)}
-          >
-            <Edit2 className="h-3.5 w-3.5" />
-          </Button>
-          {(d.status === 'under_review' || d.status === 'pending_upload' || d.status === 'rejected') && (
+          {canManage && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Edit document"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => onEdit(d)}
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {canManage && (d.status === 'under_review' || d.status === 'pending_upload' || d.status === 'rejected') && (
             <Button
               size="icon-sm"
               variant="ghost"
@@ -328,15 +332,17 @@ const columns = (
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
             </Button>
           )}
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Delete document"
-            className="text-destructive hover:text-destructive"
-            onClick={() => onDelete(d)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {canManage && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Delete document"
+              className="text-destructive hover:text-destructive"
+              onClick={() => onDelete(d)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       ),
       size: 110,
@@ -345,10 +351,13 @@ const columns = (
 
 export function DocumentsPage() {
   const { t } = useTranslation()
+  const { can } = usePermissions()
+  const canManage = can('manage_documents')
+  const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const qpEmployee = searchParams.get('employeeId') ?? ''
   const qpCategory = searchParams.get('category') ?? ''
-  const qpUpload = searchParams.get('upload') === '1' || !!qpEmployee || !!qpCategory
+  const qpUpload = canManage && (searchParams.get('upload') === '1' || !!qpEmployee || !!qpCategory)
   const [uploadOpen, setUploadOpen] = useState(qpUpload)
   const [editTarget, setEditTarget] = useState<Document | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
@@ -414,9 +423,9 @@ export function DocumentsPage() {
   // capture stable setState/mutation references, so we use an empty dep array
   // and silence the lint rule explicitly.
   const cols = useMemo(
-    () => columns(handleView, (d) => setDeleteTarget(d), handleVerify, (d) => setEditTarget(d), handleDownload),
+    () => columns(handleView, (d) => setDeleteTarget(d), handleVerify, (d) => setEditTarget(d), handleDownload, canManage),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [canManage],
   )
 
   return (
@@ -429,9 +438,11 @@ export function DocumentsPage() {
             <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
               Refresh
             </Button>
-            <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setUploadOpen(true)}>
-              Upload Document
-            </Button>
+            {canManage && (
+              <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setUploadOpen(true)}>
+                Upload Document
+              </Button>
+            )}
           </div>
         }
       />
@@ -516,6 +527,7 @@ export function DocumentsPage() {
               <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />}
                 onClick={() => {
                   Promise.all(selected.map((row: any) => api.delete(`/documents/${row.id}`))).then(() => {
+                    void qc.invalidateQueries({ queryKey: ['documents'] })
                     toast.warning(`${selected.length} document${selected.length === 1 ? '' : 's'} archived`)
                   })
                 }}>

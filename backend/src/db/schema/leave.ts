@@ -16,6 +16,8 @@ export const leaveRequests = pgTable('leave_requests', {
     status: text('status').notNull().default('pending')
         .$type<'pending' | 'approved' | 'rejected' | 'cancelled'>(),
     reason: text('reason'),
+    handoverTo: uuid('handover_to').references(() => employees.id, { onDelete: 'set null' }),
+    handoverNotes: text('handover_notes'),
     approvedBy: uuid('approved_by').references(() => users.id),
     approvedAt: timestamp('approved_at', { withTimezone: true }),
     appliedDate: date('applied_date').notNull().defaultNow(),

@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
-import { LogOut, DollarSign, CheckCircle2, Clock, UserMinus, Eye, CalendarDays, FileText, RefreshCcw } from 'lucide-react'
+import {
+    LogOut, DollarSign, CheckCircle2, Clock, UserMinus, Eye, CalendarDays,
+    FileText, RefreshCcw, XCircle, AlertTriangle, Scale,
+} from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -16,7 +19,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { DataTable } from '@/components/ui/data-table'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { InitialsAvatar } from '@/components/shared/Avatar'
-import { useExitRequests, useInitiateExit, useApproveExit, useMarkSettlementPaid, useSettlementPreview, type ExitRequest } from '@/hooks/useExit'
+import {
+    useExitRequests, useInitiateExit, useApproveExit, useRejectExit, useMarkSettlementPaid,
+    useSettlementPreview, type ExitRequest,
+} from '@/hooks/useExit'
 import { useEmployees } from '@/hooks/useEmployees'
 import type { Employee } from '@/types'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
@@ -49,8 +55,6 @@ const statusVariant: Record<string, 'warning' | 'info' | 'destructive' | 'succes
     completed: 'success',
 }
 
-const exitTypeLabel = EXIT_TYPE_LABELS
-
 const exitTypeColor: Record<string, string> = {
     resignation: 'bg-amber-100 text-amber-700',
     termination: 'bg-red-100 text-red-700',
@@ -66,6 +70,7 @@ interface InitiateForm {
     noticePeriodDays: number
     reason: string
     notes: string
+    deductions: number
 }
 
 const defaultForm: InitiateForm = {
@@ -76,20 +81,49 @@ const defaultForm: InitiateForm = {
     noticePeriodDays: 30,
     reason: '',
     notes: '',
+    deductions: 0,
 }
 
-function fmt(n: string | number | undefined) {
+function fmt(n: string | number | undefined | null) {
     if (n === undefined || n === null) return '—'
-    return formatCurrency(Number(n))
+    const num = Number(n)
+    if (isNaN(num)) return '—'
+    return formatCurrency(num)
 }
 
-type EnrichedExit = ExitRequest & { employeeName: string; employeeDepartment: string; employeeDesignation: string }
-
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+function DetailRow({ label, value, highlight }: { label: string; value: React.ReactNode; highlight?: boolean }) {
     return (
-        <div className="flex justify-between items-start py-2.5 border-b last:border-0">
-            <span className="text-sm text-muted-foreground">{label}</span>
-            <span className="text-sm font-medium text-right max-w-[60%]">{value ?? '—'}</span>
+        <div className={`flex justify-between items-start py-2.5 border-b last:border-0 ${highlight ? 'bg-muted/30 px-4 -mx-4' : ''}`}>
+            <span className={`text-sm ${highlight ? 'font-semibold' : 'text-muted-foreground'}`}>{label}</span>
+            <span className={`text-sm font-medium text-right max-w-[60%] ${highlight ? 'text-primary font-bold text-base' : ''}`}>{value ?? '—'}</span>
+        </div>
+    )
+}
+
+function GratuityBreakdown({ preview }: { preview: NonNullable<ReturnType<typeof useSettlementPreview>['data']> }) {
+    const yrs = preview.yearsOfService
+    const dailyWage = preview.basicSalary / 30
+    const first5 = Math.min(yrs, 5)
+    const beyond5 = Math.max(0, yrs - 5)
+
+    return (
+        <div className="rounded-lg border bg-muted/20 p-3 space-y-1.5 text-xs">
+            <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px] flex items-center gap-1">
+                <Scale className="h-3 w-3" /> Gratuity Calculation (UAE Labour Law 2022)
+            </p>
+            <div className="space-y-1 text-muted-foreground">
+                <p>Daily wage: <span className="font-medium text-foreground">{fmt(dailyWage)}</span> (basic ÷ 30)</p>
+                <p>Service: <span className="font-medium text-foreground">{yrs} years</span></p>
+                {first5 > 0 && (
+                    <p>First {first5.toFixed(2)}y × 21 days: <span className="font-medium text-foreground">{fmt(dailyWage * 21 * first5)}</span></p>
+                )}
+                {beyond5 > 0 && (
+                    <p>Next {beyond5.toFixed(2)}y × 30 days: <span className="font-medium text-foreground">{fmt(dailyWage * 30 * beyond5)}</span></p>
+                )}
+                {preview.basicSalary * 24 < (dailyWage * 21 * first5 + dailyWage * 30 * beyond5) && (
+                    <p className="text-amber-600">Cap applied: 2-year salary maximum ({fmt(preview.basicSalary * 24)})</p>
+                )}
+            </div>
         </div>
     )
 }
@@ -100,15 +134,17 @@ export function ExitPage() {
     const canManage = can('manage_exit')
 
     const { data: exits, isLoading, isFetching, refetch } = useExitRequests()
-    const { data: employees } = useEmployees({ limit: 100 })
     const initiate = useInitiateExit()
     const approve = useApproveExit()
+    const reject = useRejectExit()
     const markPaid = useMarkSettlementPaid()
 
     const [showDialog, setShowDialog] = useState(false)
     const [form, setForm] = useState<InitiateForm>(defaultForm)
     const [step, setStep] = useState<'form' | 'preview'>('form')
-    const [viewingExit, setViewingExit] = useState<EnrichedExit | null>(null)
+    const [viewingExit, setViewingExit] = useState<ExitRequest | null>(null)
+    const [rejectTarget, setRejectTarget] = useState<ExitRequest | null>(null)
+    const [rejectReason, setRejectReason] = useState('')
 
     const exitSearch = useSearchFilters({
         storageKey: 'hrhub.exit.searchHistory',
@@ -120,6 +156,7 @@ export function ExitPage() {
         previewEnabled ? form.employeeId : undefined,
         previewEnabled ? form.exitDate : undefined,
         previewEnabled ? form.exitType : undefined,
+        previewEnabled ? form.deductions : undefined,
     )
 
     const set = (k: keyof InitiateForm, v: string | number) => setForm(f => ({ ...f, [k]: v }))
@@ -136,50 +173,33 @@ export function ExitPage() {
         }
     }
 
-    const empList = useMemo(
-        () => Array.isArray(employees) ? employees : (employees as { data?: Employee[] } | undefined)?.data ?? [],
-        [employees],
-    )
     const exitList: ExitRequest[] = useMemo(
         () => Array.isArray(exits) ? exits : [],
         [exits],
     )
 
-    const enrichedExits = useMemo(
-        () => exitList.map((e) => {
-            const emp = empList.find((em: Employee) => em.id === e.employeeId)
-            return {
-                ...e,
-                employeeName: emp ? `${emp.firstName} ${emp.lastName}` : '—',
-                employeeDepartment: emp?.department ?? '',
-                employeeDesignation: emp?.designation ?? '',
-            }
-        }),
-        [exitList, empList],
-    )
-
     const filteredExits = useMemo(
-        () => applyClientFilters(enrichedExits as unknown as Record<string, unknown>[], {
+        () => applyClientFilters(exitList as unknown as Record<string, unknown>[], {
             searchInput: exitSearch.searchInput,
             appliedFilters: exitSearch.appliedFilters,
             searchFields: ['employeeName', 'exitType', 'status', 'reason'],
         }),
-        [enrichedExits, exitSearch.appliedFilters, exitSearch.searchInput],
+        [exitList, exitSearch.appliedFilters, exitSearch.searchInput],
     )
 
     const pending = exitList.filter((e) => e.status === 'pending').length
     const approved = exitList.filter((e) => e.status === 'approved').length
     const completed = exitList.filter((e) => e.status === 'completed').length
 
-    const columns: ColumnDef<EnrichedExit>[] = useMemo(() => [
+    const columns: ColumnDef<ExitRequest>[] = useMemo(() => [
         {
             id: 'employee',
             header: 'Employee',
             cell: ({ row: { original: e } }) => (
                 <div className="flex items-center gap-2.5 min-w-0">
-                    <InitialsAvatar name={e.employeeName} size="sm" />
+                    <InitialsAvatar name={e.employeeName ?? '—'} src={e.employeeAvatarUrl ?? undefined} size="sm" />
                     <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{e.employeeName}</p>
+                        <p className="text-sm font-medium truncate">{e.employeeName ?? '—'}</p>
                         {e.employeeDesignation && (
                             <p className="text-[11px] text-muted-foreground truncate">{e.employeeDesignation}</p>
                         )}
@@ -195,7 +215,7 @@ export function ExitPage() {
                 const v = getValue() as string
                 return (
                     <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium capitalize ${exitTypeColor[v] ?? 'bg-gray-100 text-gray-700'}`}>
-                        {exitTypeLabel[v] ?? v}
+                        {EXIT_TYPE_LABELS[v] ?? v}
                     </span>
                 )
             },
@@ -252,24 +272,39 @@ export function ExitPage() {
                         variant="ghost"
                         className="h-7 w-7 p-0"
                         onClick={(ev) => { ev.stopPropagation(); setViewingExit(e) }}
+                        title="View details"
                     >
                         <Eye className="h-3.5 w-3.5" />
                     </Button>
                     {canManage && e.status === 'pending' && (
-                        <Button
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={(ev) => {
-                                ev.stopPropagation()
-                                approve.mutate(e.id, {
-                                    onSuccess: () => toast.success('Approved', 'Exit request approved.'),
-                                    onError: () => toast.error('Failed', 'Could not approve exit.'),
-                                })
-                            }}
-                            disabled={approve.isPending}
-                        >
-                            Approve
-                        </Button>
+                        <>
+                            <Button
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={(ev) => {
+                                    ev.stopPropagation()
+                                    approve.mutate(e.id, {
+                                        onSuccess: () => toast.success('Approved', 'Exit request approved and employee marked as terminated.'),
+                                        onError: () => toast.error('Failed', 'Could not approve exit.'),
+                                    })
+                                }}
+                                disabled={approve.isPending}
+                            >
+                                Approve
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                                onClick={(ev) => {
+                                    ev.stopPropagation()
+                                    setRejectTarget(e)
+                                    setRejectReason('')
+                                }}
+                            >
+                                Reject
+                            </Button>
+                        </>
                     )}
                     {canManage && e.status === 'approved' && !e.settlementPaid && (
                         <Button
@@ -290,7 +325,7 @@ export function ExitPage() {
                     )}
                 </div>
             ),
-            size: 160,
+            size: 180,
         },
     ], [canManage, approve, markPaid])
 
@@ -324,14 +359,12 @@ export function ExitPage() {
                 <CardHeader className="flex-row items-start sm:items-center justify-between gap-3 flex-wrap">
                     <div>
                         <CardTitle className="text-base">All Exit Requests</CardTitle>
-                        <CardDescription className="mt-0.5">
-                            {exitList.length} total records
-                        </CardDescription>
+                        <CardDescription className="mt-0.5">{exitList.length} total records</CardDescription>
                     </div>
                 </CardHeader>
                 <CardContent>
                     <DataTable
-                        columns={columns as ColumnDef<ExitRequest>[]}
+                        columns={columns}
                         data={filteredExits as unknown as ExitRequest[]}
                         isLoading={isLoading}
                         advancedFilter={{
@@ -341,27 +374,24 @@ export function ExitPage() {
                         }}
                         pageSize={10}
                         emptyMessage={exitList.length === 0 ? 'No exit requests yet.' : 'No results match your filters.'}
-                        onRowClick={(row) => setViewingExit(row as unknown as EnrichedExit)}
+                        onRowClick={(row) => setViewingExit(row as ExitRequest)}
                     />
                 </CardContent>
             </Card>
 
             {/* Detail view dialog */}
             <Dialog open={!!viewingExit} onOpenChange={(o) => { if (!o) setViewingExit(null) }}>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <FileText className="h-4 w-4" /> Exit Request Details
                         </DialogTitle>
-                        <DialogDescription>
-                            Full details and settlement breakdown for this exit request.
-                        </DialogDescription>
+                        <DialogDescription>Full details and settlement breakdown.</DialogDescription>
                     </DialogHeader>
                     {viewingExit && (
                         <div className="space-y-4 py-1">
-                            {/* Employee header */}
                             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40">
-                                <InitialsAvatar name={viewingExit.employeeName} size="md" />
+                                <InitialsAvatar name={viewingExit.employeeName ?? '—'} src={viewingExit.employeeAvatarUrl ?? undefined} size="md" />
                                 <div>
                                     <p className="text-sm font-semibold">{viewingExit.employeeName}</p>
                                     {viewingExit.employeeDesignation && (
@@ -378,25 +408,25 @@ export function ExitPage() {
                                 </div>
                             </div>
 
-                            {/* Exit info */}
                             <div className="rounded-lg border divide-y text-sm">
                                 <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30">
                                     <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
                                     <span className="font-medium text-xs uppercase tracking-wide text-muted-foreground">Exit Information</span>
                                 </div>
-                                <DetailRow label="Exit Type" value={
-                                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${exitTypeColor[viewingExit.exitType] ?? 'bg-gray-100 text-gray-700'}`}>
-                                        {exitTypeLabel[viewingExit.exitType] ?? viewingExit.exitType}
-                                    </span>
-                                } />
-                                <DetailRow label="Exit Date" value={formatDate(viewingExit.exitDate)} />
-                                <DetailRow label="Last Working Day" value={formatDate(viewingExit.lastWorkingDay)} />
-                                <DetailRow label="Notice Period" value={`${viewingExit.noticePeriodDays} days`} />
-                                {viewingExit.reason && <DetailRow label="Reason" value={viewingExit.reason} />}
-                                {viewingExit.notes && <DetailRow label="Notes" value={viewingExit.notes} />}
+                                <div className="px-4">
+                                    <DetailRow label="Exit Type" value={
+                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${exitTypeColor[viewingExit.exitType] ?? 'bg-gray-100 text-gray-700'}`}>
+                                            {EXIT_TYPE_LABELS[viewingExit.exitType] ?? viewingExit.exitType}
+                                        </span>
+                                    } />
+                                    <DetailRow label="Exit Date" value={formatDate(viewingExit.exitDate)} />
+                                    <DetailRow label="Last Working Day" value={formatDate(viewingExit.lastWorkingDay)} />
+                                    <DetailRow label="Notice Period" value={`${viewingExit.noticePeriodDays} days`} />
+                                    {viewingExit.reason && <DetailRow label="Reason" value={viewingExit.reason} />}
+                                    {viewingExit.notes && <DetailRow label="Notes" value={viewingExit.notes} />}
+                                </div>
                             </div>
 
-                            {/* Settlement breakdown */}
                             {viewingExit.totalSettlement && (
                                 <div className="rounded-lg border divide-y text-sm overflow-hidden">
                                     <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30">
@@ -406,39 +436,59 @@ export function ExitPage() {
                                             <Badge variant="success" className="ml-auto text-[10px]">Paid</Badge>
                                         )}
                                     </div>
-                                    <DetailRow label="Gratuity" value={fmt(viewingExit.gratuityAmount)} />
-                                    <DetailRow label="Leave Encashment" value={fmt(viewingExit.leaveEncashmentAmount)} />
-                                    <DetailRow label="Unpaid Salary" value={fmt(viewingExit.unpaidSalaryAmount)} />
-                                    <DetailRow label="Deductions" value={fmt(viewingExit.deductions)} />
+                                    <div className="px-4">
+                                        <DetailRow label="Gratuity (UAE Labour Law 2022)" value={fmt(viewingExit.gratuityAmount)} />
+                                        <DetailRow label="Leave Encashment" value={fmt(viewingExit.leaveEncashmentAmount)} />
+                                        <DetailRow label="Unpaid Salary" value={fmt(viewingExit.unpaidSalaryAmount)} />
+                                        {Number(viewingExit.deductions ?? 0) > 0 && (
+                                            <DetailRow label="Deductions" value={`− ${fmt(viewingExit.deductions)}`} />
+                                        )}
+                                    </div>
                                     <div className="flex justify-between items-center px-4 py-3 bg-muted/50">
                                         <span className="font-semibold">Total Settlement</span>
                                         <span className="font-bold text-primary text-base">{fmt(viewingExit.totalSettlement)}</span>
                                     </div>
                                     {viewingExit.settlementPaidDate && (
-                                        <DetailRow label="Paid On" value={formatDate(viewingExit.settlementPaidDate)} />
+                                        <div className="px-4">
+                                            <DetailRow label="Paid On" value={formatDate(viewingExit.settlementPaidDate)} />
+                                        </div>
                                     )}
                                 </div>
                             )}
                         </div>
                     )}
-                    <DialogFooter className="gap-2">
+                    <DialogFooter className="gap-2 flex-wrap">
                         {canManage && viewingExit?.status === 'pending' && (
-                            <Button
-                                size="sm"
-                                onClick={() => {
-                                    if (!viewingExit) return
-                                    approve.mutate(viewingExit.id, {
-                                        onSuccess: () => {
-                                            toast.success('Approved', 'Exit request approved.')
-                                            setViewingExit(null)
-                                        },
-                                        onError: () => toast.error('Failed', 'Could not approve exit.'),
-                                    })
-                                }}
-                                disabled={approve.isPending}
-                            >
-                                Approve Exit
-                            </Button>
+                            <>
+                                <Button
+                                    size="sm"
+                                    onClick={() => {
+                                        if (!viewingExit) return
+                                        approve.mutate(viewingExit.id, {
+                                            onSuccess: () => {
+                                                toast.success('Approved', 'Exit request approved.')
+                                                setViewingExit(null)
+                                            },
+                                            onError: () => toast.error('Failed', 'Could not approve exit.'),
+                                        })
+                                    }}
+                                    disabled={approve.isPending}
+                                >
+                                    Approve Exit
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                                    onClick={() => {
+                                        setRejectTarget(viewingExit)
+                                        setRejectReason('')
+                                        setViewingExit(null)
+                                    }}
+                                >
+                                    <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
+                                </Button>
+                            </>
                         )}
                         {canManage && viewingExit?.status === 'approved' && !viewingExit?.settlementPaid && (
                             <Button
@@ -464,17 +514,62 @@ export function ExitPage() {
                 </DialogContent>
             </Dialog>
 
+            {/* Reject dialog */}
+            <Dialog open={!!rejectTarget} onOpenChange={o => { if (!o) setRejectTarget(null) }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-destructive">
+                            <AlertTriangle className="h-4 w-4" /> Reject Exit Request
+                        </DialogTitle>
+                        <DialogDescription>
+                            Rejecting this request will keep the employee active. Add a reason for the record.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-1.5 py-2">
+                        <Label>Reason for rejection <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                        <Textarea
+                            rows={3}
+                            value={rejectReason}
+                            onChange={e => setRejectReason(e.target.value)}
+                            placeholder="Explain why this exit request is being rejected…"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRejectTarget(null)}>Cancel</Button>
+                        <Button
+                            variant="destructive"
+                            disabled={reject.isPending}
+                            onClick={() => {
+                                if (!rejectTarget) return
+                                reject.mutate(
+                                    { id: rejectTarget.id, reason: rejectReason || undefined },
+                                    {
+                                        onSuccess: () => {
+                                            toast.error('Exit rejected', 'The exit request has been rejected.')
+                                            setRejectTarget(null)
+                                        },
+                                        onError: () => toast.error('Failed', 'Could not reject exit request.'),
+                                    },
+                                )
+                            }}
+                        >
+                            {reject.isPending ? 'Rejecting…' : 'Confirm Rejection'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Initiate Exit Dialog */}
             <Dialog open={showDialog} onOpenChange={(o) => { if (!initiate.isPending) setShowDialog(o) }}>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>
                             {step === 'form' ? 'Initiate Employee Exit' : 'Settlement Preview'}
                         </DialogTitle>
                         <DialogDescription>
                             {step === 'form'
-                                ? 'Fill in the exit details. You can preview the settlement before confirming.'
-                                : 'Review the calculated settlement before submitting the exit request.'}
+                                ? 'Fill in the exit details. Preview the settlement calculation before confirming.'
+                                : 'Review the calculated settlement (UAE Labour Law 2022) before submitting.'}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -485,9 +580,7 @@ export function ExitPage() {
                                 <Select value={form.employeeId} onValueChange={v => set('employeeId', v)}>
                                     <SelectTrigger><SelectValue placeholder="Select employee…" /></SelectTrigger>
                                     <SelectContent>
-                                        {empList.map((e: Employee) => (
-                                            <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
-                                        ))}
+                                        <EmployeeSelectItems value={form.employeeId} onSelect={v => set('employeeId', v)} />
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -505,16 +598,22 @@ export function ExitPage() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <Label required>Exit Date</Label>
-                                    <DatePicker value={form.exitDate} min={new Date().toISOString().split('T')[0]} onChange={v => set('exitDate', v)} />
+                                    <DatePicker value={form.exitDate} onChange={v => set('exitDate', v)} />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label required>Last Working Day</Label>
-                                    <DatePicker value={form.lastWorkingDay} min={form.exitDate || new Date().toISOString().split('T')[0]} onChange={v => set('lastWorkingDay', v)} />
+                                    <DatePicker value={form.lastWorkingDay} min={form.exitDate || undefined} onChange={v => set('lastWorkingDay', v)} />
                                 </div>
                             </div>
-                            <div className="space-y-1.5">
-                                <Label>Notice Period (days)</Label>
-                                <NumericInput decimal={false} value={form.noticePeriodDays} onChange={e => set('noticePeriodDays', Number(e.target.value))} />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <Label>Notice Period (days)</Label>
+                                    <NumericInput decimal={false} value={form.noticePeriodDays} onChange={e => set('noticePeriodDays', Number(e.target.value))} />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Deductions (AED)</Label>
+                                    <NumericInput decimal value={form.deductions} onChange={e => set('deductions', Number(e.target.value))} placeholder="0.00" />
+                                </div>
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Reason</Label>
@@ -540,15 +639,21 @@ export function ExitPage() {
                                 <InitialsAvatar name={preview.employeeName} size="sm" />
                                 <div>
                                     <p className="text-sm font-semibold">{preview.employeeName}</p>
-                                    <p className="text-xs text-muted-foreground">{preview.yearsOfService} years of service · {exitTypeLabel[form.exitType]}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {preview.yearsOfService} years of service · {EXIT_TYPE_LABELS[form.exitType] ?? form.exitType}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">Basic: {fmt(preview.basicSalary)} · Total: {fmt(preview.totalSalary)}</p>
                                 </div>
                             </div>
+
+                            <GratuityBreakdown preview={preview} />
+
                             <div className="divide-y rounded-lg border overflow-hidden text-sm">
                                 {[
-                                    ['Gratuity (UAE Labour Law)', fmt(preview.gratuityAmount)],
-                                    [`Leave Encashment (${preview.unusedLeaveDays} days)`, fmt(preview.leaveEncashmentAmount)],
-                                    ['Unpaid Salary (current month)', fmt(preview.unpaidSalaryAmount)],
-                                    ['Deductions', fmt(preview.deductions)],
+                                    ['Gratuity (UAE Labour Law 2022)', fmt(preview.gratuityAmount)],
+                                    [`Leave Encashment (${preview.unusedLeaveDays} unused days)`, fmt(preview.leaveEncashmentAmount)],
+                                    ['Unpaid Salary (current month prorate)', fmt(preview.unpaidSalaryAmount)],
+                                    ...(preview.deductions > 0 ? [['Deductions', `− ${fmt(preview.deductions)}`]] : []),
                                 ].map(([label, val]) => (
                                     <div key={label} className="flex justify-between px-4 py-2.5">
                                         <span className="text-muted-foreground">{label}</span>
@@ -560,6 +665,13 @@ export function ExitPage() {
                                     <span className="text-primary text-base">{fmt(preview.totalSettlement)}</span>
                                 </div>
                             </div>
+
+                            {preview.yearsOfService < 1 && (
+                                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2.5 text-xs text-amber-700">
+                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                    <span>Employee has less than 1 year of service — gratuity is not payable under UAE Labour Law.</span>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -593,5 +705,19 @@ export function ExitPage() {
                 </DialogContent>
             </Dialog>
         </PageWrapper>
+    )
+}
+
+function EmployeeSelectItems(_props: { value: string; onSelect: (v: string) => void }) {
+    const { data } = useEmployees({ limit: 200, status: 'active' })
+    const list = (data?.data ?? []) as Employee[]
+    return (
+        <>
+            {list.map(e => (
+                <SelectItem key={e.id} value={e.id}>
+                    {e.firstName} {e.lastName}{e.department ? ` · ${e.department}` : ''}
+                </SelectItem>
+            ))}
+        </>
     )
 }

@@ -2,7 +2,7 @@ import { Queue, Worker } from 'bullmq'
 import { log } from '../lib/logger.js'
 import { db } from '../db/index.js'
 import { employees, notifications, documents, users } from '../db/schema/index.js'
-import { and, eq, lt, lte, gte, ne, or, inArray } from 'drizzle-orm'
+import { and, eq, lt, lte, gte, ne, inArray } from 'drizzle-orm'
 import { loadEnv } from '../config/env.js'
 import { sendEmail, visaExpiryAlertEmail, documentExpiryAlertEmail } from '../plugins/email.js'
 import { sendSubscriptionExpiryReminders } from '../modules/subscription/subscription.service.js'
@@ -136,7 +136,7 @@ async function runVisaExpiryCheck() {
                     .where(and(
                         eq(users.tenantId, emp.tenantId),
                         eq(users.isActive, true),
-                        or(eq(users.role, 'hr_manager'), eq(users.role, 'pro_officer')),
+                        inArray(users.role, ['hr_manager', 'pro_officer']),
                     ))
                     .limit(5)
 

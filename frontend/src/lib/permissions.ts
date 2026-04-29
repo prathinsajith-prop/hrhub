@@ -98,6 +98,7 @@ export type RouteKey =
   | 'audit'
   | 'notifications'
   | 'my/login-history'
+  | 'my/account'
   | 'my/leave'
   | 'my/payslips'
   | 'my/profile'
@@ -105,9 +106,13 @@ export type RouteKey =
   | 'organizations'
   | 'organizations/new'
   | 'team'
+  | 'users'
   | 'apps'
   | 'leave-policies'
   | 'organization-settings'
+  | 'subscription'
+  | 'complaints'
+  | 'my/complaints'
 
 // ─── Permission matrix ────────────────────────────────────────────────────────
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -153,6 +158,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'manage_recruitment', 'view_recruitment',
     // Onboarding
     'manage_onboarding', 'view_onboarding',
+    // Visa
+    'manage_visa', 'view_visa',
     // Documents
     'manage_documents', 'view_documents',
     // Payroll
@@ -198,25 +205,32 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_org_chart',
   ],
   dept_head: [
-    // People (read-only)
+    // People (read-only, scoped to their department server-side)
     'view_employees',
-    // Onboarding (read + manage)
+    // Onboarding (read + manage for dept)
     'view_onboarding', 'manage_onboarding',
     // Documents (read-only)
     'view_documents',
-    // Leave
+    // Leave (approve for dept + own)
     'approve_leave', 'view_own_leave',
-    // Attendance
+    // Attendance (manage for dept)
     'manage_attendance', 'view_own_attendance',
-    // Performance
+    // Performance (manage for dept)
     'manage_performance', 'view_own_performance',
+    // Reports (dept-level read only)
+    'view_reports',
+    // Assets (read-only)
+    'view_assets',
     // Misc
     'view_org_chart',
+    // Teams (manage dept-scoped teams)
+    'manage_team',
   ],
   employee: [
     'view_own_leave',
     'view_own_attendance',
     'view_own_performance',
+    'view_org_chart',
   ],
 }
 
@@ -245,24 +259,29 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   leave: ['super_admin', 'hr_manager', 'dept_head'],
   attendance: ['super_admin', 'hr_manager', 'dept_head'],
   performance: ['super_admin', 'hr_manager', 'dept_head'],
-  assets: ['super_admin', 'hr_manager'],
+  assets: ['super_admin', 'hr_manager', 'dept_head'],
 
-  reports: ['super_admin', 'hr_manager', 'pro_officer'],
+  reports: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head'],
   audit: ['super_admin', 'hr_manager'],
   settings: ['super_admin', 'hr_manager'],
 
   // App Management
-  organizations: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
-  'organizations/new': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
-  team: ['super_admin', 'hr_manager'],
+  organizations: ['super_admin', 'hr_manager', 'pro_officer'],
+  'organizations/new': ['super_admin', 'hr_manager'],
+  team: ['super_admin', 'hr_manager', 'dept_head', 'pro_officer', 'employee'],
+  users: ['super_admin', 'hr_manager'],
   apps: ['super_admin', 'hr_manager'],
   'leave-policies': ['super_admin', 'hr_manager'],
   'organization-settings': ['super_admin', 'hr_manager'],
+  subscription: ['super_admin', 'hr_manager'],
+  complaints: ['super_admin', 'hr_manager'],
 
   // Self-service (all authenticated roles)
+  'my/account': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/leave': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/payslips': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/profile': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'my/complaints': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -345,14 +364,19 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/settings': 'settings',
     '/notifications': 'notifications',
     '/my/login-history': 'my/login-history',
+    '/my/account': 'my/account',
     '/my/leave': 'my/leave',
     '/my/payslips': 'my/payslips',
     '/my/profile': 'my/profile',
     '/organizations': 'organizations',
     '/team': 'team',
+    '/users': 'users',
     '/apps': 'apps',
     '/leave-policies': 'leave-policies',
     '/organization-settings': 'organization-settings',
+    '/subscription': 'subscription',
+    '/complaints': 'complaints',
+    '/my/complaints': 'my/complaints',
   }
   return map[url] ?? null
 }

@@ -1,21 +1,31 @@
-import React, { useState } from 'react'
-import { Users, Plus, XCircle, CheckCircle2, UserCircle, Shield } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Users, Plus, XCircle, CheckCircle2, UserCircle, Shield, Search, MailCheck, UserPlus, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
-import { useTenantUsers, useUpdateUser } from '@/hooks/useSettings'
+import {
+    useTenantUsers,
+    useUpdateUser,
+    useInvitableEmployees,
+    useInviteUserBulk,
+    useResendInvite,
+} from '@/hooks/useSettings'
 import { usePermissions } from '@/hooks/usePermissions'
 import { labelFor } from '@/lib/enums'
-import { api } from '@/lib/api'
-import { SettingsCard, Section } from './_shared'
+import { Section } from './_shared'
 
-// ─── Users Tab ────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatLastLogin(lastLoginAt: string | null): string {
     if (!lastLoginAt) return 'Never'
     const diff = Date.now() - new Date(lastLoginAt).getTime()
@@ -25,6 +35,10 @@ function formatLastLogin(lastLoginAt: string | null): string {
     const days = Math.floor(hours / 24)
     if (days < 7) return `${days}d ago`
     return `${Math.floor(days / 7)}w ago`
+}
+
+function initials(name: string) {
+    return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
 }
 
 const roles = [
@@ -43,35 +57,264 @@ const ROLE_ACCESS_MAP: Record<string, string[]> = {
     employee: ['Own leave', 'Own attendance', 'Own performance'],
 }
 
+const INVITE_ROLES = [
+    { id: 'hr_manager', label: 'HR Manager' },
+    { id: 'pro_officer', label: 'PRO Officer' },
+    { id: 'dept_head', label: 'Department Manager' },
+    { id: 'employee', label: 'Employee' },
+]
+
+// ─── Grant Access Modal ───────────────────────────────────────────────────────
+function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+    const { data: invitableEmployees = [], isLoading } = useInvitableEmployees({ enabled: open })
+    const inviteBulk = useInviteUserBulk()
+    const [search, setSearch] = useState('')
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [role, setRole] = useState('employee')
+
+    const filtered = useMemo(() => {
+        const q = search.toLowerCase()
+        return invitableEmployees.filter(
+            (e) =>
+                e.fullName.toLowerCase().includes(q) ||
+                (e.department ?? '').toLowerCase().includes(q) ||
+                (e.designation ?? '').toLowerCase().includes(q) ||
+                (e.employeeNo ?? '').toLowerCase().includes(q),
+        )
+    }, [invitableEmployees, search])
+
+    const allVisibleSelected = filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id))
+
+    function toggle(id: string) {
+        setSelectedIds((prev) => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
+    }
+
+    function toggleAll() {
+        if (allVisibleSelected) {
+            setSelectedIds((prev) => {
+                const next = new Set(prev)
+                filtered.forEach((e) => next.delete(e.id))
+                return next
+            })
+        } else {
+            setSelectedIds((prev) => {
+                const next = new Set(prev)
+                filtered.forEach((e) => {
+                    if (e.inviteEmail) next.add(e.id)
+                })
+                return next
+            })
+        }
+    }
+
+    function handleClose() {
+        setSearch('')
+        setSelectedIds(new Set())
+        setRole('employee')
+        onClose()
+    }
+
+    async function handleGrantAccess() {
+        const employeeIds = Array.from(selectedIds)
+        if (employeeIds.length === 0) return
+        try {
+            const result = await inviteBulk.mutateAsync({ employeeIds, role })
+            const { succeeded, failed } = result
+            if (succeeded.length > 0) {
+                toast.success(
+                    succeeded.length === 1
+                        ? `Access granted to ${succeeded[0].name}`
+                        : `Access granted to ${succeeded.length} employees`,
+                )
+            }
+            if (failed.length > 0) {
+                toast.error(
+                    `${failed.length} invite${failed.length > 1 ? 's' : ''} failed`,
+                    failed.map((f) => f.reason).join('; '),
+                )
+            }
+            handleClose()
+        } catch (err: any) {
+            toast.error(err?.message ?? 'Failed to send invitations')
+        }
+    }
+
+    const selectedCount = selectedIds.size
+    const hasEmailless = Array.from(selectedIds).some(
+        (id) => !invitableEmployees.find((e) => e.id === id)?.inviteEmail,
+    )
+
+    return (
+        <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+            <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+                <DialogHeader className="px-5 pt-5 pb-4 border-b">
+                    <DialogTitle className="flex items-center gap-2 text-base">
+                        <UserPlus className="h-4 w-4 text-primary" />
+                        Grant Access
+                    </DialogTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                        Select employees to invite. Each will receive a secure link to set up their login.
+                    </p>
+                </DialogHeader>
+
+                {/* Role selector */}
+                <div className="px-5 pt-4 pb-3 border-b bg-muted/30 flex items-center gap-3">
+                    <p className="text-xs font-medium text-muted-foreground shrink-0">Assign role</p>
+                    <select
+                        value={role}
+                        onChange={(e) => setRole(e.target.value)}
+                        className="flex-1 border border-input rounded-md px-3 py-1.5 text-sm bg-background"
+                    >
+                        {INVITE_ROLES.map((r) => (
+                            <option key={r.id} value={r.id}>{r.label}</option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Search + select-all */}
+                <div className="px-5 pt-3 pb-2 space-y-2">
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                        <Input
+                            className="pl-8 h-8 text-sm"
+                            placeholder="Search by name, department…"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            autoFocus
+                        />
+                    </div>
+                    {!isLoading && invitableEmployees.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={toggleAll}
+                            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            <div className={cn(
+                                'h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0',
+                                allVisibleSelected ? 'bg-primary border-primary' : 'border-border',
+                            )}>
+                                {allVisibleSelected && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                            </div>
+                            {allVisibleSelected ? 'Deselect all' : 'Select all'}
+                        </button>
+                    )}
+                </div>
+
+                {/* Employee list */}
+                <div className="overflow-y-auto max-h-72 px-5 pb-2 divide-y">
+                    {isLoading ? (
+                        [1, 2, 3, 4].map((i) => (
+                            <div key={i} className="flex items-center gap-3 py-2.5">
+                                <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                                <div className="space-y-1.5 flex-1">
+                                    <Skeleton className="h-3.5 w-32" />
+                                    <Skeleton className="h-3 w-44" />
+                                </div>
+                            </div>
+                        ))
+                    ) : filtered.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-muted-foreground">
+                            {invitableEmployees.length === 0
+                                ? 'All employees already have accounts'
+                                : 'No matching employees'}
+                        </div>
+                    ) : (
+                        filtered.map((emp) => {
+                            const isSelected = selectedIds.has(emp.id)
+                            const noEmail = !emp.inviteEmail
+                            return (
+                                <button
+                                    key={emp.id}
+                                    type="button"
+                                    disabled={noEmail}
+                                    onClick={() => toggle(emp.id)}
+                                    title={noEmail ? 'No email on file — add one to the employee profile first' : undefined}
+                                    className={cn(
+                                        'w-full flex items-center gap-3 py-2.5 text-start transition-colors',
+                                        noEmail ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/30 cursor-pointer',
+                                    )}
+                                >
+                                    <div className={cn(
+                                        'h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                                        isSelected ? 'bg-primary border-primary' : 'border-border',
+                                    )}>
+                                        {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                                    </div>
+                                    <Avatar className="h-8 w-8 shrink-0">
+                                        {emp.avatarUrl && <AvatarImage src={emp.avatarUrl} alt={emp.fullName} />}
+                                        <AvatarFallback className="text-xs bg-primary/10 text-primary font-bold">
+                                            {initials(emp.fullName)}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{emp.fullName}</p>
+                                        <p className="text-xs text-muted-foreground truncate">
+                                            {[emp.designation, emp.department].filter(Boolean).join(' · ')}
+                                            {emp.inviteEmail && (
+                                                <span className="ml-1.5 opacity-70">{emp.inviteEmail}</span>
+                                            )}
+                                        </p>
+                                    </div>
+                                    {noEmail && (
+                                        <Badge variant="secondary" className="text-[10px] shrink-0">No email</Badge>
+                                    )}
+                                </button>
+                            )
+                        })
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-5 py-4 border-t bg-muted/20 flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                        {selectedCount === 0
+                            ? 'No employees selected'
+                            : `${selectedCount} employee${selectedCount > 1 ? 's' : ''} selected`}
+                        {hasEmailless && (
+                            <span className="ml-1.5 text-amber-600">(some lack an email)</span>
+                        )}
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={handleClose}>
+                            Cancel
+                        </Button>
+                        <Button
+                            size="sm"
+                            disabled={selectedCount === 0 || inviteBulk.isPending}
+                            onClick={handleGrantAccess}
+                            leftIcon={<UserPlus className="h-3.5 w-3.5" />}
+                        >
+                            {inviteBulk.isPending
+                                ? 'Sending…'
+                                : selectedCount > 1
+                                    ? `Grant Access (${selectedCount})`
+                                    : 'Grant Access'}
+                        </Button>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export function UsersTab() {
     const { can } = usePermissions()
     const { user: me } = useAuthStore()
     const canManageUsers = can('manage_users')
     const { data: tenantUsers, isLoading } = useTenantUsers()
     const updateUser = useUpdateUser()
+    const resendInvite = useResendInvite()
     const [showInvite, setShowInvite] = useState(false)
-    const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'hr_manager' })
-    const [inviting, setInviting] = useState(false)
     const [deactivateTarget, setDeactivateTarget] = useState<{ id: string; name: string; active: boolean } | null>(null)
 
     const getRoleStyle = (role: string) => roles.find((r) => r.id === role)?.color ?? 'bg-gray-50 text-gray-600'
     const getRoleLabel = (role: string) => roles.find((r) => r.id === role)?.label ?? labelFor(role)
-
-    async function handleInvite(e: React.FormEvent) {
-        e.preventDefault()
-        if (!inviteForm.name || !inviteForm.email) return
-        setInviting(true)
-        try {
-            await api.post('/settings/users/invite', inviteForm)
-            toast.success(`Invitation sent to ${inviteForm.email}`)
-            setShowInvite(false)
-            setInviteForm({ name: '', email: '', role: 'hr_manager' })
-        } catch {
-            toast.error('Failed to send invitation')
-        } finally {
-            setInviting(false)
-        }
-    }
 
     async function handleRoleChange(userId: string, newRole: string) {
         try {
@@ -93,50 +336,26 @@ export function UsersTab() {
         }
     }
 
+    async function handleResendInvite(employeeId: string, name: string) {
+        try {
+            await resendInvite.mutateAsync(employeeId)
+            toast.success(`Invite resent to ${name}`)
+        } catch (err: any) {
+            toast.error(err?.message ?? 'Failed to resend invite')
+        }
+    }
+
     return (
         <div className="space-y-5">
-            {canManageUsers && showInvite && (
-                <SettingsCard className="bg-muted/30">
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-semibold">Invite User</h3>
-                            <Button variant="ghost" size="sm" onClick={() => setShowInvite(false)}>Cancel</Button>
-                        </div>
-                        <form onSubmit={handleInvite} className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="invite-name">Full Name</Label>
-                                    <Input id="invite-name" value={inviteForm.name} onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))} placeholder="Jane Smith" required />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="invite-email">Email Address</Label>
-                                    <Input id="invite-email" type="email" value={inviteForm.email} onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))} placeholder="jane@company.com" required />
-                                </div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="invite-role">Role</Label>
-                                <select id="invite-role" value={inviteForm.role} onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value }))} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background">
-                                    <option value="hr_manager">HR Manager</option>
-                                    <option value="pro_officer">PRO Officer</option>
-                                    <option value="dept_head">Department Head</option>
-                                    <option value="employee">Employee</option>
-                                </select>
-                            </div>
-                            <div className="flex justify-end">
-                                <Button type="submit" disabled={inviting}>{inviting ? 'Sending…' : 'Send Invitation'}</Button>
-                            </div>
-                        </form>
-                    </div>
-                </SettingsCard>
-            )}
+            <GrantAccessModal open={showInvite} onClose={() => setShowInvite(false)} />
 
             <Section
                 icon={Users}
                 title="Users"
                 description="Manage roles and access for all workspace users"
-                action={canManageUsers && !showInvite && (
+                action={canManageUsers && (
                     <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setShowInvite(true)}>
-                        Invite User
+                        Grant Access
                     </Button>
                 )}
             >
@@ -168,21 +387,23 @@ export function UsersTab() {
                                 )}>
                                     <div className="flex items-center gap-3 min-w-0">
                                         <Avatar className="h-9 w-9 shrink-0">
+                                            {u.avatarUrl && <AvatarImage src={u.avatarUrl} alt={u.name} />}
                                             <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                                                {u.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                                {initials(u.name)}
                                             </AvatarFallback>
                                         </Avatar>
                                         <div className="min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <p className="text-sm font-medium truncate">{u.name}</p>
                                                 {isSelf && <span className="text-[10px] text-muted-foreground">(you)</span>}
-                                                {u.employeeId && (
-                                                    <Badge variant="info" className="text-[9px] py-0 px-1.5 h-4 font-medium">
-                                                        Employee linked
-                                                    </Badge>
+                                                {!u.isActive && (
+                                                    <Badge variant="secondary" className="text-[10px]">Inactive</Badge>
                                                 )}
                                             </div>
-                                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                                            <p className="text-xs text-muted-foreground truncate">
+                                                {u.email}
+                                                {u.department && <span className="ml-1.5 opacity-70">· {u.department}</span>}
+                                            </p>
                                         </div>
                                     </div>
 
@@ -191,7 +412,6 @@ export function UsersTab() {
                                             {formatLastLogin(u.lastLoginAt)}
                                         </span>
 
-                                        {/* Role — inline edit for managers on non-self rows */}
                                         {canManageUsers && !isSelf ? (
                                             <select
                                                 value={u.role}
@@ -202,7 +422,7 @@ export function UsersTab() {
                                                 <option value="super_admin">Super Admin</option>
                                                 <option value="hr_manager">HR Manager</option>
                                                 <option value="pro_officer">PRO Officer</option>
-                                                <option value="dept_head">Dept Head</option>
+                                                <option value="dept_head">Department Manager</option>
                                                 <option value="employee">Employee</option>
                                             </select>
                                         ) : (
@@ -211,7 +431,6 @@ export function UsersTab() {
                                             </span>
                                         )}
 
-                                        {/* Active badge */}
                                         <span className={cn(
                                             'text-[10px] font-medium px-2 py-0.5 rounded-full',
                                             u.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500',
@@ -219,7 +438,19 @@ export function UsersTab() {
                                             {u.isActive ? 'Active' : 'Inactive'}
                                         </span>
 
-                                        {/* Deactivate / Activate toggle */}
+                                        {canManageUsers && !isSelf && !u.isActive && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 text-xs text-sky-600 hover:bg-sky-50"
+                                                title="Resend invite"
+                                                onClick={() => handleResendInvite(u.employeeId, u.name)}
+                                                disabled={resendInvite.isPending}
+                                            >
+                                                <MailCheck className="h-3.5 w-3.5" />
+                                            </Button>
+                                        )}
+
                                         {canManageUsers && !isSelf && (
                                             <Button
                                                 variant="ghost"
@@ -238,7 +469,6 @@ export function UsersTab() {
                 )}
             </Section>
 
-            {/* Roles & Permissions reference */}
             <Section
                 icon={Shield}
                 title="Roles & Permissions"
@@ -268,7 +498,6 @@ export function UsersTab() {
                 </div>
             </Section>
 
-            {/* Deactivate / activate confirm dialog */}
             {deactivateTarget && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
                     <div className="bg-background border rounded-xl shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">

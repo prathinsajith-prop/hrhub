@@ -8,6 +8,7 @@ export interface JwtPayload {
     name: string      // embedded at login — avoids DB lookup in authenticate plugin
     email: string     // embedded at login
     employeeId?: string | null  // linked HR record (null for non-employee accounts)
+    department?: string | null  // dept_head scope — their assigned department
     iat?: number
     exp?: number
 }
@@ -19,6 +20,7 @@ export interface RequestUser {
     email: string
     name: string
     employeeId?: string | null
+    department?: string | null  // populated from JWT for dept_head scoping
 }
 
 export interface PaginationParams {

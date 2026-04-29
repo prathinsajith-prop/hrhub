@@ -22,6 +22,8 @@ export default defineConfig([
     rules: {
       // `any` is pervasive in this codebase — warn, don't block builds
       '@typescript-eslint/no-explicit-any': 'warn',
+      // Allow vars/args prefixed with _ as intentionally unused
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
       // Non-component exports alongside components are common in this project
       'react-refresh/only-export-components': 'warn',
       // TanStack Table returns unstable refs by design — suppress incompatible-library

@@ -14,10 +14,12 @@ import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useEmployees } from '@/hooks/useEmployees'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { useDesignations } from '@/hooks/useDesignations'
+import { useTeams } from '@/hooks/useTeams'
 import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { FormField } from '@/components/shared/FormField'
-import { apiErrorToFieldMap } from '@/lib/api'
+import { api, apiErrorToFieldMap } from '@/lib/api'
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, jobPostSchema, visaApplicationSchema, leaveRequestSchema, documentMetaSchema, zodToFieldErrors } from '@/lib/schemas'
 import {
     JOB_TYPE_OPTIONS, JOB_STATUS_OPTIONS,
@@ -31,13 +33,9 @@ import {
 } from '@/lib/options'
 import type { Employee } from '@/types'
 
-// Reporting-manager picker: searchable employee dropdown writing the chosen
-// employee's id (UUID) into `reportingTo`. `excludeId` removes the employee
-// being edited from the list to prevent self-reporting cycles.
+// Searchable reporting-manager picker.
 function ManagerPicker({
-    value,
-    onChange,
-    excludeId,
+    value, onChange, excludeId,
 }: {
     value: string
     onChange: (id: string, name: string) => void
@@ -45,27 +43,48 @@ function ManagerPicker({
 }) {
     const { data } = useEmployees({ limit: 100 })
     const employees = (data?.data ?? []) as Employee[]
-    const options = employees.filter((e) => e.id !== excludeId)
+    const opts: ComboboxOption[] = [
+        { value: '__none__', label: '— No manager (top-level) —' },
+        ...employees
+            .filter(e => e.id !== excludeId)
+            .map(e => ({
+                value: e.id,
+                label: `${e.firstName} ${e.lastName}`,
+                secondary: e.designation ?? undefined,
+            })),
+    ]
     return (
-        <Select
-            value={value || 'none'}
-            onValueChange={(v) => {
-                if (v === 'none') return onChange('', '')
-                const picked = options.find((e) => e.id === v)
+        <Combobox
+            value={value || '__none__'}
+            onValueChange={v => {
+                if (!v || v === '__none__') return onChange('', '')
+                const picked = employees.find(e => e.id === v)
                 onChange(v, picked ? `${picked.firstName} ${picked.lastName}` : '')
             }}
-        >
-            <SelectTrigger><SelectValue placeholder="Select manager" /></SelectTrigger>
-            <SelectContent>
-                <SelectItem value="none">— No manager (top-level) —</SelectItem>
-                {options.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>
-                        {e.firstName} {e.lastName}{e.designation ? ` · ${e.designation}` : ''}
-                    </SelectItem>
-                ))}
-            </SelectContent>
-        </Select>
+            options={opts}
+            placeholder="— No manager (top-level) —"
+            searchPlaceholder="Search employees…"
+            clearable
+        />
     )
+}
+
+// Build flat department options with hierarchy path for the org structure picker.
+function buildOrgOptions(units: OrgUnit[]): Array<ComboboxOption & { branchId: string; divisionId: string }> {
+    return units
+        .filter(u => u.type === 'department' && u.isActive)
+        .map(dept => {
+            const division = units.find(u => u.id === dept.parentId)
+            const branch = division ? units.find(u => u.id === division.parentId) : null
+            const path = [branch?.name, division?.name].filter(Boolean).join(' → ')
+            return {
+                value: dept.id,
+                label: dept.name,
+                secondary: path || undefined,
+                branchId: branch?.id ?? '',
+                divisionId: division?.id ?? '',
+            }
+        })
 }
 
 // ─── New Job Dialog ─────────────────────────────────────────────────────────
@@ -339,6 +358,7 @@ interface EmpForm {
     emergencyContact: string
     // Step 2 — Employment
     employeeNo: string
+    workEmail: string
     divisionId: string
     departmentId: string
     branchId: string
@@ -351,6 +371,7 @@ interface EmpForm {
     reportingTo: string
     gradeLevel: string
     status: string
+    teamId: string
     // Step 3 — Salary
     basicSalary: string
     housingAllowance: string
@@ -365,9 +386,9 @@ interface EmpForm {
 const EMPTY_FORM: EmpForm = {
     firstName: '', lastName: '', dateOfBirth: '', gender: 'male', nationality: '', passportNo: '',
     mobileNo: '', personalEmail: '', maritalStatus: 'single', emergencyContact: '',
-    employeeNo: '', divisionId: '', departmentId: '', branchId: '', department: '', designation: '',
+    employeeNo: '', workEmail: '', divisionId: '', departmentId: '', branchId: '', department: '', designation: '',
     joinDate: new Date().toISOString().split('T')[0],
-    contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevel: '', status: 'onboarding',
+    contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevel: '', status: 'onboarding', teamId: '',
     basicSalary: '', housingAllowance: '', transportAllowance: '', otherAllowances: '',
     paymentMethod: 'bank_transfer', bankName: '', iban: '', emiratisationCategory: 'expat',
 }
@@ -407,12 +428,18 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     const navigate = useNavigate()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const { data: designationList = [] } = useDesignations()
+    const { data: teamsRaw = [] } = useTeams()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
-    const divisions = orgUnits.filter(u => u.type === 'division' && u.isActive)
-    const departments = orgUnits.filter(u => u.type === 'department' && u.isActive &&
-        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
-    const branches = orgUnits.filter(u => u.type === 'branch' && u.isActive &&
-        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
+    const orgOptions = buildOrgOptions(orgUnits)
+    // Teams filtered by selected department (if any)
+    const availableTeams = (Array.isArray(teamsRaw) ? teamsRaw : []).filter(
+        t => !form.departmentId || !t.departmentId || t.departmentId === form.departmentId
+    )
+    const teamOptions: ComboboxOption[] = availableTeams.map(t => ({
+        value: t.id,
+        label: t.name,
+        secondary: t.department ?? undefined,
+    }))
 
     const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
@@ -446,14 +473,14 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
         return ok
     }
 
-    const submit = () => {
+    const submit = async () => {
         const empNo = form.employeeNo || `EMP-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(1000 + Math.random() * 9000)}`
         const basic = parseFloat(form.basicSalary) || 0
         const housing = parseFloat(form.housingAllowance) || 0
         const transport = parseFloat(form.transportAllowance) || 0
         const other = parseFloat(form.otherAllowances) || 0
-        createEmployee.mutate(
-            {
+        try {
+            const newEmp = await createEmployee.mutateAsync({
                 firstName: form.firstName, lastName: form.lastName,
                 dateOfBirth: form.dateOfBirth || undefined,
                 gender: (form.gender as Employee['gender']) || undefined,
@@ -461,6 +488,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 passportNo: form.passportNo || undefined,
                 mobileNo: form.mobileNo || undefined,
                 personalEmail: form.personalEmail || undefined,
+                workEmail: form.workEmail || undefined,
                 maritalStatus: (form.maritalStatus as Employee['maritalStatus']) || undefined,
                 emergencyContact: form.emergencyContact || undefined,
                 employeeNo: empNo,
@@ -485,35 +513,33 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 bankName: form.bankName || undefined,
                 iban: form.iban || undefined,
                 emiratisationCategory: (form.emiratisationCategory as Employee['emiratisationCategory']) || 'expat',
-            },
-            {
-                onSuccess: () => {
-                    toast.success('Employee added', `${form.firstName} ${form.lastName} has been onboarded.`)
-                    close()
-                },
-                onError: (err: Error & { message?: string; statusCode?: number }) => {
-                    // Quota exceeded — guide the user to upgrade
-                    if (err?.statusCode === 402 || (err?.message ?? '').includes('Employee limit reached')) {
-                        toast.error('Employee limit reached', err?.message ?? 'Upgrade your plan to add more employees.')
-                        onOpenChange(false)
-                        navigate('/organization-settings', { state: { tab: 'subscription' } })
-                        return
-                    }
-                    const fieldErrors = apiErrorToFieldMap(err)
-                    if (Object.keys(fieldErrors).length) {
-                        setErrors(fieldErrors)
-                        // Jump to the step that contains the first errored field
-                        const step1Fields = ['firstName', 'lastName', 'dateOfBirth', 'gender', 'maritalStatus', 'nationality', 'passportNo', 'mobileNo', 'personalEmail', 'emergencyContact']
-                        const step3Fields = ['basicSalary', 'housingAllowance', 'transportAllowance', 'otherAllowances', 'totalSalary', 'paymentMethod', 'bankName', 'iban', 'emiratisationCategory']
-                        const keys = Object.keys(fieldErrors)
-                        if (keys.some(k => step1Fields.includes(k))) setStep(1)
-                        else if (keys.some(k => step3Fields.includes(k))) setStep(3)
-                        else setStep(2)
-                    }
-                    toast.error('Failed to add employee', err?.message ?? 'Please try again.')
-                },
-            },
-        )
+            })
+            // Assign to team if selected (best-effort — doesn't fail the whole create)
+            if (form.teamId && newEmp?.id) {
+                api.post(`/teams/${form.teamId}/members`, { employeeIds: [newEmp.id] }).catch(() => {})
+            }
+            toast.success('Employee added', `${form.firstName} ${form.lastName} has been onboarded.`)
+            close()
+        } catch (err: unknown) {
+            const e = err as Error & { message?: string; statusCode?: number }
+            if (e?.statusCode === 402 || (e?.message ?? '').includes('Employee limit reached')) {
+                toast.error('Employee limit reached', e?.message ?? 'Upgrade your plan to add more employees.')
+                onOpenChange(false)
+                navigate('/organization-settings', { state: { tab: 'subscription' } })
+                return
+            }
+            const fieldErrors = apiErrorToFieldMap(e)
+            if (Object.keys(fieldErrors).length) {
+                setErrors(fieldErrors)
+                const step1Fields = ['firstName', 'lastName', 'dateOfBirth', 'gender', 'maritalStatus', 'nationality', 'passportNo', 'mobileNo', 'personalEmail', 'emergencyContact']
+                const step3Fields = ['basicSalary', 'housingAllowance', 'transportAllowance', 'otherAllowances', 'totalSalary', 'paymentMethod', 'bankName', 'iban', 'emiratisationCategory']
+                const keys = Object.keys(fieldErrors)
+                if (keys.some(k => step1Fields.includes(k))) setStep(1)
+                else if (keys.some(k => step3Fields.includes(k))) setStep(3)
+                else setStep(2)
+            }
+            toast.error('Failed to add employee', e?.message ?? 'Please try again.')
+        }
     }
 
     return (
@@ -603,44 +629,53 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
-                            {/* Org Structure Assignment */}
-                            {orgUnits.length > 0 && (
-                                <div className="rounded-lg border bg-muted/20 p-3 space-y-2.5">
+                            <FormField label="Work Email" error={errors.workEmail} hint="Used for login invites and official communications">
+                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
+                            </FormField>
+                            {/* Org Structure — single searchable department picker */}
+                            {orgOptions.length > 0 && (
+                                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organization Structure</p>
-                                    <div className="grid grid-cols-1 gap-2.5">
-                                        <div className="space-y-1.5">
-                                            <Label>Division</Label>
-                                            <Select value={form.divisionId || 'none'} onValueChange={v => setForm(f => ({ ...f, divisionId: v === 'none' ? '' : v, departmentId: '', branchId: '' }))}>
-                                                <SelectTrigger><SelectValue placeholder="Select division…" /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="none">— None —</SelectItem>
-                                                    {divisions.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                            <div className="space-y-1.5">
-                                                <Label>Department</Label>
-                                                <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v }))}>
-                                                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="none">— None —</SelectItem>
-                                                        {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label>Branch</Label>
-                                                <Select value={form.branchId || 'none'} onValueChange={v => setForm(f => ({ ...f, branchId: v === 'none' ? '' : v }))}>
-                                                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="none">— None —</SelectItem>
-                                                        {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                        </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Department</Label>
+                                        <Combobox
+                                            value={form.departmentId}
+                                            onValueChange={deptId => {
+                                                const opt = orgOptions.find(o => o.value === deptId)
+                                                setForm(f => ({
+                                                    ...f,
+                                                    departmentId: deptId,
+                                                    branchId: opt?.branchId ?? '',
+                                                    divisionId: opt?.divisionId ?? '',
+                                                    teamId: '',
+                                                }))
+                                            }}
+                                            options={orgOptions}
+                                            placeholder="Select department…"
+                                            searchPlaceholder="Search by department, division or branch…"
+                                            emptyMessage="No departments found. Add them in Org Structure settings."
+                                            clearable
+                                        />
+                                        {form.departmentId && (
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Branch and division will be assigned automatically.
+                                            </p>
+                                        )}
                                     </div>
+                                    {/* Team — filtered to the selected department */}
+                                    {teamOptions.length > 0 && (
+                                        <div className="space-y-1.5">
+                                            <Label>Team <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                                            <Combobox
+                                                value={form.teamId}
+                                                onValueChange={v => setForm(f => ({ ...f, teamId: v }))}
+                                                options={teamOptions}
+                                                placeholder="Assign to a team…"
+                                                searchPlaceholder="Search teams…"
+                                                clearable
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -650,15 +685,16 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Designation / Title</Label>
-                                    <Select value={form.designation || 'none'} onValueChange={v => setForm(f => ({ ...f, designation: v === 'none' ? '' : v }))}>
-                                        <SelectTrigger><SelectValue placeholder="Select designation…" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">— None —</SelectItem>
-                                            {(Array.isArray(designationList) ? designationList : []).filter((d: { isActive: boolean }) => d.isActive).map((d: { id: string; name: string }) => (
-                                                <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Combobox
+                                        value={form.designation}
+                                        onValueChange={v => setForm(f => ({ ...f, designation: v }))}
+                                        options={(Array.isArray(designationList) ? designationList : [])
+                                            .filter((d: { isActive: boolean }) => d.isActive)
+                                            .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
+                                        placeholder="Select designation…"
+                                        searchPlaceholder="Search designations…"
+                                        clearable
+                                    />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -796,7 +832,8 @@ export function EditEmployeeDialog({
         nationality: employee.nationality ?? '',
         passportNo: employee.passportNo ?? '',
         mobileNo: employee.mobileNo ?? employee.phone ?? '',
-        personalEmail: employee.personalEmail ?? employee.email ?? '',
+        personalEmail: employee.personalEmail ?? '',
+        workEmail: employee.workEmail ?? '',
         maritalStatus: employee.maritalStatus ?? 'single',
         emergencyContact: employee.emergencyContact ?? '',
         employeeNo: employee.employeeNo ?? '',
@@ -820,17 +857,14 @@ export function EditEmployeeDialog({
         bankName: employee.bankName ?? '',
         iban: employee.iban ?? '',
         emiratisationCategory: employee.emiratisationCategory ?? 'expat',
+        teamId: '',
     })
     const [errors, setErrors] = useState<Record<string, string>>({})
     const updateEmployee = useUpdateEmployee(employee.id)
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const { data: designationList = [] } = useDesignations()
     const editOrgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
-    const editDivisions = editOrgUnits.filter(u => u.type === 'division' && u.isActive)
-    const editDepartments = editOrgUnits.filter(u => u.type === 'department' && u.isActive &&
-        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
-    const editBranches = editOrgUnits.filter(u => u.type === 'branch' && u.isActive &&
-        (!form.divisionId || u.parentId === form.divisionId || !u.parentId))
+    const editOrgOptions = buildOrgOptions(editOrgUnits)
 
     const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
@@ -876,6 +910,7 @@ export function EditEmployeeDialog({
                 passportNo: form.passportNo || undefined,
                 mobileNo: form.mobileNo || undefined,
                 personalEmail: form.personalEmail || undefined,
+                workEmail: form.workEmail || undefined,
                 maritalStatus: (form.maritalStatus as Employee['maritalStatus']) || undefined,
                 emergencyContact: form.emergencyContact || undefined,
                 employeeNo: form.employeeNo || undefined,
@@ -984,46 +1019,37 @@ export function EditEmployeeDialog({
                                     <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
-                            {editOrgUnits.length > 0 && (
-                                <div className="rounded-lg border bg-muted/20 p-3 space-y-2.5">
+                            <FormField label="Work Email" error={errors.workEmail} hint="Used for login invites and official communications">
+                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
+                            </FormField>
+                            {/* Org Structure — single searchable department picker */}
+                            {editOrgOptions.length > 0 && (
+                                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organization Structure</p>
-                                    <div className="space-y-2.5">
-                                        {editDivisions.length > 0 && (
-                                            <div className="space-y-1.5">
-                                                <Label>Division</Label>
-                                                <Select value={form.divisionId || 'none'} onValueChange={v => setForm(f => ({ ...f, divisionId: v === 'none' ? '' : v, departmentId: '', branchId: '' }))}>
-                                                    <SelectTrigger><SelectValue placeholder="Select division…" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="none">— None —</SelectItem>
-                                                        {editDivisions.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Department</Label>
+                                        <Combobox
+                                            value={form.departmentId}
+                                            onValueChange={deptId => {
+                                                const opt = editOrgOptions.find(o => o.value === deptId)
+                                                setForm(f => ({
+                                                    ...f,
+                                                    departmentId: deptId,
+                                                    branchId: opt?.branchId ?? '',
+                                                    divisionId: opt?.divisionId ?? '',
+                                                }))
+                                            }}
+                                            options={editOrgOptions}
+                                            placeholder="Select department…"
+                                            searchPlaceholder="Search by department, division or branch…"
+                                            emptyMessage="No departments found."
+                                            clearable
+                                        />
+                                        {form.departmentId && (
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Branch and division will be assigned automatically.
+                                            </p>
                                         )}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                            <div className="space-y-1.5">
-                                                <Label>Department</Label>
-                                                <Select value={form.departmentId || 'none'} onValueChange={v => setForm(f => ({ ...f, departmentId: v === 'none' ? '' : v }))}>
-                                                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="none">— None —</SelectItem>
-                                                        {editDepartments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            {editBranches.length > 0 && (
-                                                <div className="space-y-1.5">
-                                                    <Label>Branch</Label>
-                                                    <Select value={form.branchId || 'none'} onValueChange={v => setForm(f => ({ ...f, branchId: v === 'none' ? '' : v }))}>
-                                                        <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="none">— None —</SelectItem>
-                                                            {editBranches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            )}
-                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -1031,15 +1057,16 @@ export function EditEmployeeDialog({
                                 <div className="space-y-1.5"><Label>Department (freeform)</Label><Input value={form.department} onChange={set('department')} placeholder="e.g. Sales" /></div>
                                 <div className="space-y-1.5">
                                     <Label>Designation</Label>
-                                    <Select value={form.designation || 'none'} onValueChange={v => setForm(f => ({ ...f, designation: v === 'none' ? '' : v }))}>
-                                        <SelectTrigger><SelectValue placeholder="Select designation…" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">— None —</SelectItem>
-                                            {(Array.isArray(designationList) ? designationList : []).filter((d: { isActive: boolean }) => d.isActive).map((d: { id: string; name: string }) => (
-                                                <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Combobox
+                                        value={form.designation}
+                                        onValueChange={v => setForm(f => ({ ...f, designation: v }))}
+                                        options={(Array.isArray(designationList) ? designationList : [])
+                                            .filter((d: { isActive: boolean }) => d.isActive)
+                                            .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
+                                        placeholder="Select designation…"
+                                        searchPlaceholder="Search designations…"
+                                        clearable
+                                    />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

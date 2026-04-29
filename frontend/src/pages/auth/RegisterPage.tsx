@@ -20,7 +20,8 @@ import { INDUSTRY_OPTIONS, COMPANY_SIZE_OPTIONS } from '@/lib/options'
 const registerSchema = z
   .object({
     // Step 1 — account
-    fullName: z.string().min(2, 'Full name must be at least 2 characters'),
+    firstName: z.string().min(1, 'First name is required'),
+    lastName: z.string().min(1, 'Last name is required'),
     email: z.string().email('Invalid email address'),
     password: z
       .string()
@@ -43,7 +44,7 @@ const registerSchema = z
   })
 
 type RegisterForm = z.infer<typeof registerSchema>
-const STEP_1_FIELDS: (keyof RegisterForm)[] = ['fullName', 'email', 'password', 'confirmPassword']
+const STEP_1_FIELDS: (keyof RegisterForm)[] = ['firstName', 'lastName', 'email', 'password', 'confirmPassword']
 
 // ─── Static data ─────────────────────────────────────────────────────────────
 
@@ -156,7 +157,8 @@ export function RegisterPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: data.fullName,
+          firstName: data.firstName,
+          lastName: data.lastName,
           email: data.email,
           password: data.password,
           company: data.company,
@@ -241,19 +243,34 @@ export function RegisterPage() {
       {/* ── Step 1 — Account ─────────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="fullName">Full Name</Label>
-            <Input
-              id="fullName"
-              type="text"
-              autoComplete="name"
-              autoFocus
-              placeholder="Mohammed Al Rashidi"
-              {...register('fullName')}
-              aria-invalid={!!errors.fullName}
-              className={cn(errors.fullName && 'border-destructive focus-visible:ring-destructive')}
-            />
-            {errors.fullName && <p className="text-xs text-destructive">{errors.fullName.message}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="firstName">First Name</Label>
+              <Input
+                id="firstName"
+                type="text"
+                autoComplete="given-name"
+                autoFocus
+                placeholder="Mohammed"
+                {...register('firstName')}
+                aria-invalid={!!errors.firstName}
+                className={cn(errors.firstName && 'border-destructive focus-visible:ring-destructive')}
+              />
+              {errors.firstName && <p className="text-xs text-destructive">{errors.firstName.message}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="lastName">Last Name</Label>
+              <Input
+                id="lastName"
+                type="text"
+                autoComplete="family-name"
+                placeholder="Al Rashidi"
+                {...register('lastName')}
+                aria-invalid={!!errors.lastName}
+                className={cn(errors.lastName && 'border-destructive focus-visible:ring-destructive')}
+              />
+              {errors.lastName && <p className="text-xs text-destructive">{errors.lastName.message}</p>}
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -460,7 +477,7 @@ export function RegisterPage() {
           {/* Account summary */}
           <div className="rounded-lg border border-border bg-muted/30 px-3.5 py-3 space-y-0.5">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Account owner</p>
-            <p className="text-sm font-medium text-foreground">{watch('fullName') || '—'}</p>
+            <p className="text-sm font-medium text-foreground">{[watch('firstName'), watch('lastName')].filter(Boolean).join(' ') || '—'}</p>
             <p className="text-xs text-muted-foreground">{watch('email') || '—'}</p>
           </div>
 

@@ -8,7 +8,8 @@
       "Bash(pnpm lint *)",
       "Bash(./node_modules/.bin/tsc --noEmit)",
       "Bash(pnpm build *)",
-      "Bash(npx react-doctor@latest . --diff)"
+      "Bash(npx react-doctor@latest . --diff)",
+      "Bash(npx tsc *)"
     ]
   }
 }

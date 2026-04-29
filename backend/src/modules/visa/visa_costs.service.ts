@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from 'drizzle-orm'
+import { eq, and, desc, sql, isNotNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { visaCosts, employees } from '../../db/schema/index.js'
 
@@ -87,7 +87,7 @@ export async function getPROCostReport(tenantId: string) {
     const yearStart = `${currentYear}-01-01`
 
     const [allCosts, byCategoryRows, byMonthRows] = await Promise.all([
-        // All costs YTD with employee name
+        // All costs YTD with employee name — exclude orphaned rows (deleted visa)
         db
             .select({
                 id: visaCosts.id,
@@ -106,6 +106,7 @@ export async function getPROCostReport(tenantId: string) {
             .leftJoin(employees, eq(visaCosts.employeeId, employees.id))
             .where(and(
                 eq(visaCosts.tenantId, tenantId),
+                isNotNull(visaCosts.visaApplicationId),
                 sql`${visaCosts.paidDate} >= ${yearStart}`,
             ))
             .orderBy(desc(visaCosts.paidDate)),
@@ -120,6 +121,7 @@ export async function getPROCostReport(tenantId: string) {
             .from(visaCosts)
             .where(and(
                 eq(visaCosts.tenantId, tenantId),
+                isNotNull(visaCosts.visaApplicationId),
                 sql`${visaCosts.paidDate} >= ${yearStart}`,
             ))
             .groupBy(visaCosts.category)
@@ -136,6 +138,7 @@ export async function getPROCostReport(tenantId: string) {
             .from(visaCosts)
             .where(and(
                 eq(visaCosts.tenantId, tenantId),
+                isNotNull(visaCosts.visaApplicationId),
                 sql`${visaCosts.paidDate} >= ${yearStart}`,
             ))
             .groupBy(sql`to_char(${visaCosts.paidDate}, 'Mon YYYY')`, sql`to_char(${visaCosts.paidDate}, 'YYYY-MM')`)

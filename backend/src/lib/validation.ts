@@ -157,6 +157,8 @@ export const createLeaveSchema = z.object({
     startDate: z.string().date('Must be a valid date (YYYY-MM-DD)'),
     endDate: z.string().date('Must be a valid date (YYYY-MM-DD)'),
     reason: z.string().max(500).optional(),
+    handoverTo: uuidSchema.optional().nullable(),
+    handoverNotes: z.string().max(1000).optional().nullable(),
 }).refine(d => d.endDate >= d.startDate, {
     message: 'endDate must be on or after startDate',
     path: ['endDate'],

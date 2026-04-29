@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, integer, numeric, date, timestamp, index } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { pgTable, uuid, text, integer, numeric, date, timestamp, index, check } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
 import { visaApplications } from './visa.js'
@@ -26,13 +26,14 @@ export const visaCosts = pgTable('visa_costs', {
     stepLabel: text('step_label'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-    tenantIdx: index('idx_visa_costs_tenant').on(t.tenantId),
-    visaIdx: index('idx_visa_costs_visa').on(t.visaApplicationId),
-    employeeIdx: index('idx_visa_costs_employee').on(t.employeeId),
-    paidDateIdx: index('idx_visa_costs_paid_date').on(t.paidDate),
-    stepIdx: index('idx_visa_costs_step').on(t.visaApplicationId, t.stepNumber),
-}))
+}, (t) => [
+    index('idx_visa_costs_tenant').on(t.tenantId),
+    index('idx_visa_costs_visa').on(t.visaApplicationId),
+    index('idx_visa_costs_employee').on(t.employeeId),
+    index('idx_visa_costs_paid_date').on(t.paidDate),
+    index('idx_visa_costs_step').on(t.visaApplicationId, t.stepNumber),
+    check('chk_visa_costs_amount_positive', sql`${t.amount} > 0`),
+])
 
 export const visaCostsRelations = relations(visaCosts, ({ one }) => ({
     tenant: one(tenants, { fields: [visaCosts.tenantId], references: [tenants.id] }),

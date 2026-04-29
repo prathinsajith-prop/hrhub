@@ -6,7 +6,7 @@ import {
   ArrowLeft, User, Briefcase, Plane, FileText, CreditCard, Star,
   Phone, Mail, MapPin, Calendar, Building2, Hash, Shield, Edit2,
   Clock, Download, Eye, Camera, Loader2, Plus, Package,
-  CalendarDays, ClipboardList, TrendingDown, UserCheck,
+  CalendarDays, ClipboardList, TrendingDown, UserCheck, Users, GraduationCap, Landmark,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { useEmployee, useUploadEmployeeAvatar, useEmployeeAccount } from '@/hooks/useEmployees'
+import { useOrgUnits } from '@/hooks/useOrgUnits'
+import { useEmployeeTeams } from '@/hooks/useTeams'
 import { useDocuments, useUploadDocument } from '@/hooks/useDocuments'
 import { usePerformanceReviews } from '@/hooks/usePerformance'
 import { useEmployeeAssets } from '@/hooks/useAssets'
@@ -173,6 +175,11 @@ export function EmployeeDetailPage() {
   const canManage = can('manage_employees')
 
   const { data: employee, isLoading } = useEmployee(id!)
+  const { data: orgUnits = [] } = useOrgUnits()
+  const orgUnitName = React.useMemo(() => {
+    const map = new Map(orgUnits.map((u: { id: string; name: string }) => [u.id, u.name]))
+    return (id: string | undefined | null) => (id ? (map.get(id) ?? null) : null)
+  }, [orgUnits])
   const { data: docsResult, isLoading: docsLoading } = useDocuments({ employeeId: id })
   const { data: reviews, isLoading: reviewsLoading } = usePerformanceReviews({ employeeId: id })
   const { data: employeeAssignments, isLoading: assetsLoading } = useEmployeeAssets(id!)
@@ -193,6 +200,7 @@ export function EmployeeDetailPage() {
   const docs = (docsResult?.data as DocRecord[] | undefined) ?? []
 
   const { data: accountData, isLoading: accountLoading } = useEmployeeAccount(canManage ? id : undefined)
+  const { data: employeeTeams = [] } = useEmployeeTeams(id)
 
   const uploadAvatar = useUploadEmployeeAvatar(id!)
   const uploadDoc = useUploadDocument()
@@ -305,7 +313,23 @@ export function EmployeeDetailPage() {
                     <Badge variant={STATUS_VARIANT[e.status] ?? 'secondary'} className="capitalize text-[10px]">
                       {labelFor(e.status)}
                     </Badge>
-                    {e.department && <span className="text-xs text-muted-foreground">{e.department}</span>}
+                    {(() => {
+                      const parts = [
+                        orgUnitName((e as any).branchId),
+                        orgUnitName((e as any).divisionId),
+                        orgUnitName((e as any).departmentId) ?? e.department,
+                      ].filter(Boolean) as string[]
+                      return parts.length > 0 ? (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          {parts.map((p, i) => (
+                            <span key={i} className="flex items-center gap-1">
+                              {i > 0 && <span className="opacity-40">›</span>}
+                              <span className={i === parts.length - 1 ? 'font-medium text-foreground/80' : ''}>{p}</span>
+                            </span>
+                          ))}
+                        </span>
+                      ) : null
+                    })()}
                   </div>
                   <h1 className="text-xl sm:text-2xl font-bold tracking-tight font-display truncate">{e.fullName}</h1>
                   <p className="text-sm text-muted-foreground mt-0.5">{e.designation ?? '—'} · {e.employeeNo}</p>
@@ -358,7 +382,7 @@ export function EmployeeDetailPage() {
                 <QuickStat label="Join Date" value={formatDate(e.joinDate) || '—'} />
                 <QuickStat label="Total Salary" value={formatCurrency(e.totalSalary ?? 0)} />
                 <QuickStat label="Visa" value={visaLabel} valueClass={visaClass} />
-                {e.contractType && <QuickStat label="Contract" value={e.contractType} />}
+                {e.contractType && <QuickStat label="Contract" value={labelFor(e.contractType)} />}
                 {e.workLocation && <QuickStat label="Location" value={e.workLocation} />}
               </div>
             </div>
@@ -407,14 +431,14 @@ export function EmployeeDetailPage() {
                   <div>
                     <InfoRow label="Full Name" value={e.fullName} icon={User} />
                     <InfoRow label="Date of Birth" value={e.dateOfBirth ? formatDate(e.dateOfBirth) : null} icon={Calendar} />
-                    <InfoRow label="Gender" value={e.gender} icon={User} />
+                    <InfoRow label="Gender" value={labelFor(e.gender)} icon={User} />
                     <InfoRow label="Nationality" value={e.nationality} icon={MapPin} />
-                    <InfoRow label="Marital Status" value={e.maritalStatus} icon={User} />
+                    <InfoRow label="Marital Status" value={labelFor(e.maritalStatus)} icon={User} />
                   </div>
                   <div>
                     <InfoRow label="Mobile" value={e.mobileNo ?? e.phone} icon={Phone} />
                     <InfoRow label="Personal Email" value={e.personalEmail} icon={Mail} />
-                    <InfoRow label="Work Email" value={e.workEmail ?? e.email} icon={Mail} />
+                    <InfoRow label="Work Email" value={e.workEmail || e.email || null} icon={Mail} />
                     <InfoRow label="Emergency Contact" value={e.emergencyContact} icon={Phone} />
                     <InfoRow label="Address" value={e.homeCountryAddress} icon={MapPin} />
                   </div>
@@ -424,7 +448,7 @@ export function EmployeeDetailPage() {
           </TabsContent>
 
           {/* ── Employment ── */}
-          <TabsContent value="employment" className="mt-4">
+          <TabsContent value="employment" className="mt-4 space-y-4">
             <Card>
               <CardHeader><CardTitle className="text-base">Employment Details</CardTitle></CardHeader>
               <CardContent>
@@ -432,9 +456,11 @@ export function EmployeeDetailPage() {
                   <div>
                     <InfoRow label="Employee No." value={e.employeeNo} icon={Hash} />
                     <InfoRow label="Designation" value={e.designation} icon={Briefcase} />
-                    <InfoRow label="Department" value={e.department} icon={Building2} />
+                    <InfoRow label="Branch" value={orgUnitName((e as any).branchId) ?? '—'} icon={Building2} />
+                    <InfoRow label="Division" value={orgUnitName((e as any).divisionId) ?? '—'} icon={Building2} />
+                    <InfoRow label="Department" value={orgUnitName((e as any).departmentId) ?? e.department ?? '—'} icon={Building2} />
                     <InfoRow label="Company" value={(e as unknown as Record<string, unknown>)['entityName'] as string ?? '—'} icon={Building2} />
-                    <InfoRow label="Contract Type" value={e.contractType} />
+                    <InfoRow label="Contract Type" value={labelFor(e.contractType)} icon={Briefcase} />
                     <InfoRow label="Work Location" value={e.workLocation} icon={MapPin} />
                   </div>
                   <div>
@@ -442,10 +468,41 @@ export function EmployeeDetailPage() {
                     <InfoRow label="Probation End" value={e.probationEndDate ? formatDate(e.probationEndDate) : null} icon={Clock} />
                     <InfoRow label="Contract End" value={e.contractEndDate ? formatDate(e.contractEndDate) : null} icon={Calendar} />
                     <InfoRow label="Status" value={labelFor(e.status)} icon={Shield} />
-                    <InfoRow label="Grade / Band" value={e.gradeLevel} />
+                    <InfoRow label="Grade / Band" value={e.gradeLevel} icon={GraduationCap} />
                     <InfoRow label="Direct Manager" value={e.managerName} icon={User} />
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Team memberships */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-base">Team Memberships</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {employeeTeams.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">Not assigned to any team.</p>
+                ) : (
+                  <div className="divide-y divide-border/40">
+                    {employeeTeams.map(team => (
+                      <div key={team.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{team.name}</p>
+                          {team.department && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{team.department}</p>
+                          )}
+                        </div>
+                        <Badge variant="secondary" className="text-[10px] shrink-0 ml-3">
+                          {team.memberCount} {team.memberCount === 1 ? 'member' : 'members'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -550,13 +607,13 @@ export function EmployeeDetailPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
                     <InfoRow label="Basic Salary" value={formatCurrency(e.basicSalary ?? 0)} icon={CreditCard} />
-                    <InfoRow label="Housing Allow." value={formatCurrency(e.housingAllowance ?? 0)} />
-                    <InfoRow label="Transport Allow." value={formatCurrency(e.transportAllowance ?? 0)} />
-                    <InfoRow label="Other Allow." value={formatCurrency(e.otherAllowances ?? 0)} />
+                    <InfoRow label="Housing Allow." value={formatCurrency(e.housingAllowance ?? 0)} icon={CreditCard} />
+                    <InfoRow label="Transport Allow." value={formatCurrency(e.transportAllowance ?? 0)} icon={CreditCard} />
+                    <InfoRow label="Other Allow." value={formatCurrency(e.otherAllowances ?? 0)} icon={CreditCard} />
                   </div>
                   <div>
                     <InfoRow label="Total Salary" value={formatCurrency(e.totalSalary ?? 0)} icon={CreditCard} />
-                    <InfoRow label="Payment Method" value={e.paymentMethod} />
+                    <InfoRow label="Payment Method" value={labelFor(e.paymentMethod)} icon={Landmark} />
                     <InfoRow label="Bank" value={e.bankName} icon={Building2} />
                     <InfoRow label="IBAN" value={e.iban} icon={Hash} />
                   </div>

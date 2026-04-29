@@ -1,7 +1,21 @@
-import { getCompanySettings, updateCompanySettings, listTenantUsers, inviteUser, updateUserStatus } from './settings.service.js'
+import { getCompanySettings, updateCompanySettings, listTenantUsers, listInvitableEmployees, inviteUser, inviteUserBulk, updateUserStatus, resendInvite } from './settings.service.js'
 import { db } from '../../db/index.js'
 import { tenants, users } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
+
+const VALID_ROLES = ['employee', 'dept_head', 'pro_officer', 'hr_manager', 'super_admin'] as const
+type ValidRole = typeof VALID_ROLES[number]
+
+function validateRoleAssignment(callerRole: string, targetRole: string): string | null {
+    if (!VALID_ROLES.includes(targetRole as ValidRole)) {
+        return `Invalid role: ${targetRole}`
+    }
+    // hr_manager cannot assign super_admin
+    if (callerRole === 'hr_manager' && targetRole === 'super_admin') {
+        return 'You do not have permission to assign the super_admin role'
+    }
+    return null
+}
 
 export default async function settingsRoutes(fastify: any): Promise<void> {
     const hrAdmin = {
@@ -31,20 +45,55 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         return reply.send({ data: updated })
     })
 
-    // GET /settings/users — list admin/staff users in tenant
+    // GET /settings/users — list employee-linked users in tenant
     fastify.get('/users', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const data = await listTenantUsers(request.user.tenantId)
         return reply.send({ data })
     })
 
-    // POST /settings/users/invite — invite a new user by email
+    // GET /settings/invitable-employees — employees without a user account (invite picker source)
+    fastify.get('/invitable-employees', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
+        const data = await listInvitableEmployees(request.user.tenantId)
+        return reply.send({ data })
+    })
+
+    // POST /settings/users/invite — create a user account for an existing employee
     fastify.post('/users/invite', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
-        const { name, email, role, employeeId } = request.body as { name: string; email: string; role: string; employeeId?: string }
-        if (!name || !email || !role) {
-            return reply.code(400).send({ message: 'name, email and role are required' })
+        const { employeeId, role } = request.body as { employeeId: string; role: string }
+        if (!employeeId || !role) {
+            return reply.code(400).send({ message: 'employeeId and role are required' })
         }
-        await inviteUser(request.user.tenantId, { name, email, role, employeeId })
-        return reply.send({ message: 'Invitation sent' })
+        const roleError = validateRoleAssignment(request.user.role, role)
+        if (roleError) return reply.code(403).send({ message: roleError })
+        try {
+            const result = await inviteUser(request.user.tenantId, { employeeId, role })
+            return reply.code(201).send({ data: result })
+        } catch (err: any) {
+            return reply.code(err.statusCode ?? 500).send({ message: err.message })
+        }
+    })
+
+    // POST /settings/users/invite-bulk — grant access to multiple employees at once
+    fastify.post('/users/invite-bulk', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
+        const { employeeIds, role } = request.body as { employeeIds: string[]; role: string }
+        if (!Array.isArray(employeeIds) || employeeIds.length === 0 || !role) {
+            return reply.code(400).send({ message: 'employeeIds (array) and role are required' })
+        }
+        const roleError = validateRoleAssignment(request.user.role, role)
+        if (roleError) return reply.code(403).send({ message: roleError })
+        const results = await inviteUserBulk(request.user.tenantId, employeeIds, role)
+        return reply.code(207).send({ data: results })
+    })
+
+    // POST /settings/users/:employeeId/resend-invite — resend invite link to inactive user
+    fastify.post('/users/:employeeId/resend-invite', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
+        const { employeeId } = request.params as { employeeId: string }
+        try {
+            await resendInvite(request.user.tenantId, employeeId)
+            return reply.send({ message: 'Invite resent' })
+        } catch (err: any) {
+            return reply.code(err.statusCode ?? 500).send({ message: err.message })
+        }
     })
 
     // PATCH /settings/users/:id — deactivate/reactivate a user or change their role
@@ -55,6 +104,11 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         // Prevent super_admin from deactivating themselves
         if (id === request.user.id && isActive === false) {
             return reply.code(400).send({ message: 'You cannot deactivate your own account' })
+        }
+
+        if (role) {
+            const roleError = validateRoleAssignment(request.user.role, role)
+            if (roleError) return reply.code(403).send({ message: roleError })
         }
 
         const updated = await updateUserStatus(request.user.tenantId, id, { isActive, role })

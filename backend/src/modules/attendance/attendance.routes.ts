@@ -2,7 +2,7 @@ import { checkIn, checkOut, getAttendance, upsertAttendance, getAttendanceSummar
 
 export async function attendanceRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
-    const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
+    const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')] }
 
     // GET /api/v1/attendance
     fastify.get('/attendance', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
@@ -35,7 +35,7 @@ export async function attendanceRoutes(fastify: any) {
     fastify.post('/attendance/check-in', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { employeeId } = request.body as { employeeId?: string }
         const role = request.user.role
-        const isAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(role)
         const resolvedEmployeeId = isAdmin && employeeId ? employeeId : (request.user.employeeId ?? employeeId)
         if (!resolvedEmployeeId) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
@@ -48,7 +48,7 @@ export async function attendanceRoutes(fastify: any) {
     fastify.post('/attendance/check-out', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { employeeId } = request.body as { employeeId?: string }
         const role = request.user.role
-        const isAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(role)
         const resolvedEmployeeId = isAdmin && employeeId ? employeeId : (request.user.employeeId ?? employeeId)
         if (!resolvedEmployeeId) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })

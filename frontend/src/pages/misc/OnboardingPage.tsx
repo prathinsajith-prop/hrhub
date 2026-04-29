@@ -32,8 +32,15 @@ export function OnboardingPage() {
     const { data: analyticsData } = useOnboardingAnalytics()
     const analytics = analyticsData
     const createChecklist = useCreateOnboardingChecklist()
-    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
-    const allEmployees = (empData?.data ?? []) as any[]
+    // Include both active and onboarding employees in the "start checklist" dropdown
+    const { data: empDataActive } = useEmployees({ limit: 100, status: 'active' })
+    const { data: empDataOnboarding } = useEmployees({ limit: 100, status: 'onboarding' })
+    const allEmployees = useMemo(() => {
+        const active = (empDataActive?.data ?? []) as any[]
+        const onboarding = (empDataOnboarding?.data ?? []) as any[]
+        const seen = new Set(active.map((e: any) => e.id))
+        return [...active, ...onboarding.filter((e: any) => !seen.has(e.id))]
+    }, [empDataActive?.data, empDataOnboarding?.data])
 
     const [newOpen, setNewOpen] = useState(false)
     const [newEmpId, setNewEmpId] = useState('')
@@ -135,12 +142,15 @@ export function OnboardingPage() {
                 </div>
             ),
         },
-        { accessorKey: 'startDate', header: 'Start', cell: ({ getValue }) => <span className="text-sm">{formatDate(getValue() as string)}</span> },
-        { accessorKey: 'dueDate', header: 'Due', cell: ({ getValue }) => <span className="text-sm">{formatDate(getValue() as string)}</span> },
+        { accessorKey: 'startDate', header: 'Start', cell: ({ row: { original: c }, getValue }) => c.id ? <span className="text-sm">{formatDate(getValue() as string)}</span> : <span className="text-xs text-muted-foreground">—</span> },
+        { accessorKey: 'dueDate', header: 'Due', cell: ({ row: { original: c }, getValue }) => c.id ? <span className="text-sm">{formatDate(getValue() as string)}</span> : <span className="text-xs text-muted-foreground">—</span> },
         {
             accessorKey: 'progress',
             header: 'Progress',
             cell: ({ row: { original: c } }) => {
+                if (!c.id) {
+                    return <Badge variant="secondary" className="text-[10px] font-normal">No checklist</Badge>
+                }
                 const tone = progressTone(c.progress)
                 return (
                     <div className="min-w-[140px]">
@@ -157,6 +167,7 @@ export function OnboardingPage() {
             id: 'overdue',
             header: 'Overdue',
             cell: ({ row: { original: c } }) => {
+                if (!c.id) return <span className="text-xs text-muted-foreground">—</span>
                 const n = c.steps.filter((s) => s.status === 'overdue').length
                 return n > 0
                     ? <Badge variant="destructive" className="text-[10px]">{n}</Badge>
@@ -168,13 +179,20 @@ export function OnboardingPage() {
             header: '',
             cell: ({ row: { original: c } }) => (
                 <div onClick={(e) => e.stopPropagation()}>
-                    <Button asChild size="sm" variant="outline">
-                        <Link to={`/onboarding/${c.employeeId}`}><Eye className="h-3.5 w-3.5 mr-1.5" />View</Link>
-                    </Button>
+                    {c.id ? (
+                        <Button asChild size="sm" variant="outline">
+                            <Link to={`/onboarding/${c.employeeId}`}><Eye className="h-3.5 w-3.5 mr-1.5" />View</Link>
+                        </Button>
+                    ) : (
+                        <Button size="sm" variant="default" leftIcon={<Plus className="h-3.5 w-3.5" />}
+                            onClick={() => { setNewEmpId(c.employeeId); setNewOpen(true) }}>
+                            Start
+                        </Button>
+                    )}
                 </div>
             ),
         },
-    ], [])
+    ], [enrolledIds])
 
     return (
         <PageWrapper>
@@ -219,8 +237,8 @@ export function OnboardingPage() {
                     <DataTable
                         columns={columns}
                         data={filtered}
-                        getRowId={(row) => row.id}
-                        onRowClick={(row) => navigate(`/onboarding/${row.employeeId}`)}
+                        getRowId={(row) => row.id ?? `stub-${row.employeeId}`}
+                        onRowClick={(row) => { if (row.id) navigate(`/onboarding/${row.employeeId}`) }}
                         advancedFilter={{
                             search,
                             filters: ONBOARDING_FILTERS,

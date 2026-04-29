@@ -83,6 +83,8 @@ export function SiteHeader() {
   const markAll = useMarkAllRead()
   const notifications = notifData?.data ?? []
   const { user, tenant, logout } = useAuthStore()
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'hr_manager'
+  const profileRoute = isAdmin ? ROUTES.settings : '/my/account'
   const { data: myTenants } = useMyTenants()
   const switchMut = useSwitchTenant()
 
@@ -393,29 +395,35 @@ export function SiteHeader() {
                         {m.tenantId === tenant?.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
                       </DropdownMenuItem>
                     ))}
-                    <DropdownMenuSeparator className="my-1" />
-                    <DropdownMenuItem
-                      className="gap-2.5 cursor-pointer px-2.5 rounded-md text-muted-foreground"
-                      onClick={() => navigate('/organizations')}
-                    >
-                      <Building2 className="h-3.5 w-3.5" />
-                      <span className="text-xs">{t('organizations.title', { defaultValue: 'Manage Organizations' })}</span>
-                    </DropdownMenuItem>
+                    {isAdmin && (
+                      <>
+                        <DropdownMenuSeparator className="my-1" />
+                        <DropdownMenuItem
+                          className="gap-2.5 cursor-pointer px-2.5 rounded-md text-muted-foreground"
+                          onClick={() => navigate('/organizations')}
+                        >
+                          <Building2 className="h-3.5 w-3.5" />
+                          <span className="text-xs">{t('organizations.title', { defaultValue: 'Manage Organizations' })}</span>
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               )}
 
-              {/* Org Settings */}
-              <DropdownMenuItem onClick={() => navigate('/organization-settings')} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
-                <Settings2 className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">{t('organizations.settings', { defaultValue: 'Organization Settings' })}</span>
-              </DropdownMenuItem>
+              {/* Org Settings — admin only */}
+              {isAdmin && (
+                <DropdownMenuItem onClick={() => navigate('/organization-settings')} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
+                  <Settings2 className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{t('organizations.settings', { defaultValue: 'Organization Settings' })}</span>
+                </DropdownMenuItem>
+              )}
 
               <DropdownMenuSeparator className="my-1.5" />
 
-              <DropdownMenuItem onClick={() => navigate(ROUTES.settings)} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
+              <DropdownMenuItem onClick={() => navigate(profileRoute)} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
                 <UserIcon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">{t('profile.settings', { defaultValue: 'Profile & Settings' })}</span>
+                <span className="text-sm">{t('profile.myAccount', { defaultValue: 'My Account' })}</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate(ROUTES.notifications)} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
                 <BellIcon className="h-4 w-4 text-muted-foreground" />

@@ -7,16 +7,19 @@ export const users = pgTable('users', {
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
     entityId: uuid('entity_id'),
-    // Optional 1:1 link to the employees table. Nullable because not every
-    // user is an employee (super_admin, integration accounts, parent-company
-    // auditors). FK + UNIQUE(employee_id) WHERE NOT NULL added in
-    // migration 0014.
-    employeeId: uuid('employee_id').references(() => employees.id, { onDelete: 'set null' }),
+    // Mandatory 1:1 link to the employees table. Every user must have an
+    // employee record — enforced at DB level (NOT NULL) and at application
+    // level in registerTenant and inviteUser. FK is RESTRICT so an employee
+    // cannot be hard-deleted while a user account references them.
+    // Migration 0018 backfills any pre-existing rows and adds NOT NULL.
+    employeeId: uuid('employee_id').notNull().references(() => employees.id, { onDelete: 'restrict' }),
     // Email is unique per-tenant (not globally) so the same human can belong
     // to multiple tenants. Enforced by uq_users_tenant_email_ci in
     // migration 0011 — case-insensitive on LOWER(email).
     email: text('email').notNull(),
     passwordHash: text('password_hash').notNull(),
+    firstName: text('first_name').notNull(),
+    lastName: text('last_name').notNull(),
     name: text('name').notNull(),
     role: text('role').notNull().default('employee')
         .$type<'super_admin' | 'hr_manager' | 'pro_officer' | 'dept_head' | 'employee'>(),

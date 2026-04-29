@@ -13,6 +13,7 @@ import { formatDate, formatCurrency, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useReportsSummary } from '@/hooks/useReports'
+import { usePermissions } from '@/hooks/usePermissions'
 import type { PayrollTrendRow, VisaExpiryEmployee } from '@/hooks/useReports'
 import { COST_CATEGORY_LABELS } from '@/hooks/useVisaCosts'
 import type { CostReportEmployee } from '@/hooks/useVisaCosts'
@@ -78,6 +79,9 @@ const EmployeeStatusBadge = memo(function EmployeeStatusBadge({ status }: { stat
 
 export function ReportsPage() {
     const { t } = useTranslation()
+    const { can } = usePermissions()
+    const canViewPayroll = can('view_payroll')
+    const canViewVisa = can('view_visa')
     const { data: reportsSummary, isLoading: summaryLoading, isFetching: summaryFetching, refetch: refetchSummary } = useReportsSummary(90)
     const headcount = reportsSummary?.headcount
     const payrollSummary = reportsSummary?.payrollSummary
@@ -150,24 +154,30 @@ export function ReportsPage() {
                     >
                         <Users className="h-4 w-4" /> Headcount
                     </TabsTrigger>
-                    <TabsTrigger
-                        value="payroll"
-                        className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors"
-                    >
-                        <BarChart3 className="h-4 w-4" /> Payroll Summary
-                    </TabsTrigger>
-                    <TabsTrigger
-                        value="visa"
-                        className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors"
-                    >
-                        <Shield className="h-4 w-4" /> Visa Expiry
-                    </TabsTrigger>
-                    <TabsTrigger
-                        value="pro-costs"
-                        className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors"
-                    >
-                        <Receipt className="h-4 w-4" /> PRO Costs
-                    </TabsTrigger>
+                    {canViewPayroll && (
+                        <TabsTrigger
+                            value="payroll"
+                            className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors"
+                        >
+                            <BarChart3 className="h-4 w-4" /> Payroll Summary
+                        </TabsTrigger>
+                    )}
+                    {canViewVisa && (
+                        <TabsTrigger
+                            value="visa"
+                            className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors"
+                        >
+                            <Shield className="h-4 w-4" /> Visa Expiry
+                        </TabsTrigger>
+                    )}
+                    {canViewPayroll && (
+                        <TabsTrigger
+                            value="pro-costs"
+                            className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors"
+                        >
+                            <Receipt className="h-4 w-4" /> PRO Costs
+                        </TabsTrigger>
+                    )}
                 </TabsList>
 
                 {/* ── Headcount ── */}

@@ -22,6 +22,12 @@ export interface ExitRequest {
     notes?: string
     createdAt: string
     updatedAt: string
+    // enriched by backend JOIN
+    employeeName?: string
+    employeeNo?: string
+    employeeDesignation?: string
+    employeeDepartment?: string
+    employeeAvatarUrl?: string | null
 }
 
 export interface SettlementPreview {
@@ -56,10 +62,18 @@ export function useExitRequest(id: string | undefined) {
     })
 }
 
-export function useSettlementPreview(employeeId: string | undefined, exitDate: string | undefined, exitType: string | undefined) {
+export function useSettlementPreview(
+    employeeId: string | undefined,
+    exitDate: string | undefined,
+    exitType: string | undefined,
+    deductions?: number,
+) {
+    const deductionsParam = deductions ? `&deductions=${deductions}` : ''
     return useQuery({
-        queryKey: ['exit-preview', employeeId, exitDate, exitType],
-        queryFn: () => api.get<{ data: SettlementPreview }>(`/exit/settlement-preview?employeeId=${employeeId}&exitDate=${exitDate}&exitType=${exitType}`).then(r => r.data),
+        queryKey: ['exit-preview', employeeId, exitDate, exitType, deductions],
+        queryFn: () => api.get<{ data: SettlementPreview }>(
+            `/exit/settlement-preview?employeeId=${employeeId}&exitDate=${exitDate}&exitType=${exitType}${deductionsParam}`
+        ).then(r => r.data),
         enabled: !!employeeId && !!exitDate && !!exitType,
     })
 }
@@ -76,6 +90,18 @@ export function useApproveExit() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (id: string) => api.patch(`/exit/${id}/approve`, {}),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['exit'] })
+            qc.invalidateQueries({ queryKey: ['employees'] })
+        },
+    })
+}
+
+export function useRejectExit() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+            api.patch(`/exit/${id}/reject`, { reason }),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['exit'] }),
     })
 }

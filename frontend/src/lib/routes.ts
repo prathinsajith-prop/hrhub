@@ -45,6 +45,7 @@ export const ROUTES = {
     organizationsNew: '/organizations/new',
     organizationSettings: '/organization-settings',
     team: '/team',
+    users: '/users',
     apps: '/apps',
 
     // Personal
@@ -89,6 +90,7 @@ export const ROOT_NAV_LABELS: Record<string, string> = {
     help: 'nav.help',
     organizations: 'nav.organizations',
     team: 'nav.team',
+    users: 'nav.users',
     apps: 'nav.apps',
     'organization-settings': 'settings.company',
     'my/leave': 'myLeave.title',

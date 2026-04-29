@@ -42,6 +42,7 @@ const AssetsPage = lazy(() => import('@/pages/assets/AssetsPage').then(m => ({ d
 const OrganizationsPage = lazy(() => import('@/pages/organizations/OrganizationsPage').then(m => ({ default: m.OrganizationsPage })))
 const NewOrganizationPage = lazy(() => import('@/pages/organizations/NewOrganizationPage').then(m => ({ default: m.NewOrganizationPage })))
 const TeamPage = lazy(() => import('@/pages/organizations/TeamPage').then(m => ({ default: m.TeamPage })))
+const UsersPage = lazy(() => import('@/pages/settings/UsersPage').then(m => ({ default: m.UsersPage })))
 const ConnectedAppsPage = lazy(() => import('@/pages/organizations/ConnectedAppsPage').then(m => ({ default: m.ConnectedAppsPage })))
 const AppDetailPage = lazy(() => import('@/pages/organizations/AppDetailPage').then(m => ({ default: m.AppDetailPage })))
 const LeavePoliciesPage = lazy(() => import('@/pages/leave/LeavePoliciesPage').then(m => ({ default: m.LeavePoliciesPage })))
@@ -51,6 +52,9 @@ const SubscriptionPage = lazy(() => import('@/pages/organizations/SubscriptionPa
 const MyLeavePage = lazy(() => import('@/pages/my/MyLeavePage').then(m => ({ default: m.MyLeavePage })))
 const MyPayslipsPage = lazy(() => import('@/pages/my/MyPayslipsPage').then(m => ({ default: m.MyPayslipsPage })))
 const MyProfilePage = lazy(() => import('@/pages/my/MyProfilePage').then(m => ({ default: m.MyProfilePage })))
+const MyAccountPage = lazy(() => import('@/pages/my/MyAccountPage').then(m => ({ default: m.MyAccountPage })))
+const ComplaintsPage = lazy(() => import('@/pages/misc/ComplaintsPage').then(m => ({ default: m.ComplaintsPage })))
+const MyComplaintsPage = lazy(() => import('@/pages/my/MyComplaintsPage').then(m => ({ default: m.MyComplaintsPage })))
 
 function PageLoader() {
   return (
@@ -84,6 +88,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/audit': 'audit.title',
   '/notifications': 'notifications.title',
   '/my/login-history': 'loginHistory.title',
+  '/my/account': 'myAccount.title',
   '/my/leave': 'myLeave.title',
   '/my/payslips': 'myPayslips.title',
   '/my/profile': 'myProfile.title',
@@ -161,6 +166,7 @@ export default function App() {
             <Route path="audit" element={<RoleRoute routeKey="audit"><AuditLogPage /></RoleRoute>} />
             <Route path="notifications" element={<RoleRoute routeKey="notifications"><NotificationsPage /></RoleRoute>} />
             <Route path="my/login-history" element={<RoleRoute routeKey="my/login-history"><LoginHistoryPage /></RoleRoute>} />
+            <Route path="my/account" element={<RoleRoute routeKey="my/account"><MyAccountPage /></RoleRoute>} />
             <Route path="my/leave" element={<RoleRoute routeKey="my/leave"><MyLeavePage /></RoleRoute>} />
             <Route path="my/payslips" element={<RoleRoute routeKey="my/payslips"><MyPayslipsPage /></RoleRoute>} />
             <Route path="my/profile" element={<RoleRoute routeKey="my/profile"><MyProfilePage /></RoleRoute>} />
@@ -168,11 +174,14 @@ export default function App() {
             <Route path="organizations" element={<RoleRoute routeKey="organizations"><OrganizationsPage /></RoleRoute>} />
             <Route path="organizations/new" element={<RoleRoute routeKey="organizations/new"><NewOrganizationPage /></RoleRoute>} />
             <Route path="team" element={<RoleRoute routeKey="team"><TeamPage /></RoleRoute>} />
+            <Route path="users" element={<RoleRoute routeKey="users"><UsersPage /></RoleRoute>} />
             <Route path="apps" element={<RoleRoute routeKey="apps"><ConnectedAppsPage /></RoleRoute>} />
             <Route path="apps/:id" element={<RoleRoute routeKey="apps"><AppDetailPage /></RoleRoute>} />
             <Route path="leave-policies" element={<RoleRoute routeKey="leave-policies"><LeavePoliciesPage /></RoleRoute>} />
             <Route path="organization-settings" element={<RoleRoute routeKey="organization-settings"><OrganizationSettingsPage /></RoleRoute>} />
-            <Route path="subscription" element={<RoleRoute routeKey="organization-settings"><SubscriptionPage /></RoleRoute>} />
+            <Route path="subscription" element={<RoleRoute routeKey="subscription"><SubscriptionPage /></RoleRoute>} />
+            <Route path="complaints" element={<RoleRoute routeKey="complaints"><ComplaintsPage /></RoleRoute>} />
+            <Route path="my/complaints" element={<RoleRoute routeKey="my/complaints"><MyComplaintsPage /></RoleRoute>} />
           </Route>
           {/* Public onboarding upload — no auth, no AppLayout */}
           <Route path="onboarding/upload/:token" element={<OnboardingUploadPage />} />

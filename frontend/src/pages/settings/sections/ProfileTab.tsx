@@ -10,10 +10,16 @@ import { api } from '@/lib/api'
 import { labelFor } from '@/lib/enums'
 import { SettingsCard } from './_shared'
 
+function splitName(full: string): { firstName: string; lastName: string } {
+    const parts = full.trim().split(/\s+/)
+    return { firstName: parts[0] ?? '', lastName: parts.slice(1).join(' ') }
+}
+
 // ─── Profile Tab — current user avatar / name / department ────────────────────
 export function ProfileTab() {
     const { user, setUser } = useAuthStore()
-    const [name, setName] = useState(user?.name ?? '')
+    const [firstName, setFirstName] = useState(() => splitName(user?.name ?? '').firstName)
+    const [lastName, setLastName] = useState(() => splitName(user?.name ?? '').lastName)
     const [department, setDepartment] = useState(user?.department ?? '')
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(false)
@@ -21,9 +27,9 @@ export function ProfileTab() {
     const fileRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setName(user?.name ?? '')
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+        const { firstName: fn, lastName: ln } = splitName(user?.name ?? '')
+        setFirstName(fn)
+        setLastName(ln)
         setDepartment(user?.department ?? '')
     }, [user?.id, user?.name, user?.department])
 
@@ -60,15 +66,16 @@ export function ProfileTab() {
     }
 
     const handleSave = async () => {
-        if (!name.trim()) {
-            toast.error('Name is required')
+        if (!firstName.trim()) {
+            toast.error('First name is required')
             return
         }
+        const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ')
         try {
             setSaving(true)
             const res = await api.patch<{ data: { name: string; department: string | null; avatarUrl: string | null } }>(
                 '/auth/me',
-                { name: name.trim(), department: department.trim() || null },
+                { name: fullName, department: department.trim() || null },
             )
             setUser({
                 name: res.data.name,
@@ -134,8 +141,12 @@ export function ProfileTab() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-5">
                     <div>
-                        <Label htmlFor="profile-name">Full Name</Label>
-                        <Input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} />
+                        <Label htmlFor="profile-first-name">First Name</Label>
+                        <Input id="profile-first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Jane" />
+                    </div>
+                    <div>
+                        <Label htmlFor="profile-last-name">Last Name</Label>
+                        <Input id="profile-last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Smith" />
                     </div>
                     <div>
                         <Label htmlFor="profile-email">Email</Label>

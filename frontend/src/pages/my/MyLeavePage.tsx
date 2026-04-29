@@ -4,12 +4,13 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Calendar, Clock, CheckCircle2, XCircle, Ban, X, RefreshCcw } from 'lucide-react'
+import { Plus, Calendar, Clock, CheckCircle2, XCircle, Ban, X, RefreshCcw, ArrowRightLeft } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { useCurrentEmployeeId } from '@/hooks/useCurrentEmployeeId'
 import { useLeaveRequests, useCreateLeave, useLeaveBalance, useCancelLeave } from '@/hooks/useLeave'
-import type { LeaveRequest } from '@/types'
+import { useEmployees } from '@/hooks/useEmployees'
+import type { Employee, LeaveRequest } from '@/types'
 import { LEAVE_TYPE_LABELS } from '@/lib/enums'
 import { LEAVE_TYPE_OPTIONS, type SelectOption } from '@/lib/options'
 import {
@@ -39,25 +40,52 @@ const STATUS_ICON: Record<string, React.FC<{ className?: string }>> = {
     cancelled: Ban,
 }
 
-function ApplyDialog({ employeeId, onClose }: { employeeId: string; onClose: () => void }) {
+function ApplyDialog({ employeeId, currentEmployeeId, onClose }: { employeeId: string; currentEmployeeId: string; onClose: () => void }) {
     const create = useCreateLeave()
-    const [form, setForm] = useState({ leaveType: 'annual', startDate: '', endDate: '', reason: '' })
+    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
+    const employees = ((empData?.data as Employee[]) ?? []).filter((e: Employee) => e.id !== currentEmployeeId)
+
+    const [form, setForm] = useState({
+        leaveType: 'annual',
+        startDate: '',
+        endDate: '',
+        reason: '',
+        handoverTo: '',
+        handoverNotes: '',
+    })
+
+    const year = form.startDate ? new Date(form.startDate).getFullYear() : new Date().getFullYear()
+    const { data: balanceData } = useLeaveBalance(employeeId, year)
+    const typeBalance = balanceData?.balance?.[form.leaveType]
+
+    const requestedDays = (form.startDate && form.endDate && form.endDate >= form.startDate)
+        ? Math.max(1, Math.round((new Date(form.endDate).getTime() - new Date(form.startDate).getTime()) / 86400000) + 1)
+        : 0
+    const availableDays = typeBalance?.available ?? -1
+    const isUnlimited = typeBalance?.unlimited ?? false
+    const insufficientBalance = !isUnlimited && availableDays !== -1 && requestedDays > 0 && requestedDays > availableDays
 
     async function submit() {
         if (!form.startDate || !form.endDate) return toast.error('Dates required', 'Please select start and end dates.')
         if (form.endDate < form.startDate) return toast.error('Invalid dates', 'End date must be after start date.')
         try {
-            await create.mutateAsync({ ...form, employeeId })
+            await create.mutateAsync({
+                ...form,
+                employeeId,
+                handoverTo: form.handoverTo || null,
+                handoverNotes: form.handoverNotes || null,
+            })
             toast.success('Submitted', 'Your leave request has been submitted.')
             onClose()
-        } catch {
-            toast.error('Error', 'Could not submit leave request.')
+        } catch (err: unknown) {
+            const msg = (err as { message?: string })?.message
+            toast.error('Could not submit', msg ?? 'Could not submit leave request.')
         }
     }
 
     return (
         <Dialog open onOpenChange={o => { if (!o) onClose() }}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Apply for Leave</DialogTitle>
                     <DialogDescription>Submit a new leave request for approval.</DialogDescription>
@@ -84,15 +112,63 @@ function ApplyDialog({ employeeId, onClose }: { employeeId: string; onClose: () 
                             <DatePicker value={form.endDate} onChange={v => setForm(f => ({ ...f, endDate: v }))} min={form.startDate || undefined} placeholder="Select end date" />
                         </div>
                     </div>
+                    {typeBalance && !isUnlimited && (
+                        <div className={cn(
+                            'flex items-center justify-between rounded-lg px-3 py-2 text-sm border',
+                            insufficientBalance
+                                ? 'bg-destructive/10 border-destructive/30 text-destructive'
+                                : 'bg-muted/50 border-border text-muted-foreground',
+                        )}>
+                            <span>Available {LEAVE_TYPE_LABELS[form.leaveType] ?? form.leaveType} balance</span>
+                            <span className="font-semibold">
+                                {availableDays} day{availableDays === 1 ? '' : 's'}
+                                {requestedDays > 0 && ` · Requested: ${requestedDays}`}
+                            </span>
+                        </div>
+                    )}
                     <div className="space-y-1.5">
                         <Label>Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
                         <Textarea rows={2} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder="Brief reason for leave…" />
                     </div>
+
+                    <div className="border-t pt-3 space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                            <ArrowRightLeft className="h-3 w-3" /> Work Handover <span className="font-normal normal-case">(optional)</span>
+                        </p>
+                        <div className="space-y-1.5">
+                            <Label>Handover To</Label>
+                            <Select value={form.handoverTo} onValueChange={v => setForm(f => ({ ...f, handoverTo: v }))}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select colleague…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="">None</SelectItem>
+                                    {employees.map((e: Employee) => (
+                                        <SelectItem key={e.id} value={e.id}>
+                                            {e.fullName ?? `${e.firstName} ${e.lastName}`}
+                                            {e.designation ? ` · ${e.designation}` : ''}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {form.handoverTo && (
+                            <div className="space-y-1.5">
+                                <Label>Handover Notes</Label>
+                                <Textarea
+                                    rows={2}
+                                    value={form.handoverNotes}
+                                    onChange={e => setForm(f => ({ ...f, handoverNotes: e.target.value }))}
+                                    placeholder="Describe tasks, contacts, or instructions for your colleague…"
+                                />
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button onClick={submit} disabled={create.isPending}>
-                        {create.isPending ? 'Submitting…' : 'Submit Request'}
+                    <Button onClick={submit} disabled={create.isPending || insufficientBalance}>
+                        {create.isPending ? 'Submitting…' : insufficientBalance ? 'Insufficient Balance' : 'Submit Request'}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -127,7 +203,7 @@ function BalanceSummary({ employeeId }: { employeeId: string }) {
     )
 }
 
-export function MyLeavePage() {
+export function MyLeaveContent() {
     const employeeId = useCurrentEmployeeId()
     const [applying, setApplying] = useState(false)
     const [cancelTarget, setCancelTarget] = useState<string | null>(null)
@@ -137,23 +213,17 @@ export function MyLeavePage() {
     const leaves = (data?.data ?? []) as LeaveRequest[]
 
     return (
-        <PageWrapper>
-            <PageHeader
-                title="My Leave"
-                description="View your leave balance and manage your requests."
-                actions={
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
-                            Refresh
-                        </Button>
-                        {employeeId && (
-                            <Button onClick={() => setApplying(true)} leftIcon={<Plus className="h-4 w-4" />}>
-                                Apply for Leave
-                            </Button>
-                        )}
-                    </div>
-                }
-            />
+        <div>
+            <div className="flex items-center justify-end gap-2 mb-4">
+                <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                    Refresh
+                </Button>
+                {employeeId && (
+                    <Button onClick={() => setApplying(true)} leftIcon={<Plus className="h-4 w-4" />}>
+                        Apply for Leave
+                    </Button>
+                )}
+            </div>
 
             {employeeId && (
                 <div className="space-y-6">
@@ -176,31 +246,40 @@ export function MyLeavePage() {
                                 {leaves.map(req => {
                                     const StatusIcon = STATUS_ICON[req.status] ?? Clock
                                     return (
-                                        <div key={req.id} className="flex items-center gap-3 rounded-xl border px-4 py-3 bg-card">
-                                            <span className={cn('text-xs font-semibold px-2 py-1 rounded-md', LEAVE_TYPE_COLORS[req.leaveType] ?? 'bg-muted text-muted-foreground')}>
-                                                {LEAVE_TYPE_LABELS[req.leaveType] ?? req.leaveType}
-                                            </span>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium">
-                                                    {formatDate(req.startDate)} — {formatDate(req.endDate)}
-                                                    <span className="ml-2 text-muted-foreground text-xs">{req.days} day{req.days !== 1 ? 's' : ''}</span>
-                                                </p>
-                                                {req.reason && <p className="text-xs text-muted-foreground truncate">{req.reason}</p>}
+                                        <div key={req.id} className="rounded-xl border px-4 py-3 bg-card space-y-2">
+                                            <div className="flex items-center gap-3">
+                                                <span className={cn('text-xs font-semibold px-2 py-1 rounded-md shrink-0', LEAVE_TYPE_COLORS[req.leaveType] ?? 'bg-muted text-muted-foreground')}>
+                                                    {LEAVE_TYPE_LABELS[req.leaveType] ?? req.leaveType}
+                                                </span>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium">
+                                                        {formatDate(req.startDate)} — {formatDate(req.endDate)}
+                                                        <span className="ml-2 text-muted-foreground text-xs">{req.days} day{req.days !== 1 ? 's' : ''}</span>
+                                                    </p>
+                                                    {req.reason && <p className="text-xs text-muted-foreground truncate">{req.reason}</p>}
+                                                </div>
+                                                <Badge variant={STATUS_VARIANT[req.status] as 'warning' | 'success' | 'destructive' | 'secondary'} className="gap-1 shrink-0">
+                                                    <StatusIcon className="h-3 w-3" />
+                                                    {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                                                </Badge>
+                                                {req.status === 'pending' && (
+                                                    <Button
+                                                        size="icon-sm"
+                                                        variant="ghost"
+                                                        className="text-muted-foreground hover:text-destructive shrink-0"
+                                                        onClick={() => setCancelTarget(req.id)}
+                                                        aria-label="Cancel request"
+                                                    >
+                                                        <X className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                )}
                                             </div>
-                                            <Badge variant={STATUS_VARIANT[req.status] as 'warning' | 'success' | 'destructive' | 'secondary'} className="gap-1 shrink-0">
-                                                <StatusIcon className="h-3 w-3" />
-                                                {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
-                                            </Badge>
-                                            {req.status === 'pending' && (
-                                                <Button
-                                                    size="icon-sm"
-                                                    variant="ghost"
-                                                    className="text-muted-foreground hover:text-destructive shrink-0"
-                                                    onClick={() => setCancelTarget(req.id)}
-                                                    aria-label="Cancel request"
-                                                >
-                                                    <X className="h-3.5 w-3.5" />
-                                                </Button>
+                                            {req.handoverToName && (
+                                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground border-t pt-2">
+                                                    <ArrowRightLeft className="h-3 w-3 shrink-0" />
+                                                    <span>Handed over to <span className="font-medium text-foreground">{req.handoverToName}</span></span>
+                                                    {req.handoverNotes && <span className="truncate">· {req.handoverNotes}</span>}
+                                                </div>
                                             )}
                                         </div>
                                     )
@@ -218,7 +297,13 @@ export function MyLeavePage() {
                 </div>
             )}
 
-            {applying && employeeId && <ApplyDialog employeeId={employeeId} onClose={() => setApplying(false)} />}
+            {applying && employeeId && (
+                <ApplyDialog
+                    employeeId={employeeId}
+                    currentEmployeeId={employeeId}
+                    onClose={() => setApplying(false)}
+                />
+            )}
 
             <ConfirmDialog
                 open={!!cancelTarget}
@@ -235,6 +320,15 @@ export function MyLeavePage() {
                     setCancelTarget(null)
                 }}
             />
+        </div>
+    )
+}
+
+export function MyLeavePage() {
+    return (
+        <PageWrapper>
+            <PageHeader title="My Leave" description="View your leave balance and manage your requests." />
+            <MyLeaveContent />
         </PageWrapper>
     )
 }

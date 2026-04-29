@@ -1,4 +1,4 @@
-import { eq, and, inArray, desc } from 'drizzle-orm'
+import { eq, and, inArray, isNull, isNotNull, or, desc } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { onboardingChecklists, onboardingSteps, employees } from '../../db/schema/index.js'
@@ -148,20 +148,27 @@ export async function updateStep(tenantId: string, checklistId: string, stepId: 
         .set(withTimestamp({ progress }))
         .where(eq(onboardingChecklists.id, checklistId))
 
+    // When all steps complete, graduate employee from probation → active
+    if (progress === 100 && checklist.employeeId) {
+        await db.update(employees)
+            .set({ status: 'active', updatedAt: new Date() })
+            .where(and(
+                eq(employees.id, checklist.employeeId),
+                eq(employees.tenantId, tenantId),
+                eq(employees.status, 'probation'),
+            ))
+    }
+
     return { step, progress }
 }
 
 export async function listChecklists(tenantId: string, params: { limit: number; offset: number }) {
-    // Join employee for display fields and load all steps in one extra query.
+    // Drive the query from employees so that onboarding-status employees without a
+    // checklist are still included as stub rows (checklist fields will be null).
     const rows = await db
         .select({
-            id: onboardingChecklists.id,
-            employeeId: onboardingChecklists.employeeId,
-            progress: onboardingChecklists.progress,
-            startDate: onboardingChecklists.startDate,
-            dueDate: onboardingChecklists.dueDate,
-            createdAt: onboardingChecklists.createdAt,
-            updatedAt: onboardingChecklists.updatedAt,
+            // employee identity (always present)
+            employeeId: employees.id,
             firstName: employees.firstName,
             lastName: employees.lastName,
             designation: employees.designation,
@@ -172,20 +179,41 @@ export async function listChecklists(tenantId: string, params: { limit: number; 
             phone: employees.phone,
             joinDate: employees.joinDate,
             employeeStatus: employees.status,
+            // checklist fields (null when no checklist exists yet)
+            checklistId: onboardingChecklists.id,
+            progress: onboardingChecklists.progress,
+            startDate: onboardingChecklists.startDate,
+            dueDate: onboardingChecklists.dueDate,
+            checklistCreatedAt: onboardingChecklists.createdAt,
+            checklistUpdatedAt: onboardingChecklists.updatedAt,
         })
-        .from(onboardingChecklists)
-        .leftJoin(employees, eq(onboardingChecklists.employeeId, employees.id))
-        .where(eq(onboardingChecklists.tenantId, tenantId))
+        .from(employees)
+        .leftJoin(
+            onboardingChecklists,
+            and(
+                eq(onboardingChecklists.employeeId, employees.id),
+                eq(onboardingChecklists.tenantId, tenantId),
+            ),
+        )
+        .where(and(
+            eq(employees.tenantId, tenantId),
+            eq(employees.isArchived, false),
+            // Include: employees in onboarding status OR employees who have a checklist
+            or(eq(employees.status, 'onboarding'), isNotNull(onboardingChecklists.id)),
+        ))
         .orderBy(desc(onboardingChecklists.createdAt))
         .limit(params.limit)
         .offset(params.offset)
 
     if (rows.length === 0) return []
 
-    const ids = rows.map(r => r.id)
-    const allSteps = await db.select().from(onboardingSteps)
-        .where(inArray(onboardingSteps.checklistId, ids))
-        .orderBy(onboardingSteps.stepOrder)
+    // Fetch steps only for rows that have a checklist
+    const checklistIds = rows.map(r => r.checklistId).filter(Boolean) as string[]
+    const allSteps = checklistIds.length > 0
+        ? await db.select().from(onboardingSteps)
+            .where(inArray(onboardingSteps.checklistId, checklistIds))
+            .orderBy(onboardingSteps.stepOrder)
+        : []
 
     const stepsByChecklist = new Map<string, typeof allSteps>()
     for (const s of allSteps) {
@@ -195,11 +223,11 @@ export async function listChecklists(tenantId: string, params: { limit: number; 
     }
 
     return rows.map(r => {
-        const steps = stepsByChecklist.get(r.id) ?? []
+        const steps = r.checklistId ? (stepsByChecklist.get(r.checklistId) ?? []) : []
         const completedCount = steps.filter(s => s.status === 'completed').length
         const totalCount = steps.length
         return {
-            id: r.id,
+            id: r.checklistId ?? null,           // null = no checklist yet
             employeeId: r.employeeId,
             employeeName: [r.firstName, r.lastName].filter(Boolean).join(' ') || 'Unknown employee',
             employeeNo: r.employeeNo,
@@ -210,11 +238,11 @@ export async function listChecklists(tenantId: string, params: { limit: number; 
             phone: r.phone,
             joinDate: r.joinDate,
             employeeStatus: r.employeeStatus,
-            progress: r.progress,
-            startDate: r.startDate,
-            dueDate: r.dueDate,
-            createdAt: r.createdAt,
-            updatedAt: r.updatedAt,
+            progress: r.progress ?? 0,
+            startDate: r.startDate ?? null,
+            dueDate: r.dueDate ?? null,
+            createdAt: r.checklistCreatedAt ?? null,
+            updatedAt: r.checklistUpdatedAt ?? null,
             completedCount,
             totalCount,
             steps,

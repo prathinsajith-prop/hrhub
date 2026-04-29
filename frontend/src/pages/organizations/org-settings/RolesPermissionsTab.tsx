@@ -11,7 +11,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
     super_admin: 'Super Admin',
     hr_manager: 'HR Manager',
     pro_officer: 'PRO Officer',
-    dept_head: 'Dept Head',
+    dept_head: 'Department Manager',
     employee: 'Employee',
 }
 

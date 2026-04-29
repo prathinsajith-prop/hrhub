@@ -4,7 +4,7 @@ import { db } from '../../db/index.js'
 import { visaApplications, employees, visaStepHistory, visaCosts } from '../../db/schema/index.js'
 import { cacheDel } from '../../lib/redis.js'
 import { VISA_STEP_LABELS, visaStepLabel } from './visa.constants.js'
-import { addVisaCost, type CreateCostInput } from './visa_costs.service.js'
+import type { CreateCostInput } from './visa_costs.service.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewVisa = InferInsertModel<typeof visaApplications>
@@ -241,10 +241,10 @@ export async function advanceVisaStep(
 }
 
 /**
- * Atomic: persist any provided costs against the *current* step of the visa,
- * then advance to the next step writing the totals into the step history row.
- * Costs are tagged with the step they were incurred in (i.e. the step *being
- * completed*, not the step being entered).
+ * Atomically records any provided costs for the *current* step then advances
+ * to the next step and appends a `visa_step_history` row. Everything runs
+ * inside a single Postgres transaction — if any cost insert or the update
+ * fails the entire operation rolls back, leaving no partial state.
  */
 export async function advanceVisaStepWithCosts(
     tenantId: string,
@@ -252,30 +252,116 @@ export async function advanceVisaStepWithCosts(
     costs: Array<Omit<CreateCostInput, 'visaApplicationId' | 'stepNumber' | 'stepLabel'>>,
     ctx: AdvanceContext = {},
 ): Promise<{ result: AdvanceResult | null; savedCosts: Array<typeof visaCosts.$inferSelect> }> {
-    const visa = await getVisa(tenantId, id)
-    if (!visa) return { result: null, savedCosts: [] }
+    return db.transaction(async (tx) => {
+        // 1. Read the visa inside the transaction so we see a consistent snapshot.
+        const [visa] = await tx
+            .select()
+            .from(visaApplications)
+            .where(and(
+                eq(visaApplications.id, id),
+                eq(visaApplications.tenantId, tenantId),
+                isNull(visaApplications.deletedAt),
+            ))
+            .limit(1)
 
-    const stepNumber = visa.currentStep
-    const stepLabel = visaStepLabel(stepNumber)
+        if (!visa) return { result: null, savedCosts: [] }
 
-    const savedCosts: Array<typeof visaCosts.$inferSelect> = []
-    let total = 0
-    for (const c of costs) {
-        const saved = await addVisaCost(tenantId, {
-            ...c,
-            visaApplicationId: id,
-            stepNumber,
-            stepLabel,
-            createdBy: ctx.userId,
-        })
-        if (saved) {
-            savedCosts.push(saved)
-            total += Number(saved.amount)
+        const fromStep = visa.currentStep
+        const fromStatus = visa.status
+        const fromStepLabel = visaStepLabel(fromStep)
+
+        // 2. Short-circuit without inserting costs if the visa is already terminal.
+        const noop = visa.status === 'cancelled'
+            || visa.status === 'expired'
+            || visa.currentStep >= visa.totalSteps
+
+        if (noop) {
+            return {
+                result: {
+                    visa,
+                    fromStep,
+                    toStep: fromStep,
+                    fromStepLabel,
+                    toStepLabel: fromStepLabel,
+                    fromStatus,
+                    toStatus: fromStatus,
+                    historyId: null,
+                    advanced: false,
+                },
+                savedCosts: [],
+            }
         }
-    }
 
-    const result = await advanceVisaStep(tenantId, id, ctx, { total, count: savedCosts.length })
-    return { result, savedCosts }
+        // 3. Insert costs — any DB error (e.g. constraint violation) throws and
+        //    rolls back everything recorded so far.
+        const savedCosts: Array<typeof visaCosts.$inferSelect> = []
+        let total = 0
+        for (const c of costs) {
+            const [cost] = await tx.insert(visaCosts).values({
+                tenantId,
+                visaApplicationId: id,
+                employeeId: c.employeeId,
+                category: c.category,
+                description: c.description ?? null,
+                amount: String(c.amount),
+                currency: c.currency ?? 'AED',
+                paidDate: c.paidDate,
+                receiptRef: c.receiptRef ?? null,
+                stepNumber: fromStep,
+                stepLabel: fromStepLabel,
+                createdBy: ctx.userId ?? null,
+            }).returning()
+            if (!cost) throw new Error('Failed to insert visa cost')
+            savedCosts.push(cost)
+            total += Number(cost.amount)
+        }
+
+        const toStep = fromStep + 1
+        const toStatus = STEP_TO_STATUS[toStep] ?? fromStatus
+        const toStepLabel = visaStepLabel(toStep)
+
+        // 4. Advance the visa step.
+        const [updated] = await tx
+            .update(visaApplications)
+            .set(withTimestamp({ currentStep: toStep, status: toStatus }))
+            .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId)))
+            .returning()
+
+        if (!updated) throw new Error('Visa step update failed — no row returned')
+
+        // 5. Write the immutable step-history audit row.
+        const [historyRow] = await tx.insert(visaStepHistory).values({
+            tenantId,
+            visaApplicationId: id,
+            fromStep,
+            toStep,
+            fromStepLabel,
+            toStepLabel,
+            fromStatus,
+            toStatus,
+            costsTotal: String(total),
+            costsCount: savedCosts.length,
+            notes: ctx.notes ?? null,
+            advancedBy: ctx.userId ?? null,
+            advancedByName: ctx.userName ?? null,
+            advancedByRole: ctx.userRole ?? null,
+        }).returning({ id: visaStepHistory.id })
+
+        return {
+            result: {
+                visa: updated,
+                fromStep,
+                toStep,
+                fromStepLabel,
+                toStepLabel,
+                fromStatus,
+                toStatus,
+                historyId: historyRow?.id ?? null,
+                advanced: true,
+            },
+            savedCosts,
+        }
+    })
 }
 
 export async function listVisaStepHistory(tenantId: string, visaApplicationId: string) {

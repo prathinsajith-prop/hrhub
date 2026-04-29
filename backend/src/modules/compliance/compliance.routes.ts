@@ -1,7 +1,7 @@
 import { getEmiratisationMetrics, getExpiryAlerts, getComplianceReport } from './compliance.service.js'
 
 export default async function(fastify: any): Promise<void> {
-    const auth = { preHandler: [fastify.authenticate] }
+    const auth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'pro_officer', 'super_admin')] }
 
     fastify.get('/emiratisation', { ...auth, schema: { tags: ['Compliance'] } }, async (request, reply) => {
         const data = await getEmiratisationMetrics(request.user.tenantId)

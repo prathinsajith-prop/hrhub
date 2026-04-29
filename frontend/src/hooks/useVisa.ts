@@ -95,7 +95,7 @@ export interface VisaStepHistoryItem {
     fromStep: number
     toStep: number
     fromStepLabel: string
-    toStepLabel: string | null
+    toStepLabel: string
     fromStatus: string
     toStatus: string
     costsTotal: string
@@ -146,5 +146,20 @@ export function useUpdateVisa() {
             api.patch<{ data: unknown }>(`/visa/${id}`, data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['visa'] }),
         onError: (err: Error) => toast.error('Update failed', err?.message ?? 'Could not update the visa application.'),
+    })
+}
+
+/**
+ * Step label catalogue from the backend. Cached indefinitely — labels are
+ * static constants that don't change between deploys.
+ */
+export function useVisaStepLabels() {
+    return useQuery({
+        queryKey: ['visa', 'steps'],
+        queryFn: () =>
+            api.get<{ data: Record<number, string>; totalSteps: number }>('/visa/steps'),
+        staleTime: Infinity,
+        gcTime: Infinity,
+        select: (res) => res.data,
     })
 }

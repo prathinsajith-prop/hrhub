@@ -130,6 +130,8 @@ export async function prepareTenantSwitch(actorUserId: string, targetTenantId: s
     return {
         user: {
             id: u.id,
+            firstName: u.firstName,
+            lastName: u.lastName,
             name: u.name,
             email: u.email,
             role,

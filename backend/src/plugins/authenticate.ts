@@ -34,6 +34,14 @@ async function authenticatePlugin(fastify: any): Promise<void> {
                 return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Account is deactivated' })
             }
 
+            // Every user must have a linked employee record (enforced since migration 0018).
+            // A null employeeId means the account was created before the invariant was
+            // established — the user needs to re-authenticate after the migration runs
+            // or contact an admin to have their account backfilled.
+            if (!payload.employeeId) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Account setup is incomplete. Please contact your administrator.' })
+            }
+
             request.user = {
                 id: payload.sub,
                 tenantId: payload.tenantId,
@@ -41,6 +49,7 @@ async function authenticatePlugin(fastify: any): Promise<void> {
                 email: payload.email,
                 name: payload.name,
                 employeeId: payload.employeeId ?? null,
+                department: payload.department ?? null,
             }
         } catch {
             return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid or expired token' })

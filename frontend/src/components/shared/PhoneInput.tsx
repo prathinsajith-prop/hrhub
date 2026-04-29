@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
  * Render a country flag SVG at a fixed box size as an <img> (base-64 data URL).
  * Uses country-atlas flag.svg + its built-in data-URL utility.
  */
-function FlagImg({ iso2, size = 18, className }: { iso2: string; size?: number; className?: string }) {
+export function FlagImg({ iso2, size = 18, className }: { iso2: string; size?: number; className?: string }) {
     const country = useMemo(() => getCountryByISO2(iso2 as ISO2), [iso2])
     const src = useMemo(() => {
         if (!country?.flag?.svg) return ''

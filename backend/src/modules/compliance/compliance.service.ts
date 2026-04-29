@@ -132,12 +132,25 @@ export async function getComplianceReport(tenantId: string) {
             desc: Number(totalRuns) === 0
                 ? 'No payroll runs yet'
                 : `${Number(compliant)} of ${Number(totalRuns)} runs submitted via WPS`,
+            route: '/payroll',
+            counts: {
+                total: Number(totalRuns),
+                compliant: Number(compliant),
+                nonCompliant: Number(totalRuns) - Number(compliant),
+            },
         },
         {
             label: 'Emiratisation Ratio',
             score: emiScore,
             status: emi.status === 'compliant' ? 'pass' : 'warning',
             desc: `${emi.percentage}% vs ${emi.target}% MOHRE target`,
+            route: '/employees',
+            counts: {
+                total: emi.total,
+                emirati: emi.emirati,
+                expat: emi.expat,
+                gap: emi.gap,
+            },
         },
         {
             label: 'Visa Validity',
@@ -146,6 +159,12 @@ export async function getComplianceReport(tenantId: string) {
             desc: Number(expired) === 0
                 ? 'All active employees have valid visas'
                 : `${Number(expired)} employee${Number(expired) === 1 ? '' : 's'} with expired visa`,
+            route: '/visa',
+            counts: {
+                total: Number(totalActive),
+                expired: Number(expired),
+                valid: Number(totalActive) - Number(expired),
+            },
         },
         {
             label: 'Document Completeness',
@@ -154,6 +173,12 @@ export async function getComplianceReport(tenantId: string) {
             desc: Number(totalDocs) === 0
                 ? 'No documents uploaded'
                 : `${Number(validDocs)} of ${Number(totalDocs)} documents valid`,
+            route: '/documents',
+            counts: {
+                total: Number(totalDocs),
+                valid: Number(validDocs),
+                invalid: Number(totalDocs) - Number(validDocs),
+            },
         },
         {
             label: 'Expiring Soon',
@@ -162,6 +187,10 @@ export async function getComplianceReport(tenantId: string) {
             desc: Number(expiringDocs) === 0
                 ? 'Nothing expiring in 30 days'
                 : `${Number(expiringDocs)} document${Number(expiringDocs) === 1 ? '' : 's'} expiring in 30 days`,
+            route: '/documents',
+            counts: {
+                expiringDocs: Number(expiringDocs),
+            },
         },
     ]
 
