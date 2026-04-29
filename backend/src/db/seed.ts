@@ -122,6 +122,7 @@ async function seed() {
     const [superAdmin] = await db.insert(users).values({
         tenantId: tenant.id, entityId: entity.id,
         email: 'superadmin@hrhub.ae', passwordHash,
+        firstName: 'Alex', lastName: 'Thompson',
         name: 'Alex Thompson', role: 'super_admin', department: 'Executive',
         employeeId: empAlex.id,
     }).returning()
@@ -129,6 +130,7 @@ async function seed() {
     const [hrManager] = await db.insert(users).values({
         tenantId: tenant.id, entityId: entity.id,
         email: 'admin@hrhub.ae', passwordHash,
+        firstName: 'Sarah', lastName: 'Johnson',
         name: 'Sarah Johnson', role: 'hr_manager', department: 'HR',
         employeeId: empSarah.id,
     }).returning()
@@ -136,6 +138,7 @@ async function seed() {
     const [proOfficer] = await db.insert(users).values({
         tenantId: tenant.id, entityId: entity.id,
         email: 'pro@hrhub.ae', passwordHash,
+        firstName: 'Khalid', lastName: 'Al Mansoori',
         name: 'Khalid Al Mansoori', role: 'pro_officer', department: 'PRO',
         employeeId: empKhalid.id,
     }).returning()
@@ -143,6 +146,7 @@ async function seed() {
     const [deptHead] = await db.insert(users).values({
         tenantId: tenant.id, entityId: entity.id,
         email: 'manager@hrhub.ae', passwordHash,
+        firstName: 'James', lastName: 'Williams',
         name: 'James Williams', role: 'dept_head', department: 'Legal',
         employeeId: empJames.id,
     }).returning()
@@ -150,6 +154,7 @@ async function seed() {
     const [employeeUser] = await db.insert(users).values({
         tenantId: tenant.id, entityId: entity.id,
         email: 'employee@hrhub.ae', passwordHash,
+        firstName: 'Ahmed', lastName: 'Al Mansouri',
         name: 'Ahmed Al Mansouri', role: 'employee', department: 'Sales',
         employeeId: empAhmed.id,
     }).returning()

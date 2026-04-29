@@ -18,6 +18,8 @@ export const users = pgTable('users', {
     // migration 0011 — case-insensitive on LOWER(email).
     email: text('email').notNull(),
     passwordHash: text('password_hash').notNull(),
+    firstName: text('first_name').notNull(),
+    lastName: text('last_name').notNull(),
     name: text('name').notNull(),
     role: text('role').notNull().default('employee')
         .$type<'super_admin' | 'hr_manager' | 'pro_officer' | 'dept_head' | 'employee'>(),

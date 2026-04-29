@@ -211,6 +211,8 @@ export async function inviteUser(
     const [user] = await db.insert(users).values({
         tenantId,
         email: email.toLowerCase(),
+        firstName: emp.firstName,
+        lastName: emp.lastName,
         name,
         passwordHash,
         role: data.role as UserRole,

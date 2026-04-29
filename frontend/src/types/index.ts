@@ -3,6 +3,8 @@ export type UserRole = 'super_admin' | 'hr_manager' | 'pro_officer' | 'dept_head
 
 export interface User {
   id: string
+  firstName: string
+  lastName: string
   name: string
   email: string
   role: UserRole

@@ -109,13 +109,13 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
     return issueTokens(fastify, user, input)
 }
 
-type UserRow = { id: string; name: string; email: string; role: string; tenantId: string; entityId: string | null; employeeId: string; department: string | null; avatarUrl: string | null }
+type UserRow = { id: string; firstName: string; lastName: string; name: string; email: string; role: string; tenantId: string; entityId: string | null; employeeId: string; department: string | null; avatarUrl: string | null }
 
 export async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ipAddress?: string; userAgent?: string }) {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, user.tenantId)).limit(1)
 
     const accessToken = fastify.jwt.sign(
-        { sub: user.id, tenantId: user.tenantId, role: user.role, name: user.name, email: user.email, employeeId: user.employeeId, department: user.department ?? null },
+        { sub: user.id, tenantId: user.tenantId, role: user.role, firstName: user.firstName, lastName: user.lastName, name: user.name, email: user.email, employeeId: user.employeeId, department: user.department ?? null },
         { expiresIn: '15m' }
     )
     const rawRefreshToken = crypto.randomBytes(48).toString('hex')
@@ -141,6 +141,8 @@ export async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ip
         refreshToken: rawRefreshToken,
         user: {
             id: user.id,
+            firstName: user.firstName,
+            lastName: user.lastName,
             name: user.name,
             email: user.email,
             role: user.role,
@@ -212,7 +214,8 @@ export async function completeMfaLoginWithBackupCode(
  * Register a new tenant + super_admin user in a single transaction.
  */
 export async function registerTenant(input: {
-    name: string
+    firstName: string
+    lastName: string
     email: string
     password: string
     company: string
@@ -250,12 +253,9 @@ export async function registerTenant(input: {
             licenseType: input.jurisdiction ?? 'mainland',
         }).returning({ id: entities.id })
 
-        // Derive first / last name from the registrant's full name.
-        // Single-word names (e.g. "Madonna") reuse the first name as last name
-        // so the NOT NULL constraint on employees.last_name is satisfied.
-        const nameParts = input.name.trim().split(/\s+/)
-        const firstName = nameParts[0]
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0]
+        const firstName = input.firstName.trim()
+        const lastName = input.lastName.trim()
+        const fullName = `${firstName} ${lastName}`.trim()
 
         // Auto-generate EMP-00001 for the first employee of this tenant
         const employeeNo = 'EMP-00001'
@@ -275,7 +275,9 @@ export async function registerTenant(input: {
 
         const [adminUser] = await tx.insert(users).values({
             tenantId: tenant.id,
-            name: input.name,
+            firstName,
+            lastName,
+            name: fullName,
             email: input.email.toLowerCase(),
             passwordHash,
             role: 'super_admin',

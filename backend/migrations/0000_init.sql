@@ -197,6 +197,8 @@ CREATE TABLE IF NOT EXISTS "users" (
     "employee_id"         uuid NOT NULL REFERENCES "employees"("id") ON DELETE RESTRICT,
     "email"               text NOT NULL,
     "password_hash"       text NOT NULL,
+    "first_name"          text NOT NULL,
+    "last_name"           text NOT NULL,
     "name"                text NOT NULL,
     "role"                text NOT NULL DEFAULT 'employee',
     "department"          text,

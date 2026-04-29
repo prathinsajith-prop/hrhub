@@ -67,27 +67,28 @@ export default async function (fastify: any): Promise<void> {
             tags: ['Auth'],
             body: {
                 type: 'object',
-                required: ['name', 'email', 'password', 'company'],
+                required: ['firstName', 'lastName', 'email', 'password', 'company'],
                 properties: {
-                    name: { type: 'string', minLength: 2 },
-                    email: { type: 'string', format: 'email' },
-                    password: { type: 'string', minLength: 8 },
-                    company: { type: 'string', minLength: 2 },
-                    industry: { type: 'string' },
-                    jurisdiction: { type: 'string', enum: ['mainland', 'freezone'] },
+                    firstName:     { type: 'string', minLength: 1 },
+                    lastName:      { type: 'string', minLength: 1 },
+                    email:         { type: 'string', format: 'email' },
+                    password:      { type: 'string', minLength: 8 },
+                    company:       { type: 'string', minLength: 2 },
+                    industry:      { type: 'string' },
+                    jurisdiction:  { type: 'string', enum: ['mainland', 'freezone'] },
                     tradeLicenseNo: { type: 'string' },
-                    phone: { type: 'string' },
-                    companySize: { type: 'string' },
+                    phone:         { type: 'string' },
+                    companySize:   { type: 'string' },
                 },
             },
         },
     }, async (request, reply) => {
-        const { name, email, password, company, industry, jurisdiction, tradeLicenseNo, phone, companySize } = request.body as {
-            name: string; email: string; password: string; company: string
+        const { firstName, lastName, email, password, company, industry, jurisdiction, tradeLicenseNo, phone, companySize } = request.body as {
+            firstName: string; lastName: string; email: string; password: string; company: string
             industry?: string; jurisdiction?: 'mainland' | 'freezone'
             tradeLicenseNo?: string; phone?: string; companySize?: string
         }
-        const result = await registerTenant({ name, email, password, company, industry, jurisdiction, tradeLicenseNo, phone, companySize })
+        const result = await registerTenant({ firstName, lastName, email, password, company, industry, jurisdiction, tradeLicenseNo, phone, companySize })
         if (!result.ok) {
             const reason = (result as { ok: false; reason: string }).reason
             if (reason === 'email_taken') {
@@ -355,6 +356,8 @@ export default async function (fastify: any): Promise<void> {
             body: {
                 type: 'object',
                 properties: {
+                    firstName: { type: 'string', minLength: 1, maxLength: 60 },
+                    lastName:  { type: 'string', minLength: 1, maxLength: 60 },
                     name: { type: 'string', minLength: 2, maxLength: 120 },
                     department: { type: 'string', maxLength: 120, nullable: true },
                 },
@@ -362,16 +365,24 @@ export default async function (fastify: any): Promise<void> {
             },
         },
     }, async (request: any, reply: any) => {
-        const body = request.body as { name?: string; department?: string | null }
+        const body = request.body as { firstName?: string; lastName?: string; name?: string; department?: string | null }
         const patch: Record<string, unknown> = { updatedAt: new Date() }
-        if (typeof body.name === 'string') patch.name = body.name.trim()
+        if (typeof body.firstName === 'string') patch.firstName = body.firstName.trim()
+        if (typeof body.lastName === 'string')  patch.lastName  = body.lastName.trim()
+        if (typeof body.firstName === 'string' || typeof body.lastName === 'string') {
+            const fn = (body.firstName ?? (patch.firstName as string | undefined)) ?? ''
+            const ln = (body.lastName  ?? (patch.lastName  as string | undefined)) ?? ''
+            if (fn || ln) patch.name = `${fn} ${ln}`.trim()
+        }
+        if (typeof body.name === 'string' && !patch.name) patch.name = body.name.trim()
         if (body.department !== undefined) patch.department = body.department
         if (Object.keys(patch).length === 1) {
             return reply.code(400).send({ message: 'No fields to update' })
         }
         const [updated] = await db.update(users).set(patch as never).where(eq(users.id, request.user.id)).returning({
-            id: users.id, name: users.name, email: users.email, role: users.role,
-            tenantId: users.tenantId, department: users.department, avatarUrl: users.avatarUrl,
+            id: users.id, firstName: users.firstName, lastName: users.lastName, name: users.name,
+            email: users.email, role: users.role, tenantId: users.tenantId,
+            department: users.department, avatarUrl: users.avatarUrl,
         })
         if (!updated) return reply.code(404).send({ message: 'User not found' })
         return reply.send({ data: updated })
