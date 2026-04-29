@@ -26,6 +26,12 @@ export default async function teamsRoutes(fastify: any) {
         return { data: rows }
     })
 
+    // Teams for a specific employee (managers viewing an employee's profile)
+    fastify.get('/teams/employee/:employeeId', { ...auth, schema: { tags: ['Teams'] } }, async (request: any) => {
+        const rows = await getMyTeams(request.user.tenantId, request.params.employeeId)
+        return { data: rows }
+    })
+
     // Get single team
     fastify.get('/teams/:id', { ...auth, schema: { tags: ['Teams'] } }, async (request: any, reply: any) => {
         const team = await getTeam(request.user.tenantId, request.params.id)
@@ -43,24 +49,30 @@ export default async function teamsRoutes(fastify: any) {
         const team = await createTeam(request.user.tenantId, {
             name, description, departmentId,
             createdById: request.user.id,
+            creatorEmployeeId: request.user.employeeId ?? null,
         })
         return reply.code(201).send({ data: team })
     })
 
-    // Update team
+    // Update team — dept_head can only edit teams they created
     fastify.patch('/teams/:id', { ...canManage, schema: { tags: ['Teams'] } }, async (request: any, reply: any) => {
         const team = await getTeam(request.user.tenantId, request.params.id)
         if (!team) return reply.code(404).send({ message: 'Team not found' })
-
+        if (request.user.role === 'dept_head' && team.createdById !== request.user.id) {
+            return reply.code(403).send({ message: 'You can only edit teams you created.' })
+        }
         const { name, description } = request.body as { name?: string; description?: string }
         const updated = await updateTeam(request.user.tenantId, request.params.id, { name, description })
         return { data: updated }
     })
 
-    // Soft-delete team
+    // Soft-delete team — dept_head can only delete teams they created
     fastify.delete('/teams/:id', { ...canManage, schema: { tags: ['Teams'] } }, async (request: any, reply: any) => {
         const team = await getTeam(request.user.tenantId, request.params.id)
         if (!team) return reply.code(404).send({ message: 'Team not found' })
+        if (request.user.role === 'dept_head' && team.createdById !== request.user.id) {
+            return reply.code(403).send({ message: 'You can only delete teams you created.' })
+        }
         await deleteTeam(request.user.tenantId, request.params.id)
         return reply.code(204).send()
     })

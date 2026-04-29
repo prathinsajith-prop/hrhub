@@ -10,6 +10,7 @@ import { UserCircle, Pencil, Save, X } from 'lucide-react'
 import { toast } from '@/components/ui/overlays'
 import { cn } from '@/lib/utils'
 import { useMyEmployee, useUpdateMyProfile } from '@/hooks/useMe'
+import { labelFor } from '@/lib/enums'
 import type { Employee } from '@/types'
 
 function Field({ label, value }: { label: string; value?: string | null }) {
@@ -127,10 +128,10 @@ export function MyProfileContent() {
                         <p className="text-sm font-semibold mb-4">Employment Details</p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
                             <Field label="Join Date" value={employee.joinDate} />
-                            <Field label="Contract Type" value={employee.contractType} />
+                            <Field label="Contract Type" value={labelFor(employee.contractType)} />
                             <Field label="Work Location" value={employee.workLocation} />
                             <Field label="Nationality" value={employee.nationality} />
-                            <Field label="Visa Status" value={employee.visaStatus?.replace(/_/g, ' ')} />
+                            <Field label="Visa Status" value={labelFor(employee.visaStatus)} />
                             <Field label="Visa Expiry" value={employee.visaExpiry} />
                         </div>
                     </div>

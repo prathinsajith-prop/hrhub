@@ -68,7 +68,7 @@ export function OnboardingDetailPage() {
     const tone = progressTone(checklist.progress)
 
     const handleSendUploadLink = () => {
-        sendLink.mutate({ checklistId: checklist.id }, {
+        sendLink.mutate({ checklistId: checklist.id! }, {
             onSuccess: (result) => {
                 if (result.sent) {
                     toast.success('Upload link sent', `Email sent to ${result.email}. Link expires in ${result.expiresInDays} days.`)
@@ -252,7 +252,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
         if (!editing) return
         updateStep.mutate(
             {
-                checklistId: checklist.id,
+                checklistId: checklist.id!,
                 stepId: editing.id,
                 data: {
                     status: stepStatus,
@@ -277,7 +277,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
         }
         addStep.mutate(
             {
-                checklistId: checklist.id,
+                checklistId: checklist.id!,
                 data: {
                     title: newTitle.trim(),
                     owner: newOwner || undefined,
@@ -306,7 +306,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
     const doDelete = () => {
         if (!confirmDelete) return
         deleteStep.mutate(
-            { checklistId: checklist.id, stepId: confirmDelete.id },
+            { checklistId: checklist.id!, stepId: confirmDelete.id },
             {
                 onSuccess: () => {
                     toast.success('Step removed', `"${confirmDelete.title}" deleted.`)

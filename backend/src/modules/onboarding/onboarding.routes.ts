@@ -53,7 +53,7 @@ function getStepSuggestions(title: string) {
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
-    const writeAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'pro_officer', 'super_admin')] }
+    const writeAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')] }
 
     fastify.get('/analytics', { ...auth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
         const data = await getAnalytics(request.user.tenantId)

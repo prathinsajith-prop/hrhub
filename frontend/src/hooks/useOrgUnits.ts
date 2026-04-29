@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-
-export type OrgUnitType = 'division' | 'department' | 'branch'
+import type { OrgUnitType } from '@/lib/org-unit-meta'
+export type { OrgUnitType } from '@/lib/org-unit-meta'
 
 export interface OrgUnit {
     id: string
@@ -34,10 +34,13 @@ export interface OrgUnitInput {
     sortOrder?: number
 }
 
+const STALE = 5 * 60 * 1000
+
 export function useOrgUnits() {
     return useQuery({
         queryKey: ['org-units'],
         queryFn: () => api.get<{ data: OrgUnit[] }>('/org-units').then(r => r.data ?? []),
+        staleTime: STALE,
     })
 }
 
@@ -45,6 +48,7 @@ export function useOrgUnitTree() {
     return useQuery({
         queryKey: ['org-units', 'tree'],
         queryFn: () => api.get<{ data: OrgUnitNode[] }>('/org-units/tree').then(r => r.data ?? []),
+        staleTime: STALE,
     })
 }
 
@@ -52,6 +56,7 @@ export function useOrgUnitStats() {
     return useQuery({
         queryKey: ['org-units', 'stats'],
         queryFn: () => api.get<{ data: { divisions: number; departments: number; branches: number } }>('/org-units/stats').then(r => r.data),
+        staleTime: STALE,
     })
 }
 

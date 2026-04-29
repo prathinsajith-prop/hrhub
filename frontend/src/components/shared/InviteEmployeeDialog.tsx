@@ -1,7 +1,10 @@
+import { useState, useEffect } from 'react'
 import { UserCheck, Mail, ShieldOff, RefreshCw, Shield, Clock, Calendar, Send } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle, toast } from '@/components/ui/overlays'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/primitives'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/utils'
 import { useEmployeeAccount, useInviteEmployee, useResendInvite } from '@/hooks/useEmployees'
@@ -14,7 +17,6 @@ interface Props {
     onOpenChange: (o: boolean) => void
 }
 
-// Three distinct account states
 type AccountState = 'no-account' | 'invite-pending' | 'active'
 
 export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
@@ -23,7 +25,15 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
     const resend = useResendInvite()
     const updateUser = useUpdateUser()
 
-    const inviteEmail = employee.workEmail ?? employee.email ?? employee.personalEmail ?? ''
+    // Use || (not ??) so empty strings fall through to the next option
+    const derivedEmail = employee.workEmail || employee.email || employee.personalEmail || ''
+    const [emailInput, setEmailInput] = useState(derivedEmail)
+
+    // Sync when the dialog opens or employee changes
+    useEffect(() => {
+        if (open) setEmailInput(employee.workEmail || employee.email || employee.personalEmail || '')
+    }, [open, employee])
+
     const close = () => onOpenChange(false)
 
     const account = accountData?.account
@@ -32,7 +42,6 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
         `${employee.firstName ?? ''} ${employee.lastName ?? ''}`.trim() ||
         'Employee'
 
-    // Derive state clearly
     const state: AccountState = !accountData?.hasAccount
         ? 'no-account'
         : !account?.isActive
@@ -40,9 +49,11 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
             : 'active'
 
     async function handleInvite() {
+        const email = emailInput.trim()
+        if (!email) { toast.error('Email required', 'Please enter an email address to send the invite.'); return }
         try {
-            await invite.mutateAsync({ employeeId: employee.id, email: inviteEmail || undefined })
-            toast.success('Invitation sent', `An invite email has been sent to ${inviteEmail || 'the employee'}.`)
+            await invite.mutateAsync({ employeeId: employee.id, email })
+            toast.success('Invitation sent', `An invite email has been sent to ${email}.`)
             close()
         } catch (err: unknown) {
             toast.error('Invite failed', (err as { message?: string })?.message ?? 'Could not send the invitation.')
@@ -74,9 +85,9 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
 
     return (
         <Dialog open={open} onOpenChange={o => !o && close()}>
-            <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden gap-0">
+            <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden gap-0">
 
-                {/* ── Header ── */}
+                {/* Header */}
                 <div className="flex items-center gap-3.5 px-6 py-5 border-b">
                     <div className="h-9 w-9 rounded-xl bg-primary/10 ring-1 ring-primary/15 flex items-center justify-center text-primary shrink-0">
                         <UserCheck className="h-4 w-4" />
@@ -91,8 +102,8 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                     </div>
                 </div>
 
-                {/* ── Body ── */}
-                <div className="px-6 py-5">
+                {/* Body */}
+                <div className="px-6 py-5 space-y-4">
                     {isLoading ? (
                         <div className="space-y-2.5">
                             <Skeleton className="h-4 w-1/2" />
@@ -100,26 +111,40 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                             <Skeleton className="h-3.5 w-4/5" />
                         </div>
                     ) : state === 'no-account' ? (
-                        /* ── State 1: No account ── */
-                        <div className="flex gap-4">
-                            <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
-                                <Shield className="h-5 w-5 text-muted-foreground" />
+                        <div className="space-y-4">
+                            <div className="flex gap-4">
+                                <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                                    <Shield className="h-5 w-5 text-muted-foreground" />
+                                </div>
+                                <div className="min-w-0 space-y-1">
+                                    <p className="text-sm font-semibold">No login account yet</p>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        Send an invitation so this employee can log in and access their leave, payslips, and profile.
+                                    </p>
+                                </div>
                             </div>
-                            <div className="min-w-0 space-y-1.5">
-                                <p className="text-sm font-semibold">No login account yet</p>
-                                <p className="text-xs text-muted-foreground leading-relaxed">
-                                    Send an invitation so this employee can log in and access their leave, payslips, and profile.
-                                </p>
-                                {inviteEmail && (
-                                    <div className="flex items-center gap-2 pt-0.5">
-                                        <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                        <span className="text-xs text-muted-foreground truncate">{inviteEmail}</span>
-                                    </div>
+
+                            {/* Editable email */}
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Email address</Label>
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input
+                                        type="text"
+                                        value={emailInput}
+                                        onChange={e => setEmailInput(e.target.value)}
+                                        placeholder="employee@example.com"
+                                        className="pl-9"
+                                    />
+                                </div>
+                                {!emailInput.trim() && (
+                                    <p className="text-[11px] text-destructive">
+                                        No email on file — enter one above to send the invite.
+                                    </p>
                                 )}
                             </div>
                         </div>
                     ) : state === 'invite-pending' ? (
-                        /* ── State 2: Invite sent, password not yet set ── */
                         <div className="flex gap-4">
                             <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center shrink-0">
                                 <Send className="h-5 w-5 text-warning" />
@@ -145,7 +170,6 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                             </div>
                         </div>
                     ) : (
-                        /* ── State 3: Active account ── */
                         <div className="space-y-3.5">
                             <div className="flex items-center gap-2">
                                 <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
@@ -170,7 +194,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                     )}
                 </div>
 
-                {/* ── Footer ── */}
+                {/* Footer */}
                 <div className="flex items-center justify-end gap-2 px-6 py-4 border-t bg-muted/30">
                     <Button variant="ghost" size="sm" onClick={close}>Cancel</Button>
 
@@ -180,7 +204,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                             leftIcon={<Mail className="h-3.5 w-3.5" />}
                             onClick={handleInvite}
                             loading={invite.isPending}
-                            disabled={!inviteEmail}
+                            disabled={!emailInput.trim()}
                         >
                             Send Invite
                         </Button>

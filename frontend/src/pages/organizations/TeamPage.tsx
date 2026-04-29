@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X, Building2, Calendar, UserMinus } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
@@ -21,11 +21,30 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { getInitials } from '@/lib/utils'
 import { ApiError } from '@/lib/api'
+
+/** Deterministic pastel background colour from a string — for team avatar. */
+function teamColor(name: string) {
+    const palette = [
+        'bg-blue-100 text-blue-700',
+        'bg-violet-100 text-violet-700',
+        'bg-emerald-100 text-emerald-700',
+        'bg-amber-100 text-amber-700',
+        'bg-rose-100 text-rose-700',
+        'bg-cyan-100 text-cyan-700',
+        'bg-indigo-100 text-indigo-700',
+        'bg-pink-100 text-pink-700',
+    ]
+    let hash = 0
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+    return palette[Math.abs(hash) % palette.length]
+}
 
 // ── Create / Edit Team Dialog ─────────────────────────────────────────────────
 
@@ -37,27 +56,29 @@ interface TeamFormDialogProps {
     lockedDepartmentName?: string
 }
 
+const DEPT_NONE = '__none__'
+
 function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDepartmentName }: TeamFormDialogProps) {
     const { data: orgUnits = [] } = useOrgUnits()
     const departments = orgUnits.filter(u => u.type === 'department' && u.isActive)
     const createMut = useCreateTeam()
     const updateMut = useUpdateTeam()
 
-    const [name, setName] = useState(editTeam?.name ?? '')
-    const [description, setDescription] = useState(editTeam?.description ?? '')
-    const [departmentId, setDepartmentId] = useState(editTeam?.departmentId ?? lockedDepartmentId ?? '')
+    const [name, setName] = useState('')
+    const [description, setDescription] = useState('')
+    const [departmentId, setDepartmentId] = useState('')
 
     const isEdit = !!editTeam
     const isPending = createMut.isPending || updateMut.isPending
 
-    const handleOpen = (v: boolean) => {
-        if (!v) {
-            onClose()
+    // Sync form state whenever the dialog opens (handles both create and edit transitions)
+    useEffect(() => {
+        if (open) {
             setName(editTeam?.name ?? '')
             setDescription(editTeam?.description ?? '')
             setDepartmentId(editTeam?.departmentId ?? lockedDepartmentId ?? '')
         }
-    }
+    }, [open, editTeam, lockedDepartmentId])
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -76,7 +97,7 @@ function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDep
     }
 
     return (
-        <Dialog open={open} onOpenChange={handleOpen}>
+        <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>{isEdit ? 'Edit Team' : 'Create Team'}</DialogTitle>
@@ -89,6 +110,7 @@ function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDep
                             value={name}
                             onChange={e => setName(e.target.value)}
                             placeholder="e.g. Frontend Squad"
+                            autoFocus
                             required
                         />
                     </div>
@@ -108,19 +130,22 @@ function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDep
                             {lockedDepartmentId ? (
                                 <p className="text-sm text-muted-foreground py-1.5">{lockedDepartmentName}</p>
                             ) : (
-                                <Select value={departmentId} onValueChange={setDepartmentId}>
+                                <Select
+                                    value={departmentId || DEPT_NONE}
+                                    onValueChange={v => setDepartmentId(v === DEPT_NONE ? '' : v)}
+                                >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="All departments (optional)" />
+                                        <SelectValue placeholder="No department filter" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">All departments</SelectItem>
+                                        <SelectItem value={DEPT_NONE}>— No department filter —</SelectItem>
                                         {departments.map(d => (
                                             <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             )}
-                            <p className="text-xs text-muted-foreground">Only employees in this department can join the team.</p>
+                            <p className="text-xs text-muted-foreground">Optionally restrict this team to employees in a specific department.</p>
                         </div>
                     )}
                 </form>
@@ -277,6 +302,17 @@ function TeamDetailDialog({ team, open, onClose, canManage }: TeamDetailDialogPr
     const removeMut = useRemoveTeamMember(team?.id ?? '')
     const [addOpen, setAddOpen] = useState(false)
     const [removeTarget, setRemoveTarget] = useState<string | null>(null)
+    const [search, setSearch] = useState('')
+
+    const filtered = useMemo(() => {
+        const q = search.trim().toLowerCase()
+        if (!q) return members
+        return members.filter(m =>
+            `${m.firstName} ${m.lastName}`.toLowerCase().includes(q) ||
+            (m.designation ?? '').toLowerCase().includes(q) ||
+            (m.department ?? '').toLowerCase().includes(q)
+        )
+    }, [members, search])
 
     const handleRemove = async () => {
         if (!removeTarget) return
@@ -289,71 +325,174 @@ function TeamDetailDialog({ team, open, onClose, canManage }: TeamDetailDialogPr
         }
     }
 
+    const handleClose = () => {
+        setSearch('')
+        onClose()
+    }
+
     if (!team) return null
+
+    const colorClass = teamColor(team.name)
+    const initials = team.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
     return (
         <>
-            <Dialog open={open} onOpenChange={v => !v && onClose()}>
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            {team.name}
-                            {team.department && (
-                                <Badge variant="secondary" className="text-xs font-normal">{team.department}</Badge>
-                            )}
-                        </DialogTitle>
-                        {team.description && (
-                            <p className="text-sm text-muted-foreground mt-1">{team.description}</p>
-                        )}
-                    </DialogHeader>
+            <Dialog open={open} onOpenChange={v => !v && handleClose()}>
+                <DialogContent className="sm:max-w-xl p-0 overflow-hidden gap-0">
 
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium">Members ({members.length})</p>
+                    {/* ── Header banner ── */}
+                    <div className="px-6 pt-6 pb-5 border-b bg-muted/30">
+                        <div className="flex items-start gap-4">
+                            <div className={`flex items-center justify-center h-12 w-12 rounded-xl text-lg font-bold shrink-0 ${colorClass}`}>
+                                {initials}
+                            </div>
+                            <div className="flex-1 min-w-0 pt-0.5">
+                                <DialogTitle className="text-base font-semibold leading-snug truncate pr-6">
+                                    {team.name}
+                                </DialogTitle>
+                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                    {team.department && (
+                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                            <Building2 className="h-3 w-3" />
+                                            {team.department}
+                                        </div>
+                                    )}
+                                    {team.department && <span className="text-muted-foreground/40 text-xs">·</span>}
+                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Users className="h-3 w-3" />
+                                        {members.length} {members.length === 1 ? 'member' : 'members'}
+                                    </div>
+                                </div>
+                                {team.description && (
+                                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed line-clamp-2">
+                                        {team.description}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── Members section ── */}
+                    <div className="px-6 pt-4 pb-2">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                <Input
+                                    className="pl-8 h-8 text-sm"
+                                    placeholder="Search members…"
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                />
+                                {search && (
+                                    <button
+                                        onClick={() => setSearch('')}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
                             {canManage && (
-                                <Button size="sm" variant="outline" leftIcon={<UserPlus className="h-3.5 w-3.5" />} onClick={() => setAddOpen(true)}>
+                                <Button
+                                    size="sm"
+                                    leftIcon={<UserPlus className="h-3.5 w-3.5" />}
+                                    onClick={() => setAddOpen(true)}
+                                >
                                     Add Members
                                 </Button>
                             )}
                         </div>
+                    </div>
 
-                        <ScrollArea className="h-72 rounded-md border">
-                            {isLoading ? (
-                                <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">Loading...</div>
-                            ) : members.length === 0 ? (
-                                <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">No members yet</div>
-                            ) : (
-                                <div className="divide-y">
-                                    {members.map(m => (
-                                        <div key={m.id} className="flex items-center gap-3 px-3 py-2.5">
-                                            <Avatar className="h-8 w-8 shrink-0">
-                                                {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
-                                                <AvatarFallback className="text-xs">{getInitials(`${m.firstName} ${m.lastName}`)}</AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium leading-tight">{m.firstName} {m.lastName}</p>
-                                                {m.designation && <p className="text-xs text-muted-foreground">{m.designation}</p>}
+                    <ScrollArea className="h-72 px-2">
+                        {isLoading ? (
+                            <div className="space-y-1 px-4 py-2">
+                                {[...Array(4)].map((_, i) => (
+                                    <div key={i} className="flex items-center gap-3 py-2.5 px-2 animate-pulse">
+                                        <div className="h-9 w-9 rounded-full bg-muted shrink-0" />
+                                        <div className="flex-1 space-y-1.5">
+                                            <div className="h-3 bg-muted rounded w-32" />
+                                            <div className="h-2.5 bg-muted rounded w-20" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : filtered.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-48 gap-2 text-center">
+                                <Users className="h-8 w-8 text-muted-foreground/30" />
+                                <p className="text-sm text-muted-foreground">
+                                    {search ? 'No members match your search.' : 'No members yet.'}
+                                </p>
+                                {canManage && !search && (
+                                    <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+                                        Add Members
+                                    </Button>
+                                )}
+                            </div>
+                        ) : (
+                            <TooltipProvider delayDuration={300}>
+                                <div className="px-2 py-1">
+                                    {filtered.map((m, idx) => (
+                                        <div key={m.id}>
+                                            <div className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-muted/50 transition-colors group">
+                                                <Avatar className="h-9 w-9 shrink-0">
+                                                    {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
+                                                    <AvatarFallback className="text-xs font-medium">
+                                                        {getInitials(`${m.firstName} ${m.lastName}`)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium leading-tight truncate">
+                                                        {m.firstName} {m.lastName}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                        {m.designation && (
+                                                            <span className="text-xs text-muted-foreground truncate">{m.designation}</span>
+                                                        )}
+                                                        {m.designation && m.department && (
+                                                            <span className="text-muted-foreground/40 text-xs">·</span>
+                                                        )}
+                                                        {m.department && (
+                                                            <span className="text-xs text-muted-foreground/70 truncate">{m.department}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Calendar className="h-3 w-3" />
+                                                        {new Date(m.joinedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                    </div>
+                                                    {canManage && (
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    onClick={() => setRemoveTarget(m.employeeId)}
+                                                                >
+                                                                    <UserMinus className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="left">Remove from team</TooltipContent>
+                                                        </Tooltip>
+                                                    )}
+                                                </div>
                                             </div>
-                                            {canManage && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                                                    onClick={() => setRemoveTarget(m.employeeId)}
-                                                >
-                                                    <X className="h-3.5 w-3.5" />
-                                                </Button>
+                                            {idx < filtered.length - 1 && (
+                                                <Separator className="mx-2 opacity-50" />
                                             )}
                                         </div>
                                     ))}
                                 </div>
-                            )}
-                        </ScrollArea>
-                    </div>
+                            </TooltipProvider>
+                        )}
+                    </ScrollArea>
 
-                    <DialogFooter>
-                        <Button variant="outline" onClick={onClose}>Close</Button>
-                    </DialogFooter>
+                    {/* ── Footer ── */}
+                    <div className="px-6 py-4 border-t bg-muted/20 flex justify-end">
+                        <Button variant="outline" size="sm" onClick={handleClose}>Close</Button>
+                    </div>
                 </DialogContent>
             </Dialog>
 
@@ -437,13 +576,9 @@ export function TeamPage() {
     const me = useAuthStore(s => s.user)
     const { can } = usePermissions()
     const canManage = can('manage_team')
+    const canViewAll = me?.role === 'super_admin' || me?.role === 'hr_manager'
 
-    // dept_head: restrict to their department
-    const deptHeadDepartmentId = me?.role === 'dept_head' ? (me as any).department : undefined
-
-    const { data: allTeams = [], isLoading: teamsLoading } = useTeams(
-        me?.role === 'dept_head' ? deptHeadDepartmentId : undefined
-    )
+    const { data: allTeams = [], isLoading: teamsLoading } = useTeams()
     const { data: myTeams = [], isLoading: myTeamsLoading } = useMyTeams()
 
     const [formOpen, setFormOpen] = useState(false)
@@ -474,8 +609,6 @@ export function TeamPage() {
         setEditTarget(null)
     }
 
-    const isEmployee = !canManage
-
     return (
         <PageWrapper>
             <PageHeader
@@ -488,34 +621,8 @@ export function TeamPage() {
                 )}
             />
 
-            {isEmployee ? (
-                // Employee-only view: just their teams
-                <div className="space-y-4">
-                    <h2 className="text-sm font-medium text-muted-foreground">Teams you belong to</h2>
-                    {myTeamsLoading ? (
-                        <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>
-                    ) : myTeams.length === 0 ? (
-                        <Card>
-                            <CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                                <Users className="h-8 w-8 text-muted-foreground/40" />
-                                <p className="text-sm text-muted-foreground">You haven't been assigned to any teams yet.</p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            {myTeams.map(team => (
-                                <TeamCard
-                                    key={team.id}
-                                    team={team}
-                                    canManage={false}
-                                    onView={() => setDetailTeam(team)}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </div>
-            ) : (
-                // Manager view: tabs for All Teams and My Teams
+            {canViewAll ? (
+                // hr_manager / super_admin: tabs for All Teams and My Teams
                 <Tabs defaultValue="all">
                     <TabsList className="mb-4">
                         <TabsTrigger value="all">All Teams</TabsTrigger>
@@ -573,6 +680,42 @@ export function TeamPage() {
                         )}
                     </TabsContent>
                 </Tabs>
+            ) : (
+                // dept_head / employee: only teams they belong to
+                <div className="space-y-4">
+                    <h2 className="text-sm font-medium text-muted-foreground">Teams you belong to</h2>
+                    {myTeamsLoading ? (
+                        <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>
+                    ) : myTeams.length === 0 ? (
+                        <Card>
+                            <CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
+                                <Users className="h-8 w-8 text-muted-foreground/40" />
+                                <p className="text-sm text-muted-foreground">
+                                    {canManage ? 'Create a team to get started.' : "You haven't been assigned to any teams yet."}
+                                </p>
+                                {canManage && (
+                                    <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>Create Team</Button>
+                                )}
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {myTeams.map(team => {
+                                const isOwner = team.createdById === me?.id
+                                return (
+                                    <TeamCard
+                                        key={team.id}
+                                        team={team}
+                                        canManage={canManage}
+                                        onView={() => setDetailTeam(team)}
+                                        onEdit={canManage && isOwner ? () => openEdit(team as unknown as TeamRow) : undefined}
+                                        onDelete={canManage && isOwner ? () => setDeleteTarget(team as unknown as TeamRow) : undefined}
+                                    />
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
             )}
 
             <TeamFormDialog

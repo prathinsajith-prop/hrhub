@@ -19,18 +19,20 @@ export default async function (fastify: any): Promise<void> {
     // GET /api/v1/employees
     fastify.get('/', { ...auth, schema: { tags: ['Employees'] } }, async (request, reply) => {
         const query = validate(listEmployeesSchema, request.query)
+        const user = (request as any).user
 
-        // dept_head can only see employees in their own department — enforced at
-        // the API layer regardless of what the client sends as a filter param.
-        const department = (request as any).user.role === 'dept_head'
-            ? ((request as any).user.department ?? query.department)
-            : query.department
+        // dept_head: scope to their own reporting subtree (direct + indirect reports
+        // plus themselves). This is enforced server-side — the client filter is ignored.
+        const managerEmployeeId = user.role === 'dept_head'
+            ? (user.employeeId ?? undefined)
+            : undefined
 
         const result = await listEmployees({
             tenantId: request.user.tenantId,
             search: query.search,
             status: query.status,
-            department,
+            department: managerEmployeeId ? undefined : query.department,
+            managerEmployeeId,
             limit: query.limit,
             offset: query.offset,
             after: query.after,
@@ -65,7 +67,11 @@ export default async function (fastify: any): Promise<void> {
 
     // GET /api/v1/employees/org-chart
     fastify.get('/org-chart', { ...auth, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
-        return reply.send(await getOrgChart(request.user.tenantId))
+        // dept_head: scope the chart to their own reporting subtree only
+        const rootEmployeeId = request.user.role === 'dept_head'
+            ? (request.user.employeeId ?? undefined)
+            : undefined
+        return reply.send(await getOrgChart(request.user.tenantId, rootEmployeeId))
     })
 
     // GET /api/v1/employees/expiring-visas

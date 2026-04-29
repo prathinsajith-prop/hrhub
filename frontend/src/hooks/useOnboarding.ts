@@ -18,7 +18,7 @@ export interface OnboardingStep {
 }
 
 export interface OnboardingChecklist {
-    id: string
+    id: string | null
     employeeId: string
     employeeName: string
     employeeNo: string | null

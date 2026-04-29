@@ -21,6 +21,7 @@ export interface MyTeamRow {
     description: string | null
     departmentId: string | null
     department: string | null
+    createdById: string | null
     memberCount: number
     joinedAt: string
 }
@@ -60,6 +61,14 @@ export function useMyTeams() {
     return useQuery({
         queryKey: ['teams', 'my'],
         queryFn: () => api.get<{ data: MyTeamRow[] }>('/teams/my').then(r => r.data),
+    })
+}
+
+export function useEmployeeTeams(employeeId: string | undefined) {
+    return useQuery({
+        queryKey: ['teams', 'employee', employeeId],
+        queryFn: () => api.get<{ data: MyTeamRow[] }>(`/teams/employee/${employeeId}`).then(r => r.data),
+        enabled: !!employeeId,
     })
 }
 

@@ -228,10 +228,10 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitive.Viewport.displayName
 
 const toastVariants = {
-  success: { bg: 'bg-emerald-50 border-emerald-200', icon: <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" /> },
-  error: { bg: 'bg-red-50 border-red-200', icon: <XCircle className="h-5 w-5 text-red-600 shrink-0" /> },
-  warning: { bg: 'bg-amber-50 border-amber-200', icon: <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" /> },
-  info: { bg: 'bg-blue-50 border-blue-200', icon: <Info className="h-5 w-5 text-blue-600 shrink-0" /> },
+  success: { bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-800', icon: <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" /> },
+  error: { bg: 'bg-red-50 border-red-200 dark:bg-red-950/60 dark:border-red-800', icon: <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0" /> },
+  warning: { bg: 'bg-amber-50 border-amber-200 dark:bg-amber-950/60 dark:border-amber-800', icon: <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" /> },
+  info: { bg: 'bg-blue-50 border-blue-200 dark:bg-blue-950/60 dark:border-blue-800', icon: <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" /> },
 }
 
 interface ToastData {

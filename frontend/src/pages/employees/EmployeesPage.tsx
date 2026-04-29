@@ -39,6 +39,8 @@ import { AddEmployeeDialog, EditEmployeeDialog } from '@/components/shared/actio
 import { InviteEmployeeDialog } from '@/components/shared/InviteEmployeeDialog'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
+import { useOrgUnits } from '@/hooks/useOrgUnits'
+import { FlagImg, resolveCountryIso } from '@/components/shared/PhoneInput'
 import type { FilterConfig } from '@/lib/filters'
 import type { Employee } from '@/types'
 
@@ -112,9 +114,10 @@ const ActionMenu = memo(function ActionMenu({
           </DropdownMenuItem>
         )}
         <DropdownMenuItem
-          disabled={!employee.email}
+          disabled={!(employee.workEmail || employee.email)}
           onClick={() => {
-            if (employee.email) window.open(`mailto:${employee.email}`, '_self')
+            const em = employee.workEmail || employee.email
+            if (em) window.open(`mailto:${em}`, '_self')
           }}
         >
           <Mail className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
@@ -148,6 +151,11 @@ export function EmployeesPage() {
   const { can } = usePermissions()
   const canManage = can('manage_employees')
   const { data: empData, isLoading, isFetching, isError, error, refetch } = useEmployees({ limit: 50 })
+  const { data: orgUnits = [] } = useOrgUnits()
+  const orgUnitName = useMemo(() => {
+    const map = new Map(orgUnits.map(u => [u.id, u.name]))
+    return (id: string | undefined | null) => (id ? (map.get(id) ?? null) : null)
+  }, [orgUnits])
   const employeesRaw = useMemo(() => (empData?.data as Employee[]) ?? [], [empData?.data])
   const employees: Employee[] = employeesRaw
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
@@ -164,7 +172,8 @@ export function EmployeesPage() {
     const f = search.appliedFilters
     const q = search.searchInput.trim().toLowerCase()
     return employees.filter((e: Employee) => {
-      if (q && !`${e.fullName} ${e.employeeNo} ${e.email ?? ''}`.toLowerCase().includes(q)) return false
+      const emailStr = e.workEmail || e.email || e.personalEmail || ''
+      if (q && !`${e.fullName} ${e.employeeNo} ${emailStr}`.toLowerCase().includes(q)) return false
       if (f.status?.value && e.status !== f.status.value) return false
       if (f.department?.value && !String(e.department ?? '').toLowerCase().includes(String(f.department.value).toLowerCase())) return false
       if (f.designation?.value && !String(e.designation ?? '').toLowerCase().includes(String(f.designation.value).toLowerCase())) return false
@@ -247,25 +256,45 @@ export function EmployeesPage() {
       size: 160,
     },
     {
-      accessorKey: 'department',
+      id: 'department',
       header: 'Department',
-      cell: ({ getValue }) => {
-        const val = getValue() as string | null
-        return <span className="text-sm text-muted-foreground">{val ?? '—'}</span>
+      cell: ({ row: { original: e } }) => {
+        const branch = orgUnitName(e.branchId)
+        const division = orgUnitName(e.divisionId)
+        const dept = orgUnitName(e.departmentId) ?? e.department ?? null
+        const parts = [branch, division, dept].filter(Boolean) as string[]
+        if (parts.length === 0) return <span className="text-xs text-muted-foreground">—</span>
+        return (
+          <div className="flex items-center gap-1 min-w-0 flex-wrap">
+            {parts.map((part, i) => (
+              <span key={i} className="flex items-center gap-1 min-w-0">
+                {i > 0 && <span className="text-muted-foreground/40 text-[10px] shrink-0">›</span>}
+                <span className={cn(
+                  'truncate text-xs',
+                  i === parts.length - 1
+                    ? 'text-foreground font-medium'
+                    : 'text-muted-foreground/70',
+                )}>
+                  {part}
+                </span>
+              </span>
+            ))}
+          </div>
+        )
       },
-      size: 140,
+      size: 200,
     },
     {
-      accessorKey: 'email',
+      id: 'email',
       header: 'Email',
-      cell: ({ getValue }) => {
-        const email = getValue() as string | null
+      cell: ({ row: { original: e } }) => {
+        const email = e.workEmail || e.email || e.personalEmail || null
         if (!email) return <span className="text-xs text-muted-foreground">—</span>
         return (
           <a
             href={`mailto:${email}`}
             className="flex items-center gap-1.5 text-xs text-primary hover:underline truncate max-w-[180px]"
-            onClick={e => e.stopPropagation()}
+            onClick={ev => ev.stopPropagation()}
             title={email}
           >
             <Mail className="h-3 w-3 shrink-0 text-muted-foreground" />
@@ -278,7 +307,18 @@ export function EmployeesPage() {
     {
       accessorKey: 'nationality',
       header: 'Nationality',
-      cell: ({ getValue }) => <span className="text-sm">{getValue() as string}</span>,
+      cell: ({ getValue }) => {
+        const nat = getValue() as string | null | undefined
+        if (!nat) return <span className="text-xs text-muted-foreground">—</span>
+        const iso = resolveCountryIso(nat)
+        return (
+          <div className="flex items-center gap-2 min-w-0">
+            {iso && <FlagImg iso2={iso} size={16} className="shrink-0" />}
+            <span className="text-xs truncate">{nat}</span>
+          </div>
+        )
+      },
+      size: 150,
     },
     {
       accessorKey: 'status',
@@ -345,7 +385,7 @@ export function EmployeesPage() {
       ),
       size: 44,
     },
-  ], [navigate, canManage])
+  ], [navigate, canManage, orgUnitName])
 
   return (
     <PageWrapper>

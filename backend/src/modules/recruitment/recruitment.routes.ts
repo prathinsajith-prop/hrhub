@@ -26,7 +26,7 @@ export default async function (fastify: any): Promise<void> {
 
     // POST /api/v1/jobs
     fastify.post('/jobs', {
-        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin', 'dept_head')],
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: {
             tags: ['Recruitment'],
             body: {

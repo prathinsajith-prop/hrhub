@@ -158,6 +158,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'manage_recruitment', 'view_recruitment',
     // Onboarding
     'manage_onboarding', 'view_onboarding',
+    // Visa
+    'manage_visa', 'view_visa',
     // Documents
     'manage_documents', 'view_documents',
     // Payroll
@@ -228,6 +230,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_own_leave',
     'view_own_attendance',
     'view_own_performance',
+    'view_org_chart',
   ],
 }
 

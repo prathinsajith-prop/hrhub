@@ -116,6 +116,7 @@ export async function listInvitableEmployees(tenantId: string) {
             lastName: employees.lastName,
             email: employees.email,
             workEmail: employees.workEmail,
+            personalEmail: employees.personalEmail,
             department: employees.department,
             designation: employees.designation,
             avatarUrl: employees.avatarUrl,
@@ -136,7 +137,7 @@ export async function listInvitableEmployees(tenantId: string) {
         ...e,
         fullName: `${e.firstName} ${e.lastName}`.trim(),
         // Prefer work email (company email) for login, fall back to personal email
-        inviteEmail: e.workEmail ?? e.email ?? null,
+        inviteEmail: e.workEmail || e.email || e.personalEmail || null,
     }))
 }
 
@@ -161,6 +162,7 @@ export async function inviteUser(
             lastName: employees.lastName,
             email: employees.email,
             workEmail: employees.workEmail,
+            personalEmail: employees.personalEmail,
         })
         .from(employees)
         .where(and(
@@ -175,7 +177,7 @@ export async function inviteUser(
     }
 
     // Prefer work (company) email, fall back to personal email
-    const email = emp.workEmail ?? emp.email
+    const email = emp.workEmail || emp.email || emp.personalEmail
     if (!email) {
         throw Object.assign(
             new Error('This employee has no email address. Add a work or personal email to their profile before inviting.'),

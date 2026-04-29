@@ -1,4 +1,4 @@
-import { eq, and, inArray, sql } from 'drizzle-orm'
+import { eq, and, inArray, notInArray, ne, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { teams, teamMembers, employees, orgUnits } from '../../db/schema/index.js'
 
@@ -7,6 +7,7 @@ export interface CreateTeamInput {
     description?: string
     departmentId?: string
     createdById: string
+    creatorEmployeeId?: string | null
 }
 
 export interface TeamRow {
@@ -80,6 +81,15 @@ export async function createTeam(tenantId: string, input: CreateTeamInput) {
         department: departmentName,
         createdById: input.createdById,
     }).returning()
+
+    // Auto-add the creator as a member so they can see the team in "My Teams"
+    if (input.creatorEmployeeId) {
+        await db.insert(teamMembers).values({
+            teamId: row.id,
+            employeeId: input.creatorEmployeeId,
+            tenantId,
+        }).onConflictDoNothing()
+    }
 
     return row
 }
@@ -191,6 +201,7 @@ export async function getMyTeams(tenantId: string, employeeId: string) {
             description: teams.description,
             departmentId: teams.departmentId,
             department: teams.department,
+            createdById: teams.createdById,
             memberCount: sql<number>`COALESCE(${memberCounts.count}, 0)`,
             joinedAt: teamMembers.joinedAt,
         })
@@ -248,10 +259,10 @@ export async function getEligibleEmployees(tenantId: string, teamId: string) {
     const conditions = [
         eq(employees.tenantId, tenantId),
         eq(employees.isArchived, false),
-        sql`${employees.status} != 'terminated'`,
+        ne(employees.status, 'terminated'),
     ]
     if (team.departmentId) conditions.push(eq(employees.departmentId, team.departmentId))
-    if (existingIds.length > 0) conditions.push(sql`${employees.id} NOT IN (${sql.join(existingIds.map(id => sql`${id}::uuid`), sql`, `)})`)
+    if (existingIds.length > 0) conditions.push(notInArray(employees.id, existingIds))
 
     return db
         .select({
