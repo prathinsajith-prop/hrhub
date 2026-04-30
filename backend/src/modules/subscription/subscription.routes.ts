@@ -263,6 +263,45 @@ export default async function subscriptionRoutes(fastify: any): Promise<void> {
         return reply.send({ data: events })
     })
 
+    // GET /api/v1/subscription/events/:id/invoice — download invoice PDF for a billing event
+    fastify.get('/events/:id/invoice', { ...adminAuth, schema: { tags: ['Subscription'] } }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const events = await getSubscriptionEvents(request.user.tenantId, 100)
+        const event = events.find(e => e.id === id)
+        if (!event) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Invoice not found' })
+
+        const meta = (event.metadata ?? {}) as Record<string, unknown>
+        const invoiceRef = (meta.invoiceRef as string) ?? `INV-${event.id.slice(0, 8).toUpperCase()}`
+        const [tenantRow] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
+        const tenantName = tenantRow?.name ?? 'Organisation'
+
+        const eventLabel: Record<string, string> = {
+            plan_activated: 'Professional Plan Activation',
+            quota_updated: 'Employee Capacity Update',
+            upgrade_request: 'Upgrade Request',
+            enterprise_contact: 'Enterprise Enquiry',
+            checkout_created: 'Checkout Initiated',
+        }
+        const description = eventLabel[event.eventType] ?? event.eventType
+
+        const { generateInvoicePdf } = await import('../../lib/pdf.js')
+        const pdf = await generateInvoicePdf({
+            invoiceRef,
+            companyName: tenantName,
+            description,
+            plan: event.planTo ?? event.planFrom ?? '—',
+            quota: event.employeeQuota ? `${event.employeeQuota} employees` : '—',
+            amount: event.monthlyCost ? `AED ${event.monthlyCost.toLocaleString()}` : '—',
+            paymentMethod: (meta.paymentMethod as string) ?? '—',
+            date: new Date(event.createdAt).toLocaleDateString('en-AE', { day: 'numeric', month: 'long', year: 'numeric' }),
+            issuedTo: tenantName,
+        })
+
+        reply.header('Content-Type', 'application/pdf')
+        reply.header('Content-Disposition', `attachment; filename="invoice-${invoiceRef}.pdf"`)
+        return reply.send(pdf)
+    })
+
     // POST /api/v1/subscription/test-email — send a test invoice or expiry reminder to the logged-in user
     fastify.post('/test-email', { ...adminAuth, schema: { tags: ['Subscription'] } }, async (request: any, reply: any) => {
         const { type } = (request.body ?? {}) as { type?: string }
