@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, isNotNull } from 'drizzle-orm'
+import { eq, and, desc, sql, isNotNull, isNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { visaCosts, employees } from '../../db/schema/index.js'
 
@@ -40,6 +40,7 @@ export async function listVisaCosts(tenantId: string, visaApplicationId: string)
         .where(and(
             eq(visaCosts.tenantId, tenantId),
             eq(visaCosts.visaApplicationId, visaApplicationId),
+            isNull(visaCosts.deletedAt),
         ))
         .orderBy(desc(visaCosts.paidDate), desc(visaCosts.createdAt))
 }
@@ -76,8 +77,9 @@ export async function getVisaCost(tenantId: string, costId: string) {
 
 export async function deleteVisaCost(tenantId: string, costId: string) {
     const [row] = await db
-        .delete(visaCosts)
-        .where(and(eq(visaCosts.id, costId), eq(visaCosts.tenantId, tenantId)))
+        .update(visaCosts)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(visaCosts.id, costId), eq(visaCosts.tenantId, tenantId), isNull(visaCosts.deletedAt)))
         .returning({ id: visaCosts.id })
     return row ?? null
 }
@@ -107,6 +109,7 @@ export async function getPROCostReport(tenantId: string) {
             .where(and(
                 eq(visaCosts.tenantId, tenantId),
                 isNotNull(visaCosts.visaApplicationId),
+                isNull(visaCosts.deletedAt),
                 sql`${visaCosts.paidDate} >= ${yearStart}`,
             ))
             .orderBy(desc(visaCosts.paidDate)),
@@ -122,6 +125,7 @@ export async function getPROCostReport(tenantId: string) {
             .where(and(
                 eq(visaCosts.tenantId, tenantId),
                 isNotNull(visaCosts.visaApplicationId),
+                isNull(visaCosts.deletedAt),
                 sql`${visaCosts.paidDate} >= ${yearStart}`,
             ))
             .groupBy(visaCosts.category)
@@ -139,6 +143,7 @@ export async function getPROCostReport(tenantId: string) {
             .where(and(
                 eq(visaCosts.tenantId, tenantId),
                 isNotNull(visaCosts.visaApplicationId),
+                isNull(visaCosts.deletedAt),
                 sql`${visaCosts.paidDate} >= ${yearStart}`,
             ))
             .groupBy(sql`to_char(${visaCosts.paidDate}, 'Mon YYYY')`, sql`to_char(${visaCosts.paidDate}, 'YYYY-MM')`)
