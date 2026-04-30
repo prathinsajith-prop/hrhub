@@ -30,6 +30,7 @@ import { useEmployees } from '@/hooks/useEmployees'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { ATTENDANCE_STATUS_OPTIONS } from '@/lib/options'
+import { exportAttendance } from '@/lib/export'
 
 const ATTENDANCE_FILTERS: FilterConfig[] = [
     { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
@@ -447,7 +448,15 @@ export function AttendancePage() {
                             leftIcon={<Download className="h-3.5 w-3.5" />}
                             onClick={handleExport}
                         >
-                            Export
+                            CSV
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<Download className="h-3.5 w-3.5" />}
+                            onClick={() => exportAttendance({ format: 'pdf', startDate: start, endDate: end }).catch(() => toast.error('Export failed', 'Could not download PDF report.'))}
+                        >
+                            PDF
                         </Button>
                     </div>
                 }

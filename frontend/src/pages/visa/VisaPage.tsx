@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Plane, Clock, AlertTriangle, CheckCircle2, Plus, RefreshCw, RefreshCcw, Eye, Edit2 } from 'lucide-react'
+import { Plane, Clock, AlertTriangle, CheckCircle2, Plus, RefreshCw, RefreshCcw, Eye, Edit2, Download } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +22,7 @@ import type { VisaApplication, VisaStatus } from '@/types'
 import { toast } from '@/components/ui/overlays'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { NewVisaApplicationDialog } from '@/components/shared/action-dialogs'
+import { exportVisa } from '@/lib/export'
 
 const VISA_FILTERS: FilterConfig[] = [
   { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
@@ -451,6 +452,8 @@ export function VisaPage() {
             <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
               Refresh
             </Button>
+            <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportVisa({ format: 'csv' }).catch(() => toast.error('Export failed', 'Could not download CSV.'))}>CSV</Button>
+            <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportVisa({ format: 'pdf' }).catch(() => toast.error('Export failed', 'Could not download PDF.'))}>PDF</Button>
             <Button
               variant="outline"
               size="sm"

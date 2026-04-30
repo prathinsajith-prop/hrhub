@@ -1,4 +1,8 @@
 import { getReviews, createReview, updateReview, deleteReview } from './performance.service.js'
+import { generateReportPdf } from '../../lib/pdf.js'
+import { db } from '../../db/index.js'
+import { tenants } from '../../db/schema/index.js'
+import { eq } from 'drizzle-orm'
 
 export async function performanceRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
@@ -34,5 +38,45 @@ export async function performanceRoutes(fastify: any) {
         const { id } = request.params as { id: string }
         await deleteReview(request.user.tenantId, id)
         return reply.code(204).send()
+    })
+
+    // GET /api/v1/performance/export?format=csv|pdf
+    fastify.get('/performance/export', { ...adminAuth, schema: { tags: ['Performance'] } }, async (request: any, reply: any) => {
+        const { format = 'csv', employeeId, from, to } = request.query as Record<string, string>
+        if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
+        const { data } = await getReviews(request.user.tenantId, { employeeId, from, to, limit: 10000, offset: 0 }) as any
+        const rows = (data ?? []) as any[]
+        const dateStr = new Date().toISOString().slice(0, 10)
+
+        if (format === 'pdf') {
+            const [tenantRow] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
+            const pdf = await generateReportPdf({
+                title: 'Performance Reviews Report',
+                companyName: tenantRow?.name ?? '',
+                subtitle: from && to ? `${from} – ${to}` : undefined,
+                columns: [
+                    { header: 'Employee', key: 'employeeName', width: 130 },
+                    { header: 'Review Period', key: 'reviewPeriod', width: 100 },
+                    { header: 'Rating', key: 'rating', width: 55, align: 'right' },
+                    { header: 'Status', key: 'status', width: 70 },
+                    { header: 'Reviewer', key: 'reviewerName', width: 120 },
+                    { header: 'Comments', key: 'comments' },
+                ],
+                rows,
+            })
+            reply.header('Content-Type', 'application/pdf')
+            reply.header('Content-Disposition', `attachment; filename="performance-report-${dateStr}.pdf"`)
+            return reply.send(pdf)
+        }
+
+        const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+        const headers = ['Employee Name', 'Review Period', 'Rating', 'Status', 'Reviewer', 'Comments']
+        const lines = [headers.join(',')]
+        for (const r of rows) {
+            lines.push([r.employeeName, r.reviewPeriod, r.rating ?? '', r.status, r.reviewerName ?? '', r.comments ?? ''].map(escape).join(','))
+        }
+        reply.header('Content-Type', 'text/csv; charset=utf-8')
+        reply.header('Content-Disposition', `attachment; filename="performance-export-${dateStr}.csv"`)
+        return reply.send(lines.join('\r\n'))
     })
 }

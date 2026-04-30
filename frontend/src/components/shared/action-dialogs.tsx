@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
@@ -99,6 +99,13 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const [description, setDescription] = useState('')
     const createJob = useCreateJob()
 
+    useEffect(() => {
+        if (!open) {
+            setTitle(''); setDepartment(''); setLocation(''); setType('full_time')
+            setOpenings(1); setMinSalary(0); setMaxSalary(0); setDescription('')
+        }
+    }, [open])
+
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
         if (!ok) {
@@ -187,6 +194,13 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
     const employees = (empData?.data as Employee[]) ?? []
     const createVisa = useCreateVisa()
 
+    useEffect(() => {
+        if (!open) {
+            setEmployeeId(''); setVisaType('employment_new'); setUrgencyLevel('normal')
+            setStartDate(new Date().toISOString().split('T')[0])
+        }
+    }, [open])
+
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(visaApplicationSchema, { employeeId })
         if (!ok) {
@@ -270,15 +284,20 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
     const employees = (empData?.data as Employee[]) ?? []
     const createLeave = useCreateLeave()
 
+    useEffect(() => {
+        if (!open) {
+            setEmployeeId(''); setLeaveType('annual'); setStartDate(''); setEndDate(''); setReason('')
+        }
+    }, [open])
+
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(leaveRequestSchema, { employeeId, startDate, endDate })
         if (!ok) {
             toast.warning('Please review', Object.values(errors)[0] ?? 'Fix the highlighted fields.')
             return
         }
-        const days = Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1)
         createLeave.mutate(
-            { employeeId, leaveType, startDate, endDate, days, reason, status: 'pending' },
+            { employeeId, leaveType: leaveType as import('@/hooks/useLeave').LeaveType, startDate, endDate, reason },
             {
                 onSuccess: () => {
                     toast.success('Leave submitted', 'Your leave request is pending approval.')
@@ -425,6 +444,10 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     const [form, setForm] = useState<EmpForm>(EMPTY_FORM)
     const [errors, setErrors] = useState<Record<string, string>>({})
     const createEmployee = useCreateEmployee()
+
+    useEffect(() => {
+        if (!open) { setTimeout(() => { setStep(1); setForm(EMPTY_FORM); setErrors({}) }, 300) }
+    }, [open])
     const navigate = useNavigate()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const { data: designationList = [] } = useDesignations()
@@ -1186,6 +1209,16 @@ export function EditJobDialog({
     const [status, setStatus] = useState(job.status ?? 'open')
     const updateJob = useUpdateJob()
 
+    useEffect(() => {
+        if (open) {
+            setTitle(job.title ?? ''); setDepartment(job.department ?? ''); setLocation(job.location ?? '')
+            setType(job.type ?? 'full_time'); setOpenings(job.openings ?? 1)
+            setMinSalary(Number(job.minSalary ?? 0)); setMaxSalary(Number(job.maxSalary ?? 0))
+            setDescription(job.description ?? ''); setStatus(job.status ?? 'open')
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open])
+
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
         if (!ok) {
@@ -1288,6 +1321,14 @@ export function EditDocumentDialog({
     const [docType, setDocType] = useState(doc.docType ?? '')
     const [expiryDate, setExpiryDate] = useState(doc.expiryDate ? String(doc.expiryDate).slice(0, 10) : '')
     const updateDoc = useUpdateDocument(doc.id)
+
+    useEffect(() => {
+        if (open) {
+            setFileName(doc.fileName ?? ''); setCategory(doc.category ?? '')
+            setDocType(doc.docType ?? ''); setExpiryDate(doc.expiryDate ? String(doc.expiryDate).slice(0, 10) : '')
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open])
 
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(documentMetaSchema, { category, type: docType })

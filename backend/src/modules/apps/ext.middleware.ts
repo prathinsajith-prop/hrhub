@@ -28,9 +28,9 @@ export interface AppContext {
 }
 
 export function clientIp(request: any): string {
-    const forwarded = request.headers['x-forwarded-for']
-    if (forwarded) return (Array.isArray(forwarded) ? forwarded[0] : forwarded).split(',')[0].trim()
-    return request.socket?.remoteAddress ?? '0.0.0.0'
+    // Use Fastify's resolved request.ip which correctly honours trustProxy.
+    // Never parse X-Forwarded-For directly — that is user-controlled and spoofable.
+    return request.ip ?? '0.0.0.0'
 }
 
 function ipInList(ip: string, allowlist: string[]): boolean {

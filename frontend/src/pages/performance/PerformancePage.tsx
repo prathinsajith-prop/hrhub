@@ -14,12 +14,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { usePerformanceReviews, useCreateReview, useUpdateReview, type PerformanceReview } from '@/hooks/usePerformance'
 import { useEmployees } from '@/hooks/useEmployees'
-import { Star, TrendingUp, Plus, CheckCircle2, Clock, Send, FileText, RefreshCcw } from 'lucide-react'
+import { Star, TrendingUp, Plus, CheckCircle2, Clock, Send, FileText, RefreshCcw, Download } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig, type QuickFilter } from '@/lib/filters'
 import { PERFORMANCE_STATUS_OPTIONS } from '@/lib/options'
+import { exportPerformance } from '@/lib/export'
+import { toast } from 'sonner'
 
 const PERFORMANCE_FILTERS: FilterConfig[] = [
     { name: 'status', label: 'Status', type: 'select', field: 'status', options: PERFORMANCE_STATUS_OPTIONS },
@@ -125,11 +127,13 @@ export function PerformancePage() {
 
     function handleDialogChange(open: boolean) {
         setShowDialog(open)
-        if (!open && lockedEmployeeId) {
-            const next = new URLSearchParams(searchParams)
-            next.delete('employeeId')
-            setSearchParams(next, { replace: true })
+        if (!open) {
             setForm(defaultForm)
+            if (lockedEmployeeId) {
+                const next = new URLSearchParams(searchParams)
+                next.delete('employeeId')
+                setSearchParams(next, { replace: true })
+            }
         }
     }
 
@@ -184,6 +188,8 @@ export function PerformancePage() {
                         <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
+                        <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportPerformance({ format: 'csv' }).catch(() => toast.error('Export failed'))}>CSV</Button>
+                        <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportPerformance({ format: 'pdf' }).catch(() => toast.error('Export failed'))}>PDF</Button>
                         <Button onClick={() => setShowDialog(true)}>
                             <Plus className="h-4 w-4 mr-2" /> New Review
                         </Button>

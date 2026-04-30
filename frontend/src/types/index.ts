@@ -136,6 +136,7 @@ export interface Candidate {
   currentSalary?: number
   expectedSalary?: number
   notes?: string
+  resumeUrl?: string | null
 }
 
 // Visa

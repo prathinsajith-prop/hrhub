@@ -34,7 +34,8 @@ import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { useEmployees, useArchiveEmployee } from '@/hooks/useEmployees'
+import { useEmployees, useArchiveEmployee, exportEmployeesCsv } from '@/hooks/useEmployees'
+import { exportEmployees } from '@/lib/export'
 import { AddEmployeeDialog, EditEmployeeDialog } from '@/components/shared/action-dialogs'
 import { InviteEmployeeDialog } from '@/components/shared/InviteEmployeeDialog'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -163,7 +164,22 @@ export function EmployeesPage() {
   const [editTarget, setEditTarget] = useState<Employee | null>(null)
   const [inviteTarget, setInviteTarget] = useState<Employee | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const archiveEmployee = useArchiveEmployee()
+
+  async function handleExportCsv() {
+    setExporting(true)
+    try {
+      await exportEmployeesCsv({
+        department: search.appliedFilters.department?.value as string | undefined,
+        status: search.appliedFilters.status?.value as string | undefined,
+      })
+    } catch {
+      toast.error('Export failed', 'Could not download employee CSV. Please try again.')
+    } finally {
+      setExporting(false)
+    }
+  }
   const search = useSearchFilters({
     storageKey: 'hrhub.employees.searchHistory',
     availableFilters: EMPLOYEE_FILTERS,
@@ -393,8 +409,11 @@ export function EmployeesPage() {
             <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
               Refresh
             </Button>
-            <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}>
-              Export
+            <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={handleExportCsv} disabled={exporting}>
+              {exporting ? 'Exporting…' : 'CSV'}
+            </Button>
+            <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportEmployees({ format: 'pdf' }).catch(() => toast.error('Export failed', 'Could not download PDF.'))}>
+              PDF
             </Button>
             {canManage && (
               <Button size="sm" leftIcon={<UserPlus className="h-3.5 w-3.5" />} onClick={() => setAddOpen(true)}>

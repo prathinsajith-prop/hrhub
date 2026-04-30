@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import FullCalendar from '@fullcalendar/react'
@@ -64,7 +64,11 @@ export function CalendarPage() {
     // Track the visible date range so we can scope fetches to just the visible window.
     const [visibleRange, setVisibleRange] = useState<{ from: string; to: string } | undefined>(undefined)
 
-    const { data: calendarData, isLoading } = useCalendarEvents(visibleRange)
+    const { data: calendarData, isFetching } = useCalendarEvents(visibleRange)
+    // Show skeleton overlay only until the first successful data fetch.
+    // Never conditionally unmount FullCalendar — that resets initialView.
+    const [calReady, setCalReady] = useState(false)
+    useEffect(() => { if (calendarData && !calReady) setCalReady(true) }, [calendarData, calReady])
 
     // ─── Build calendar events ─────────────────────────────────────────────────
 
@@ -297,6 +301,9 @@ export function CalendarPage() {
                             <Filter className="h-2.5 w-2.5 mr-1" />
                             {upcomingThisWeek} this week
                         </Badge>
+                        {isFetching && calReady && (
+                            <div className="h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                        )}
                         <div className="inline-flex rounded-md border bg-secondary p-0.5">
                             {(['dayGridMonth', 'timeGridWeek', 'listWeek'] as ViewKey[]).map(v => (
                                 <button
@@ -313,10 +320,14 @@ export function CalendarPage() {
                 </div>
             </Card>
 
-            <Card className="p-3 hrhub-fullcalendar">
-                {isLoading ? (
-                    <Skeleton className="h-[600px] w-full" />
-                ) : (
+            <Card className="p-3 hrhub-fullcalendar relative">
+                {/* Skeleton shown only until first data load — FullCalendar always stays mounted */}
+                {!calReady && (
+                    <div className="absolute inset-3 z-10 rounded-md overflow-hidden">
+                        <Skeleton className="h-full w-full" />
+                    </div>
+                )}
+                <div className={calReady ? undefined : 'invisible'}>
                     <FullCalendar
                         ref={calRef}
                         plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
@@ -331,7 +342,6 @@ export function CalendarPage() {
                         weekends
                         firstDay={0}
                         datesSet={handleDatesSet}
-                        // Visually highlight days that have a holiday event
                         dayCellClassNames={(arg) => {
                             const dateStr = arg.date.toISOString().slice(0, 10)
                             const isHoliday = (calendarData?.holidays ?? []).some(h => h.date === dateStr)
@@ -342,7 +352,7 @@ export function CalendarPage() {
                             setView('listWeek')
                         }}
                     />
-                )}
+                </div>
             </Card>
         </PageWrapper>
     )
