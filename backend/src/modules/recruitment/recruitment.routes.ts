@@ -146,7 +146,13 @@ export default async function (fastify: any): Promise<void> {
         if (!job) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found' })
         const body = request.body as Record<string, unknown>
         // New applications always start at 'received' — stage transitions go through PATCH /stage.
-        const application = await createApplication(job.tenantId, id, { ...body, stage: 'received' } as never)
+        let application: Awaited<ReturnType<typeof createApplication>>
+        try {
+            application = await createApplication(job.tenantId, id, { ...body, stage: 'received' } as never)
+        } catch (err: any) {
+            if (err?.statusCode === 409) return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: err.message })
+            throw err
+        }
         recordActivity({
             tenantId,
             userId: request.user.id,

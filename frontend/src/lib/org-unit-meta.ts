@@ -64,8 +64,3 @@ export const PARENT_TYPE: Partial<Record<OrgUnitType, OrgUnitType>> = {
     department: 'division',
 }
 
-export function genOrgCode(name: string): string {
-    const words = name.trim().split(/\s+/).filter(Boolean)
-    if (words.length === 1) return words[0].slice(0, 5).toUpperCase()
-    return words.map(w => w.slice(0, 3)).join('').toUpperCase().slice(0, 8)
-}

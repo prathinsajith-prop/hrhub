@@ -25,7 +25,6 @@ export interface OrgUnitNode extends OrgUnit {
 
 export interface OrgUnitInput {
     name: string
-    code?: string
     type: OrgUnitType
     parentId?: string | null
     headEmployeeId?: string | null

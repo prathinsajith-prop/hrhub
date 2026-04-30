@@ -1,15 +1,18 @@
 import { listOrgUnits, getOrgUnitTree, getScopedOrgUnitTree, createOrgUnit, updateOrgUnit, deleteOrgUnit, getOrgUnitStats } from './orgUnits.service.js'
 import { z } from 'zod'
 
-const orgUnitSchema = z.object({
+const createOrgUnitSchema = z.object({
     name: z.string().min(1).max(150),
-    code: z.string().max(20).optional(),
     type: z.enum(['division', 'department', 'branch']),
     parentId: z.string().uuid().nullable().optional(),
     headEmployeeId: z.string().uuid().nullable().optional(),
     description: z.string().max(500).optional(),
     isActive: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
+})
+
+const updateOrgUnitSchema = createOrgUnitSchema.omit({ type: true }).partial().extend({
+    type: z.enum(['division', 'department', 'branch']).optional(),
 })
 
 export async function orgUnitsRoutes(fastify: any) {
@@ -40,7 +43,7 @@ export async function orgUnitsRoutes(fastify: any) {
 
     // POST /api/v1/org-units
     fastify.post('/org-units', { ...adminAuth, schema: { tags: ['OrgUnits'] } }, async (request: any, reply: any) => {
-        const parsed = orgUnitSchema.safeParse(request.body)
+        const parsed = createOrgUnitSchema.safeParse(request.body)
         if (!parsed.success) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid input', validationErrors: parsed.error.issues })
         }
@@ -51,7 +54,7 @@ export async function orgUnitsRoutes(fastify: any) {
     // PATCH /api/v1/org-units/:id
     fastify.patch('/org-units/:id', { ...adminAuth, schema: { tags: ['OrgUnits'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const parsed = orgUnitSchema.partial().safeParse(request.body)
+        const parsed = updateOrgUnitSchema.safeParse(request.body)
         if (!parsed.success) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid input', validationErrors: parsed.error.issues })
         }
