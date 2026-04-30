@@ -78,10 +78,28 @@ export async function getOrgUnitTree(tenantId: string): Promise<OrgUnitNode[]> {
 }
 
 /**
- * Returns the org unit tree scoped to the branch the given employee belongs to.
- * Falls back to the full tree if the employee has no branchId.
+ * Strips branch nodes from a tree — used for dept_head view where branches
+ * are an employee-level concept and shouldn't clutter the manager's chart.
  */
-export async function getScopedOrgUnitTree(tenantId: string, employeeId: string): Promise<OrgUnitNode[]> {
+function stripBranches(node: OrgUnitNode): OrgUnitNode {
+    return {
+        ...node,
+        children: node.children
+            .filter((c) => c.type !== 'branch')
+            .map(stripBranches),
+    }
+}
+
+/**
+ * Returns the org unit tree scoped by role:
+ *
+ * - dept_head  → their division with all departments inside it; branches are hidden
+ * - employee / pro_officer → their exact lineage path only (division → department → branch),
+ *   no siblings, no other branches or departments
+ *
+ * Falls back to the full tree if the employee has no org assignments.
+ */
+export async function getScopedOrgUnitTree(tenantId: string, employeeId: string, role: string): Promise<OrgUnitNode[]> {
     const [emp] = await db
         .select({ branchId: employees.branchId, divisionId: employees.divisionId, departmentId: employees.departmentId })
         .from(employees)
@@ -96,7 +114,7 @@ export async function getScopedOrgUnitTree(tenantId: string, employeeId: string)
         map.set(row.id, { ...row, children: [] } as OrgUnitNode)
     }
 
-    // Build full tree first
+    // Build full tree
     const roots: OrgUnitNode[] = []
     for (const node of map.values()) {
         if (node.parentId && map.has(node.parentId)) {
@@ -106,18 +124,55 @@ export async function getScopedOrgUnitTree(tenantId: string, employeeId: string)
         }
     }
 
-    // If employee has a branchId, return only that branch node
+    // Canonical hierarchy: Branch → Division → Department
+    // Build the employee's lineage path with Branch always as the root node.
+
+    if (role === 'dept_head') {
+        // dept_head sees their branch as root; inside it their division; inside that all departments (no sibling branches/divisions)
+        if (emp.branchId && map.has(emp.branchId)) {
+            const branch: OrgUnitNode = { ...map.get(emp.branchId)!, children: [] }
+            if (emp.divisionId && map.has(emp.divisionId)) {
+                const div: OrgUnitNode = { ...map.get(emp.divisionId)!, children: [] }
+                // Include all departments in their division (full dept view for dept_head)
+                const allDepts = Array.from(map.values()).filter(n => n.type === 'department' && n.parentId === emp.divisionId)
+                div.children = allDepts
+                branch.children = [div]
+            }
+            return [branch]
+        }
+        // No branch assigned — fall back to just their division with all departments
+        if (emp.divisionId && map.has(emp.divisionId)) {
+            const div: OrgUnitNode = { ...map.get(emp.divisionId)!, children: [] }
+            div.children = Array.from(map.values()).filter(n => n.type === 'department' && n.parentId === emp.divisionId)
+            return [div]
+        }
+        return roots
+    }
+
+    // employee / pro_officer: exact lineage only — Branch → Division → Department (their own path, no siblings)
     if (emp.branchId && map.has(emp.branchId)) {
-        const branch = map.get(emp.branchId)!
+        const branch: OrgUnitNode = { ...map.get(emp.branchId)!, children: [] }
+        if (emp.divisionId && map.has(emp.divisionId)) {
+            const div: OrgUnitNode = { ...map.get(emp.divisionId)!, children: [] }
+            if (emp.departmentId && map.has(emp.departmentId)) {
+                div.children = [{ ...map.get(emp.departmentId)!, children: [] }]
+            }
+            branch.children = [div]
+        }
         return [branch]
     }
-
-    // No branch assigned — return the division or department they belong to, wrapped minimally
+    // No branch — show division → department path
     if (emp.divisionId && map.has(emp.divisionId)) {
-        return [map.get(emp.divisionId)!]
+        const div: OrgUnitNode = { ...map.get(emp.divisionId)!, children: [] }
+        if (emp.departmentId && map.has(emp.departmentId)) {
+            div.children = [{ ...map.get(emp.departmentId)!, children: [] }]
+        }
+        return [div]
+    }
+    if (emp.departmentId && map.has(emp.departmentId)) {
+        return [{ ...map.get(emp.departmentId)!, children: [] }]
     }
 
-    // Last resort: return full tree (unassigned employee)
     return roots
 }
 

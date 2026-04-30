@@ -104,7 +104,6 @@ export type RouteKey =
   | 'my/profile'
   | 'assets'
   | 'organizations'
-  | 'organizations/new'
   | 'team'
   | 'users'
   | 'apps'
@@ -267,7 +266,6 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
 
   // App Management
   organizations: ['super_admin', 'hr_manager', 'pro_officer'],
-  'organizations/new': ['super_admin', 'hr_manager'],
   team: ['super_admin', 'hr_manager', 'dept_head', 'pro_officer', 'employee'],
   users: ['super_admin', 'hr_manager'],
   apps: ['super_admin', 'hr_manager'],

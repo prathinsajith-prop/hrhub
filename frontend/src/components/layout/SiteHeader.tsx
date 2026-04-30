@@ -29,6 +29,7 @@ import { useNotificationsList, useUnreadCount, useMarkNotificationRead, useMarkA
 import { useAuthStore } from '@/store/authStore'
 import { useMyTenants, useSwitchTenant } from '@/hooks/useTenants'
 import { GlobalSearch } from '@/components/shared/GlobalSearch'
+import { NewOrganizationDialog } from '@/components/shared/NewOrganizationDialog'
 import { ROOT_NAV_LABELS, ROUTES } from '@/lib/routes'
 
 /** Humanise a URL segment as a fallback label (kebab/snake → Title Case). */
@@ -88,6 +89,7 @@ export function SiteHeader() {
   const { data: myTenants } = useMyTenants()
   const switchMut = useSwitchTenant()
   const [switchingId, setSwitchingId] = useState<string | null>(null)
+  const [newOrgOpen, setNewOrgOpen] = useState(false)
 
   const initials = user?.name
     ? user.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
@@ -112,6 +114,7 @@ export function SiteHeader() {
   const iconBtn = 'h-9 w-9 border-border bg-background hover:bg-muted'
 
   return (
+    <>
     <header
       className={cn(
         'sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 px-4 lg:px-6',
@@ -393,7 +396,7 @@ export function SiteHeader() {
                           <DropdownMenuSeparator className="my-1" />
                           <DropdownMenuItem
                             className="gap-2 rounded-md px-2.5 py-2 cursor-pointer"
-                            onClick={() => navigate('/organizations/new')}
+                            onClick={() => setNewOrgOpen(true)}
                           >
                             <PlusIcon className="size-3.5 text-muted-foreground" />
                             <span className="text-sm">New organization</span>
@@ -445,5 +448,8 @@ export function SiteHeader() {
         </DropdownMenu>
       </div>
     </header>
+
+    <NewOrganizationDialog open={newOrgOpen} onOpenChange={setNewOrgOpen} />
+    </>
   )
 }

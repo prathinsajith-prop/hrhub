@@ -42,7 +42,6 @@ export const ROUTES = {
 
     // Workspace
     organizations: '/organizations',
-    organizationsNew: '/organizations/new',
     organizationSettings: '/organization-settings',
     team: '/team',
     users: '/users',

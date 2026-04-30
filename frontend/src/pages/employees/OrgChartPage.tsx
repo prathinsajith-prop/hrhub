@@ -160,9 +160,60 @@ function ReportingChart() {
 
 // ─── Org Structure ────────────────────────────────────────────────────────────
 
+function UnitHeader({
+    icon: Icon,
+    iconBg,
+    iconColor,
+    name,
+    code,
+    headEmployeeName,
+    isActive,
+    open,
+    meta,
+}: {
+    icon: React.ElementType
+    iconBg: string
+    iconColor: string
+    name: string
+    code?: string | null
+    headEmployeeName?: string | null
+    isActive: boolean
+    open: boolean
+    meta?: React.ReactNode
+}) {
+    return (
+        <div className="flex flex-wrap items-center gap-3 w-full">
+            <div className={cn('w-9 h-9 rounded-lg border flex items-center justify-center shrink-0', iconBg)}>
+                <Icon className={cn('h-4 w-4', iconColor)} />
+            </div>
+            <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-sm leading-tight">{name}</p>
+                    {code && (
+                        <span className="text-[10px] font-mono text-muted-foreground border rounded px-1.5 py-0.5 bg-muted/50">
+                            {code}
+                        </span>
+                    )}
+                    {!isActive && <Badge variant="secondary" className="text-[9px] h-4 px-1.5">Inactive</Badge>}
+                </div>
+                {headEmployeeName && (
+                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                        <UserCircle className="h-3 w-3 shrink-0" />
+                        {headEmployeeName}
+                    </p>
+                )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+                {meta}
+                <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform duration-200', !open && '-rotate-90')} />
+            </div>
+        </div>
+    )
+}
+
 function DeptPill({ dept }: { dept: OrgUnitNode }) {
     return (
-        <div className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5 hover:bg-muted/40 transition-colors group">
+        <div className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5 hover:bg-muted/40 transition-colors">
             <div className="w-6 h-6 rounded-md bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
                 <Users2 className="h-3 w-3 text-sky-600" />
             </div>
@@ -175,11 +226,55 @@ function DeptPill({ dept }: { dept: OrgUnitNode }) {
                     </p>
                 )}
             </div>
-            {dept.code && (
-                <span className="text-[9px] font-mono text-muted-foreground/50 shrink-0">{dept.code}</span>
-            )}
-            {!dept.isActive && (
-                <Badge variant="secondary" className="text-[9px] h-4 px-1.5 shrink-0">Off</Badge>
+            {dept.code && <span className="text-[9px] font-mono text-muted-foreground/50 shrink-0">{dept.code}</span>}
+            {!dept.isActive && <Badge variant="secondary" className="text-[9px] h-4 px-1.5 shrink-0">Off</Badge>}
+        </div>
+    )
+}
+
+/** Dept card that also renders its branch children (leaf level). */
+function DeptCard({ dept }: { dept: OrgUnitNode }) {
+    const [open, setOpen] = useState(true)
+    const branches = dept.children.filter(c => c.type === 'branch')
+    const hasBranches = branches.length > 0
+
+    return (
+        <div className="rounded-xl border bg-card overflow-hidden">
+            <button
+                onClick={() => setOpen(o => !o)}
+                className="w-full px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+            >
+                <UnitHeader
+                    icon={Users2} iconBg="bg-sky-50 border-sky-100" iconColor="text-sky-600"
+                    name={dept.name} code={dept.code} headEmployeeName={dept.headEmployeeName}
+                    isActive={dept.isActive} open={open}
+                    meta={hasBranches && (
+                        <span className="text-[9px] font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                            {branches.length} branch{branches.length !== 1 ? 'es' : ''}
+                        </span>
+                    )}
+                />
+            </button>
+            {open && hasBranches && (
+                <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-border/40">
+                    {branches.map(b => (
+                        <div key={b.id} className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5 hover:bg-muted/40 transition-colors">
+                            <div className="w-6 h-6 rounded-md bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                                <MapPin className="h-3 w-3 text-emerald-600" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium leading-tight truncate">{b.name}</p>
+                                {b.headEmployeeName && (
+                                    <p className="text-[10px] text-muted-foreground truncate mt-0.5 flex items-center gap-1">
+                                        <UserCircle className="h-2.5 w-2.5 shrink-0" />{b.headEmployeeName}
+                                    </p>
+                                )}
+                            </div>
+                            {b.code && <span className="text-[9px] font-mono text-muted-foreground/50 shrink-0">{b.code}</span>}
+                            {!b.isActive && <Badge variant="secondary" className="text-[9px] h-4 px-1.5 shrink-0">Off</Badge>}
+                        </div>
+                    ))}
+                </div>
             )}
         </div>
     )
@@ -187,125 +282,223 @@ function DeptPill({ dept }: { dept: OrgUnitNode }) {
 
 function DivisionCard({ division }: { division: OrgUnitNode }) {
     const [open, setOpen] = useState(true)
-    const depts = division.children
+    const depts = division.children.filter(c => c.type === 'department')
+    const orphanBranches = division.children.filter(c => c.type === 'branch')
 
     return (
         <div className="rounded-xl border bg-card overflow-hidden">
             <button
                 onClick={() => setOpen(o => !o)}
-                className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/30 transition-colors"
+                className="w-full px-4 py-3.5 text-left hover:bg-muted/30 transition-colors"
             >
-                <div className="w-8 h-8 rounded-lg bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0">
-                    <Layers className="h-3.5 w-3.5 text-violet-600" />
-                </div>
-                <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold leading-tight truncate">{division.name}</p>
-                    {division.headEmployeeName && (
-                        <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                            <UserCircle className="h-2.5 w-2.5" />
-                            {division.headEmployeeName}
-                        </p>
-                    )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                    {depts.length > 0 && (
+                <UnitHeader
+                    icon={Layers} iconBg="bg-violet-50 border-violet-100" iconColor="text-violet-600"
+                    name={division.name} code={division.code} headEmployeeName={division.headEmployeeName}
+                    isActive={division.isActive} open={open}
+                    meta={depts.length > 0 && (
                         <span className="text-[9px] font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5">
                             {depts.length} dept{depts.length !== 1 ? 's' : ''}
                         </span>
                     )}
-                    {!division.isActive && (
-                        <Badge variant="secondary" className="text-[9px] h-4 px-1">Off</Badge>
-                    )}
-                    <ChevronDown className={cn(
-                        'h-3.5 w-3.5 text-muted-foreground transition-transform duration-200',
-                        !open && '-rotate-90',
-                    )} />
-                </div>
+                />
             </button>
-
             {open && (
-                depts.length > 0 ? (
-                    <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-border/40">
-                        {depts.map(dept => <DeptPill key={dept.id} dept={dept} />)}
-                    </div>
-                ) : (
-                    <p className="px-4 pb-3 pt-2 text-[11px] text-muted-foreground border-t border-border/40">
-                        No departments assigned
-                    </p>
-                )
+                <div className="px-3 pb-3 pt-1 space-y-1.5 border-t border-border/40">
+                    {depts.length > 0
+                        ? depts.map(dept => <DeptCard key={dept.id} dept={dept} />)
+                        : orphanBranches.length === 0 && (
+                            <p className="text-[11px] text-muted-foreground py-1">No departments assigned</p>
+                        )
+                    }
+                    {orphanBranches.map(b => (
+                        <div key={b.id} className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5">
+                            <div className="w-6 h-6 rounded-md bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                                <MapPin className="h-3 w-3 text-emerald-600" />
+                            </div>
+                            <p className="text-xs font-medium truncate">{b.name}</p>
+                        </div>
+                    ))}
+                </div>
             )}
         </div>
     )
 }
 
+/** Top-level card for a branch node (admin full-tree view). */
 function BranchPanel({ branch }: { branch: OrgUnitNode }) {
     const [open, setOpen] = useState(true)
-    const divisions = branch.children
-    const totalDepts = divisions.reduce((s, d) => s + d.children.length, 0)
+    const divisions = branch.children.filter(c => c.type === 'division')
+    const directDepts = branch.children.filter(c => c.type === 'department')
+    const totalDepts = divisions.reduce((s, d) => s + d.children.filter(c => c.type === 'department').length, 0) + directDepts.length
 
     return (
         <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
-            {/* Branch header */}
             <button
                 onClick={() => setOpen(o => !o)}
                 className="w-full flex flex-wrap items-center gap-4 px-6 py-5 text-left hover:bg-muted/20 transition-colors"
             >
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
-                    <MapPin className="h-5 w-5 text-emerald-600" />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-sm leading-tight">{branch.name}</p>
-                        {branch.code && (
-                            <span className="text-[10px] font-mono text-muted-foreground border rounded px-1.5 py-0.5 bg-muted/50">
-                                {branch.code}
-                            </span>
-                        )}
-                        {!branch.isActive && (
-                            <Badge variant="secondary" className="text-[10px]">Inactive</Badge>
-                        )}
-                    </div>
-                    {branch.headEmployeeName && (
-                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
-                            <UserCircle className="h-3 w-3 shrink-0" />
-                            {branch.headEmployeeName}
-                        </p>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1 bg-muted rounded-full px-2.5 py-1 font-medium">
-                            <Layers className="h-3 w-3" />
-                            {divisions.length}
-                        </span>
-                        <span className="flex items-center gap-1 bg-muted rounded-full px-2.5 py-1 font-medium">
-                            <Users2 className="h-3 w-3" />
-                            {totalDepts}
-                        </span>
-                    </div>
-                    <ChevronDown className={cn(
-                        'h-4 w-4 text-muted-foreground transition-transform duration-200',
-                        !open && '-rotate-90',
-                    )} />
-                </div>
+                <UnitHeader
+                    icon={MapPin} iconBg="bg-emerald-50 border-emerald-100" iconColor="text-emerald-600"
+                    name={branch.name} code={branch.code} headEmployeeName={branch.headEmployeeName}
+                    isActive={branch.isActive} open={open}
+                    meta={
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            {divisions.length > 0 && (
+                                <span className="flex items-center gap-1 bg-muted rounded-full px-2.5 py-1 font-medium">
+                                    <Layers className="h-3 w-3" />{divisions.length}
+                                </span>
+                            )}
+                            {totalDepts > 0 && (
+                                <span className="flex items-center gap-1 bg-muted rounded-full px-2.5 py-1 font-medium">
+                                    <Users2 className="h-3 w-3" />{totalDepts}
+                                </span>
+                            )}
+                        </div>
+                    }
+                />
             </button>
-
-            {/* Divisions */}
             {open && (
                 <div className="border-t border-border/50 bg-muted/10 px-5 py-5">
                     {divisions.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                            {divisions.map(div => (
-                                <DivisionCard key={div.id} division={div} />
-                            ))}
+                            {divisions.map(div => <DivisionCard key={div.id} division={div} />)}
+                        </div>
+                    ) : directDepts.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                            {directDepts.map(dept => <DeptCard key={dept.id} dept={dept} />)}
                         </div>
                     ) : (
                         <p className="text-sm text-muted-foreground py-2">No divisions in this branch.</p>
                     )}
                 </div>
             )}
+        </div>
+    )
+}
+
+/**
+ * Lineage view for non-admin roles.
+ * Always renders Branch → Division → Department (the canonical hierarchy).
+ * The backend returns the scoped subtree; this component just renders it cleanly.
+ */
+function LineageView({ roots }: { roots: OrgUnitNode[] }) {
+    if (roots.length === 0) return null
+
+    return (
+        <div className="space-y-3 max-w-2xl">
+            {roots.map(branch => {
+                const isBranch = branch.type === 'branch'
+                const divisions = isBranch ? branch.children.filter(c => c.type === 'division') : []
+                const directDepts = isBranch ? branch.children.filter(c => c.type === 'department') : []
+
+                return (
+                    <div key={branch.id} className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+                        {/* Branch header */}
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-border/50 bg-emerald-50/30">
+                            <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                                <MapPin className="h-4 w-4 text-emerald-600" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="font-semibold text-sm leading-tight">{branch.name}</p>
+                                {branch.headEmployeeName && (
+                                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                                        <UserCircle className="h-3 w-3 shrink-0" />{branch.headEmployeeName}
+                                    </p>
+                                )}
+                            </div>
+                            {branch.code && (
+                                <span className="text-[10px] font-mono text-muted-foreground border rounded px-1.5 py-0.5 bg-muted/50 shrink-0">
+                                    {branch.code}
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Divisions (with departments inside) */}
+                        {divisions.length > 0 && (
+                            <div className="px-4 py-4 space-y-3">
+                                {divisions.map(div => {
+                                    const depts = div.children.filter(c => c.type === 'department')
+                                    return (
+                                        <div key={div.id} className="rounded-xl border bg-background overflow-hidden">
+                                            <div className="flex items-center gap-3 px-4 py-3 border-b border-border/40 bg-violet-50/20">
+                                                <div className="w-7 h-7 rounded-md bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0">
+                                                    <Layers className="h-3.5 w-3.5 text-violet-600" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-xs font-semibold leading-tight truncate">{div.name}</p>
+                                                    {div.headEmployeeName && (
+                                                        <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                                                            <UserCircle className="h-2.5 w-2.5 shrink-0" />{div.headEmployeeName}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                {div.code && <span className="text-[9px] font-mono text-muted-foreground/50 shrink-0">{div.code}</span>}
+                                            </div>
+                                            {depts.length > 0 ? (
+                                                <div className="px-3 py-2.5 space-y-1.5">
+                                                    {depts.map(dept => (
+                                                        <div key={dept.id} className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5">
+                                                            <div className="w-6 h-6 rounded-md bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
+                                                                <Users2 className="h-3 w-3 text-sky-600" />
+                                                            </div>
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="text-xs font-medium leading-tight truncate">{dept.name}</p>
+                                                                {dept.headEmployeeName && (
+                                                                    <p className="text-[10px] text-muted-foreground truncate mt-0.5 flex items-center gap-1">
+                                                                        <UserCircle className="h-2.5 w-2.5 shrink-0" />{dept.headEmployeeName}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            {dept.code && <span className="text-[9px] font-mono text-muted-foreground/50 shrink-0">{dept.code}</span>}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="px-4 py-2.5 text-[11px] text-muted-foreground">No departments</p>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+
+                        {/* Direct departments (no division between branch and dept) */}
+                        {directDepts.length > 0 && (
+                            <div className="px-4 py-3 space-y-1.5">
+                                {directDepts.map(dept => (
+                                    <div key={dept.id} className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5">
+                                        <div className="w-6 h-6 rounded-md bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
+                                            <Users2 className="h-3 w-3 text-sky-600" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-xs font-medium leading-tight truncate">{dept.name}</p>
+                                            {dept.headEmployeeName && (
+                                                <p className="text-[10px] text-muted-foreground truncate mt-0.5 flex items-center gap-1">
+                                                    <UserCircle className="h-2.5 w-2.5 shrink-0" />{dept.headEmployeeName}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {!isBranch && (
+                            // Root was a division (no branch assigned) — render as plain division card
+                            <div className="px-4 py-3 space-y-1.5">
+                                {branch.children.filter(c => c.type === 'department').map(dept => (
+                                    <div key={dept.id} className="flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5">
+                                        <div className="w-6 h-6 rounded-md bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
+                                            <Users2 className="h-3 w-3 text-sky-600" />
+                                        </div>
+                                        <p className="text-xs font-medium truncate">{dept.name}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )
+            })}
         </div>
     )
 }
@@ -360,6 +553,7 @@ function StructureChart() {
     const role = useAuthStore(s => s.user?.role)
     const isFullAccess = role === 'hr_manager' || role === 'super_admin'
 
+    // Admin view: branches are root-level nodes; anything else is "orphan" units
     const branches = useMemo(() => roots.filter(n => n.type === 'branch'), [roots])
     const orphans = useMemo(() => roots.filter(n => n.type !== 'branch'), [roots])
 
@@ -384,14 +578,12 @@ function StructureChart() {
                         div.children.length > 0
                     ),
             }))
-            .filter(b =>
-                b.name.toLowerCase().includes(q) || b.children.length > 0
-            )
+            .filter(b => b.name.toLowerCase().includes(q) || b.children.length > 0)
     }, [branches, search])
 
     if (isLoading) return (
         <div className="space-y-4">
-            <StatsRowSkeleton />
+            {isFullAccess && <StatsRowSkeleton />}
             <div className="space-y-3 pt-2">
                 {Array.from({ length: 2 }).map((_, i) => (
                     <div key={i} className="rounded-2xl border bg-card shadow-sm overflow-hidden">
@@ -433,16 +625,21 @@ function StructureChart() {
                 <p className="text-sm text-muted-foreground mt-1 max-w-xs">
                     {isFullAccess
                         ? <>Go to <strong>Organization Settings → Org Structure</strong> to add branches, divisions, and departments.</>
-                        : 'Your profile has not been assigned to a branch yet. Contact your HR manager.'
+                        : 'Your profile has not been assigned to an org unit yet. Contact your HR manager.'
                     }
                 </p>
             </div>
         </div>
     )
 
+    // Non-admin: show the scoped lineage (Division → Department → Branch path)
+    if (!isFullAccess) {
+        return <LineageView roots={roots} />
+    }
+
     return (
         <div className="space-y-5">
-            {isFullAccess && stats && (
+            {stats && (
                 <StatsRow
                     branches={stats.branches}
                     divisions={stats.divisions}
@@ -450,7 +647,6 @@ function StructureChart() {
                 />
             )}
 
-            {/* Search */}
             <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input

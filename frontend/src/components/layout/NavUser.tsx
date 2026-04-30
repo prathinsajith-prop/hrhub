@@ -40,6 +40,7 @@ import { useMyTenants, useSwitchTenant } from "@/hooks/useTenants"
 import { useState } from "react"
 import { labelFor } from "@/lib/enums"
 import { cn } from "@/lib/utils"
+import { NewOrganizationDialog } from "@/components/shared/NewOrganizationDialog"
 
 const ORG_COLORS = [
   'bg-emerald-500', 'bg-blue-500', 'bg-violet-500',
@@ -69,6 +70,7 @@ export function NavUser({
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const [switchingId, setSwitchingId] = useState<string | null>(null)
+  const [newOrgOpen, setNewOrgOpen] = useState(false)
 
   const { data: tenants } = useMyTenants()
   const switchTenant = useSwitchTenant()
@@ -109,6 +111,7 @@ export function NavUser({
   const isBillingAdmin = currentRole === 'super_admin' || currentRole === 'hr_manager'
 
   return (
+    <>
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
@@ -215,7 +218,7 @@ export function NavUser({
                             )
                           })}
                           <DropdownMenuSeparator className="my-1" />
-                          <DropdownMenuItem onClick={() => navigate('/organizations/new')} className="gap-2 rounded-md px-2.5 py-2 cursor-pointer">
+                          <DropdownMenuItem onClick={() => setNewOrgOpen(true)} className="gap-2 rounded-md px-2.5 py-2 cursor-pointer">
                             <PlusIcon className="size-3.5 text-muted-foreground" />
                             <span className="text-sm">New organization</span>
                           </DropdownMenuItem>
@@ -298,5 +301,8 @@ export function NavUser({
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
+
+    <NewOrganizationDialog open={newOrgOpen} onOpenChange={setNewOrgOpen} />
+    </>
   )
 }

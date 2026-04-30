@@ -3,7 +3,7 @@ import { type ColumnDef } from '@tanstack/react-table'
 import { labelFor } from '@/lib/enums'
 import {
     Package, Plus, CheckCircle2, Wrench,
-    Edit2, Trash2, UserPlus, RotateCcw, History, RefreshCcw,
+    Edit2, Trash2, UserPlus, RotateCcw, History, RefreshCcw, Tags,
 } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -26,10 +26,12 @@ import {
     useAssignAsset, useReturnAsset,
     useAssetHistory, useAssetMaintenance,
     useCreateMaintenanceRecord, useUpdateMaintenanceRecord,
-    useAssetCategories,
+    useAssetCategories, useCreateAssetCategory, useDeleteAssetCategory,
     type Asset, type AssetAssignment, type AssetMaintenance,
 } from '@/hooks/useAssets'
 import { useEmployees } from '@/hooks/useEmployees'
+import { useAuthStore } from '@/store/authStore'
+import { hasPermission } from '@/lib/permissions'
 
 // ─── Status badges ────────────────────────────────────────────────────────────
 
@@ -45,6 +47,118 @@ const CONDITION_BADGE: Record<Asset['condition'], { variant: 'success' | 'info' 
     new: { variant: 'success', label: 'New' },
     good: { variant: 'info', label: 'Good' },
     damaged: { variant: 'warning', label: 'Damaged' },
+}
+
+// ─── Categories Panel ─────────────────────────────────────────────────────────
+
+function CategoriesPanel({ canManage }: { canManage: boolean }) {
+    const { data: categories, isLoading } = useAssetCategories()
+    const createCategory = useCreateAssetCategory()
+    const deleteCategory = useDeleteAssetCategory()
+
+    const [newName, setNewName] = useState('')
+    const [newDesc, setNewDesc] = useState('')
+    const [collapsed, setCollapsed] = useState(true)
+
+    async function handleAdd(e: { preventDefault(): void }) {
+        e.preventDefault()
+        if (!newName.trim()) return
+        try {
+            await createCategory.mutateAsync({ name: newName.trim(), description: newDesc.trim() || undefined })
+            toast.success('Category added')
+            setNewName('')
+            setNewDesc('')
+        } catch {
+            toast.error('Failed to add category')
+        }
+    }
+
+    async function handleDelete(id: string, name: string) {
+        try {
+            await deleteCategory.mutateAsync(id)
+            toast.success(`"${name}" deleted`)
+        } catch {
+            toast.error('Failed to delete category')
+        }
+    }
+
+    return (
+        <Card className="p-4">
+            <button
+                type="button"
+                className="flex items-center gap-2 w-full text-left"
+                onClick={() => setCollapsed(c => !c)}
+            >
+                <Tags className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Asset Categories</span>
+                <span className="ml-auto text-xs text-muted-foreground">{collapsed ? 'Show' : 'Hide'}</span>
+            </button>
+
+            {!collapsed && (
+                <div className="mt-4 space-y-4">
+                    {/* Category list */}
+                    {isLoading ? (
+                        <Skeleton className="h-8 w-full" />
+                    ) : (categories ?? []).length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No categories yet.</p>
+                    ) : (
+                        <div className="flex flex-wrap gap-2">
+                            {(categories ?? []).map(c => (
+                                <div
+                                    key={c.id}
+                                    className="flex items-center gap-1.5 border rounded-full px-3 py-1 text-xs bg-muted/40"
+                                >
+                                    <span className="font-medium">{c.name}</span>
+                                    {c.description && (
+                                        <span className="text-muted-foreground">· {c.description}</span>
+                                    )}
+                                    {canManage && (
+                                        <button
+                                            type="button"
+                                            className="ml-1 text-muted-foreground hover:text-destructive transition-colors"
+                                            title={`Delete ${c.name}`}
+                                            onClick={() => handleDelete(c.id, c.name)}
+                                            disabled={deleteCategory.isPending}
+                                        >
+                                            <Trash2 className="h-3 w-3" />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Add category form */}
+                    {canManage && (
+                        <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-2 border-t pt-3">
+                            <div className="space-y-1">
+                                <Label className="text-xs">Name</Label>
+                                <Input
+                                    className="h-8 text-sm w-40"
+                                    placeholder="e.g. Electronics"
+                                    value={newName}
+                                    onChange={e => setNewName(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs">Description (optional)</Label>
+                                <Input
+                                    className="h-8 text-sm w-52"
+                                    placeholder="Short description…"
+                                    value={newDesc}
+                                    onChange={e => setNewDesc(e.target.value)}
+                                />
+                            </div>
+                            <Button type="submit" size="sm" className="h-8" disabled={createCategory.isPending || !newName.trim()}>
+                                {createCategory.isPending ? 'Adding…' : 'Add'}
+                            </Button>
+                        </form>
+                    )}
+                </div>
+            )}
+        </Card>
+    )
 }
 
 // ─── Asset Form Dialog ────────────────────────────────────────────────────────
@@ -69,14 +183,17 @@ function AssetFormDialog({
 
     const set = (k: keyof Asset, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
-    async function handleSubmit(e: React.FormEvent) {
+    async function handleSubmit(e: { preventDefault(): void }) {
         e.preventDefault()
+        // Strip computed/server-only fields before sending
+        const { categoryName: _cn, assignedEmployeeId: _aei, assignedEmployeeName: _aen, assignedEmployeeNo: _aeno,
+                id: _id, tenantId: _tid, createdAt: _ca, updatedAt: _ua, deletedAt: _da, assetCode: _ac, ...payload } = form as Asset
         try {
             if (isEdit) {
-                await updateAsset.mutateAsync(form)
+                await updateAsset.mutateAsync(payload)
                 toast.success('Asset updated')
             } else {
-                await createAsset.mutateAsync(form)
+                await createAsset.mutateAsync(payload)
                 toast.success('Asset created')
             }
             onOpenChange(false)
@@ -93,15 +210,15 @@ function AssetFormDialog({
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
                     <DialogBody className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <Label required>Asset Code</Label>
-                            <Input
-                                value={form.assetCode ?? ''}
-                                onChange={e => set('assetCode', e.target.value)}
-                                placeholder="e.g. LAP-001"
-                                required
-                            />
-                        </div>
+                        {/* Asset Code — read-only display when editing, hidden on create */}
+                        {isEdit && asset?.assetCode && (
+                            <div className="space-y-1.5">
+                                <Label>Asset Code</Label>
+                                <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm font-mono font-medium text-muted-foreground">
+                                    {asset.assetCode}
+                                </div>
+                            </div>
+                        )}
                         <div className="space-y-1.5">
                             <Label required>Name</Label>
                             <Input
@@ -213,7 +330,7 @@ function AssignAssetDialog({
 
     const employees = employeesData?.data ?? []
 
-    async function handleSubmit(e: React.FormEvent) {
+    async function handleSubmit(e: { preventDefault(): void }) {
         e.preventDefault()
         if (!employeeId) { toast.error('Please select an employee'); return }
         try {
@@ -349,7 +466,7 @@ function MaintenanceDialog({
     const [issueDescription, setIssueDescription] = useState('')
     const [notes, setNotes] = useState('')
 
-    async function handleCreate(e: React.FormEvent) {
+    async function handleCreate(e: { preventDefault(): void }) {
         e.preventDefault()
         try {
             await createRecord.mutateAsync({ assetId: asset.id, issueDescription, notes: notes || undefined })
@@ -474,6 +591,9 @@ function HistoryDialog({ asset, open, onOpenChange }: { asset: Asset; open: bool
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function AssetsPage() {
+    const user = useAuthStore(s => s.user)
+    const canManageAssets = !!user?.role && hasPermission(user.role, 'manage_assets')
+
     const [params, setParams] = useState<{
         status?: string
         categoryId?: string
@@ -600,10 +720,12 @@ export function AssetsPage() {
                         <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
-                        <Button onClick={() => setCreateOpen(true)}>
-                            <Plus className="h-4 w-4 mr-1.5" />
-                            New Asset
-                        </Button>
+                        {canManageAssets && (
+                            <Button onClick={() => setCreateOpen(true)}>
+                                <Plus className="h-4 w-4 mr-1.5" />
+                                New Asset
+                            </Button>
+                        )}
                     </div>
                 }
             />
@@ -639,6 +761,9 @@ export function AssetsPage() {
                     loading={isLoading}
                 />
             </div>
+
+            {/* Categories Panel */}
+            <CategoriesPanel canManage={canManageAssets} />
 
             {/* Filters */}
             <Card className="p-3">
@@ -727,7 +852,9 @@ export function AssetsPage() {
             )}
 
             {/* Dialogs */}
-            <AssetFormDialog open={createOpen} onOpenChange={setCreateOpen} />
+            {canManageAssets && (
+                <AssetFormDialog open={createOpen} onOpenChange={setCreateOpen} />
+            )}
 
             {editTarget && (
                 <AssetFormDialog

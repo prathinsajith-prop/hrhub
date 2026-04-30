@@ -27,7 +27,7 @@ export async function orgUnitsRoutes(fastify: any) {
     fastify.get('/org-units/tree', { ...auth, schema: { tags: ['OrgUnits'] } }, async (request: any, reply: any) => {
         const scopedRoles = ['employee', 'dept_head', 'pro_officer']
         const data = scopedRoles.includes(request.user.role) && request.user.employeeId
-            ? await getScopedOrgUnitTree(request.user.tenantId, request.user.employeeId)
+            ? await getScopedOrgUnitTree(request.user.tenantId, request.user.employeeId, request.user.role)
             : await getOrgUnitTree(request.user.tenantId)
         return reply.send({ data })
     })
