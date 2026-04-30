@@ -23,12 +23,15 @@ const ROLE_ACCESS_MAP: Record<string, string[]> = {
     employee: ['Own leave', 'Own attendance', 'Own performance'],
 }
 
-const INVITE_ROLES = [
+const ALL_ROLES = [
+    { id: 'super_admin', label: 'Super Admin' },
     { id: 'hr_manager', label: 'HR Manager' },
     { id: 'pro_officer', label: 'PRO Officer' },
     { id: 'dept_head', label: 'Department Manager' },
     { id: 'employee', label: 'Employee' },
 ]
+
+const INVITE_ROLES = ALL_ROLES.filter(r => r.id !== 'super_admin')
 
 // ─── Employee Picker ──────────────────────────────────────────────────────────
 function EmployeePicker({
@@ -277,6 +280,15 @@ export function MembersTab() {
                     <div className="divide-y border rounded-lg overflow-hidden">
                         {(tenantUsers ?? []).map((u) => {
                             const isSelf = u.id === me?.id
+                            const isSuperAdmin = u.role === 'super_admin'
+                            const callerIsSuperAdmin = me?.role === 'super_admin'
+                            // hr_manager cannot edit super_admin users at all
+                            const canEditThisUser = canManageUsers && !isSelf && (callerIsSuperAdmin || !isSuperAdmin)
+                            // roles available depend on caller's own role
+                            const availableRoles = callerIsSuperAdmin ? ALL_ROLES : INVITE_ROLES
+                            // true pending invite = has account but never logged in; deactivated = had access, now revoked
+                            const isPendingInvite = !u.isActive && !u.lastLoginAt
+                            const isDeactivated = !u.isActive && !!u.lastLoginAt
                             return (
                                 <div
                                     key={u.id}
@@ -305,24 +317,22 @@ export function MembersTab() {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2.5 shrink-0">
-                                        {canManageUsers && !isSelf ? (
+                                        {canEditThisUser ? (
                                             <select
                                                 value={u.role}
                                                 onChange={e => handleRoleChange(u.id, e.target.value)}
                                                 className="h-7 rounded-md border border-input bg-background px-2 py-0 text-xs font-medium"
                                                 disabled={updateUser.isPending}
                                             >
-                                                <option value="super_admin">Super Admin</option>
-                                                <option value="hr_manager">HR Manager</option>
-                                                <option value="pro_officer">PRO Officer</option>
-                                                <option value="dept_head">Department Manager</option>
-                                                <option value="employee">Employee</option>
+                                                {availableRoles.map(r => (
+                                                    <option key={r.id} value={r.id}>{r.label}</option>
+                                                ))}
                                             </select>
                                         ) : (
                                             <Badge variant="outline" className="text-xs capitalize">{labelFor(u.role)}</Badge>
                                         )}
 
-                                        {canManageUsers && !isSelf && !u.isActive && (
+                                        {canEditThisUser && isPendingInvite && (
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
@@ -335,10 +345,11 @@ export function MembersTab() {
                                             </Button>
                                         )}
 
-                                        {canManageUsers && !isSelf && (
+                                        {canEditThisUser && (
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
+                                                title={isDeactivated ? 'Restore access' : u.isActive ? 'Revoke access' : 'Restore access'}
                                                 className={cn('h-7 text-xs', u.isActive ? 'text-destructive hover:text-destructive hover:bg-destructive/10' : 'text-emerald-600 hover:bg-emerald-50')}
                                                 onClick={() => setDeactivateTarget({ id: u.id, name: u.name, active: u.isActive })}
                                             >

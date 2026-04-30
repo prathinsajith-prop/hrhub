@@ -1,7 +1,7 @@
 import { getCompanySettings, updateCompanySettings, listTenantUsers, listInvitableEmployees, inviteUser, inviteUserBulk, updateUserStatus, resendInvite } from './settings.service.js'
 import { db } from '../../db/index.js'
 import { tenants, users } from '../../db/schema/index.js'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 
 const VALID_ROLES = ['employee', 'dept_head', 'pro_officer', 'hr_manager', 'super_admin'] as const
 type ValidRole = typeof VALID_ROLES[number]
@@ -106,7 +106,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const { isActive, role } = request.body as { isActive?: boolean; role?: string }
 
-        // Prevent super_admin from deactivating themselves
+        // Prevent anyone from deactivating themselves
         if (id === request.user.id && isActive === false) {
             return reply.code(400).send({ message: 'You cannot deactivate your own account' })
         }
@@ -114,6 +114,18 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         if (role) {
             const roleError = validateRoleAssignment(request.user.role, role)
             if (roleError) return reply.code(403).send({ message: roleError })
+        }
+
+        // hr_manager cannot modify super_admin users (role change or deactivation)
+        if (request.user.role !== 'super_admin') {
+            const [target] = await db
+                .select({ role: users.role })
+                .from(users)
+                .where(and(eq(users.id, id), eq(users.tenantId, request.user.tenantId)))
+                .limit(1)
+            if (target?.role === 'super_admin') {
+                return reply.code(403).send({ message: 'You do not have permission to modify a Super Admin account' })
+            }
         }
 
         const updated = await updateUserStatus(request.user.tenantId, id, { isActive, role })
