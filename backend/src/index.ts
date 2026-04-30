@@ -134,6 +134,8 @@ async function bootstrap() {
     await app.register(cors, {
         origin: env.CORS_ORIGINS === '*' ? true : env.CORS_ORIGINS.split(',').map(o => o.trim()),
         credentials: true,
+        methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma'],
     })
 
     // JWT
