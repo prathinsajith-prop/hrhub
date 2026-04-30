@@ -3,6 +3,7 @@ import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
 import { tenants } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
+import { recordActivity } from '../audit/audit.service.js'
 
 export async function performanceRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
@@ -22,6 +23,7 @@ export async function performanceRoutes(fastify: any) {
     // POST /api/v1/performance
     fastify.post('/performance', { ...adminAuth, schema: { tags: ['Performance'] } }, async (request: any, reply: any) => {
         const review = await createReview(request.user.tenantId, request.user.id, request.body as any)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'performance_review', entityId: review.id, entityName: (review as any).employeeName ?? (request.body as any).reviewPeriod, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.code(201).send({ data: review })
     })
 
@@ -30,6 +32,7 @@ export async function performanceRoutes(fastify: any) {
         const { id } = request.params as { id: string }
         const review = await updateReview(request.user.tenantId, id, request.body as any)
         if (!review) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Performance review not found' })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'performance_review', entityId: id, entityName: (review as any).employeeName ?? (review as any).reviewPeriod, action: 'update', ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.send({ data: review })
     })
 
@@ -37,6 +40,7 @@ export async function performanceRoutes(fastify: any) {
     fastify.delete('/performance/:id', { ...adminAuth, schema: { tags: ['Performance'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         await deleteReview(request.user.tenantId, id)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'performance_review', entityId: id, action: 'delete', ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.code(204).send()
     })
 

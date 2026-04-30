@@ -243,14 +243,15 @@ export async function updateOrgUnit(tenantId: string, id: string, input: Partial
 }
 
 export async function deleteOrgUnit(tenantId: string, id: string) {
-    // Detach children before deletion
+    // Detach children before soft-deleting the parent
     await db
         .update(orgUnits)
-        .set({ parentId: null })
+        .set({ parentId: null, updatedAt: new Date() })
         .where(and(eq(orgUnits.parentId, id), eq(orgUnits.tenantId, tenantId)))
 
     const [row] = await db
-        .delete(orgUnits)
+        .update(orgUnits)
+        .set({ isActive: false, updatedAt: new Date() })
         .where(and(eq(orgUnits.id, id), eq(orgUnits.tenantId, tenantId)))
         .returning()
     return row ?? null

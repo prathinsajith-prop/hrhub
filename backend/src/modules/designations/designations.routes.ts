@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { listDesignations, createDesignation, updateDesignation, deleteDesignation } from './designations.service.js'
+import { recordActivity } from '../audit/audit.service.js'
 
 const createSchema = z.object({
     name: z.string().min(1).max(120),
@@ -29,6 +30,7 @@ export async function designationsRoutes(fastify: any) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid input', validationErrors: parsed.error.issues })
         }
         const data = await createDesignation(req.user.tenantId, parsed.data)
+        recordActivity({ tenantId: req.user.tenantId, userId: req.user.id, actorName: req.user.name, actorRole: req.user.role, entityType: 'designation', entityId: data.id, entityName: data.name, action: 'create', ipAddress: req.ip, userAgent: req.headers['user-agent'] })
         return reply.code(201).send({ data })
     })
 
@@ -40,6 +42,8 @@ export async function designationsRoutes(fastify: any) {
         }
         const data = await updateDesignation(req.user.tenantId, req.params.id, parsed.data)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Designation not found' })
+        const action = parsed.data.isActive === false ? 'delete' : parsed.data.isActive === true ? 'update' : 'update'
+        recordActivity({ tenantId: req.user.tenantId, userId: req.user.id, actorName: req.user.name, actorRole: req.user.role, entityType: 'designation', entityId: data.id, entityName: data.name, action, metadata: parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : undefined, ipAddress: req.ip, userAgent: req.headers['user-agent'] })
         return reply.send({ data })
     })
 
@@ -47,6 +51,7 @@ export async function designationsRoutes(fastify: any) {
     fastify.delete('/designations/:id', { ...adminAuth, schema: { tags: ['Designations'] } }, async (req: any, reply: any) => {
         const data = await deleteDesignation(req.user.tenantId, req.params.id)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Designation not found' })
+        recordActivity({ tenantId: req.user.tenantId, userId: req.user.id, actorName: req.user.name, actorRole: req.user.role, entityType: 'designation', entityId: req.params.id, action: 'delete', ipAddress: req.ip, userAgent: req.headers['user-agent'] })
         return reply.code(204).send()
     })
 }

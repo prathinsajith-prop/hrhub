@@ -1,5 +1,6 @@
 import { listOrgUnits, getOrgUnitTree, getScopedOrgUnitTree, createOrgUnit, updateOrgUnit, deleteOrgUnit, getOrgUnitStats } from './orgUnits.service.js'
 import { z } from 'zod'
+import { recordActivity } from '../audit/audit.service.js'
 
 const createOrgUnitSchema = z.object({
     name: z.string().min(1).max(150),
@@ -48,6 +49,7 @@ export async function orgUnitsRoutes(fastify: any) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid input', validationErrors: parsed.error.issues })
         }
         const data = await createOrgUnit(request.user.tenantId, parsed.data)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'org_unit', entityId: data.id, entityName: data.name, action: 'create', metadata: { type: data.type }, ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.code(201).send({ data })
     })
 
@@ -60,6 +62,7 @@ export async function orgUnitsRoutes(fastify: any) {
         }
         const data = await updateOrgUnit(request.user.tenantId, id, parsed.data)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Org unit not found' })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'org_unit', entityId: id, entityName: data.name, action: 'update', ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.send({ data })
     })
 
@@ -68,6 +71,7 @@ export async function orgUnitsRoutes(fastify: any) {
         const { id } = request.params as { id: string }
         const data = await deleteOrgUnit(request.user.tenantId, id)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Org unit not found' })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'org_unit', entityId: id, entityName: data.name, action: 'delete', ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.code(204).send()
     })
 }

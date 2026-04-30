@@ -3,6 +3,7 @@ import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
 import { tenants } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
+import { recordActivity } from '../audit/audit.service.js'
 
 export async function exitRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
@@ -21,6 +22,7 @@ export async function exitRoutes(fastify: any) {
     // POST /api/v1/exit
     fastify.post('/exit', { ...adminAuth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
         const data = await initiateExit(request.user.tenantId, request.body as any)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: data.request.id, entityName: (data.request as any).employeeId, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.code(201).send({ data })
     })
 
@@ -43,6 +45,7 @@ export async function exitRoutes(fastify: any) {
         const { id } = request.params as { id: string }
         const data = await approveExit(request.user.tenantId, id, request.user.id)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found or not pending' })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: id, entityName: (data as any).employeeName, action: 'approve', ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.send({ data })
     })
 
@@ -52,6 +55,7 @@ export async function exitRoutes(fastify: any) {
         const { reason } = (request.body ?? {}) as { reason?: string }
         const data = await rejectExit(request.user.tenantId, id, request.user.id, reason)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found or not pending' })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: id, entityName: (data as any).employeeName, action: 'reject', metadata: reason ? { reason } : undefined, ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.send({ data })
     })
 
@@ -60,6 +64,7 @@ export async function exitRoutes(fastify: any) {
         const { id } = request.params as { id: string }
         const data = await markSettlementPaid(request.user.tenantId, id)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found or not approved' })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: id, entityName: (data as any).employeeName, action: 'update', metadata: { settlementPaid: true }, ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.send({ data })
     })
 

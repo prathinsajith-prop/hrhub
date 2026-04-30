@@ -14,7 +14,7 @@ import { formatDate, formatCurrency, cn } from '@/lib/utils'
 import { useVisas, useAdvanceVisaWithCosts, useCancelVisa, useUpdateVisa, useVisaHistory, useVisaStepLabels } from '@/hooks/useVisa'
 import { useVisaCosts, useAddVisaCost, useDeleteVisaCost, COST_CATEGORY_LABELS } from '@/hooks/useVisaCosts'
 import type { CostCategory, AddCostInput } from '@/hooks/useVisaCosts'
-import { toast } from '@/components/ui/overlays'
+import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import { PromptDialog } from '@/components/ui/prompt-dialog'
 import { AdvanceStageCostsDialog } from '@/components/visa/AdvanceStageCostsDialog'
 import type { VisaApplication, VisaStatus } from '@/types'
@@ -82,6 +82,7 @@ export function VisaDetailPage() {
     const deleteCost = useDeleteVisaCost(id ?? '')
 
     const [showAddCost, setShowAddCost] = useState(false)
+    const [deleteCostTarget, setDeleteCostTarget] = useState<string | null>(null)
     const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false)
     const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
     const [stampingRefDialogOpen, setStampingRefDialogOpen] = useState(false)
@@ -529,7 +530,7 @@ export function VisaDetailPage() {
                                         size="sm"
                                         variant="ghost"
                                         className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
-                                        onClick={() => deleteCost.mutate(cost.id, { onSuccess: () => toast.success('Removed'), onError: () => toast.error('Failed') })}
+                                        onClick={() => setDeleteCostTarget(cost.id)}
                                         disabled={deleteCost.isPending}
                                     >
                                         <Trash2 className="h-3.5 w-3.5" />
@@ -584,6 +585,22 @@ export function VisaDetailPage() {
                     </Card>
                 )}
             </div>
+
+            <ConfirmDialog
+                open={!!deleteCostTarget}
+                onOpenChange={o => !o && setDeleteCostTarget(null)}
+                title="Remove cost record?"
+                description="This cost entry will be permanently removed from this visa application."
+                confirmLabel="Remove"
+                variant="destructive"
+                onConfirm={() => {
+                    if (!deleteCostTarget) return
+                    deleteCost.mutate(deleteCostTarget, {
+                        onSuccess: () => { toast.success('Cost removed'); setDeleteCostTarget(null) },
+                        onError: () => { toast.error('Failed to remove cost'); setDeleteCostTarget(null) },
+                    })
+                }}
+            />
 
             <AdvanceStageCostsDialog
                 open={advanceDialogOpen}
