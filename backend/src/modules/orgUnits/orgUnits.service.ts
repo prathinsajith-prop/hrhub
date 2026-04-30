@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js'
-import { orgUnits, employees } from '../../db/schema/index.js'
-import { eq, and, asc, sql } from 'drizzle-orm'
+import { orgUnits, employees, tenants } from '../../db/schema/index.js'
+import { eq, and, asc, sql, count } from 'drizzle-orm'
 
 export type OrgUnitType = 'division' | 'department' | 'branch'
 
@@ -77,13 +77,142 @@ export async function getOrgUnitTree(tenantId: string): Promise<OrgUnitNode[]> {
     return roots
 }
 
+/**
+ * Strips branch nodes from a tree — used for dept_head view where branches
+ * are an employee-level concept and shouldn't clutter the manager's chart.
+ */
+function stripBranches(node: OrgUnitNode): OrgUnitNode {
+    return {
+        ...node,
+        children: node.children
+            .filter((c) => c.type !== 'branch')
+            .map(stripBranches),
+    }
+}
+
+/**
+ * Returns the org unit tree scoped by role:
+ *
+ * - dept_head  → their division with all departments inside it; branches are hidden
+ * - employee / pro_officer → their exact lineage path only (division → department → branch),
+ *   no siblings, no other branches or departments
+ *
+ * Falls back to the full tree if the employee has no org assignments.
+ */
+export async function getScopedOrgUnitTree(tenantId: string, employeeId: string, role: string): Promise<OrgUnitNode[]> {
+    const [emp] = await db
+        .select({ branchId: employees.branchId, divisionId: employees.divisionId, departmentId: employees.departmentId })
+        .from(employees)
+        .where(and(eq(employees.id, employeeId), eq(employees.tenantId, tenantId)))
+        .limit(1)
+
+    if (!emp) return []
+
+    const all = await listOrgUnits(tenantId)
+    const map = new Map<string, OrgUnitNode>()
+    for (const row of all) {
+        map.set(row.id, { ...row, children: [] } as OrgUnitNode)
+    }
+
+    // Build full tree
+    const roots: OrgUnitNode[] = []
+    for (const node of map.values()) {
+        if (node.parentId && map.has(node.parentId)) {
+            map.get(node.parentId)!.children.push(node)
+        } else {
+            roots.push(node)
+        }
+    }
+
+    // Canonical hierarchy: Branch → Division → Department
+    // Build the employee's lineage path with Branch always as the root node.
+
+    if (role === 'dept_head') {
+        // dept_head sees their branch as root; inside it their division; inside that all departments (no sibling branches/divisions)
+        if (emp.branchId && map.has(emp.branchId)) {
+            const branch: OrgUnitNode = { ...map.get(emp.branchId)!, children: [] }
+            if (emp.divisionId && map.has(emp.divisionId)) {
+                const div: OrgUnitNode = { ...map.get(emp.divisionId)!, children: [] }
+                // Include all departments in their division (full dept view for dept_head)
+                const allDepts = Array.from(map.values()).filter(n => n.type === 'department' && n.parentId === emp.divisionId)
+                div.children = allDepts
+                branch.children = [div]
+            }
+            return [branch]
+        }
+        // No branch assigned — fall back to just their division with all departments
+        if (emp.divisionId && map.has(emp.divisionId)) {
+            const div: OrgUnitNode = { ...map.get(emp.divisionId)!, children: [] }
+            div.children = Array.from(map.values()).filter(n => n.type === 'department' && n.parentId === emp.divisionId)
+            return [div]
+        }
+        return roots
+    }
+
+    // employee / pro_officer: exact lineage only — Branch → Division → Department (their own path, no siblings)
+    if (emp.branchId && map.has(emp.branchId)) {
+        const branch: OrgUnitNode = { ...map.get(emp.branchId)!, children: [] }
+        if (emp.divisionId && map.has(emp.divisionId)) {
+            const div: OrgUnitNode = { ...map.get(emp.divisionId)!, children: [] }
+            if (emp.departmentId && map.has(emp.departmentId)) {
+                div.children = [{ ...map.get(emp.departmentId)!, children: [] }]
+            }
+            branch.children = [div]
+        }
+        return [branch]
+    }
+    // No branch — show division → department path
+    if (emp.divisionId && map.has(emp.divisionId)) {
+        const div: OrgUnitNode = { ...map.get(emp.divisionId)!, children: [] }
+        if (emp.departmentId && map.has(emp.departmentId)) {
+            div.children = [{ ...map.get(emp.departmentId)!, children: [] }]
+        }
+        return [div]
+    }
+    if (emp.departmentId && map.has(emp.departmentId)) {
+        return [{ ...map.get(emp.departmentId)!, children: [] }]
+    }
+
+    return roots
+}
+
+const TYPE_ABBR: Record<OrgUnitType, string> = {
+    branch: 'BRA',
+    division: 'DIVN',
+    department: 'DEPT',
+}
+
+async function generateOrgCode(tenantId: string, type: OrgUnitType): Promise<string> {
+    const [tenant] = await db
+        .select({ companyCode: tenants.companyCode })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1)
+
+    const prefix = (tenant?.companyCode ?? 'ORG').toUpperCase()
+    const abbr = TYPE_ABBR[type]
+    const now = new Date()
+    const mm = String(now.getMonth() + 1).padStart(2, '0')
+    const yyyy = now.getFullYear()
+    const period = `${mm}${yyyy}`
+
+    const [{ total }] = await db
+        .select({ total: count() })
+        .from(orgUnits)
+        .where(eq(orgUnits.tenantId, tenantId))
+
+    const seq = String(Number(total) + 1).padStart(7, '0')
+    return `${prefix}-${abbr}-${period}-${seq}`
+}
+
 export async function createOrgUnit(tenantId: string, input: OrgUnitInput) {
+    const code = await generateOrgCode(tenantId, input.type)
     const [row] = await db
         .insert(orgUnits)
         .values({
             tenantId,
             name: input.name.trim(),
-            code: input.code?.trim() || null,
+            code,
             type: input.type,
             parentId: input.parentId || null,
             headEmployeeId: input.headEmployeeId || null,
@@ -100,7 +229,6 @@ export async function updateOrgUnit(tenantId: string, id: string, input: Partial
         .update(orgUnits)
         .set({
             ...(input.name !== undefined && { name: input.name.trim() }),
-            ...(input.code !== undefined && { code: input.code?.trim() || null }),
             ...(input.type !== undefined && { type: input.type }),
             ...(input.parentId !== undefined && { parentId: input.parentId || null }),
             ...(input.headEmployeeId !== undefined && { headEmployeeId: input.headEmployeeId || null }),
@@ -115,14 +243,15 @@ export async function updateOrgUnit(tenantId: string, id: string, input: Partial
 }
 
 export async function deleteOrgUnit(tenantId: string, id: string) {
-    // Detach children before deletion
+    // Detach children before soft-deleting the parent
     await db
         .update(orgUnits)
-        .set({ parentId: null })
+        .set({ parentId: null, updatedAt: new Date() })
         .where(and(eq(orgUnits.parentId, id), eq(orgUnits.tenantId, tenantId)))
 
     const [row] = await db
-        .delete(orgUnits)
+        .update(orgUnits)
+        .set({ isActive: false, updatedAt: new Date() })
         .where(and(eq(orgUnits.id, id), eq(orgUnits.tenantId, tenantId)))
         .returning()
     return row ?? null

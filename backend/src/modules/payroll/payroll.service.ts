@@ -6,6 +6,8 @@ import type { InferInsertModel } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { calculateGratuity as calcGratuityFromExit } from '../exit/exit.service.js'
+import { sendEmail, payslipEmail } from '../../plugins/email.js'
+import { loadEnv } from '../../config/env.js'
 
 type NewPayrollRun = InferInsertModel<typeof payrollRuns>
 
@@ -235,6 +237,47 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
     })
 
     await cacheDel(`dashboard:kpis:${tenantId}`)
+
+    // Fire-and-forget payslip notification emails (non-fatal)
+    ;(async () => {
+        try {
+            const env = loadEnv()
+            const appUrl = (env as unknown as Record<string, string>).APP_URL ?? ''
+            const [tenant] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId)).limit(1)
+            const companyName = tenant?.name ?? 'Your Company'
+
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December']
+            const month = `${monthNames[(run.month ?? 1) - 1]} ${run.year}`
+
+            const empIds = payslipValues.map(p => p.employeeId).filter(Boolean) as string[]
+            if (empIds.length === 0) return
+
+            const empEmails = await db.select({ id: employees.id, firstName: employees.firstName, email: employees.email })
+                .from(employees)
+                .where(and(eq(employees.tenantId, tenantId), inArray(employees.id, empIds)))
+            const emailMap = new Map(empEmails.map(e => [e.id, e]))
+
+            for (const slip of payslipValues) {
+                const emp = emailMap.get(slip.employeeId ?? '')
+                if (!emp?.email) continue
+                const opts = payslipEmail({
+                    employeeName: emp.firstName ?? 'Employee',
+                    month,
+                    basicSalary: String(slip.basicSalary ?? '0'),
+                    grossSalary: String(slip.grossSalary ?? '0'),
+                    deductions: String(slip.deductions ?? '0'),
+                    netSalary: String(slip.netSalary ?? '0'),
+                    companyName,
+                    appUrl,
+                })
+                sendEmail({ ...opts, to: emp.email }).catch(() => {})
+            }
+        } catch {
+            // non-fatal — email errors must not fail payroll
+        }
+    })()
+
     return true
 }
 

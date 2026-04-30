@@ -3,6 +3,7 @@ import {
     getTeamMembers, addTeamMembers, removeTeamMember, getMyTeams,
     getEligibleEmployees,
 } from './teams.service.js'
+import { recordActivity } from '../audit/audit.service.js'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function teamsRoutes(fastify: any) {
@@ -51,6 +52,7 @@ export default async function teamsRoutes(fastify: any) {
             createdById: request.user.id,
             creatorEmployeeId: request.user.employeeId ?? null,
         })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'team', entityId: team.id, entityName: team.name, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.code(201).send({ data: team })
     })
 
@@ -63,6 +65,7 @@ export default async function teamsRoutes(fastify: any) {
         }
         const { name, description } = request.body as { name?: string; description?: string }
         const updated = await updateTeam(request.user.tenantId, request.params.id, { name, description })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'team', entityId: request.params.id, entityName: name ?? team.name, action: 'update', ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return { data: updated }
     })
 
@@ -74,6 +77,7 @@ export default async function teamsRoutes(fastify: any) {
             return reply.code(403).send({ message: 'You can only delete teams you created.' })
         }
         await deleteTeam(request.user.tenantId, request.params.id)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'team', entityId: request.params.id, entityName: team.name, action: 'delete', ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.code(204).send()
     })
 
@@ -100,12 +104,14 @@ export default async function teamsRoutes(fastify: any) {
             return reply.code(400).send({ message: 'employeeIds array is required' })
         }
         const added = await addTeamMembers(request.user.tenantId, request.params.id, employeeIds)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'team', entityId: request.params.id, action: 'update', metadata: { addedMembers: employeeIds.length }, ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.code(201).send({ data: added })
     })
 
     // Remove a member
     fastify.delete('/teams/:id/members/:employeeId', { ...canManage, schema: { tags: ['Teams'] } }, async (request: any, reply: any) => {
         await removeTeamMember(request.user.tenantId, request.params.id, request.params.employeeId)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'team', entityId: request.params.id, action: 'update', metadata: { removedMember: request.params.employeeId }, ipAddress: request.ip, userAgent: request.headers['user-agent'] })
         return reply.code(204).send()
     })
 }

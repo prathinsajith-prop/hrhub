@@ -62,7 +62,7 @@ export interface Employee {
   gender?: 'male' | 'female'
   department?: string
   designation?: string
-  reportingTo?: string
+  reportingTo?: string | null
   divisionId?: string
   departmentId?: string
   branchId?: string
@@ -136,6 +136,7 @@ export interface Candidate {
   currentSalary?: number
   expectedSalary?: number
   notes?: string
+  resumeUrl?: string | null
 }
 
 // Visa

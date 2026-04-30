@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { UserCheck, Mail, ShieldOff, RefreshCw, Shield, Clock, Calendar, Send } from 'lucide-react'
+import { UserCheck, Mail, ShieldOff, ShieldCheck, RefreshCw, Shield, Clock, Calendar, Send } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle, toast } from '@/components/ui/overlays'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,7 +17,7 @@ interface Props {
     onOpenChange: (o: boolean) => void
 }
 
-type AccountState = 'no-account' | 'invite-pending' | 'active'
+type AccountState = 'no-account' | 'invite-pending' | 'deactivated' | 'active'
 
 export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
     const { data: accountData, isLoading } = useEmployeeAccount(employee.id)
@@ -45,7 +45,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
     const state: AccountState = !accountData?.hasAccount
         ? 'no-account'
         : !account?.isActive
-            ? 'invite-pending'
+            ? (account?.lastLoginAt ? 'deactivated' : 'invite-pending')
             : 'active'
 
     async function handleInvite() {
@@ -144,6 +144,33 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                 )}
                             </div>
                         </div>
+                    ) : state === 'deactivated' ? (
+                        <div className="flex gap-4">
+                            <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                                <ShieldOff className="h-5 w-5 text-destructive" />
+                            </div>
+                            <div className="min-w-0 space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                    <p className="text-sm font-semibold">Access revoked</p>
+                                    <Badge variant="destructive" className="text-[10px]">Deactivated</Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                    This employee's login access has been revoked. Restore it to allow them to sign in again.
+                                </p>
+                                {account?.email && (
+                                    <div className="flex items-center gap-2 pt-0.5">
+                                        <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                        <span className="text-xs text-muted-foreground truncate">{account.email}</span>
+                                    </div>
+                                )}
+                                {account?.lastLoginAt && (
+                                    <div className="flex items-center gap-2 pt-0.5">
+                                        <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                        <span className="text-xs text-muted-foreground">Last login: {formatDate(account.lastLoginAt)}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     ) : state === 'invite-pending' ? (
                         <div className="flex gap-4">
                             <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center shrink-0">
@@ -207,6 +234,17 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                             disabled={!emailInput.trim()}
                         >
                             Send Invite
+                        </Button>
+                    )}
+
+                    {!isLoading && state === 'deactivated' && account && (
+                        <Button
+                            size="sm"
+                            leftIcon={<ShieldCheck className="h-3.5 w-3.5" />}
+                            onClick={() => handleToggleActive(account.id, true)}
+                            loading={updateUser.isPending}
+                        >
+                            Restore Access
                         </Button>
                     )}
 

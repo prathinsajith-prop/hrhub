@@ -22,6 +22,8 @@ import type { VisaApplication, VisaStatus } from '@/types'
 import { toast } from '@/components/ui/overlays'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { NewVisaApplicationDialog } from '@/components/shared/action-dialogs'
+import { exportVisa } from '@/lib/export'
+import { ExportDropdown } from '@/components/shared/ExportDropdown'
 
 const VISA_FILTERS: FilterConfig[] = [
   { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
@@ -451,6 +453,10 @@ export function VisaPage() {
             <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
               Refresh
             </Button>
+            <ExportDropdown
+              onExportCsv={() => exportVisa({ format: 'csv' })}
+              onExportPdf={() => exportVisa({ format: 'pdf' })}
+            />
             <Button
               variant="outline"
               size="sm"

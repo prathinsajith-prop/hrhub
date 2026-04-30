@@ -1,12 +1,11 @@
 import { db } from '../../db/index.js'
 import { performanceReviews } from '../../db/schema/index.js'
-import { eq, and, desc, gte, lte } from 'drizzle-orm'
+import { eq, and, desc, gte, lte, isNull } from 'drizzle-orm'
 
 export async function getReviews(tenantId: string, params: { employeeId?: string; from?: string; to?: string; limit?: number; offset?: number }) {
     const { employeeId, from, to, limit = 20, offset = 0 } = params
-    const conditions = [eq(performanceReviews.tenantId, tenantId)]
+    const conditions = [eq(performanceReviews.tenantId, tenantId), isNull(performanceReviews.deletedAt)]
     if (employeeId) conditions.push(eq(performanceReviews.employeeId, employeeId))
-    // Calendar uses reviewDate as the event date; filter by [from, to] when provided.
     if (from) conditions.push(gte(performanceReviews.reviewDate, from))
     if (to) conditions.push(lte(performanceReviews.reviewDate, to))
 
@@ -64,6 +63,9 @@ export async function updateReview(tenantId: string, id: string, data: Partial<{
 }
 
 export async function deleteReview(tenantId: string, id: string) {
-    await db.delete(performanceReviews)
-        .where(and(eq(performanceReviews.id, id), eq(performanceReviews.tenantId, tenantId)))
+    const [row] = await db.update(performanceReviews)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(performanceReviews.id, id), eq(performanceReviews.tenantId, tenantId), isNull(performanceReviews.deletedAt)))
+        .returning({ id: performanceReviews.id })
+    return row ?? null
 }

@@ -1,4 +1,4 @@
-import { eq, and, ilike, asc, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
+import { eq, and, ilike, asc, desc, isNull, sql, getTableColumns, ne } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { recruitmentJobs, jobApplications } from '../../db/schema/index.js'
@@ -68,6 +68,25 @@ export async function listApplications(tenantId: string, params: { jobId?: strin
 }
 
 export async function createApplication(tenantId: string, jobId: string, data: Omit<NewApplication, 'tenantId' | 'jobId' | 'id'>) {
+    // Prevent duplicate application: same candidate email + same job (unless previously rejected/withdrawn)
+    if (data.email) {
+        const [duplicate] = await db.select({ id: jobApplications.id, stage: jobApplications.stage })
+            .from(jobApplications)
+            .where(and(
+                eq(jobApplications.tenantId, tenantId),
+                eq(jobApplications.jobId, jobId),
+                eq(jobApplications.email, data.email),
+                isNull(jobApplications.deletedAt),
+                ne(jobApplications.stage, 'rejected' as never),
+            ))
+            .limit(1)
+        if (duplicate) {
+            throw Object.assign(
+                new Error('This candidate has already applied for this position.'),
+                { statusCode: 409 },
+            )
+        }
+    }
     const [row] = await db.insert(jobApplications).values({ ...data, tenantId, jobId }).returning()
     return row
 }

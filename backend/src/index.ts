@@ -79,6 +79,8 @@ async function bootstrap() {
         },
         // 30-second hard limit on all requests (PERF-008)
         connectionTimeout: 30_000,
+        // Trust the X-Forwarded-For header from the reverse proxy so request.ip is accurate
+        trustProxy: true,
     })
 
     // Security
@@ -132,6 +134,8 @@ async function bootstrap() {
     await app.register(cors, {
         origin: env.CORS_ORIGINS === '*' ? true : env.CORS_ORIGINS.split(',').map(o => o.trim()),
         credentials: true,
+        methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma'],
     })
 
     // JWT

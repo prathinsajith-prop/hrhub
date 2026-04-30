@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Plus, Pencil, Check, XCircle, Trash2, Briefcase } from 'lucide-react'
+import { Plus, Pencil, Check, XCircle, Briefcase } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { toast } from '@/components/ui/overlays'
-import { useDesignations, useCreateDesignation, useUpdateDesignation, useDeleteDesignation } from '@/hooks/useDesignations'
+import { toast, ConfirmDialog } from '@/components/ui/overlays'
+import { useDesignations, useCreateDesignation, useUpdateDesignation } from '@/hooks/useDesignations'
 import type { Designation } from '@/hooks/useDesignations'
 import { Section } from './_shared'
 
@@ -13,12 +13,12 @@ export function DesignationsTab() {
     const designations = Array.isArray(items) ? items as Designation[] : []
     const create = useCreateDesignation()
     const update = useUpdateDesignation()
-    const del = useDeleteDesignation()
 
     const [newName, setNewName] = useState('')
     const [addingNew, setAddingNew] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
     const [editName, setEditName] = useState('')
+    const [toggleTarget, setToggleTarget] = useState<Designation | null>(null)
 
     function handleAdd() {
         const name = newName.trim()
@@ -38,18 +38,16 @@ export function DesignationsTab() {
         })
     }
 
-    function handleToggle(d: Designation) {
-        update.mutate({ id: d.id, data: { isActive: !d.isActive } })
-    }
-
-    function handleDelete(d: Designation) {
-        del.mutate(d.id, {
-            onSuccess: () => toast.success(`"${d.name}" removed`),
-            onError: () => toast.error('Failed to delete'),
+    function handleToggle() {
+        if (!toggleTarget) return
+        update.mutate({ id: toggleTarget.id, data: { isActive: !toggleTarget.isActive } }, {
+            onSuccess: () => { toast.success(toggleTarget.isActive ? `"${toggleTarget.name}" deactivated` : `"${toggleTarget.name}" activated`); setToggleTarget(null) },
+            onError: () => { toast.error('Failed to update'); setToggleTarget(null) },
         })
     }
 
     return (
+        <>
         <div className="space-y-6">
             <div>
                 <h3 className="text-base font-semibold">Designations</h3>
@@ -107,18 +105,9 @@ export function DesignationsTab() {
                                                     ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'
                                                     : 'border-muted-foreground/30 text-muted-foreground hover:bg-muted')}
                                                 title={d.isActive ? 'Deactivate' : 'Activate'}
-                                                onClick={() => handleToggle(d)}
+                                                onClick={() => setToggleTarget(d)}
                                             >
                                                 {d.isActive ? 'Active' : 'Inactive'}
-                                            </Button>
-                                            <Button
-                                                size="sm" variant="ghost"
-                                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                                title="Delete"
-                                                disabled={del.isPending}
-                                                onClick={() => handleDelete(d)}
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
                                             </Button>
                                         </>
                                     )}
@@ -155,5 +144,19 @@ export function DesignationsTab() {
                 </div>
             </Section>
         </div>
+
+        <ConfirmDialog
+            open={!!toggleTarget}
+            onOpenChange={o => !o && setToggleTarget(null)}
+            title={toggleTarget?.isActive ? `Deactivate "${toggleTarget?.name}"?` : `Activate "${toggleTarget?.name}"?`}
+            description={toggleTarget?.isActive
+                ? 'This designation will be hidden from employee forms. Employees currently assigned this title are not affected.'
+                : 'This designation will become available again in employee forms.'}
+            confirmLabel={toggleTarget?.isActive ? 'Deactivate' : 'Activate'}
+            variant={toggleTarget?.isActive ? 'destructive' : 'success'}
+            onConfirm={handleToggle}
+        />
+
+</>
     )
 }

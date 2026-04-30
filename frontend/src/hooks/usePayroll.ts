@@ -28,6 +28,15 @@ export function usePayrollRun(id: string | undefined) {
     })
 }
 
+export function useCreatePayrollRun() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: { month: number; year: number }) => api.post<{ data: unknown }>('/payroll', data).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll'] }),
+        onError: (err: Error) => toast.error('Failed to create payroll run', err?.message ?? 'Could not create a draft payroll run.'),
+    })
+}
+
 export function useRunPayroll() {
     const qc = useQueryClient()
     return useMutation({

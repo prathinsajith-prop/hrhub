@@ -139,10 +139,10 @@ export function LoginPage() {
   })
 
   const completeLogin = useCallback((data: { user: User; tenant: Tenant | null; accessToken: string; refreshToken: string }) => {
-    login(data.user, data.tenant as Tenant, data.accessToken, data.refreshToken)
+    login(data.user, data.tenant as Tenant, data.accessToken, data.refreshToken, rememberMe)
     toast.success(`Welcome back, ${data.user.name}!`, 'Redirecting to your dashboard.')
     navigate('/dashboard')
-  }, [login, navigate])
+  }, [login, navigate, rememberMe])
 
   const onSubmit = async (data: LoginForm) => {
     setLoading(true)

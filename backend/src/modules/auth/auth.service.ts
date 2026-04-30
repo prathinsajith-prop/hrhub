@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt'
-import { eq, and, lt } from 'drizzle-orm'
+import { eq, and, lt, sql } from 'drizzle-orm'
 import crypto from 'node:crypto'
 import { db } from '../../db/index.js'
 import { users, refreshTokens, tenants, passwordResetTokens, entities, employees } from '../../db/schema/index.js'
@@ -213,6 +213,35 @@ export async function completeMfaLoginWithBackupCode(
 /**
  * Register a new tenant + super_admin user in a single transaction.
  */
+async function generateUniqueCompanyCode(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], companyName: string): Promise<string> {
+    // Build base code from initials of each word, uppercase, max 4 chars
+    const initials = companyName
+        .trim()
+        .split(/\s+/)
+        .map(w => w[0]?.toUpperCase() ?? '')
+        .join('')
+        .replace(/[^A-Z0-9]/g, '')
+        .slice(0, 4)
+
+    const base = initials.length >= 2
+        ? initials.padEnd(4, 'X').slice(0, 4)
+        : companyName.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4).padEnd(4, 'X')
+
+    // Try base code first, then BASE + suffix (1-99) if taken
+    let candidate = base
+    let suffix = 1
+    while (true) {
+        const [existing] = await tx
+            .select({ id: tenants.id })
+            .from(tenants)
+            .where(sql`LOWER(${tenants.companyCode}) = LOWER(${candidate})`)
+            .limit(1)
+        if (!existing) return candidate
+        candidate = base.slice(0, 3) + String(suffix)
+        suffix++
+    }
+}
+
 export async function registerTenant(input: {
     firstName: string
     lastName: string
@@ -235,8 +264,11 @@ export async function registerTenant(input: {
     const passwordHash = await bcrypt.hash(input.password, 10)
 
     return db.transaction(async (tx) => {
+        const companyCode = await generateUniqueCompanyCode(tx, input.company)
+
         const [tenant] = await tx.insert(tenants).values({
             name: input.company,
+            companyCode,
             tradeLicenseNo: input.tradeLicenseNo?.trim() || `PENDING-${crypto.randomBytes(8).toString('hex')}`,
             jurisdiction: input.jurisdiction ?? 'mainland',
             industryType: input.industry ?? 'general',

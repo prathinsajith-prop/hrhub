@@ -28,6 +28,8 @@ import {
     RefreshCcw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { exportAuditLog } from '@/lib/export'
+import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 
 type ActionMeta = {
@@ -267,9 +269,15 @@ export function AuditLogPage() {
                 title={t('audit.title')}
                 description={t('audit.description')}
                 actions={
-                    <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
-                        Refresh
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                            Refresh
+                        </Button>
+                        <ExportDropdown
+                            onExportCsv={() => exportAuditLog({ format: 'csv' })}
+                            onExportPdf={() => exportAuditLog({ format: 'pdf' })}
+                        />
+                    </div>
                 }
             />
 

@@ -16,7 +16,8 @@ import { Select as UiSelect, SelectContent as UiSelectContent, SelectItem as UiS
 import { Textarea as UiTextarea } from '@/components/ui/textarea'
 import { Dialog as UiDialog, DialogContent as UiDialogContent, DialogHeader as UiDialogHeader, DialogTitle as UiDialogTitle, DialogFooter as UiDialogFooter, DialogDescription as UiDialogDescription } from '@/components/ui/dialog'
 import { ApiError } from '@/lib/api'
-import { ORG_TYPE_META, ORG_HIERARCHY, genOrgCode, type OrgUnitType } from '@/lib/org-unit-meta'
+import { ORG_TYPE_META, ORG_HIERARCHY, type OrgUnitType } from '@/lib/org-unit-meta'
+import { KpiCardCompact } from '@/components/ui/kpi-card'
 
 // ─── Org Unit Dialog ──────────────────────────────────────────────────────────
 
@@ -81,7 +82,6 @@ function OrgUnitDialog({
         if (!form.name.trim()) return toast.error('Name required', 'Please enter a name.')
         const payload: OrgUnitInput = {
             name: form.name.trim(),
-            code: genOrgCode(form.name),
             type: form.type,
             parentId: form.parentId || null,
             headEmployeeId: form.headEmployeeId || null,
@@ -351,19 +351,9 @@ export function OrgStructureTab() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {ORG_HIERARCHY.map(type => {
-                    const meta = ORG_TYPE_META[type]
-                    const Icon = meta.icon
-                    return (
-                        <div key={type} className={cn('rounded-xl border p-4 flex items-center gap-3', meta.stat)}>
-                            <Icon className="h-5 w-5 shrink-0" />
-                            <div>
-                                <p className="text-xl font-bold">{counts[type]}</p>
-                                <p className="text-xs font-medium">{meta.plural}</p>
-                            </div>
-                        </div>
-                    )
-                })}
+                <KpiCardCompact label="Branches" value={counts.branch} icon={ORG_TYPE_META.branch.icon} color="green" loading={isLoading} />
+                <KpiCardCompact label="Divisions" value={counts.division} icon={ORG_TYPE_META.division.icon} color="purple" loading={isLoading} />
+                <KpiCardCompact label="Departments" value={counts.department} icon={ORG_TYPE_META.department.icon} color="blue" loading={isLoading} />
             </div>
 
             <div className="flex gap-2 flex-wrap">

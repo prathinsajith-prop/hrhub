@@ -167,9 +167,8 @@ export const ORG_INDUSTRY_OPTIONS: SelectOption[] = [
     { value: 'Other', label: 'Other' },
 ]
 export const ORG_PLAN_OPTIONS: SelectOption[] = [
-    { value: 'free', label: 'Free' },
     { value: 'starter', label: 'Starter' },
-    { value: 'pro', label: 'Pro' },
+    { value: 'growth', label: 'Growth' },
     { value: 'enterprise', label: 'Enterprise' },
 ]
 

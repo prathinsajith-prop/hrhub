@@ -40,7 +40,6 @@ const CompliancePage = lazy(() => import('@/pages/misc/CompliancePage').then(m =
 const ReportsPage = lazy(() => import('@/pages/misc/ReportsPage').then(m => ({ default: m.ReportsPage })))
 const AssetsPage = lazy(() => import('@/pages/assets/AssetsPage').then(m => ({ default: m.AssetsPage })))
 const OrganizationsPage = lazy(() => import('@/pages/organizations/OrganizationsPage').then(m => ({ default: m.OrganizationsPage })))
-const NewOrganizationPage = lazy(() => import('@/pages/organizations/NewOrganizationPage').then(m => ({ default: m.NewOrganizationPage })))
 const TeamPage = lazy(() => import('@/pages/organizations/TeamPage').then(m => ({ default: m.TeamPage })))
 const UsersPage = lazy(() => import('@/pages/settings/UsersPage').then(m => ({ default: m.UsersPage })))
 const ConnectedAppsPage = lazy(() => import('@/pages/organizations/ConnectedAppsPage').then(m => ({ default: m.ConnectedAppsPage })))
@@ -93,7 +92,6 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/my/payslips': 'myPayslips.title',
   '/my/profile': 'myProfile.title',
   '/organizations': 'organizations.title',
-  '/organizations/new': 'organizations.new',
   '/team': 'team.title',
   '/apps': 'apps.title',
   '/leave-policies': 'leavePolicies.title',
@@ -172,7 +170,6 @@ export default function App() {
             <Route path="my/profile" element={<RoleRoute routeKey="my/profile"><MyProfilePage /></RoleRoute>} />
             <Route path="assets" element={<RoleRoute routeKey="assets"><AssetsPage /></RoleRoute>} />
             <Route path="organizations" element={<RoleRoute routeKey="organizations"><OrganizationsPage /></RoleRoute>} />
-            <Route path="organizations/new" element={<RoleRoute routeKey="organizations/new"><NewOrganizationPage /></RoleRoute>} />
             <Route path="team" element={<RoleRoute routeKey="team"><TeamPage /></RoleRoute>} />
             <Route path="users" element={<RoleRoute routeKey="users"><UsersPage /></RoleRoute>} />
             <Route path="apps" element={<RoleRoute routeKey="apps"><ConnectedAppsPage /></RoleRoute>} />

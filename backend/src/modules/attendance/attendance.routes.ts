@@ -1,4 +1,8 @@
 import { checkIn, checkOut, getAttendance, upsertAttendance, getAttendanceSummary, externalPunch } from './attendance.service.js'
+import { generateReportPdf } from '../../lib/pdf.js'
+import { db } from '../../db/index.js'
+import { tenants } from '../../db/schema/index.js'
+import { eq } from 'drizzle-orm'
 
 export async function attendanceRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
@@ -97,5 +101,50 @@ export async function attendanceRoutes(fastify: any) {
         }
         const data = await externalPunch(request.user.tenantId, { employeeId, timestamp, deviceId, deviceName, punchType, source })
         return reply.send({ data })
+    })
+
+    // GET /api/v1/attendance/export?format=csv|pdf&startDate=...&endDate=...
+    fastify.get('/attendance/export', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')],
+        schema: { tags: ['Attendance'] },
+    }, async (request: any, reply: any) => {
+        const { format = 'csv', employeeId, startDate, endDate, status } = request.query as Record<string, string>
+        if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
+        const result = await getAttendance(request.user.tenantId, { employeeId, startDate, endDate, status, limit: 10000 })
+        const rows = (result.items ?? []) as any[]
+        const dateStr = new Date().toISOString().slice(0, 10)
+
+        if (format === 'pdf') {
+            const [tenantRow] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
+            const pdf = await generateReportPdf({
+                title: 'Attendance Report',
+                companyName: tenantRow?.name ?? '',
+                subtitle: startDate && endDate ? `${startDate} – ${endDate}` : undefined,
+                columns: [
+                    { header: 'Employee', key: 'employeeName', width: 130 },
+                    { header: 'Date', key: 'date', width: 80 },
+                    { header: 'Check In', key: 'checkIn', width: 70 },
+                    { header: 'Check Out', key: 'checkOut', width: 70 },
+                    { header: 'Hours', key: 'hoursWorked', width: 55, align: 'right' },
+                    { header: 'Overtime', key: 'overtimeHours', width: 60, align: 'right' },
+                    { header: 'Status', key: 'status', width: 70 },
+                    { header: 'Notes', key: 'notes' },
+                ],
+                rows,
+            })
+            reply.header('Content-Type', 'application/pdf')
+            reply.header('Content-Disposition', `attachment; filename="attendance-report-${dateStr}.pdf"`)
+            return reply.send(pdf)
+        }
+
+        const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+        const headers = ['Employee No', 'Employee Name', 'Date', 'Check In', 'Check Out', 'Hours Worked', 'Overtime Hours', 'Status', 'Notes']
+        const lines = [headers.join(',')]
+        for (const r of rows) {
+            lines.push([r.employeeNo, r.employeeName, r.date, r.checkIn ?? '', r.checkOut ?? '', r.hoursWorked ?? '', r.overtimeHours ?? '', r.status, r.notes ?? ''].map(escape).join(','))
+        }
+        reply.header('Content-Type', 'text/csv; charset=utf-8')
+        reply.header('Content-Disposition', `attachment; filename="attendance-export-${dateStr}.csv"`)
+        return reply.send(lines.join('\r\n'))
     })
 }

@@ -127,6 +127,14 @@ export function useCreateAssetCategory() {
     })
 }
 
+export function useDeleteAssetCategory() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (id: string) => api.delete(`/assets/categories/${id}`),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['asset-categories'] }),
+    })
+}
+
 // ─── Assets ───────────────────────────────────────────────────────────────────
 
 export function useAssets(params: AssetParams = {}) {

@@ -15,10 +15,12 @@ import {
     listMaintenanceRecords,
     listCategories,
     createCategory,
+    deleteCategory,
 } from './assets.service.js'
 import { db } from '../../db/index.js'
-import { employees } from '../../db/schema/index.js'
-import { eq, and } from 'drizzle-orm'
+import { employees, tenants } from '../../db/schema/index.js'
+import { eq, and, sql } from 'drizzle-orm'
+import { generateReportPdf } from '../../lib/pdf.js'
 
 export default async function assetsRoutes(fastify: any): Promise<void> {
     // ─── Categories ──────────────────────────────────────────────────────────
@@ -50,6 +52,16 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
         return reply.code(201).send({ data: category })
+    })
+
+    fastify.delete('/categories/:id', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Assets'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const row = await deleteCategory(request.user.tenantId, id)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Category not found' })
+        return reply.code(204).send()
     })
 
     // ─── List & Create Assets ─────────────────────────────────────────────────
@@ -114,7 +126,7 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
             const [empRecord] = await db
                 .select()
                 .from(employees)
-                .where(and(eq(employees.tenantId, user.tenantId), eq(employees.id, employeeId), eq(employees.email, user.email)))
+                .where(and(eq(employees.tenantId, user.tenantId), eq(employees.id, employeeId), eq(sql`lower(${employees.email})`, user.email.toLowerCase())))
             if (!empRecord) {
                 return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Access denied' })
             }
@@ -348,5 +360,49 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
         }).catch(() => { })
 
         return reply.send({ data: updated })
+    })
+
+    // GET /api/v1/assets/export?format=csv|pdf
+    fastify.get('/export', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Assets'] },
+    }, async (request: any, reply: any) => {
+        const { format = 'csv', status, categoryId } = request.query as Record<string, string>
+        if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
+        const { data } = await listAssets(request.user.tenantId, { status, categoryId, limit: 10000, offset: 0 }) as any
+        const rows = (data ?? []) as any[]
+        const dateStr = new Date().toISOString().slice(0, 10)
+
+        if (format === 'pdf') {
+            const [tenantRow] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
+            const pdf = await generateReportPdf({
+                title: 'Asset Inventory Report',
+                companyName: tenantRow?.name ?? '',
+                columns: [
+                    { header: 'Asset Code', key: 'assetCode', width: 90 },
+                    { header: 'Name', key: 'name', width: 130 },
+                    { header: 'Category', key: 'categoryName', width: 90 },
+                    { header: 'Serial No', key: 'serialNumber', width: 100 },
+                    { header: 'Status', key: 'status', width: 70 },
+                    { header: 'Assigned To', key: 'assignedToName', width: 120 },
+                    { header: 'Purchase Value', key: 'purchaseValue', width: 90, align: 'right', currency: true },
+                    { header: 'Purchase Date', key: 'purchaseDate' },
+                ],
+                rows,
+            })
+            reply.header('Content-Type', 'application/pdf')
+            reply.header('Content-Disposition', `attachment; filename="assets-report-${dateStr}.pdf"`)
+            return reply.send(pdf)
+        }
+
+        const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+        const headers = ['Asset Code', 'Name', 'Category', 'Serial No', 'Status', 'Assigned To', 'Purchase Value (AED)', 'Purchase Date']
+        const lines = [headers.join(',')]
+        for (const r of rows) {
+            lines.push([r.assetCode, r.name, r.categoryName ?? '', r.serialNumber ?? '', r.status, r.assignedToName ?? '', r.purchaseValue ?? '', r.purchaseDate ?? ''].map(escape).join(','))
+        }
+        reply.header('Content-Type', 'text/csv; charset=utf-8')
+        reply.header('Content-Disposition', `attachment; filename="assets-export-${dateStr}.csv"`)
+        return reply.send(lines.join('\r\n'))
     })
 }

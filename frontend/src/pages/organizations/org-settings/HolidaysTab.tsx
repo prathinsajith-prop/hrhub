@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
-import { toast } from '@/components/ui/overlays'
+import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import {
     usePublicHolidays,
     useCreatePublicHoliday,
@@ -284,27 +284,15 @@ export function HolidaysTab() {
             )}
 
             {/* Delete confirmation */}
-            {deleteTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                    <div className="bg-background border rounded-xl shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
-                        <p className="font-semibold text-sm">Remove this holiday?</p>
-                        <p className="text-xs text-muted-foreground">
-                            This will remove it from the organization calendar. Employees already on leave for this day are not affected.
-                        </p>
-                        <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-                            <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleDelete(deleteTarget)}
-                                loading={deleteHoliday.isPending}
-                            >
-                                Remove
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ConfirmDialog
+                open={!!deleteTarget}
+                onOpenChange={(v) => { if (!v) setDeleteTarget(null) }}
+                title="Remove this holiday?"
+                description="This will remove it from the organization calendar. Employees already on leave for this day are not affected."
+                confirmLabel={deleteHoliday.isPending ? 'Removing…' : 'Remove'}
+                onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+                variant="destructive"
+            />
         </div>
     )
 }

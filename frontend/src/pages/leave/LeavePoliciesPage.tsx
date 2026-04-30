@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CalendarClock, Save, RotateCcw } from 'lucide-react'
+import { CalendarClock, Save, RotateCcw, LockKeyhole } from 'lucide-react'
 import { useLeavePolicies, useSaveLeavePolicies, useRolloverYear, type LeavePolicy, type AccrualRule } from '@/hooks/useLeave'
+import { useLeaveSettings } from '@/hooks/useSettings'
 import { Button } from '@/components/ui/button'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -17,9 +19,19 @@ const ACCRUAL_RULES: AccrualRule[] = ['flat', 'monthly_2_then_30', 'unlimited', 
 export function LeavePoliciesPage() {
     const { t } = useTranslation()
     const { data: policies, isLoading } = useLeavePolicies()
+    const { data: leaveSettings } = useLeaveSettings()
     const saveMut = useSaveLeavePolicies()
     const rolloverMut = useRolloverYear()
     const [draft, setDraft] = useState<LeavePolicy[]>(() => policies ?? [])
+
+    const rolloverLockDate = leaveSettings?.rolloverEnabledFrom ?? null
+    const rolloverLocked = (() => {
+        if (!rolloverLockDate) return false
+        const unlock = new Date(rolloverLockDate)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        return today < unlock
+    })()
     const [rolloverOpen, setRolloverOpen] = useState(false)
     const [prevPolicies, setPrevPolicies] = useState(policies)
     if (policies !== prevPolicies) {
@@ -63,10 +75,30 @@ export function LeavePoliciesPage() {
                 description={t('leavePolicies.description')}
                 actions={
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" onClick={() => setRolloverOpen(true)} disabled={rolloverMut.isPending}>
-                            <RotateCcw className="mr-2 h-4 w-4" />
-                            {t('leavePolicies.runRollover')}
-                        </Button>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span tabIndex={rolloverLocked ? 0 : -1}>
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => !rolloverLocked && setRolloverOpen(true)}
+                                            disabled={rolloverMut.isPending || rolloverLocked}
+                                        >
+                                            {rolloverLocked
+                                                ? <LockKeyhole className="mr-2 h-4 w-4" />
+                                                : <RotateCcw className="mr-2 h-4 w-4" />
+                                            }
+                                            {t('leavePolicies.runRollover')}
+                                        </Button>
+                                    </span>
+                                </TooltipTrigger>
+                                {rolloverLocked && (
+                                    <TooltipContent>
+                                        Year-end rollover is locked until {rolloverLockDate}. Change this in Organization Settings → Leave Settings.
+                                    </TooltipContent>
+                                )}
+                            </Tooltip>
+                        </TooltipProvider>
                         <Button onClick={onSave} disabled={!dirty || saveMut.isPending}>
                             <Save className="mr-2 h-4 w-4" />
                             {saveMut.isPending ? t('leavePolicies.saving') : t('leavePolicies.saveChanges')}

@@ -107,3 +107,15 @@ export function useUpdateJob() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['jobs'] }),
     })
 }
+
+export function useUploadResume() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: async ({ id, file }: { id: string; file: File }) => {
+            const fd = new FormData()
+            fd.append('resume', file)
+            return api.upload<{ data: { s3Key: string; downloadUrl: string } }>(`/applications/${id}/resume`, fd)
+        },
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['applications'] }),
+    })
+}

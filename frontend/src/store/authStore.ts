@@ -1,6 +1,19 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { User, Tenant } from '@/types'
+
+// Key used to decide which storage to use across page loads
+const KEEP_SIGNED_IN_KEY = 'hrhub-keep-signed-in'
+
+function getStorage() {
+  try {
+    return localStorage.getItem(KEEP_SIGNED_IN_KEY) === 'true'
+      ? localStorage
+      : sessionStorage
+  } catch {
+    return sessionStorage
+  }
+}
 
 interface AuthState {
   user: User | null
@@ -8,7 +21,8 @@ interface AuthState {
   isAuthenticated: boolean
   accessToken: string | null
   refreshToken: string | null
-  login: (user: User, tenant: Tenant, accessToken: string, refreshToken: string) => void
+  keepSignedIn: boolean
+  login: (user: User, tenant: Tenant, accessToken: string, refreshToken: string, keepSignedIn?: boolean) => void
   logout: () => void
   refreshTokens: () => Promise<boolean>
   setUser: (patch: Partial<User>) => void
@@ -22,15 +36,24 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       accessToken: null,
       refreshToken: null,
-      login: (user, tenant, accessToken, refreshToken) =>
-        set({ user, tenant, isAuthenticated: true, accessToken, refreshToken }),
+      keepSignedIn: false,
+      login: (user, tenant, accessToken, refreshToken, keepSignedIn = false) => {
+        // Persist preference so getStorage() picks the right store on next load
+        try {
+          localStorage.setItem(KEEP_SIGNED_IN_KEY, String(keepSignedIn))
+          if (!keepSignedIn) {
+            // Remove any stale localStorage auth so a new tab starts fresh
+            localStorage.removeItem('hrhub-auth')
+          }
+        } catch { /* ignore */ }
+        set({ user, tenant, isAuthenticated: true, accessToken, refreshToken, keepSignedIn })
+      },
       setUser: (patch) => {
         const current = get().user
         if (!current) return
         set({ user: { ...current, ...patch } })
       },
       logout: () => {
-        // Fire-and-forget logout call
         const token = get().accessToken
         if (token) {
           fetch('/api/v1/auth/logout', {
@@ -38,7 +61,8 @@ export const useAuthStore = create<AuthState>()(
             headers: { Authorization: `Bearer ${token}` },
           }).catch(() => { })
         }
-        set({ user: null, tenant: null, isAuthenticated: false, accessToken: null, refreshToken: null })
+        try { localStorage.removeItem(KEEP_SIGNED_IN_KEY) } catch { /* ignore */ }
+        set({ user: null, tenant: null, isAuthenticated: false, accessToken: null, refreshToken: null, keepSignedIn: false })
       },
       refreshTokens: async () => {
         const { refreshToken } = get()
@@ -67,12 +91,14 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'hrhub-auth',
+      storage: createJSONStorage(getStorage),
       partialize: (state) => ({
         user: state.user,
         tenant: state.tenant,
         isAuthenticated: state.isAuthenticated,
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
+        keepSignedIn: state.keepSignedIn,
       }),
     }
   )

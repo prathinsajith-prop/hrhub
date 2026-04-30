@@ -12,7 +12,9 @@ import { entities, employees, tenants, users } from '../../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
 import { inviteUser, resendInvite } from '../settings/settings.service.js'
 import { extname } from 'node:path'
+import { fileTypeFromBuffer } from 'file-type'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
+import { generateReportPdf } from '../../lib/pdf.js'
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
@@ -41,6 +43,56 @@ export default async function (fastify: any): Promise<void> {
         return reply.send(result)
     })
 
+    // GET /api/v1/employees/export?format=csv|pdf — CSV/PDF export for HR managers and super admins
+    fastify.get('/export', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Employees'] },
+    }, async (request: any, reply: any) => {
+        const { department, status, format = 'csv' } = request.query as { department?: string; status?: string; format?: string }
+        if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
+        const result = await listEmployees({
+            tenantId: request.user.tenantId,
+            department,
+            status,
+            limit: 10000,
+            offset: 0,
+        })
+        const rows = result.data as Record<string, unknown>[]
+        const date = new Date().toISOString().slice(0, 10)
+
+        if (format === 'pdf') {
+            const [tenantRow] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
+            const pdf = await generateReportPdf({
+                title: 'Employee Directory',
+                companyName: tenantRow?.name ?? '',
+                columns: [
+                    { header: 'Emp No', key: 'employeeNo', width: 70 },
+                    { header: 'First Name', key: 'firstName', width: 90 },
+                    { header: 'Last Name', key: 'lastName', width: 90 },
+                    { header: 'Department', key: 'department', width: 100 },
+                    { header: 'Designation', key: 'designation', width: 110 },
+                    { header: 'Status', key: 'status', width: 70 },
+                    { header: 'Join Date', key: 'joinDate', width: 75 },
+                    { header: 'Nationality', key: 'nationality', width: 80 },
+                    { header: 'Email', key: 'email' },
+                ],
+                rows,
+            })
+            reply.header('Content-Type', 'application/pdf')
+            reply.header('Content-Disposition', `attachment; filename="employees-report-${date}.pdf"`)
+            return reply.send(pdf)
+        }
+
+        const csvHeaders = ['employeeNo', 'firstName', 'lastName', 'email', 'phone', 'department', 'designation', 'status', 'joinDate', 'nationality', 'basicSalary', 'contractType']
+        const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+        const lines = [csvHeaders.join(','), ...rows.map(r => csvHeaders.map(h => escape(r[h])).join(','))]
+        const csv = lines.join('\r\n')
+
+        reply.header('Content-Type', 'text/csv; charset=utf-8')
+        reply.header('Content-Disposition', `attachment; filename="employees-${date}.csv"`)
+        return reply.send(csv)
+    })
+
     // GET /api/v1/employees/me — current user's own employee record
     fastify.get('/me', { ...auth, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
         const { employeeId, tenantId } = request.user
@@ -67,8 +119,10 @@ export default async function (fastify: any): Promise<void> {
 
     // GET /api/v1/employees/org-chart
     fastify.get('/org-chart', { ...auth, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
-        // dept_head: scope the chart to their own reporting subtree only
-        const rootEmployeeId = request.user.role === 'dept_head'
+        // dept_head + employee: scope to own subtree + ancestor chain only
+        // hr_manager / pro_officer / super_admin: full chart
+        const scopedRoles = ['dept_head', 'employee', 'pro_officer']
+        const rootEmployeeId = scopedRoles.includes(request.user.role)
             ? (request.user.employeeId ?? undefined)
             : undefined
         return reply.send(await getOrgChart(request.user.tenantId, rootEmployeeId))
@@ -237,8 +291,18 @@ export default async function (fastify: any): Promise<void> {
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
         const body = validate(updateEmployeeSchema, request.body)
+        const before = await getEmployee(request.user.tenantId, id)
         const updated = await updateEmployee(request.user.tenantId, id, body as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+
+        const TRACKED = ['firstName', 'lastName', 'email', 'phone', 'department', 'designation', 'status', 'basicSalary', 'contractType', 'nationality', 'jobTitle']
+        const changes: Record<string, { from: unknown; to: unknown }> = {}
+        for (const key of TRACKED) {
+            const prev = (before as any)?.[key]
+            const next = (updated as any)?.[key]
+            if (prev !== next) changes[key] = { from: prev ?? null, to: next ?? null }
+        }
+
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,
@@ -248,6 +312,7 @@ export default async function (fastify: any): Promise<void> {
             entityId: updated.id,
             entityName: `${updated.firstName} ${updated.lastName}`,
             action: 'update',
+            changes: Object.keys(changes).length > 0 ? changes : undefined,
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
@@ -334,24 +399,38 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Employees'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
+
+        // Only HR managers / super admins can update any employee's avatar.
+        // Regular employees can only update their own.
+        const isElevated = ['hr_manager', 'super_admin'].includes(request.user.role)
+        if (!isElevated && request.user.employeeId !== id) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only update your own avatar.' })
+        }
+
         const part = await request.file()
         if (!part) return reply.code(400).send({ message: 'No file provided' })
-
-        const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-        if (!allowed.includes(part.mimetype)) {
-            return reply.code(415).send({ message: 'Only JPEG, PNG, WEBP, or GIF images are allowed' })
-        }
 
         const chunks: Buffer[] = []
         for await (const chunk of part.file) chunks.push(chunk as Buffer)
         const buffer = Buffer.concat(chunks)
 
-        const ext = extname(part.filename) || '.jpg'
-        const safeName = `avatar${ext}`
+        // Validate via magic bytes — never trust the client-supplied Content-Type
+        const allowedMime: Record<string, string> = {
+            'image/jpeg': '.jpg',
+            'image/png': '.png',
+            'image/webp': '.webp',
+            'image/gif': '.gif',
+        }
+        const detected = await fileTypeFromBuffer(buffer)
+        if (!detected || !allowedMime[detected.mime]) {
+            return reply.code(415).send({ message: 'Only JPEG, PNG, WEBP, or GIF images are allowed' })
+        }
+
+        const safeName = `avatar${allowedMime[detected.mime]}`
         const s3Key = buildS3Key(request.user.tenantId, `employees/${id}/avatar`, safeName)
 
         try {
-            await uploadObject(s3Key, buffer, part.mimetype)
+            await uploadObject(s3Key, buffer, detected.mime)
         } catch (err) {
             request.log.error({ err }, 'S3 avatar upload failed')
             return reply.code(503).send({ message: 'File storage service is unavailable. Please try again later.' })

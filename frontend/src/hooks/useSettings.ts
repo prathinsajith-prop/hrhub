@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 export interface CompanySettings {
     id: string
     name: string
+    companyCode: string | null
     tradeLicenseNo: string
     jurisdiction: string
     industryType: string
@@ -246,6 +247,28 @@ export function useUpdateIpAllowlist() {
         mutationFn: (ipAllowlist: string[]) =>
             api.put<{ data: { ipAllowlist: string[] } }>('/settings/ip-allowlist', { ipAllowlist }).then((r) => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'ip-allowlist'] }),
+    })
+}
+
+// ── Leave Settings hooks ──────────────────────────────────────────────────────
+export interface LeaveSettings {
+    rolloverEnabledFrom: string | null
+}
+
+export function useLeaveSettings() {
+    return useQuery({
+        queryKey: ['settings', 'leave'],
+        queryFn: () => api.get<{ data: LeaveSettings }>('/settings/leave').then((r) => r.data),
+        staleTime: 5 * 60 * 1000,
+    })
+}
+
+export function useUpdateLeaveSettings() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: Partial<LeaveSettings>) =>
+            api.patch<{ data: LeaveSettings }>('/settings/leave', data).then((r) => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'leave'] }),
     })
 }
 

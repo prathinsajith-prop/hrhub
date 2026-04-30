@@ -29,7 +29,7 @@ export function ProfileTab() {
     const [saved, setSaved] = useState(false)
 
     useEffect(() => {
-        setForm({ name: company?.name ?? '', tradeLicenseNo: company?.tradeLicenseNo ?? '', jurisdiction: company?.jurisdiction ?? '', industryType: company?.industryType ?? '' })
+        setForm({ name: company?.name ?? '', companyCode: company?.companyCode ?? '', tradeLicenseNo: company?.tradeLicenseNo ?? '', jurisdiction: company?.jurisdiction ?? '', industryType: company?.industryType ?? '' })
     }, [company])
 
     useEffect(() => {
@@ -66,9 +66,14 @@ export function ProfileTab() {
                             {company?.industryType ? ` · ${labelFor(company.industryType)}` : ''}
                         </p>
                     </div>
-                    <Badge variant="secondary" className="capitalize shrink-0">
-                        {company?.subscriptionPlan ?? 'free'} plan
-                    </Badge>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                        <Badge variant="secondary" className="capitalize">
+                            {company?.subscriptionPlan ?? 'free'} plan
+                        </Badge>
+                        {company?.companyCode && (
+                            <span className="text-xs font-mono text-muted-foreground tracking-widest">{company.companyCode}</span>
+                        )}
+                    </div>
                 </div>
                 <div className="pt-5 space-y-4">
                     <div>
@@ -79,6 +84,18 @@ export function ProfileTab() {
                         <div className="space-y-1.5">
                             <Label htmlFor="org_name">Company Name</Label>
                             <Input id="org_name" value={form.name ?? ''} onChange={e => set('name', e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="company_code">Company Code</Label>
+                            <Input
+                                id="company_code"
+                                value={form.companyCode ?? ''}
+                                onChange={e => set('companyCode', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))}
+                                placeholder="e.g. PROP"
+                                maxLength={4}
+                                className="font-mono tracking-widest"
+                            />
+                            <p className="text-[11px] text-muted-foreground">2–4 chars, uppercase. Used as prefix in employee IDs (e.g. PROP-001-04-2026).</p>
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="trade_license">Trade License No.</Label>

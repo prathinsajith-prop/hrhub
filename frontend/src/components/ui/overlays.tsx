@@ -182,7 +182,13 @@ interface ConfirmDialogProps {
   confirmLabel?: string
   cancelLabel?: string
   onConfirm: () => void
-  variant?: 'destructive' | 'warning'
+  variant?: 'destructive' | 'warning' | 'success'
+}
+
+const CONFIRM_DIALOG_STYLES = {
+  destructive: { bg: 'bg-red-100',     iconClass: 'text-red-600',     Icon: AlertTriangle,  btn: 'destructive' as const },
+  warning:     { bg: 'bg-amber-100',   iconClass: 'text-amber-600',   Icon: AlertTriangle,  btn: 'warning' as const },
+  success:     { bg: 'bg-emerald-100', iconClass: 'text-emerald-600', Icon: CheckCircle2,   btn: 'success' as const },
 }
 
 function ConfirmDialog({
@@ -190,13 +196,14 @@ function ConfirmDialog({
   confirmLabel = 'Confirm', cancelLabel = 'Cancel',
   onConfirm, variant = 'destructive'
 }: ConfirmDialogProps) {
+  const { bg, iconClass, Icon, btn } = CONFIRM_DIALOG_STYLES[variant]
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <div className="flex items-center gap-3">
-            <div className={cn('flex h-10 w-10 items-center justify-center rounded-full', variant === 'destructive' ? 'bg-red-100' : 'bg-amber-100')}>
-              <AlertTriangle className={cn('h-5 w-5', variant === 'destructive' ? 'text-red-600' : 'text-amber-600')} />
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-full', bg)}>
+              <Icon className={cn('h-5 w-5', iconClass)} />
             </div>
             <AlertDialogTitle>{title}</AlertDialogTitle>
           </div>
@@ -204,7 +211,7 @@ function ConfirmDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} className={cn(buttonVariants({ variant: variant === 'destructive' ? 'destructive' : 'warning' }))}>
+          <AlertDialogAction onClick={onConfirm} className={cn(buttonVariants({ variant: btn }))}>
             {confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
