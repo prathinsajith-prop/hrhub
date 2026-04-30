@@ -1,8 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
-import { Plus, MoreHorizontal, Copy, RefreshCw, AlertTriangle, RefreshCcw } from 'lucide-react'
+import {
+    Plus, Copy, RefreshCcw, AlertTriangle, RefreshCw,
+    Plug2, Clock, Activity, ChevronRight, MoreHorizontal,
+    ShieldCheck, Wifi, WifiOff,
+} from 'lucide-react'
 import {
     useConnectedApps,
     useCreateApp,
@@ -17,16 +20,170 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
-import { DataTable } from '@/components/ui/data-table'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { Textarea } from '@/components/ui/textarea'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { ScopeMatrix } from '@/components/apps/ScopeMatrix'
 import { formatDate } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const APP_COLORS = [
+    'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
+    'bg-amber-500', 'bg-rose-500', 'bg-cyan-500',
+]
+function appColor(name: string) {
+    let h = 0
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff
+    return APP_COLORS[h % APP_COLORS.length]
+}
+
+function truncateKey(key: string) {
+    return key.length > 22 ? `${key.slice(0, 10)}…${key.slice(-8)}` : key
+}
+
+// ─── App Row ──────────────────────────────────────────────────────────────────
+
+function AppRow({
+    app,
+    canManage,
+    onToggle,
+    onRegen,
+    onDelete,
+    onClick,
+}: {
+    app: ConnectedApp
+    canManage: boolean
+    onToggle: (app: ConnectedApp) => void
+    onRegen: (app: ConnectedApp) => void
+    onDelete: (app: ConnectedApp) => void
+    onClick: (app: ConnectedApp) => void
+}) {
+    const { t } = useTranslation()
+    const isActive = app.status === 'active'
+    const visibleScopes = app.scopes.slice(0, 3)
+    const extraScopes = app.scopes.length - visibleScopes.length
+
+    return (
+        <div
+            onClick={() => onClick(app)}
+            className="group flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-muted/40 transition-colors border-b border-border last:border-0"
+        >
+            {/* Icon */}
+            <div className={cn(
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white text-sm font-bold shadow-sm',
+                appColor(app.name),
+            )}>
+                {app.name[0].toUpperCase()}
+            </div>
+
+            {/* Name + key */}
+            <div className="min-w-0 w-48 shrink-0">
+                <p className="text-sm font-semibold leading-tight truncate">{app.name}</p>
+                {app.description
+                    ? <p className="text-xs text-muted-foreground truncate mt-0.5">{app.description}</p>
+                    : null}
+                <button
+                    type="button"
+                    className="mt-1 flex items-center gap-1 group/key"
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        navigator.clipboard.writeText(app.appKey)
+                        toast.success(t('apps.copied'))
+                    }}
+                    title={app.appKey}
+                >
+                    <code className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded group-hover/key:bg-primary/10 group-hover/key:text-primary transition-colors">
+                        {truncateKey(app.appKey)}
+                    </code>
+                    <Copy className="h-2.5 w-2.5 text-muted-foreground/50 group-hover/key:text-primary transition-colors shrink-0" />
+                </button>
+            </div>
+
+            {/* Scopes */}
+            <div className="flex-1 min-w-0 flex flex-wrap gap-1 items-center">
+                {app.scopes.length === 0
+                    ? <span className="text-xs text-muted-foreground/60 italic">No scopes</span>
+                    : visibleScopes.map((s) => (
+                        <Badge key={s} variant="secondary" className="text-[10px] font-mono px-1.5 py-0 h-5 rounded-md bg-muted border-0">
+                            {s}
+                        </Badge>
+                    ))}
+                {extraScopes > 0 && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 rounded-md">
+                        +{extraScopes}
+                    </Badge>
+                )}
+            </div>
+
+            {/* Stats */}
+            <div className="hidden lg:flex items-center gap-5 shrink-0 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5 w-28">
+                    <Clock className="size-3 shrink-0" />
+                    <span>{app.lastUsedAt ? formatDate(app.lastUsedAt) : t('apps.never')}</span>
+                </div>
+                <div className="flex items-center gap-1.5 w-20">
+                    <Activity className="size-3 shrink-0" />
+                    <span className="tabular-nums">{(app.requestCount ?? 0).toLocaleString()} req</span>
+                </div>
+            </div>
+
+            {/* Status */}
+            <div className="shrink-0 flex items-center gap-1.5">
+                {isActive
+                    ? <Wifi className="size-3.5 text-emerald-500" />
+                    : <WifiOff className="size-3.5 text-muted-foreground/50" />}
+                <span className={cn('text-xs font-medium', isActive ? 'text-emerald-600' : 'text-muted-foreground')}>
+                    {isActive ? 'Active' : 'Revoked'}
+                </span>
+            </div>
+
+            {/* Actions */}
+            {canManage ? (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRegen(app) }} className="gap-2">
+                            <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                            {t('apps.regenerateSecret')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onToggle(app) }} className="gap-2">
+                            {isActive
+                                ? <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
+                                : <Wifi className="h-3.5 w-3.5 text-muted-foreground" />}
+                            {isActive ? t('apps.revoke') : t('apps.reactivate')}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            onClick={(e) => { e.stopPropagation(); onDelete(app) }}
+                            className="gap-2 text-destructive focus:text-destructive focus:bg-destructive/10"
+                        >
+                            {t('apps.delete')}
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0 group-hover:text-muted-foreground transition-colors" />
+            )}
+        </div>
+    )
+}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -107,111 +264,6 @@ export function ConnectedAppsPage() {
         }
     }
 
-    const columns = useMemo<ColumnDef<ConnectedApp>[]>(() => [
-        {
-            accessorKey: 'name',
-            header: t('apps.name'),
-            cell: ({ row }) => (
-                <div>
-                    <div className="text-sm font-medium">{row.original.name}</div>
-                    {row.original.description && (
-                        <div className="text-xs text-muted-foreground line-clamp-1">{row.original.description}</div>
-                    )}
-                </div>
-            ),
-        },
-        {
-            accessorKey: 'appKey',
-            header: t('apps.appKey'),
-            cell: ({ row }) => (
-                <div className="flex items-center gap-1.5">
-                    <code className="text-[11px] bg-muted rounded px-1.5 py-0.5">{row.original.appKey}</code>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        aria-label="Copy app key"
-                        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(row.original.appKey); toast.success(t('apps.copied')) }}
-                    >
-                        <Copy className="h-3 w-3" />
-                    </Button>
-                </div>
-            ),
-            size: 280,
-        },
-        {
-            accessorKey: 'scopes',
-            header: t('apps.scopes'),
-            cell: ({ row }) => (
-                <div className="flex flex-wrap gap-1">
-                    {row.original.scopes.length === 0
-                        ? <span className="text-xs text-muted-foreground">—</span>
-                        : row.original.scopes.slice(0, 3).map((s) => (
-                            <Badge key={s} variant="outline" className="text-[10px]">{s}</Badge>
-                        ))}
-                    {row.original.scopes.length > 3 && (
-                        <Badge variant="outline" className="text-[10px]">+{row.original.scopes.length - 3}</Badge>
-                    )}
-                </div>
-            ),
-        },
-        {
-            accessorKey: 'status',
-            header: t('apps.status'),
-            cell: ({ row }) => (
-                <Badge variant={row.original.status === 'active' ? 'default' : 'destructive'} className="text-[10px] capitalize">
-                    {t(`team.statuses.${row.original.status}`, { defaultValue: row.original.status })}
-                </Badge>
-            ),
-            size: 90,
-        },
-        {
-            accessorKey: 'lastUsedAt',
-            header: t('apps.lastUsed'),
-            cell: ({ getValue }) => {
-                const v = getValue() as string | null
-                return <span className="text-xs text-muted-foreground">{v ? formatDate(v) : t('apps.never')}</span>
-            },
-            size: 110,
-        },
-        {
-            accessorKey: 'requestCount',
-            header: t('apps.requests'),
-            cell: ({ getValue }) => <span className="text-xs tabular-nums">{(getValue() as number).toLocaleString()}</span>,
-            size: 90,
-        },
-        {
-            id: 'actions',
-            header: '',
-            cell: ({ row }) => {
-                if (!canManage) return null
-                const app = row.original
-                return (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}>
-                                <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setRegenTarget(app)}>
-                                <RefreshCw className="h-3.5 w-3.5 mr-2" /> {t('apps.regenerateSecret')}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onToggleStatus(app)}>
-                                {app.status === 'active' ? t('apps.revoke') : t('apps.reactivate')}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(app)}>
-                                {t('apps.delete')}
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                )
-            },
-            size: 44,
-        },
-    ], [canManage, t])
-
     return (
         <PageWrapper>
             <PageHeader
@@ -219,7 +271,13 @@ export function ConnectedAppsPage() {
                 description={t('apps.description')}
                 actions={
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />}
+                            onClick={() => refetch()}
+                            disabled={isFetching}
+                        >
                             Refresh
                         </Button>
                         {canManage && (
@@ -231,15 +289,97 @@ export function ConnectedAppsPage() {
                 }
             />
 
-            <Card>
-                <CardContent className="p-0 pt-0">
-                    <DataTable
-                        columns={columns}
-                        data={apps ?? []}
-                        isLoading={isLoading}
-                        emptyMessage={t('common.noData')}
-                        onRowClick={(row: ConnectedApp) => navigate(`/apps/${row.id}`)}
-                    />
+            {/* KPI cards — same design as dashboard */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <KpiCardCompact
+                    label="Total Apps"
+                    value={isLoading ? undefined : (apps?.length ?? 0)}
+                    icon={Plug2}
+                    color="blue"
+                    loading={isLoading}
+                />
+                <KpiCardCompact
+                    label="Active"
+                    value={isLoading ? undefined : (apps?.filter(a => a.status === 'active').length ?? 0)}
+                    icon={ShieldCheck}
+                    color="green"
+                    loading={isLoading}
+                />
+                <KpiCardCompact
+                    label="Total Requests"
+                    value={isLoading ? undefined : (apps?.reduce((s, a) => s + (a.requestCount ?? 0), 0).toLocaleString() ?? '0')}
+                    icon={Activity}
+                    color="cyan"
+                    loading={isLoading}
+                />
+            </div>
+
+            {/* App list */}
+            <Card className="overflow-hidden border-border/60 shadow-sm p-0">
+                <CardHeader className="px-5 py-3 border-b border-border bg-muted/30">
+                    <CardTitle className="text-sm font-semibold">Apps</CardTitle>
+                </CardHeader>
+                {/* Column labels */}
+                <div className="hidden md:flex items-center gap-4 px-5 py-2 border-b border-border/60 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60 bg-muted/20">
+                    <div className="w-10 shrink-0" />
+                    <div className="w-48 shrink-0">App</div>
+                    <div className="flex-1">Scopes</div>
+                    <div className="hidden lg:flex items-center gap-5 shrink-0">
+                        <span className="w-28">Last Used</span>
+                        <span className="w-20">Requests</span>
+                    </div>
+                    <div className="shrink-0 w-20">Status</div>
+                    {canManage && <div className="w-7 shrink-0" />}
+                </div>
+
+                <CardContent className="p-0">
+                    {isLoading ? (
+                        <div className="divide-y divide-border">
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="flex items-center gap-4 px-5 py-4">
+                                    <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+                                    <div className="flex-1 space-y-1.5">
+                                        <Skeleton className="h-3.5 w-32" />
+                                        <Skeleton className="h-3 w-48" />
+                                    </div>
+                                    <div className="flex gap-1.5">
+                                        <Skeleton className="h-5 w-20 rounded-md" />
+                                        <Skeleton className="h-5 w-20 rounded-md" />
+                                    </div>
+                                    <Skeleton className="h-5 w-14 rounded-full" />
+                                </div>
+                            ))}
+                        </div>
+                    ) : !apps || apps.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mb-4">
+                                <Plug2 className="size-7 text-muted-foreground/40" />
+                            </div>
+                            <p className="text-sm font-semibold text-foreground">{t('common.noData')}</p>
+                            <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                                Create an API app to connect external systems like ERP, payroll, or analytics tools.
+                            </p>
+                            {canManage && (
+                                <Button size="sm" className="mt-4" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={openCreate}>
+                                    {t('apps.newApp')}
+                                </Button>
+                            )}
+                        </div>
+                    ) : (
+                        <div>
+                            {apps.map((app) => (
+                                <AppRow
+                                    key={app.id}
+                                    app={app}
+                                    canManage={canManage}
+                                    onToggle={onToggleStatus}
+                                    onRegen={setRegenTarget}
+                                    onDelete={setDeleteTarget}
+                                    onClick={(a) => navigate(`/apps/${a.id}`)}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
@@ -297,9 +437,7 @@ export function ConnectedAppsPage() {
                         <DialogTitle className="flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4 text-amber-500" /> {t('apps.secretRevealedTitle')}
                         </DialogTitle>
-                        <DialogDescription>
-                            {t('apps.secretRevealedDesc')}
-                        </DialogDescription>
+                        <DialogDescription>{t('apps.secretRevealedDesc')}</DialogDescription>
                     </DialogHeader>
                     {revealedSecret && (
                         <div className="space-y-3">

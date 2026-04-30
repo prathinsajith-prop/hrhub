@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import { useApplications, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee } from '@/hooks/useRecruitment'
 import { toast } from '@/components/ui/overlays'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
+import { CopyableEmail, CopyablePhone } from '@/components/shared'
 import type { Candidate, ApplicationStage } from '@/types'
 
 const stageLabel: Record<ApplicationStage, string> = {
@@ -263,12 +264,12 @@ export function CandidateProfilePage() {
                         <dl className="space-y-2 text-sm">
                             <div className="flex items-center gap-2">
                                 <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span className="truncate text-muted-foreground">{candidate.email}</span>
+                                <CopyableEmail email={candidate.email} className="text-sm text-muted-foreground truncate" />
                             </div>
                             {candidate.phone && (
                                 <div className="flex items-center gap-2">
                                     <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                    <span className="text-muted-foreground">{candidate.phone}</span>
+                                    <CopyablePhone phone={candidate.phone} className="text-sm text-muted-foreground" />
                                 </div>
                             )}
                             {candidate.nationality && (

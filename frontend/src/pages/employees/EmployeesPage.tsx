@@ -41,6 +41,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { FlagImg, resolveCountryIso } from '@/components/shared/PhoneInput'
+import { CopyableEmail } from '@/components/shared'
 import type { FilterConfig } from '@/lib/filters'
 import type { Employee } from '@/types'
 
@@ -291,15 +292,10 @@ export function EmployeesPage() {
         const email = e.workEmail || e.email || e.personalEmail || null
         if (!email) return <span className="text-xs text-muted-foreground">—</span>
         return (
-          <a
-            href={`mailto:${email}`}
-            className="flex items-center gap-1.5 text-xs text-primary hover:underline truncate max-w-[180px]"
-            onClick={ev => ev.stopPropagation()}
-            title={email}
-          >
+          <div className="flex items-center gap-1 max-w-[180px]" onClick={ev => ev.stopPropagation()}>
             <Mail className="h-3 w-3 shrink-0 text-muted-foreground" />
-            <span className="truncate">{email}</span>
-          </a>
+            <CopyableEmail email={email} className="text-xs text-muted-foreground truncate" />
+          </div>
         )
       },
       size: 190,

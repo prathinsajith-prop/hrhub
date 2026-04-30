@@ -8,6 +8,20 @@
       "when": 1745539200000,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1746057600000,
+      "tag": "0001_company_code",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1746144000000,
+      "tag": "0002_leave_settings",
+      "breakpoints": true
     }
   ]
 }

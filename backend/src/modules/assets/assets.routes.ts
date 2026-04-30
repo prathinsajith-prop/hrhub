@@ -15,6 +15,7 @@ import {
     listMaintenanceRecords,
     listCategories,
     createCategory,
+    deleteCategory,
 } from './assets.service.js'
 import { db } from '../../db/index.js'
 import { employees } from '../../db/schema/index.js'
@@ -50,6 +51,16 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
         return reply.code(201).send({ data: category })
+    })
+
+    fastify.delete('/categories/:id', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Assets'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const row = await deleteCategory(request.user.tenantId, id)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Category not found' })
+        return reply.code(204).send()
     })
 
     // ─── List & Create Assets ─────────────────────────────────────────────────

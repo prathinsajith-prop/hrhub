@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
@@ -11,10 +12,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { toast } from '@/components/ui/overlays'
+import { NewOrganizationDialog } from '@/components/shared/NewOrganizationDialog'
 
 export function OrganizationsPage() {
     const { t } = useTranslation()
     const navigate = useNavigate()
+    const [newOrgOpen, setNewOrgOpen] = useState(false)
     const { data: tenants, isLoading, isFetching, refetch } = useMyTenants()
     const currentTenantId = useAuthStore(s => s.tenant?.id)
     const switchMut = useSwitchTenant()
@@ -31,6 +34,7 @@ export function OrganizationsPage() {
     }
 
     return (
+        <>
         <PageWrapper>
             <PageHeader
                 title={t('organizations.title')}
@@ -40,7 +44,7 @@ export function OrganizationsPage() {
                         <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
-                        <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => navigate('/organizations/new')}>
+                        <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setNewOrgOpen(true)}>
                             {t('organizations.new')}
                         </Button>
                     </div>
@@ -113,5 +117,8 @@ export function OrganizationsPage() {
                 </CardContent>
             </Card>
         </PageWrapper>
+
+        <NewOrganizationDialog open={newOrgOpen} onOpenChange={setNewOrgOpen} onSuccess={() => refetch()} />
+        </>
     )
 }

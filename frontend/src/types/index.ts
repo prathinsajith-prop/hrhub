@@ -62,7 +62,7 @@ export interface Employee {
   gender?: 'male' | 'female'
   department?: string
   designation?: string
-  reportingTo?: string
+  reportingTo?: string | null
   divisionId?: string
   departmentId?: string
   branchId?: string

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Zap, CreditCard, Building, Users2, AlertCircle, CheckCircle, Send, RefreshCw, ExternalLink, XCircle, Plus, Minus } from 'lucide-react'
+import { Zap, CreditCard, Building, Users2, AlertCircle, CheckCircle, Send, RefreshCw, ExternalLink, Plus, Minus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -259,19 +260,13 @@ export function SubscriptionTab() {
             </p>
 
             {/* ── Upgrade / Update capacity modal ─────────────────────── */}
-            {upgradeModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-                    <div className="bg-background rounded-2xl border shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-5">
-                        <div className="flex items-center justify-between">
-                            <h2 className="font-semibold text-base">
-                                {isOnProfessional ? 'Update employee capacity' : 'Upgrade to Professional'}
-                            </h2>
-                            <button type="button" onClick={() => setUpgradeModal(false)} className="text-muted-foreground hover:text-foreground">
-                                <XCircle className="h-5 w-5" />
-                            </button>
-                        </div>
-
-                        <p className="text-sm text-muted-foreground">
+            <Dialog open={upgradeModal} onOpenChange={setUpgradeModal}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {isOnProfessional ? 'Update employee capacity' : 'Upgrade to Professional'}
+                        </DialogTitle>
+                        <DialogDescription>
                             {isOnProfessional
                                 ? stripeEnabled
                                     ? 'Choose your new employee capacity. A payment will be processed for the updated monthly amount.'
@@ -280,164 +275,157 @@ export function SubscriptionTab() {
                                     ? `Choose how many employees you need. You'll be billed AED ${pricing?.pricePerFiveEmployees ?? 10} per 5 employees per month. Pay by card and your plan activates instantly.`
                                     : `Choose how many employees you need. You'll be billed AED ${pricing?.pricePerFiveEmployees ?? 10} per 5 employees per month. Our team will confirm payment before activating.`
                             }
-                        </p>
+                        </DialogDescription>
+                    </DialogHeader>
 
-                        <div className="space-y-3">
-                            <Label htmlFor="quota">Number of employees</Label>
-                            <div className="flex items-center gap-3">
-                                <Button
-                                    type="button" variant="outline" size="icon-sm"
-                                    onClick={() => setDesiredQuota(q => Math.max(5, q - 5))}
-                                >
-                                    <Minus className="h-4 w-4" />
-                                </Button>
-                                <Input
-                                    id="quota"
-                                    type="number"
-                                    min={5}
-                                    step={5}
-                                    value={desiredQuota}
-                                    onChange={e => setDesiredQuota(Math.max(5, Number(e.target.value)))}
-                                    className="text-center font-semibold w-24"
-                                />
-                                <Button
-                                    type="button" variant="outline" size="icon-sm"
-                                    onClick={() => setDesiredQuota(q => q + 5)}
-                                >
-                                    <Plus className="h-4 w-4" />
-                                </Button>
-                            </div>
-
-                            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 flex items-center justify-between">
-                                <div>
-                                    <p className="text-xs text-blue-600 font-medium">Monthly cost</p>
-                                    <p className="text-2xl font-bold text-blue-700">AED {monthlyCost}</p>
-                                </div>
-                                <div className="text-right text-xs text-blue-600">
-                                    <p>{desiredQuota} employees</p>
-                                    <p>AED {pricing?.pricePerFiveEmployees ?? 10} × {Math.ceil(desiredQuota / 5)} blocks</p>
-                                </div>
-                            </div>
+                    <div className="space-y-3">
+                        <Label htmlFor="quota">Number of employees</Label>
+                        <div className="flex items-center gap-3">
+                            <Button
+                                type="button" variant="outline" size="icon-sm"
+                                onClick={() => setDesiredQuota(q => Math.max(5, q - 5))}
+                            >
+                                <Minus className="h-4 w-4" />
+                            </Button>
+                            <Input
+                                id="quota"
+                                type="number"
+                                min={5}
+                                step={5}
+                                value={desiredQuota}
+                                onChange={e => setDesiredQuota(Math.max(5, Number(e.target.value)))}
+                                className="text-center font-semibold w-24"
+                            />
+                            <Button
+                                type="button" variant="outline" size="icon-sm"
+                                onClick={() => setDesiredQuota(q => q + 5)}
+                            >
+                                <Plus className="h-4 w-4" />
+                            </Button>
                         </div>
 
-                        <div className="flex gap-3 pt-2">
-                            <Button variant="outline" size="sm" className="flex-1" onClick={() => setUpgradeModal(false)}>
-                                Cancel
-                            </Button>
-
-                            {stripeEnabled ? (
-                                <Button
-                                    size="sm"
-                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                                    loading={checkoutMut.isPending}
-                                    onClick={handlePay}
-                                >
-                                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                                    {isOnProfessional ? 'Pay & update capacity' : 'Pay & activate'}
-                                </Button>
-                            ) : isOnProfessional ? (
-                                <Button
-                                    size="sm"
-                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                                    loading={updateQuotaMut.isPending}
-                                    onClick={handlePay}
-                                >
-                                    <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                                    Save changes
-                                </Button>
-                            ) : (
-                                <Button
-                                    size="sm"
-                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                                    loading={upgradeMut.isPending}
-                                    onClick={handlePay}
-                                >
-                                    <Send className="h-3.5 w-3.5 mr-1.5" />
-                                    Send upgrade request
-                                </Button>
-                            )}
+                        <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 flex items-center justify-between">
+                            <div>
+                                <p className="text-xs text-blue-600 font-medium">Monthly cost</p>
+                                <p className="text-2xl font-bold text-blue-700">AED {monthlyCost}</p>
+                            </div>
+                            <div className="text-right text-xs text-blue-600">
+                                <p>{desiredQuota} employees</p>
+                                <p>AED {pricing?.pricePerFiveEmployees ?? 10} × {Math.ceil(desiredQuota / 5)} blocks</p>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
 
-            {/* ── Enterprise contact modal ──────────────────────────── */}
-            {enterpriseModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-                    <div className="bg-background rounded-2xl border shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-5">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h2 className="font-semibold text-base">Contact Sales — Enterprise</h2>
-                                <p className="text-xs text-muted-foreground mt-0.5">Our team will reach out within 1 business day.</p>
-                            </div>
-                            <button type="button" onClick={() => setEnterpriseModal(false)} className="text-muted-foreground hover:text-foreground">
-                                <XCircle className="h-5 w-5" />
-                            </button>
-                        </div>
+                    <div className="flex gap-3 pt-2">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => setUpgradeModal(false)}>
+                            Cancel
+                        </Button>
 
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Your name</Label>
-                                    <Input
-                                        value={contactForm.contactName}
-                                        onChange={e => setContactForm(f => ({ ...f, contactName: e.target.value }))}
-                                        placeholder="Full name"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label>Work email</Label>
-                                    <Input
-                                        type="email"
-                                        value={contactForm.contactEmail}
-                                        onChange={e => setContactForm(f => ({ ...f, contactEmail: e.target.value }))}
-                                        placeholder="you@company.com"
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Company size</Label>
-                                <select
-                                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                                    value={contactForm.companySize}
-                                    onChange={e => setContactForm(f => ({ ...f, companySize: e.target.value }))}
-                                >
-                                    <option value="">Select company size</option>
-                                    <option value="50-100">50–100 employees</option>
-                                    <option value="100-250">100–250 employees</option>
-                                    <option value="250-500">250–500 employees</option>
-                                    <option value="500-1000">500–1,000 employees</option>
-                                    <option value="1000+">1,000+ employees</option>
-                                </select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Tell us about your needs</Label>
-                                <textarea
-                                    className="w-full min-h-[90px] rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
-                                    placeholder="Describe your requirements, integrations, timeline..."
-                                    value={contactForm.message}
-                                    onChange={e => setContactForm(f => ({ ...f, message: e.target.value }))}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3 pt-1">
-                            <Button variant="outline" size="sm" className="flex-1" onClick={() => setEnterpriseModal(false)}>
-                                Cancel
-                            </Button>
+                        {stripeEnabled ? (
                             <Button
                                 size="sm"
-                                className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
-                                loading={contactMut.isPending}
-                                onClick={handleEnterpriseContact}
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                loading={checkoutMut.isPending}
+                                onClick={handlePay}
+                            >
+                                <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                                {isOnProfessional ? 'Pay & update capacity' : 'Pay & activate'}
+                            </Button>
+                        ) : isOnProfessional ? (
+                            <Button
+                                size="sm"
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                loading={updateQuotaMut.isPending}
+                                onClick={handlePay}
+                            >
+                                <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                                Save changes
+                            </Button>
+                        ) : (
+                            <Button
+                                size="sm"
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                loading={upgradeMut.isPending}
+                                onClick={handlePay}
                             >
                                 <Send className="h-3.5 w-3.5 mr-1.5" />
-                                Send inquiry
+                                Send upgrade request
                             </Button>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Enterprise contact modal ──────────────────────────── */}
+            <Dialog open={enterpriseModal} onOpenChange={setEnterpriseModal}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Contact Sales — Enterprise</DialogTitle>
+                        <DialogDescription>Our team will reach out within 1 business day.</DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label>Your name</Label>
+                                <Input
+                                    value={contactForm.contactName}
+                                    onChange={e => setContactForm(f => ({ ...f, contactName: e.target.value }))}
+                                    placeholder="Full name"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Work email</Label>
+                                <Input
+                                    type="email"
+                                    value={contactForm.contactEmail}
+                                    onChange={e => setContactForm(f => ({ ...f, contactEmail: e.target.value }))}
+                                    placeholder="you@company.com"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Company size</Label>
+                            <select
+                                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                                value={contactForm.companySize}
+                                onChange={e => setContactForm(f => ({ ...f, companySize: e.target.value }))}
+                            >
+                                <option value="">Select company size</option>
+                                <option value="50-100">50–100 employees</option>
+                                <option value="100-250">100–250 employees</option>
+                                <option value="250-500">250–500 employees</option>
+                                <option value="500-1000">500–1,000 employees</option>
+                                <option value="1000+">1,000+ employees</option>
+                            </select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Tell us about your needs</Label>
+                            <textarea
+                                className="w-full min-h-[90px] rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                                placeholder="Describe your requirements, integrations, timeline..."
+                                value={contactForm.message}
+                                onChange={e => setContactForm(f => ({ ...f, message: e.target.value }))}
+                            />
                         </div>
                     </div>
-                </div>
-            )}
+
+                    <div className="flex gap-3 pt-1">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => setEnterpriseModal(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            size="sm"
+                            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                            loading={contactMut.isPending}
+                            onClick={handleEnterpriseContact}
+                        >
+                            <Send className="h-3.5 w-3.5 mr-1.5" />
+                            Send inquiry
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

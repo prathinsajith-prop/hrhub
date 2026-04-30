@@ -9,3 +9,5 @@ export { PhoneInput, CountrySelect, FlagImg, resolveCountryIso, countryNameFromI
 export { FormField } from './FormField'
 export { PermissionGate } from './PermissionGate'
 export { QueryBoundary } from './QueryBoundary'
+export { CopyableEmail } from './CopyableEmail'
+export { CopyablePhone } from './CopyablePhone'

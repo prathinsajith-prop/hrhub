@@ -1,7 +1,7 @@
 import { eq, and, desc, ilike, isNull, sql, getTableColumns, or, lt, count } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
-import { assets, assetCategories, assetAssignments, assetMaintenance, employees } from '../../db/schema/index.js'
+import { assets, assetCategories, assetAssignments, assetMaintenance, employees, tenants } from '../../db/schema/index.js'
 import { cacheDel } from '../../lib/redis.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
@@ -17,6 +17,32 @@ export async function listCategories(tenantId: string) {
         .from(assetCategories)
         .where(eq(assetCategories.tenantId, tenantId))
         .orderBy(assetCategories.name)
+}
+
+export async function deleteCategory(tenantId: string, id: string) {
+    const [row] = await db
+        .delete(assetCategories)
+        .where(and(eq(assetCategories.id, id), eq(assetCategories.tenantId, tenantId)))
+        .returning()
+    return row ?? null
+}
+
+export async function generateNextAssetCode(tenantId: string): Promise<string> {
+    const [tenant] = await db
+        .select({ companyCode: tenants.companyCode })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1)
+
+    const prefix = tenant?.companyCode ?? 'ORG'
+
+    const [row] = await db
+        .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
+        .from(assets)
+        .where(eq(assets.tenantId, tenantId))
+
+    const seq = String((row?.count ?? 0) + 1).padStart(5, '0')
+    return `${prefix}-AST-${seq}`
 }
 
 export async function createCategory(tenantId: string, data: { name: string; description?: string }) {
@@ -146,9 +172,10 @@ export async function getAsset(tenantId: string, id: string) {
 }
 
 export async function createAsset(tenantId: string, data: Omit<NewAsset, 'id' | 'tenantId' | 'createdAt' | 'updatedAt' | 'deletedAt'>) {
+    const assetCode = data.assetCode || await generateNextAssetCode(tenantId)
     const [row] = await db
         .insert(assets)
-        .values({ tenantId, ...data })
+        .values({ tenantId, ...data, assetCode })
         .returning()
     await cacheDel(`dashboard:kpis:${tenantId}`)
     return row

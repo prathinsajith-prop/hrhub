@@ -286,8 +286,41 @@ export function PerformancePage() {
                                 )}
                             </div>
                             <div className="space-y-1.5">
-                                <Label>Period (e.g. 2024-Q2)</Label>
-                                <Input value={form.period} onChange={e => set('period', e.target.value)} placeholder="2024-Q2" />
+                                <Label>Period</Label>
+                                <div className="flex gap-2">
+                                    {(() => {
+                                        const currentYear = new Date().getFullYear()
+                                        const years = [currentYear - 1, currentYear, currentYear + 1]
+                                        const [selYear, selQ] = form.period?.includes('-Q')
+                                            ? [form.period.split('-Q')[0], `Q${form.period.split('-Q')[1]}`]
+                                            : [String(currentYear), '']
+                                        return (
+                                            <>
+                                                <Select
+                                                    value={selYear}
+                                                    onValueChange={v => set('period', selQ ? `${v}-${selQ}` : v)}
+                                                >
+                                                    <SelectTrigger className="flex-1"><SelectValue placeholder="Year" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                                <Select
+                                                    value={selQ}
+                                                    onValueChange={v => set('period', `${selYear}-${v}`)}
+                                                >
+                                                    <SelectTrigger className="flex-1"><SelectValue placeholder="Quarter" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {['Q1', 'Q2', 'Q3', 'Q4'].map(q => (
+                                                            <SelectItem key={q} value={q}>{q} (Jan–{q === 'Q1' ? 'Mar' : q === 'Q2' ? 'Jun' : q === 'Q3' ? 'Sep' : 'Dec'})</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </>
+                                        )
+                                    })()}
+                                </div>
+                                {form.period && <p className="text-xs text-muted-foreground">Period: {form.period}</p>}
                             </div>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -34,15 +34,20 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
 
     // PATCH /settings/company — update tenant profile (hr_manager / super_admin only)
     fastify.patch('/company', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
-        const { name, tradeLicenseNo, jurisdiction, industryType, logoUrl } = request.body as Record<string, string>
-        const updated = await updateCompanySettings(request.user.tenantId, {
-            name,
-            tradeLicenseNo,
-            jurisdiction: jurisdiction as 'mainland' | 'freezone',
-            industryType,
-            logoUrl,
-        })
-        return reply.send({ data: updated })
+        const { name, companyCode, tradeLicenseNo, jurisdiction, industryType, logoUrl } = request.body as Record<string, string>
+        try {
+            const updated = await updateCompanySettings(request.user.tenantId, {
+                name,
+                companyCode,
+                tradeLicenseNo,
+                jurisdiction: jurisdiction as 'mainland' | 'freezone',
+                industryType,
+                logoUrl,
+            })
+            return reply.send({ data: updated })
+        } catch (err: any) {
+            return reply.code(err.statusCode ?? 500).send({ message: err.message })
+        }
     })
 
     // GET /settings/users — list employee-linked users in tenant
@@ -235,6 +240,40 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             .where(eq(users.id, request.user.id))
             .returning({ notifPrefs: users.notifPrefs })
         return reply.send({ data: updated?.notifPrefs ?? {} })
+    })
+
+    // ── Leave Settings ───────────────────────────────────────────────────────
+    // GET /settings/leave
+    fastify.get('/leave', { preHandler: [fastify.authenticate], schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
+        const [row] = await db
+            .select({ leaveSettings: tenants.leaveSettings })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
+            .limit(1)
+        return reply.send({ data: row?.leaveSettings ?? { rolloverEnabledFrom: null } })
+    })
+
+    // PATCH /settings/leave
+    fastify.patch('/leave', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
+        const { rolloverEnabledFrom } = (request.body ?? {}) as { rolloverEnabledFrom?: string | null }
+        // Validate date format if provided
+        if (rolloverEnabledFrom !== undefined && rolloverEnabledFrom !== null) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(rolloverEnabledFrom) || isNaN(Date.parse(rolloverEnabledFrom))) {
+                return reply.code(400).send({ message: 'rolloverEnabledFrom must be a valid ISO date (YYYY-MM-DD) or null' })
+            }
+        }
+        const [row] = await db
+            .select({ leaveSettings: tenants.leaveSettings })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
+            .limit(1)
+        const merged = { ...row?.leaveSettings, rolloverEnabledFrom: rolloverEnabledFrom ?? null }
+        const [updated] = await db
+            .update(tenants)
+            .set({ leaveSettings: merged, updatedAt: new Date() })
+            .where(eq(tenants.id, request.user.tenantId))
+            .returning({ leaveSettings: tenants.leaveSettings })
+        return reply.send({ data: updated?.leaveSettings })
     })
 
     // ── Mail diagnostics ─────────────────────────────────────────────────────

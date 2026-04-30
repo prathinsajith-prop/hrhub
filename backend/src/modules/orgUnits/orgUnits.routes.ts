@@ -1,4 +1,4 @@
-import { listOrgUnits, getOrgUnitTree, createOrgUnit, updateOrgUnit, deleteOrgUnit, getOrgUnitStats } from './orgUnits.service.js'
+import { listOrgUnits, getOrgUnitTree, getScopedOrgUnitTree, createOrgUnit, updateOrgUnit, deleteOrgUnit, getOrgUnitStats } from './orgUnits.service.js'
 import { z } from 'zod'
 
 const orgUnitSchema = z.object({
@@ -23,8 +23,12 @@ export async function orgUnitsRoutes(fastify: any) {
     })
 
     // GET /api/v1/org-units/tree — hierarchical tree
+    // hr_manager / super_admin: full tree; employee / dept_head / pro_officer: scoped to own branch
     fastify.get('/org-units/tree', { ...auth, schema: { tags: ['OrgUnits'] } }, async (request: any, reply: any) => {
-        const data = await getOrgUnitTree(request.user.tenantId)
+        const scopedRoles = ['employee', 'dept_head', 'pro_officer']
+        const data = scopedRoles.includes(request.user.role) && request.user.employeeId
+            ? await getScopedOrgUnitTree(request.user.tenantId, request.user.employeeId, request.user.role)
+            : await getOrgUnitTree(request.user.tenantId)
         return reply.send({ data })
     })
 
