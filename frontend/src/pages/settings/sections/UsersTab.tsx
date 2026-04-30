@@ -12,7 +12,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { toast } from '@/components/ui/overlays'
+import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
 import {
     useTenantUsers,
@@ -24,6 +24,7 @@ import {
 import { usePermissions } from '@/hooks/usePermissions'
 import { labelFor } from '@/lib/enums'
 import { Section } from './_shared'
+import { CopyableEmail } from '@/components/shared'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function formatLastLogin(lastLoginAt: string | null): string {
@@ -401,7 +402,7 @@ export function UsersTab() {
                                                 )}
                                             </div>
                                             <p className="text-xs text-muted-foreground truncate">
-                                                {u.email}
+                                                <CopyableEmail email={u.email} className="text-xs text-muted-foreground" />
                                                 {u.department && <span className="ml-1.5 opacity-70">· {u.department}</span>}
                                             </p>
                                         </div>
@@ -498,33 +499,17 @@ export function UsersTab() {
                 </div>
             </Section>
 
-            {deactivateTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                    <div className="bg-background border rounded-xl shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
-                        <div className="space-y-1">
-                            <p className="font-semibold text-sm">
-                                {deactivateTarget.active ? 'Deactivate' : 'Activate'} {deactivateTarget.name}?
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                {deactivateTarget.active
-                                    ? 'This user will immediately lose access. They can be reactivated at any time.'
-                                    : 'This user will regain access to the workspace.'}
-                            </p>
-                        </div>
-                        <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={() => setDeactivateTarget(null)}>Cancel</Button>
-                            <Button
-                                size="sm"
-                                variant={deactivateTarget.active ? 'destructive' : 'default'}
-                                onClick={handleToggleActive}
-                                disabled={updateUser.isPending}
-                            >
-                                {updateUser.isPending ? 'Saving…' : deactivateTarget.active ? 'Deactivate' : 'Activate'}
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ConfirmDialog
+                open={!!deactivateTarget}
+                onOpenChange={(v) => { if (!v) setDeactivateTarget(null) }}
+                title={deactivateTarget ? `${deactivateTarget.active ? 'Deactivate' : 'Activate'} ${deactivateTarget.name}?` : ''}
+                description={deactivateTarget?.active
+                    ? 'This user will immediately lose access. They can be reactivated at any time.'
+                    : 'This user will regain access to the workspace.'}
+                confirmLabel={updateUser.isPending ? 'Saving…' : deactivateTarget?.active ? 'Deactivate' : 'Activate'}
+                onConfirm={handleToggleActive}
+                variant={deactivateTarget?.active ? 'destructive' : 'warning'}
+            />
         </div>
     )
 }

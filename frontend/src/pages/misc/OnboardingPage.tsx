@@ -252,29 +252,38 @@ export function OnboardingPage() {
             )}
 
             {/* New Onboarding Dialog */}
-            <Dialog open={newOpen} onOpenChange={setNewOpen}>
+            <Dialog open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open) { setNewEmpId(''); setNewStartDate(''); setNewDueDate('') } }}>
                 <DialogContent className="max-w-md">
                     <DialogHeader><DialogTitle>Start Onboarding</DialogTitle></DialogHeader>
                     <DialogBody className="space-y-4">
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-muted-foreground">Employee *</label>
-                            <Select value={newEmpId} onValueChange={setNewEmpId}>
-                                <SelectTrigger className="h-9">
-                                    <SelectValue placeholder="Select employee…" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {allEmployees.filter((e: any) => !enrolledIds.has(e.id)).map((e: any) => (
-                                        <SelectItem key={e.id} value={e.id}>
-                                            {e.firstName} {e.lastName}
-                                            {e.designation ? ` — ${e.designation}` : ''}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            {allEmployees.filter((e: any) => !enrolledIds.has(e.id)).length === 0 && (
-                                <p className="text-xs text-muted-foreground">All active employees already have a checklist.</p>
-                            )}
-                        </div>
+                        {!newEmpId ? (
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">Employee *</label>
+                                <Select value={newEmpId} onValueChange={setNewEmpId}>
+                                    <SelectTrigger className="h-9">
+                                        <SelectValue placeholder="Select employee…" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {allEmployees.filter((e: any) => !enrolledIds.has(e.id)).map((e: any) => (
+                                            <SelectItem key={e.id} value={e.id}>
+                                                {e.firstName} {e.lastName}
+                                                {e.designation ? ` — ${e.designation}` : ''}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {allEmployees.filter((e: any) => !enrolledIds.has(e.id)).length === 0 && (
+                                    <p className="text-xs text-muted-foreground">All active employees already have a checklist.</p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 rounded-lg bg-muted/50 border px-3 py-2">
+                                <span className="text-sm font-medium">
+                                    {(() => { const e = allEmployees.find((e: any) => e.id === newEmpId); return e ? `${e.firstName} ${e.lastName}` : '' })()}
+                                </span>
+                                {(() => { const e = allEmployees.find((e: any) => e.id === newEmpId); return e?.designation ? <span className="text-xs text-muted-foreground">— {e.designation}</span> : null })()}
+                            </div>
+                        )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-muted-foreground">Start date</label>

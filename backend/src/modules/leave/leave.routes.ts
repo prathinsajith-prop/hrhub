@@ -3,6 +3,9 @@ import { validate, createLeaveSchema, leaveActionSchema } from '../../lib/valida
 import { recordActivity } from '../audit/audit.service.js'
 import { sendWithETag } from '../../lib/etag.js'
 import { cacheDel } from '../../lib/redis.js'
+import { db } from '../../db/index.js'
+import { tenants } from '../../db/schema/index.js'
+import { eq } from 'drizzle-orm'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -112,6 +115,25 @@ export default async function (fastify: any): Promise<void> {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['Leave'] },
     }, async (request, reply) => {
+        // Enforce rolloverEnabledFrom gate
+        const [tenantRow] = await db
+            .select({ leaveSettings: tenants.leaveSettings })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
+            .limit(1)
+        const enabledFrom = tenantRow?.leaveSettings?.rolloverEnabledFrom
+        if (enabledFrom) {
+            const unlockDate = new Date(enabledFrom)
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            if (today < unlockDate) {
+                return reply.code(403).send({
+                    statusCode: 403,
+                    error: 'Forbidden',
+                    message: `Year-end rollover is locked until ${enabledFrom}. Update the date in Organization Settings → Leave Settings.`,
+                })
+            }
+        }
         const { fromYear } = (request.body ?? {}) as { fromYear?: number }
         const year = Number(fromYear ?? new Date().getFullYear() - 1)
         const result = await rolloverYear(request.user.tenantId, year)

@@ -1,4 +1,4 @@
-import { eq, and, isNull, isNotNull } from 'drizzle-orm'
+import { eq, and, isNull, isNotNull, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { tenants, users, passwordResetTokens, employees } from '../../db/schema/index.js'
 import { randomBytes, createHash } from 'crypto'
@@ -7,17 +7,20 @@ import { sendEmail, inviteUserEmail } from '../../plugins/email.js'
 import { loadEnv } from '../../config/env.js'
 import type { UserRole } from '../../types/index.js'
 
+const COMPANY_SETTINGS_COLS = {
+    id: tenants.id,
+    name: tenants.name,
+    companyCode: tenants.companyCode,
+    tradeLicenseNo: tenants.tradeLicenseNo,
+    jurisdiction: tenants.jurisdiction,
+    industryType: tenants.industryType,
+    subscriptionPlan: tenants.subscriptionPlan,
+    logoUrl: tenants.logoUrl,
+}
+
 export async function getCompanySettings(tenantId: string) {
     const [tenant] = await db
-        .select({
-            id: tenants.id,
-            name: tenants.name,
-            tradeLicenseNo: tenants.tradeLicenseNo,
-            jurisdiction: tenants.jurisdiction,
-            industryType: tenants.industryType,
-            subscriptionPlan: tenants.subscriptionPlan,
-            logoUrl: tenants.logoUrl,
-        })
+        .select(COMPANY_SETTINGS_COLS)
         .from(tenants)
         .where(eq(tenants.id, tenantId))
         .limit(1)
@@ -29,25 +32,36 @@ export async function updateCompanySettings(
     tenantId: string,
     data: Partial<{
         name: string
+        companyCode: string
         tradeLicenseNo: string
         jurisdiction: 'mainland' | 'freezone'
         industryType: string
         logoUrl: string
     }>,
 ) {
+    // Validate and normalise companyCode if provided
+    if (data.companyCode !== undefined) {
+        const code = data.companyCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4)
+        if (code.length < 2) {
+            throw Object.assign(new Error('Company code must be 2–4 alphanumeric characters'), { statusCode: 400 })
+        }
+        // Uniqueness check — exclude own tenant
+        const [conflict] = await db
+            .select({ id: tenants.id })
+            .from(tenants)
+            .where(and(eq(tenants.companyCode, code), sql`${tenants.id} != ${tenantId}::uuid`))
+            .limit(1)
+        if (conflict) {
+            throw Object.assign(new Error('This company code is already taken'), { statusCode: 409 })
+        }
+        data = { ...data, companyCode: code }
+    }
+
     const [updated] = await db
         .update(tenants)
         .set({ ...data, updatedAt: new Date() })
         .where(eq(tenants.id, tenantId))
-        .returning({
-            id: tenants.id,
-            name: tenants.name,
-            tradeLicenseNo: tenants.tradeLicenseNo,
-            jurisdiction: tenants.jurisdiction,
-            industryType: tenants.industryType,
-            subscriptionPlan: tenants.subscriptionPlan,
-            logoUrl: tenants.logoUrl,
-        })
+        .returning(COMPANY_SETTINGS_COLS)
 
     return updated ?? null
 }

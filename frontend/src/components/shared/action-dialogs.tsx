@@ -474,7 +474,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     }
 
     const submit = async () => {
-        const empNo = form.employeeNo || `EMP-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(1000 + Math.random() * 9000)}`
+        const empNo = form.employeeNo || undefined
         const basic = parseFloat(form.basicSalary) || 0
         const housing = parseFloat(form.housingAllowance) || 0
         const transport = parseFloat(form.transportAllowance) || 0
@@ -491,7 +491,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 workEmail: form.workEmail || undefined,
                 maritalStatus: (form.maritalStatus as Employee['maritalStatus']) || undefined,
                 emergencyContact: form.emergencyContact || undefined,
-                employeeNo: empNo,
+                employeeNo: empNo || undefined,
                 divisionId: form.divisionId || undefined,
                 departmentId: form.departmentId || undefined,
                 branchId: form.branchId || undefined,
@@ -501,7 +501,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 contractType: (form.contractType as Employee['contractType']) || undefined,
                 workLocation: form.workLocation || undefined,
                 managerName: form.managerName || undefined,
-                reportingTo: form.reportingTo || undefined,
+                reportingTo: form.reportingTo || null,
                 gradeLevel: form.gradeLevel || undefined,
                 status: form.status as Employee['status'],
                 basicSalary: basic || undefined,
@@ -622,9 +622,12 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                     {step === 2 && (
                         <div className="space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <FormField label="Employee No" error={errors.employeeNo} hint="Auto-generated if blank">
-                                    <Input value={form.employeeNo} onChange={set('employeeNo')} placeholder="EMP-2604-1234" />
-                                </FormField>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Employee No</label>
+                                    <div className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm text-muted-foreground select-none">
+                                        Auto-generated on save
+                                    </div>
+                                </div>
                                 <FormField label="Join Date" required error={errors.joinDate}>
                                     <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                                 </FormField>
@@ -923,7 +926,7 @@ export function EditEmployeeDialog({
                 contractType: (form.contractType as Employee['contractType']) || undefined,
                 workLocation: form.workLocation || undefined,
                 managerName: form.managerName || undefined,
-                reportingTo: form.reportingTo || undefined,
+                reportingTo: form.reportingTo || null,
                 gradeLevel: form.gradeLevel || undefined,
                 status: form.status as Employee['status'],
                 basicSalary: basic || undefined,
@@ -1014,7 +1017,12 @@ export function EditEmployeeDialog({
                     {step === 2 && (
                         <div className="space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Employee No</Label><Input value={form.employeeNo} onChange={set('employeeNo')} /></div>
+                                <div className="space-y-1.5">
+                                    <Label>Employee No</Label>
+                                    <div className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm font-mono select-none">
+                                        {form.employeeNo || '—'}
+                                    </div>
+                                </div>
                                 <FormField label="Join Date" required error={errors.joinDate}>
                                     <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                                 </FormField>

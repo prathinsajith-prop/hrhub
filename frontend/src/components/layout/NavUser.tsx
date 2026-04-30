@@ -65,7 +65,7 @@ export function NavUser({
   user: { name: string; email: string; avatar: string }
 }) {
   const { isMobile } = useSidebar()
-  const { logout, tenant } = useAuthStore()
+  const { logout, tenant, user: authUser } = useAuthStore()
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const [switchingId, setSwitchingId] = useState<string | null>(null)
@@ -102,8 +102,8 @@ export function NavUser({
 
   const isArabic = i18n.language === 'ar'
   const myTenants = tenants ?? []
-  const currentMembership = myTenants.find(t => t.tenantId === tenant?.id)
-  const currentRole = currentMembership?.role
+  // Use role directly from auth store — always available without waiting for the tenants fetch
+  const currentRole = authUser?.role
 
   const isAdmin = currentRole === 'super_admin' || currentRole === 'hr_manager'
   const isBillingAdmin = currentRole === 'super_admin' || currentRole === 'hr_manager'
@@ -142,112 +142,92 @@ export function NavUser({
             style={{ maxHeight: 'min(calc(100dvh - 5rem), 640px)', display: 'flex', flexDirection: 'column' }}
           >
             {/* ── Identity card ─────────────────────────────────── */}
-            <div className="flex items-center gap-3 px-4 py-4 bg-muted/40 border-b border-border shrink-0">
-              <Avatar className="h-11 w-11 rounded-full ring-2 ring-primary/20 shrink-0">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-tight truncate">{user.name}</p>
-                <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</p>
-                {currentRole && (
-                  <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    <ShieldIcon className="size-2.5 shrink-0" />
-                    {labelFor(currentRole)}
-                  </span>
-                )}
+            <div className="px-4 py-4 bg-muted/40 border-b border-border shrink-0">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-11 w-11 rounded-full ring-2 ring-primary/20 shrink-0">
+                  <AvatarImage src={user.avatar} alt={user.name} />
+                  <AvatarFallback className="rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold leading-tight truncate">{user.name}</p>
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</p>
+                  {currentRole && (
+                    <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      <ShieldIcon className="size-2.5 shrink-0" />
+                      {labelFor(currentRole)}
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {/* ── Org row: plain text + switch button ─────────── */}
+              {tenant && (
+                <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Building2Icon className="size-3.5 shrink-0 text-muted-foreground/70" />
+                    <span className="text-xs text-muted-foreground truncate">{tenant.name}</span>
+                  </div>
+                  {myTenants.length > 1 && (
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="h-auto p-0 border-0 bg-transparent text-xs font-medium text-primary hover:text-primary/80 focus:bg-transparent data-[state=open]:bg-transparent shrink-0 gap-0.5 [&>svg]:hidden">
+                        {switchingId ? (
+                          <Loader2Icon className="size-3 animate-spin mr-0.5" />
+                        ) : null}
+                        Switch
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent className="min-w-56 rounded-xl p-1.5 shadow-lg">
+                          {myTenants.map((org) => {
+                            const isCurrent = org.tenantId === tenant?.id
+                            const isSwitching = switchingId === org.tenantId
+                            return (
+                              <DropdownMenuItem
+                                key={org.tenantId}
+                                onClick={() => handleSwitchOrg(org.tenantId)}
+                                disabled={isCurrent || !!switchingId}
+                                className={cn(
+                                  "gap-2.5 rounded-md px-2 py-2 cursor-pointer",
+                                  isCurrent && "bg-primary/8 cursor-default",
+                                )}
+                              >
+                                <div className={cn(
+                                  'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white text-xs font-bold',
+                                  orgColor(org.tenantName ?? 'X'),
+                                )}>
+                                  {(org.tenantName ?? '?')[0].toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="truncate text-sm font-medium leading-tight">{org.tenantName}</p>
+                                  <p className="truncate text-[11px] text-muted-foreground capitalize leading-tight">
+                                    {labelFor(org.role)}
+                                  </p>
+                                </div>
+                                <span className="ml-auto shrink-0">
+                                  {isSwitching ? (
+                                    <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+                                  ) : isCurrent ? (
+                                    <CheckIcon className="size-3.5 text-primary" />
+                                  ) : null}
+                                </span>
+                              </DropdownMenuItem>
+                            )
+                          })}
+                          <DropdownMenuSeparator className="my-1" />
+                          <DropdownMenuItem onClick={() => navigate('/organizations/new')} className="gap-2 rounded-md px-2.5 py-2 cursor-pointer">
+                            <PlusIcon className="size-3.5 text-muted-foreground" />
+                            <span className="text-sm">New organization</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenuSub>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="p-1.5 space-y-0.5 overflow-y-auto overscroll-contain min-h-0">
-
-              {/* ── Organisation block ─────────────────────────── */}
-              {/* Admins: full switcher if multi-tenant, static block if single */}
-              {/* Non-admins: always just the current workspace badge */}
-              {isAdmin && myTenants.length > 1 ? (
-                <>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="rounded-lg px-0 py-0 h-auto focus:bg-accent data-[state=open]:bg-accent">
-                      <div className="flex w-full items-center gap-2.5 px-2.5 py-2">
-                        <div className={cn(
-                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white text-xs font-bold',
-                          orgColor(tenant?.name ?? 'X'),
-                        )}>
-                          {(tenant?.name ?? '?')[0].toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0 text-left">
-                          <p className="truncate text-sm font-medium leading-tight">{tenant?.name}</p>
-                          <p className="text-[11px] text-muted-foreground leading-tight">Switch organization</p>
-                        </div>
-                      </div>
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent className="min-w-56 rounded-xl p-1.5 shadow-lg">
-                        {myTenants.map((org) => {
-                          const isCurrent = org.tenantId === tenant?.id
-                          const isSwitching = switchingId === org.tenantId
-                          return (
-                            <DropdownMenuItem
-                              key={org.tenantId}
-                              onClick={() => handleSwitchOrg(org.tenantId)}
-                              disabled={isCurrent || !!switchingId}
-                              className={cn(
-                                "gap-2.5 rounded-md px-2 py-2 cursor-pointer",
-                                isCurrent && "bg-primary/8 cursor-default",
-                              )}
-                            >
-                              <div className={cn(
-                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white text-xs font-bold',
-                                orgColor(org.tenantName ?? 'X'),
-                              )}>
-                                {(org.tenantName ?? '?')[0].toUpperCase()}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="truncate text-sm font-medium leading-tight">{org.tenantName}</p>
-                                <p className="truncate text-[11px] text-muted-foreground capitalize leading-tight">
-                                  {labelFor(org.role)}
-                                </p>
-                              </div>
-                              <span className="ml-auto shrink-0">
-                                {isSwitching ? (
-                                  <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
-                                ) : isCurrent ? (
-                                  <CheckIcon className="size-3.5 text-primary" />
-                                ) : null}
-                              </span>
-                            </DropdownMenuItem>
-                          )
-                        })}
-                        <DropdownMenuSeparator className="my-1" />
-                        <DropdownMenuItem onClick={() => navigate('/organizations/new')} className="gap-2 rounded-md px-2.5 py-2 cursor-pointer">
-                          <PlusIcon className="size-3.5 text-muted-foreground" />
-                          <span className="text-sm">New organization</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
-                  <DropdownMenuSeparator className="my-1" />
-                </>
-              ) : tenant ? (
-                <>
-                  <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg">
-                    <div className={cn(
-                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white text-xs font-bold',
-                      orgColor(tenant.name ?? 'X'),
-                    )}>
-                      {(tenant.name ?? '?')[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm font-medium leading-tight">{tenant.name}</p>
-                      <p className="text-[11px] text-muted-foreground leading-tight">Current workspace</p>
-                    </div>
-                    <CheckIcon className="size-3.5 text-primary shrink-0" />
-                  </div>
-                  <DropdownMenuSeparator className="my-1" />
-                </>
-              ) : null}
 
               {/* ── Workspace (admin only) ─────────────────────── */}
               {isAdmin && (

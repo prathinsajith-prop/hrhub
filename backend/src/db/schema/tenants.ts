@@ -6,6 +6,7 @@ import { employees } from './employees.js'
 export const tenants = pgTable('tenants', {
     id: uuid('id').primaryKey().defaultRandom(),
     name: text('name').notNull(),
+    companyCode: text('company_code').unique(),
     tradeLicenseNo: text('trade_license_no').unique().notNull(),
     jurisdiction: text('jurisdiction').notNull().$type<'mainland' | 'freezone'>(),
     industryType: text('industry_type').notNull(),
@@ -28,6 +29,9 @@ export const tenants = pgTable('tenants', {
         sessionTimeoutMinutes: number
         auditLoggingEnabled: boolean
     }>().notNull().default({ sessionTimeoutMinutes: 480, auditLoggingEnabled: true }),
+    leaveSettings: jsonb('leave_settings').$type<{
+        rolloverEnabledFrom: string | null
+    }>().notNull().default({ rolloverEnabledFrom: null }),
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

@@ -1,8 +1,8 @@
-import { eq, and, ilike, desc, asc, getTableColumns, inArray, sql, or, lt } from 'drizzle-orm'
+import { eq, and, ilike, desc, asc, getTableColumns, inArray, sql, or, lt, gte, lte } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { employees, entities } from '../../db/schema/index.js'
+import { employees, entities, tenants } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
 
@@ -161,24 +161,39 @@ export async function createEmployee(tenantId: string, data: Omit<NewEmployee, '
 
 /**
  * Generate the next sequential employee number for a tenant.
- * Format: `EMP-00001`, `EMP-00002`, ... — scoped to the tenant and ignoring
- * any manually-assigned non-numeric IDs. Uses the largest existing numeric
- * suffix so gaps never collapse. The `(tenant_id, employee_no)` unique index
- * backs this with a retry on conflict at the route layer.
+ * Format: `{COMPANYCODE}-{NNN}-{MM}-{YYYY}`
+ * e.g. PROP-001-04-2026
+ * - COMPANYCODE: uppercase initials of each word in tenant name, max 4 chars
+ * - NNN: employees created this calendar month (zero-padded, 3 digits)
+ * - MM/YYYY: current month and year
  */
 export async function generateNextEmployeeNo(tenantId: string): Promise<string> {
-    const [row] = await db
-        .select({
-            // Extract the trailing integer from EMP-NNNNN (or similar) per tenant.
-            max: sql<number>`COALESCE(MAX(
-                CAST(NULLIF(REGEXP_REPLACE(${employees.employeeNo}, '\\D', '', 'g'), '') AS INTEGER)
-            ), 0)`,
-        })
-        .from(employees)
-        .where(eq(employees.tenantId, tenantId))
+    const [tenant] = await db
+        .select({ companyCode: tenants.companyCode })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1)
 
-    const next = (row?.max ?? 0) + 1
-    return `EMP-${String(next).padStart(5, '0')}`
+    const companyCode = tenant?.companyCode ?? 'EMP'
+
+    const now = new Date()
+    const mm = String(now.getMonth() + 1).padStart(2, '0')
+    const yyyy = String(now.getFullYear())
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+
+    const [row] = await db
+        .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
+        .from(employees)
+        .where(and(
+            eq(employees.tenantId, tenantId),
+            gte(employees.createdAt, startOfMonth),
+            lte(employees.createdAt, endOfMonth),
+        ))
+
+    const seq = String((row?.count ?? 0) + 1).padStart(3, '0')
+    return `${companyCode}-${seq}-${mm}-${yyyy}`
 }
 
 export async function updateEmployee(tenantId: string, id: string, data: Partial<NewEmployee>) {

@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { toast } from '@/components/ui/overlays'
+import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
 import {
     useTenantUsers, useUpdateUser, useInvitableEmployees,
@@ -21,6 +21,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { labelFor } from '@/lib/enums'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { CopyableEmail } from '@/components/shared'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 function formatLastLogin(lastLoginAt: string | null): string {
@@ -290,48 +291,6 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
     )
 }
 
-// ─── Deactivate Confirm ───────────────────────────────────────────────────────
-function DeactivateConfirm({
-    target,
-    onClose,
-    onConfirm,
-    isPending,
-}: {
-    target: { id: string; name: string; active: boolean } | null
-    onClose: () => void
-    onConfirm: () => void
-    isPending: boolean
-}) {
-    if (!target) return null
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-background border rounded-xl shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
-                <div className="space-y-1">
-                    <p className="font-semibold text-sm">
-                        {target.active ? 'Deactivate' : 'Activate'} {target.name}?
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                        {target.active
-                            ? 'This user will immediately lose access. They can be reactivated at any time.'
-                            : 'This user will regain access to the workspace.'}
-                    </p>
-                </div>
-                <div className="flex gap-2 justify-end">
-                    <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-                    <Button
-                        size="sm"
-                        variant={target.active ? 'destructive' : 'default'}
-                        onClick={onConfirm}
-                        disabled={isPending}
-                    >
-                        {isPending ? 'Saving…' : target.active ? 'Deactivate' : 'Activate'}
-                    </Button>
-                </div>
-            </div>
-        </div>
-    )
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function UsersPage() {
     const { can } = usePermissions()
@@ -441,7 +400,7 @@ export function UsersPage() {
                                                     )}
                                                 </div>
                                                 <p className="text-xs text-muted-foreground truncate">
-                                                    {u.email}
+                                                    <CopyableEmail email={u.email} className="text-xs text-muted-foreground" />
                                                     {u.department && <span className="ml-1.5 opacity-70">· {u.department}</span>}
                                                 </p>
                                             </div>
@@ -549,11 +508,16 @@ export function UsersPage() {
             </div>
 
             <GrantAccessModal open={showInvite} onClose={() => setShowInvite(false)} />
-            <DeactivateConfirm
-                target={deactivateTarget}
-                onClose={() => setDeactivateTarget(null)}
+            <ConfirmDialog
+                open={!!deactivateTarget}
+                onOpenChange={(v) => { if (!v) setDeactivateTarget(null) }}
+                title={deactivateTarget ? `${deactivateTarget.active ? 'Deactivate' : 'Activate'} ${deactivateTarget.name}?` : ''}
+                description={deactivateTarget?.active
+                    ? 'This user will immediately lose access. They can be reactivated at any time.'
+                    : 'This user will regain access to the workspace.'}
+                confirmLabel={updateUser.isPending ? 'Saving…' : deactivateTarget?.active ? 'Deactivate' : 'Activate'}
                 onConfirm={handleToggleActive}
-                isPending={updateUser.isPending}
+                variant={deactivateTarget?.active ? 'destructive' : 'warning'}
             />
         </PageWrapper>
     )

@@ -36,10 +36,11 @@ const STATUS_DOT: Record<string, string> = {
     visa_expired: 'bg-red-400',
 }
 
-const EmpCard = memo(function EmpCard({ node, isRoot }: { node: OrgNode; isRoot?: boolean }) {
+const EmpCard = memo(function EmpCard({ node, currentEmployeeId }: { node: OrgNode; currentEmployeeId?: string }) {
     const initials = node.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
     const dot = STATUS_DOT[node.status] ?? 'bg-muted-foreground'
     const isAncestor = node.isAncestor === true
+    const isMe = !!currentEmployeeId && node.id === currentEmployeeId
 
     return (
         <div className="flex flex-col items-center">
@@ -47,11 +48,11 @@ const EmpCard = memo(function EmpCard({ node, isRoot }: { node: OrgNode; isRoot?
                 'relative flex flex-col items-center text-center rounded-2xl border px-4 py-4 w-48 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5',
                 isAncestor
                     ? 'bg-muted/40 border-border/40 opacity-75'
-                    : isRoot
+                    : isMe
                         ? 'bg-card border-primary/25 shadow-primary/10 shadow-md ring-1 ring-primary/10'
                         : 'bg-card border-border/60',
             )}>
-                {isRoot && !isAncestor && (
+                {isMe && !isAncestor && (
                     <div className="absolute -top-2 left-1/2 -translate-x-1/2">
                         <span className="text-[9px] font-bold uppercase tracking-wider bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
                             You
@@ -69,7 +70,7 @@ const EmpCard = memo(function EmpCard({ node, isRoot }: { node: OrgNode; isRoot?
                     'relative w-12 h-12 rounded-full flex items-center justify-center mb-3 text-sm font-bold',
                     isAncestor
                         ? 'bg-muted text-muted-foreground'
-                        : isRoot
+                        : isMe
                             ? 'bg-primary/10 text-primary ring-2 ring-primary/20'
                             : 'bg-muted text-foreground',
                 )}>
@@ -102,7 +103,7 @@ const EmpCard = memo(function EmpCard({ node, isRoot }: { node: OrgNode; isRoot?
                         {node.children.map(child => (
                             <div key={child.id} className="flex flex-col items-center">
                                 <div className={cn('w-px h-6', isAncestor ? 'bg-border/50' : 'bg-border')} />
-                                <EmpCard node={child} />
+                                <EmpCard node={child} currentEmployeeId={currentEmployeeId} />
                             </div>
                         ))}
                     </div>
@@ -113,6 +114,8 @@ const EmpCard = memo(function EmpCard({ node, isRoot }: { node: OrgNode; isRoot?
 })
 
 function ReportingChart() {
+    const { user } = useAuthStore()
+    const currentEmployeeId = user?.employeeId ?? undefined
     const { data, isLoading } = useQuery({
         queryKey: ['org-chart'],
         queryFn: () => api.get<OrgNode[]>('/employees/org-chart'),
@@ -148,7 +151,7 @@ function ReportingChart() {
         <div className="overflow-x-auto pb-6">
             <div className="flex gap-16 justify-center min-w-max py-8 px-6">
                 {list.map((node: OrgNode) => (
-                    <EmpCard key={node.id} node={node} isRoot />
+                    <EmpCard key={node.id} node={node} currentEmployeeId={currentEmployeeId} />
                 ))}
             </div>
         </div>
@@ -354,6 +357,8 @@ function StructureChart() {
     const { data: roots = [], isLoading } = useOrgUnitTree()
     const { data: stats } = useOrgUnitStats()
     const [search, setSearch] = useState('')
+    const role = useAuthStore(s => s.user?.role)
+    const isFullAccess = role === 'hr_manager' || role === 'super_admin'
 
     const branches = useMemo(() => roots.filter(n => n.type === 'branch'), [roots])
     const orphans = useMemo(() => roots.filter(n => n.type !== 'branch'), [roots])
@@ -422,9 +427,14 @@ function StructureChart() {
                 <Building2 className="h-6 w-6 text-muted-foreground" />
             </div>
             <div>
-                <p className="font-semibold text-sm">No structure defined yet</p>
+                <p className="font-semibold text-sm">
+                    {isFullAccess ? 'No structure defined yet' : 'No branch assigned yet'}
+                </p>
                 <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-                    Go to <strong>Organization Settings → Org Structure</strong> to add branches, divisions, and departments.
+                    {isFullAccess
+                        ? <>Go to <strong>Organization Settings → Org Structure</strong> to add branches, divisions, and departments.</>
+                        : 'Your profile has not been assigned to a branch yet. Contact your HR manager.'
+                    }
                 </p>
             </div>
         </div>
@@ -432,7 +442,7 @@ function StructureChart() {
 
     return (
         <div className="space-y-5">
-            {stats && (
+            {isFullAccess && stats && (
                 <StatsRow
                     branches={stats.branches}
                     divisions={stats.divisions}
@@ -486,7 +496,13 @@ function StructureChart() {
 export function OrgChartPage() {
     const { t } = useTranslation()
     const role = useAuthStore(s => s.user?.role)
-    const isDeptHead = role === 'dept_head'
+    const isFullAccess = role === 'hr_manager' || role === 'super_admin'
+
+    const description = isFullAccess
+        ? t('orgChart.description', { defaultValue: 'Visualize your company structure and reporting lines.' })
+        : role === 'dept_head'
+            ? t('orgChart.descriptionDeptHead', { defaultValue: 'Your branch structure and reporting lines within your team.' })
+            : t('orgChart.descriptionEmployee', { defaultValue: 'Your branch structure and your position in the reporting hierarchy.' })
 
     return (
         <PageWrapper>
@@ -494,38 +510,29 @@ export function OrgChartPage() {
                 <h1 className="text-2xl font-bold tracking-tight">
                     {t('orgChart.title', { defaultValue: 'Organization Chart' })}
                 </h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                    {isDeptHead
-                        ? t('orgChart.descriptionDeptHead', { defaultValue: 'Reporting lines within your team.' })
-                        : t('orgChart.description', { defaultValue: 'Visualize your company structure and reporting lines.' })
-                    }
-                </p>
+                <p className="text-sm text-muted-foreground mt-1">{description}</p>
             </div>
 
-            {isDeptHead ? (
-                // dept_head: reporting lines only, scoped to their subtree by the backend
-                <ReportingChart />
-            ) : (
-                <Tabs defaultValue="structure">
-                    <TabsList className="mb-6 bg-muted/60 p-1">
-                        <TabsTrigger value="structure" className="gap-2 text-sm">
-                            <GitBranch className="h-3.5 w-3.5" />
-                            Org Structure
-                        </TabsTrigger>
-                        <TabsTrigger value="reporting" className="gap-2 text-sm">
-                            <Users className="h-3.5 w-3.5" />
-                            Reporting Lines
-                        </TabsTrigger>
-                    </TabsList>
+            {/* All roles see both tabs — backend scopes the data appropriately */}
+            <Tabs defaultValue={isFullAccess ? 'structure' : 'reporting'}>
+                <TabsList className="mb-6 bg-muted/60 p-1">
+                    <TabsTrigger value="structure" className="gap-2 text-sm">
+                        <GitBranch className="h-3.5 w-3.5" />
+                        {isFullAccess ? 'Org Structure' : 'My Branch'}
+                    </TabsTrigger>
+                    <TabsTrigger value="reporting" className="gap-2 text-sm">
+                        <Users className="h-3.5 w-3.5" />
+                        Reporting Lines
+                    </TabsTrigger>
+                </TabsList>
 
-                    <TabsContent value="structure" className="mt-0">
-                        <StructureChart />
-                    </TabsContent>
-                    <TabsContent value="reporting" className="mt-0">
-                        <ReportingChart />
-                    </TabsContent>
-                </Tabs>
-            )}
+                <TabsContent value="structure" className="mt-0">
+                    <StructureChart />
+                </TabsContent>
+                <TabsContent value="reporting" className="mt-0">
+                    <ReportingChart />
+                </TabsContent>
+            </Tabs>
         </PageWrapper>
     )
 }

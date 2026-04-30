@@ -67,8 +67,10 @@ export default async function (fastify: any): Promise<void> {
 
     // GET /api/v1/employees/org-chart
     fastify.get('/org-chart', { ...auth, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
-        // dept_head: scope the chart to their own reporting subtree only
-        const rootEmployeeId = request.user.role === 'dept_head'
+        // dept_head + employee: scope to own subtree + ancestor chain only
+        // hr_manager / pro_officer / super_admin: full chart
+        const scopedRoles = ['dept_head', 'employee', 'pro_officer']
+        const rootEmployeeId = scopedRoles.includes(request.user.role)
             ? (request.user.employeeId ?? undefined)
             : undefined
         return reply.send(await getOrgChart(request.user.tenantId, rootEmployeeId))

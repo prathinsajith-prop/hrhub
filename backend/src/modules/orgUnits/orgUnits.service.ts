@@ -77,6 +77,50 @@ export async function getOrgUnitTree(tenantId: string): Promise<OrgUnitNode[]> {
     return roots
 }
 
+/**
+ * Returns the org unit tree scoped to the branch the given employee belongs to.
+ * Falls back to the full tree if the employee has no branchId.
+ */
+export async function getScopedOrgUnitTree(tenantId: string, employeeId: string): Promise<OrgUnitNode[]> {
+    const [emp] = await db
+        .select({ branchId: employees.branchId, divisionId: employees.divisionId, departmentId: employees.departmentId })
+        .from(employees)
+        .where(and(eq(employees.id, employeeId), eq(employees.tenantId, tenantId)))
+        .limit(1)
+
+    if (!emp) return []
+
+    const all = await listOrgUnits(tenantId)
+    const map = new Map<string, OrgUnitNode>()
+    for (const row of all) {
+        map.set(row.id, { ...row, children: [] } as OrgUnitNode)
+    }
+
+    // Build full tree first
+    const roots: OrgUnitNode[] = []
+    for (const node of map.values()) {
+        if (node.parentId && map.has(node.parentId)) {
+            map.get(node.parentId)!.children.push(node)
+        } else {
+            roots.push(node)
+        }
+    }
+
+    // If employee has a branchId, return only that branch node
+    if (emp.branchId && map.has(emp.branchId)) {
+        const branch = map.get(emp.branchId)!
+        return [branch]
+    }
+
+    // No branch assigned — return the division or department they belong to, wrapped minimally
+    if (emp.divisionId && map.has(emp.divisionId)) {
+        return [map.get(emp.divisionId)!]
+    }
+
+    // Last resort: return full tree (unassigned employee)
+    return roots
+}
+
 export async function createOrgUnit(tenantId: string, input: OrgUnitInput) {
     const [row] = await db
         .insert(orgUnits)

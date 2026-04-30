@@ -30,6 +30,7 @@ import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { toast } from '@/components/ui/overlays'
 import { api } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
+import { CopyableEmail, CopyablePhone } from '@/components/shared'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -336,12 +337,14 @@ export function EmployeeDetailPage() {
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
                     {(e.mobileNo ?? e.phone) && (
                       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Phone className="h-3.5 w-3.5" />{e.mobileNo ?? e.phone}
+                        <Phone className="h-3.5 w-3.5 shrink-0" />
+                        <CopyablePhone phone={e.mobileNo ?? e.phone ?? ''} className="text-xs text-muted-foreground" />
                       </span>
                     )}
                     {(e.workEmail ?? e.email) && (
                       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Mail className="h-3.5 w-3.5" />{e.workEmail ?? e.email}
+                        <Mail className="h-3.5 w-3.5 shrink-0" />
+                        <CopyableEmail email={e.workEmail ?? e.email ?? ''} className="text-xs text-muted-foreground" />
                       </span>
                     )}
                   </div>
@@ -846,7 +849,7 @@ export function EmployeeDetailPage() {
                       <div className="space-y-1.5 text-sm text-muted-foreground">
                         <p className="flex items-center gap-2">
                           <Mail className="h-3.5 w-3.5 shrink-0" />
-                          {accountData.account?.email}
+                          {accountData.account?.email && <CopyableEmail email={accountData.account.email} className="text-sm text-muted-foreground" />}
                         </p>
                         <p className="flex items-center gap-2">
                           <Clock className="h-3.5 w-3.5 shrink-0" />
