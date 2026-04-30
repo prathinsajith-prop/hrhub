@@ -361,6 +361,7 @@ export function DocumentsPage() {
   const [uploadOpen, setUploadOpen] = useState(qpUpload)
   const [editTarget, setEditTarget] = useState<Document | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
+  const [bulkArchiveTarget, setBulkArchiveTarget] = useState<any[] | null>(null)
   const [viewTarget, setViewTarget] = useState<Document | null>(null)
   const [verifyTarget, setVerifyTarget] = useState<Document | null>(null)
   const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: 100 })
@@ -525,12 +526,7 @@ export function DocumentsPage() {
                 Download
               </Button>
               <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                onClick={() => {
-                  Promise.all(selected.map((row: any) => api.delete(`/documents/${row.id}`))).then(() => {
-                    void qc.invalidateQueries({ queryKey: ['documents'] })
-                    toast.warning(`${selected.length} document${selected.length === 1 ? '' : 's'} archived`)
-                  })
-                }}>
+                onClick={() => setBulkArchiveTarget(selected as any[])}>
                 Archive
               </Button>
             </>
@@ -567,6 +563,22 @@ export function DocumentsPage() {
         confirmLabel={deleteDoc.isPending ? 'Archiving…' : 'Archive'}
         variant="destructive"
         onConfirm={handleDelete}
+      />
+      <ConfirmDialog
+        open={!!bulkArchiveTarget}
+        onOpenChange={(o) => !o && setBulkArchiveTarget(null)}
+        title={`Archive ${bulkArchiveTarget?.length ?? 0} document${(bulkArchiveTarget?.length ?? 0) === 1 ? '' : 's'}?`}
+        description="These documents will be permanently removed from the system. This action cannot be undone."
+        confirmLabel="Archive All"
+        variant="destructive"
+        onConfirm={() => {
+          if (!bulkArchiveTarget) return
+          Promise.all(bulkArchiveTarget.map((row: any) => api.delete(`/documents/${row.id}`))).then(() => {
+            void qc.invalidateQueries({ queryKey: ['documents'] })
+            toast.warning(`${bulkArchiveTarget.length} document${bulkArchiveTarget.length === 1 ? '' : 's'} archived`)
+            setBulkArchiveTarget(null)
+          })
+        }}
       />
       <DocumentViewerDialog
         open={!!viewTarget}
