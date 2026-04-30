@@ -363,7 +363,7 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
     })
 
     // GET /api/v1/assets/export?format=csv|pdf
-    fastify.get('/assets/export', {
+    fastify.get('/export', {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['Assets'] },
     }, async (request: any, reply: any) => {
