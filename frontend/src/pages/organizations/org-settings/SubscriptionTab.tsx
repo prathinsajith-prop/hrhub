@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
     Zap, CreditCard, Building, Users2, AlertCircle, CheckCircle, Send,
-    RefreshCw, ExternalLink, Plus, Minus, ShieldCheck, FileText, Calendar, Download,
+    ExternalLink, Plus, Minus, ShieldCheck, FileText, Calendar, Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
