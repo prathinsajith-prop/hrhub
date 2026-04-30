@@ -6,6 +6,10 @@ import {
   TrendingUp, RefreshCcw, Plus, Calculator, DollarSign,
   CircleDot, ArrowRight, Banknote, Users, BarChart3,
 } from 'lucide-react'
+import {
+  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +28,7 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { formatCurrency, cn } from '@/lib/utils'
 import {
   usePayrollRuns, useRunPayroll, useSubmitWps,
@@ -37,6 +42,9 @@ import type { PayrollRun, Payslip } from '@/types'
 
 const MONTH_NAMES = Array.from({ length: 12 }, (_, i) =>
   new Date(2000, i).toLocaleDateString('en-AE', { month: 'long' }),
+)
+const MONTH_SHORT = Array.from({ length: 12 }, (_, i) =>
+  new Date(2000, i).toLocaleDateString('en-AE', { month: 'short' }),
 )
 
 function periodLabel(month: number, year: number) {
@@ -52,6 +60,8 @@ const STATUS_CFG: Record<string, { variant: BadgeVariant; label: string; step: n
 }
 
 const WORKFLOW_STEPS = ['Draft', 'Processing', 'Approved', 'WPS Submitted', 'Paid']
+
+const PIE_COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#ef4444']
 
 // ─── download helpers ─────────────────────────────────────────────────────────
 
@@ -102,6 +112,135 @@ function WorkflowBar({ status }: { status: string }) {
   )
 }
 
+// ─── Payroll Charts ────────────────────────────────────────────────────────────
+
+function PayrollCharts({ runs }: { runs: PayrollRun[] }) {
+  const areaData = useMemo(() => {
+    const paid = runs
+      .filter(r => ['approved', 'wps_submitted', 'paid'].includes(r.status))
+      .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
+    return paid.map(r => ({
+      name: MONTH_SHORT[r.month - 1],
+      Gross: Number(r.totalGross ?? 0),
+      Net: Number(r.totalNet ?? 0),
+      Deductions: Number(r.totalDeductions ?? 0),
+    }))
+  }, [runs])
+
+  const statusData = useMemo(() => {
+    const counts: Record<string, number> = {}
+    runs.forEach(r => { counts[r.status] = (counts[r.status] ?? 0) + 1 })
+    return Object.entries(counts).map(([name, value]) => ({
+      name: STATUS_CFG[name]?.label ?? name,
+      value,
+    }))
+  }, [runs])
+
+  if (runs.length === 0) return null
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Area chart: Gross vs Net trend */}
+      <Card className="lg:col-span-2 p-4">
+        <h3 className="text-sm font-semibold mb-4">Gross vs Net Payroll Trend</h3>
+        {areaData.length === 0 ? (
+          <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">
+            No processed runs yet
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={areaData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradGross" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradNet" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis
+                tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                tick={{ fontSize: 11 }}
+                width={48}
+              />
+              <Tooltip
+                formatter={(value: unknown, name: unknown) => [formatCurrency(Number(value ?? 0)), String(name ?? "")]}
+                contentStyle={{ fontSize: 12, borderRadius: 8 }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Area type="monotone" dataKey="Gross" stroke="#3b82f6" fill="url(#gradGross)" strokeWidth={2} dot={false} />
+              <Area type="monotone" dataKey="Net" stroke="#10b981" fill="url(#gradNet)" strokeWidth={2} dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </Card>
+
+      {/* Pie chart: Run status distribution */}
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold mb-4">Runs by Status</h3>
+        {statusData.length === 0 ? (
+          <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">No data</div>
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            <ResponsiveContainer width="100%" height={160}>
+              <PieChart>
+                <Pie
+                  data={statusData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={48}
+                  outerRadius={72}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {statusData.map((_, i) => (
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="space-y-1.5 w-full">
+              {statusData.map((d, i) => (
+                <div key={d.name} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2.5 w-2.5 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    <span className="text-muted-foreground">{d.name}</span>
+                  </div>
+                  <span className="font-semibold">{d.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Bar chart: deductions breakdown */}
+      {areaData.length > 0 && (
+        <Card className="lg:col-span-3 p-4">
+          <h3 className="text-sm font-semibold mb-4">Deductions per Month</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={areaData} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} width={48} />
+              <Tooltip
+                formatter={(value: unknown) => [formatCurrency(Number(value ?? 0)), "Deductions"]}
+                contentStyle={{ fontSize: 12, borderRadius: 8 }}
+              />
+              <Bar dataKey="Deductions" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 // ─── Payslip breakdown sheet ──────────────────────────────────────────────────
 
 function PayslipRow({ label, value, sub, bold, red, green }: {
@@ -127,6 +266,12 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
   const [downloading, setDownloading] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const payslips = (data ?? []) as Payslip[]
+
+  const chartData = useMemo(() => payslips.slice(0, 10).map(ps => ({
+    name: (ps.employeeName ?? '').split(' ')[0],
+    Net: Number(ps.netSalary),
+    Gross: Number(ps.grossSalary),
+  })), [payslips])
 
   const handleDownload = async (ps: Payslip) => {
     setDownloading(ps.id)
@@ -174,60 +319,78 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
               </div>
             </div>
           ) : (
-            payslips.map((ps) => {
-              const isExp = expanded === ps.id
-              return (
-                <div key={ps.id} className="hover:bg-muted/20 transition-colors">
-                  <button
-                    type="button"
-                    className="w-full flex items-center justify-between px-5 py-3.5 text-left"
-                    onClick={() => setExpanded(isExp ? null : ps.id)}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{ps.employeeName}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Gross {formatCurrency(Number(ps.grossSalary))} · Net <span className="text-emerald-600 font-semibold">{formatCurrency(Number(ps.netSalary))}</span>
-                      </p>
-                    </div>
-                    <ArrowRight className={cn('h-3.5 w-3.5 text-muted-foreground shrink-0 ml-3 transition-transform', isExp && 'rotate-90')} />
-                  </button>
-
-                  {isExp && (
-                    <div className="px-5 pb-4 bg-muted/10 border-t">
-                      <div className="divide-y divide-border/60">
-                        <div className="py-1">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pt-2 pb-1">Earnings</p>
-                          {Number(ps.basicSalary) > 0 && <PayslipRow label="Basic Salary" value={Number(ps.basicSalary)} sub />}
-                          {Number(ps.housingAllowance) > 0 && <PayslipRow label="Housing Allowance" value={Number(ps.housingAllowance)} sub />}
-                          {Number(ps.transportAllowance) > 0 && <PayslipRow label="Transport Allowance" value={Number(ps.transportAllowance)} sub />}
-                          {Number(ps.otherAllowances) > 0 && <PayslipRow label="Other Allowances" value={Number(ps.otherAllowances)} sub />}
-                          {Number(ps.overtime) > 0 && <PayslipRow label="Overtime" value={Number(ps.overtime)} sub />}
-                          <PayslipRow label="Total Gross" value={Number(ps.grossSalary)} bold />
-                        </div>
-                        {Number(ps.deductions) > 0 && (
-                          <div className="py-1">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pt-2 pb-1">Deductions</p>
-                            <PayslipRow label="Total Deductions" value={Number(ps.deductions)} red sub />
-                          </div>
-                        )}
-                        <div className="flex justify-between items-center py-3">
-                          <span className="text-sm font-bold">Net Salary</span>
-                          <span className="text-base font-bold text-emerald-600">{formatCurrency(Number(ps.netSalary))}</span>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm" variant="outline" className="w-full mt-2 h-8 text-xs"
-                        loading={downloading === ps.id}
-                        leftIcon={<FileDown className="h-3 w-3" />}
-                        onClick={() => handleDownload(ps)}
-                      >
-                        Download PDF Payslip
-                      </Button>
-                    </div>
-                  )}
+            <>
+              {/* Mini bar chart inside sheet */}
+              {chartData.length > 0 && (
+                <div className="px-5 py-4 bg-muted/20">
+                  <p className="text-xs font-medium text-muted-foreground mb-3">Salary Overview (top {chartData.length})</p>
+                  <ResponsiveContainer width="100%" height={120}>
+                    <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                      <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                      <YAxis hide tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v: unknown) => formatCurrency(Number(v ?? 0))} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
+                      <Bar dataKey="Gross" fill="#93c5fd" radius={[2, 2, 0, 0]} maxBarSize={20} />
+                      <Bar dataKey="Net" fill="#10b981" radius={[2, 2, 0, 0]} maxBarSize={20} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
-              )
-            })
+              )}
+
+              {payslips.map((ps) => {
+                const isExp = expanded === ps.id
+                return (
+                  <div key={ps.id} className="hover:bg-muted/20 transition-colors">
+                    <button
+                      type="button"
+                      className="w-full flex items-center justify-between px-5 py-3.5 text-left"
+                      onClick={() => setExpanded(isExp ? null : ps.id)}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{ps.employeeName}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Gross {formatCurrency(Number(ps.grossSalary))} · Net <span className="text-emerald-600 font-semibold">{formatCurrency(Number(ps.netSalary))}</span>
+                        </p>
+                      </div>
+                      <ArrowRight className={cn('h-3.5 w-3.5 text-muted-foreground shrink-0 ml-3 transition-transform', isExp && 'rotate-90')} />
+                    </button>
+
+                    {isExp && (
+                      <div className="px-5 pb-4 bg-muted/10 border-t">
+                        <div className="divide-y divide-border/60">
+                          <div className="py-1">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pt-2 pb-1">Earnings</p>
+                            {Number(ps.basicSalary) > 0 && <PayslipRow label="Basic Salary" value={Number(ps.basicSalary)} sub />}
+                            {Number(ps.housingAllowance) > 0 && <PayslipRow label="Housing Allowance" value={Number(ps.housingAllowance)} sub />}
+                            {Number(ps.transportAllowance) > 0 && <PayslipRow label="Transport Allowance" value={Number(ps.transportAllowance)} sub />}
+                            {Number(ps.otherAllowances) > 0 && <PayslipRow label="Other Allowances" value={Number(ps.otherAllowances)} sub />}
+                            {Number(ps.overtime) > 0 && <PayslipRow label="Overtime" value={Number(ps.overtime)} sub />}
+                            <PayslipRow label="Total Gross" value={Number(ps.grossSalary)} bold />
+                          </div>
+                          {Number(ps.deductions) > 0 && (
+                            <div className="py-1">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pt-2 pb-1">Deductions</p>
+                              <PayslipRow label="Total Deductions" value={Number(ps.deductions)} red sub />
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center py-3">
+                            <span className="text-sm font-bold">Net Salary</span>
+                            <span className="text-base font-bold text-emerald-600">{formatCurrency(Number(ps.netSalary))}</span>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm" variant="outline" className="w-full mt-2 h-8 text-xs"
+                          loading={downloading === ps.id}
+                          leftIcon={<FileDown className="h-3 w-3" />}
+                          onClick={() => handleDownload(ps)}
+                        >
+                          Download PDF Payslip
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </>
           )}
         </div>
       </SheetContent>
@@ -248,8 +411,20 @@ function GratuityCalculator() {
   const uaeRules = yearsNum < 1 ? null :
     yearsNum < 5 ? '21 days per year of service' : '30 days per year of service'
 
+  // Breakdown bar data
+  const barData = useMemo(() => {
+    if (!hasResult || !data) return []
+    const phase1Years = Math.min(yearsNum, 5)
+    const phase2Years = Math.max(0, yearsNum - 5)
+    const dailyRate = basicNum / 30
+    return [
+      { phase: 'First 5 yrs (21d)', amount: dailyRate * 21 * phase1Years },
+      ...(phase2Years > 0 ? [{ phase: 'After 5 yrs (30d)', amount: dailyRate * 30 * phase2Years }] : []),
+    ]
+  }, [hasResult, data, basicNum, yearsNum])
+
   return (
-    <div className="space-y-4 max-w-lg">
+    <div className="space-y-5 max-w-xl">
       <div>
         <h3 className="text-sm font-semibold flex items-center gap-2">
           <Calculator className="h-4 w-4 text-muted-foreground" />
@@ -272,22 +447,39 @@ function GratuityCalculator() {
       </div>
 
       {hasResult ? (
-        <div className="rounded-xl border bg-emerald-50/60 border-emerald-100 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-emerald-800">Estimated Gratuity</span>
-            <span className="text-2xl font-bold text-emerald-700">{formatCurrency(data!.gratuity)}</span>
-          </div>
-          <Separator className="bg-emerald-100" />
-          <div className="space-y-1.5 text-xs text-emerald-700">
-            <div className="flex justify-between">
-              <span>Calculation basis</span>
-              <span className="font-medium">{uaeRules}</span>
+        <div className="space-y-4">
+          <div className="rounded-xl border bg-emerald-50/60 border-emerald-100 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-emerald-800">Estimated Gratuity</span>
+              <span className="text-2xl font-bold text-emerald-700">{formatCurrency(data!.gratuity)}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Daily basic rate</span>
-              <span className="font-medium">{formatCurrency(basicNum / 30)} / day</span>
+            <Separator className="bg-emerald-100" />
+            <div className="space-y-1.5 text-xs text-emerald-700">
+              <div className="flex justify-between">
+                <span>Calculation basis</span>
+                <span className="font-medium">{uaeRules}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Daily basic rate</span>
+                <span className="font-medium">{formatCurrency(basicNum / 30)} / day</span>
+              </div>
             </div>
           </div>
+
+          {/* Breakdown bar chart */}
+          {barData.length > 0 && (
+            <div className="rounded-xl border p-4">
+              <p className="text-xs font-medium text-muted-foreground mb-3">Gratuity Breakdown</p>
+              <ResponsiveContainer width="100%" height={100}>
+                <BarChart data={barData} layout="vertical" margin={{ top: 0, right: 60, left: 10, bottom: 0 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="phase" tick={{ fontSize: 11 }} width={120} />
+                  <Tooltip formatter={(v: unknown) => formatCurrency(Number(v ?? 0))} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
+                  <Bar dataKey="amount" fill="#10b981" radius={[0, 4, 4, 0]} label={{ position: 'right', fontSize: 11, formatter: (v: unknown) => formatCurrency(Number(v ?? 0)) }} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       ) : (
         <div className="rounded-xl border border-dashed p-6 text-center">
@@ -370,7 +562,11 @@ export function PayrollPage() {
   const { can } = usePermissions()
   const canManagePayroll = can('manage_payroll')
 
-  const { data: payrollData, isLoading, isFetching, refetch } = usePayrollRuns({ year: new Date().getFullYear() })
+  const now = new Date()
+  const currentMonth = now.getMonth() + 1
+  const currentYear = now.getFullYear()
+
+  const { data: payrollData, isLoading, isFetching, refetch } = usePayrollRuns({ year: currentYear })
   const payrollRuns = useMemo<PayrollRun[]>(() => (payrollData?.data as PayrollRun[]) ?? [], [payrollData?.data])
 
   const runPayroll = useRunPayroll()
@@ -381,9 +577,11 @@ export function PayrollPage() {
   const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null)
   const [payslipsOpen, setPayslipsOpen] = useState(false)
 
-  const now = new Date()
-  const [createMonth, setCreateMonth] = useState(now.getMonth() + 1)
-  const [createYear, setCreateYear] = useState(now.getFullYear())
+  const [createMonth, setCreateMonth] = useState(currentMonth)
+  const [createYear, setCreateYear] = useState(currentYear)
+
+  // Disable months in the future when selected year = current year
+  const maxSelectableMonth = createYear === currentYear ? currentMonth : 12
 
   const draftRun = payrollRuns.find(r => r.status === 'draft')
   const latestPaidRun = payrollRuns.find(r => r.status === 'paid' || r.status === 'wps_submitted')
@@ -498,59 +696,10 @@ export function PayrollPage() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {isLoading ? Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-xl border bg-card p-4 space-y-3">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-7 w-28" />
-          </div>
-        )) : (
-          <>
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-                  <CreditCard className="h-4 w-4 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-[11px] text-muted-foreground font-medium">Last Net Payroll</p>
-                  <p className="text-lg font-bold leading-tight">{latestPaidRun ? formatCurrency(Number(latestPaidRun.totalNet)) : '—'}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-[11px] text-muted-foreground font-medium">WPS Compliance</p>
-                  <p className="text-lg font-bold leading-tight">{wpsPct}%</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
-                  <Clock className="h-4 w-4 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-[11px] text-muted-foreground font-medium">Pending Run</p>
-                  <p className="text-lg font-bold leading-tight truncate">{draftLabel}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0">
-                  <TrendingUp className="h-4 w-4 text-violet-600" />
-                </div>
-                <div>
-                  <p className="text-[11px] text-muted-foreground font-medium">YTD Payroll</p>
-                  <p className="text-lg font-bold leading-tight">{ytdNet > 0 ? formatCurrency(ytdNet) : '—'}</p>
-                </div>
-              </div>
-            </Card>
-          </>
-        )}
+        <KpiCardCompact label="Last Net Payroll" value={latestPaidRun ? formatCurrency(Number(latestPaidRun.totalNet)) : '—'} icon={CreditCard} color="blue" loading={isLoading} />
+        <KpiCardCompact label="WPS Compliance" value={isLoading ? undefined : `${wpsPct}%`} icon={CheckCircle2} color="green" loading={isLoading} />
+        <KpiCardCompact label="Pending Run" value={isLoading ? undefined : draftLabel} icon={Clock} color="amber" loading={isLoading} />
+        <KpiCardCompact label="YTD Payroll" value={isLoading ? undefined : (ytdNet > 0 ? formatCurrency(ytdNet) : '—')} icon={TrendingUp} color="purple" loading={isLoading} />
       </div>
 
       {/* Draft run action banner */}
@@ -563,11 +712,7 @@ export function PayrollPage() {
                   <Badge variant="warning" className="text-[10px]">Draft</Badge>
                   <p className="font-semibold text-sm">{draftLabel} Payroll Run</p>
                 </div>
-
-                {/* Workflow progress */}
                 <WorkflowBar status={draftRun.status} />
-
-                {/* Financials */}
                 <div className="flex items-center gap-5 text-xs flex-wrap">
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <Users className="h-3.5 w-3.5" />
@@ -579,7 +724,6 @@ export function PayrollPage() {
                   <span className="text-muted-foreground">Net <span className="font-bold text-emerald-600 text-sm">{formatCurrency(Number(draftRun.totalNet ?? 0))}</span></span>
                 </div>
               </div>
-
               {canManagePayroll && (
                 <Button leftIcon={<Play className="h-4 w-4" />} onClick={() => setRunConfirmOpen(true)}>
                   Process Payroll
@@ -591,8 +735,12 @@ export function PayrollPage() {
       )}
 
       {/* Main tabs */}
-      <Tabs defaultValue="history">
+      <Tabs defaultValue="overview">
         <TabsList className="bg-muted/60">
+          <TabsTrigger value="overview" className="gap-1.5 text-sm">
+            <TrendingUp className="h-3.5 w-3.5" />
+            Overview
+          </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5 text-sm">
             <BarChart3 className="h-3.5 w-3.5" />
             History
@@ -603,10 +751,32 @@ export function PayrollPage() {
           </TabsTrigger>
         </TabsList>
 
+        {/* Overview tab — charts */}
+        <TabsContent value="overview" className="mt-4">
+          {isLoading ? (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className={cn('rounded-xl border bg-card p-4', i === 0 && 'lg:col-span-2')}>
+                  <Skeleton className="h-4 w-40 mb-4" />
+                  <Skeleton className="h-48 w-full" />
+                </div>
+              ))}
+            </div>
+          ) : payrollRuns.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-16 text-center">
+              <BarChart3 className="h-10 w-10 text-muted-foreground/30" />
+              <p className="text-sm font-medium text-muted-foreground">No payroll data yet</p>
+              <p className="text-xs text-muted-foreground/70">Create and process a payroll run to see charts here.</p>
+            </div>
+          ) : (
+            <PayrollCharts runs={payrollRuns} />
+          )}
+        </TabsContent>
+
         <TabsContent value="history" className="mt-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Payroll Runs — {now.getFullYear()}</CardTitle>
+              <CardTitle className="text-sm font-semibold">Payroll Runs — {currentYear}</CardTitle>
               <p className="text-xs text-muted-foreground">Click any row to view individual payslips.</p>
             </CardHeader>
             <CardContent className="p-0">
@@ -637,33 +807,57 @@ export function PayrollPage() {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>New Payroll Run</DialogTitle>
-            <DialogDescription>Select the pay period. A draft will be created for review before processing.</DialogDescription>
+            <DialogDescription>Select the pay period. Only past or current months are allowed.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Month</Label>
-                <Select value={String(createMonth)} onValueChange={v => setCreateMonth(Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {MONTH_NAMES.map((name, i) => (
-                      <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
                 <Label>Year</Label>
-                <Select value={String(createYear)} onValueChange={v => setCreateYear(Number(v))}>
+                <Select
+                  value={String(createYear)}
+                  onValueChange={v => {
+                    const y = Number(v)
+                    setCreateYear(y)
+                    // clamp month when switching to current year
+                    if (y === currentYear && createMonth > currentMonth) {
+                      setCreateMonth(currentMonth)
+                    }
+                  }}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Array.from({ length: 6 }, (_, i) => now.getFullYear() - 1 + i).map(y => (
+                    {[currentYear - 1, currentYear].map(y => (
                       <SelectItem key={y} value={String(y)}>{y}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5">
+                <Label>Month</Label>
+                <Select value={String(createMonth)} onValueChange={v => setCreateMonth(Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MONTH_NAMES.map((name, i) => {
+                      const monthNum = i + 1
+                      const isFuture = monthNum > maxSelectableMonth
+                      return (
+                        <SelectItem key={monthNum} value={String(monthNum)} disabled={isFuture}>
+                          <span className={cn(isFuture && 'text-muted-foreground')}>{name}</span>
+                          {isFuture && <span className="ml-1.5 text-[10px] text-muted-foreground">(future)</span>}
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            {/* Period preview */}
+            <div className="rounded-lg bg-muted/40 border px-3 py-2.5 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Pay period</span>
+              <span className="text-sm font-semibold">{MONTH_NAMES[createMonth - 1]} {createYear}</span>
+            </div>
+
             <Separator />
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={createRun.isPending}>Cancel</Button>

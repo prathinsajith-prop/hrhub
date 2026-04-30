@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useCreateTenant } from '@/hooks/useTenants'
+import { useCreateTenant, useSwitchTenant } from '@/hooks/useTenants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,12 +24,15 @@ const INITIAL = {
   name: '',
   jurisdiction: 'Mainland',
   industryType: 'Other',
-  subscriptionPlan: 'free',
+  subscriptionPlan: 'starter',
 }
 
 export function NewOrganizationDialog({ open, onOpenChange, onSuccess }: Props) {
   const createMut = useCreateTenant()
+  const switchMut = useSwitchTenant()
   const [form, setForm] = useState(INITIAL)
+
+  const isPending = createMut.isPending || switchMut.isPending
 
   function set(field: keyof typeof INITIAL, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -42,18 +45,22 @@ export function NewOrganizationDialog({ open, onOpenChange, onSuccess }: Props) 
       return
     }
     try {
-      await createMut.mutateAsync(form)
-      toast.success('Organization created')
+      const result = await createMut.mutateAsync(form)
       setForm(INITIAL)
       onOpenChange(false)
       onSuccess?.()
+      // Auto-switch into the new org so the user lands in it immediately
+      switchMut.mutate(result.id, {
+        onSuccess: () => { window.location.assign('/dashboard') },
+        onError: () => toast.error('Organization created but could not switch to it. Use the org switcher.'),
+      })
     } catch (err: unknown) {
       toast.error((err instanceof Error ? err.message : null) ?? 'Failed to create organization')
     }
   }
 
   function handleOpenChange(v: boolean) {
-    if (!createMut.isPending) {
+    if (!isPending) {
       if (!v) setForm(INITIAL)
       onOpenChange(v)
     }
@@ -121,11 +128,11 @@ export function NewOrganizationDialog({ open, onOpenChange, onSuccess }: Props) 
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)} disabled={createMut.isPending}>
+            <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)} disabled={isPending}>
               Cancel
             </Button>
-            <Button type="submit" disabled={createMut.isPending}>
-              {createMut.isPending ? 'Creating…' : 'Create organization'}
+            <Button type="submit" disabled={isPending}>
+              {createMut.isPending ? 'Creating…' : switchMut.isPending ? 'Switching…' : 'Create organization'}
             </Button>
           </div>
         </form>

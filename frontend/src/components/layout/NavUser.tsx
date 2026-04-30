@@ -11,6 +11,7 @@ import {
   Loader2Icon,
   CreditCardIcon,
   PlusIcon,
+  ArrowRightLeftIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -174,10 +175,10 @@ export function NavUser({
                   </div>
                   {myTenants.length > 1 && (
                     <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="h-auto p-0 border-0 bg-transparent text-xs font-medium text-primary hover:text-primary/80 focus:bg-transparent data-[state=open]:bg-transparent shrink-0 gap-0.5 [&>svg]:hidden">
-                        {switchingId ? (
-                          <Loader2Icon className="size-3 animate-spin mr-0.5" />
-                        ) : null}
+                      <DropdownMenuSubTrigger className="h-7 px-2 rounded-md bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 focus:bg-primary/15 data-[state=open]:bg-primary/15 text-xs font-medium shrink-0 gap-1 [&>svg:last-child]:size-3 [&>svg:last-child]:opacity-60">
+                        {switchingId
+                          ? <Loader2Icon className="size-3 animate-spin" />
+                          : <ArrowRightLeftIcon className="size-3" />}
                         Switch
                       </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>

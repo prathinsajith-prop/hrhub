@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import { eq, and, desc, isNull, sql } from 'drizzle-orm'
 import { log } from '../../lib/logger.js'
 import { db } from '../../db/index.js'
-import { tenants, users, tenantMemberships } from '../../db/schema/index.js'
+import { tenants, users, tenantMemberships, entities, employees } from '../../db/schema/index.js'
 import {
     type MemberRole,
     buildPermissionMap,
@@ -43,7 +43,7 @@ async function loadActorRole(userId: string, tenantId: string): Promise<MemberRo
 /* ───────────────────────── tenant / membership listing ─────────────────────── */
 
 export async function listMyTenants(userId: string) {
-    // Memberships
+    // Explicit membership rows (invited or created via dialog)
     const memberships = await db
         .select({
             membershipId: tenantMemberships.id,
@@ -65,6 +65,44 @@ export async function listMyTenants(userId: string) {
             eq(tenantMemberships.isActive, true),
         ))
         .orderBy(desc(tenantMemberships.createdAt))
+
+    // Legacy fallback: include the user's primary tenant from users.tenantId
+    // for accounts created before the membership system was introduced.
+    const [u] = await db
+        .select({ tenantId: users.tenantId, role: users.role })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1)
+
+    if (u?.tenantId && !memberships.find(m => m.tenantId === u.tenantId)) {
+        const [t] = await db
+            .select({
+                id: tenants.id,
+                name: tenants.name,
+                jurisdiction: tenants.jurisdiction,
+                industryType: tenants.industryType,
+                subscriptionPlan: tenants.subscriptionPlan,
+                logoUrl: tenants.logoUrl,
+            })
+            .from(tenants)
+            .where(eq(tenants.id, u.tenantId))
+            .limit(1)
+
+        if (t) {
+            memberships.push({
+                membershipId: 'legacy',
+                role: u.role as MemberRole,
+                isActive: true,
+                status: 'accepted',
+                tenantId: t.id,
+                tenantName: t.name,
+                jurisdiction: t.jurisdiction,
+                industryType: t.industryType,
+                subscriptionPlan: t.subscriptionPlan,
+                logoUrl: t.logoUrl,
+            })
+        }
+    }
 
     return memberships
 }
@@ -89,25 +127,69 @@ export async function createTenant(actorUserId: string, input: {
     industryType?: string
     subscriptionPlan?: string
 }) {
-    const [tenant] = await db.insert(tenants).values({
-        name: input.name,
-        tradeLicenseNo: '',
-        jurisdiction: (input.jurisdiction ?? 'mainland') as 'mainland' | 'freezone',
-        industryType: input.industryType ?? 'Other',
-        subscriptionPlan: (input.subscriptionPlan ?? 'free') as any,
-    }).returning()
+    // Load creator user info so we can build their employee record
+    const [actor] = await db.select().from(users).where(eq(users.id, actorUserId)).limit(1)
+    if (!actor) throw http('User not found', 404)
 
-    // Bootstrap: actor becomes super_admin of the new tenant.
-    await db.insert(tenantMemberships).values({
-        tenantId: tenant.id,
-        userId: actorUserId,
-        role: 'super_admin',
-        inviteStatus: 'accepted',
-        acceptedAt: new Date(),
-        isActive: true,
+    return db.transaction(async (tx) => {
+        // 1. Create the tenant
+        // tradeLicenseNo must be unique — use a placeholder that won't collide
+        const placeholderLicense = `PENDING-${crypto.randomUUID().slice(0, 8).toUpperCase()}`
+        const [tenant] = await tx.insert(tenants).values({
+            name: input.name,
+            tradeLicenseNo: placeholderLicense,
+            jurisdiction: (input.jurisdiction ?? 'mainland') as 'mainland' | 'freezone',
+            industryType: input.industryType ?? 'Other',
+            subscriptionPlan: (input.subscriptionPlan ?? 'starter') as any,
+        }).returning()
+
+        // 2. Bootstrap: actor becomes super_admin of the new tenant
+        await tx.insert(tenantMemberships).values({
+            tenantId: tenant.id,
+            userId: actorUserId,
+            role: 'super_admin',
+            inviteStatus: 'accepted',
+            acceptedAt: new Date(),
+            isActive: true,
+        })
+
+        // 3. Create a default entity for the tenant
+        const [entity] = await tx.insert(entities).values({
+            tenantId: tenant.id,
+            entityName: input.name,
+            licenseType: null,
+            freeZoneId: null,
+            isActive: true,
+        }).returning()
+
+        // 4. Generate employee number: ORG-001-MM-YYYY
+        const now = new Date()
+        const mm = String(now.getMonth() + 1).padStart(2, '0')
+        const yyyy = String(now.getFullYear())
+        const employeeNo = `ORG-001-${mm}-${yyyy}`
+
+        // 5. Create an employee record for the creator in this tenant
+        const [employee] = await tx.insert(employees).values({
+            tenantId: tenant.id,
+            entityId: entity.id,
+            employeeNo,
+            firstName: actor.firstName,
+            lastName: actor.lastName,
+            email: actor.email,
+            joinDate: now.toISOString().slice(0, 10),
+            status: 'active',
+        } as any).returning()
+
+        // 6. Link the user's employeeId to this new employee record
+        // (only if user doesn't have one yet — otherwise this is a secondary org)
+        if (!actor.employeeId) {
+            await tx.update(users)
+                .set({ employeeId: employee.id })
+                .where(eq(users.id, actorUserId))
+        }
+
+        return tenant
     })
-
-    return tenant
 }
 
 /* ───────────────────────────── tenant switch ─────────────────────────────── */
@@ -120,12 +202,64 @@ export async function prepareTenantSwitch(actorUserId: string, targetTenantId: s
     const role = await loadActorRole(actorUserId, targetTenantId)
     if (!role) throw http('You do not belong to this tenant', 403)
 
-    // We need a user row that lives under the target tenant (since users.tenantId
-    // is the JWT tenantId). For multi-tenant users this is the row that already
-    // exists (single user record), but the JWT tenantId we set will be the
-    // target tenant from the membership.
     const [u] = await db.select().from(users).where(eq(users.id, actorUserId)).limit(1)
     if (!u) throw http('User not found', 404)
+
+    // Resolve the employee record for this user in the TARGET tenant by email.
+    // This enables per-tenant employee profiles (different dept, salary, etc.).
+    let [emp] = await db
+        .select({ id: employees.id, department: employees.department })
+        .from(employees)
+        .where(and(
+            eq(employees.tenantId, targetTenantId),
+            eq(employees.email, u.email),
+        ))
+        .limit(1)
+
+    // If no employee record exists in the target tenant, auto-provision one.
+    // The authenticate plugin requires a non-null employeeId in every JWT.
+    if (!emp) {
+        const newEmp = await db.transaction(async (tx) => {
+            // Find or create the default entity for this tenant
+            let [entity] = await tx
+                .select({ id: entities.id })
+                .from(entities)
+                .where(eq(entities.tenantId, targetTenantId))
+                .limit(1)
+
+            if (!entity) {
+                const [t] = await tx.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, targetTenantId)).limit(1)
+                const [newEntity] = await tx.insert(entities).values({
+                    tenantId: targetTenantId,
+                    entityName: t?.name ?? 'Default',
+                    isActive: true,
+                }).returning()
+                entity = newEntity
+            }
+
+            // Use a UUID suffix to guarantee uniqueness regardless of concurrent switches
+            const now = new Date()
+            const mm = String(now.getMonth() + 1).padStart(2, '0')
+            const yyyy = String(now.getFullYear())
+            const suffix = crypto.randomUUID().slice(0, 6).toUpperCase()
+            const employeeNo = `EMP-${suffix}-${mm}-${yyyy}`
+
+            const [inserted] = await tx.insert(employees).values({
+                tenantId: targetTenantId,
+                entityId: entity.id,
+                employeeNo,
+                firstName: u.firstName,
+                lastName: u.lastName,
+                email: u.email,
+                joinDate: now.toISOString().slice(0, 10),
+                status: 'active',
+            } as any).returning()
+
+            return inserted
+        })
+
+        emp = { id: newEmp.id, department: null }
+    }
 
     return {
         user: {
@@ -135,10 +269,10 @@ export async function prepareTenantSwitch(actorUserId: string, targetTenantId: s
             name: u.name,
             email: u.email,
             role,
-            tenantId: targetTenantId, // <- JWT will carry the target tenant
+            tenantId: targetTenantId,
             entityId: u.entityId,
-            employeeId: u.employeeId ?? null,
-            department: u.department,
+            employeeId: emp.id,
+            department: emp.department ?? u.department,
             avatarUrl: u.avatarUrl,
         },
     }
