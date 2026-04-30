@@ -3,7 +3,7 @@ import { type ColumnDef } from '@tanstack/react-table'
 import { labelFor } from '@/lib/enums'
 import {
     Package, Plus, CheckCircle2, Wrench,
-    Edit2, Trash2, UserPlus, RotateCcw, History, RefreshCcw, Tags, Download,
+    Edit2, Trash2, UserPlus, RotateCcw, History, RefreshCcw, Tags,
 } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -22,6 +22,7 @@ import {
 import { DatePicker } from '@/components/ui/date-picker'
 import { formatDate } from '@/lib/utils'
 import { exportAssets } from '@/lib/export'
+import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import {
     useAssets, useCreateAsset, useUpdateAsset, useDeleteAsset,
     useAssignAsset, useReturnAsset,
@@ -721,8 +722,10 @@ export function AssetsPage() {
                         <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
-                        <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportAssets({ format: 'csv' }).catch(() => toast.error('Export failed', 'Could not download CSV.'))}>CSV</Button>
-                        <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportAssets({ format: 'pdf' }).catch(() => toast.error('Export failed', 'Could not download PDF.'))}>PDF</Button>
+                        <ExportDropdown
+                            onExportCsv={() => exportAssets({ format: 'csv' })}
+                            onExportPdf={() => exportAssets({ format: 'pdf' })}
+                        />
                         {canManageAssets && (
                             <Button onClick={() => setCreateOpen(true)}>
                                 <Plus className="h-4 w-4 mr-1.5" />

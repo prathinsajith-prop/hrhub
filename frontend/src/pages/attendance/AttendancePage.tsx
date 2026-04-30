@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
     ChevronLeft, ChevronRight, CalendarDays, Clock, UserCheck, UserX,
-    AlarmClock, Home, CalendarOff, TrendingUp, Download, Edit2, RefreshCcw,
+    AlarmClock, Home, CalendarOff, TrendingUp, Edit2, RefreshCcw,
 } from 'lucide-react'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -24,6 +24,7 @@ import {
     StatusBadge, EmptyState, TableSkeleton, InitialsAvatar,
     type StatusTone,
 } from '@/components/shared'
+import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 import { useAttendance, useUpsertAttendance, type AttendanceRecord } from '@/hooks/useAttendance'
 import { useEmployees } from '@/hooks/useEmployees'
@@ -442,22 +443,10 @@ export function AttendancePage() {
                         >
                             Refresh
                         </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            leftIcon={<Download className="h-3.5 w-3.5" />}
-                            onClick={handleExport}
-                        >
-                            CSV
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            leftIcon={<Download className="h-3.5 w-3.5" />}
-                            onClick={() => exportAttendance({ format: 'pdf', startDate: start, endDate: end }).catch(() => toast.error('Export failed', 'Could not download PDF report.'))}
-                        >
-                            PDF
-                        </Button>
+                        <ExportDropdown
+                            onExportCsv={handleExport}
+                            onExportPdf={() => exportAttendance({ format: 'pdf', startDate: start, endDate: end }).catch(() => toast.error('Export failed', 'Could not download PDF report.'))}
+                        />
                     </div>
                 }
             />

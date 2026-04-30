@@ -29,7 +29,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { exportAuditLog } from '@/lib/export'
-import { toast } from 'sonner'
+import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { KpiCardCompact } from '@/components/ui/kpi-card'
 
 type ActionMeta = {
@@ -273,8 +273,10 @@ export function AuditLogPage() {
                         <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
-                        <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportAuditLog({ format: 'csv' }).catch(() => toast.error('Export failed'))}>CSV</Button>
-                        <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportAuditLog({ format: 'pdf' }).catch(() => toast.error('Export failed'))}>PDF</Button>
+                        <ExportDropdown
+                            onExportCsv={() => exportAuditLog({ format: 'csv' })}
+                            onExportPdf={() => exportAuditLog({ format: 'pdf' })}
+                        />
                     </div>
                 }
             />
