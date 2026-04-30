@@ -138,12 +138,12 @@ function ApplyDialog({ employeeId, currentEmployeeId, onClose }: { employeeId: s
                         </p>
                         <div className="space-y-1.5">
                             <Label>Handover To</Label>
-                            <Select value={form.handoverTo} onValueChange={v => setForm(f => ({ ...f, handoverTo: v }))}>
+                            <Select value={form.handoverTo || '__none__'} onValueChange={v => setForm(f => ({ ...f, handoverTo: v === '__none__' ? '' : v }))}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select colleague…" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">None</SelectItem>
+                                    <SelectItem value="__none__">None</SelectItem>
                                     {employees.map((e: Employee) => (
                                         <SelectItem key={e.id} value={e.id}>
                                             {e.fullName ?? `${e.firstName} ${e.lastName}`}

@@ -1177,11 +1177,10 @@ export function EditEmployeeDialog({
                     ) : (
                         <Button variant="outline" onClick={close}>Cancel</Button>
                     )}
-                    {step < 3 ? (
-                        <Button onClick={() => setStep(s => (s + 1) as Step)}>Next →</Button>
-                    ) : (
-                        <Button onClick={submit} loading={updateEmployee.isPending}>Save Changes</Button>
+                    {step < 3 && (
+                        <Button variant="outline" onClick={() => setStep(s => (s + 1) as Step)}>Next →</Button>
                     )}
+                    <Button onClick={submit} loading={updateEmployee.isPending}>Save Changes</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
