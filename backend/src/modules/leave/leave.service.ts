@@ -2,7 +2,7 @@ import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns, aliased
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { leaveRequests, leavePolicies, leaveBalances } from '../../db/schema/index.js'
+import { leaveRequests, leavePolicies, leaveBalances, publicHolidays } from '../../db/schema/index.js'
 import { employees } from '../../db/schema/employees.js'
 import { sendEmail } from '../../plugins/email.js'
 import type { InferInsertModel } from 'drizzle-orm'
@@ -43,6 +43,20 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
     return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 
+async function countWorkingDays(tenantId: string, startDate: string, endDate: string): Promise<number> {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const calendarDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+    const holidays = await db.select({ id: publicHolidays.id })
+        .from(publicHolidays)
+        .where(and(
+            eq(publicHolidays.tenantId, tenantId),
+            gte(publicHolidays.date, startDate),
+            lte(publicHolidays.date, endDate),
+        ))
+    return Math.max(1, calendarDays - holidays.length)
+}
+
 export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRequest, 'tenantId' | 'id'>) {
     // Basic date sanity checks
     if (data.startDate && data.endDate && data.startDate > data.endDate) {
@@ -76,13 +90,10 @@ export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRe
         }
     }
 
-    // Compute `days` if not provided (inclusive day count between start and end).
+    // Compute `days` if not provided — subtract any public holidays in the range.
     let days = typeof data.days === 'number' ? data.days : undefined
     if (days === undefined && data.startDate && data.endDate) {
-        const start = new Date(data.startDate)
-        const end = new Date(data.endDate)
-        const ms = end.getTime() - start.getTime()
-        days = Math.max(1, Math.round(ms / (1000 * 60 * 60 * 24)) + 1)
+        days = await countWorkingDays(tenantId, data.startDate, data.endDate)
     }
 
     // Balance check — block if employee doesn't have enough leave available.
@@ -157,7 +168,7 @@ export async function approveLeave(tenantId: string, id: string, approvedBy: str
     if (approved && row.days) {
         const year = new Date(row.startDate).getFullYear()
         await db.update(leaveBalances)
-            .set({ taken: sql`taken + ${String(row.days)}`, updatedAt: new Date() })
+            .set({ taken: sql`taken + ${row.days}`, updatedAt: new Date() })
             .where(and(
                 eq(leaveBalances.tenantId, tenantId),
                 eq(leaveBalances.employeeId, row.employeeId),
@@ -221,7 +232,7 @@ export async function cancelLeave(tenantId: string, id: string, requesterEmail: 
     if (req.status === 'approved' && req.days) {
         const year = new Date(req.startDate).getFullYear()
         await db.update(leaveBalances)
-            .set({ taken: sql`GREATEST(taken - ${String(req.days)}, 0)`, updatedAt: new Date() })
+            .set({ taken: sql`GREATEST(taken - ${req.days}, 0)`, updatedAt: new Date() })
             .where(and(
                 eq(leaveBalances.tenantId, tenantId),
                 eq(leaveBalances.employeeId, req.employeeId),

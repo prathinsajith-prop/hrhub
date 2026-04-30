@@ -13,6 +13,10 @@ import { listVisaCosts, addVisaCost, deleteVisaCost, getVisaCost } from './visa_
 import { visaStepLabel, VISA_STEP_LABELS, VISA_TOTAL_STEPS } from './visa.constants.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { cacheDel } from '../../lib/redis.js'
+import { generateReportPdf } from '../../lib/pdf.js'
+import { db } from '../../db/index.js'
+import { tenants } from '../../db/schema/index.js'
+import { eq } from 'drizzle-orm'
 
 /**
  * Audit helper — every mutating route in this module funnels through this so
@@ -394,5 +398,49 @@ export default async function (fastify: any): Promise<void> {
                 : { costId },
         })
         return reply.code(204).send()
+    })
+
+    // GET /export?format=csv|pdf
+    fastify.get('/export', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'pro_officer', 'super_admin')],
+        schema: { tags: ['Visa'] },
+    }, async (request: any, reply: any) => {
+        const { format = 'csv', status, urgencyLevel, from, to } = request.query as Record<string, string>
+        if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
+        const { data } = await listVisas(request.user.tenantId, { status, urgencyLevel, from, to, limit: 10000, offset: 0 })
+        const rows = data as any[]
+        const dateStr = new Date().toISOString().slice(0, 10)
+
+        if (format === 'pdf') {
+            const [tenantRow] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
+            const pdf = await generateReportPdf({
+                title: 'Visa Applications Report',
+                companyName: tenantRow?.name ?? '',
+                columns: [
+                    { header: 'Employee', key: 'employeeName', width: 120 },
+                    { header: 'Visa Type', key: 'visaType', width: 90 },
+                    { header: 'Status', key: 'status', width: 70 },
+                    { header: 'Step', key: 'currentStep', width: 50, align: 'right' },
+                    { header: 'Expiry Date', key: 'expiryDate', width: 80 },
+                    { header: 'Days Remaining', key: 'daysRemaining', width: 85, align: 'right' },
+                    { header: 'Urgency', key: 'urgencyLevel', width: 65 },
+                    { header: 'Nationality', key: 'nationality' },
+                ],
+                rows,
+            })
+            reply.header('Content-Type', 'application/pdf')
+            reply.header('Content-Disposition', `attachment; filename="visa-report-${dateStr}.pdf"`)
+            return reply.send(pdf)
+        }
+
+        const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+        const headers = ['Employee Name', 'Visa Type', 'Passport No', 'Nationality', 'Status', 'Current Step', 'Expiry Date', 'Days Remaining', 'Urgency Level']
+        const lines = [headers.join(',')]
+        for (const r of rows) {
+            lines.push([r.employeeName, r.visaType, r.passportNo, r.nationality, r.status, r.currentStep, r.expiryDate ?? '', r.daysRemaining ?? '', r.urgencyLevel].map(escape).join(','))
+        }
+        reply.header('Content-Type', 'text/csv; charset=utf-8')
+        reply.header('Content-Disposition', `attachment; filename="visa-export-${dateStr}.csv"`)
+        return reply.send(lines.join('\r\n'))
     })
 }

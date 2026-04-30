@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
 export interface CalendarRange {
@@ -21,5 +21,6 @@ export function useCalendarEvents(range: CalendarRange | undefined) {
         queryFn: () => api.get<CalendarEvents>(`/calendar?${params}`),
         enabled: !!range,
         staleTime: 60_000,
+        placeholderData: keepPreviousData,
     })
 }

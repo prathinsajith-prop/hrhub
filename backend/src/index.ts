@@ -79,6 +79,8 @@ async function bootstrap() {
         },
         // 30-second hard limit on all requests (PERF-008)
         connectionTimeout: 30_000,
+        // Trust the X-Forwarded-For header from the reverse proxy so request.ip is accurate
+        trustProxy: true,
     })
 
     // Security

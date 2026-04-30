@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/form-controls'
 import { DatePicker } from '@/components/ui/date-picker'
 import { formatDate } from '@/lib/utils'
+import { exportAssets } from '@/lib/export'
+import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import {
     useAssets, useCreateAsset, useUpdateAsset, useDeleteAsset,
     useAssignAsset, useReturnAsset,
@@ -720,6 +722,10 @@ export function AssetsPage() {
                         <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
+                        <ExportDropdown
+                            onExportCsv={() => exportAssets({ format: 'csv' })}
+                            onExportPdf={() => exportAssets({ format: 'pdf' })}
+                        />
                         {canManageAssets && (
                             <Button onClick={() => setCreateOpen(true)}>
                                 <Plus className="h-4 w-4 mr-1.5" />

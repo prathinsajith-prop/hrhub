@@ -4,8 +4,11 @@ import { recordActivity } from '../audit/audit.service.js'
 import { sendWithETag } from '../../lib/etag.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { tenants } from '../../db/schema/index.js'
-import { eq } from 'drizzle-orm'
+import { tenants, users, employees } from '../../db/schema/index.js'
+import { eq, and, inArray } from 'drizzle-orm'
+import { sendEmail, leaveNotificationEmail } from '../../plugins/email.js'
+import { loadEnv } from '../../config/env.js'
+import { generateReportPdf } from '../../lib/pdf.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -26,6 +29,53 @@ export default async function (fastify: any): Promise<void> {
     }, async (request, reply) => {
         const body = validate(createLeaveSchema, request.body)
         const leave = await createLeaveRequest(request.user.tenantId, body as never)
+
+        // Notify HR managers, super admins, and the employee's dept_head (fire-and-forget)
+        ;(async () => {
+            try {
+                const env = loadEnv()
+                const appUrl = (env as any).APP_URL ?? ''
+
+                // Fetch employee name and department in one query
+                const [emp] = await db
+                    .select({ firstName: employees.firstName, lastName: employees.lastName, department: employees.department })
+                    .from(employees)
+                    .where(and(eq(employees.id, body.employeeId), eq(employees.tenantId, request.user.tenantId)))
+                    .limit(1)
+                if (!emp) return
+
+                const employeeName = `${emp.firstName} ${emp.lastName}`
+
+                // Fetch all HR managers + super_admins, plus dept_heads in the same department
+                const approvers = await db
+                    .select({ name: users.name, email: users.email, role: users.role, department: users.department })
+                    .from(users)
+                    .where(and(
+                        eq(users.tenantId, request.user.tenantId),
+                        eq(users.isActive, true),
+                        inArray(users.role, ['hr_manager', 'super_admin', 'dept_head'] as never[]),
+                    ))
+
+                // Filter dept_heads to only those in the same department; hr_manager/super_admin always notified
+                const recipients = approvers.filter(u =>
+                    u.role !== 'dept_head' || (emp.department && u.department === emp.department)
+                )
+
+                for (const recipient of recipients) {
+                    if (!recipient.email) continue
+                    const opts = leaveNotificationEmail({
+                        managerName: recipient.name ?? 'Manager',
+                        employeeName,
+                        leaveType: body.leaveType,
+                        startDate: body.startDate,
+                        endDate: body.endDate,
+                        approveUrl: `${appUrl}/leave`,
+                    })
+                    sendEmail({ ...opts, to: recipient.email }).catch(() => {})
+                }
+            } catch { /* non-fatal */ }
+        })()
+
         return reply.code(201).send({ data: leave })
     })
 
@@ -163,6 +213,51 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip, userAgent: request.headers['user-agent'],
         }).catch(() => { })
         return reply.send({ data: balance })
+    })
+
+    // GET /leave/export?format=csv|pdf&status=...&department=...&from=...&to=...
+    fastify.get('/export', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Leave'] },
+    }, async (request, reply) => {
+        const { format = 'csv', ...filters } = request.query as Record<string, string>
+        if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
+        const { data } = await listLeaveRequests(request.user.tenantId, { ...filters, limit: 10000, offset: 0 })
+        const dateStr = new Date().toISOString().slice(0, 10)
+
+        if (format === 'pdf') {
+            const [tenantRow] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
+            const pdf = await generateReportPdf({
+                title: 'Leave Requests Report',
+                companyName: tenantRow?.name ?? '',
+                subtitle: filters.from && filters.to ? `${filters.from} – ${filters.to}` : undefined,
+                columns: [
+                    { header: 'Employee', key: 'employeeName', width: 130 },
+                    { header: 'Department', key: 'employeeDepartment', width: 100 },
+                    { header: 'Leave Type', key: 'leaveType', width: 90 },
+                    { header: 'From', key: 'startDate', width: 70 },
+                    { header: 'To', key: 'endDate', width: 70 },
+                    { header: 'Days', key: 'days', width: 45, align: 'right' },
+                    { header: 'Status', key: 'status', width: 70 },
+                    { header: 'Reason', key: 'reason' },
+                ],
+                rows: data as Record<string, unknown>[],
+            })
+            reply.header('Content-Type', 'application/pdf')
+            reply.header('Content-Disposition', `attachment; filename="leave-report-${dateStr}.pdf"`)
+            return reply.send(pdf)
+        }
+
+        // CSV
+        const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+        const headers = ['Employee No', 'Employee Name', 'Department', 'Leave Type', 'Start Date', 'End Date', 'Days', 'Status', 'Reason']
+        const lines = [headers.join(',')]
+        for (const r of data as any[]) {
+            lines.push([r.employeeNo, r.employeeName, r.employeeDepartment, r.leaveType, r.startDate, r.endDate, r.days, r.status, r.reason ?? ''].map(escape).join(','))
+        }
+        reply.header('Content-Type', 'text/csv; charset=utf-8')
+        reply.header('Content-Disposition', `attachment; filename="leave-export-${dateStr}.csv"`)
+        return reply.send(lines.join('\r\n'))
     })
 }
 

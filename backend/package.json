@@ -20,8 +20,8 @@
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1038.0",
-    "@aws-sdk/s3-request-presigner": "^3.1038.0",
+    "@aws-sdk/client-s3": "^3.1039.0",
+    "@aws-sdk/s3-request-presigner": "^3.1039.0",
     "@fastify/compress": "^8.3.1",
     "@fastify/cors": "^11.2.0",
     "@fastify/helmet": "^13.0.2",
@@ -30,7 +30,7 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.6",
-    "@sentry/node": "^10.50.0",
+    "@sentry/node": "^10.51.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.76.4",
     "dotenv": "^17.4.2",
@@ -38,6 +38,7 @@
     "fastify": "^5.8.5",
     "fastify-plugin": "^5.1.0",
     "fastify-raw-body": "^5.0.0",
+    "file-type": "^22.0.1",
     "ioredis": "^5.10.1",
     "nodemailer": "^8.0.7",
     "otplib": "^13.4.0",
@@ -45,7 +46,7 @@
     "postgres": "^3.4.9",
     "qrcode": "^1.5.4",
     "stripe": "^22.1.0",
-    "zod": "^4.3.6"
+    "zod": "^4.4.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

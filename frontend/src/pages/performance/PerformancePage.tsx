@@ -20,6 +20,8 @@ import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig, type QuickFilter } from '@/lib/filters'
 import { PERFORMANCE_STATUS_OPTIONS } from '@/lib/options'
+import { exportPerformance } from '@/lib/export'
+import { ExportDropdown } from '@/components/shared/ExportDropdown'
 
 const PERFORMANCE_FILTERS: FilterConfig[] = [
     { name: 'status', label: 'Status', type: 'select', field: 'status', options: PERFORMANCE_STATUS_OPTIONS },
@@ -125,11 +127,13 @@ export function PerformancePage() {
 
     function handleDialogChange(open: boolean) {
         setShowDialog(open)
-        if (!open && lockedEmployeeId) {
-            const next = new URLSearchParams(searchParams)
-            next.delete('employeeId')
-            setSearchParams(next, { replace: true })
+        if (!open) {
             setForm(defaultForm)
+            if (lockedEmployeeId) {
+                const next = new URLSearchParams(searchParams)
+                next.delete('employeeId')
+                setSearchParams(next, { replace: true })
+            }
         }
     }
 
@@ -184,6 +188,10 @@ export function PerformancePage() {
                         <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
+                        <ExportDropdown
+                            onExportCsv={() => exportPerformance({ format: 'csv' })}
+                            onExportPdf={() => exportPerformance({ format: 'pdf' })}
+                        />
                         <Button onClick={() => setShowDialog(true)}>
                             <Plus className="h-4 w-4 mr-2" /> New Review
                         </Button>

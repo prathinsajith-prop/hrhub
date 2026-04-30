@@ -15,6 +15,7 @@ import {
     onboardingChecklists, onboardingSteps,
     payrollRuns, leaveRequests, leavePolicies,
     notifications, publicHolidays,
+    subscriptionEvents,
 } from './schema/index.js'
 
 const TRADE_LICENSE = 'DED-2019-12345'
@@ -282,6 +283,58 @@ async function seed() {
         { tenantId: tenant.id, userId: superAdmin.id, type: 'info', title: 'New Tenant Registration', message: 'Al Noor Real Estate LLC has completed setup.', isRead: false },
     ])
     console.log('✓ Notifications created')
+
+    // ── Subscription events (billing history demo) ─────────────
+    await db.insert(subscriptionEvents).values([
+        {
+            tenantId: tenant.id,
+            userId: superAdmin.id,
+            eventType: 'plan_activated',
+            planFrom: 'starter',
+            planTo: 'growth',
+            employeeQuota: 25,
+            monthlyCost: 500,
+            stripeSessionId: 'cs_test_demo_001',
+            metadata: { invoiceRef: 'INV-2025-0001', paymentMethod: 'Visa •••• 4242' },
+            createdAt: new Date('2025-09-01T10:30:00Z'),
+        },
+        {
+            tenantId: tenant.id,
+            userId: hrManager.id,
+            eventType: 'quota_updated',
+            planFrom: 'growth',
+            planTo: 'growth',
+            employeeQuota: 50,
+            monthlyCost: 1000,
+            stripeSessionId: 'cs_test_demo_002',
+            metadata: { invoiceRef: 'INV-2025-0002', paymentMethod: 'Visa •••• 4242' },
+            createdAt: new Date('2025-11-15T09:00:00Z'),
+        },
+        {
+            tenantId: tenant.id,
+            userId: hrManager.id,
+            eventType: 'quota_updated',
+            planFrom: 'growth',
+            planTo: 'growth',
+            employeeQuota: 75,
+            monthlyCost: 1500,
+            stripeSessionId: 'cs_test_demo_003',
+            metadata: { invoiceRef: 'INV-2026-0001', paymentMethod: 'Mastercard •••• 5555' },
+            createdAt: new Date('2026-02-01T11:00:00Z'),
+        },
+        {
+            tenantId: tenant.id,
+            userId: superAdmin.id,
+            eventType: 'upgrade_request',
+            planFrom: null,
+            planTo: 'enterprise',
+            employeeQuota: 200,
+            monthlyCost: null,
+            metadata: { notes: 'Interested in dedicated support and custom integrations' },
+            createdAt: new Date('2026-03-20T14:00:00Z'),
+        },
+    ])
+    console.log('✓ Subscription events created')
 
     // ── Second tenant (for org-switching demo) ─────────────────
     const [tenant2] = await db.insert(tenants).values({

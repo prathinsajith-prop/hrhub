@@ -1,4 +1,8 @@
 import { calculateSettlement, initiateExit, getExitRequests, getExitRequest, approveExit, rejectExit, markSettlementPaid } from './exit.service.js'
+import { generateReportPdf } from '../../lib/pdf.js'
+import { db } from '../../db/index.js'
+import { tenants } from '../../db/schema/index.js'
+import { eq } from 'drizzle-orm'
 
 export async function exitRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
@@ -57,5 +61,46 @@ export async function exitRoutes(fastify: any) {
         const data = await markSettlementPaid(request.user.tenantId, id)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found or not approved' })
         return reply.send({ data })
+    })
+
+    // GET /api/v1/exit/export?format=csv|pdf
+    fastify.get('/exit/export', { ...adminAuth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
+        const { format = 'csv', status } = request.query as Record<string, string>
+        if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
+        const allExits = await getExitRequests(request.user.tenantId)
+        const rows = (status ? allExits.filter((r: any) => r.status === status) : allExits) as any[]
+        const dateStr = new Date().toISOString().slice(0, 10)
+
+        if (format === 'pdf') {
+            const [tenantRow] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
+            const pdf = await generateReportPdf({
+                title: 'Employee Exit Report',
+                companyName: tenantRow?.name ?? '',
+                columns: [
+                    { header: 'Employee', key: 'employeeName', width: 120 },
+                    { header: 'Emp No', key: 'employeeNo', width: 70 },
+                    { header: 'Department', key: 'employeeDepartment', width: 90 },
+                    { header: 'Exit Type', key: 'exitType', width: 80 },
+                    { header: 'Exit Date', key: 'exitDate', width: 75 },
+                    { header: 'Status', key: 'status', width: 70 },
+                    { header: 'Total Settlement (AED)', key: 'totalSettlement', width: 110, align: 'right', currency: true },
+                    { header: 'Settled', key: 'settlementPaid' },
+                ],
+                rows,
+            })
+            reply.header('Content-Type', 'application/pdf')
+            reply.header('Content-Disposition', `attachment; filename="exit-report-${dateStr}.pdf"`)
+            return reply.send(pdf)
+        }
+
+        const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+        const headers = ['Employee No', 'Employee Name', 'Department', 'Exit Type', 'Exit Date', 'Last Working Day', 'Status', 'Gratuity (AED)', 'Leave Encashment (AED)', 'Total Settlement (AED)', 'Settlement Paid']
+        const lines = [headers.join(',')]
+        for (const r of rows) {
+            lines.push([r.employeeNo, r.employeeName, r.employeeDepartment, r.exitType, r.exitDate, r.lastWorkingDay, r.status, r.gratuityAmount ?? '', r.leaveEncashmentAmount ?? '', r.totalSettlement ?? '', r.settlementPaid ? 'Yes' : 'No'].map(escape).join(','))
+        }
+        reply.header('Content-Type', 'text/csv; charset=utf-8')
+        reply.header('Content-Disposition', `attachment; filename="exit-export-${dateStr}.csv"`)
+        return reply.send(lines.join('\r\n'))
     })
 }

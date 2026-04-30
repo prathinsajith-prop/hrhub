@@ -71,6 +71,7 @@ function ApplyDialog({ employeeId, currentEmployeeId, onClose }: { employeeId: s
         try {
             await create.mutateAsync({
                 ...form,
+                leaveType: form.leaveType as import('@/hooks/useLeave').LeaveType,
                 employeeId,
                 handoverTo: form.handoverTo || null,
                 handoverNotes: form.handoverNotes || null,

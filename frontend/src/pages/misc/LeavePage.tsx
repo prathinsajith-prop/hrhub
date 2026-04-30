@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Calendar, Clock, CheckCircle2, XCircle, Plus, AlertCircle, RefreshCcw, ArrowRightLeft, Users } from 'lucide-react'
+import { Calendar, Clock, CheckCircle2, XCircle, Plus, AlertCircle, RefreshCcw, ArrowRightLeft, Users, Download } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
@@ -23,6 +23,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import type { Employee, LeaveRequest } from '@/types'
 import { LEAVE_TYPE_LABELS } from '@/lib/enums'
 import { LEAVE_TYPE_OPTIONS, LEAVE_STATUS_OPTIONS } from '@/lib/options'
+import { exportLeave } from '@/lib/export'
 
 const LEAVE_FILTERS: FilterConfig[] = [
     { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
@@ -183,6 +184,13 @@ export function LeavePage() {
     const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null)
     const [applyOpen, setApplyOpen] = useState(false)
     const [bulkAction, setBulkAction] = useState<{ ids: string[]; approve: boolean } | null>(null)
+    const [exporting, setExporting] = useState(false)
+    async function handleExport(format: 'csv' | 'pdf') {
+        setExporting(true)
+        try { await exportLeave({ format }) }
+        catch { toast.error('Export failed', 'Could not download leave report.') }
+        finally { setExporting(false) }
+    }
 
     const leaveSearch = useSearchFilters({
         storageKey: 'hrhub.leave.searchHistory',
@@ -291,6 +299,8 @@ export function LeavePage() {
                                 <span>Dept. view</span>
                             </div>
                         )}
+                        <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => handleExport('csv')} disabled={exporting}>CSV</Button>
+                        <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => handleExport('pdf')} disabled={exporting}>PDF</Button>
                         <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setApplyOpen(true)}>Apply Leave</Button>
                     </div>
                 }

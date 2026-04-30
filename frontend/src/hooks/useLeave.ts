@@ -19,10 +19,22 @@ export function useLeaveRequests(params: LeaveParams = {}) {
     })
 }
 
+export type LeaveType = 'annual' | 'sick' | 'maternity' | 'paternity' | 'unpaid' | 'compassionate' | 'emergency' | 'bereavement' | 'hajj'
+
+export interface CreateLeaveInput {
+    employeeId: string
+    leaveType: LeaveType
+    startDate: string
+    endDate: string
+    reason?: string
+    handoverTo?: string | null
+    handoverNotes?: string | null
+}
+
 export function useCreateLeave() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (data: unknown) => api.post('/leave', data),
+        mutationFn: (data: CreateLeaveInput) => api.post('/leave', data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['leave'] }),
         onError: (err: Error) => toast.error('Failed to submit leave', err?.message ?? 'Please try again.'),
     })
