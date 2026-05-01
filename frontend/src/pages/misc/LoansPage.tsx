@@ -1,16 +1,19 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { z } from 'zod'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
+import { FormField } from '@/components/shared/FormField'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfirmDialog } from '@/components/ui/overlays'
 import { toast } from '@/components/ui/overlays'
+import { zodToFieldErrors } from '@/lib/schemas'
 import {
     Banknote, Clock, CheckCircle2, AlertCircle,
     Plus, Check, X,
@@ -29,6 +32,14 @@ import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import type { UserRole } from '@/types'
 
+const createLoanSchema = z.object({
+    employeeId: z.string().min(1, 'Employee is required'),
+    amount: z.string().min(1, 'Amount is required').refine(v => parseFloat(v) > 0, 'Amount must be greater than 0'),
+    monthlyDeduction: z.string().min(1, 'Monthly deduction is required').refine(v => parseFloat(v) > 0, 'Monthly deduction must be greater than 0'),
+    reason: z.string().optional(),
+    notes: z.string().optional(),
+})
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const STATUS_STYLE: Record<string, string> = {
@@ -45,18 +56,18 @@ const STATUS_STYLE: Record<string, string> = {
 function CreateLoanDialog({ onClose }: { onClose: () => void }) {
     const { t } = useTranslation()
     const create = useCreateLoan()
-    const { data: empData } = useEmployees({ limit: 200 })
+    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
     const [form, setForm] = useState({ employeeId: '', amount: '', monthlyDeduction: '', reason: '', notes: '' })
+    const [errors, setErrors] = useState<Record<string, string>>({})
 
     const amount = parseFloat(form.amount || '0')
     const monthly = parseFloat(form.monthlyDeduction || '0')
     const installments = monthly > 0 && amount > 0 ? Math.ceil(amount / monthly) : null
 
     function handleSubmit() {
-        if (!form.employeeId || !form.amount || !form.monthlyDeduction) {
-            toast.error(t('common.required'))
-            return
-        }
+        const result = zodToFieldErrors(createLoanSchema, form)
+        if (!result.ok) { setErrors(result.errors); return }
+        setErrors({})
         create.mutate(form, {
             onSuccess: () => { toast.success(t('loans.created')); onClose() },
             onError: () => toast.error(t('loans.saveFailed')),
@@ -72,10 +83,12 @@ function CreateLoanDialog({ onClose }: { onClose: () => void }) {
                     <DialogTitle>{t('loans.newLoan')}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
-                    <div className="grid gap-1.5">
-                        <Label>{t('training.employee')} <span className="text-destructive">*</span></Label>
-                        <Select value={form.employeeId} onValueChange={v => setForm(f => ({ ...f, employeeId: v }))}>
-                            <SelectTrigger><SelectValue placeholder={t('training.selectEmployee')} /></SelectTrigger>
+                    <FormField label={t('training.employee')} required error={errors.employeeId}>
+                        <Select
+                            value={form.employeeId}
+                            onValueChange={v => { setForm(f => ({ ...f, employeeId: v })); setErrors(e => ({ ...e, employeeId: '' })) }}
+                        >
+                            <SelectTrigger aria-invalid={!!errors.employeeId}><SelectValue placeholder={t('training.selectEmployee')} /></SelectTrigger>
                             <SelectContent>
                                 {employees.map(e => (
                                     <SelectItem key={e.id} value={e.id}>
@@ -84,30 +97,38 @@ function CreateLoanDialog({ onClose }: { onClose: () => void }) {
                                 ))}
                             </SelectContent>
                         </Select>
-                    </div>
+                    </FormField>
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-1.5">
-                            <Label>{t('loans.amount')} (AED) <span className="text-destructive">*</span></Label>
-                            <Input type="number" min="0" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label>{t('loans.monthlyDeduction')} (AED) <span className="text-destructive">*</span></Label>
-                            <Input type="number" min="0" value={form.monthlyDeduction} onChange={e => setForm(f => ({ ...f, monthlyDeduction: e.target.value }))} placeholder="0.00" />
-                        </div>
+                        <FormField label={`${t('loans.amount')} (AED)`} required error={errors.amount}>
+                            <NumericInput
+                                maxDecimals={2}
+                                aria-invalid={!!errors.amount}
+                                value={form.amount}
+                                onChange={e => { setForm(f => ({ ...f, amount: e.target.value })); setErrors(er => ({ ...er, amount: '' })) }}
+                                placeholder="0.00"
+                            />
+                        </FormField>
+                        <FormField label={`${t('loans.monthlyDeduction')} (AED)`} required error={errors.monthlyDeduction}>
+                            <NumericInput
+                                maxDecimals={2}
+                                aria-invalid={!!errors.monthlyDeduction}
+                                value={form.monthlyDeduction}
+                                onChange={e => { setForm(f => ({ ...f, monthlyDeduction: e.target.value })); setErrors(er => ({ ...er, monthlyDeduction: '' })) }}
+                                placeholder="0.00"
+                            />
+                        </FormField>
                     </div>
                     {installments !== null && (
                         <p className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-lg">
                             {t('loans.installmentCalc', { count: installments })}
                         </p>
                     )}
-                    <div className="grid gap-1.5">
-                        <Label>{t('loans.reason')}</Label>
+                    <FormField label={t('loans.reason')}>
                         <Input value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder={t('loans.reasonPlaceholder')} />
-                    </div>
-                    <div className="grid gap-1.5">
-                        <Label>{t('common.notes')}</Label>
+                    </FormField>
+                    <FormField label={t('common.notes')}>
                         <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-                    </div>
+                    </FormField>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
@@ -135,10 +156,9 @@ function RejectDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () => vo
                 </DialogHeader>
                 <div className="py-2 space-y-3">
                     <p className="text-sm text-muted-foreground">{t('loans.rejectDesc', { name: loan.employeeName })}</p>
-                    <div className="grid gap-1.5">
-                        <Label>{t('common.notes')}</Label>
+                    <FormField label={t('common.notes')}>
                         <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder={t('loans.rejectNotesPlaceholder')} />
-                    </div>
+                    </FormField>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
