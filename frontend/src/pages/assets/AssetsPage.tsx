@@ -32,7 +32,7 @@ import {
     useAssetCategories, useCreateAssetCategory, useDeleteAssetCategory,
     type Asset, type AssetAssignment, type AssetMaintenance,
 } from '@/hooks/useAssets'
-import { useEmployees } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 
@@ -322,7 +322,6 @@ function AssignAssetDialog({
     open: boolean
     onOpenChange: (o: boolean) => void
 }) {
-    const { data: employeesData } = useEmployees({ limit: 100 })
     const assignAsset = useAssignAsset()
 
     const [employeeId, setEmployeeId] = useState('')
@@ -331,7 +330,6 @@ function AssignAssetDialog({
     const [notes, setNotes] = useState('')
     const [errors, setErrors] = useState<Record<string, string>>({})
 
-    const employees = employeesData?.data ?? []
 
     async function handleSubmit(e: { preventDefault(): void }) {
         e.preventDefault()
@@ -355,16 +353,10 @@ function AssignAssetDialog({
                 <form onSubmit={handleSubmit}>
                     <DialogBody className="space-y-4">
                         <FormField label="Employee" required error={errors.employeeId}>
-                            <Select value={employeeId} onValueChange={v => { setEmployeeId(v); setErrors(err => ({ ...err, employeeId: '' })) }}>
-                                <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                                <SelectContent>
-                                    {employees.map(emp => (
-                                        <SelectItem key={emp.id} value={emp.id}>
-                                            {emp.firstName} {emp.lastName} ({emp.employeeNo})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <EmployeeSelect
+                                value={employeeId}
+                                onValueChange={v => { setEmployeeId(v); setErrors(err => ({ ...err, employeeId: '' })) }}
+                            />
                         </FormField>
                         <div className="space-y-1.5">
                             <Label>Assigned Date</Label>

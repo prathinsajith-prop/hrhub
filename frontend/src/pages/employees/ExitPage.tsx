@@ -23,7 +23,7 @@ import {
     useExitRequests, useInitiateExit, useApproveExit, useRejectExit, useMarkSettlementPaid,
     useSettlementPreview, type ExitRequest,
 } from '@/hooks/useExit'
-import { useEmployees } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared'
 import type { Employee } from '@/types'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
@@ -577,12 +577,7 @@ export function ExitPage() {
                         <div className="space-y-4 py-2">
                             <div className="space-y-1.5">
                                 <Label required>Employee</Label>
-                                <Select value={form.employeeId} onValueChange={v => set('employeeId', v)}>
-                                    <SelectTrigger><SelectValue placeholder="Select employee…" /></SelectTrigger>
-                                    <SelectContent>
-                                        <EmployeeSelectItems value={form.employeeId} onSelect={v => set('employeeId', v)} />
-                                    </SelectContent>
-                                </Select>
+                                <EmployeeSelect value={form.employeeId} onValueChange={v => set('employeeId', v)} />
                             </div>
                             <div className="space-y-1.5">
                                 <Label required>Exit Type</Label>
@@ -708,16 +703,3 @@ export function ExitPage() {
     )
 }
 
-function EmployeeSelectItems(_props: { value: string; onSelect: (v: string) => void }) {
-    const { data } = useEmployees({ limit: 200, status: 'active' })
-    const list = (data?.data ?? []) as Employee[]
-    return (
-        <>
-            {list.map(e => (
-                <SelectItem key={e.id} value={e.id}>
-                    {e.firstName} {e.lastName}{e.department ? ` · ${e.department}` : ''}
-                </SelectItem>
-            ))}
-        </>
-    )
-}

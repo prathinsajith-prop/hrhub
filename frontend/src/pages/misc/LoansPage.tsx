@@ -27,7 +27,7 @@ import {
     useRejectLoan,
     useRecordLoanPayment,
 } from '@/hooks/useLoans'
-import { useEmployees } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import type { UserRole } from '@/types'
@@ -56,7 +56,6 @@ const STATUS_STYLE: Record<string, string> = {
 function CreateLoanDialog({ onClose }: { onClose: () => void }) {
     const { t } = useTranslation()
     const create = useCreateLoan()
-    const { data: empData } = useEmployees({ limit: 500, status: 'active' })
     const [form, setForm] = useState({ employeeId: '', amount: '', monthlyDeduction: '', reason: '', notes: '' })
     const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -74,8 +73,6 @@ function CreateLoanDialog({ onClose }: { onClose: () => void }) {
         })
     }
 
-    const employees = empData?.data ?? []
-
     return (
         <Dialog open onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[480px]">
@@ -84,19 +81,10 @@ function CreateLoanDialog({ onClose }: { onClose: () => void }) {
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                     <FormField label={t('training.employee')} required error={errors.employeeId}>
-                        <Select
+                        <EmployeeSelect
                             value={form.employeeId}
                             onValueChange={v => { setForm(f => ({ ...f, employeeId: v })); setErrors(e => ({ ...e, employeeId: '' })) }}
-                        >
-                            <SelectTrigger aria-invalid={!!errors.employeeId}><SelectValue placeholder={t('training.selectEmployee')} /></SelectTrigger>
-                            <SelectContent>
-                                {employees.map(e => (
-                                    <SelectItem key={e.id} value={e.id}>
-                                        {e.firstName} {e.lastName}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        />
                     </FormField>
                     <div className="grid grid-cols-2 gap-4">
                         <FormField label={`${t('loans.amount')} (AED)`} required error={errors.amount}>

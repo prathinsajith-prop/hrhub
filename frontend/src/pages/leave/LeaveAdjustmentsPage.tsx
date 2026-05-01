@@ -11,9 +11,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
-import { FormField } from '@/components/shared/FormField'
+import { FormField, EmployeeSelect } from '@/components/shared'
 import { cn } from '@/lib/utils'
-import { useEmployees } from '@/hooks/useEmployees'
 import { useAdjustLeaveBalance } from '@/hooks/useLeave'
 import {
     type LeaveAdjustment,
@@ -62,7 +61,6 @@ function formatDate(iso: string | null | undefined) {
 
 function LeaveAdjustmentDialog({ onClose }: { onClose: () => void }) {
     const { t } = useTranslation()
-    const { data: empData } = useEmployees({ limit: 500, status: 'active' })
     const adjust = useAdjustLeaveBalance()
 
     const [form, setForm] = useState({
@@ -74,7 +72,6 @@ function LeaveAdjustmentDialog({ onClose }: { onClose: () => void }) {
     })
     const [errors, setErrors] = useState<Record<string, string>>({})
 
-    const employees = empData?.data ?? []
 
     function validate() {
         const errs: Record<string, string> = {}
@@ -117,14 +114,10 @@ function LeaveAdjustmentDialog({ onClose }: { onClose: () => void }) {
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                     <FormField label={t('leaveAdjustments.adjustment.employee')} required error={errors.employeeId}>
-                        <Select value={form.employeeId} onValueChange={v => { setForm(f => ({ ...f, employeeId: v })); setErrors(e => ({ ...e, employeeId: '' })) }}>
-                            <SelectTrigger aria-invalid={!!errors.employeeId}><SelectValue placeholder={t('training.selectEmployee')} /></SelectTrigger>
-                            <SelectContent>
-                                {employees.map(e => (
-                                    <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <EmployeeSelect
+                            value={form.employeeId}
+                            onValueChange={v => { setForm(f => ({ ...f, employeeId: v })); setErrors(e => ({ ...e, employeeId: '' })) }}
+                        />
                     </FormField>
                     <div className="grid grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.adjustment.leaveType')} required>
@@ -194,7 +187,6 @@ function LeaveAdjustmentDialog({ onClose }: { onClose: () => void }) {
 
 function AirTicketDialog({ ticket, onClose }: { ticket?: AirTicket; onClose: () => void }) {
     const { t } = useTranslation()
-    const { data: empData } = useEmployees({ limit: 500, status: 'active' })
     const create = useCreateAirTicket()
     const update = useUpdateAirTicket()
 
@@ -209,7 +201,6 @@ function AirTicketDialog({ ticket, onClose }: { ticket?: AirTicket; onClose: () 
     })
     const [errors, setErrors] = useState<Record<string, string>>({})
 
-    const employees = empData?.data ?? []
     const isEdit = !!ticket
 
     function validate() {
@@ -260,18 +251,11 @@ function AirTicketDialog({ ticket, onClose }: { ticket?: AirTicket; onClose: () 
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                     <FormField label={t('leaveAdjustments.adjustment.employee')} required error={errors.employeeId}>
-                        <Select
+                        <EmployeeSelect
                             value={form.employeeId}
                             onValueChange={v => { setForm(f => ({ ...f, employeeId: v })); setErrors(e => ({ ...e, employeeId: '' })) }}
                             disabled={isEdit}
-                        >
-                            <SelectTrigger aria-invalid={!!errors.employeeId}><SelectValue placeholder={t('training.selectEmployee')} /></SelectTrigger>
-                            <SelectContent>
-                                {employees.map(e => (
-                                    <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        />
                     </FormField>
                     <div className="grid grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.adjustment.year')} required error={errors.year}>
@@ -339,7 +323,6 @@ function AirTicketDialog({ ticket, onClose }: { ticket?: AirTicket; onClose: () 
 
 function OffsetDialog({ offset, onClose }: { offset?: LeaveOffset; onClose: () => void }) {
     const { t } = useTranslation()
-    const { data: empData } = useEmployees({ limit: 500, status: 'active' })
     const create = useCreateLeaveOffset()
     const update = useUpdateLeaveOffset()
 
@@ -352,7 +335,6 @@ function OffsetDialog({ offset, onClose }: { offset?: LeaveOffset; onClose: () =
     })
     const [errors, setErrors] = useState<Record<string, string>>({})
 
-    const employees = empData?.data ?? []
     const isEdit = !!offset
 
     function validate() {
@@ -402,18 +384,11 @@ function OffsetDialog({ offset, onClose }: { offset?: LeaveOffset; onClose: () =
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                     <FormField label={t('leaveAdjustments.adjustment.employee')} required error={errors.employeeId}>
-                        <Select
+                        <EmployeeSelect
                             value={form.employeeId}
                             onValueChange={v => { setForm(f => ({ ...f, employeeId: v })); setErrors(e => ({ ...e, employeeId: '' })) }}
                             disabled={isEdit}
-                        >
-                            <SelectTrigger aria-invalid={!!errors.employeeId}><SelectValue placeholder={t('training.selectEmployee')} /></SelectTrigger>
-                            <SelectContent>
-                                {employees.map(e => (
-                                    <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        />
                     </FormField>
                     <div className="grid grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.offset.workDate')} required error={errors.workDate}>

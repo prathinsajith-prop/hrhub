@@ -14,7 +14,7 @@ import { formatDate, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useLeaveRequests, useApproveLeave, useLeaveBalance } from '@/hooks/useLeave'
-import { useEmployees } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { ApplyLeaveDialog } from '@/components/shared/action-dialogs'
@@ -35,8 +35,6 @@ const LEAVE_FILTERS: FilterConfig[] = [
 
 function LeaveBalancePanel() {
     const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>()
-    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
-    const employees = (empData?.data as Employee[]) ?? []
     const { data: balanceData, isLoading: balanceLoading } = useLeaveBalance(selectedEmployee)
     const balance = balanceData?.balance
 
@@ -44,16 +42,12 @@ function LeaveBalancePanel() {
         <Card className="p-4">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <p className="text-sm font-semibold">Leave Balance Checker</p>
-                <Select value={selectedEmployee ?? ''} onValueChange={setSelectedEmployee}>
-                    <SelectTrigger className="w-56 h-8 text-sm">
-                        <SelectValue placeholder="Select employee…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {employees.map((e: Employee) => (
-                            <SelectItem key={e.id} value={e.id}>{e.fullName ?? `${e.firstName} ${e.lastName}`}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                <EmployeeSelect
+                    value={selectedEmployee ?? ''}
+                    onValueChange={v => setSelectedEmployee(v || undefined)}
+                    clearable
+                    className="w-56 h-8 text-sm"
+                />
             </div>
 
             {!selectedEmployee && (
