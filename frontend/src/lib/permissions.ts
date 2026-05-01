@@ -67,6 +67,12 @@ export type Permission =
   | 'view_exit'
   // Org chart
   | 'view_org_chart'
+  // Training & Development
+  | 'manage_training'
+  | 'view_own_training'
+  // Loans / Salary Advances
+  | 'manage_loans'
+  | 'view_own_loans'
   // Workspace / app management
   | 'manage_team'
   | 'manage_org'
@@ -112,6 +118,10 @@ export type RouteKey =
   | 'subscription'
   | 'complaints'
   | 'my/complaints'
+  | 'training'
+  | 'my/training'
+  | 'loans'
+  | 'my/loans'
 
 // ─── Permission matrix ────────────────────────────────────────────────────────
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -147,6 +157,10 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'manage_exit', 'view_exit',
     // Misc
     'view_org_chart',
+    // Training
+    'manage_training', 'view_own_training',
+    // Loans
+    'manage_loans', 'view_own_loans',
     // Workspace management
     'manage_team', 'manage_org', 'manage_apps', 'invite_members',
   ],
@@ -182,6 +196,10 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'manage_exit', 'view_exit',
     // Misc
     'view_org_chart',
+    // Training
+    'manage_training', 'view_own_training',
+    // Loans
+    'manage_loans', 'view_own_loans',
     // Workspace management
     'manage_team', 'manage_org', 'manage_apps', 'invite_members',
   ],
@@ -200,6 +218,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_own_leave',
     'view_own_attendance',
     'view_own_performance',
+    'view_own_training',
+    'view_own_loans',
     // Misc
     'view_org_chart',
   ],
@@ -224,12 +244,17 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_org_chart',
     // Teams (manage dept-scoped teams)
     'manage_team',
+    // Own training + loans
+    'view_own_training',
+    'view_own_loans',
   ],
   employee: [
     'view_own_leave',
     'view_own_attendance',
     'view_own_performance',
     'view_org_chart',
+    'view_own_training',
+    'view_own_loans',
   ],
 }
 
@@ -273,6 +298,8 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   'organization-settings': ['super_admin', 'hr_manager'],
   subscription: ['super_admin', 'hr_manager'],
   complaints: ['super_admin', 'hr_manager'],
+  training: ['super_admin', 'hr_manager'],
+  loans: ['super_admin', 'hr_manager'],
 
   // Self-service (all authenticated roles)
   'my/account': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
@@ -280,6 +307,8 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   'my/payslips': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/profile': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/complaints': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'my/training': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'my/loans': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -317,6 +346,10 @@ export const ALL_PERMISSIONS: Permission[] = [
   'manage_exit', 'view_exit',
   // Misc
   'view_org_chart',
+  // Training & Development
+  'manage_training', 'view_own_training',
+  // Loans
+  'manage_loans', 'view_own_loans',
   // Workspace management
   'manage_team', 'manage_org', 'manage_apps', 'invite_members',
 ]
@@ -375,6 +408,10 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/subscription': 'subscription',
     '/complaints': 'complaints',
     '/my/complaints': 'my/complaints',
+    '/training': 'training',
+    '/my/training': 'my/training',
+    '/loans': 'loans',
+    '/my/loans': 'my/loans',
   }
   return map[url] ?? null
 }
