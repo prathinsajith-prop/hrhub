@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { DataTable } from '@/components/ui/data-table'
-import { KpiCardCompact } from '@/components/ui/kpi-card'
+import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import {
     useExitRequests, useInitiateExit, useApproveExit, useRejectExit, useMarkSettlementPaid,

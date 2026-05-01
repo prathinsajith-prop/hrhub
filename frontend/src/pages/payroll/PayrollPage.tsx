@@ -28,7 +28,7 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { KpiCardCompact } from '@/components/ui/kpi-card'
+import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { formatCurrency, cn } from '@/lib/utils'
 import {
   usePayrollRuns, useRunPayroll, useSubmitWps,

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Card, Input, Textarea, Label } from '@/components/ui/primitives'
-import { KpiCardCompact } from '@/components/ui/kpi-card'
+import { KpiCardCompact } from '@/components/shared/KpiCard'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
     toast, ConfirmDialog

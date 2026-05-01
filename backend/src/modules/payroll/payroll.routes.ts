@@ -151,8 +151,18 @@ export default async function (fastify: any): Promise<void> {
         },
     }, async (request, reply) => {
         const { basicSalary, yearsOfService } = request.query as { basicSalary: number; yearsOfService: number }
-        const gratuity = calculateGratuity(Number(basicSalary), Number(yearsOfService))
-        return reply.send({ data: { gratuity, basicSalary: Number(basicSalary), yearsOfService: Number(yearsOfService) } })
+        const salary = Number(basicSalary)
+        const years = Number(yearsOfService)
+        // Guard against NaN / Infinity — Number('') and Number(undefined) both produce NaN,
+        // which would silently propagate through the calculation and corrupt the result.
+        if (!Number.isFinite(salary) || salary < 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'basicSalary must be a non-negative number' })
+        }
+        if (!Number.isFinite(years) || years < 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'yearsOfService must be a non-negative number' })
+        }
+        const gratuity = calculateGratuity(salary, years)
+        return reply.send({ data: { gratuity, basicSalary: salary, yearsOfService: years } })
     })
 
     // GET /api/v1/payroll/:id/wps-sif — download WPS Salary Information File

@@ -28,7 +28,9 @@ import {
     RefreshCcw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { KpiCardCompact } from '@/components/ui/kpi-card'
+import { exportAuditLog } from '@/lib/export'
+import { ExportDropdown } from '@/components/shared/ExportDropdown'
+import { KpiCardCompact } from '@/components/shared/KpiCard'
 
 type ActionMeta = {
     icon: React.ComponentType<{ className?: string }>

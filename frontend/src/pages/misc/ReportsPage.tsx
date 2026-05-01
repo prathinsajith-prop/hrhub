@@ -13,7 +13,7 @@ import {
 import { DataTable } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge, Card } from '@/components/ui/primitives'
-import { KpiCardCompact } from '@/components/ui/kpi-card'
+import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { formatDate, formatCurrency, cn } from '@/lib/utils'

@@ -26,6 +26,8 @@ export function ProfileTab() {
     const [uploading, setUploading] = useState(false)
     const fileRef = useRef<HTMLInputElement>(null)
 
+    // Sync form fields when the stored identity/name/department changes — but NOT on
+    // every setUser call (e.g. avatar-only patches would reset in-progress edits).
     useEffect(() => {
         const { firstName: fn, lastName: ln } = splitName(user?.name ?? '')
         setFirstName(fn)

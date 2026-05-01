@@ -17,7 +17,7 @@ import { Textarea as UiTextarea } from '@/components/ui/textarea'
 import { Dialog as UiDialog, DialogContent as UiDialogContent, DialogHeader as UiDialogHeader, DialogTitle as UiDialogTitle, DialogFooter as UiDialogFooter, DialogDescription as UiDialogDescription } from '@/components/ui/dialog'
 import { ApiError } from '@/lib/api'
 import { ORG_TYPE_META, ORG_HIERARCHY, type OrgUnitType } from '@/lib/org-unit-meta'
-import { KpiCardCompact } from '@/components/ui/kpi-card'
+import { KpiCardCompact } from '@/components/shared/KpiCard'
 
 // ─── Org Unit Dialog ──────────────────────────────────────────────────────────
 

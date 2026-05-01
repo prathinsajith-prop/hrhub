@@ -1,6 +1,6 @@
 # HR Hub UAE — Workflows & Operational Guide
 
-Last updated: 23 April 2026
+Last updated: 29 April 2026
 
 This document defines the operational workflows that the HR Hub system supports.
 Use it as the source of truth when explaining the product to a new admin, HR
@@ -25,21 +25,24 @@ The system uses a fixed string-based role list stored on `users.role`.
 Roles are *not* free-form — they map to backend role guards
 (`fastify.requireRole(...)`).
 
-| Role             | Code        drizzle-kit studio    | Purpose                                                  |
-| ---------------- | --------------- | -------------------------------------------------------- |
-| Super Admin      | `super_admin`   | Tenant configuration, billing, user provisioning         |
-| HR Admin         | `hr_admin`      | Full HR module access, can create/edit users             |
-| HR Manager       | `hr_manager`    | Approvals (leave, exit, performance), payroll edits      |
-| Recruiter        | `recruiter`     | Recruitment module (jobs, candidates, interviews)        |
-| Department Head  | `dept_head`     | Approves leave/attendance for their department only      |
-| Employee         | `employee`      | Self-service: view own profile, request leave, payslips  |
-| Auditor          | `auditor`       | Read-only access to audit/activity logs                  |
+| Role             | Code            | Purpose                                                        |
+| ---------------- | --------------- | -------------------------------------------------------------- |
+| Super Admin      | `super_admin`   | Tenant configuration, billing, user provisioning               |
+| HR Manager       | `hr_manager`    | Full HR access: approvals, payroll, complaints, org settings   |
+| PRO Officer      | `pro_officer`   | UAE-specific role: visa, documents, compliance, government PRO work |
+| Department Head  | `dept_head`     | Approves leave/attendance for their department only            |
+| Employee         | `employee`      | Self-service: own profile, leave requests, payslips, complaints |
+
+> **UAE-specific note**: The `pro_officer` role covers what some systems call
+> "Recruiter" or "Auditor" — in UAE HR practice the Public Relations Officer
+> (PRO) handles visa applications, MOHRE filings, and document compliance.
+> This role has no access to payroll, recruitment, or workspace admin.
 
 ### Role enforcement
 
 * **Backend**: every protected route declares
-  `preHandler: [fastify.authenticate, fastify.requireRole(['hr_admin', 'hr_manager'])]`.
-* **Frontend**: `useAuth()` exposes `user.role`. UI hides actions the user cannot perform.
+  `preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')]`.
+* **Frontend**: `useAuth()` exposes `user.role`. UI hides actions the user cannot perform via the `canAccessRoute` / `hasPermission` helpers in `lib/permissions.ts`.
 * **Audit**: every role-gated action writes to `activity_logs.actor_role`.
 
 > **Why no `roles` table?** The role list is small, stable, and tightly coupled
@@ -75,33 +78,28 @@ Roles are *not* free-form — they map to backend role guards
 
 ## 3. Organisational Structure
 
-Three concepts:
+Three-level hierarchy: **Branch → Division → Department**, stored in `org_units`.
 
-* **Tenant** (`tenants` table) — the company. All rows are scoped by `tenant_id`
-  and protected by Postgres Row-Level Security (migration `0004_row_level_security.sql`).
-* **Department** (`employees.department` string) — currently a free-form text
-  field on each employee row (e.g. *Finance*, *Engineering*). The Reports
-  module aggregates by this string.
+* **Tenant** (`tenants` table) — the company. All rows are scoped by `tenant_id`.
+* **Org Units** (`org_units` table) — structured hierarchy with `type` ∈ `{branch, division, department}`.
+  Managed via Organization Settings → Org Structure. Exposed on the Org Chart page.
 * **Reporting line** (`employees.manager_id` self-FK) — each employee can have
-  one manager. The Org Chart page (`GET /employees/org-chart`) builds a tree
-  recursively from this column.
+  one manager. The Org Chart page → Reporting Lines tab (`GET /employees/org-chart`)
+  builds a tree recursively from this column.
+* **Department (legacy)** (`employees.department` string) — still used for employee
+  display and report aggregations. Should be kept in sync with the `org_units` department name.
 
-### Setting up a new department
-1. Edit any employee → set their *Department* field to the new name.
-2. The department string will now appear in:
-   * Reports → Department breakdowns
-   * Filters across Employees, Attendance, Leave, Documents
-   * KPIs on the Dashboard
+### Setting up the org structure
+1. Go to **Organization Settings → Org Structure** → create branches, then divisions under each branch,
+   then departments under each division.
+2. On the **Org Chart** page, the Structure tab renders the three-level hierarchy
+   with branch/division/department counts.
 
 ### Building the reporting line
 1. Open employee A → **Edit** → set *Manager* to employee B.
-2. The Org Chart page recomputes; A appears as a child of B.
+2. The Org Chart → Reporting Lines tab recomputes; A appears as a child of B.
 3. Department Heads (`dept_head` role) automatically see only employees whose
    `manager_id` chain leads to them.
-
-> **Future enhancement**: promote `department` to its own table with a `head_id`
-> FK, allowing department managers to be configured independently of reporting
-> lines. Tracked in `task-list.md`.
 
 ---
 
@@ -131,11 +129,10 @@ five stages, persisted in the `onboarding` module.
 
 ### Backend wiring
 
-* `POST /onboarding` creates an onboarding record.
-* `PATCH /onboarding/:id/advance` moves to the next stage and writes an audit
-  entry; checklist items can be ticked individually.
-* When stage 5 completes, the employee status flips from `probation` →
-  `active`.
+* `POST /onboarding` creates an onboarding checklist with 9 template steps.
+* `PATCH /onboarding/:checklistId/steps/:stepId` marks individual steps complete.
+* When **all steps reach 100% progress**, the employee status automatically
+  flips from `probation` → `active` (implemented in `onboarding.service.ts:updateStep`).
 
 ---
 
@@ -198,12 +195,12 @@ draft → submitted → under_review → resolved
 
 | Action          | Who can do it                                      |
 | --------------- | -------------------------------------------------- |
-| Create draft    | Any employee (against any subject)                 |
+| Create draft    | Any authenticated user                             |
 | Submit          | Original author                                    |
-| Read            | HR Admin, HR Manager, the author, the named subject (optional, redacted) |
-| Investigate     | Assigned HR Manager                                |
-| Escalate        | HR Manager → Super Admin                           |
-| Close/Resolve   | HR Manager (with resolution notes)                 |
+| Read            | `hr_manager`, `super_admin`, the author            |
+| Acknowledge     | `hr_manager`, `super_admin`                        |
+| Escalate        | `hr_manager` → `super_admin`                       |
+| Close/Resolve   | `hr_manager`, `super_admin` (with resolution notes)|
 
 ### Required fields on submit
 
@@ -229,18 +226,28 @@ Every state change writes to `activity_logs` with `entity_type='complaint'`.
 The change diff is encrypted alongside the description so auditors can verify
 *that* something happened without seeing the substance.
 
+### SLA calendar-day equivalents (stored as `sla_due_at` on submit)
+
+| Severity | Working days | Calendar days (approx) |
+| -------- | ------------ | -----------------------|
+| critical | 5            | 7                      |
+| high     | 10           | 14                     |
+| medium   | 15           | 21                     |
+| low      | 30           | 42                     |
+
 ### UI surface
 
-* **Employee self-service**: *My Complaints* tile on the dashboard for
-  employees with at least one complaint.
-* **HR queue**: Settings → *Complaints* → list of open complaints with KPI
-  strip (Total / Open / Critical / Overdue).
-* **Detail page**: timeline view (similar to Visa detail) with the actions
-  Acknowledge, Add note, Reassign, Escalate, Resolve.
+* **Employee self-service**: `/my/complaints` — list own complaints, create new draft, submit.
+* **HR queue**: `/complaints` (Insights → Complaints in sidebar) — KPI strip
+  (Total / Open / Critical / Overdue), filterable table, detail dialog with
+  Acknowledge / Escalate / Resolve actions.
+* **Backend**: `POST/GET /api/v1/my/complaints`, `GET/POST /api/v1/complaints`,
+  action endpoints at `/complaints/:id/{acknowledge,assign,escalate,resolve}`.
 
-> **Status**: backend module + UI page is on the task list. The data model and
-> permission matrix above are the agreed spec — any future implementation must
-> match it.
+> **Status**: ✅ Implemented (April 2026). DB table: `complaints`. Backend module:
+> `backend/src/modules/complaints/`. Frontend pages:
+> `frontend/src/pages/misc/ComplaintsPage.tsx` (HR) and
+> `frontend/src/pages/my/MyComplaintsPage.tsx` (employee self-service).
 
 ---
 

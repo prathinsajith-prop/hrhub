@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadBucketCommand, HeadObjectCommand, CreateBucketCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import fp from 'fastify-plugin'
 import { loadEnv } from '../config/env.js'
@@ -83,6 +83,18 @@ export async function deleteObject(key: string): Promise<void> {
     await getS3Client().send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }))
 }
 
+export async function objectExists(key: string): Promise<boolean> {
+    const env = loadEnv()
+    try {
+        await getS3Client().send(new HeadObjectCommand({ Bucket: env.S3_BUCKET, Key: key }))
+        return true
+    } catch (err: unknown) {
+        const code = (err as { name?: string; $metadata?: { httpStatusCode?: number } })
+        if (code?.name === 'NotFound' || code?.$metadata?.httpStatusCode === 404) return false
+        throw err
+    }
+}
+
 export function buildS3Key(tenantId: string, folder: string, fileName: string): string {
     return `tenants/${tenantId}/${folder}/${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`
 }
@@ -95,6 +107,7 @@ const s3Plugin = fp(async (fastify) => {
         buildS3Key,
         uploadObject,
         ensureBucket,
+        objectExists,
     })
 })
 

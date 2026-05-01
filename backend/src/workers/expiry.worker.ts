@@ -93,7 +93,6 @@ async function notifyHrManagers(tenantId: string, entityId: string, notifType: s
 async function runVisaExpiryCheck() {
     log.info('worker: running visa expiry check')
     const thresholds = [90, 60, 30, 14, 7]
-    const today = new Date()
 
     for (const days of thresholds) {
         const target = daysFromNow(days)
@@ -154,7 +153,7 @@ async function runVisaExpiryCheck() {
                         await sendEmail({ ...emailOpts, to: manager.email })
                     }
                 }
-            } catch { /* email errors non-fatal */ }
+            } catch (err) { log.warn({ err }, 'worker: visa expiry email delivery failed') }
         }
     }
     log.info('worker: visa expiry check complete')
@@ -225,9 +224,9 @@ async function runDocumentExpiryCheck() {
                         actionUrl,
                     })
                     opts.to = u.email
-                    sendEmail(opts).catch(() => { })
+                    sendEmail(opts).catch((err: unknown) => log.warn({ err }, 'worker: document expiry email delivery failed'))
                 }
-            } catch { /* non-fatal */ }
+            } catch (err) { log.warn({ err }, 'worker: document expiry email setup failed') }
 
             // Update document status to expiring_soon
             await db.update(documents)

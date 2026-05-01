@@ -45,9 +45,26 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         return null
     }
 
-    // Check account lockout
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
-        const minutesLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000)
+    // Lock the row for the fast state-check phase; bcrypt runs outside the transaction
+    // so the connection is not held for the ~100ms hash duration.
+    const fresh = await db.transaction(async (tx) => {
+        const rows = await tx.execute(
+            sql`SELECT id, "lockedUntil", "failedLoginCount", "passwordHash", "twoFaEnabled"
+                FROM users WHERE id = ${user.id} FOR UPDATE`
+        )
+        return (rows as unknown as { rows: Record<string, unknown>[] }).rows[0] as {
+            id: string
+            lockedUntil: Date | null
+            failedLoginCount: number | null
+            passwordHash: string
+            twoFaEnabled: boolean
+        } | undefined
+    })
+
+    if (!fresh) return null
+
+    if (fresh.lockedUntil && fresh.lockedUntil > new Date()) {
+        const minutesLeft = Math.ceil((fresh.lockedUntil.getTime() - Date.now()) / 60_000)
         recordLoginEvent({
             tenantId: user.tenantId,
             userId: user.id,
@@ -61,13 +78,11 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         throw Object.assign(new Error(`Account locked. Try again in ${minutesLeft} minute(s).`), { statusCode: 423 })
     }
 
-    const passwordMatch = await bcrypt.compare(input.password, user.passwordHash)
+    const passwordMatch = await bcrypt.compare(input.password, fresh.passwordHash)
     if (!passwordMatch) {
-        const newCount = (user.failedLoginCount ?? 0) + 1
+        const newCount = (fresh.failedLoginCount ?? 0) + 1
         const shouldLock = newCount >= MAX_FAILED_ATTEMPTS
-        const lockedUntil = shouldLock
-            ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000)
-            : null
+        const lockedUntil = shouldLock ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000) : null
 
         await db
             .update(users)
@@ -91,7 +106,6 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         return null
     }
 
-    // Successful auth — reset failure counter
     await db
         .update(users)
         .set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date(), updatedAt: new Date() })

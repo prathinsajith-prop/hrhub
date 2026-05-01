@@ -1,5 +1,6 @@
 import { listDocuments, getDocument, createDocument, updateDocument, verifyDocument, rejectDocument, getExpiringDocuments, softDeleteDocument } from './documents.service.js'
-import { generateUploadUrl, generateDownloadUrl, buildS3Key, uploadObject } from '../../plugins/s3.js'
+import { generateUploadUrl, generateDownloadUrl, buildS3Key, uploadObject, objectExists } from '../../plugins/s3.js'
+import { e403 } from '../../lib/errors.js'
 import { templateRoutes } from './templates.routes.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { logDocumentAction, getDocumentAuditLog } from '../onboarding/onboarding.docs.service.js'
@@ -54,6 +55,17 @@ export default async function (fastify: any): Promise<void> {
         },
     }, async (request, reply) => {
         const body = request.body as Record<string, unknown>
+        // Presigned-PUT flow: validate the supplied s3Key before creating the DB record.
+        if (body.s3Key && typeof body.s3Key === 'string') {
+            // Reject keys outside this tenant's prefix — prevents cross-tenant file access.
+            if (!body.s3Key.startsWith(`tenants/${request.user.tenantId}/`)) {
+                return reply.code(403).send(e403('The referenced file does not belong to your organization'))
+            }
+            const exists = await objectExists(body.s3Key)
+            if (!exists) {
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'The referenced file was not found in storage. Please upload the file first.' })
+            }
+        }
         const doc = await createDocument(request.user.tenantId, request.user.id, body as never)
         recordActivity({
             tenantId: request.user.tenantId,
@@ -131,9 +143,9 @@ export default async function (fastify: any): Promise<void> {
                         companyName: tn?.name ?? 'Your Company',
                     })
                     opts.to = emp.email
-                    sendEmail(opts).catch(() => { })
+                    sendEmail(opts).catch((err: unknown) => request.log.warn({ err }, 'document verified email delivery failed'))
                 }
-            } catch { /* ignore */ }
+            } catch (err) { request.log.warn({ err }, 'document verified: failed to load employee for email') }
         }
         return reply.send({ data: updated })
     })
@@ -188,9 +200,9 @@ export default async function (fastify: any): Promise<void> {
                         companyName: tn?.name ?? 'Your Company',
                     })
                     opts.to = emp.email
-                    sendEmail(opts).catch(() => { })
+                    sendEmail(opts).catch((err: unknown) => request.log.warn({ err }, 'document rejected email delivery failed'))
                 }
-            } catch { /* ignore */ }
+            } catch (err) { request.log.warn({ err }, 'document rejected: failed to load employee for email') }
         }
         return reply.send({ data: updated })
     })

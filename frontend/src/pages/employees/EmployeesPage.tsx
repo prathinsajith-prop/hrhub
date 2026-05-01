@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { useTranslation } from 'react-i18next'
-import { KpiCardCompact } from '@/components/ui/kpi-card'
+import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
