@@ -53,10 +53,12 @@ directly to backend `requireRole(...)` guards — they are not free-form.
 - **Frontend:** `canAccessRoute(role, routeKey)` and `hasPermission(role, permission)` in `lib/permissions.ts` gate UI and route access
 - **Audit:** every role-gated mutation writes `actor_role` to `activity_logs`
 
+> **Why no `roles` table?** The role list is small, stable, and tightly coupled to backend permission code. Exposing it as a free-form table would let an admin create a "role" the backend doesn't recognise, which would silently grant no permissions. If org-level custom roles are ever needed, we'll introduce a `roles` + `role_permissions` join table; for now string roles are intentionally restricted.
+
 ### Managing users
 
-1. **Invite:** Org Settings → Members → *Invite user* → enter email + select role → system sends invitation email; user sets password on first login.
-2. **Change role:** Org Settings → Members → click user → change Role dropdown → save. The change is logged. The user must log out and back in for the new JWT role to take effect.
+1. **Invite:** Org Settings → Members → *Invite user* → enter email + select role → system sends invitation email; user sets password on first login. The role is recorded on `users.role` and copied to every audit row that user produces.
+2. **Change role:** Org Settings → Members → click user → change Role dropdown → save. Logs `activity_logs(action='update', entityType='user', changes={ role: { from, to } })`. The user must log out and back in for the new JWT role to take effect.
 3. **Deactivate:** Members → toggle Active. The Redis `isActive` cache (5 min TTL) enforces the change without a full re-deploy.
 4. **Link to employee record:** `users.employeeId` FK — links the account to an `employees` row so the same person has both a payroll record and a login. Employees without a login (e.g. blue-collar staff) still appear in the HR system.
 
@@ -78,6 +80,12 @@ Three-level hierarchy: **Branch → Division → Department**, stored in `org_un
 1. Org Settings → Org Structure → create branches → divisions under each branch → departments under each division.
 2. Org Settings → Designations → create job titles.
 3. Employee records → assign `department`, `designation`, and `managerId`.
+
+### Building the reporting line
+
+1. Open employee A → **Edit** → set *Manager* to employee B.
+2. The Org Chart → Reporting Lines tab recomputes; A appears as a child of B.
+3. `dept_head` users automatically see **only** employees whose `managerId` chain leads to them — enforced server-side in the employees and leave routes.
 
 ---
 
@@ -122,7 +130,26 @@ Onboarding is a guided checklist attached to each new hire, persisted in `onboar
 - **From recruitment:** when a candidate's application status is set to `hired`, an onboarding checklist is auto-created for that employee.
 - **Manual:** Onboarding → *New Checklist* → select employee.
 
-### Steps (9 template steps per checklist)
+### High-level stages
+
+| # | Stage | Owner | Trigger |
+|---|---|---|---|
+| 1 | Offer accepted | Recruiter | Candidate application status set to *hired* |
+| 2 | Document collection | HR Admin | Auto-creates checklist of required UAE documents |
+| 3 | Visa initiation | PRO Officer | Creates a visa application (see §5) |
+| 4 | First day | HR Manager | Welcome email, asset assignment, account creation |
+| 5 | Probation review | Manager | Auto-scheduled review N days after start date |
+
+### Required documents (auto-checklist items)
+
+- Passport copy (min 6 months validity remaining)
+- Photo (white background)
+- Educational certificates (attested)
+- Previous employment NOC (if applicable)
+- Emirates ID copy (if already issued)
+- Tenancy contract / Ejari (for spouse or dependent visa)
+
+### Checklist steps (9 template steps per checklist)
 
 | # | Step | Owner |
 |---|---|---|
@@ -165,7 +192,7 @@ Eight steps, one button per step. Each click advances `visa_applications.current
 
 ### Stamping-stage actions
 
-While `status = 'stamping'`, the visa detail page shows three extra actions:
+While `status = 'stamping'`, the visa detail page shows three extra actions **in addition to** the standard "Mark step complete" and "Cancel" buttons:
 - **Upload stamped passport page** → opens Documents module pre-filtered for this employee + category = visa.
 - **Record stamping reference** → prompts for MOHRE/GDRFA reference; writes to `visa_applications.mohreRef` / `gdfraRef`.
 - **Schedule stamping appointment** → creates a calendar event N days out (surfaces on the Calendar page).
@@ -176,7 +203,7 @@ Each application can have multiple cost line items (`visa_costs`) with currency,
 
 ### Cancelling
 
-*Cancel Application* is always visible on non-completed visas. Cancellation:
+*Cancel Application* is intentionally always visible on non-completed visas — UAE visa workflows often need to be aborted (e.g. candidate withdrew, government rejection). Cancellation:
 1. Prompts for a reason.
 2. Sets `status = 'cancelled'`.
 3. Writes an audit entry with the reason.
@@ -269,6 +296,44 @@ draft → processing → completed → wps_submitted
 ### Reports
 
 The Attendance page shows a monthly grid view per employee and summary statistics. CSV export available.
+
+### External biometric / RFID device integration
+
+Devices **push** to the API on each scan — they do not poll.
+
+- **Endpoint:** `POST /api/v1/attendance/device-punch`
+- **Auth:** device-scoped API key via header `X-Device-Key` (one key per physical device, issued from Settings → Devices)
+- **Payload:**
+
+  ```json
+  {
+    "deviceId": "main-gate-01",
+    "employeeRef": "EMP-1042",
+    "timestamp": "2026-04-23T08:02:14+04:00",
+    "direction": "in",
+    "method": "fingerprint",
+    "rawScore": 0.91
+  }
+  ```
+
+  `direction`: `"in"` or `"out"`. `method`: `fingerprint | face | rfid | pin`. `rawScore` is optional.
+
+- **Server behaviour:**
+  1. Verify `X-Device-Key` against `attendance_devices.apiKeyHash`.
+  2. Resolve `employeeRef` → `employees.id` within the device's tenant.
+  3. Reject if the employee is on leave or `status='inactive'`.
+  4. Upsert into `attendance_records` for that date: first `in` sets `checkIn`; later `out` updates `checkOut` (last wins).
+  5. Derive status: `late` if `checkIn > shiftStart + graceMinutes`, otherwise `present`.
+  6. Write audit entry with `actorRole='device'` and device ID.
+
+- **Supported device families:** ZKTeco (BioTime/Push SDK), Suprema BioStar 2 (native webhook), Hikvision/Dahua face terminals (HTTP listener). For proprietary protocols, deploy the *HRHub Bridge* (Node.js, on-premise) to poll and push.
+
+- **Failure modes:**
+  - Device offline → punches buffer on-device until reconnect.
+  - Duplicate timestamp → server deduplicates within 60-second window.
+  - Unknown `employeeRef` → written to `device_punch_errors` for HR review.
+
+> **Status:** The device management UI (Settings → Devices) and `POST /attendance/device-punch` are on the roadmap. Web punch and manual entry are fully implemented.
 
 ---
 
@@ -389,24 +454,32 @@ draft → submitted → under_review → resolved
 
 - Category: `harassment | pay_dispute | leave_dispute | working_conditions | discrimination | other`
 - Severity: `low | medium | high | critical`
-- Description (free text)
-- Optional: linked employee (the subject), confidentiality flag (`anonymous | named | confidential`)
+- Description (free text, stored encrypted at rest)
+- Optional: linked employee (the subject), supporting documents, confidentiality flag (`anonymous | named | confidential`)
 
 ### SLA
 
-| Severity | Resolution target |
-|---|---|
-| critical | 5 working days (~7 calendar days) |
-| high | 10 working days (~14 calendar days) |
-| medium | 15 working days (~21 calendar days) |
-| low | 30 working days (~42 calendar days) |
+- Acknowledge within **2 working days** (auto-email sent to HR on submission).
+- First update within **5 working days**.
+- Resolution target by severity:
+
+| Severity | Resolution target | Calendar days (approx) |
+|---|---|---|
+| critical | 5 working days | ~7 days |
+| high | 10 working days | ~14 days |
+| medium | 15 working days | ~21 days |
+| low | 30 working days | ~42 days |
 
 `slaDeadline` is set on submission. The HR queue shows overdue complaints in red.
 
-### UI surfaces
+### Audit
 
-- **Employee:** My Complaints (`/my/complaints`) — list own complaints, create draft, submit.
-- **HR queue:** Complaints page — KPI strip (Total / Open / Critical / Overdue), filterable table, detail dialog with Acknowledge / Escalate / Resolve actions.
+Every state change writes to `activity_logs` with `entityType='complaint'`. The change diff is stored alongside the encrypted description so auditors can verify *that* a change occurred without seeing the substance.
+
+### UI surfaces & API
+
+- **Employee:** My Complaints (`/my/complaints`) — list own complaints, create draft, submit. API: `POST/GET /api/v1/my/complaints`.
+- **HR queue:** Complaints page — KPI strip (Total / Open / Critical / Overdue), filterable table, detail dialog with Acknowledge / Escalate / Resolve actions. API: `GET/POST /api/v1/complaints`, action endpoints at `/complaints/:id/{acknowledge,assign,escalate,resolve}`.
 
 ---
 
@@ -416,13 +489,19 @@ Every mutating action writes a row to `activity_logs`:
 
 | Column | Notes |
 |---|---|
+| `id` | UUID |
+| `tenantId` | RLS-scoped |
+| `actorId` | `users.id` (nullable for system / device actions) |
 | `actorName` | Denormalised at write time so deleted users still display |
 | `actorRole` | Role at the time of the action |
 | `action` | create / update / delete / approve / reject / submit / view / export / import / login / logout |
 | `entityType` | employee / leave / payroll / visa / document / complaint / … |
+| `entityId` | UUID of the affected row |
+| `entityName` | Denormalised name for display |
 | `changes` | `{ field: { from, to } }` JSON diff for update actions |
 | `ipAddress` | Request IP |
 | `userAgent` | Request UA |
+| `createdAt` | Timestamp |
 
 ### UI features
 
@@ -436,6 +515,15 @@ Every mutating action writes a row to `activity_logs`:
 ### Login history
 
 A separate *Login History* page (`/misc/login-history`) shows all auth events for the tenant's users with IP, UA, and timestamp.
+
+### Retention policy
+
+| Tier | Window | Storage |
+|---|---|---|
+| **Hot** | Latest 90 days | Primary `activity_logs` table |
+| **Warm** | 90 days – 2 years | Partitioned archive table (nightly move) |
+| **Cold** | > 2 years | Exported to S3 as Parquet, dropped from DB |
+| **Never deleted** | — | login / logout / export rows (compliance requirement) |
 
 ---
 
