@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Card, Input, Textarea, Label } from '@/components/ui/primitives'
+import { Badge, Card, Input, Textarea, Label, NumericInput } from '@/components/ui/primitives'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
@@ -286,9 +286,8 @@ function AssetFormDialog({
                         </div>
                         <div className="space-y-1.5">
                             <Label>Purchase Cost (AED)</Label>
-                            <Input
-                                type="number"
-                                step="0.01"
+                            <NumericInput
+                                maxDecimals={2}
                                 value={form.purchaseCost ?? ''}
                                 onChange={e => set('purchaseCost', e.target.value || null)}
                                 placeholder="0.00"

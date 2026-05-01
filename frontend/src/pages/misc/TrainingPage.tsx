@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -168,9 +169,8 @@ function TrainingFormDialog({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-1.5">
                             <Label>{t('training.cost')} (AED)</Label>
-                            <Input
-                                type="number"
-                                min="0"
+                            <NumericInput
+                                maxDecimals={2}
                                 value={form.cost}
                                 onChange={e => setForm(f => ({ ...f, cost: e.target.value }))}
                                 placeholder="0.00"

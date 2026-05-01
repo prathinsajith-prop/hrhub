@@ -23,6 +23,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -441,11 +442,11 @@ function GratuityCalculator() {
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Basic Monthly Salary (AED)</Label>
-          <Input type="number" placeholder="e.g. 10,000" value={basic} onChange={e => setBasic(e.target.value)} />
+          <NumericInput maxDecimals={2} placeholder="e.g. 10,000" value={basic} onChange={e => setBasic(e.target.value)} />
         </div>
         <div className="space-y-1.5">
           <Label>Years of Service</Label>
-          <Input type="number" placeholder="e.g. 3" value={years} onChange={e => setYears(e.target.value)} min="0" step="0.5" />
+          <NumericInput maxDecimals={1} placeholder="e.g. 3" value={years} onChange={e => setYears(e.target.value)} />
         </div>
       </div>
 

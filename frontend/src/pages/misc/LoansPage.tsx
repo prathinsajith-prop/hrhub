@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -88,11 +89,11 @@ function CreateLoanDialog({ onClose }: { onClose: () => void }) {
                     <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-1.5">
                             <Label>{t('loans.amount')} (AED) <span className="text-destructive">*</span></Label>
-                            <Input type="number" min="0" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
+                            <NumericInput maxDecimals={2} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
                         </div>
                         <div className="grid gap-1.5">
                             <Label>{t('loans.monthlyDeduction')} (AED) <span className="text-destructive">*</span></Label>
-                            <Input type="number" min="0" value={form.monthlyDeduction} onChange={e => setForm(f => ({ ...f, monthlyDeduction: e.target.value }))} placeholder="0.00" />
+                            <NumericInput maxDecimals={2} value={form.monthlyDeduction} onChange={e => setForm(f => ({ ...f, monthlyDeduction: e.target.value }))} placeholder="0.00" />
                         </div>
                     </div>
                     {installments !== null && (
