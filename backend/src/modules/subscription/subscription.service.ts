@@ -771,95 +771,140 @@ function subscriptionInvoiceEmail(p: InvoiceEmailParams): string {
     const lineDesc = isUpgrade
         ? `HRHub Professional Plan — ${p.desiredQuota} employees`
         : `HRHub Professional — Capacity update to ${p.desiredQuota} employees`
+    const pricePerBlock = (p.monthlyCost / p.desiredQuota * 5).toFixed(0)
     return `
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"/></head>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
 <body style="font-family:Arial,sans-serif;background:#f9fafb;padding:32px;margin:0;">
-<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" border="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
 
   <!-- Header -->
-  <div style="background:#1e40af;padding:28px 32px;display:flex;justify-content:space-between;align-items:center;">
-    <div>
-      <p style="margin:0;color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">HRHub UAE</p>
-      <p style="margin:4px 0 0;color:#fff;font-size:20px;font-weight:700;">Payment Receipt</p>
-    </div>
-    <div style="text-align:right;">
-      <p style="margin:0;color:#93c5fd;font-size:11px;">Invoice</p>
-      <p style="margin:2px 0 0;color:#fff;font-size:13px;font-weight:600;font-family:monospace;">${p.invoiceRef}</p>
-    </div>
-  </div>
-
-  <div style="padding:28px 32px;">
-
-    <!-- Status badge -->
-    <div style="display:inline-block;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:20px;padding:4px 14px;margin-bottom:24px;">
-      <span style="color:#047857;font-size:12px;font-weight:600;">&#10003; PAID</span>
-    </div>
-
-    <!-- Bill to / dates -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px;">
-      <div>
-        <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Billed To</p>
-        <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">${p.tenantName}</p>
-        <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${p.ownerEmail}</p>
-      </div>
-      <div>
-        <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Payment Date</p>
-        <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">${fmt(p.paidOn)}</p>
-        <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${p.paymentMethod}</p>
-      </div>
-    </div>
-
-    <!-- Line items -->
-    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
-      <thead>
-        <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb;">
-          <th style="padding:10px 12px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Description</th>
-          <th style="padding:10px 12px;text-align:center;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Qty</th>
-          <th style="padding:10px 12px;text-align:right;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr style="border-bottom:1px solid #f3f4f6;">
-          <td style="padding:14px 12px;">
-            <p style="margin:0;font-size:14px;color:#111827;font-weight:500;">${lineDesc}</p>
-            <p style="margin:3px 0 0;font-size:12px;color:#6b7280;">1-month subscription &bull; AED ${(p.monthlyCost / p.desiredQuota * 5).toFixed(0)} per 5 employees</p>
+  <tr>
+    <td style="background:#1e40af;padding:28px 32px;">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td>
+            <p style="margin:0;color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">HRHub UAE</p>
+            <p style="margin:6px 0 0;color:#fff;font-size:20px;font-weight:700;line-height:1.2;">Payment Receipt</p>
           </td>
-          <td style="padding:14px 12px;text-align:center;font-size:14px;color:#374151;">1</td>
-          <td style="padding:14px 12px;text-align:right;font-size:14px;font-weight:600;color:#111827;">AED ${p.monthlyCost}</td>
+          <td align="right" valign="top">
+            <p style="margin:0;color:#93c5fd;font-size:11px;">Invoice</p>
+            <p style="margin:4px 0 0;color:#fff;font-size:13px;font-weight:600;font-family:monospace;">${p.invoiceRef}</p>
+          </td>
         </tr>
-      </tbody>
-    </table>
-
-    <!-- Total -->
-    <div style="background:#f9fafb;border-radius:8px;padding:16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
-      <span style="font-size:14px;color:#6b7280;font-weight:500;">Total Paid</span>
-      <span style="font-size:22px;font-weight:700;color:#111827;">AED ${p.monthlyCost}</span>
-    </div>
-
-    <!-- Subscription period -->
-    <div style="background:#eff6ff;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
-      <p style="margin:0;font-size:12px;color:#1d4ed8;font-weight:600;">Subscription period</p>
-      <p style="margin:4px 0 0;font-size:13px;color:#1e40af;">${fmt(p.paidOn)} &rarr; ${fmt(p.expiresAt)}</p>
-      <p style="margin:4px 0 0;font-size:11px;color:#3b82f6;">Next renewal: ${fmt(p.expiresAt)}</p>
-    </div>
-
-    <!-- Plan summary -->
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
-      <table style="width:100%;border-collapse:collapse;">
-        <tr><td style="padding:5px 0;font-size:12px;color:#9ca3af;width:140px;">Plan</td><td style="padding:5px 0;font-size:13px;font-weight:600;color:#2563eb;">Professional</td></tr>
-        <tr><td style="padding:5px 0;font-size:12px;color:#9ca3af;">Employee capacity</td><td style="padding:5px 0;font-size:13px;font-weight:600;color:#111827;">${p.desiredQuota} employees</td></tr>
-        <tr><td style="padding:5px 0;font-size:12px;color:#9ca3af;">Monthly cost</td><td style="padding:5px 0;font-size:13px;font-weight:600;color:#111827;">AED ${p.monthlyCost}</td></tr>
       </table>
-    </div>
+    </td>
+  </tr>
 
-    <p style="font-size:11px;color:#9ca3af;line-height:1.6;">Please keep this receipt for your records. For billing inquiries, reply to this email or contact <a href="mailto:support@hrhub.ae" style="color:#2563eb;">support@hrhub.ae</a>.</p>
-  </div>
+  <!-- Body -->
+  <tr>
+    <td style="padding:28px 32px;">
 
-  <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
-    <p style="margin:0;font-size:11px;color:#9ca3af;">HRHub &mdash; UAE HR &amp; PRO Platform &bull; hrhub.ae</p>
-  </div>
-</div>
+      <!-- PAID badge -->
+      <table cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+        <tr>
+          <td style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:20px;padding:5px 16px;">
+            <span style="color:#047857;font-size:12px;font-weight:600;">&#10003; PAID</span>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Billed to / Payment date (2 columns via table) -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
+        <tr>
+          <td width="50%" valign="top" style="padding-right:12px;">
+            <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Billed To</p>
+            <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">${p.tenantName}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${p.ownerEmail}</p>
+          </td>
+          <td width="50%" valign="top" style="padding-left:12px;">
+            <p style="margin:0 0 4px;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Payment Date</p>
+            <p style="margin:0;font-size:14px;font-weight:600;color:#111827;">${fmt(p.paidOn)}</p>
+            <p style="margin:2px 0 0;font-size:12px;color:#6b7280;">${p.paymentMethod}</p>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Line items -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px;border-collapse:collapse;">
+        <thead>
+          <tr style="background:#f9fafb;">
+            <th style="padding:10px 12px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #e5e7eb;">Description</th>
+            <th style="padding:10px 12px;text-align:center;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #e5e7eb;width:40px;">Qty</th>
+            <th style="padding:10px 12px;text-align:right;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #e5e7eb;width:90px;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:14px 12px;border-bottom:1px solid #f3f4f6;">
+              <p style="margin:0;font-size:14px;color:#111827;font-weight:500;">${lineDesc}</p>
+              <p style="margin:3px 0 0;font-size:12px;color:#6b7280;">1-month subscription &bull; AED ${pricePerBlock} per 5 employees</p>
+            </td>
+            <td style="padding:14px 12px;text-align:center;font-size:14px;color:#374151;border-bottom:1px solid #f3f4f6;">1</td>
+            <td style="padding:14px 12px;text-align:right;font-size:14px;font-weight:600;color:#111827;border-bottom:1px solid #f3f4f6;">AED ${p.monthlyCost}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Total -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb;border-radius:8px;margin-bottom:24px;">
+        <tr>
+          <td style="padding:14px 16px;">
+            <span style="font-size:14px;color:#6b7280;font-weight:500;">Total Paid</span>
+          </td>
+          <td style="padding:14px 16px;" align="right">
+            <span style="font-size:22px;font-weight:700;color:#111827;">AED ${p.monthlyCost}</span>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Subscription period -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eff6ff;border-radius:8px;margin-bottom:24px;">
+        <tr>
+          <td style="padding:14px 16px;">
+            <p style="margin:0;font-size:12px;color:#1d4ed8;font-weight:600;">Subscription period</p>
+            <p style="margin:4px 0 0;font-size:13px;color:#1e40af;">${fmt(p.paidOn)} &rarr; ${fmt(p.expiresAt)}</p>
+            <p style="margin:4px 0 0;font-size:11px;color:#3b82f6;">Next renewal: ${fmt(p.expiresAt)}</p>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Plan summary -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;">
+        <tr>
+          <td style="padding:14px 16px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="padding:5px 0;font-size:12px;color:#9ca3af;width:140px;">Plan</td>
+                <td style="padding:5px 0;font-size:13px;font-weight:600;color:#2563eb;">Professional</td>
+              </tr>
+              <tr>
+                <td style="padding:5px 0;font-size:12px;color:#9ca3af;">Employee capacity</td>
+                <td style="padding:5px 0;font-size:13px;font-weight:600;color:#111827;">${p.desiredQuota} employees</td>
+              </tr>
+              <tr>
+                <td style="padding:5px 0;font-size:12px;color:#9ca3af;">Monthly cost</td>
+                <td style="padding:5px 0;font-size:13px;font-weight:600;color:#111827;">AED ${p.monthlyCost}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <p style="font-size:11px;color:#9ca3af;line-height:1.6;margin:0;">Please keep this receipt for your records. For billing inquiries, reply to this email or contact <a href="mailto:support@hrhub.ae" style="color:#2563eb;">support@hrhub.ae</a>.</p>
+    </td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
+      <p style="margin:0;font-size:11px;color:#9ca3af;">HRHub &mdash; UAE HR &amp; PRO Platform &bull; hrhub.ae</p>
+    </td>
+  </tr>
+
+</table>
+</td></tr></table>
 </body></html>`
 }
 
@@ -884,57 +929,94 @@ function subscriptionExpiryReminderEmail(p: ExpiryReminderParams): string {
 
     return `
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"/></head>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
 <body style="font-family:Arial,sans-serif;background:#f9fafb;padding:32px;margin:0;">
-<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center">
+<table width="520" cellpadding="0" cellspacing="0" border="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
 
-  <div style="background:#1e40af;padding:24px 32px;">
-    <p style="margin:0;color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">HRHub UAE</p>
-    <p style="margin:4px 0 0;color:#fff;font-size:18px;font-weight:700;">Subscription Renewal Reminder</p>
-  </div>
+  <!-- Header -->
+  <tr>
+    <td style="background:#1e40af;padding:24px 32px;">
+      <p style="margin:0;color:#93c5fd;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">HRHub UAE</p>
+      <p style="margin:6px 0 0;color:#fff;font-size:18px;font-weight:700;line-height:1.2;">Subscription Renewal Reminder</p>
+    </td>
+  </tr>
 
-  <div style="padding:28px 32px;">
+  <!-- Body -->
+  <tr>
+    <td style="padding:28px 32px;">
 
-    <div style="background:${urgencyBg};border-left:4px solid ${urgencyColor};border-radius:4px;padding:14px 16px;margin-bottom:24px;">
-      <p style="margin:0;color:${urgencyColor};font-size:13px;">${urgencyText}</p>
-    </div>
-
-    <p style="color:#374151;font-size:14px;margin:0 0 20px;">Hi ${p.ownerName},</p>
-    <p style="color:#6b7280;font-size:14px;margin:0 0 20px;">Your <strong>HRHub Professional</strong> subscription for <strong>${p.tenantName}</strong> is coming up for renewal. Renew before the expiry date to keep your team running without interruption.</p>
-
-    <!-- Current plan details -->
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:24px;">
-      <table style="width:100%;border-collapse:collapse;">
-        <tr><td style="padding:6px 0;font-size:12px;color:#9ca3af;width:140px;">Plan</td><td style="padding:6px 0;font-size:13px;font-weight:600;color:#2563eb;">Professional</td></tr>
-        <tr><td style="padding:6px 0;font-size:12px;color:#9ca3af;">Employee capacity</td><td style="padding:6px 0;font-size:13px;font-weight:600;color:#111827;">${p.quota} employees</td></tr>
-        <tr><td style="padding:6px 0;font-size:12px;color:#9ca3af;">Monthly cost</td><td style="padding:6px 0;font-size:13px;font-weight:600;color:#111827;">AED ${p.monthlyCost}</td></tr>
+      <!-- Urgency banner -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
         <tr>
-          <td style="padding:6px 0;font-size:12px;color:#9ca3af;">Expires on</td>
-          <td style="padding:6px 0;font-size:13px;font-weight:700;color:${urgencyColor};">${p.expiryDate}</td>
+          <td style="background:${urgencyBg};border-left:4px solid ${urgencyColor};border-radius:4px;padding:14px 16px;">
+            <p style="margin:0;color:${urgencyColor};font-size:13px;">${urgencyText}</p>
+          </td>
         </tr>
       </table>
-    </div>
 
-    <!-- CTA -->
-    <div style="text-align:center;margin-bottom:24px;">
-      <a href="${p.renewUrl}" style="display:inline-block;background:${urgencyColor};color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">Renew Subscription</a>
-    </div>
+      <p style="color:#374151;font-size:14px;margin:0 0 16px;">Hi ${p.ownerName},</p>
+      <p style="color:#6b7280;font-size:14px;margin:0 0 24px;">Your <strong>HRHub Professional</strong> subscription for <strong>${p.tenantName}</strong> is coming up for renewal. Renew before the expiry date to keep your team running without interruption.</p>
 
-    <!-- What happens if expired -->
-    <div style="background:#f9fafb;border-radius:8px;padding:14px 16px;">
-      <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#374151;">What happens if I don't renew?</p>
-      <ul style="margin:0;padding-left:18px;color:#6b7280;font-size:12px;line-height:2;">
-        <li>Adding new employees will be restricted</li>
-        <li>Your existing data remains safe and accessible</li>
-        <li>You can renew at any time to restore full access</li>
-      </ul>
-    </div>
-  </div>
+      <!-- Plan details -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:24px;">
+        <tr>
+          <td style="padding:16px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="padding:6px 0;font-size:12px;color:#9ca3af;width:140px;">Plan</td>
+                <td style="padding:6px 0;font-size:13px;font-weight:600;color:#2563eb;">Professional</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-size:12px;color:#9ca3af;">Employee capacity</td>
+                <td style="padding:6px 0;font-size:13px;font-weight:600;color:#111827;">${p.quota} employees</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-size:12px;color:#9ca3af;">Monthly cost</td>
+                <td style="padding:6px 0;font-size:13px;font-weight:600;color:#111827;">AED ${p.monthlyCost}</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 0;font-size:12px;color:#9ca3af;">Expires on</td>
+                <td style="padding:6px 0;font-size:13px;font-weight:700;color:${urgencyColor};">${p.expiryDate}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
 
-  <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
-    <p style="margin:0;font-size:11px;color:#9ca3af;">HRHub &mdash; UAE HR &amp; PRO Platform &bull; hrhub.ae</p>
-    <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Questions? Reply to this email or contact <a href="mailto:support@hrhub.ae" style="color:#2563eb;">support@hrhub.ae</a></p>
-  </div>
-</div>
+      <!-- CTA -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+        <tr>
+          <td align="center">
+            <a href="${p.renewUrl}" style="display:inline-block;background:${urgencyColor};color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">Renew Subscription</a>
+          </td>
+        </tr>
+      </table>
+
+      <!-- What happens if not renewed -->
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb;border-radius:8px;">
+        <tr>
+          <td style="padding:14px 16px;">
+            <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#374151;">What happens if I don't renew?</p>
+            <p style="margin:0 0 4px;font-size:12px;color:#6b7280;">&bull; Adding new employees will be restricted</p>
+            <p style="margin:0 0 4px;font-size:12px;color:#6b7280;">&bull; Your existing data remains safe and accessible</p>
+            <p style="margin:0;font-size:12px;color:#6b7280;">&bull; You can renew at any time to restore full access</p>
+          </td>
+        </tr>
+      </table>
+
+    </td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
+      <p style="margin:0;font-size:11px;color:#9ca3af;">HRHub &mdash; UAE HR &amp; PRO Platform &bull; hrhub.ae</p>
+      <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Questions? Reply to this email or contact <a href="mailto:support@hrhub.ae" style="color:#2563eb;">support@hrhub.ae</a></p>
+    </td>
+  </tr>
+
+</table>
+</td></tr></table>
 </body></html>`
 }

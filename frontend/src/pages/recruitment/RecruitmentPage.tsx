@@ -38,6 +38,8 @@ import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { JOB_STATUS_OPTIONS } from '@/lib/options'
+import { exportRecruitment } from '@/lib/export'
+import { ExportDropdown } from '@/components/shared/ExportDropdown'
 
 const JOB_FILTERS: FilterConfig[] = [
   { name: 'title', label: 'Job title', type: 'text', field: 'title' },
@@ -601,6 +603,10 @@ export function RecruitmentPage() {
             <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={jobsFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => { void refetchJobs(); void refetchApps() }} disabled={jobsFetching}>
               Refresh
             </Button>
+            <ExportDropdown
+              onExportCsv={() => exportRecruitment({ format: 'csv' })}
+              onExportPdf={() => exportRecruitment({ format: 'pdf' })}
+            />
             <Button variant="outline" className="gap-2" onClick={() => setAddCandidateOpen(true)} disabled={jobs.filter((j) => j.status === 'open').length === 0}>
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Add Candidate</span>

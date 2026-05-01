@@ -26,4 +26,5 @@ export const performanceReviews = pgTable('performance_reviews', {
     employeeComments: text('employee_comments'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
 })

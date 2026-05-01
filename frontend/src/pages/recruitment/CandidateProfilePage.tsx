@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/overlays'
 import { cn } from '@/lib/utils'
-import { useApplications, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee } from '@/hooks/useRecruitment'
+import { useApplications, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume } from '@/hooks/useRecruitment'
 import { toast } from '@/components/ui/overlays'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { CopyableEmail, CopyablePhone } from '@/components/shared'
@@ -56,6 +56,8 @@ export function CandidateProfilePage() {
     const updateStage = useUpdateApplicationStage()
     const updateApplication = useUpdateApplication()
     const convertToEmployee = useConvertCandidateToEmployee()
+    const uploadResume = useUploadResume()
+    const [resumeDownloadUrl, setResumeDownloadUrl] = useState<string | null>(null)
     const [rejectOpen, setRejectOpen] = useState(false)
     const [rejectNote, setRejectNote] = useState('')
     const [editOpen, setEditOpen] = useState(false)
@@ -301,6 +303,55 @@ export function CandidateProfilePage() {
                                 </div>
                             )}
                         </dl>
+
+                        {/* Resume upload / download */}
+                        <div className="pt-2 border-t border-border space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">Resume / CV</p>
+                            {(candidate.resumeUrl || resumeDownloadUrl) && (
+                                <a
+                                    href={resumeDownloadUrl ?? '#'}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs text-primary underline underline-offset-2"
+                                >
+                                    Download Resume
+                                </a>
+                            )}
+                            <label className="block">
+                                <span className="sr-only">Upload resume</span>
+                                <input
+                                    type="file"
+                                    accept=".pdf,.doc,.docx"
+                                    className="hidden"
+                                    id="resume-upload"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (!file || !candidate) return
+                                        uploadResume.mutate(
+                                            { id: candidate.id, file },
+                                            {
+                                                onSuccess: (res) => {
+                                                    setResumeDownloadUrl((res as any)?.data?.downloadUrl ?? null)
+                                                    toast.success('Resume uploaded')
+                                                },
+                                                onError: () => toast.error('Upload failed', 'Could not upload resume.'),
+                                            },
+                                        )
+                                        e.target.value = ''
+                                    }}
+                                />
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full text-xs"
+                                    disabled={uploadResume.isPending}
+                                    onClick={() => document.getElementById('resume-upload')?.click()}
+                                    type="button"
+                                >
+                                    {uploadResume.isPending ? 'Uploading…' : candidate.resumeUrl ? 'Replace Resume' : 'Upload Resume'}
+                                </Button>
+                            </label>
+                        </div>
                     </Card>
 
                     {!isRejected && (

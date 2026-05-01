@@ -1,10 +1,13 @@
 import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication } from './recruitment.service.js'
+import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 import { db } from '../../db/index.js'
-import { entities } from '../../db/schema/index.js'
+import { entities, tenants } from '../../db/schema/index.js'
 import { and, eq } from 'drizzle-orm'
+import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
+import { extname } from 'node:path'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -238,6 +241,34 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data: updated })
     })
 
+    // POST /api/v1/applications/:id/resume — upload resume/CV to S3
+    fastify.post('/applications/:id/resume', {
+        preHandler: [fastify.authenticate],
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const part = await request.file()
+        if (!part) return reply.code(400).send({ message: 'No file provided' })
+        const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+        if (!allowed.includes(part.mimetype)) return reply.code(415).send({ message: 'Only PDF or Word documents are accepted' })
+        const chunks: Buffer[] = []
+        for await (const chunk of part.file) chunks.push(chunk as Buffer)
+        const buffer = Buffer.concat(chunks)
+        if (buffer.length > 5 * 1024 * 1024) return reply.code(413).send({ message: 'File must be under 5 MB' })
+        const ext = extname(part.filename) || '.pdf'
+        const safeName = `resume${ext}`
+        const s3Key = buildS3Key(request.user.tenantId, `applications/${id}/resume`, safeName)
+        try {
+            await uploadObject(s3Key, buffer, part.mimetype)
+        } catch {
+            return reply.code(503).send({ message: 'File storage unavailable. Please try again.' })
+        }
+        const updated = await updateApplication(request.user.tenantId, id, { resumeUrl: s3Key } as never)
+        if (!updated) return reply.code(404).send({ message: 'Application not found' })
+        const downloadUrl = await generateDownloadUrl(s3Key)
+        return reply.send({ data: { s3Key, downloadUrl } })
+    })
+
     // POST /api/v1/applications/:id/convert-to-employee
     // Promotes a candidate in `pre_boarding` stage into a real employee record.
     fastify.post('/applications/:id/convert-to-employee', {
@@ -321,6 +352,48 @@ export default async function (fastify: any): Promise<void> {
         }).catch(() => { })
 
         return reply.code(201).send({ data: { employee, application: await getApplication(tenantId, id) } })
+    })
+
+    // GET /api/v1/applications/export?format=csv|pdf&stage=...
+    fastify.get('/applications/export', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Recruitment'] },
+    }, async (request, reply) => {
+        const { format = 'csv', jobId, stage } = request.query as Record<string, string>
+        if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
+        const { data } = await listApplications(request.user.tenantId, { jobId, stage, limit: 10000, offset: 0 }) as any
+        const rows = (data ?? []) as any[]
+        const dateStr = new Date().toISOString().slice(0, 10)
+
+        if (format === 'pdf') {
+            const [tenantRow] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
+            const pdf = await generateReportPdf({
+                title: 'Recruitment Pipeline Report',
+                companyName: tenantRow?.name ?? '',
+                columns: [
+                    { header: 'Candidate', key: 'name', width: 130 },
+                    { header: 'Email', key: 'email', width: 140 },
+                    { header: 'Job Title', key: 'jobTitle', width: 130 },
+                    { header: 'Stage', key: 'stage', width: 80 },
+                    { header: 'Score', key: 'score', width: 50, align: 'right' },
+                    { header: 'Applied', key: 'createdAt' },
+                ],
+                rows,
+            })
+            reply.header('Content-Type', 'application/pdf')
+            reply.header('Content-Disposition', `attachment; filename="recruitment-report-${dateStr}.pdf"`)
+            return reply.send(pdf)
+        }
+
+        const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+        const headers = ['Name', 'Email', 'Phone', 'Nationality', 'Job Title', 'Stage', 'Score', 'Experience (yrs)', 'Expected Salary', 'Applied Date']
+        const lines = [headers.join(',')]
+        for (const r of rows) {
+            lines.push([r.name, r.email, r.phone ?? '', r.nationality ?? '', r.jobTitle ?? '', r.stage, r.score ?? '', r.experience ?? '', r.expectedSalary ?? '', r.createdAt?.slice?.(0, 10) ?? ''].map(escape).join(','))
+        }
+        reply.header('Content-Type', 'text/csv; charset=utf-8')
+        reply.header('Content-Disposition', `attachment; filename="recruitment-export-${dateStr}.csv"`)
+        return reply.send(lines.join('\r\n'))
     })
 }
 

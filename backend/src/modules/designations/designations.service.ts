@@ -38,7 +38,8 @@ export async function updateDesignation(
 
 export async function deleteDesignation(tenantId: string, id: string) {
     const [row] = await db
-        .delete(designations)
+        .update(designations)
+        .set({ isActive: false })
         .where(and(eq(designations.id, id), eq(designations.tenantId, tenantId)))
         .returning({ id: designations.id })
     return row ?? null

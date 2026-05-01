@@ -26,6 +26,7 @@ export const visaCosts = pgTable('visa_costs', {
     stepLabel: text('step_label'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (t) => [
     index('idx_visa_costs_tenant').on(t.tenantId),
     index('idx_visa_costs_visa').on(t.visaApplicationId),

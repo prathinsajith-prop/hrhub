@@ -3,6 +3,30 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import type { Employee } from '@/types'
 
+export async function exportEmployeesCsv(params: { department?: string; status?: string } = {}) {
+    const qs = new URLSearchParams()
+    if (params.department) qs.set('department', params.department)
+    if (params.status) qs.set('status', params.status)
+    const queryStr = qs.toString()
+    const path = `/employees/export${queryStr ? '?' + queryStr : ''}`
+    const token = useAuthStore.getState().accessToken
+    const baseUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api/v1'
+    const res = await fetch(`${baseUrl}${path}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error(`Export failed: ${res.status}`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const date = new Date().toISOString().slice(0, 10)
+    a.href = url
+    a.download = `employees-${date}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+}
+
 interface ListParams {
     search?: string
     status?: string

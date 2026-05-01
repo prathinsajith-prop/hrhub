@@ -78,10 +78,21 @@ export function useSettlementPreview(
     })
 }
 
+export interface InitiateExitInput {
+    employeeId: string
+    exitType: 'resignation' | 'termination' | 'contract_end' | 'retirement'
+    exitDate: string
+    lastWorkingDay: string
+    noticePeriodDays?: number
+    reason?: string
+    deductions?: number
+    notes?: string
+}
+
 export function useInitiateExit() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (data: unknown) => api.post('/exit', data),
+        mutationFn: (data: InitiateExitInput) => api.post('/exit', data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['exit'] }),
     })
 }
