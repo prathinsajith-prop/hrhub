@@ -18,6 +18,7 @@ export const interviews = pgTable('interviews', {
     rating: text('rating').$type<'1' | '2' | '3' | '4' | '5'>(),
     passed: boolean('passed'),
     notes: text('notes'),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })

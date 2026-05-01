@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js'
 import { interviews, jobApplications } from '../../db/schema/index.js'
-import { eq, and, getTableColumns } from 'drizzle-orm'
+import { eq, and, isNull, getTableColumns } from 'drizzle-orm'
 
 export async function scheduleInterview(tenantId: string, data: {
     applicationId: string
@@ -34,11 +34,11 @@ export async function getInterviewsForApplication(tenantId: string, applicationI
             eq(jobApplications.id, interviews.applicationId),
             eq(jobApplications.tenantId, tenantId),
         ))
-        .where(eq(interviews.applicationId, applicationId))
+        .where(and(eq(interviews.applicationId, applicationId), isNull(interviews.deletedAt)))
 }
 
 export async function getInterviewsByTenant(tenantId: string) {
-    return db.select().from(interviews).where(eq(interviews.tenantId, tenantId))
+    return db.select().from(interviews).where(and(eq(interviews.tenantId, tenantId), isNull(interviews.deletedAt)))
 }
 
 export async function updateInterviewStatus(tenantId: string, id: string, data: {
@@ -56,6 +56,6 @@ export async function updateInterviewStatus(tenantId: string, id: string, data: 
 
 export async function deleteInterview(tenantId: string, id: string) {
     await db.update(interviews)
-        .set({ status: 'cancelled', updatedAt: new Date() })
-        .where(and(eq(interviews.id, id), eq(interviews.tenantId, tenantId)))
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(interviews.id, id), eq(interviews.tenantId, tenantId), isNull(interviews.deletedAt)))
 }

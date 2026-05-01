@@ -9,6 +9,7 @@ import {
     assignComplaint,
     escalateComplaint,
     resolveComplaint,
+    deleteComplaint,
     getComplaintStats,
 } from './complaints.service.js'
 
@@ -122,6 +123,13 @@ export async function complaintsRoutes(fastify: any) {
         const data = await updateComplaint(req.user.tenantId, req.params.id, parsed.data, employeeId)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found' })
         return reply.send({ data })
+    })
+
+    // DELETE /api/v1/complaints/:id — soft delete (HR only)
+    fastify.delete('/complaints/:id', { ...hrAuth, schema: { tags: ['Complaints'] } }, async (req: any, reply: any) => {
+        const row = await deleteComplaint(req.user.tenantId, req.params.id)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found' })
+        return reply.code(204).send()
     })
 
     // POST /api/v1/my/complaints/:id/submit

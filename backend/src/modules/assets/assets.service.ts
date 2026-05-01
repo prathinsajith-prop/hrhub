@@ -15,14 +15,15 @@ export async function listCategories(tenantId: string) {
     return db
         .select()
         .from(assetCategories)
-        .where(eq(assetCategories.tenantId, tenantId))
+        .where(and(eq(assetCategories.tenantId, tenantId), isNull(assetCategories.deletedAt)))
         .orderBy(assetCategories.name)
 }
 
 export async function deleteCategory(tenantId: string, id: string) {
     const [row] = await db
-        .delete(assetCategories)
-        .where(and(eq(assetCategories.id, id), eq(assetCategories.tenantId, tenantId)))
+        .update(assetCategories)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(assetCategories.id, id), eq(assetCategories.tenantId, tenantId), isNull(assetCategories.deletedAt)))
         .returning()
     return row ?? null
 }

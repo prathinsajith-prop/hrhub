@@ -178,7 +178,18 @@
     "onboardingDesc": "حالة إلحاق الموظفين",
     "activeChecklists": "قوائم التحقق النشطة",
     "overdueSteps": "الخطوات المتأخرة",
-    "noActiveVisaCases": "لا توجد حالات تأشيرة نشطة"
+    "noActiveVisaCases": "لا توجد حالات تأشيرة نشطة",
+    "upcomingBirthdays": "أعياد الميلاد",
+    "noBirthdays": "لا توجد أعياد ميلاد هذا الشهر",
+    "workAnniversaries": "سنوات الخدمة",
+    "noAnniversaries": "لا توجد ذكرى سنوية هذا الشهر",
+    "genderBreakdown": "الموظفون حسب الجنس",
+    "maritalBreakdown": "الموظفون حسب الحالة الاجتماعية",
+    "birthdayDay": "اليوم",
+    "birthdayName": "الاسم",
+    "anniversaryJoiningYear": "سنة الانضمام",
+    "anniversaryYears": "السنوات",
+    "allDepartments": "الكل"
   },
   "employees": {
     "title": "الموظفون",
@@ -194,6 +205,18 @@
     "joinDate": "تاريخ الانضمام",
     "exitDate": "تاريخ المغادرة",
     "gender": "الجنس",
+    "genderValues": {
+      "male": "ذكر",
+      "female": "أنثى",
+      "unknown": "غير محدد"
+    },
+    "maritalValues": {
+      "married": "متزوج",
+      "single": "أعزب",
+      "widowed": "أرمل",
+      "divorced": "مطلق",
+      "unknown": "غير محدد"
+    },
     "nationality": "الجنسية",
     "salary": "الراتب",
     "employmentType": "نوع التوظيف",

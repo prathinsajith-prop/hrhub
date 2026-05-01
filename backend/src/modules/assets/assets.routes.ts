@@ -153,8 +153,20 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
         schema: { tags: ['Assets'] },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        const body = request.body as Record<string, unknown>
-        const updated = await updateAsset(request.user.tenantId, id, body as never)
+        const b = request.body as Record<string, unknown>
+        const updated = await updateAsset(request.user.tenantId, id, {
+            ...(b.name !== undefined && { name: b.name as string }),
+            ...(b.assetCode !== undefined && { assetCode: b.assetCode as string }),
+            ...(b.categoryId !== undefined && { categoryId: b.categoryId as string }),
+            ...(b.brand !== undefined && { brand: b.brand as string }),
+            ...(b.model !== undefined && { model: b.model as string }),
+            ...(b.serialNumber !== undefined && { serialNumber: b.serialNumber as string }),
+            ...(b.purchaseDate !== undefined && { purchaseDate: b.purchaseDate as string }),
+            ...(b.purchaseCost !== undefined && { purchaseCost: b.purchaseCost as string }),
+            ...(b.status !== undefined && { status: b.status as never }),
+            ...(b.condition !== undefined && { condition: b.condition as never }),
+            ...(b.notes !== undefined && { notes: b.notes as string }),
+        })
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Asset not found' })
         recordActivity({
             tenantId: request.user.tenantId,

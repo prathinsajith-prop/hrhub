@@ -130,7 +130,11 @@ export default async function (fastify: any): Promise<void> {
 
     fastify.patch('/:id', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        const updated = await updatePayrollRun(request.user.tenantId, id, request.body as never)
+        const b = request.body as Record<string, unknown>
+        const updated = await updatePayrollRun(request.user.tenantId, id, {
+            ...(b.notes !== undefined && { notes: b.notes as string }),
+            ...(b.wpsFileRef !== undefined && { wpsFileRef: b.wpsFileRef as string }),
+        })
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Payroll run not found' })
         return reply.send({ data: updated })
     })

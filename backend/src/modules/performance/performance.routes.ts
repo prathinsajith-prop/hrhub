@@ -1,9 +1,24 @@
+import { z } from 'zod'
 import { getReviews, createReview, updateReview, deleteReview } from './performance.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
 import { tenants } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
+
+const createReviewSchema = z.object({
+    employeeId: z.string().uuid(),
+    reviewPeriod: z.string().min(1),
+    reviewerId: z.string().uuid().optional(),
+    overallRating: z.number().min(1).max(5).optional(),
+    status: z.enum(['draft', 'submitted', 'acknowledged', 'completed']).optional(),
+    strengths: z.string().optional(),
+    improvements: z.string().optional(),
+    goals: z.string().optional(),
+    managerComments: z.string().optional(),
+    employeeComments: z.string().optional(),
+    reviewDate: z.string().optional(),
+})
 
 export async function performanceRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
@@ -22,7 +37,9 @@ export async function performanceRoutes(fastify: any) {
 
     // POST /api/v1/performance
     fastify.post('/performance', { ...adminAuth, schema: { tags: ['Performance'] } }, async (request: any, reply: any) => {
-        const review = await createReview(request.user.tenantId, request.user.id, request.body as any)
+        const parse = createReviewSchema.safeParse(request.body)
+        if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
+        const review = await createReview(request.user.tenantId, request.user.id, parse.data as any)
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'performance_review', entityId: review.id, entityName: (review as any).employeeName ?? (request.body as any).reviewPeriod, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(201).send({ data: review })
     })
@@ -30,7 +47,22 @@ export async function performanceRoutes(fastify: any) {
     // PATCH /api/v1/performance/:id
     fastify.patch('/performance/:id', { ...adminAuth, schema: { tags: ['Performance'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const review = await updateReview(request.user.tenantId, id, request.body as any)
+        const b = request.body as Record<string, unknown>
+        const review = await updateReview(request.user.tenantId, id, {
+            ...(b.overallRating !== undefined && { overallRating: Number(b.overallRating) }),
+            ...(b.qualityScore !== undefined && { qualityScore: Number(b.qualityScore) }),
+            ...(b.productivityScore !== undefined && { productivityScore: Number(b.productivityScore) }),
+            ...(b.teamworkScore !== undefined && { teamworkScore: Number(b.teamworkScore) }),
+            ...(b.attendanceScore !== undefined && { attendanceScore: Number(b.attendanceScore) }),
+            ...(b.initiativeScore !== undefined && { initiativeScore: Number(b.initiativeScore) }),
+            ...(b.strengths !== undefined && { strengths: b.strengths as string }),
+            ...(b.improvements !== undefined && { improvements: b.improvements as string }),
+            ...(b.goals !== undefined && { goals: b.goals as string }),
+            ...(b.managerComments !== undefined && { managerComments: b.managerComments as string }),
+            ...(b.employeeComments !== undefined && { employeeComments: b.employeeComments as string }),
+            ...(b.status !== undefined && { status: b.status as never }),
+            ...(b.reviewDate !== undefined && { reviewDate: b.reviewDate as string }),
+        })
         if (!review) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Performance review not found' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'performance_review', entityId: id, entityName: (review as any).employeeName ?? (review as any).reviewPeriod, action: 'update', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.send({ data: review })

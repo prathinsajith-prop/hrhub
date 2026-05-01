@@ -56,7 +56,7 @@ const STATUS_STYLE: Record<string, string> = {
 function CreateLoanDialog({ onClose }: { onClose: () => void }) {
     const { t } = useTranslation()
     const create = useCreateLoan()
-    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
+    const { data: empData } = useEmployees({ limit: 500, status: 'active' })
     const [form, setForm] = useState({ employeeId: '', amount: '', monthlyDeduction: '', reason: '', notes: '' })
     const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -176,7 +176,7 @@ function RejectDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () => vo
 export function LoansPage() {
     const { t } = useTranslation()
     const role = useAuthStore(s => s.user?.role) as UserRole | undefined
-    const canManage = hasPermission(role ?? 'employee', 'manage_payroll')
+    const canManage = hasPermission(role ?? 'employee', 'manage_loans')
 
     const [statusFilter, setStatusFilter] = useState('all')
     const [createOpen, setCreateOpen] = useState(false)

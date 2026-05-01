@@ -53,13 +53,6 @@ const STATUS_STYLE: Record<string, string> = {
     cancelled:   'bg-red-50 text-red-600 ring-1 ring-red-200',
 }
 
-const TYPE_LABEL: Record<string, string> = {
-    internal:   'Internal',
-    external:   'External',
-    online:     'Online',
-    conference: 'Conference',
-}
-
 // ─── Training Form Dialog ─────────────────────────────────────────────────────
 
 function TrainingFormDialog({
@@ -234,7 +227,7 @@ function TrainingFormDialog({
 export function TrainingPage() {
     const { t } = useTranslation()
     const role = useAuthStore(s => s.user?.role) as UserRole | undefined
-    const canManage = hasPermission(role ?? 'employee', 'manage_employees')
+    const canManage = hasPermission(role ?? 'employee', 'manage_training')
 
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('all')
@@ -370,7 +363,7 @@ export function TrainingPage() {
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                                                {TYPE_LABEL[r.type] ?? r.type}
+                                                {t(`training.types.${r.type}`)}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 text-muted-foreground">

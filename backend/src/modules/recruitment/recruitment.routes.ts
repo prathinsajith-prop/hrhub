@@ -76,7 +76,21 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Recruitment'] },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        const updated = await updateJob(request.user.tenantId, id, request.body as never)
+        const b = request.body as Record<string, unknown>
+        const updated = await updateJob(request.user.tenantId, id, {
+            ...(b.title !== undefined && { title: b.title as string }),
+            ...(b.department !== undefined && { department: b.department as string }),
+            ...(b.location !== undefined && { location: b.location as string }),
+            ...(b.type !== undefined && { type: b.type as never }),
+            ...(b.status !== undefined && { status: b.status as never }),
+            ...(b.openings !== undefined && { openings: Number(b.openings) }),
+            ...(b.minSalary !== undefined && { minSalary: b.minSalary as string }),
+            ...(b.maxSalary !== undefined && { maxSalary: b.maxSalary as string }),
+            ...(b.industry !== undefined && { industry: b.industry as string }),
+            ...(b.description !== undefined && { description: b.description as string }),
+            ...(b.requirements !== undefined && { requirements: b.requirements as never }),
+            ...(b.closingDate !== undefined && { closingDate: b.closingDate as string }),
+        })
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found' })
         recordActivity({
             tenantId: request.user.tenantId,
@@ -238,7 +252,18 @@ export default async function (fastify: any): Promise<void> {
         },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        const updated = await updateApplication(request.user.tenantId, id, request.body as never)
+        const b = request.body as Record<string, unknown>
+        const updated = await updateApplication(request.user.tenantId, id, {
+            ...(b.name !== undefined && { name: b.name as string }),
+            ...(b.email !== undefined && { email: b.email as string }),
+            ...(b.phone !== undefined && { phone: b.phone as string }),
+            ...(b.nationality !== undefined && { nationality: b.nationality as string }),
+            ...(b.experience !== undefined && { experience: Number(b.experience) }),
+            ...(b.expectedSalary !== undefined && { expectedSalary: String(b.expectedSalary) }),
+            ...(b.currentSalary !== undefined && { currentSalary: String(b.currentSalary) }),
+            ...(b.notes !== undefined && { notes: b.notes as string }),
+            ...(b.score !== undefined && { score: Number(b.score) }),
+        } as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
         return reply.send({ data: updated })
     })
