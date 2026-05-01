@@ -659,23 +659,25 @@ export async function deleteLeaveAdjustment(tenantId: string, id: string) {
         .where(and(eq(leaveAdjustments.id, id), eq(leaveAdjustments.tenantId, tenantId), isNull(leaveAdjustments.deletedAt)))
         .limit(1)
     if (!adj) return null
-    // Reverse the balance effect (negate delta, no new audit record needed for the reversal)
-    const existing = await db.select().from(leaveBalances).where(and(
-        eq(leaveBalances.tenantId, tenantId),
-        eq(leaveBalances.employeeId, adj.employeeId),
-        eq(leaveBalances.leaveType, adj.leaveType),
-        eq(leaveBalances.year, adj.year),
-    ))
-    if (existing.length > 0) {
-        const newAdj = Number(existing[0].adjustment) - Number(adj.delta)
-        await db.update(leaveBalances).set({ adjustment: String(newAdj), updatedAt: new Date() })
-            .where(eq(leaveBalances.id, existing[0].id))
-    }
-    // Soft-delete the adjustment record
-    const [deleted] = await db.update(leaveAdjustments)
-        .set({ deletedAt: new Date() })
-        .where(and(eq(leaveAdjustments.id, id), eq(leaveAdjustments.tenantId, tenantId)))
-        .returning()
+    // Reverse the balance effect atomically and soft-delete in a single transaction.
+    // Atomic SQL avoids a read-modify-write race if two HR managers delete concurrently.
+    const [deleted] = await db.transaction(async (tx) => {
+        await tx.update(leaveBalances)
+            .set({
+                adjustment: sql`CAST(adjustment AS NUMERIC) - ${Number(adj.delta)}`,
+                updatedAt: new Date(),
+            })
+            .where(and(
+                eq(leaveBalances.tenantId, tenantId),
+                eq(leaveBalances.employeeId, adj.employeeId),
+                eq(leaveBalances.leaveType, adj.leaveType),
+                eq(leaveBalances.year, adj.year),
+            ))
+        return tx.update(leaveAdjustments)
+            .set({ deletedAt: new Date() })
+            .where(and(eq(leaveAdjustments.id, id), eq(leaveAdjustments.tenantId, tenantId)))
+            .returning()
+    })
     return deleted ?? null
 }
 
