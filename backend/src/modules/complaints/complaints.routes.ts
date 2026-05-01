@@ -12,6 +12,7 @@ import {
     deleteComplaint,
     getComplaintStats,
 } from './complaints.service.js'
+import { recordActivity } from '../audit/audit.service.js'
 
 const createSchema = z.object({
     title: z.string().min(3).max(200),
@@ -129,6 +130,11 @@ export async function complaintsRoutes(fastify: any) {
     fastify.delete('/complaints/:id', { ...hrAuth, schema: { tags: ['Complaints'] } }, async (req: any, reply: any) => {
         const row = await deleteComplaint(req.user.tenantId, req.params.id)
         if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found' })
+        recordActivity({
+            tenantId: req.user.tenantId, userId: req.user.id, actorName: req.user.name, actorRole: req.user.role,
+            entityType: 'complaint', entityId: row.id, action: 'delete',
+            ipAddress: req.ip, userAgent: req.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(204).send()
     })
 
