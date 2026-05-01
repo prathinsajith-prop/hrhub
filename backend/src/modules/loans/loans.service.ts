@@ -165,30 +165,33 @@ export async function rejectLoan(tenantId: string, id: string, notes?: string) {
 }
 
 export async function recordLoanPayment(tenantId: string, id: string) {
-    const [existing] = await db
-        .select()
-        .from(employeeLoans)
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
-    if (!existing) throw Object.assign(new Error('Loan not found'), { statusCode: 404 })
-    if (existing.status !== 'active')
-        throw Object.assign(new Error('Loan is not active'), { statusCode: 409 })
+    return db.transaction(async (tx) => {
+        const [existing] = await tx
+            .select()
+            .from(employeeLoans)
+            .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
+            .for('update')
+        if (!existing) throw Object.assign(new Error('Loan not found'), { statusCode: 404 })
+        if (existing.status !== 'active')
+            throw Object.assign(new Error('Loan is not active'), { statusCode: 409 })
 
-    const monthly = parseFloat(String(existing.monthlyDeduction))
-    const current = parseFloat(String(existing.remainingBalance ?? existing.amount))
-    const newBalance = Math.max(0, current - monthly)
-    const newPaid = (existing.paidInstallments ?? 0) + 1
-    const newStatus = newBalance === 0 ? 'completed' : 'active'
+        const monthly = parseFloat(String(existing.monthlyDeduction))
+        const current = parseFloat(String(existing.remainingBalance ?? existing.amount))
+        const newBalance = Math.max(0, current - monthly)
+        const newPaid = (existing.paidInstallments ?? 0) + 1
+        const newStatus = newBalance === 0 ? 'completed' : 'active'
 
-    const [updated] = await db
-        .update(employeeLoans)
-        .set(withTimestamp({
-            paidInstallments: newPaid,
-            remainingBalance: String(newBalance),
-            status: newStatus,
-        }))
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
-        .returning()
-    return updated
+        const [updated] = await tx
+            .update(employeeLoans)
+            .set(withTimestamp({
+                paidInstallments: newPaid,
+                remainingBalance: String(newBalance),
+                status: newStatus,
+            }))
+            .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
+            .returning()
+        return updated ?? null
+    })
 }
 
 export async function getEmployeeActiveLoans(tenantId: string, employeeId: string) {

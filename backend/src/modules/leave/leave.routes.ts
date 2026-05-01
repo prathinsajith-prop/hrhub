@@ -15,6 +15,26 @@ import { eq, and, inArray } from 'drizzle-orm'
 import { sendEmail, leaveNotificationEmail } from '../../plugins/email.js'
 import { loadEnv } from '../../config/env.js'
 import { generateReportPdf } from '../../lib/pdf.js'
+import { z } from 'zod'
+
+const createAirTicketSchema = z.object({
+    employeeId: z.string().uuid(),
+    year: z.number().int().min(2000).max(2100),
+    ticketFor: z.enum(['self', 'family', 'both']),
+    destination: z.string().optional(),
+    amount: z.number().positive().optional(),
+    currency: z.string().optional(),
+    reason: z.string().optional(),
+    notes: z.string().optional(),
+})
+
+const createLeaveOffsetSchema = z.object({
+    employeeId: z.string().uuid(),
+    workDate: z.string().min(1),
+    days: z.number().positive().optional(),
+    reason: z.string().optional(),
+    notes: z.string().optional(),
+})
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -291,13 +311,9 @@ export default async function (fastify: any): Promise<void> {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['Leave'] },
     }, async (request, reply) => {
-        const body = request.body as {
-            employeeId: string; year: number; ticketFor: 'self' | 'family' | 'both';
-            destination?: string; amount?: number; currency?: string; reason?: string; notes?: string
-        }
-        if (!body?.employeeId || !body?.year || !body?.ticketFor) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId, year, ticketFor required' })
-        }
+        const parse = createAirTicketSchema.safeParse(request.body)
+        if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
+        const body = parse.data
         const row = await createAirTicket(request.user.tenantId, { ...body, createdBy: request.user.id })
         recordActivity({
             tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
@@ -363,12 +379,9 @@ export default async function (fastify: any): Promise<void> {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['Leave'] },
     }, async (request, reply) => {
-        const body = request.body as {
-            employeeId: string; workDate: string; days?: number; reason?: string; notes?: string
-        }
-        if (!body?.employeeId || !body?.workDate) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId, workDate required' })
-        }
+        const parse = createLeaveOffsetSchema.safeParse(request.body)
+        if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
+        const body = parse.data
         const row = await createLeaveOffset(request.user.tenantId, { ...body, createdBy: request.user.id })
         recordActivity({
             tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
