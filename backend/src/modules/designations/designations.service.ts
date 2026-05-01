@@ -6,7 +6,7 @@ export async function listDesignations(tenantId: string) {
     return db
         .select()
         .from(designations)
-        .where(eq(designations.tenantId, tenantId))
+        .where(and(eq(designations.tenantId, tenantId), eq(designations.isActive, true)))
         .orderBy(asc(designations.sortOrder), asc(designations.name))
 }
 

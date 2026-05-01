@@ -148,7 +148,7 @@ export function passwordResetEmail(params: { name: string; resetUrl: string; exp
   <h2 style="color:#111827;margin-top:0;">Reset your password</h2>
   <p style="color:#6b7280;">Hi ${h(name)},</p>
   <p style="color:#6b7280;">We received a request to reset your HRHub password. Click the button below to set a new password. This link expires in <strong>${h(String(expiresInMinutes))} minutes</strong>.</p>
-  <a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">Reset Password</a>
+  <a href="${h(resetUrl)}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">Reset Password</a>
   <p style="color:#9ca3af;font-size:12px;">If you didn't request this, you can safely ignore this email. Your password won't change.</p>
   <p style="color:#9ca3af;font-size:12px;border-top:1px solid #e5e7eb;margin-top:24px;padding-top:16px;">HRHub &mdash; UAE HR & PRO Platform</p>
 </div>

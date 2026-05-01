@@ -60,6 +60,15 @@ export async function getSubscriptionEvents(tenantId: string, limit = 50) {
         .limit(limit)
 }
 
+export async function getSubscriptionEventById(tenantId: string, id: string) {
+    const [row] = await db
+        .select()
+        .from(subscriptionEvents)
+        .where(and(eq(subscriptionEvents.id, id), eq(subscriptionEvents.tenantId, tenantId)))
+        .limit(1)
+    return row ?? null
+}
+
 // ─── Email helper: send and log failure without throwing ─────────────────────
 
 async function sendEmailLogged(opts: Parameters<typeof sendEmail>[0], context: string): Promise<void> {

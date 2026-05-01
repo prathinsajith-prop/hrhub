@@ -46,7 +46,16 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
 async function countWorkingDays(tenantId: string, startDate: string, endDate: string): Promise<number> {
     const start = new Date(startDate)
     const end = new Date(endDate)
-    const calendarDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+
+    // Count Mon–Thu + Sun only (UAE weekend = Fri + Sat per Federal Decree-Law No. 33 of 2021)
+    let workingDays = 0
+    const cur = new Date(start)
+    while (cur <= end) {
+        const dow = cur.getDay()
+        if (dow !== 5 && dow !== 6) workingDays++
+        cur.setDate(cur.getDate() + 1)
+    }
+
     const holidays = await db.select({ id: publicHolidays.id })
         .from(publicHolidays)
         .where(and(
@@ -54,7 +63,7 @@ async function countWorkingDays(tenantId: string, startDate: string, endDate: st
             gte(publicHolidays.date, startDate),
             lte(publicHolidays.date, endDate),
         ))
-    return Math.max(1, calendarDays - holidays.length)
+    return Math.max(1, workingDays - holidays.length)
 }
 
 export async function createLeaveRequest(tenantId: string, data: Omit<NewLeaveRequest, 'tenantId' | 'id'>) {

@@ -8,6 +8,7 @@ import {
     verifyStripeWebhook,
     updateProfessionalQuota,
     getSubscriptionEvents,
+    getSubscriptionEventById,
     isStripeEnabled,
     sendTestSubscriptionEmail,
     PLAN_DISPLAY,
@@ -266,8 +267,7 @@ export default async function subscriptionRoutes(fastify: any): Promise<void> {
     // GET /api/v1/subscription/events/:id/invoice — download invoice PDF for a billing event
     fastify.get('/events/:id/invoice', { ...adminAuth, schema: { tags: ['Subscription'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const events = await getSubscriptionEvents(request.user.tenantId, 100)
-        const event = events.find(e => e.id === id)
+        const event = await getSubscriptionEventById(request.user.tenantId, id)
         if (!event) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Invoice not found' })
 
         const meta = (event.metadata ?? {}) as Record<string, unknown>
@@ -284,6 +284,7 @@ export default async function subscriptionRoutes(fastify: any): Promise<void> {
         }
         const description = eventLabel[event.eventType] ?? event.eventType
 
+        const PAID_EVENT_TYPES = ['plan_activated', 'quota_updated']
         const { generateInvoicePdf } = await import('../../lib/pdf.js')
         const pdf = await generateInvoicePdf({
             invoiceRef,
@@ -295,6 +296,7 @@ export default async function subscriptionRoutes(fastify: any): Promise<void> {
             paymentMethod: (meta.paymentMethod as string) ?? '—',
             date: new Date(event.createdAt).toLocaleDateString('en-AE', { day: 'numeric', month: 'long', year: 'numeric' }),
             issuedTo: tenantName,
+            isPaid: PAID_EVENT_TYPES.includes(event.eventType),
         })
 
         reply.header('Content-Type', 'application/pdf')

@@ -66,7 +66,7 @@ export default async function (fastify: any): Promise<void> {
                     const opts = leaveNotificationEmail({
                         managerName: recipient.name ?? 'Manager',
                         employeeName,
-                        leaveType: body.leaveType,
+                        leaveType: body.leaveType.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
                         startDate: body.startDate,
                         endDate: body.endDate,
                         approveUrl: `${appUrl}/leave`,

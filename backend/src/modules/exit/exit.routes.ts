@@ -22,7 +22,7 @@ export async function exitRoutes(fastify: any) {
     // POST /api/v1/exit
     fastify.post('/exit', { ...adminAuth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
         const data = await initiateExit(request.user.tenantId, request.body as any)
-        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: data.request.id, entityName: (data.request as any).employeeId, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: data.request.id, entityName: data.settlement.employeeName, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(201).send({ data })
     })
 

@@ -1,18 +1,39 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import type { User, Tenant } from '@/types'
 
 // Key used to decide which storage to use across page loads
 const KEEP_SIGNED_IN_KEY = 'hrhub-keep-signed-in'
+const AUTH_KEY = 'hrhub-auth'
 
-function getStorage() {
-  try {
-    return localStorage.getItem(KEEP_SIGNED_IN_KEY) === 'true'
-      ? localStorage
-      : sessionStorage
-  } catch {
-    return sessionStorage
-  }
+function preferLocalStorage() {
+  try { return localStorage.getItem(KEEP_SIGNED_IN_KEY) === 'true' } catch { return false }
+}
+
+// Dynamic storage proxy — re-evaluates the preference on every operation so that a
+// login with a different keepSignedIn value takes effect immediately without a page reload.
+// On setItem it also evicts the other storage to prevent stale persisted state.
+const dynamicStorage = {
+  getItem: (name: string) => {
+    try {
+      return preferLocalStorage() ? localStorage.getItem(name) : sessionStorage.getItem(name)
+    } catch { return null }
+  },
+  setItem: (name: string, value: string) => {
+    try {
+      if (preferLocalStorage()) {
+        localStorage.setItem(name, value)
+        sessionStorage.removeItem(name)
+      } else {
+        sessionStorage.setItem(name, value)
+        localStorage.removeItem(name)
+      }
+    } catch { /* ignore */ }
+  },
+  removeItem: (name: string) => {
+    try { localStorage.removeItem(name) } catch { /* ignore */ }
+    try { sessionStorage.removeItem(name) } catch { /* ignore */ }
+  },
 }
 
 interface AuthState {
@@ -38,14 +59,8 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       keepSignedIn: false,
       login: (user, tenant, accessToken, refreshToken, keepSignedIn = false) => {
-        // Persist preference so getStorage() picks the right store on next load
-        try {
-          localStorage.setItem(KEEP_SIGNED_IN_KEY, String(keepSignedIn))
-          if (!keepSignedIn) {
-            // Remove any stale localStorage auth so a new tab starts fresh
-            localStorage.removeItem('hrhub-auth')
-          }
-        } catch { /* ignore */ }
+        // Write preference BEFORE set() so dynamicStorage.setItem uses the updated value
+        try { localStorage.setItem(KEEP_SIGNED_IN_KEY, String(keepSignedIn)) } catch { /* ignore */ }
         set({ user, tenant, isAuthenticated: true, accessToken, refreshToken, keepSignedIn })
       },
       setUser: (patch) => {
@@ -62,6 +77,9 @@ export const useAuthStore = create<AuthState>()(
           }).catch(() => { })
         }
         try { localStorage.removeItem(KEEP_SIGNED_IN_KEY) } catch { /* ignore */ }
+        // Clear auth from both storages before set() so dynamicStorage.removeItem cleans up
+        try { localStorage.removeItem(AUTH_KEY) } catch { /* ignore */ }
+        try { sessionStorage.removeItem(AUTH_KEY) } catch { /* ignore */ }
         set({ user: null, tenant: null, isAuthenticated: false, accessToken: null, refreshToken: null, keepSignedIn: false })
       },
       refreshTokens: async () => {
@@ -90,8 +108,16 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'hrhub-auth',
-      storage: createJSONStorage(getStorage),
+      name: AUTH_KEY,
+      storage: {
+        getItem: (name) => {
+          const val = dynamicStorage.getItem(name)
+          if (val === null) return null
+          try { return JSON.parse(val) } catch { return null }
+        },
+        setItem: (name, value) => dynamicStorage.setItem(name, JSON.stringify(value)),
+        removeItem: (name) => dynamicStorage.removeItem(name),
+      },
       partialize: (state) => ({
         user: state.user,
         tenant: state.tenant,

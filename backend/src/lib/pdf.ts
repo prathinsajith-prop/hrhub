@@ -159,6 +159,7 @@ export interface InvoicePdfOptions {
     paymentMethod: string
     date: string
     issuedTo?: string
+    isPaid?: boolean
 }
 
 const PLAN_DISPLAY_NAMES: Record<string, string> = {
@@ -276,15 +277,20 @@ export async function generateInvoicePdf(opts: InvoicePdfOptions): Promise<Buffe
             .text(opts.amount, totX + 10, y + 17, { width: W - MX - totX - 20, align: 'right' })
         y += 34
 
-        // ── PAID status ────────────────────────────────────────────────────
+        // ── Payment status ─────────────────────────────────────────────────
         y += 24
-        // Green pill badge
-        doc.rect(MX, y, 52, 20).fill('#dcfce7')
-        doc.fillColor('#15803d').fontSize(9).font('Helvetica-Bold')
-            .text('PAID', MX + 14, y + 5, { lineBreak: false })
-
-        doc.fillColor('#15803d').fontSize(9).font('Helvetica')
-            .text('Payment confirmed', MX + 60, y + 5, { lineBreak: false })
+        if (opts.isPaid !== false) {
+            // Green pill badge — only shown for confirmed-payment events
+            doc.rect(MX, y, 52, 20).fill('#dcfce7')
+            doc.fillColor('#15803d').fontSize(9).font('Helvetica-Bold')
+                .text('PAID', MX + 14, y + 5, { lineBreak: false })
+            doc.fillColor('#15803d').fontSize(9).font('Helvetica')
+                .text('Payment confirmed', MX + 60, y + 5, { lineBreak: false })
+        } else {
+            doc.rect(MX, y, 80, 20).fill('#fef9c3')
+            doc.fillColor('#854d0e').fontSize(9).font('Helvetica-Bold')
+                .text('PENDING', MX + 10, y + 5, { lineBreak: false })
+        }
 
         // ── Divider + Note ─────────────────────────────────────────────────
         y += 36

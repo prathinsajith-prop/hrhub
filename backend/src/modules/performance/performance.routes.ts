@@ -39,7 +39,8 @@ export async function performanceRoutes(fastify: any) {
     // DELETE /api/v1/performance/:id
     fastify.delete('/performance/:id', { ...adminAuth, schema: { tags: ['Performance'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        await deleteReview(request.user.tenantId, id)
+        const deleted = await deleteReview(request.user.tenantId, id)
+        if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Performance review not found' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'performance_review', entityId: id, action: 'delete', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(204).send()
     })
