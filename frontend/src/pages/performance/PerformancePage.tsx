@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { usePerformanceReviews, useCreateReview, useUpdateReview, type PerformanceReview } from '@/hooks/usePerformance'
 import { useEmployees } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared'
 import { Star, TrendingUp, Plus, CheckCircle2, Clock, Send, FileText, RefreshCcw } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
@@ -281,14 +282,11 @@ export function PerformancePage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label>Employee</Label>
-                                <Select value={form.employeeId} onValueChange={v => set('employeeId', v)} disabled={!!lockedEmployeeId}>
-                                    <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                                    <SelectContent>
-                                        {empList.map((e) => (
-                                            <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <EmployeeSelect
+                                    value={form.employeeId}
+                                    onValueChange={v => set('employeeId', v)}
+                                    disabled={!!lockedEmployeeId}
+                                />
                                 {lockedEmployeeId && (
                                     <p className="text-[11px] text-muted-foreground">Employee preselected from profile.</p>
                                 )}

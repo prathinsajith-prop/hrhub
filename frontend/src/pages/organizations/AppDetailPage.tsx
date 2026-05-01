@@ -1052,7 +1052,7 @@ export function AppDetailPage() {
                 title={isActive ? 'Revoke app?' : 'Reactivate app?'}
                 description={isActive ? 'All credentials for this app will stop working immediately.' : 'This will re-enable API access for this app.'}
                 confirmLabel={isActive ? t('apps.revoke') : t('apps.reactivate')}
-                variant={isActive ? 'destructive' : undefined}
+                variant={isActive ? 'destructive' : 'success'}
                 onConfirm={confirmRevoke}
             />
 

@@ -517,7 +517,7 @@ export function UsersPage() {
                     : 'This user will regain access to the workspace.'}
                 confirmLabel={updateUser.isPending ? 'Saving…' : deactivateTarget?.active ? 'Deactivate' : 'Activate'}
                 onConfirm={handleToggleActive}
-                variant={deactivateTarget?.active ? 'destructive' : 'warning'}
+                variant={deactivateTarget?.active ? 'destructive' : 'success'}
             />
         </PageWrapper>
     )

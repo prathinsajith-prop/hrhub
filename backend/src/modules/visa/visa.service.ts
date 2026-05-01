@@ -124,7 +124,7 @@ export async function createVisa(tenantId: string, data: Omit<NewVisa, 'tenantId
 export async function updateVisa(tenantId: string, id: string, data: Partial<NewVisa>) {
     const [row] = await db.update(visaApplications)
         .set(withTimestamp(data))
-        .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId)))
+        .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)))
         .returning()
     return row ?? null
 }

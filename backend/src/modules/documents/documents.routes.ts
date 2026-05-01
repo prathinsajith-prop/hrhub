@@ -18,7 +18,9 @@ export default async function (fastify: any): Promise<void> {
 
     fastify.get('/', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {
         const { employeeId, category, status, from, to, limit = '20', offset = '0', after } = request.query as Record<string, string>
-        const result = await listDocuments(request.user.tenantId, { employeeId, category, status, from, to, limit: Number(limit), offset: Number(offset), after })
+        const isElevated = ['hr_manager', 'super_admin', 'pro_officer'].includes(request.user.role)
+        const effectiveEmployeeId = isElevated ? employeeId : request.user.employeeId
+        const result = await listDocuments(request.user.tenantId, { employeeId: effectiveEmployeeId, category, status, from, to, limit: Number(limit), offset: Number(offset), after })
         return reply.send(result)
     })
 

@@ -166,6 +166,7 @@ export default async function loansRoutes(fastify: any): Promise<void> {
     fastify.post('/:id/payment', hrOnly, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         const updated = await recordLoanPayment(request.user.tenantId, id)
+        if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,
