@@ -244,7 +244,7 @@ export default async function (fastify: any): Promise<void> {
 
     // POST /api/v1/applications/:id/resume — upload resume/CV to S3
     fastify.post('/applications/:id/resume', {
-        preHandler: [fastify.authenticate],
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin', 'pro_officer')],
         schema: { tags: ['Recruitment'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }

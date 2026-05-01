@@ -243,11 +243,11 @@ export async function updateOrgUnit(tenantId: string, id: string, input: Partial
 }
 
 export async function deleteOrgUnit(tenantId: string, id: string) {
-    // Detach children before soft-deleting the parent
+    // Soft-deactivate active children rather than orphaning them as floating root nodes
     await db
         .update(orgUnits)
-        .set({ parentId: null, updatedAt: new Date() })
-        .where(and(eq(orgUnits.parentId, id), eq(orgUnits.tenantId, tenantId)))
+        .set({ isActive: false, parentId: null, updatedAt: new Date() })
+        .where(and(eq(orgUnits.parentId, id), eq(orgUnits.tenantId, tenantId), eq(orgUnits.isActive, true)))
 
     const [row] = await db
         .update(orgUnits)
