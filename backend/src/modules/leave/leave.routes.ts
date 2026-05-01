@@ -1,4 +1,10 @@
-import { listLeaveRequests, createLeaveRequest, approveLeave, cancelLeave, getLeaveBalance, listLeavePolicies, upsertLeavePolicies, rolloverYear, adjustLeaveBalance, getLeaveRequestOwnerDept } from './leave.service.js'
+import {
+    listLeaveRequests, createLeaveRequest, approveLeave, cancelLeave, getLeaveBalance,
+    listLeavePolicies, upsertLeavePolicies, rolloverYear, adjustLeaveBalance, getLeaveRequestOwnerDept,
+    listLeaveAdjustments, deleteLeaveAdjustment,
+    listAirTickets, createAirTicket, updateAirTicket, deleteAirTicket,
+    listLeaveOffsets, createLeaveOffset, updateLeaveOffset, deleteLeaveOffset,
+} from './leave.service.js'
 import { validate, createLeaveSchema, leaveActionSchema } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { sendWithETag } from '../../lib/etag.js'
@@ -15,11 +21,15 @@ export default async function (fastify: any): Promise<void> {
 
     fastify.get('/', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
         const { employeeId, department, status, leaveType, from, to, limit = '20', offset = '0' } = request.query as Record<string, string>
+        const user = request.user
+        const isElevated = ['hr_manager', 'super_admin', 'dept_head', 'pro_officer'].includes(user.role)
+        // Non-elevated users can only see their own leave requests.
+        const effectiveEmployeeId = isElevated ? employeeId : (user.employeeId ?? undefined)
         // dept_head can only see leave requests for their own department.
-        const resolvedDepartment = (request as any).user.role === 'dept_head'
-            ? ((request as any).user.department ?? department)
+        const resolvedDepartment = user.role === 'dept_head'
+            ? (user.department ?? department)
             : department
-        const result = await listLeaveRequests(request.user.tenantId, { employeeId, department: resolvedDepartment, status, leaveType, from, to, limit: Number(limit), offset: Number(offset) })
+        const result = await listLeaveRequests(request.user.tenantId, { employeeId: effectiveEmployeeId, department: resolvedDepartment, status, leaveType, from, to, limit: Number(limit), offset: Number(offset) })
         return sendWithETag(reply, request, result)
     })
 
@@ -28,6 +38,11 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Leave'] },
     }, async (request, reply) => {
         const body = validate(createLeaveSchema, request.body)
+        // Employees can only submit leave for themselves; elevated roles can submit on behalf of others.
+        const isElevated = ['hr_manager', 'super_admin', 'pro_officer', 'dept_head'].includes(request.user.role)
+        if (!isElevated && body.employeeId !== request.user.employeeId) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only submit leave requests for yourself' })
+        }
         const leave = await createLeaveRequest(request.user.tenantId, body as never)
 
         // Notify HR managers, super admins, and the employee's dept_head (fire-and-forget)
@@ -115,6 +130,13 @@ export default async function (fastify: any): Promise<void> {
 
     fastify.post('/:id/cancel', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
+        // dept_head can only cancel leave for employees in their own department.
+        if ((request as any).user.role === 'dept_head') {
+            const dept = await getLeaveRequestOwnerDept(request.user.tenantId, id)
+            if (dept && dept !== (request as any).user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only cancel leave for employees in your department' })
+            }
+        }
         const updated = await cancelLeave(request.user.tenantId, id, request.user.email, request.user.role, request.user.employeeId ?? null)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Leave request not found' })
         cacheDel(`dashboard:kpis:${request.user.tenantId}`).catch(() => { })
@@ -210,7 +232,7 @@ export default async function (fastify: any): Promise<void> {
         if (!leaveType || typeof year !== 'number' || typeof delta !== 'number') {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'leaveType, year, delta required' })
         }
-        const balance = await adjustLeaveBalance(request.user.tenantId, employeeId, leaveType, year, delta, reason)
+        const balance = await adjustLeaveBalance(request.user.tenantId, employeeId, leaveType, year, delta, reason, request.user.id)
         recordActivity({
             tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
             entityType: 'leave_balance', entityId: employeeId, action: 'update',
@@ -218,6 +240,178 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip, userAgent: request.headers['user-agent'],
         }).catch(() => { })
         return reply.send({ data: balance })
+    })
+
+    // ─── Leave Adjustments ────────────────────────────────────────────────────
+
+    // GET /leave/adjustments?employeeId=&limit=&offset=
+    fastify.get('/adjustments', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Leave'] },
+    }, async (request, reply) => {
+        const { employeeId, limit = '25', offset = '0' } = request.query as Record<string, string>
+        const result = await listLeaveAdjustments(request.user.tenantId, {
+            employeeId, limit: Number(limit), offset: Number(offset),
+        })
+        return reply.send(result)
+    })
+
+    // DELETE /leave/adjustments/:id  (reverses balance + soft-deletes)
+    fastify.delete('/adjustments/:id', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Leave'] },
+    }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const row = await deleteLeaveAdjustment(request.user.tenantId, id)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Adjustment not found' })
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'leave_adjustment', entityId: id, action: 'delete',
+            ipAddress: (request as any).ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: row })
+    })
+
+    // ─── Air Tickets ──────────────────────────────────────────────────────────
+
+    // GET /leave/air-tickets?employeeId=&status=&limit=&offset=
+    fastify.get('/air-tickets', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Leave'] },
+    }, async (request, reply) => {
+        const { employeeId, status, limit = '25', offset = '0' } = request.query as Record<string, string>
+        const result = await listAirTickets(request.user.tenantId, {
+            employeeId, status, limit: Number(limit), offset: Number(offset),
+        })
+        return reply.send(result)
+    })
+
+    // POST /leave/air-tickets
+    fastify.post('/air-tickets', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Leave'] },
+    }, async (request, reply) => {
+        const body = request.body as {
+            employeeId: string; year: number; ticketFor: 'self' | 'family' | 'both';
+            destination?: string; amount?: number; currency?: string; reason?: string; notes?: string
+        }
+        if (!body?.employeeId || !body?.year || !body?.ticketFor) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId, year, ticketFor required' })
+        }
+        const row = await createAirTicket(request.user.tenantId, { ...body, createdBy: request.user.id })
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'air_ticket', entityId: row.id, action: 'create',
+            metadata: { employeeId: body.employeeId, year: body.year, ticketFor: body.ticketFor } as any,
+            ipAddress: (request as any).ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(201).send({ data: row })
+    })
+
+    // PATCH /leave/air-tickets/:id
+    fastify.patch('/air-tickets/:id', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Leave'] },
+    }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const body = request.body as Partial<{
+            ticketFor: 'self' | 'family' | 'both'; destination: string; amount: number;
+            currency: string; status: 'pending' | 'approved' | 'rejected' | 'used'; reason: string; notes: string
+        }>
+        const row = await updateAirTicket(request.user.tenantId, id, body)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Air ticket not found' })
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'air_ticket', entityId: id, action: 'update',
+            ipAddress: (request as any).ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: row })
+    })
+
+    // DELETE /leave/air-tickets/:id
+    fastify.delete('/air-tickets/:id', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Leave'] },
+    }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const row = await deleteAirTicket(request.user.tenantId, id)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Air ticket not found' })
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'air_ticket', entityId: id, action: 'delete',
+            ipAddress: (request as any).ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: row })
+    })
+
+    // ─── Leave Offsets ────────────────────────────────────────────────────────
+
+    // GET /leave/offsets?employeeId=&status=&limit=&offset=
+    fastify.get('/offsets', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Leave'] },
+    }, async (request, reply) => {
+        const { employeeId, status, limit = '25', offset = '0' } = request.query as Record<string, string>
+        const result = await listLeaveOffsets(request.user.tenantId, {
+            employeeId, status, limit: Number(limit), offset: Number(offset),
+        })
+        return reply.send(result)
+    })
+
+    // POST /leave/offsets
+    fastify.post('/offsets', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Leave'] },
+    }, async (request, reply) => {
+        const body = request.body as {
+            employeeId: string; workDate: string; days?: number; reason?: string; notes?: string
+        }
+        if (!body?.employeeId || !body?.workDate) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId, workDate required' })
+        }
+        const row = await createLeaveOffset(request.user.tenantId, { ...body, createdBy: request.user.id })
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'leave_offset', entityId: row.id, action: 'create',
+            metadata: { employeeId: body.employeeId, workDate: body.workDate, days: body.days } as any,
+            ipAddress: (request as any).ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(201).send({ data: row })
+    })
+
+    // PATCH /leave/offsets/:id
+    fastify.patch('/offsets/:id', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Leave'] },
+    }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const body = request.body as Partial<{
+            workDate: string; days: number; reason: string; status: 'pending' | 'approved' | 'rejected'; notes: string
+        }>
+        const row = await updateLeaveOffset(request.user.tenantId, id, body)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Offset not found' })
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'leave_offset', entityId: id, action: 'update',
+            ipAddress: (request as any).ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: row })
+    })
+
+    // DELETE /leave/offsets/:id
+    fastify.delete('/offsets/:id', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Leave'] },
+    }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const row = await deleteLeaveOffset(request.user.tenantId, id)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Offset not found' })
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'leave_offset', entityId: id, action: 'delete',
+            ipAddress: (request as any).ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: row })
     })
 
     // GET /leave/export?format=csv|pdf&status=...&department=...&from=...&to=...

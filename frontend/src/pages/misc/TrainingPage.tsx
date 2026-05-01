@@ -26,7 +26,7 @@ import {
     useUpdateTraining,
     useDeleteTraining,
 } from '@/hooks/useTraining'
-import { useEmployees } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import type { UserRole } from '@/types'
@@ -65,7 +65,6 @@ function TrainingFormDialog({
     const { t } = useTranslation()
     const create = useCreateTraining()
     const update = useUpdateTraining()
-    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
 
     const [form, setForm] = useState({
         employeeId: record?.employeeId ?? '',
@@ -100,8 +99,6 @@ function TrainingFormDialog({
         }
     }
 
-    const employees = empData?.data ?? []
-
     return (
         <Dialog open onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
@@ -110,19 +107,10 @@ function TrainingFormDialog({
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                     <FormField label={t('training.employee')} required error={errors.employeeId}>
-                        <Select
+                        <EmployeeSelect
                             value={form.employeeId}
                             onValueChange={v => { setForm(f => ({ ...f, employeeId: v })); setErrors(e => ({ ...e, employeeId: '' })) }}
-                        >
-                            <SelectTrigger aria-invalid={!!errors.employeeId}><SelectValue placeholder={t('training.selectEmployee')} /></SelectTrigger>
-                            <SelectContent>
-                                {employees.map(e => (
-                                    <SelectItem key={e.id} value={e.id}>
-                                        {e.firstName} {e.lastName}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        />
                     </FormField>
 
                     <FormField label={t('training.title')} required error={errors.title}>

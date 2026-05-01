@@ -20,7 +20,7 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data: run })
     })
 
-    fastify.get('/:id/payslips', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+    fastify.get('/:id/payslips', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
         const data = await getPayslipsWithEmployees(request.user.tenantId, id)
         return reply.send({ data })

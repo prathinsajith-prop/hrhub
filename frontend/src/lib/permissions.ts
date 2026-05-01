@@ -122,6 +122,7 @@ export type RouteKey =
   | 'my/training'
   | 'loans'
   | 'my/loans'
+  | 'leave-adjustments'
 
 // ─── Permission matrix ────────────────────────────────────────────────────────
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -300,6 +301,7 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   complaints: ['super_admin', 'hr_manager'],
   training: ['super_admin', 'hr_manager'],
   loans: ['super_admin', 'hr_manager'],
+  'leave-adjustments': ['super_admin', 'hr_manager'],
 
   // Self-service (all authenticated roles)
   'my/account': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
@@ -412,6 +414,7 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/my/training': 'my/training',
     '/loans': 'loans',
     '/my/loans': 'my/loans',
+    '/leave-adjustments': 'leave-adjustments',
   }
   return map[url] ?? null
 }
