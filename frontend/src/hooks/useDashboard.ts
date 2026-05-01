@@ -109,6 +109,27 @@ export function useOnboardingSummary() {
     })
 }
 
+export interface BreakdownPoint {
+    name: string
+    value: number
+    color: string
+}
+
+export interface BirthdayEntry {
+    day: number
+    name: string
+    employeeNo: string
+    department: string
+}
+
+export interface AnniversaryEntry {
+    name: string
+    employeeNo: string
+    department: string
+    joinYear: number
+    years: number
+}
+
 export interface DashboardSummary {
     kpis: KPIs
     payrollTrend: PayrollTrendPoint[]
@@ -116,6 +137,10 @@ export interface DashboardSummary {
     deptHeadcount: DeptHeadcountPoint[]
     emiratisation: EmiratisationStatus
     onboardingSummary: OnboardingSummary
+    genderBreakdown: BreakdownPoint[]
+    maritalBreakdown: BreakdownPoint[]
+    birthdays: BirthdayEntry[]
+    anniversaries: AnniversaryEntry[]
 }
 
 export function useDashboardSummary() {
@@ -123,6 +148,24 @@ export function useDashboardSummary() {
         queryKey: ['dashboard', 'summary'],
         queryFn: () => api.get<DashboardSummary>('/dashboard/summary'),
         staleTime: DASHBOARD_STALE,
+        gcTime: ANALYTICS_GC,
+    })
+}
+
+export function useBirthdays(month?: number) {
+    return useQuery({
+        queryKey: ['dashboard', 'birthdays', month],
+        queryFn: () => api.get<{ data: BirthdayEntry[] }>(`/dashboard/birthdays${month ? `?month=${month}` : ''}`).then(r => r.data),
+        staleTime: ANALYTICS_STALE,
+        gcTime: ANALYTICS_GC,
+    })
+}
+
+export function useAnniversaries(month?: number) {
+    return useQuery({
+        queryKey: ['dashboard', 'anniversaries', month],
+        queryFn: () => api.get<{ data: AnniversaryEntry[] }>(`/dashboard/anniversaries${month ? `?month=${month}` : ''}`).then(r => r.data),
+        staleTime: ANALYTICS_STALE,
         gcTime: ANALYTICS_GC,
     })
 }

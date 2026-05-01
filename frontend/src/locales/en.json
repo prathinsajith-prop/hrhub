@@ -178,7 +178,18 @@
     "onboardingDesc": "Employee onboarding status",
     "activeChecklists": "Active Checklists",
     "overdueSteps": "Overdue Steps",
-    "noActiveVisaCases": "No active visa cases"
+    "noActiveVisaCases": "No active visa cases",
+    "upcomingBirthdays": "Birthdays",
+    "noBirthdays": "No birthdays this month",
+    "workAnniversaries": "Years Completed",
+    "noAnniversaries": "No anniversaries this month",
+    "genderBreakdown": "Employees by Gender",
+    "maritalBreakdown": "Employees by Marital Status",
+    "birthdayDay": "Day",
+    "birthdayName": "Name",
+    "anniversaryJoiningYear": "Joining Year",
+    "anniversaryYears": "Years",
+    "allDepartments": "All"
   },
   "employees": {
     "title": "Employees",

@@ -38,11 +38,15 @@ export default async function trainingRoutes(fastify: any): Promise<void> {
             limit?: string
             offset?: string
         }
-        const result = await listTraining(request.user.tenantId, {
-            employeeId: qs.employeeId,
+        const user = request.user
+        const isElevated = ['hr_manager', 'super_admin', 'dept_head'].includes(user.role)
+        // Employees can only see their own training records
+        const effectiveEmployeeId = isElevated ? qs.employeeId : (user.employeeId ?? undefined)
+        const result = await listTraining(user.tenantId, {
+            employeeId: effectiveEmployeeId,
             status: qs.status,
             type: qs.type,
-            search: qs.search,
+            search: isElevated ? qs.search : undefined,
             limit: Math.min(Number(qs.limit ?? 25), 100),
             offset: Number(qs.offset ?? 0),
         })
@@ -72,8 +76,13 @@ export default async function trainingRoutes(fastify: any): Promise<void> {
     // GET /api/v1/training/:id
     fastify.get('/:id', auth, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const row = await getTrainingRecord(request.user.tenantId, id)
+        const user = request.user
+        const row = await getTrainingRecord(user.tenantId, id)
         if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Training record not found' })
+        const isElevated = ['hr_manager', 'super_admin', 'dept_head'].includes(user.role)
+        if (!isElevated && row.employeeId !== user.employeeId) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Access denied' })
+        }
         return reply.send({ data: row })
     })
 

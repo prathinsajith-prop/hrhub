@@ -1,4 +1,4 @@
-import { getDashboardKPIs, getRecentNotifications, getPayrollTrend, getNationalityBreakdown, getDeptHeadcount, getEmiratisationStatus, getOnboardingSummary } from './dashboard.service.js'
+import { getDashboardKPIs, getRecentNotifications, getPayrollTrend, getNationalityBreakdown, getDeptHeadcount, getEmiratisationStatus, getOnboardingSummary, getGenderBreakdown, getMaritalStatusBreakdown, getUpcomingBirthdays, getWorkAnniversaries } from './dashboard.service.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -39,12 +39,34 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data })
     })
 
+    fastify.get('/gender-breakdown', { ...auth, schema: { tags: ['Dashboard'] } }, async (request, reply) => {
+        const data = await getGenderBreakdown(request.user.tenantId)
+        return reply.send({ data })
+    })
+
+    fastify.get('/marital-breakdown', { ...auth, schema: { tags: ['Dashboard'] } }, async (request, reply) => {
+        const data = await getMaritalStatusBreakdown(request.user.tenantId)
+        return reply.send({ data })
+    })
+
+    fastify.get('/birthdays', { ...auth, schema: { tags: ['Dashboard'] } }, async (request: any, reply: any) => {
+        const { month } = request.query as { month?: string }
+        const data = await getUpcomingBirthdays(request.user.tenantId, month ? Number(month) : undefined)
+        return reply.send({ data })
+    })
+
+    fastify.get('/anniversaries', { ...auth, schema: { tags: ['Dashboard'] } }, async (request: any, reply: any) => {
+        const { month } = request.query as { month?: string }
+        const data = await getWorkAnniversaries(request.user.tenantId, month ? Number(month) : undefined)
+        return reply.send({ data })
+    })
+
     // BFF aggregator — single round trip for the full dashboard view.
     // Notifications are intentionally excluded: they are shared with the header
     // and have a separate cache lifecycle.
     fastify.get('/summary', { ...auth, schema: { tags: ['Dashboard'] } }, async (request: any, reply: any) => {
         const tenantId: string = request.user.tenantId
-        const [kpis, payrollTrend, nationalityBreakdown, deptHeadcount, emiratisation, onboardingSummary] =
+        const [kpis, payrollTrend, nationalityBreakdown, deptHeadcount, emiratisation, onboardingSummary, genderBreakdown, maritalBreakdown, birthdays, anniversaries] =
             await Promise.all([
                 getDashboardKPIs(tenantId),
                 getPayrollTrend(tenantId),
@@ -52,8 +74,12 @@ export default async function (fastify: any): Promise<void> {
                 getDeptHeadcount(tenantId),
                 getEmiratisationStatus(tenantId),
                 getOnboardingSummary(tenantId),
+                getGenderBreakdown(tenantId),
+                getMaritalStatusBreakdown(tenantId),
+                getUpcomingBirthdays(tenantId),
+                getWorkAnniversaries(tenantId),
             ])
-        return reply.send({ kpis, payrollTrend, nationalityBreakdown, deptHeadcount, emiratisation, onboardingSummary })
+        return reply.send({ kpis, payrollTrend, nationalityBreakdown, deptHeadcount, emiratisation, onboardingSummary, genderBreakdown, maritalBreakdown, birthdays, anniversaries })
     })
 }
 

@@ -1,27 +1,31 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { labelFor } from '@/lib/enums'
 import {
   Users, Briefcase, FileText, AlertTriangle, TrendingUp,
-  ArrowUpRight, CheckCircle2, Plane,
+  ArrowUpRight, CheckCircle2, Plane, Cake, Award,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Area, AreaChart,
+  ResponsiveContainer, PieChart, Pie, Cell, Area, AreaChart, Legend,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import type { KpiColor } from '@/components/shared/KpiCard'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'
-import { useDashboardSummary, useNotifications } from '@/hooks/useDashboard'
+import { useDashboardSummary, useNotifications, useBirthdays, useAnniversaries } from '@/hooks/useDashboard'
+import type { BirthdayEntry, AnniversaryEntry, BreakdownPoint } from '@/hooks/useDashboard'
 import { useVisas } from '@/hooks/useVisa'
 import { useNavigate } from 'react-router-dom'
 import { CHART_COLORS, NAT_FILLS, tooltipStyle } from './_shared'
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
 // ─── KPI card config ──────────────────────────────────────────────────────────
 const kpiCards: Array<{
@@ -36,6 +40,54 @@ const kpiCards: Array<{
   { labelKey: 'dashboard.pendingLeave', labelFallback: 'Pending Leave', key: 'pendingLeave', subKey: 'dashboard.subAwaitingApproval', subFallback: 'Awaiting approval', icon: CheckCircle2, color: 'green' },
 ]
 
+// ─── Reusable demographic pie card ───────────────────────────────────────────
+function DemoPieCard({ title, data, loading }: { title: string; data: BreakdownPoint[]; loading: boolean }) {
+  const total = data.reduce((s, d) => s + d.value, 0)
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-[140px] w-full rounded-xl" />
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-center mb-3">
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie data={data} cx="50%" cy="50%" innerRadius={44} outerRadius={66} paddingAngle={3} dataKey="value">
+                    {data.map((d, i) => <Cell key={i} fill={d.color} stroke="none" />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => [v, 'Employees']} contentStyle={tooltipStyle} />
+                  <Legend
+                    iconType="circle"
+                    iconSize={8}
+                    formatter={(value) => <span style={{ fontSize: 11 }}>{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <ul className="space-y-2">
+              {data.map(d => (
+                <li key={d.name} className="flex items-center gap-2 text-xs">
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: d.color }} />
+                  <span className="flex-1 text-foreground">{d.name}</span>
+                  <span className="font-semibold">{d.value}</span>
+                  {total > 0 && <span className="text-muted-foreground w-9 text-right">{Math.round((d.value / total) * 100)}%</span>}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 // ─── HR / Super-admin dashboard ───────────────────────────────────────────────
 export function HRDashboard() {
   const { t } = useTranslation()
@@ -43,6 +95,16 @@ export function HRDashboard() {
   const { data: summary, isLoading: dashLoading } = useDashboardSummary()
   const { data: notifications } = useNotifications(20)
   const { data: visaData, isLoading: visasLoading } = useVisas({ limit: 10 })
+
+  const currentMonth = new Date().getMonth() + 1
+  const [birthdayMonth, setBirthdayMonth] = useState(currentMonth)
+  const [anniversaryMonth, setAnniversaryMonth] = useState(currentMonth)
+
+  // Only fetch from dedicated endpoints when the month differs from the BFF summary (current month)
+  const useBirthdayDedicated = birthdayMonth !== currentMonth
+  const useAnniversaryDedicated = anniversaryMonth !== currentMonth
+  const { data: birthdaysDedicated, isLoading: bdLoading } = useBirthdays(useBirthdayDedicated ? birthdayMonth : undefined)
+  const { data: anniversariesDedicated, isLoading: annivLoading } = useAnniversaries(useAnniversaryDedicated ? anniversaryMonth : undefined)
 
   const kpis = summary?.kpis
   const payrollTrendRaw = summary?.payrollTrend
@@ -61,6 +123,12 @@ export function HRDashboard() {
   const payrollTrend = payrollTrendRaw ?? []
   const nationalityData = (nationalityRaw ?? []).map((d, i) => ({ ...d, fill: NAT_FILLS[i] ?? CHART_COLORS.muted }))
   const departmentData = deptRaw ?? []
+  const genderData: BreakdownPoint[] = summary?.genderBreakdown ?? []
+  const maritalData: BreakdownPoint[] = summary?.maritalBreakdown ?? []
+  const birthdayData: BirthdayEntry[] = useBirthdayDedicated ? (birthdaysDedicated ?? []) : (summary?.birthdays ?? [])
+  const anniversaryData: AnniversaryEntry[] = useAnniversaryDedicated ? (anniversariesDedicated ?? []) : (summary?.anniversaries ?? [])
+  const bdLoadingFinal = useBirthdayDedicated ? bdLoading : dashLoading
+  const annivLoadingFinal = useAnniversaryDedicated ? annivLoading : dashLoading
 
   type NotifItem = { isRead?: boolean; type?: string; title?: string }
   const urgentAlerts = ((notifications as NotifItem[] | undefined) ?? []).filter(n => !n.isRead && (n.type === 'warning' || n.type === 'error'))
@@ -378,6 +446,129 @@ export function HRDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Birthdays & Work Anniversaries */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Birthdays */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Cake className="h-4 w-4 text-pink-500" />
+                <CardTitle>{t('dashboard.upcomingBirthdays', { defaultValue: 'Birthdays' })}</CardTitle>
+              </div>
+              <Select value={String(birthdayMonth)} onValueChange={v => setBirthdayMonth(Number(v))}>
+                <SelectTrigger className="h-7 w-32 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_NAMES.map((m, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)} className="text-xs">{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {bdLoadingFinal ? (
+              <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-lg" />)}</div>
+            ) : birthdayData.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">{t('dashboard.noBirthdays', { defaultValue: 'No birthdays this month' })}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 pr-3 font-medium text-muted-foreground w-12">{t('dashboard.birthdayDay', { defaultValue: 'Day' })}</th>
+                      <th className="text-left py-2 font-medium text-muted-foreground">{t('dashboard.birthdayName', { defaultValue: 'Name' })}</th>
+                      <th className="text-left py-2 pl-3 font-medium text-muted-foreground hidden sm:table-cell">{t('common.department', { defaultValue: 'Department' })}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {birthdayData.map((b, i) => (
+                      <tr key={i} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="py-2.5 pr-3">
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-pink-50 text-pink-600 font-bold text-xs ring-1 ring-pink-200">
+                            {b.day}
+                          </span>
+                        </td>
+                        <td className="py-2.5 font-medium">{b.name}</td>
+                        <td className="py-2.5 pl-3 text-muted-foreground hidden sm:table-cell">{b.department || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Work Anniversaries */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Award className="h-4 w-4 text-amber-500" />
+                <CardTitle>{t('dashboard.workAnniversaries', { defaultValue: 'Years Completed' })}</CardTitle>
+              </div>
+              <Select value={String(anniversaryMonth)} onValueChange={v => setAnniversaryMonth(Number(v))}>
+                <SelectTrigger className="h-7 w-32 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_NAMES.map((m, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)} className="text-xs">{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {annivLoadingFinal ? (
+              <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-lg" />)}</div>
+            ) : anniversaryData.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">{t('dashboard.noAnniversaries', { defaultValue: 'No anniversaries this month' })}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 font-medium text-muted-foreground">{t('dashboard.birthdayName', { defaultValue: 'Name' })}</th>
+                      <th className="text-right py-2 px-3 font-medium text-muted-foreground">{t('dashboard.anniversaryJoiningYear', { defaultValue: 'Joining Year' })}</th>
+                      <th className="text-right py-2 font-medium text-muted-foreground">{t('dashboard.anniversaryYears', { defaultValue: 'Years' })}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {anniversaryData.map((a, i) => (
+                      <tr key={i} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="py-2.5 font-medium">{a.name}</td>
+                        <td className="py-2.5 px-3 text-right text-muted-foreground">{a.joinYear}</td>
+                        <td className="py-2.5 text-right">
+                          <Badge variant="secondary" className="text-[10px] font-semibold">{a.years} yr{a.years !== 1 ? 's' : ''}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Gender & Marital Status breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <DemoPieCard
+          title={t('dashboard.genderBreakdown', { defaultValue: 'Employees by Gender' })}
+          data={genderData}
+          loading={dashLoading}
+        />
+        <DemoPieCard
+          title={t('dashboard.maritalBreakdown', { defaultValue: 'Employees by Marital Status' })}
+          data={maritalData}
+          loading={dashLoading}
+        />
+      </div>
     </PageWrapper>
   )
 }
