@@ -29,7 +29,9 @@
     "team": "Teams",
     "apps": "Connected Apps",
     "leavePolicies": "Leave Policies",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "training": "Training & Development",
+    "loans": "Loans & Advances"
   },
   "auth": {
     "signIn": "Sign In",
@@ -790,6 +792,109 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low"
+    }
+  },
+  "training": {
+    "pageTitle": "Training & Development",
+    "pageDesc": "Track employee training courses, certifications, and development programs.",
+    "myPageTitle": "My Training",
+    "myPageDesc": "View your training records and certifications.",
+    "addRecord": "Add Training Record",
+    "editRecord": "Edit Training Record",
+    "noRecords": "No training records found",
+    "noMyRecords": "No training records yet",
+    "created": "Training record created",
+    "updated": "Training record updated",
+    "deleted": "Training record deleted",
+    "saveFailed": "Failed to save training record",
+    "deleteFailed": "Failed to delete training record",
+    "deleteTitle": "Delete Training Record",
+    "deleteDesc": "Are you sure you want to delete \"{{title}}\"? This action cannot be undone.",
+    "employee": "Employee",
+    "selectEmployee": "Select employee…",
+    "title": "Training Title",
+    "titlePlaceholder": "e.g. Advanced Excel Workshop",
+    "provider": "Provider / Trainer",
+    "providerPlaceholder": "e.g. LinkedIn Learning",
+    "type": "Type",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "cost": "Cost",
+    "status": "Status",
+    "certExpiry": "Certificate Expiry",
+    "certificate": "Certificate",
+    "viewCert": "View",
+    "notesPlaceholder": "Additional notes…",
+    "searchPlaceholder": "Search training…",
+    "table": {
+      "employee": "Employee",
+      "dates": "Dates",
+      "progress": "Progress"
+    },
+    "types": {
+      "internal": "Internal",
+      "external": "External",
+      "online": "Online",
+      "conference": "Conference"
+    },
+    "statuses": {
+      "planned": "Planned",
+      "in_progress": "In Progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "kpi": {
+      "total": "Total Trainings",
+      "planned": "Planned",
+      "completed": "Completed",
+      "totalCost": "Total Cost"
+    }
+  },
+  "loans": {
+    "pageTitle": "Loans & Advances",
+    "pageDesc": "Manage employee salary advances and loan repayment schedules.",
+    "myPageTitle": "My Loans",
+    "myPageDesc": "View and request salary advances.",
+    "newLoan": "New Loan",
+    "requestLoan": "Request Advance",
+    "noLoans": "No loans found",
+    "noMyLoans": "No loan requests yet",
+    "created": "Loan request submitted",
+    "requestSubmitted": "Your loan request has been submitted for approval.",
+    "saveFailed": "Failed to save loan request",
+    "approved": "Loan approved",
+    "rejected": "Loan rejected",
+    "paymentRecorded": "Payment recorded",
+    "actionFailed": "Action failed",
+    "amount": "Loan Amount",
+    "monthlyDeduction": "Monthly Deduction",
+    "reason": "Reason",
+    "reasonPlaceholder": "Purpose of the advance…",
+    "recordPayment": "Record Payment",
+    "installmentCalc": "This will require {{count}} monthly installments.",
+    "rejectTitle": "Reject Loan Request",
+    "rejectDesc": "Reject the loan request from {{name}}?",
+    "rejectNotesPlaceholder": "Reason for rejection…",
+    "paymentConfirmTitle": "Record Monthly Payment",
+    "paymentConfirmDesc": "Record a deduction of {{amount}} for {{name}}?",
+    "table": {
+      "employee": "Employee",
+      "progress": "Repayment Progress",
+      "remaining": "Remaining"
+    },
+    "statuses": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "active": "Active",
+      "completed": "Completed",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled"
+    },
+    "kpi": {
+      "total": "Total Loans",
+      "pending": "Pending Approval",
+      "active": "Active Loans",
+      "outstanding": "Total Outstanding"
     }
   }
 }

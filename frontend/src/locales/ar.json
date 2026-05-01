@@ -29,7 +29,9 @@
     "team": "الفريق",
     "apps": "التطبيقات المتصلة",
     "leavePolicies": "سياسات الإجازات",
-    "notifications": "الإشعارات"
+    "notifications": "الإشعارات",
+    "training": "التدريب والتطوير",
+    "loans": "القروض والسلف"
   },
   "auth": {
     "signIn": "تسجيل الدخول",
@@ -790,6 +792,109 @@
       "high": "عالية",
       "medium": "متوسطة",
       "low": "منخفضة"
+    }
+  },
+  "training": {
+    "pageTitle": "التدريب والتطوير",
+    "pageDesc": "تتبع دورات التدريب والشهادات وبرامج التطوير للموظفين.",
+    "myPageTitle": "تدريبي",
+    "myPageDesc": "عرض سجلات التدريب والشهادات الخاصة بك.",
+    "addRecord": "إضافة سجل تدريب",
+    "editRecord": "تعديل سجل التدريب",
+    "noRecords": "لا توجد سجلات تدريب",
+    "noMyRecords": "لا توجد سجلات تدريب بعد",
+    "created": "تم إنشاء سجل التدريب",
+    "updated": "تم تحديث سجل التدريب",
+    "deleted": "تم حذف سجل التدريب",
+    "saveFailed": "فشل حفظ سجل التدريب",
+    "deleteFailed": "فشل حذف سجل التدريب",
+    "deleteTitle": "حذف سجل التدريب",
+    "deleteDesc": "هل أنت متأكد من حذف \"{{title}}\"؟ لا يمكن التراجع عن هذا الإجراء.",
+    "employee": "الموظف",
+    "selectEmployee": "اختر موظفاً…",
+    "title": "عنوان التدريب",
+    "titlePlaceholder": "مثال: ورشة Excel المتقدمة",
+    "provider": "المزود / المدرب",
+    "providerPlaceholder": "مثال: LinkedIn Learning",
+    "type": "النوع",
+    "startDate": "تاريخ البدء",
+    "endDate": "تاريخ الانتهاء",
+    "cost": "التكلفة",
+    "status": "الحالة",
+    "certExpiry": "انتهاء الشهادة",
+    "certificate": "الشهادة",
+    "viewCert": "عرض",
+    "notesPlaceholder": "ملاحظات إضافية…",
+    "searchPlaceholder": "البحث في التدريبات…",
+    "table": {
+      "employee": "الموظف",
+      "dates": "التواريخ",
+      "progress": "التقدم"
+    },
+    "types": {
+      "internal": "داخلي",
+      "external": "خارجي",
+      "online": "إلكتروني",
+      "conference": "مؤتمر"
+    },
+    "statuses": {
+      "planned": "مخطط",
+      "in_progress": "جاري",
+      "completed": "مكتمل",
+      "cancelled": "ملغي"
+    },
+    "kpi": {
+      "total": "إجمالي التدريبات",
+      "planned": "المخططة",
+      "completed": "المكتملة",
+      "totalCost": "إجمالي التكلفة"
+    }
+  },
+  "loans": {
+    "pageTitle": "القروض والسلف",
+    "pageDesc": "إدارة سلف الرواتب وجداول سداد القروض للموظفين.",
+    "myPageTitle": "قروضي",
+    "myPageDesc": "عرض وطلب سلف الراتب.",
+    "newLoan": "قرض جديد",
+    "requestLoan": "طلب سلفة",
+    "noLoans": "لا توجد قروض",
+    "noMyLoans": "لا توجد طلبات قروض بعد",
+    "created": "تم تقديم طلب القرض",
+    "requestSubmitted": "تم تقديم طلب قرضك للموافقة.",
+    "saveFailed": "فشل حفظ طلب القرض",
+    "approved": "تمت الموافقة على القرض",
+    "rejected": "تم رفض القرض",
+    "paymentRecorded": "تم تسجيل الدفعة",
+    "actionFailed": "فشل الإجراء",
+    "amount": "مبلغ القرض",
+    "monthlyDeduction": "الخصم الشهري",
+    "reason": "السبب",
+    "reasonPlaceholder": "الغرض من السلفة…",
+    "recordPayment": "تسجيل دفعة",
+    "installmentCalc": "سيتطلب ذلك {{count}} قسطاً شهرياً.",
+    "rejectTitle": "رفض طلب القرض",
+    "rejectDesc": "رفض طلب القرض من {{name}}؟",
+    "rejectNotesPlaceholder": "سبب الرفض…",
+    "paymentConfirmTitle": "تسجيل الدفعة الشهرية",
+    "paymentConfirmDesc": "تسجيل خصم {{amount}} لـ {{name}}؟",
+    "table": {
+      "employee": "الموظف",
+      "progress": "تقدم السداد",
+      "remaining": "المتبقي"
+    },
+    "statuses": {
+      "pending": "في الانتظار",
+      "approved": "موافق عليه",
+      "active": "نشط",
+      "completed": "مكتمل",
+      "rejected": "مرفوض",
+      "cancelled": "ملغي"
+    },
+    "kpi": {
+      "total": "إجمالي القروض",
+      "pending": "بانتظار الموافقة",
+      "active": "القروض النشطة",
+      "outstanding": "إجمالي المتبقي"
     }
   }
 }
