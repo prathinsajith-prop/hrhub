@@ -21,11 +21,15 @@ export default async function (fastify: any): Promise<void> {
 
     fastify.get('/', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
         const { employeeId, department, status, leaveType, from, to, limit = '20', offset = '0' } = request.query as Record<string, string>
+        const user = request.user
+        const isElevated = ['hr_manager', 'super_admin', 'dept_head', 'pro_officer'].includes(user.role)
+        // Non-elevated users can only see their own leave requests.
+        const effectiveEmployeeId = isElevated ? employeeId : (user.employeeId ?? undefined)
         // dept_head can only see leave requests for their own department.
-        const resolvedDepartment = (request as any).user.role === 'dept_head'
-            ? ((request as any).user.department ?? department)
+        const resolvedDepartment = user.role === 'dept_head'
+            ? (user.department ?? department)
             : department
-        const result = await listLeaveRequests(request.user.tenantId, { employeeId, department: resolvedDepartment, status, leaveType, from, to, limit: Number(limit), offset: Number(offset) })
+        const result = await listLeaveRequests(request.user.tenantId, { employeeId: effectiveEmployeeId, department: resolvedDepartment, status, leaveType, from, to, limit: Number(limit), offset: Number(offset) })
         return sendWithETag(reply, request, result)
     })
 
@@ -34,6 +38,11 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Leave'] },
     }, async (request, reply) => {
         const body = validate(createLeaveSchema, request.body)
+        // Employees can only submit leave for themselves; elevated roles can submit on behalf of others.
+        const isElevated = ['hr_manager', 'super_admin', 'pro_officer', 'dept_head'].includes(request.user.role)
+        if (!isElevated && body.employeeId !== request.user.employeeId) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only submit leave requests for yourself' })
+        }
         const leave = await createLeaveRequest(request.user.tenantId, body as never)
 
         // Notify HR managers, super admins, and the employee's dept_head (fire-and-forget)
@@ -121,6 +130,13 @@ export default async function (fastify: any): Promise<void> {
 
     fastify.post('/:id/cancel', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
+        // dept_head can only cancel leave for employees in their own department.
+        if ((request as any).user.role === 'dept_head') {
+            const dept = await getLeaveRequestOwnerDept(request.user.tenantId, id)
+            if (dept && dept !== (request as any).user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only cancel leave for employees in your department' })
+            }
+        }
         const updated = await cancelLeave(request.user.tenantId, id, request.user.email, request.user.role, request.user.employeeId ?? null)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Leave request not found' })
         cacheDel(`dashboard:kpis:${request.user.tenantId}`).catch(() => { })

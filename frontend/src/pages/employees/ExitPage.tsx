@@ -24,7 +24,6 @@ import {
     useSettlementPreview, type ExitRequest,
 } from '@/hooks/useExit'
 import { EmployeeSelect } from '@/components/shared'
-import type { Employee } from '@/types'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { usePermissions } from '@/hooks/usePermissions'
