@@ -105,6 +105,7 @@ export default async function loansRoutes(fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const body = request.body as { startDate?: string }
         const updated = await approveLoan(request.user.tenantId, id, request.user.id, body.startDate)
+        if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,
@@ -125,6 +126,7 @@ export default async function loansRoutes(fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const body = request.body as { notes?: string }
         const updated = await rejectLoan(request.user.tenantId, id, body.notes)
+        if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,

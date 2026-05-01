@@ -205,6 +205,18 @@
     "joinDate": "Join Date",
     "exitDate": "Exit Date",
     "gender": "Gender",
+    "genderValues": {
+      "male": "Male",
+      "female": "Female",
+      "unknown": "Not specified"
+    },
+    "maritalValues": {
+      "married": "Married",
+      "single": "Single",
+      "widowed": "Widowed",
+      "divorced": "Divorced",
+      "unknown": "Not specified"
+    },
     "nationality": "Nationality",
     "salary": "Salary",
     "employmentType": "Employment Type",

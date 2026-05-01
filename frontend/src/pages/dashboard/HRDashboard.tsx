@@ -25,7 +25,11 @@ import { useVisas } from '@/hooks/useVisa'
 import { useNavigate } from 'react-router-dom'
 import { CHART_COLORS, NAT_FILLS, tooltipStyle } from './_shared'
 
-const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
+function buildMonthNames(locale: string) {
+  return Array.from({ length: 12 }, (_, i) =>
+    new Date(2000, i, 1).toLocaleString(locale, { month: 'long' })
+  )
+}
 
 // ─── KPI card config ──────────────────────────────────────────────────────────
 const kpiCards: Array<{
@@ -60,7 +64,7 @@ function DemoPieCard({ title, data, loading }: { title: string; data: BreakdownP
               <ResponsiveContainer width="100%" height={160}>
                 <PieChart>
                   <Pie data={data} cx="50%" cy="50%" innerRadius={44} outerRadius={66} paddingAngle={3} dataKey="value">
-                    {data.map((d, i) => <Cell key={i} fill={d.color} stroke="none" />)}
+                    {data.map((d) => <Cell key={d.name} fill={d.color} stroke="none" />)}
                   </Pie>
                   <Tooltip formatter={(v) => [v, 'Employees']} contentStyle={tooltipStyle} />
                   <Legend
@@ -90,7 +94,7 @@ function DemoPieCard({ title, data, loading }: { title: string; data: BreakdownP
 
 // ─── HR / Super-admin dashboard ───────────────────────────────────────────────
 export function HRDashboard() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { data: summary, isLoading: dashLoading } = useDashboardSummary()
   const { data: notifications } = useNotifications(20)
@@ -99,6 +103,7 @@ export function HRDashboard() {
   const currentMonth = new Date().getMonth() + 1
   const [birthdayMonth, setBirthdayMonth] = useState(currentMonth)
   const [anniversaryMonth, setAnniversaryMonth] = useState(currentMonth)
+  const monthNames = buildMonthNames(i18n.language)
 
   // Only fetch from dedicated endpoints when the month differs from the BFF summary (current month)
   const useBirthdayDedicated = birthdayMonth !== currentMonth
@@ -123,8 +128,14 @@ export function HRDashboard() {
   const payrollTrend = payrollTrendRaw ?? []
   const nationalityData = (nationalityRaw ?? []).map((d, i) => ({ ...d, fill: NAT_FILLS[i] ?? CHART_COLORS.muted }))
   const departmentData = deptRaw ?? []
-  const genderData: BreakdownPoint[] = summary?.genderBreakdown ?? []
-  const maritalData: BreakdownPoint[] = summary?.maritalBreakdown ?? []
+  const genderData: BreakdownPoint[] = (summary?.genderBreakdown ?? []).map(d => ({
+    ...d,
+    name: t(`employee.genderValues.${d.name || 'unknown'}`, { defaultValue: d.name || 'Not specified' }),
+  }))
+  const maritalData: BreakdownPoint[] = (summary?.maritalBreakdown ?? []).map(d => ({
+    ...d,
+    name: t(`employee.maritalValues.${d.name || 'unknown'}`, { defaultValue: d.name || 'Not specified' }),
+  }))
   const birthdayData: BirthdayEntry[] = useBirthdayDedicated ? (birthdaysDedicated ?? []) : (summary?.birthdays ?? [])
   const anniversaryData: AnniversaryEntry[] = useAnniversaryDedicated ? (anniversariesDedicated ?? []) : (summary?.anniversaries ?? [])
   const bdLoadingFinal = useBirthdayDedicated ? bdLoading : dashLoading
@@ -462,7 +473,7 @@ export function HRDashboard() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {MONTH_NAMES.map((m, i) => (
+                  {monthNames.map((m, i) => (
                     <SelectItem key={i + 1} value={String(i + 1)} className="text-xs">{m}</SelectItem>
                   ))}
                 </SelectContent>
@@ -516,7 +527,7 @@ export function HRDashboard() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {MONTH_NAMES.map((m, i) => (
+                  {monthNames.map((m, i) => (
                     <SelectItem key={i + 1} value={String(i + 1)} className="text-xs">{m}</SelectItem>
                   ))}
                 </SelectContent>

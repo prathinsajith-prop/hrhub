@@ -191,7 +191,7 @@ export async function getGenderBreakdown(tenantId: string) {
         .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), eq(employees.status, 'active')))
         .groupBy(employees.gender)
     return rows.map(r => ({
-        name: r.gender === 'male' ? 'Male' : r.gender === 'female' ? 'Female' : 'Not specified',
+        name: r.gender ?? '',
         value: Number(r.count),
         color: GENDER_COLORS[r.gender ?? ''] ?? '#94a3b8',
     }))
@@ -203,9 +203,8 @@ export async function getMaritalStatusBreakdown(tenantId: string) {
         .from(employees)
         .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), eq(employees.status, 'active')))
         .groupBy(employees.maritalStatus)
-    const LABELS: Record<string, string> = { married: 'Married', single: 'Single', widowed: 'Widowed', divorced: 'Divorced', '': 'Not specified' }
     return rows.map(r => ({
-        name: LABELS[r.status ?? ''] ?? 'Not specified',
+        name: r.status ?? '',
         value: Number(r.count),
         color: MARITAL_COLORS[r.status ?? ''] ?? '#94a3b8',
     }))
@@ -253,6 +252,7 @@ export async function getWorkAnniversaries(tenantId: string, month?: number) {
             eq(employees.tenantId, tenantId),
             eq(employees.isArchived, false),
             eq(employees.status, 'active'),
+            isNotNull(employees.joinDate),
             sql`EXTRACT(MONTH FROM ${employees.joinDate}::date) = ${m}`,
             sql`EXTRACT(YEAR FROM ${employees.joinDate}::date) < ${currentYear}`,
         ))

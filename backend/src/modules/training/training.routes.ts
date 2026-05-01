@@ -100,6 +100,7 @@ export default async function trainingRoutes(fastify: any): Promise<void> {
             cost: parse.data.cost,
             currency: parse.data.currency ?? 'AED',
             status: parse.data.status ?? 'planned',
+            certificateUrl: parse.data.certificateUrl,
             certificateExpiry: parse.data.certificateExpiry,
             notes: parse.data.notes,
             createdBy: request.user.id,

@@ -205,6 +205,18 @@
     "joinDate": "تاريخ الانضمام",
     "exitDate": "تاريخ المغادرة",
     "gender": "الجنس",
+    "genderValues": {
+      "male": "ذكر",
+      "female": "أنثى",
+      "unknown": "غير محدد"
+    },
+    "maritalValues": {
+      "married": "متزوج",
+      "single": "أعزب",
+      "widowed": "أرمل",
+      "divorced": "مطلق",
+      "unknown": "غير محدد"
+    },
     "nationality": "الجنسية",
     "salary": "الراتب",
     "employmentType": "نوع التوظيف",

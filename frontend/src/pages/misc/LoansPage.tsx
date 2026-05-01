@@ -56,7 +56,7 @@ const STATUS_STYLE: Record<string, string> = {
 function CreateLoanDialog({ onClose }: { onClose: () => void }) {
     const { t } = useTranslation()
     const create = useCreateLoan()
-    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
+    const { data: empData } = useEmployees({ limit: 500, status: 'active' })
     const [form, setForm] = useState({ employeeId: '', amount: '', monthlyDeduction: '', reason: '', notes: '' })
     const [errors, setErrors] = useState<Record<string, string>>({})
 
