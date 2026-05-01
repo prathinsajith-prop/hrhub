@@ -45,20 +45,21 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         return null
     }
 
-    // Lock the row for the fast state-check phase; bcrypt runs outside the transaction
-    // so the connection is not held for the ~100ms hash duration.
+    // Read current lockout state with a row-level lock, then run bcrypt outside the
+    // transaction so the DB connection isn't held for the ~100ms hash duration.
     const fresh = await db.transaction(async (tx) => {
-        const rows = await tx.execute(
-            sql`SELECT id, "lockedUntil", "failedLoginCount", "passwordHash", "twoFaEnabled"
-                FROM users WHERE id = ${user.id} FOR UPDATE`
-        )
-        return (rows as unknown as { rows: Record<string, unknown>[] }).rows[0] as {
-            id: string
-            lockedUntil: Date | null
-            failedLoginCount: number | null
-            passwordHash: string
-            twoFaEnabled: boolean
-        } | undefined
+        const [row] = await tx
+            .select({
+                id: users.id,
+                lockedUntil: users.lockedUntil,
+                failedLoginCount: users.failedLoginCount,
+                passwordHash: users.passwordHash,
+                twoFaEnabled: users.twoFaEnabled,
+            })
+            .from(users)
+            .where(eq(users.id, user.id))
+            .for('update')
+        return row
     })
 
     if (!fresh) return null
@@ -80,18 +81,22 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
 
     const passwordMatch = await bcrypt.compare(input.password, fresh.passwordHash)
     if (!passwordMatch) {
-        const newCount = (fresh.failedLoginCount ?? 0) + 1
-        const shouldLock = newCount >= MAX_FAILED_ATTEMPTS
-        const lockedUntil = shouldLock ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000) : null
-
+        // Atomic increment prevents concurrent requests from both reading count=4 and
+        // both incrementing to 5 without triggering lockout on the first failure.
+        const lockAt = new Date(Date.now() + LOCKOUT_MINUTES * 60_000)
         await db
             .update(users)
             .set({
-                failedLoginCount: newCount,
-                ...(lockedUntil !== null ? { lockedUntil } : {}),
+                failedLoginCount: sql`${users.failedLoginCount} + 1`,
+                lockedUntil: sql`CASE WHEN ${users.failedLoginCount} + 1 >= ${MAX_FAILED_ATTEMPTS}
+                    THEN ${lockAt.toISOString()}::timestamptz
+                    ELSE ${users.lockedUntil} END`,
                 updatedAt: new Date(),
             })
             .where(eq(users.id, user.id))
+
+        const newCount = (fresh.failedLoginCount ?? 0) + 1
+        const shouldLock = newCount >= MAX_FAILED_ATTEMPTS
 
         recordLoginEvent({
             tenantId: user.tenantId,

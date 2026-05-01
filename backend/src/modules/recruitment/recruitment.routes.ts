@@ -7,6 +7,7 @@ import { db } from '../../db/index.js'
 import { entities, tenants } from '../../db/schema/index.js'
 import { and, eq } from 'drizzle-orm'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
+import { fileTypeFromBuffer } from 'file-type'
 import { extname } from 'node:path'
 
 export default async function (fastify: any): Promise<void> {
@@ -247,24 +248,51 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Recruitment'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
+
+        // Verify the application belongs to this tenant before accepting any upload
+        const app = await getApplication(request.user.tenantId, id)
+        if (!app) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
+
         const part = await request.file()
         if (!part) return reply.code(400).send({ message: 'No file provided' })
-        const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-        if (!allowed.includes(part.mimetype)) return reply.code(415).send({ message: 'Only PDF or Word documents are accepted' })
         const chunks: Buffer[] = []
         for await (const chunk of part.file) chunks.push(chunk as Buffer)
         const buffer = Buffer.concat(chunks)
         if (buffer.length > 5 * 1024 * 1024) return reply.code(413).send({ message: 'File must be under 5 MB' })
-        const ext = extname(part.filename) || '.pdf'
-        const safeName = `resume${ext}`
+
+        // Validate via magic bytes — never trust client-supplied Content-Type
+        const allowedMime: Record<string, string> = {
+            'application/pdf': '.pdf',
+            'application/msword': '.doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+        }
+        const detected = await fileTypeFromBuffer(buffer)
+        // PDF/Word detection: fall back to extension check for plain .doc files file-type may miss
+        const mime = detected?.mime ?? part.mimetype
+        if (!allowedMime[mime]) return reply.code(415).send({ message: 'Only PDF or Word documents are accepted' })
+
+        const safeName = `resume${allowedMime[mime]}`
         const s3Key = buildS3Key(request.user.tenantId, `applications/${id}/resume`, safeName)
         try {
-            await uploadObject(s3Key, buffer, part.mimetype)
+            await uploadObject(s3Key, buffer, mime)
         } catch {
             return reply.code(503).send({ message: 'File storage unavailable. Please try again.' })
         }
         const updated = await updateApplication(request.user.tenantId, id, { resumeUrl: s3Key } as never)
         if (!updated) return reply.code(404).send({ message: 'Application not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'candidate',
+            entityId: id,
+            entityName: app.name ?? id,
+            action: 'update',
+            metadata: { resumeUploaded: true },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         const downloadUrl = await generateDownloadUrl(s3Key)
         return reply.send({ data: { s3Key, downloadUrl } })
     })
