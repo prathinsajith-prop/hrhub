@@ -1,7 +1,7 @@
 import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, getPayslipsWithEmployees, getPayslipsByEmployee, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
 import { generatePayslipPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
-import { enqueuePayrollRun, getPayrollQueue } from '../../workers/payroll.worker.js'
+import { enqueuePayrollRun, getPayrollQueue, type PayrollJobData } from '../../workers/payroll.worker.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -243,6 +243,22 @@ export default async function (fastify: any): Promise<void> {
             .header('Content-Type', 'application/pdf')
             .header('Content-Disposition', `attachment; filename="payslip-${payslipId}.pdf"`)
             .send(pdfBuffer)
+    })
+
+    // GET /api/v1/payroll/jobs/:jobId — poll async payroll job status
+    fastify.get('/jobs/:jobId', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const { jobId } = request.params as { jobId: string }
+        const queue = getPayrollQueue()
+        if (!queue) {
+            return reply.code(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'Payroll job queue unavailable.' })
+        }
+        const job = await queue.getJob(jobId)
+        if (!job) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found.' })
+        }
+        const state = await job.getState()
+        const data = job.data as PayrollJobData
+        return reply.send({ data: { jobId: job.id, state, payrollRunId: data.payrollRunId, failedReason: job.failedReason ?? null } })
     })
 }
 

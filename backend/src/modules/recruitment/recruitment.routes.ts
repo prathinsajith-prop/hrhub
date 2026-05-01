@@ -3,6 +3,7 @@ import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
+import { createChecklist } from '../onboarding/onboarding.service.js'
 import { db } from '../../db/index.js'
 import { entities, tenants } from '../../db/schema/index.js'
 import { and, eq } from 'drizzle-orm'
@@ -361,6 +362,9 @@ export default async function (fastify: any): Promise<void> {
             status: 'onboarding',
             basicSalary: (body.basicSalary as number)?.toString() ?? (app.expectedSalary ?? undefined),
         } as never)
+
+        // Auto-create onboarding checklist with 9 template steps — fire-and-forget
+        createChecklist(tenantId, { employeeId: employee.id, startDate: joinDate, useTemplate: true }).catch(() => { })
 
         // Mark the application completed (no more pipeline stage).
         await updateApplication(tenantId, id, { stage: 'hired', notes: `${app.notes ?? ''}\n[Converted to employee ${employeeNo} on ${new Date().toISOString().slice(0, 10)}]`.trim() } as never)

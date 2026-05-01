@@ -1,6 +1,7 @@
 import { db } from '../../db/index.js'
 import { complaints, employees, users } from '../../db/schema/index.js'
-import { eq, and, desc, sql, ilike, or } from 'drizzle-orm'
+import { eq, and, desc, sql, ilike, or, inArray } from 'drizzle-orm'
+import { sendEmail } from '../../plugins/email.js'
 
 // SLA calendar days per severity (approximate working-day equivalent)
 const SLA_DAYS: Record<string, number> = {
@@ -225,7 +226,7 @@ export async function updateComplaint(tenantId: string, id: string, input: Updat
 
 export async function submitComplaint(tenantId: string, id: string, employeeId: string) {
     const now = new Date()
-    const [existing] = await db.select({ severity: complaints.severity, status: complaints.status })
+    const [existing] = await db.select({ severity: complaints.severity, status: complaints.status, title: complaints.title })
         .from(complaints)
         .where(and(eq(complaints.id, id), eq(complaints.tenantId, tenantId), eq(complaints.submittedByEmployeeId, employeeId)))
         .limit(1)
@@ -240,7 +241,38 @@ export async function submitComplaint(tenantId: string, id: string, employeeId: 
         updatedAt: now,
     }).where(and(eq(complaints.id, id), eq(complaints.tenantId, tenantId))).returning()
 
-    return row ?? null
+    if (!row) return null
+
+    // Notify HR managers and super admins — acknowledgement SLA is 2 working days
+    try {
+        const hrUsers = await db.select({ name: users.name, email: users.email })
+            .from(users)
+            .where(and(
+                eq(users.tenantId, tenantId),
+                eq(users.isActive, true),
+                inArray(users.role, ['hr_manager', 'super_admin'] as never[]),
+            ))
+            .limit(10)
+
+        for (const u of hrUsers) {
+            if (!u.email) continue
+            sendEmail({
+                to: u.email,
+                subject: `New Complaint Submitted — ${existing.severity.toUpperCase()} severity`,
+                html: `<p>Hi ${u.name ?? 'HR Manager'},</p>
+<p>A new complaint has been submitted and requires acknowledgement within <strong>2 working days</strong>.</p>
+<ul>
+  <li><strong>Title:</strong> ${existing.title}</li>
+  <li><strong>Severity:</strong> ${existing.severity}</li>
+  <li><strong>SLA deadline:</strong> ${row.slaDueAt?.toISOString().split('T')[0] ?? 'N/A'}</li>
+</ul>
+<p>Please log in to HRHub to review and acknowledge the complaint.</p>`,
+                text: `New ${existing.severity} complaint submitted: "${existing.title}". SLA deadline: ${row.slaDueAt?.toISOString().split('T')[0] ?? 'N/A'}. Please acknowledge within 2 working days.`,
+            }).catch(() => { /* non-fatal */ })
+        }
+    } catch { /* non-fatal — submission already persisted */ }
+
+    return row
 }
 
 export async function acknowledgeComplaint(tenantId: string, id: string) {

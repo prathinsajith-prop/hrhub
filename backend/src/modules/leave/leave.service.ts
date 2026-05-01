@@ -2,7 +2,7 @@ import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns, aliased
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { leaveRequests, leavePolicies, leaveBalances, publicHolidays } from '../../db/schema/index.js'
+import { leaveRequests, leavePolicies, leaveBalances, publicHolidays, attendanceRecords } from '../../db/schema/index.js'
 import { employees } from '../../db/schema/employees.js'
 import { sendEmail } from '../../plugins/email.js'
 import type { InferInsertModel } from 'drizzle-orm'
@@ -184,6 +184,35 @@ export async function approveLeave(tenantId: string, id: string, approvedBy: str
                 eq(leaveBalances.leaveType, row.leaveType),
                 eq(leaveBalances.year, year),
             ))
+
+        // Auto-mark attendance records as on_leave for each day in the approved period.
+        // Fire-and-forget — does not block the approval response.
+        ;(async () => {
+            try {
+                const start = new Date(row.startDate)
+                const end = new Date(row.endDate)
+                const now = new Date()
+                const records: Array<typeof attendanceRecords.$inferInsert> = []
+                for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    records.push({
+                        tenantId,
+                        employeeId: row.employeeId,
+                        date: d.toISOString().split('T')[0],
+                        status: 'on_leave' as const,
+                        notes: `Auto-marked from approved leave (${row.leaveType})`,
+                        createdAt: now,
+                        updatedAt: now,
+                    })
+                }
+                if (records.length > 0) {
+                    await db.insert(attendanceRecords).values(records)
+                        .onConflictDoUpdate({
+                            target: [attendanceRecords.employeeId, attendanceRecords.date],
+                            set: { status: 'on_leave' as never, notes: sql`EXCLUDED.notes`, updatedAt: now },
+                        })
+                }
+            } catch { /* non-fatal */ }
+        })()
     }
 
     // Send notification using data already fetched in the initial JOIN (no extra DB call)

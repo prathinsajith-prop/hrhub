@@ -127,7 +127,7 @@ Onboarding is a guided checklist attached to each new hire, persisted in `onboar
 
 ### Triggering onboarding
 
-- **From recruitment:** when a candidate's application status is set to `hired`, an onboarding checklist is auto-created for that employee.
+- **From recruitment:** when HR converts a candidate via *Convert to Employee* (`POST /applications/:id/convert-to-employee`), an onboarding checklist with 9 template steps is automatically created for the new employee.
 - **Manual:** Onboarding → *New Checklist* → select employee.
 
 ### High-level stages
@@ -194,8 +194,8 @@ Eight steps, one button per step. Each click advances `visa_applications.current
 
 While `status = 'stamping'`, the visa detail page shows three extra actions **in addition to** the standard "Mark step complete" and "Cancel" buttons:
 - **Upload stamped passport page** → opens Documents module pre-filtered for this employee + category = visa.
-- **Record stamping reference** → prompts for MOHRE/GDRFA reference; writes to `visa_applications.mohreRef` / `gdfraRef`.
-- **Schedule stamping appointment** → creates a calendar event N days out (surfaces on the Calendar page).
+- **Record stamping reference** → prompts for MOHRE/GDRFA reference; writes to `visa_applications.mohreRef` / `gdfrRef`.
+- **Schedule stamping appointment** → *(planned)* will create a calendar event N days out.
 
 ### Cost tracking
 
@@ -233,8 +233,8 @@ draft → submitted → approved → active
 
 1. Employee submits leave request (Leave → *Request Leave*) with start/end dates + type.
 2. Department Head or HR Manager approves / rejects.
-3. On approval, `leave_balances` is decremented.
-4. Attendance records for approved leave days are auto-marked `on_leave`.
+3. On approval, `leave_balances.taken` is incremented by the number of leave days.
+4. Attendance records for every day in the approved leave period are automatically upserted with status `on_leave`.
 
 ### Self-service
 
@@ -256,7 +256,7 @@ draft → processing → completed → wps_submitted
 
 1. HR Manager creates a payroll run for a month/year (`POST /payroll`).
 2. *Run Payroll* button triggers `POST /payroll/:id/run`:
-   - If Redis available: enqueues a BullMQ job and returns `202 { jobId, status: 'processing' }`.
+   - If Redis available: enqueues a BullMQ job and returns `202 { jobId, status: 'processing' }`. Poll `GET /payroll/jobs/:jobId` for `{ state, payrollRunId }` until `state` is `completed` or `failed`.
    - If Redis unavailable: runs synchronously, returns the completed run immediately.
 3. The worker calculates gross = basic + housing + transport + other allowances, then applies deductions (leave without pay, advances).
 4. Payslips are generated per active employee and stored in `payslips`.
@@ -365,7 +365,7 @@ applied → screening → interview → offer → hired
 
 1. HR creates a job posting (`recruitments` table) with title, department, and open count.
 2. Candidates are added (or apply via a link) — `candidates` table.
-3. HR drags candidates across Kanban columns (stage changes call `PATCH /recruitment/candidates/:id`).
+3. HR drags candidates across Kanban columns (stage changes call `PATCH /applications/:id/stage`).
 4. Interviews are scheduled (`interviews` table) with date, type (technical/hr/final), and interviewer.
 5. When a candidate is marked `hired`, the system can auto-create an onboarding checklist for that employee.
 6. Resume files are stored in S3 and accessible via `GET /recruitment/candidates/:id/resume`.
@@ -400,7 +400,7 @@ pending → approved → completed
 ### Document upload
 
 1. Employee or HR uploads a file via the Documents page.
-2. The frontend requests a presigned S3 URL (`POST /documents/presign`), uploads directly to S3, then registers the document (`POST /documents`) with the returned `s3Key`.
+2. The frontend requests a presigned S3 URL (`POST /documents/upload-url`), uploads directly to S3, then registers the document (`POST /documents`) with the returned `s3Key`.
 3. Documents have a category (passport, visa, certificate, contract, etc.) and an optional expiry date.
 
 ### Expiry tracking
@@ -454,7 +454,7 @@ draft → submitted → under_review → resolved
 
 - Category: `harassment | pay_dispute | leave_dispute | working_conditions | discrimination | other`
 - Severity: `low | medium | high | critical`
-- Description (free text, stored encrypted at rest)
+- Description (free text)
 - Optional: linked employee (the subject), supporting documents, confidentiality flag (`anonymous | named | confidential`)
 
 ### SLA
