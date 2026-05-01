@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js'
 import { complaints, employees, users } from '../../db/schema/index.js'
-import { eq, and, desc, sql, ilike, or, inArray } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, ilike, or, inArray } from 'drizzle-orm'
 import { sendEmail } from '../../plugins/email.js'
 
 // SLA calendar days per severity (approximate working-day equivalent)
@@ -112,7 +112,7 @@ export async function listComplaints(tenantId: string, params: {
         LEFT JOIN employees e ON c.submitted_by_employee_id = e.id
         LEFT JOIN employees se ON c.subject_employee_id = se.id
         LEFT JOIN users u ON c.assigned_to_id = u.id
-        WHERE c.tenant_id = ${tenantId}
+        WHERE c.tenant_id = ${tenantId} AND c.deleted_at IS NULL
         ${params.employeeId ? sql`AND c.submitted_by_employee_id = ${params.employeeId}` : sql``}
         ${params.status ? sql`AND c.status = ${params.status}` : sql``}
         ${params.severity ? sql`AND c.severity = ${params.severity}` : sql``}
@@ -160,7 +160,7 @@ export async function getComplaint(tenantId: string, id: string, employeeId?: st
         LEFT JOIN employees e ON c.submitted_by_employee_id = e.id
         LEFT JOIN employees se ON c.subject_employee_id = se.id
         LEFT JOIN users u ON c.assigned_to_id = u.id
-        WHERE c.tenant_id = ${tenantId} AND c.id = ${id}
+        WHERE c.tenant_id = ${tenantId} AND c.id = ${id} AND c.deleted_at IS NULL
         ${employeeId ? sql`AND c.submitted_by_employee_id = ${employeeId}` : sql``}
         LIMIT 1
     `).then(r => r as any[])
@@ -323,6 +323,15 @@ export async function resolveComplaint(tenantId: string, id: string, resolutionN
     return row ?? null
 }
 
+export async function deleteComplaint(tenantId: string, id: string) {
+    const [row] = await db
+        .update(complaints)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(complaints.id, id), eq(complaints.tenantId, tenantId), isNull(complaints.deletedAt)))
+        .returning()
+    return row ?? null
+}
+
 export async function getComplaintStats(tenantId: string) {
     const [counts] = await db.execute(sql`
         SELECT
@@ -331,7 +340,7 @@ export async function getComplaintStats(tenantId: string) {
             COUNT(*) FILTER (WHERE severity = 'critical' AND status != 'resolved')::int AS critical,
             COUNT(*) FILTER (WHERE sla_due_at < NOW() AND status NOT IN ('resolved'))::int AS overdue
         FROM complaints
-        WHERE tenant_id = ${tenantId}
+        WHERE tenant_id = ${tenantId} AND deleted_at IS NULL
     `).then(r => r as any[])
 
     return {

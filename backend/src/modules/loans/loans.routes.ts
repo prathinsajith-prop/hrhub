@@ -6,6 +6,7 @@ import {
     approveLoan,
     rejectLoan,
     recordLoanPayment,
+    deleteLoan,
     getEmployeeAllLoans,
 } from './loans.service.js'
 
@@ -127,6 +128,26 @@ export default async function loansRoutes(fastify: any): Promise<void> {
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
         return reply.send({ data: updated })
+    })
+
+    // DELETE /api/v1/loans/:id — soft delete (HR only, pending loans only)
+    fastify.delete('/:id', hrOnly, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const row = await deleteLoan(request.user.tenantId, id)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee_loan',
+            entityId: row.id,
+            entityName: `Loan AED ${row.amount}`,
+            action: 'delete',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(204).send()
     })
 
     // POST /api/v1/loans/:id/payment — record monthly deduction

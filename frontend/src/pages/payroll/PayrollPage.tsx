@@ -82,28 +82,31 @@ async function downloadBlob(url: string, filename: string, token: string | null)
 function WorkflowBar({ status }: { status: string }) {
   const current = STATUS_CFG[status]?.step ?? 0
   return (
-    <div className="flex items-center gap-0">
+    <div className="flex items-center w-full">
       {WORKFLOW_STEPS.map((step, i) => {
         const done = i < current
         const active = i === current
+        const isLast = i === WORKFLOW_STEPS.length - 1
         return (
-          <div key={step} className="flex items-center gap-0">
-            <div className="flex flex-col items-center gap-1">
+          <div key={step} className={cn('flex items-center', !isLast && 'flex-1 min-w-0')}>
+            <div className="flex flex-col items-center gap-1 shrink-0">
               <div className={cn(
-                'w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all',
-                done  ? 'border-emerald-500 bg-emerald-500 text-white' :
-                active ? 'border-primary bg-primary text-primary-foreground' :
+                'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all text-xs font-semibold',
+                done  ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' :
+                active ? 'border-primary bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/20' :
                          'border-border bg-background text-muted-foreground',
               )}>
-                {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : <CircleDot className="h-3 w-3" />}
+                {done   ? <CheckCircle2 className="h-3.5 w-3.5" /> :
+                 active ? <CircleDot className="h-3.5 w-3.5" /> :
+                          <span>{i + 1}</span>}
               </div>
               <span className={cn(
                 'text-[10px] font-medium whitespace-nowrap',
-                active ? 'text-primary' : done ? 'text-emerald-600' : 'text-muted-foreground',
+                active ? 'text-primary font-semibold' : done ? 'text-emerald-600' : 'text-muted-foreground',
               )}>{step}</span>
             </div>
-            {i < WORKFLOW_STEPS.length - 1 && (
-              <div className={cn('h-0.5 w-8 mb-4 mx-1', done ? 'bg-emerald-400' : 'bg-border')} />
+            {!isLast && (
+              <div className={cn('h-px flex-1 mx-2 mb-4', done ? 'bg-emerald-400' : 'bg-border')} />
             )}
           </div>
         )
@@ -704,32 +707,58 @@ export function PayrollPage() {
 
       {/* Draft run action banner */}
       {draftRun && !isLoading && (
-        <Card className="border-amber-200 bg-amber-50/30">
+        <Card className="border-l-4 border-l-amber-400 border border-amber-200 bg-gradient-to-r from-amber-50/70 to-background overflow-hidden">
           <CardContent className="p-5">
-            <div className="flex flex-wrap items-start gap-5">
-              <div className="min-w-0 flex-1 space-y-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="warning" className="text-[10px]">Draft</Badge>
-                  <p className="font-semibold text-sm">{draftLabel} Payroll Run</p>
+
+            {/* Row 1: identity + action */}
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
+                  <Banknote className="h-4.5 w-4.5 text-amber-600" />
                 </div>
-                <WorkflowBar status={draftRun.status} />
-                <div className="flex items-center gap-5 text-xs flex-wrap">
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Users className="h-3.5 w-3.5" />
-                    <span>{draftRun.totalEmployees ?? 0} employees</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-sm">{draftLabel} Payroll Run</p>
+                    <Badge variant="warning" className="text-[10px]">Draft</Badge>
                   </div>
-                  <div className="h-3 w-px bg-border" />
-                  <span className="text-muted-foreground">Gross <span className="font-medium text-foreground">{formatCurrency(Number(draftRun.totalGross ?? 0))}</span></span>
-                  <span className="text-red-500">-{formatCurrency(Number(draftRun.totalDeductions ?? 0))}</span>
-                  <span className="text-muted-foreground">Net <span className="font-bold text-emerald-600 text-sm">{formatCurrency(Number(draftRun.totalNet ?? 0))}</span></span>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                    Ready to process — review employee records before running
+                  </p>
                 </div>
               </div>
               {canManagePayroll && (
-                <Button leftIcon={<Play className="h-4 w-4" />} onClick={() => setRunConfirmOpen(true)}>
+                <Button leftIcon={<Play className="h-4 w-4" />} onClick={() => setRunConfirmOpen(true)} className="shrink-0">
                   Process Payroll
                 </Button>
               )}
             </div>
+
+            {/* Row 2: stepper */}
+            <WorkflowBar status={draftRun.status} />
+
+            {/* Row 3: stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 mt-5 pt-4 border-t border-amber-100 w-full">
+              <div className="flex items-center gap-2 px-5 first:pl-0 border-r border-border">
+                <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-none mb-0.5">Employees</p>
+                  <p className="text-sm font-semibold">{draftRun.totalEmployees ?? 0}</p>
+                </div>
+              </div>
+              <div className="px-5 border-r border-border sm:border-r">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-none mb-0.5">Gross Pay</p>
+                <p className="text-sm font-semibold">{formatCurrency(Number(draftRun.totalGross ?? 0))}</p>
+              </div>
+              <div className="px-5 border-r border-border mt-3 sm:mt-0 border-t sm:border-t-0 pt-3 sm:pt-0">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-none mb-0.5">Deductions</p>
+                <p className="text-sm font-semibold text-red-500">−{formatCurrency(Number(draftRun.totalDeductions ?? 0))}</p>
+              </div>
+              <div className="px-5 mt-3 sm:mt-0 border-t sm:border-t-0 pt-3 sm:pt-0">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-none mb-0.5">Net Pay</p>
+                <p className="text-sm font-bold text-emerald-600">{formatCurrency(Number(draftRun.totalNet ?? 0))}</p>
+              </div>
+            </div>
+
           </CardContent>
         </Card>
       )}

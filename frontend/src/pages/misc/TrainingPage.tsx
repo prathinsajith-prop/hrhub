@@ -56,7 +56,7 @@ function TrainingFormDialog({
     const { t } = useTranslation()
     const create = useCreateTraining()
     const update = useUpdateTraining()
-    const { data: empData } = useEmployees({ limit: 200 })
+    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
 
     const [form, setForm] = useState({
         employeeId: record?.employeeId ?? '',

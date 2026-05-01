@@ -20,6 +20,7 @@ export const employeeLoans = pgTable('employee_loans', {
     paidInstallments: integer('paid_installments').notNull().default(0),
     remainingBalance: numeric('remaining_balance', { precision: 12, scale: 2 }),
     notes: text('notes'),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({

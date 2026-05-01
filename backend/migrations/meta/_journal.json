@@ -36,6 +36,13 @@
       "when": 1746489600000,
       "tag": "0004_training_loans",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1746576000000,
+      "tag": "0005_soft_delete_missing",
+      "breakpoints": true
     }
   ]
 }

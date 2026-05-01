@@ -1,4 +1,4 @@
-import { eq, and, desc, isNotNull, sql, getTableColumns } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { employeeLoans, employees, users } from '../../db/schema/index.js'
@@ -17,7 +17,7 @@ export async function listLoans(
 ) {
     const { employeeId, status, limit, offset } = params
 
-    const conditions = [eq(employeeLoans.tenantId, tenantId)]
+    const conditions = [eq(employeeLoans.tenantId, tenantId), isNull(employeeLoans.deletedAt)]
     if (employeeId) conditions.push(eq(employeeLoans.employeeId, employeeId))
     if (status) conditions.push(eq(employeeLoans.status, status as never))
 
@@ -50,7 +50,7 @@ export async function listLoans(
             totalOutstanding: sql<number>`COALESCE(SUM(CAST(remaining_balance AS NUMERIC)) FILTER (WHERE status = 'active'), 0)`.as('totalOutstanding'),
         })
         .from(employeeLoans)
-        .where(eq(employeeLoans.tenantId, tenantId))
+        .where(and(eq(employeeLoans.tenantId, tenantId), isNull(employeeLoans.deletedAt)))
 
     return {
         data: rows.map(r => { const { total: _, ...rest } = r; return rest }),
@@ -80,7 +80,16 @@ export async function getLoan(tenantId: string, id: string) {
         .from(employeeLoans)
         .leftJoin(employees, eq(employees.id, employeeLoans.employeeId))
         .leftJoin(users, eq(users.id, employeeLoans.approvedBy))
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id)))
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
+    return row ?? null
+}
+
+export async function deleteLoan(tenantId: string, id: string) {
+    const [row] = await db
+        .update(employeeLoans)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
+        .returning()
     return row ?? null
 }
 
@@ -187,6 +196,7 @@ export async function getEmployeeActiveLoans(tenantId: string, employeeId: strin
                 eq(employeeLoans.tenantId, tenantId),
                 eq(employeeLoans.employeeId, employeeId),
                 eq(employeeLoans.status, 'active'),
+                isNull(employeeLoans.deletedAt),
             ),
         )
         .orderBy(desc(employeeLoans.createdAt))
@@ -196,6 +206,6 @@ export async function getEmployeeAllLoans(tenantId: string, employeeId: string) 
     return db
         .select()
         .from(employeeLoans)
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.employeeId, employeeId)))
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.employeeId, employeeId), isNull(employeeLoans.deletedAt)))
         .orderBy(desc(employeeLoans.createdAt))
 }
