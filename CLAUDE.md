@@ -53,11 +53,19 @@ Run a single test file:
 pnpm vitest run src/__tests__/permissions.test.ts
 ```
 
+Coverage is scoped to `src/lib/**` and `src/hooks/**` only — page components are not covered by the test suite.
+
 ### Infrastructure
 
 ```bash
-docker compose up -d  # start PostgreSQL 17 + Redis together (local dev)
+docker compose up -d  # start PostgreSQL 17, Redis, MinIO, and Mailpit (local dev)
 ```
+
+Local dev services:
+- PostgreSQL 17 — `localhost:5432`
+- Redis 7 — `localhost:6379`
+- MinIO (S3-compatible) — API `localhost:9000`, console `localhost:9001`
+- Mailpit (SMTP test UI) — `http://localhost:8025` — catches all outgoing email when `EMAIL_PROVIDER=smtp` + `EMAIL_DEV_FALLBACK` not set
 
 ### Linting / Formatting
 
@@ -295,6 +303,12 @@ if (externalValue !== lastSynced) {
 - `0003_soft_delete_columns.sql` — `deleted_at` on `performance_reviews` + `visa_costs`
 
 **WARNING:** Drizzle-kit snapshots can drift from the actual DB state. If `pnpm db:generate` produces a huge migration (>10 KB), it's a snapshot mismatch — write a minimal `ALTER TABLE` migration by hand and update `meta/_journal.json` manually.
+
+---
+
+## Domain Reference
+
+`WORKFLOWS.md` (root) is a 24 KB operational reference covering the full lifecycle of every module: visa 8-step workflow, payroll WPS run lifecycle, UAE Labour Law exit settlement rules, Emiratisation quotas, grievance SLAs, audit log retention tiers, and more. Read it before making non-trivial changes to any of those modules.
 
 ---
 

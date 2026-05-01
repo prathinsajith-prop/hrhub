@@ -84,7 +84,15 @@ export default async function (fastify: any): Promise<void> {
 
     fastify.patch('/:id', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        const updated = await updateDocument(request.user.tenantId, id, request.body as never)
+        const b = request.body as Record<string, unknown>
+        const updated = await updateDocument(request.user.tenantId, id, {
+            ...(b.category !== undefined && { category: b.category as never }),
+            ...(b.docType !== undefined && { docType: b.docType as string }),
+            ...(b.fileName !== undefined && { fileName: b.fileName as string }),
+            ...(b.expiryDate !== undefined && { expiryDate: b.expiryDate ? (b.expiryDate as string) : null }),
+            ...(b.notes !== undefined && { notes: b.notes as string }),
+            ...(b.status !== undefined && { status: b.status as never }),
+        })
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Document not found' })
         recordActivity({
             tenantId: request.user.tenantId,

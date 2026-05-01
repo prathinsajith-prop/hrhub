@@ -1,4 +1,4 @@
-import { eq, and, count, desc, gte, lte, sql, or, isNull } from 'drizzle-orm'
+import { eq, and, count, desc, gte, lte, sql, or, isNull, isNotNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, recruitmentJobs, visaApplications, leaveRequests, notifications, payrollRuns, onboardingChecklists, onboardingSteps } from '../../db/schema/index.js'
 import { cacheGet, cacheSet } from '../../lib/redis.js'
@@ -169,6 +169,104 @@ export async function getEmiratisationStatus(tenantId: string) {
             ? Math.min(100, Math.round((currentRatio / targetRatio) * 100))
             : 100,
     }
+}
+
+const GENDER_COLORS: Record<string, string> = {
+    male: '#3b82f6',
+    female: '#10b981',
+    '': '#f59e0b',
+}
+const MARITAL_COLORS: Record<string, string> = {
+    married: '#3b82f6',
+    single: '#10b981',
+    widowed: '#f59e0b',
+    divorced: '#ef4444',
+    '': '#8b5cf6',
+}
+
+export async function getGenderBreakdown(tenantId: string) {
+    const rows = await db
+        .select({ gender: employees.gender, count: count() })
+        .from(employees)
+        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), eq(employees.status, 'active')))
+        .groupBy(employees.gender)
+    return rows.map(r => ({
+        name: r.gender ?? '',
+        value: Number(r.count),
+        color: GENDER_COLORS[r.gender ?? ''] ?? '#94a3b8',
+    }))
+}
+
+export async function getMaritalStatusBreakdown(tenantId: string) {
+    const rows = await db
+        .select({ status: employees.maritalStatus, count: count() })
+        .from(employees)
+        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), eq(employees.status, 'active')))
+        .groupBy(employees.maritalStatus)
+    return rows.map(r => ({
+        name: r.status ?? '',
+        value: Number(r.count),
+        color: MARITAL_COLORS[r.status ?? ''] ?? '#94a3b8',
+    }))
+}
+
+export async function getUpcomingBirthdays(tenantId: string, month?: number) {
+    const m = month ?? new Date().getMonth() + 1
+    const rows = await db
+        .select({
+            firstName: employees.firstName,
+            lastName: employees.lastName,
+            employeeNo: employees.employeeNo,
+            department: employees.department,
+            dateOfBirth: employees.dateOfBirth,
+        })
+        .from(employees)
+        .where(and(
+            eq(employees.tenantId, tenantId),
+            eq(employees.isArchived, false),
+            isNotNull(employees.dateOfBirth),
+            sql`EXTRACT(MONTH FROM ${employees.dateOfBirth}::date) = ${m}`,
+        ))
+        .orderBy(sql`EXTRACT(DAY FROM ${employees.dateOfBirth}::date)`)
+    return rows.map(r => ({
+        day: r.dateOfBirth ? new Date(r.dateOfBirth).getUTCDate() : 0,
+        name: `${r.firstName} ${r.lastName}`.trim(),
+        employeeNo: r.employeeNo,
+        department: r.department ?? '',
+    }))
+}
+
+export async function getWorkAnniversaries(tenantId: string, month?: number) {
+    const m = month ?? new Date().getMonth() + 1
+    const currentYear = new Date().getFullYear()
+    const rows = await db
+        .select({
+            firstName: employees.firstName,
+            lastName: employees.lastName,
+            employeeNo: employees.employeeNo,
+            department: employees.department,
+            joinDate: employees.joinDate,
+        })
+        .from(employees)
+        .where(and(
+            eq(employees.tenantId, tenantId),
+            eq(employees.isArchived, false),
+            eq(employees.status, 'active'),
+            isNotNull(employees.joinDate),
+            sql`EXTRACT(MONTH FROM ${employees.joinDate}::date) = ${m}`,
+            sql`EXTRACT(YEAR FROM ${employees.joinDate}::date) < ${currentYear}`,
+        ))
+        .orderBy(sql`EXTRACT(YEAR FROM ${employees.joinDate}::date)`)
+    return rows.map(r => {
+        const joinYear = r.joinDate ? new Date(r.joinDate).getUTCFullYear() : currentYear
+        return {
+            name: `${r.firstName} ${r.lastName}`.trim(),
+            employeeNo: r.employeeNo,
+            department: r.department ?? '',
+            joinYear,
+            years: currentYear - joinYear,
+        }
+    })
 }
 
 export async function getOnboardingSummary(tenantId: string) {

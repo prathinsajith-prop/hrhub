@@ -131,6 +131,11 @@ export default async function (fastify: any): Promise<void> {
         },
     }, async (request, reply) => {
         const { employeeId } = request.params as { employeeId: string }
+        const user = request.user
+        const isElevated = ['hr_manager', 'super_admin', 'dept_head', 'pro_officer'].includes(user.role)
+        if (!isElevated && user.employeeId !== employeeId) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Access denied' })
+        }
         const { year = new Date().getFullYear() } = request.query as { year?: number }
         const balance = await getLeaveBalance(request.user.tenantId, employeeId, Number(year))
         if (!balance) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })

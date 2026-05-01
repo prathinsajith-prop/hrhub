@@ -10,8 +10,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { Badge, Card, Input, Textarea, Label } from '@/components/ui/primitives'
+import { Badge, Card, Input, Textarea, Label, NumericInput } from '@/components/ui/primitives'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
+import { FormField } from '@/components/shared/FormField'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
     toast, ConfirmDialog
@@ -286,9 +287,8 @@ function AssetFormDialog({
                         </div>
                         <div className="space-y-1.5">
                             <Label>Purchase Cost (AED)</Label>
-                            <Input
-                                type="number"
-                                step="0.01"
+                            <NumericInput
+                                maxDecimals={2}
                                 value={form.purchaseCost ?? ''}
                                 onChange={e => set('purchaseCost', e.target.value || null)}
                                 placeholder="0.00"
@@ -329,12 +329,14 @@ function AssignAssetDialog({
     const [assignedDate, setAssignedDate] = useState(new Date().toISOString().slice(0, 10))
     const [expectedReturnDate, setExpectedReturnDate] = useState<string | undefined>()
     const [notes, setNotes] = useState('')
+    const [errors, setErrors] = useState<Record<string, string>>({})
 
     const employees = employeesData?.data ?? []
 
     async function handleSubmit(e: { preventDefault(): void }) {
         e.preventDefault()
-        if (!employeeId) { toast.error('Please select an employee'); return }
+        if (!employeeId) { setErrors({ employeeId: 'Employee is required' }); return }
+        setErrors({})
         try {
             await assignAsset.mutateAsync({ assetId: asset.id, employeeId, assignedDate, expectedReturnDate, notes: notes || undefined })
             toast.success('Asset assigned successfully')
@@ -352,9 +354,8 @@ function AssignAssetDialog({
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
                     <DialogBody className="space-y-4">
-                        <div className="space-y-1.5">
-                            <Label required>Employee</Label>
-                            <Select value={employeeId} onValueChange={setEmployeeId}>
+                        <FormField label="Employee" required error={errors.employeeId}>
+                            <Select value={employeeId} onValueChange={v => { setEmployeeId(v); setErrors(err => ({ ...err, employeeId: '' })) }}>
                                 <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
                                 <SelectContent>
                                     {employees.map(emp => (
@@ -364,7 +365,7 @@ function AssignAssetDialog({
                                     ))}
                                 </SelectContent>
                             </Select>
-                        </div>
+                        </FormField>
                         <div className="space-y-1.5">
                             <Label>Assigned Date</Label>
                             <DatePicker value={assignedDate} onChange={v => setAssignedDate(v || assignedDate)} />

@@ -1,9 +1,21 @@
+import { z } from 'zod'
 import { calculateSettlement, initiateExit, getExitRequests, getExitRequest, approveExit, rejectExit, markSettlementPaid } from './exit.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
 import { tenants } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
+
+const initiateExitSchema = z.object({
+    employeeId: z.string().uuid(),
+    exitType: z.enum(['resignation', 'termination', 'contract_end', 'retirement']),
+    exitDate: z.string().min(1),
+    lastWorkingDay: z.string().min(1),
+    noticePeriodDays: z.number().optional(),
+    reason: z.string().optional(),
+    notes: z.string().optional(),
+    deductions: z.number().optional(),
+})
 
 export async function exitRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
@@ -21,7 +33,9 @@ export async function exitRoutes(fastify: any) {
 
     // POST /api/v1/exit
     fastify.post('/exit', { ...adminAuth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
-        const data = await initiateExit(request.user.tenantId, request.body as any)
+        const parse = initiateExitSchema.safeParse(request.body)
+        if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
+        const data = await initiateExit(request.user.tenantId, parse.data as any)
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: data.request.id, entityName: data.settlement.employeeName, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(201).send({ data })
     })

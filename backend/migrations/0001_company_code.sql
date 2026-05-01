@@ -1,7 +1,14 @@
 -- Add unique company_code to tenants.
 -- Nullable so existing rows are unaffected; backfilled below.
 ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "company_code" text;
-ALTER TABLE "tenants" ADD CONSTRAINT "tenants_company_code_unique" UNIQUE("company_code");
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'tenants_company_code_unique' AND conrelid = 'tenants'::regclass
+    ) THEN
+        ALTER TABLE "tenants" ADD CONSTRAINT "tenants_company_code_unique" UNIQUE("company_code");
+    END IF;
+END $$;
 
 -- Backfill existing tenants: derive a best-effort 4-char code from the name.
 -- Uses initials of each word, uppercased, padded/truncated to 4 chars.
