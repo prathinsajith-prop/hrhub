@@ -142,7 +142,7 @@ export async function approveLoan(
             approvedAt: new Date(),
             startDate: startDate ?? new Date().toISOString().slice(0, 10),
         }))
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id)))
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
         .returning()
     return updated
 }
@@ -159,7 +159,7 @@ export async function rejectLoan(tenantId: string, id: string, notes?: string) {
     const [updated] = await db
         .update(employeeLoans)
         .set(withTimestamp({ status: 'rejected', notes: notes ?? existing.notes }))
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id)))
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
         .returning()
     return updated
 }
@@ -186,7 +186,7 @@ export async function recordLoanPayment(tenantId: string, id: string) {
             remainingBalance: String(newBalance),
             status: newStatus,
         }))
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id)))
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
         .returning()
     return updated
 }

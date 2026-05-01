@@ -292,7 +292,7 @@ export async function assignComplaint(tenantId: string, id: string, assignedToId
     const [row] = await db.update(complaints).set({
         assignedToId,
         updatedAt: new Date(),
-    }).where(and(eq(complaints.id, id), eq(complaints.tenantId, tenantId))).returning()
+    }).where(and(eq(complaints.id, id), eq(complaints.tenantId, tenantId), isNull(complaints.deletedAt))).returning()
     return row ?? null
 }
 
@@ -303,6 +303,7 @@ export async function escalateComplaint(tenantId: string, id: string) {
     }).where(and(
         eq(complaints.id, id),
         eq(complaints.tenantId, tenantId),
+        isNull(complaints.deletedAt),
         sql`status IN ('submitted','under_review')`,
     )).returning()
     return row ?? null
@@ -318,6 +319,7 @@ export async function resolveComplaint(tenantId: string, id: string, resolutionN
     }).where(and(
         eq(complaints.id, id),
         eq(complaints.tenantId, tenantId),
+        isNull(complaints.deletedAt),
         sql`status != 'resolved'`,
     )).returning()
     return row ?? null

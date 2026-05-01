@@ -46,7 +46,7 @@ export async function createJob(tenantId: string, data: Omit<NewJob, 'tenantId' 
 export async function updateJob(tenantId: string, id: string, data: Partial<NewJob>) {
     const [row] = await db.update(recruitmentJobs)
         .set(withTimestamp(data))
-        .where(and(eq(recruitmentJobs.id, id), eq(recruitmentJobs.tenantId, tenantId)))
+        .where(and(eq(recruitmentJobs.id, id), eq(recruitmentJobs.tenantId, tenantId), isNull(recruitmentJobs.deletedAt)))
         .returning()
     return row ?? null
 }
