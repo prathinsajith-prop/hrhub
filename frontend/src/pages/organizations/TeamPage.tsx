@@ -518,7 +518,7 @@ function TeamDetailDialog({ team, open, onClose, canManage }: TeamDetailDialogPr
                 title="Remove Member"
                 description="Are you sure you want to remove this member from the team?"
                 confirmLabel="Remove"
-                variant="destructive"
+                variant="warning"
                 onConfirm={handleRemove}
             />
         </>

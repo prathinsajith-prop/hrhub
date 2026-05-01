@@ -415,7 +415,7 @@ export function LeavePage() {
                     })
                     setApproveTarget(null)
                 }}
-                variant="warning"
+                variant="success"
             />
             <ConfirmDialog
                 open={!!rejectTarget}
@@ -437,7 +437,7 @@ export function LeavePage() {
                 title={bulkAction?.approve ? `Approve ${bulkAction.ids.length} leave request${bulkAction.ids.length === 1 ? '' : 's'}?` : `Reject ${bulkAction?.ids.length} leave request${bulkAction?.ids.length === 1 ? '' : 's'}?`}
                 description={bulkAction?.approve ? 'All selected requests will be approved and employees notified.' : 'All selected requests will be rejected and employees notified.'}
                 confirmLabel={bulkAction?.approve ? 'Approve all' : 'Reject all'}
-                variant={bulkAction?.approve ? 'warning' : 'destructive'}
+                variant={bulkAction?.approve ? 'success' : 'destructive'}
                 onConfirm={() => {
                     if (!bulkAction) return
                     Promise.all(
