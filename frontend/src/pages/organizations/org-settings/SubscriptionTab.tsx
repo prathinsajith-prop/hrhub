@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -442,9 +443,9 @@ export function SubscriptionTab() {
                             <Button type="button" variant="outline" size="icon-sm" onClick={() => setDesiredQuota(q => Math.max(5, q - 5))}>
                                 <Minus className="h-4 w-4" />
                             </Button>
-                            <Input
-                                type="number" min={5} step={5}
-                                value={desiredQuota}
+                            <NumericInput
+                                decimal={false}
+                                value={String(desiredQuota)}
                                 onChange={e => setDesiredQuota(Math.max(5, Number(e.target.value)))}
                                 className="text-center font-semibold w-24"
                             />

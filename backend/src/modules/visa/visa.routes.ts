@@ -117,7 +117,16 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Visa'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const updated = await updateVisa(request.user.tenantId, id, request.body as never)
+        const b = request.body as Record<string, unknown>
+        const updated = await updateVisa(request.user.tenantId, id, {
+            ...(b.mohreRef !== undefined && { mohreRef: b.mohreRef as string }),
+            ...(b.gdfrRef !== undefined && { gdfrRef: b.gdfrRef as string }),
+            ...(b.icpRef !== undefined && { icpRef: b.icpRef as string }),
+            ...(b.expiryDate !== undefined && { expiryDate: b.expiryDate as string }),
+            ...(b.startDate !== undefined && { startDate: b.startDate as string }),
+            ...(b.urgencyLevel !== undefined && { urgencyLevel: b.urgencyLevel as never }),
+            ...(b.notes !== undefined && { notes: b.notes as string }),
+        })
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Visa application not found' })
         audit(request, {
             entityId: id,

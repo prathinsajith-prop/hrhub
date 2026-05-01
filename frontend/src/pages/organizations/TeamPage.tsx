@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { z } from 'zod'
 import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X, Building2, Calendar, UserMinus } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -26,6 +27,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { FormField } from '@/components/shared/FormField'
+import { zodToFieldErrors } from '@/lib/schemas'
 import { getInitials } from '@/lib/utils'
 import { ApiError } from '@/lib/api'
 
@@ -48,6 +51,12 @@ function teamColor(name: string) {
 
 // ── Create / Edit Team Dialog ─────────────────────────────────────────────────
 
+const teamFormSchema = z.object({
+    name: z.string().min(1, 'Team name is required'),
+    description: z.string().optional(),
+    departmentId: z.string().optional(),
+})
+
 interface TeamFormDialogProps {
     open: boolean
     onClose: () => void
@@ -67,6 +76,7 @@ function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDep
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [departmentId, setDepartmentId] = useState('')
+    const [errors, setErrors] = useState<Record<string, string>>({})
 
     const isEdit = !!editTeam
     const isPending = createMut.isPending || updateMut.isPending
@@ -77,12 +87,15 @@ function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDep
             setName(editTeam?.name ?? '')
             setDescription(editTeam?.description ?? '')
             setDepartmentId(editTeam?.departmentId ?? lockedDepartmentId ?? '')
+            setErrors({})
         }
     }, [open, editTeam, lockedDepartmentId])
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!name.trim()) return
+        const result = zodToFieldErrors(teamFormSchema, { name, description, departmentId })
+        if (!result.ok) { setErrors(result.errors); return }
+        setErrors({})
         try {
             if (isEdit) {
                 await updateMut.mutateAsync({ id: editTeam.id, name, description })
@@ -103,17 +116,16 @@ function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDep
                     <DialogTitle>{isEdit ? 'Edit Team' : 'Create Team'}</DialogTitle>
                 </DialogHeader>
                 <form id="team-form" onSubmit={submit} className="space-y-4">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="team-name">Team Name *</Label>
+                    <FormField label="Team Name" required error={errors.name}>
                         <Input
                             id="team-name"
                             value={name}
-                            onChange={e => setName(e.target.value)}
+                            onChange={e => { setName(e.target.value); setErrors(err => ({ ...err, name: '' })) }}
                             placeholder="e.g. Frontend Squad"
                             autoFocus
-                            required
+                            aria-invalid={!!errors.name}
                         />
-                    </div>
+                    </FormField>
                     <div className="space-y-1.5">
                         <Label htmlFor="team-desc">Description</Label>
                         <Textarea
