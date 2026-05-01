@@ -54,6 +54,10 @@ const MyProfilePage = lazy(() => import('@/pages/my/MyProfilePage').then(m => ({
 const MyAccountPage = lazy(() => import('@/pages/my/MyAccountPage').then(m => ({ default: m.MyAccountPage })))
 const ComplaintsPage = lazy(() => import('@/pages/misc/ComplaintsPage').then(m => ({ default: m.ComplaintsPage })))
 const MyComplaintsPage = lazy(() => import('@/pages/my/MyComplaintsPage').then(m => ({ default: m.MyComplaintsPage })))
+const TrainingPage = lazy(() => import('@/pages/misc/TrainingPage').then(m => ({ default: m.TrainingPage })))
+const MyTrainingPage = lazy(() => import('@/pages/my/MyTrainingPage').then(m => ({ default: m.MyTrainingPage })))
+const LoansPage = lazy(() => import('@/pages/misc/LoansPage').then(m => ({ default: m.LoansPage })))
+const MyLoansPage = lazy(() => import('@/pages/my/MyLoansPage').then(m => ({ default: m.MyLoansPage })))
 
 function PageLoader() {
   return (
@@ -95,6 +99,10 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/team': 'team.title',
   '/apps': 'apps.title',
   '/leave-policies': 'leavePolicies.title',
+  '/training': 'training.pageTitle',
+  '/my/training': 'training.myPageTitle',
+  '/loans': 'loans.pageTitle',
+  '/my/loans': 'loans.myPageTitle',
 }
 
 function TitleManager() {
@@ -179,6 +187,10 @@ export default function App() {
             <Route path="subscription" element={<RoleRoute routeKey="subscription"><SubscriptionPage /></RoleRoute>} />
             <Route path="complaints" element={<RoleRoute routeKey="complaints"><ComplaintsPage /></RoleRoute>} />
             <Route path="my/complaints" element={<RoleRoute routeKey="my/complaints"><MyComplaintsPage /></RoleRoute>} />
+            <Route path="training" element={<RoleRoute routeKey="training"><TrainingPage /></RoleRoute>} />
+            <Route path="my/training" element={<RoleRoute routeKey="my/training"><MyTrainingPage /></RoleRoute>} />
+            <Route path="loans" element={<RoleRoute routeKey="loans"><LoansPage /></RoleRoute>} />
+            <Route path="my/loans" element={<RoleRoute routeKey="my/loans"><MyLoansPage /></RoleRoute>} />
           </Route>
           {/* Public onboarding upload — no auth, no AppLayout */}
           <Route path="onboarding/upload/:token" element={<OnboardingUploadPage />} />

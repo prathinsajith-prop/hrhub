@@ -49,6 +49,8 @@ import { designationsRoutes } from './modules/designations/designations.routes.j
 import calendarRoutes from './modules/calendar/calendar.routes.js'
 import teamsModuleRoutes from './modules/teams/teams.routes.js'
 import { complaintsRoutes } from './modules/complaints/complaints.routes.js'
+import trainingRoutes from './modules/training/training.routes.js'
+import loansRoutes from './modules/loans/loans.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -231,6 +233,8 @@ async function bootstrap() {
     await app.register(calendarRoutes, { prefix: '/api/v1' })
     await app.register(teamsModuleRoutes, { prefix: '/api/v1' })
     await app.register(complaintsRoutes, { prefix: '/api/v1' })
+    await app.register(trainingRoutes, { prefix: '/api/v1/training' })
+    await app.register(loansRoutes, { prefix: '/api/v1/loans' })
 
     // Health check — basic
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))

@@ -29,6 +29,13 @@
       "when": 1777566781505,
       "tag": "0003_soft_delete_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1746489600000,
+      "tag": "0004_training_loans",
+      "breakpoints": true
     }
   ]
 }
