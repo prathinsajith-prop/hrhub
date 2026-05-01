@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { User, Tenant } from '@/types'
 
 // Key used to decide which storage to use across page loads
@@ -109,15 +109,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: AUTH_KEY,
-      storage: {
-        getItem: (name) => {
-          const val = dynamicStorage.getItem(name)
-          if (val === null) return null
-          try { return JSON.parse(val) } catch { return null }
-        },
-        setItem: (name, value) => dynamicStorage.setItem(name, JSON.stringify(value)),
-        removeItem: (name) => dynamicStorage.removeItem(name),
-      },
+      // createJSONStorage caches the storage instance on first access, but dynamicStorage
+      // itself re-evaluates the preference key on every operation, so the routing is always current.
+      storage: createJSONStorage(() => dynamicStorage),
       partialize: (state) => ({
         user: state.user,
         tenant: state.tenant,
