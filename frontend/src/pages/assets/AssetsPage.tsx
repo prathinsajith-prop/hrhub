@@ -12,6 +12,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Card, Input, Textarea, Label, NumericInput } from '@/components/ui/primitives'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
+import { FormField } from '@/components/shared/FormField'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter,
     toast, ConfirmDialog
@@ -31,7 +32,7 @@ import {
     useAssetCategories, useCreateAssetCategory, useDeleteAssetCategory,
     type Asset, type AssetAssignment, type AssetMaintenance,
 } from '@/hooks/useAssets'
-import { useEmployees } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 
@@ -321,19 +322,19 @@ function AssignAssetDialog({
     open: boolean
     onOpenChange: (o: boolean) => void
 }) {
-    const { data: employeesData } = useEmployees({ limit: 100 })
     const assignAsset = useAssignAsset()
 
     const [employeeId, setEmployeeId] = useState('')
     const [assignedDate, setAssignedDate] = useState(new Date().toISOString().slice(0, 10))
     const [expectedReturnDate, setExpectedReturnDate] = useState<string | undefined>()
     const [notes, setNotes] = useState('')
+    const [errors, setErrors] = useState<Record<string, string>>({})
 
-    const employees = employeesData?.data ?? []
 
     async function handleSubmit(e: { preventDefault(): void }) {
         e.preventDefault()
-        if (!employeeId) { toast.error('Please select an employee'); return }
+        if (!employeeId) { setErrors({ employeeId: 'Employee is required' }); return }
+        setErrors({})
         try {
             await assignAsset.mutateAsync({ assetId: asset.id, employeeId, assignedDate, expectedReturnDate, notes: notes || undefined })
             toast.success('Asset assigned successfully')
@@ -351,19 +352,12 @@ function AssignAssetDialog({
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
                     <DialogBody className="space-y-4">
-                        <div className="space-y-1.5">
-                            <Label required>Employee</Label>
-                            <Select value={employeeId} onValueChange={setEmployeeId}>
-                                <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                                <SelectContent>
-                                    {employees.map(emp => (
-                                        <SelectItem key={emp.id} value={emp.id}>
-                                            {emp.firstName} {emp.lastName} ({emp.employeeNo})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        <FormField label="Employee" required error={errors.employeeId}>
+                            <EmployeeSelect
+                                value={employeeId}
+                                onValueChange={v => { setEmployeeId(v); setErrors(err => ({ ...err, employeeId: '' })) }}
+                            />
+                        </FormField>
                         <div className="space-y-1.5">
                             <Label>Assigned Date</Label>
                             <DatePicker value={assignedDate} onChange={v => setAssignedDate(v || assignedDate)} />

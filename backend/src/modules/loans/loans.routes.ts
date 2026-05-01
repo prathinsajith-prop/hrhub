@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { recordActivity } from '../audit/audit.service.js'
 import {
     listLoans,
@@ -9,6 +10,14 @@ import {
     deleteLoan,
     getEmployeeAllLoans,
 } from './loans.service.js'
+
+const createLoanSchema = z.object({
+    employeeId: z.string().uuid().optional(),
+    amount: z.string().refine(v => parseFloat(v) > 0, { message: 'Amount must be greater than 0' }),
+    monthlyDeduction: z.string().refine(v => parseFloat(v) > 0, { message: 'Monthly deduction must be greater than 0' }),
+    reason: z.string().optional(),
+    notes: z.string().optional(),
+})
 
 export default async function loansRoutes(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -57,12 +66,13 @@ export default async function loansRoutes(fastify: any): Promise<void> {
 
     // POST /api/v1/loans — request a loan (employee or HR)
     fastify.post('/', auth, async (request: any, reply: any) => {
-        const body = request.body as Record<string, unknown>
+        const parse = createLoanSchema.safeParse(request.body)
+        if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const user = request.user
         const isElevated = ['hr_manager', 'super_admin'].includes(user.role)
 
         // Employees can only request for themselves
-        let employeeId = body.employeeId as string
+        let employeeId = parse.data.employeeId as string
         if (!isElevated) {
             if (!user.employeeId) return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'No employee profile linked' })
             employeeId = user.employeeId
@@ -70,10 +80,10 @@ export default async function loansRoutes(fastify: any): Promise<void> {
 
         const row = await createLoan(user.tenantId, {
             employeeId,
-            amount: body.amount as string,
-            monthlyDeduction: body.monthlyDeduction as string,
-            reason: body.reason as string | undefined,
-            notes: body.notes as string | undefined,
+            amount: parse.data.amount,
+            monthlyDeduction: parse.data.monthlyDeduction,
+            reason: parse.data.reason,
+            notes: parse.data.notes,
         })
         recordActivity({
             tenantId: user.tenantId,
@@ -95,6 +105,7 @@ export default async function loansRoutes(fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const body = request.body as { startDate?: string }
         const updated = await approveLoan(request.user.tenantId, id, request.user.id, body.startDate)
+        if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,
@@ -115,6 +126,7 @@ export default async function loansRoutes(fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const body = request.body as { notes?: string }
         const updated = await rejectLoan(request.user.tenantId, id, body.notes)
+        if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,
@@ -154,6 +166,7 @@ export default async function loansRoutes(fastify: any): Promise<void> {
     fastify.post('/:id/payment', hrOnly, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         const updated = await recordLoanPayment(request.user.tenantId, id)
+        if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,

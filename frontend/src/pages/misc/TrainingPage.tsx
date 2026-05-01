@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { z } from 'zod'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
+import { FormField } from '@/components/shared/FormField'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfirmDialog } from '@/components/ui/overlays'
 import { toast } from '@/components/ui/overlays'
+import { zodToFieldErrors } from '@/lib/schemas'
 import {
     GraduationCap, BookOpen, CheckCircle2, TrendingUp,
     Search, Plus, Pencil, Trash2, ExternalLink,
@@ -24,10 +26,23 @@ import {
     useUpdateTraining,
     useDeleteTraining,
 } from '@/hooks/useTraining'
-import { useEmployees } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import type { UserRole } from '@/types'
+
+const trainingFormSchema = z.object({
+    employeeId: z.string().min(1, 'Employee is required'),
+    title: z.string().min(1, 'Title is required'),
+    startDate: z.string().min(1, 'Start date is required'),
+    provider: z.string().optional(),
+    type: z.string().optional(),
+    endDate: z.string().optional(),
+    cost: z.string().optional(),
+    status: z.string().optional(),
+    notes: z.string().optional(),
+    certificateExpiry: z.string().optional(),
+})
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,13 +51,6 @@ const STATUS_STYLE: Record<string, string> = {
     in_progress: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
     completed:   'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
     cancelled:   'bg-red-50 text-red-600 ring-1 ring-red-200',
-}
-
-const TYPE_LABEL: Record<string, string> = {
-    internal:   'Internal',
-    external:   'External',
-    online:     'Online',
-    conference: 'Conference',
 }
 
 // ─── Training Form Dialog ─────────────────────────────────────────────────────
@@ -57,7 +65,6 @@ function TrainingFormDialog({
     const { t } = useTranslation()
     const create = useCreateTraining()
     const update = useUpdateTraining()
-    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
 
     const [form, setForm] = useState({
         employeeId: record?.employeeId ?? '',
@@ -71,14 +78,14 @@ function TrainingFormDialog({
         notes: record?.notes ?? '',
         certificateExpiry: record?.certificateExpiry ?? '',
     })
+    const [errors, setErrors] = useState<Record<string, string>>({})
 
     const isPending = create.isPending || update.isPending
 
     function handleSubmit() {
-        if (!form.employeeId || !form.title || !form.startDate) {
-            toast.error(t('common.required'))
-            return
-        }
+        const result = zodToFieldErrors(trainingFormSchema, form)
+        if (!result.ok) { setErrors(result.errors); return }
+        setErrors({})
         if (record) {
             update.mutate({ id: record.id, ...form }, {
                 onSuccess: () => { toast.success(t('training.updated')); onClose() },
@@ -92,8 +99,6 @@ function TrainingFormDialog({
         }
     }
 
-    const employees = empData?.data ?? []
-
     return (
         <Dialog open onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
@@ -101,40 +106,31 @@ function TrainingFormDialog({
                     <DialogTitle>{record ? t('training.editRecord') : t('training.addRecord')}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
-                    <div className="grid gap-1.5">
-                        <Label>{t('training.employee')} <span className="text-destructive">*</span></Label>
-                        <Select value={form.employeeId} onValueChange={v => setForm(f => ({ ...f, employeeId: v }))}>
-                            <SelectTrigger><SelectValue placeholder={t('training.selectEmployee')} /></SelectTrigger>
-                            <SelectContent>
-                                {employees.map(e => (
-                                    <SelectItem key={e.id} value={e.id}>
-                                        {e.firstName} {e.lastName}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    <FormField label={t('training.employee')} required error={errors.employeeId}>
+                        <EmployeeSelect
+                            value={form.employeeId}
+                            onValueChange={v => { setForm(f => ({ ...f, employeeId: v })); setErrors(e => ({ ...e, employeeId: '' })) }}
+                        />
+                    </FormField>
 
-                    <div className="grid gap-1.5">
-                        <Label>{t('training.title')} <span className="text-destructive">*</span></Label>
+                    <FormField label={t('training.title')} required error={errors.title}>
                         <Input
+                            aria-invalid={!!errors.title}
                             value={form.title}
-                            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                            onChange={e => { setForm(f => ({ ...f, title: e.target.value })); setErrors(er => ({ ...er, title: '' })) }}
                             placeholder={t('training.titlePlaceholder')}
                         />
-                    </div>
+                    </FormField>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-1.5">
-                            <Label>{t('training.provider')}</Label>
+                        <FormField label={t('training.provider')}>
                             <Input
                                 value={form.provider}
                                 onChange={e => setForm(f => ({ ...f, provider: e.target.value }))}
                                 placeholder={t('training.providerPlaceholder')}
                             />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label>{t('training.type')}</Label>
+                        </FormField>
+                        <FormField label={t('training.type')}>
                             <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v as never }))}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
@@ -144,40 +140,37 @@ function TrainingFormDialog({
                                     <SelectItem value="conference">{t('training.types.conference')}</SelectItem>
                                 </SelectContent>
                             </Select>
-                        </div>
+                        </FormField>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-1.5">
-                            <Label>{t('training.startDate')} <span className="text-destructive">*</span></Label>
+                        <FormField label={t('training.startDate')} required error={errors.startDate}>
                             <Input
                                 type="date"
+                                aria-invalid={!!errors.startDate}
                                 value={form.startDate}
-                                onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
+                                onChange={e => { setForm(f => ({ ...f, startDate: e.target.value })); setErrors(er => ({ ...er, startDate: '' })) }}
                             />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label>{t('training.endDate')}</Label>
+                        </FormField>
+                        <FormField label={t('training.endDate')}>
                             <Input
                                 type="date"
                                 value={form.endDate}
                                 onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
                             />
-                        </div>
+                        </FormField>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-1.5">
-                            <Label>{t('training.cost')} (AED)</Label>
+                        <FormField label={`${t('training.cost')} (AED)`}>
                             <NumericInput
                                 maxDecimals={2}
                                 value={form.cost}
                                 onChange={e => setForm(f => ({ ...f, cost: e.target.value }))}
                                 placeholder="0.00"
                             />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label>{t('training.status')}</Label>
+                        </FormField>
+                        <FormField label={t('training.status')}>
                             <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as never }))}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
@@ -187,26 +180,24 @@ function TrainingFormDialog({
                                     <SelectItem value="cancelled">{t('training.statuses.cancelled')}</SelectItem>
                                 </SelectContent>
                             </Select>
-                        </div>
+                        </FormField>
                     </div>
 
-                    <div className="grid gap-1.5">
-                        <Label>{t('training.certExpiry')}</Label>
+                    <FormField label={t('training.certExpiry')}>
                         <Input
                             type="date"
                             value={form.certificateExpiry}
                             onChange={e => setForm(f => ({ ...f, certificateExpiry: e.target.value }))}
                         />
-                    </div>
+                    </FormField>
 
-                    <div className="grid gap-1.5">
-                        <Label>{t('common.notes')}</Label>
+                    <FormField label={t('common.notes')}>
                         <Input
                             value={form.notes}
                             onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                             placeholder={t('training.notesPlaceholder')}
                         />
-                    </div>
+                    </FormField>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
@@ -224,7 +215,7 @@ function TrainingFormDialog({
 export function TrainingPage() {
     const { t } = useTranslation()
     const role = useAuthStore(s => s.user?.role) as UserRole | undefined
-    const canManage = hasPermission(role ?? 'employee', 'manage_employees')
+    const canManage = hasPermission(role ?? 'employee', 'manage_training')
 
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('all')
@@ -360,7 +351,7 @@ export function TrainingPage() {
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                                                {TYPE_LABEL[r.type] ?? r.type}
+                                                {t(`training.types.${r.type}`)}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 text-muted-foreground">

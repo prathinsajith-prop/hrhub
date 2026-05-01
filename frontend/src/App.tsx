@@ -58,6 +58,7 @@ const TrainingPage = lazy(() => import('@/pages/misc/TrainingPage').then(m => ({
 const MyTrainingPage = lazy(() => import('@/pages/my/MyTrainingPage').then(m => ({ default: m.MyTrainingPage })))
 const LoansPage = lazy(() => import('@/pages/misc/LoansPage').then(m => ({ default: m.LoansPage })))
 const MyLoansPage = lazy(() => import('@/pages/my/MyLoansPage').then(m => ({ default: m.MyLoansPage })))
+const LeaveAdjustmentsPage = lazy(() => import('@/pages/leave/LeaveAdjustmentsPage').then(m => ({ default: m.LeaveAdjustmentsPage })))
 
 function PageLoader() {
   return (
@@ -103,6 +104,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/my/training': 'training.myPageTitle',
   '/loans': 'loans.pageTitle',
   '/my/loans': 'loans.myPageTitle',
+  '/leave-adjustments': 'leaveAdjustments.title',
 }
 
 function TitleManager() {
@@ -191,6 +193,7 @@ export default function App() {
             <Route path="my/training" element={<RoleRoute routeKey="my/training"><MyTrainingPage /></RoleRoute>} />
             <Route path="loans" element={<RoleRoute routeKey="loans"><LoansPage /></RoleRoute>} />
             <Route path="my/loans" element={<RoleRoute routeKey="my/loans"><MyLoansPage /></RoleRoute>} />
+            <Route path="leave-adjustments" element={<RoleRoute routeKey="leave-adjustments"><LeaveAdjustmentsPage /></RoleRoute>} />
           </Route>
           {/* Public onboarding upload — no auth, no AppLayout */}
           <Route path="onboarding/upload/:token" element={<OnboardingUploadPage />} />

@@ -9,8 +9,8 @@ import { cn, formatDate } from '@/lib/utils'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { useCurrentEmployeeId } from '@/hooks/useCurrentEmployeeId'
 import { useLeaveRequests, useCreateLeave, useLeaveBalance, useCancelLeave } from '@/hooks/useLeave'
-import { useEmployees } from '@/hooks/useEmployees'
-import type { Employee, LeaveRequest } from '@/types'
+import { EmployeeSelect } from '@/components/shared'
+import type { LeaveRequest } from '@/types'
 import { LEAVE_TYPE_LABELS } from '@/lib/enums'
 import { LEAVE_TYPE_OPTIONS, type SelectOption } from '@/lib/options'
 import {
@@ -42,8 +42,6 @@ const STATUS_ICON: Record<string, React.FC<{ className?: string }>> = {
 
 function ApplyDialog({ employeeId, currentEmployeeId, onClose }: { employeeId: string; currentEmployeeId: string; onClose: () => void }) {
     const create = useCreateLeave()
-    const { data: empData } = useEmployees({ limit: 100, status: 'active' })
-    const employees = ((empData?.data as Employee[]) ?? []).filter((e: Employee) => e.id !== currentEmployeeId)
 
     const [form, setForm] = useState({
         leaveType: 'annual',
@@ -138,20 +136,13 @@ function ApplyDialog({ employeeId, currentEmployeeId, onClose }: { employeeId: s
                         </p>
                         <div className="space-y-1.5">
                             <Label>Handover To</Label>
-                            <Select value={form.handoverTo || '__none__'} onValueChange={v => setForm(f => ({ ...f, handoverTo: v === '__none__' ? '' : v }))}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select colleague…" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__none__">None</SelectItem>
-                                    {employees.map((e: Employee) => (
-                                        <SelectItem key={e.id} value={e.id}>
-                                            {e.fullName ?? `${e.firstName} ${e.lastName}`}
-                                            {e.designation ? ` · ${e.designation}` : ''}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <EmployeeSelect
+                                value={form.handoverTo}
+                                onValueChange={v => setForm(f => ({ ...f, handoverTo: v }))}
+                                placeholder="Select colleague…"
+                                excludeId={currentEmployeeId}
+                                clearable
+                            />
                         </div>
                         {form.handoverTo && (
                             <div className="space-y-1.5">

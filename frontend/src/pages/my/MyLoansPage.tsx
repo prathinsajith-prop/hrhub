@@ -1,17 +1,25 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { z } from 'zod'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { FormField } from '@/components/shared/FormField'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/overlays'
+import { zodToFieldErrors } from '@/lib/schemas'
 import { Banknote, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMyLoans, useCreateLoan } from '@/hooks/useLoans'
+
+const requestLoanSchema = z.object({
+    amount: z.string().min(1, 'Amount is required').refine(v => parseFloat(v) > 0, 'Amount must be greater than 0'),
+    monthlyDeduction: z.string().min(1, 'Monthly deduction is required').refine(v => parseFloat(v) > 0, 'Monthly deduction must be greater than 0'),
+    reason: z.string().optional(),
+})
 
 const STATUS_STYLE: Record<string, string> = {
     pending:   'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
@@ -26,16 +34,16 @@ function RequestLoanDialog({ onClose }: { onClose: () => void }) {
     const { t } = useTranslation()
     const create = useCreateLoan()
     const [form, setForm] = useState({ amount: '', monthlyDeduction: '', reason: '' })
+    const [errors, setErrors] = useState<Record<string, string>>({})
 
     const amount = parseFloat(form.amount || '0')
     const monthly = parseFloat(form.monthlyDeduction || '0')
     const installments = monthly > 0 && amount > 0 ? Math.ceil(amount / monthly) : null
 
     function handleSubmit() {
-        if (!form.amount || !form.monthlyDeduction) {
-            toast.error(t('common.required'))
-            return
-        }
+        const result = zodToFieldErrors(requestLoanSchema, form)
+        if (!result.ok) { setErrors(result.errors); return }
+        setErrors({})
         create.mutate(form, {
             onSuccess: () => { toast.success(t('loans.requestSubmitted')); onClose() },
             onError: () => toast.error(t('loans.saveFailed')),
@@ -50,24 +58,33 @@ function RequestLoanDialog({ onClose }: { onClose: () => void }) {
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-1.5">
-                            <Label>{t('loans.amount')} (AED) <span className="text-destructive">*</span></Label>
-                            <NumericInput maxDecimals={2} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label>{t('loans.monthlyDeduction')} (AED) <span className="text-destructive">*</span></Label>
-                            <NumericInput maxDecimals={2} value={form.monthlyDeduction} onChange={e => setForm(f => ({ ...f, monthlyDeduction: e.target.value }))} placeholder="0.00" />
-                        </div>
+                        <FormField label={`${t('loans.amount')} (AED)`} required error={errors.amount}>
+                            <NumericInput
+                                maxDecimals={2}
+                                aria-invalid={!!errors.amount}
+                                value={form.amount}
+                                onChange={e => { setForm(f => ({ ...f, amount: e.target.value })); setErrors(er => ({ ...er, amount: '' })) }}
+                                placeholder="0.00"
+                            />
+                        </FormField>
+                        <FormField label={`${t('loans.monthlyDeduction')} (AED)`} required error={errors.monthlyDeduction}>
+                            <NumericInput
+                                maxDecimals={2}
+                                aria-invalid={!!errors.monthlyDeduction}
+                                value={form.monthlyDeduction}
+                                onChange={e => { setForm(f => ({ ...f, monthlyDeduction: e.target.value })); setErrors(er => ({ ...er, monthlyDeduction: '' })) }}
+                                placeholder="0.00"
+                            />
+                        </FormField>
                     </div>
                     {installments !== null && (
                         <p className="text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-lg">
                             {t('loans.installmentCalc', { count: installments })}
                         </p>
                     )}
-                    <div className="grid gap-1.5">
-                        <Label>{t('loans.reason')}</Label>
+                    <FormField label={t('loans.reason')}>
                         <Input value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder={t('loans.reasonPlaceholder')} />
-                    </div>
+                    </FormField>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>

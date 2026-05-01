@@ -87,3 +87,77 @@ export const leaveBalancesRelations = relations(leaveBalances, ({ one }) => ({
     tenant: one(tenants, { fields: [leaveBalances.tenantId], references: [tenants.id] }),
     employee: one(employees, { fields: [leaveBalances.employeeId], references: [employees.id] }),
 }))
+
+export const leaveAdjustments = pgTable('leave_adjustments', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    employeeId: uuid('employee_id').notNull().references(() => employees.id, { onDelete: 'cascade' }),
+    leaveType: text('leave_type').notNull(),
+    year: integer('year').notNull(),
+    delta: numeric('delta', { precision: 8, scale: 2 }).notNull(),
+    reason: text('reason'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+}, (t) => ({
+    tenantIdx: index('idx_leave_adj_tenant').on(t.tenantId),
+    empIdx: index('idx_leave_adj_emp').on(t.employeeId),
+}))
+
+export const leaveAdjustmentsRelations = relations(leaveAdjustments, ({ one }) => ({
+    tenant: one(tenants, { fields: [leaveAdjustments.tenantId], references: [tenants.id] }),
+    employee: one(employees, { fields: [leaveAdjustments.employeeId], references: [employees.id] }),
+    createdByUser: one(users, { fields: [leaveAdjustments.createdBy], references: [users.id] }),
+}))
+
+export const airTickets = pgTable('air_tickets', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    employeeId: uuid('employee_id').notNull().references(() => employees.id, { onDelete: 'cascade' }),
+    year: integer('year').notNull(),
+    ticketFor: text('ticket_for').notNull().default('self')
+        .$type<'self' | 'family' | 'both'>(),
+    destination: text('destination'),
+    amount: numeric('amount', { precision: 12, scale: 2 }),
+    currency: text('currency').notNull().default('AED'),
+    status: text('status').notNull().default('pending')
+        .$type<'pending' | 'approved' | 'rejected' | 'used'>(),
+    reason: text('reason'),
+    notes: text('notes'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+}, (t) => ({
+    tenantIdx: index('idx_air_tickets_tenant').on(t.tenantId),
+    empIdx: index('idx_air_tickets_emp').on(t.employeeId),
+}))
+
+export const airTicketsRelations = relations(airTickets, ({ one }) => ({
+    tenant: one(tenants, { fields: [airTickets.tenantId], references: [tenants.id] }),
+    employee: one(employees, { fields: [airTickets.employeeId], references: [employees.id] }),
+    createdByUser: one(users, { fields: [airTickets.createdBy], references: [users.id] }),
+}))
+
+export const leaveOffsets = pgTable('leave_offsets', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    employeeId: uuid('employee_id').notNull().references(() => employees.id, { onDelete: 'cascade' }),
+    workDate: date('work_date').notNull(),
+    days: numeric('days', { precision: 4, scale: 2 }).notNull().default('1'),
+    reason: text('reason'),
+    status: text('status').notNull().default('pending')
+        .$type<'pending' | 'approved' | 'rejected'>(),
+    notes: text('notes'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+}, (t) => ({
+    tenantIdx: index('idx_leave_offsets_tenant').on(t.tenantId),
+    empIdx: index('idx_leave_offsets_emp').on(t.employeeId),
+}))
+
+export const leaveOffsetsRelations = relations(leaveOffsets, ({ one }) => ({
+    tenant: one(tenants, { fields: [leaveOffsets.tenantId], references: [tenants.id] }),
+    employee: one(employees, { fields: [leaveOffsets.employeeId], references: [employees.id] }),
+    createdByUser: one(users, { fields: [leaveOffsets.createdBy], references: [users.id] }),
+}))

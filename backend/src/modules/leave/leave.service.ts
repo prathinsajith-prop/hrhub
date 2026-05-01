@@ -2,8 +2,9 @@ import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns, aliased
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { leaveRequests, leavePolicies, leaveBalances, publicHolidays, attendanceRecords } from '../../db/schema/index.js'
+import { leaveRequests, leavePolicies, leaveBalances, publicHolidays, attendanceRecords, leaveAdjustments, airTickets, leaveOffsets } from '../../db/schema/index.js'
 import { employees } from '../../db/schema/employees.js'
+import { users } from '../../db/schema/users.js'
 import { sendEmail } from '../../plugins/email.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
@@ -576,7 +577,7 @@ export async function rolloverYear(tenantId: string, fromYear: number) {
     return { fromYear, toYear: fromYear + 1, closed, opened }
 }
 
-export async function adjustLeaveBalance(tenantId: string, employeeId: string, leaveType: string, year: number, delta: number, _reason?: string) {
+export async function adjustLeaveBalance(tenantId: string, employeeId: string, leaveType: string, year: number, delta: number, reason?: string, createdBy?: string) {
     const [existing] = await db.select().from(leaveBalances).where(and(
         eq(leaveBalances.tenantId, tenantId),
         eq(leaveBalances.employeeId, employeeId),
@@ -592,6 +593,16 @@ export async function adjustLeaveBalance(tenantId: string, employeeId: string, l
             tenantId, employeeId, leaveType, year, adjustment: String(newAdj),
         })
     }
+    // Record the adjustment for audit trail
+    await db.insert(leaveAdjustments).values({
+        tenantId,
+        employeeId,
+        leaveType,
+        year,
+        delta: String(delta),
+        reason: reason ?? null,
+        createdBy: createdBy ?? null,
+    })
     return getLeaveBalance(tenantId, employeeId, year)
 }
 
@@ -604,4 +615,228 @@ export async function getLeaveRequestOwnerDept(tenantId: string, leaveId: string
         .where(and(eq(leaveRequests.id, leaveId), eq(leaveRequests.tenantId, tenantId)))
         .limit(1)
     return row?.department ?? null
+}
+
+// ─── Leave Adjustments ───────────────────────────────────────────────────────
+
+const createdByUser = db.select({ id: users.id, name: users.name }).from(users).as('created_by_user')
+
+export async function listLeaveAdjustments(tenantId: string, params: { employeeId?: string; limit: number; offset: number }) {
+    const { employeeId, limit, offset } = params
+    const conditions = [eq(leaveAdjustments.tenantId, tenantId), isNull(leaveAdjustments.deletedAt)]
+    if (employeeId) conditions.push(eq(leaveAdjustments.employeeId, employeeId))
+
+    const rows = await db.select({
+        id: leaveAdjustments.id,
+        tenantId: leaveAdjustments.tenantId,
+        employeeId: leaveAdjustments.employeeId,
+        leaveType: leaveAdjustments.leaveType,
+        year: leaveAdjustments.year,
+        delta: leaveAdjustments.delta,
+        reason: leaveAdjustments.reason,
+        createdBy: leaveAdjustments.createdBy,
+        createdAt: leaveAdjustments.createdAt,
+        employeeName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.lastName}, '')`.as('employee_name'),
+        createdByName: sql<string | null>`${createdByUser.name}`.as('created_by_name'),
+        totalCount: sql<number>`COUNT(*) OVER()`.as('total_count'),
+    })
+        .from(leaveAdjustments)
+        .leftJoin(employees, eq(employees.id, leaveAdjustments.employeeId))
+        .leftJoin(createdByUser, eq(createdByUser.id, leaveAdjustments.createdBy))
+        .where(and(...conditions))
+        .orderBy(desc(leaveAdjustments.createdAt))
+        .limit(limit)
+        .offset(offset)
+
+    const total = rows.length > 0 ? Number(rows[0].totalCount ?? 0) : 0
+    const data = rows.map(({ totalCount: _tc, ...row }) => row)
+    return { data, total, limit, offset, hasMore: offset + limit < total }
+}
+
+export async function deleteLeaveAdjustment(tenantId: string, id: string) {
+    const [adj] = await db.select()
+        .from(leaveAdjustments)
+        .where(and(eq(leaveAdjustments.id, id), eq(leaveAdjustments.tenantId, tenantId), isNull(leaveAdjustments.deletedAt)))
+        .limit(1)
+    if (!adj) return null
+    // Reverse the balance effect atomically and soft-delete in a single transaction.
+    // Atomic SQL avoids a read-modify-write race if two HR managers delete concurrently.
+    const [deleted] = await db.transaction(async (tx) => {
+        await tx.update(leaveBalances)
+            .set({
+                adjustment: sql`CAST(adjustment AS NUMERIC) - ${Number(adj.delta)}`,
+                updatedAt: new Date(),
+            })
+            .where(and(
+                eq(leaveBalances.tenantId, tenantId),
+                eq(leaveBalances.employeeId, adj.employeeId),
+                eq(leaveBalances.leaveType, adj.leaveType),
+                eq(leaveBalances.year, adj.year),
+            ))
+        return tx.update(leaveAdjustments)
+            .set({ deletedAt: new Date() })
+            .where(and(eq(leaveAdjustments.id, id), eq(leaveAdjustments.tenantId, tenantId)))
+            .returning()
+    })
+    return deleted ?? null
+}
+
+// ─── Air Tickets ─────────────────────────────────────────────────────────────
+
+export async function listAirTickets(tenantId: string, params: { employeeId?: string; status?: string; limit: number; offset: number }) {
+    const { employeeId, status, limit, offset } = params
+    const conditions = [eq(airTickets.tenantId, tenantId), isNull(airTickets.deletedAt)]
+    if (employeeId) conditions.push(eq(airTickets.employeeId, employeeId))
+    if (status) conditions.push(eq(airTickets.status, status as never))
+
+    const rows = await db.select({
+        id: airTickets.id,
+        tenantId: airTickets.tenantId,
+        employeeId: airTickets.employeeId,
+        year: airTickets.year,
+        ticketFor: airTickets.ticketFor,
+        destination: airTickets.destination,
+        amount: airTickets.amount,
+        currency: airTickets.currency,
+        status: airTickets.status,
+        reason: airTickets.reason,
+        notes: airTickets.notes,
+        createdBy: airTickets.createdBy,
+        createdAt: airTickets.createdAt,
+        employeeName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.lastName}, '')`.as('employee_name'),
+        createdByName: sql<string | null>`${createdByUser.name}`.as('created_by_name'),
+        totalCount: sql<number>`COUNT(*) OVER()`.as('total_count'),
+    })
+        .from(airTickets)
+        .leftJoin(employees, eq(employees.id, airTickets.employeeId))
+        .leftJoin(createdByUser, eq(createdByUser.id, airTickets.createdBy))
+        .where(and(...conditions))
+        .orderBy(desc(airTickets.createdAt))
+        .limit(limit)
+        .offset(offset)
+
+    const total = rows.length > 0 ? Number(rows[0].totalCount ?? 0) : 0
+    const data = rows.map(({ totalCount: _tc, ...row }) => row)
+    return { data, total, limit, offset, hasMore: offset + limit < total }
+}
+
+export async function createAirTicket(tenantId: string, data: {
+    employeeId: string; year: number; ticketFor: 'self' | 'family' | 'both'; destination?: string;
+    amount?: number; currency?: string; reason?: string; notes?: string; createdBy?: string
+}) {
+    const [row] = await db.insert(airTickets).values({
+        tenantId,
+        employeeId: data.employeeId,
+        year: data.year,
+        ticketFor: data.ticketFor,
+        destination: data.destination ?? null,
+        amount: data.amount != null ? String(data.amount) : null,
+        currency: data.currency ?? 'AED',
+        reason: data.reason ?? null,
+        notes: data.notes ?? null,
+        createdBy: data.createdBy ?? null,
+    }).returning()
+    return row
+}
+
+export async function updateAirTicket(tenantId: string, id: string, data: Partial<{
+    ticketFor: 'self' | 'family' | 'both'; destination: string; amount: number;
+    currency: string; status: 'pending' | 'approved' | 'rejected' | 'used'; reason: string; notes: string
+}>) {
+    const set: Record<string, unknown> = {}
+    if (data.ticketFor !== undefined) set.ticketFor = data.ticketFor
+    if (data.destination !== undefined) set.destination = data.destination
+    if (data.amount !== undefined) set.amount = String(data.amount)
+    if (data.currency !== undefined) set.currency = data.currency
+    if (data.status !== undefined) set.status = data.status
+    if (data.reason !== undefined) set.reason = data.reason
+    if (data.notes !== undefined) set.notes = data.notes
+    if (Object.keys(set).length === 0) return null
+    const [row] = await db.update(airTickets).set(set as never)
+        .where(and(eq(airTickets.id, id), eq(airTickets.tenantId, tenantId), isNull(airTickets.deletedAt)))
+        .returning()
+    return row ?? null
+}
+
+export async function deleteAirTicket(tenantId: string, id: string) {
+    const [row] = await db.update(airTickets)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(airTickets.id, id), eq(airTickets.tenantId, tenantId), isNull(airTickets.deletedAt)))
+        .returning()
+    return row ?? null
+}
+
+// ─── Leave Offsets ───────────────────────────────────────────────────────────
+
+export async function listLeaveOffsets(tenantId: string, params: { employeeId?: string; status?: string; limit: number; offset: number }) {
+    const { employeeId, status, limit, offset } = params
+    const conditions = [eq(leaveOffsets.tenantId, tenantId), isNull(leaveOffsets.deletedAt)]
+    if (employeeId) conditions.push(eq(leaveOffsets.employeeId, employeeId))
+    if (status) conditions.push(eq(leaveOffsets.status, status as never))
+
+    const rows = await db.select({
+        id: leaveOffsets.id,
+        tenantId: leaveOffsets.tenantId,
+        employeeId: leaveOffsets.employeeId,
+        workDate: leaveOffsets.workDate,
+        days: leaveOffsets.days,
+        reason: leaveOffsets.reason,
+        status: leaveOffsets.status,
+        notes: leaveOffsets.notes,
+        createdBy: leaveOffsets.createdBy,
+        createdAt: leaveOffsets.createdAt,
+        employeeName: sql<string>`COALESCE(${employees.firstName} || ' ' || ${employees.lastName}, '')`.as('employee_name'),
+        createdByName: sql<string | null>`${createdByUser.name}`.as('created_by_name'),
+        totalCount: sql<number>`COUNT(*) OVER()`.as('total_count'),
+    })
+        .from(leaveOffsets)
+        .leftJoin(employees, eq(employees.id, leaveOffsets.employeeId))
+        .leftJoin(createdByUser, eq(createdByUser.id, leaveOffsets.createdBy))
+        .where(and(...conditions))
+        .orderBy(desc(leaveOffsets.createdAt))
+        .limit(limit)
+        .offset(offset)
+
+    const total = rows.length > 0 ? Number(rows[0].totalCount ?? 0) : 0
+    const data = rows.map(({ totalCount: _tc, ...row }) => row)
+    return { data, total, limit, offset, hasMore: offset + limit < total }
+}
+
+export async function createLeaveOffset(tenantId: string, data: {
+    employeeId: string; workDate: string; days?: number; reason?: string; notes?: string; createdBy?: string
+}) {
+    const [row] = await db.insert(leaveOffsets).values({
+        tenantId,
+        employeeId: data.employeeId,
+        workDate: data.workDate,
+        days: data.days != null ? String(data.days) : '1',
+        reason: data.reason ?? null,
+        notes: data.notes ?? null,
+        createdBy: data.createdBy ?? null,
+    }).returning()
+    return row
+}
+
+export async function updateLeaveOffset(tenantId: string, id: string, data: Partial<{
+    workDate: string; days: number; reason: string; status: 'pending' | 'approved' | 'rejected'; notes: string
+}>) {
+    const set: Record<string, unknown> = {}
+    if (data.workDate !== undefined) set.workDate = data.workDate
+    if (data.days !== undefined) set.days = String(data.days)
+    if (data.reason !== undefined) set.reason = data.reason
+    if (data.status !== undefined) set.status = data.status
+    if (data.notes !== undefined) set.notes = data.notes
+    if (Object.keys(set).length === 0) return null
+    const [row] = await db.update(leaveOffsets).set(set as never)
+        .where(and(eq(leaveOffsets.id, id), eq(leaveOffsets.tenantId, tenantId), isNull(leaveOffsets.deletedAt)))
+        .returning()
+    return row ?? null
+}
+
+export async function deleteLeaveOffset(tenantId: string, id: string) {
+    const [row] = await db.update(leaveOffsets)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(leaveOffsets.id, id), eq(leaveOffsets.tenantId, tenantId), isNull(leaveOffsets.deletedAt)))
+        .returning()
+    return row ?? null
 }

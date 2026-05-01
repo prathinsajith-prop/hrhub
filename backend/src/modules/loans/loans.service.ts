@@ -50,7 +50,11 @@ export async function listLoans(
             totalOutstanding: sql<number>`COALESCE(SUM(CAST(remaining_balance AS NUMERIC)) FILTER (WHERE status = 'active'), 0)`.as('totalOutstanding'),
         })
         .from(employeeLoans)
-        .where(and(eq(employeeLoans.tenantId, tenantId), isNull(employeeLoans.deletedAt)))
+        .where(and(
+            eq(employeeLoans.tenantId, tenantId),
+            isNull(employeeLoans.deletedAt),
+            ...(employeeId ? [eq(employeeLoans.employeeId, employeeId)] : []),
+        ))
 
     return {
         data: rows.map(r => { const { total: _, ...rest } = r; return rest }),
@@ -87,7 +91,7 @@ export async function getLoan(tenantId: string, id: string) {
 export async function deleteLoan(tenantId: string, id: string) {
     const [row] = await db
         .update(employeeLoans)
-        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .set(withTimestamp({ deletedAt: new Date() }))
         .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
         .returning()
     return row ?? null
@@ -125,7 +129,7 @@ export async function approveLoan(
     const [existing] = await db
         .select()
         .from(employeeLoans)
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id)))
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
     if (!existing) throw Object.assign(new Error('Loan not found'), { statusCode: 404 })
     if (existing.status !== 'pending')
         throw Object.assign(new Error('Only pending loans can be approved'), { statusCode: 409 })
@@ -138,7 +142,7 @@ export async function approveLoan(
             approvedAt: new Date(),
             startDate: startDate ?? new Date().toISOString().slice(0, 10),
         }))
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id)))
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
         .returning()
     return updated
 }
@@ -147,7 +151,7 @@ export async function rejectLoan(tenantId: string, id: string, notes?: string) {
     const [existing] = await db
         .select()
         .from(employeeLoans)
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id)))
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
     if (!existing) throw Object.assign(new Error('Loan not found'), { statusCode: 404 })
     if (existing.status !== 'pending')
         throw Object.assign(new Error('Only pending loans can be rejected'), { statusCode: 409 })
@@ -155,7 +159,7 @@ export async function rejectLoan(tenantId: string, id: string, notes?: string) {
     const [updated] = await db
         .update(employeeLoans)
         .set(withTimestamp({ status: 'rejected', notes: notes ?? existing.notes }))
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id)))
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
         .returning()
     return updated
 }
@@ -164,7 +168,7 @@ export async function recordLoanPayment(tenantId: string, id: string) {
     const [existing] = await db
         .select()
         .from(employeeLoans)
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id)))
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
     if (!existing) throw Object.assign(new Error('Loan not found'), { statusCode: 404 })
     if (existing.status !== 'active')
         throw Object.assign(new Error('Loan is not active'), { statusCode: 409 })
@@ -182,7 +186,7 @@ export async function recordLoanPayment(tenantId: string, id: string) {
             remainingBalance: String(newBalance),
             status: newStatus,
         }))
-        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id)))
+        .where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.id, id), isNull(employeeLoans.deletedAt)))
         .returning()
     return updated
 }

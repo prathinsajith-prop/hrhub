@@ -49,7 +49,7 @@ export async function updateInterviewStatus(tenantId: string, id: string, data: 
 }) {
     const [interview] = await db.update(interviews)
         .set({ ...data, updatedAt: new Date() })
-        .where(and(eq(interviews.id, id), eq(interviews.tenantId, tenantId)))
+        .where(and(eq(interviews.id, id), eq(interviews.tenantId, tenantId), isNull(interviews.deletedAt)))
         .returning()
     return interview
 }

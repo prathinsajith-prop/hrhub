@@ -31,7 +31,8 @@
     "leavePolicies": "سياسات الإجازات",
     "notifications": "الإشعارات",
     "training": "التدريب والتطوير",
-    "loans": "القروض والسلف"
+    "loans": "القروض والسلف",
+    "leaveAdjustments": "تعديلات الإجازات"
   },
   "auth": {
     "signIn": "تسجيل الدخول",
@@ -178,7 +179,18 @@
     "onboardingDesc": "حالة إلحاق الموظفين",
     "activeChecklists": "قوائم التحقق النشطة",
     "overdueSteps": "الخطوات المتأخرة",
-    "noActiveVisaCases": "لا توجد حالات تأشيرة نشطة"
+    "noActiveVisaCases": "لا توجد حالات تأشيرة نشطة",
+    "upcomingBirthdays": "أعياد الميلاد",
+    "noBirthdays": "لا توجد أعياد ميلاد هذا الشهر",
+    "workAnniversaries": "سنوات الخدمة",
+    "noAnniversaries": "لا توجد ذكرى سنوية هذا الشهر",
+    "genderBreakdown": "الموظفون حسب الجنس",
+    "maritalBreakdown": "الموظفون حسب الحالة الاجتماعية",
+    "birthdayDay": "اليوم",
+    "birthdayName": "الاسم",
+    "anniversaryJoiningYear": "سنة الانضمام",
+    "anniversaryYears": "السنوات",
+    "allDepartments": "الكل"
   },
   "employees": {
     "title": "الموظفون",
@@ -194,6 +206,18 @@
     "joinDate": "تاريخ الانضمام",
     "exitDate": "تاريخ المغادرة",
     "gender": "الجنس",
+    "genderValues": {
+      "male": "ذكر",
+      "female": "أنثى",
+      "unknown": "غير محدد"
+    },
+    "maritalValues": {
+      "married": "متزوج",
+      "single": "أعزب",
+      "widowed": "أرمل",
+      "divorced": "مطلق",
+      "unknown": "غير محدد"
+    },
     "nationality": "الجنسية",
     "salary": "الراتب",
     "employmentType": "نوع التوظيف",
@@ -895,6 +919,96 @@
       "pending": "بانتظار الموافقة",
       "active": "القروض النشطة",
       "outstanding": "إجمالي المتبقي"
+    }
+  },
+  "leaveAdjustments": {
+    "title": "تعديلات الإجازات",
+    "description": "إدارة استحقاقات تذاكر السفر الجوي وتعديلات رصيد الإجازات وسجلات الإجازات التعويضية.",
+    "tabAirTicket": "تذكرة الطيران",
+    "tabLeaveAdjustment": "تعديل الإجازة",
+    "tabOffsetAdjustment": "تعديل الإجازة التعويضية",
+    "days": "أيام",
+    "table": {
+      "employee": "الموظف",
+      "leaveType": "نوع الإجازة",
+      "delta": "التعديل",
+      "reason": "السبب",
+      "createdBy": "أنشأ بواسطة",
+      "createdAt": "تاريخ الإنشاء"
+    },
+    "adjustment": {
+      "desc": "إضافة أو خصم أيام من رصيد إجازات الموظف يدوياً.",
+      "newAdjustment": "+ تعديل إجازة",
+      "employee": "الموظف",
+      "employeeRequired": "الموظف مطلوب",
+      "leaveType": "نوع الإجازة",
+      "year": "السنة",
+      "yearRequired": "السنة مطلوبة",
+      "delta": "الأيام المراد تعديلها",
+      "deltaRequired": "يجب أن تكون الأيام عدداً غير صفري",
+      "deltaPlaceholder": "مثال: 2 أو -1.5",
+      "deltaHint": "موجب = إضافة أيام، سالب = خصم أيام",
+      "reason": "السبب",
+      "reasonPlaceholder": "مثال: تصحيح إجازة سنوية",
+      "noAdjustments": "لا توجد تعديلات إجازات بعد",
+      "created": "تم تطبيق تعديل الإجازة",
+      "deleted": "تم عكس تعديل الإجازة",
+      "deleteFailed": "فشل عكس التعديل",
+      "saveFailed": "فشل تطبيق التعديل",
+      "deleteTitle": "عكس التعديل",
+      "deleteDesc": "سيؤدي هذا إلى عكس تغيير الرصيد. هل أنت متأكد؟"
+    },
+    "airTicket": {
+      "desc": "تتبع استحقاقات تذاكر الطيران للموظفين وفق قانون العمل الإماراتي.",
+      "newAirTicket": "+ تذكرة طيران",
+      "editTitle": "تعديل تذكرة الطيران",
+      "ticketFor": "التذكرة لـ",
+      "forSelf": "الموظف",
+      "forFamily": "الأسرة",
+      "forBoth": "الموظف والأسرة",
+      "destination": "الوجهة",
+      "destinationPlaceholder": "مثال: كولومبو، مانيلا",
+      "amount": "المبلغ",
+      "reasonPlaceholder": "سبب استحقاق التذكرة…",
+      "employeeRequired": "الموظف مطلوب",
+      "noTickets": "لا توجد سجلات تذاكر طيران بعد",
+      "created": "تم إنشاء سجل تذكرة الطيران",
+      "updated": "تم تحديث سجل تذكرة الطيران",
+      "deleted": "تم حذف سجل تذكرة الطيران",
+      "deleteFailed": "فشل حذف تذكرة الطيران",
+      "saveFailed": "فشل حفظ تذكرة الطيران",
+      "deleteTitle": "حذف تذكرة الطيران",
+      "deleteDesc": "هل أنت متأكد من حذف سجل تذكرة الطيران هذا؟",
+      "status": {
+        "pending": "قيد الانتظار",
+        "approved": "موافق عليه",
+        "rejected": "مرفوض",
+        "used": "مستخدم"
+      }
+    },
+    "offset": {
+      "desc": "تسجيل الإجازات التعويضية للموظفين الذين عملوا في أيام العطل الرسمية أو عطل نهاية الأسبوع.",
+      "newOffset": "+ تعديل تعويضي",
+      "editTitle": "تعديل الإجازة التعويضية",
+      "workDate": "تاريخ العمل",
+      "workDateRequired": "تاريخ العمل مطلوب",
+      "days": "الأيام",
+      "daysRequired": "يجب أن تكون الأيام أكبر من صفر",
+      "reasonPlaceholder": "مثال: عمل خلال إجازة العيد",
+      "employeeRequired": "الموظف مطلوب",
+      "noOffsets": "لا توجد تعديلات تعويضية بعد",
+      "created": "تم إنشاء التعديل التعويضي",
+      "updated": "تم تحديث التعديل التعويضي",
+      "deleted": "تم حذف التعديل التعويضي",
+      "deleteFailed": "فشل حذف التعديل التعويضي",
+      "saveFailed": "فشل حفظ التعديل التعويضي",
+      "deleteTitle": "حذف التعديل التعويضي",
+      "deleteDesc": "هل أنت متأكد من حذف هذا التعديل التعويضي؟",
+      "status": {
+        "pending": "قيد الانتظار",
+        "approved": "موافق عليه",
+        "rejected": "مرفوض"
+      }
     }
   }
 }

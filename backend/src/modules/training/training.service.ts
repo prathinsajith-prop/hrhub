@@ -42,7 +42,9 @@ export async function listTraining(
 
     const total = rows.length > 0 ? Number(rows[0]!.total) : 0
 
-    // KPI summary
+    // KPI summary — scoped to the same employee filter so non-HR callers don't see company-wide stats
+    const kpiConditions = [eq(trainingRecords.tenantId, tenantId), isNull(trainingRecords.deletedAt)]
+    if (employeeId) kpiConditions.push(eq(trainingRecords.employeeId, employeeId))
     const [kpi] = await db
         .select({
             total: sql<number>`COUNT(*)`.as('total'),
@@ -52,7 +54,7 @@ export async function listTraining(
             totalCost: sql<number>`COALESCE(SUM(CAST(cost AS NUMERIC)), 0)`.as('totalCost'),
         })
         .from(trainingRecords)
-        .where(and(eq(trainingRecords.tenantId, tenantId), isNull(trainingRecords.deletedAt)))
+        .where(and(...kpiConditions))
 
     return {
         data: rows.map(r => { const { total: _, ...rest } = r; return rest }),

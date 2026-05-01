@@ -2,7 +2,7 @@ import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog'
 import * as ToastPrimitive from '@radix-ui/react-toast'
-import { X, AlertTriangle, CheckCircle2, Info, XCircle } from 'lucide-react'
+import { X, AlertTriangle, CheckCircle2, Info, XCircle, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from './button'
 
@@ -173,7 +173,7 @@ const AlertDialogCancel = React.forwardRef<
 ))
 AlertDialogCancel.displayName = AlertDialogPrimitive.Cancel.displayName
 
-// Convenience component for danger confirmations
+// Convenience component for confirmations
 interface ConfirmDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -182,13 +182,14 @@ interface ConfirmDialogProps {
   confirmLabel?: string
   cancelLabel?: string
   onConfirm: () => void
-  variant?: 'destructive' | 'warning' | 'success'
+  variant?: 'destructive' | 'warning' | 'success' | 'info'
 }
 
 const CONFIRM_DIALOG_STYLES = {
-  destructive: { bg: 'bg-red-100',     iconClass: 'text-red-600',     Icon: AlertTriangle,  btn: 'destructive' as const },
-  warning:     { bg: 'bg-amber-100',   iconClass: 'text-amber-600',   Icon: AlertTriangle,  btn: 'warning' as const },
-  success:     { bg: 'bg-emerald-100', iconClass: 'text-emerald-600', Icon: CheckCircle2,   btn: 'success' as const },
+  destructive: { bg: 'bg-red-50',      iconClass: 'text-red-600',     Icon: AlertTriangle,  btn: 'destructive' as const },
+  warning:     { bg: 'bg-amber-50',    iconClass: 'text-amber-600',   Icon: AlertTriangle,  btn: 'warning' as const },
+  success:     { bg: 'bg-emerald-50',  iconClass: 'text-emerald-600', Icon: ShieldCheck,    btn: 'success' as const },
+  info:        { bg: 'bg-blue-50',     iconClass: 'text-blue-600',    Icon: Info,           btn: 'info' as const },
 }
 
 function ConfirmDialog({
@@ -200,16 +201,18 @@ function ConfirmDialog({
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
-        <AlertDialogHeader>
-          <div className="flex items-center gap-3">
-            <div className={cn('flex h-10 w-10 items-center justify-center rounded-full', bg)}>
+        <AlertDialogHeader className="p-6 pb-5">
+          <div className="flex items-start gap-4">
+            <div className={cn('shrink-0 flex h-10 w-10 items-center justify-center rounded-full mt-0.5', bg)}>
               <Icon className={cn('h-5 w-5', iconClass)} />
             </div>
-            <AlertDialogTitle>{title}</AlertDialogTitle>
+            <div className="flex-1 min-w-0">
+              <AlertDialogTitle className="leading-snug">{title}</AlertDialogTitle>
+              <AlertDialogDescription className="mt-1.5">{description}</AlertDialogDescription>
+            </div>
           </div>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="border-t border-border bg-muted/30 px-6 py-4">
           <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction onClick={onConfirm} className={cn(buttonVariants({ variant: btn }))}>
             {confirmLabel}

@@ -57,7 +57,7 @@ export async function updateReview(tenantId: string, id: string, data: Partial<{
 }>) {
     const [review] = await db.update(performanceReviews)
         .set({ ...data, updatedAt: new Date() })
-        .where(and(eq(performanceReviews.id, id), eq(performanceReviews.tenantId, tenantId)))
+        .where(and(eq(performanceReviews.id, id), eq(performanceReviews.tenantId, tenantId), isNull(performanceReviews.deletedAt)))
         .returning()
     return review
 }

@@ -31,7 +31,8 @@
     "leavePolicies": "Leave Policies",
     "notifications": "Notifications",
     "training": "Training & Development",
-    "loans": "Loans & Advances"
+    "loans": "Loans & Advances",
+    "leaveAdjustments": "Leave Adjustments"
   },
   "auth": {
     "signIn": "Sign In",
@@ -178,7 +179,18 @@
     "onboardingDesc": "Employee onboarding status",
     "activeChecklists": "Active Checklists",
     "overdueSteps": "Overdue Steps",
-    "noActiveVisaCases": "No active visa cases"
+    "noActiveVisaCases": "No active visa cases",
+    "upcomingBirthdays": "Birthdays",
+    "noBirthdays": "No birthdays this month",
+    "workAnniversaries": "Years Completed",
+    "noAnniversaries": "No anniversaries this month",
+    "genderBreakdown": "Employees by Gender",
+    "maritalBreakdown": "Employees by Marital Status",
+    "birthdayDay": "Day",
+    "birthdayName": "Name",
+    "anniversaryJoiningYear": "Joining Year",
+    "anniversaryYears": "Years",
+    "allDepartments": "All"
   },
   "employees": {
     "title": "Employees",
@@ -194,6 +206,18 @@
     "joinDate": "Join Date",
     "exitDate": "Exit Date",
     "gender": "Gender",
+    "genderValues": {
+      "male": "Male",
+      "female": "Female",
+      "unknown": "Not specified"
+    },
+    "maritalValues": {
+      "married": "Married",
+      "single": "Single",
+      "widowed": "Widowed",
+      "divorced": "Divorced",
+      "unknown": "Not specified"
+    },
     "nationality": "Nationality",
     "salary": "Salary",
     "employmentType": "Employment Type",
@@ -895,6 +919,96 @@
       "pending": "Pending Approval",
       "active": "Active Loans",
       "outstanding": "Total Outstanding"
+    }
+  },
+  "leaveAdjustments": {
+    "title": "Leave Adjustments",
+    "description": "Manage air ticket entitlements, manual leave balance adjustments, and compensatory leave records.",
+    "tabAirTicket": "Air Ticket",
+    "tabLeaveAdjustment": "Leave Adjustment",
+    "tabOffsetAdjustment": "Offset Adjustment",
+    "days": "days",
+    "table": {
+      "employee": "Employee",
+      "leaveType": "Leave Type",
+      "delta": "Adjustment",
+      "reason": "Reason",
+      "createdBy": "Created By",
+      "createdAt": "Created At"
+    },
+    "adjustment": {
+      "desc": "Manually add or deduct days from an employee's leave balance.",
+      "newAdjustment": "+ Leave Adjustment",
+      "employee": "Employee",
+      "employeeRequired": "Employee is required",
+      "leaveType": "Leave Type",
+      "year": "Year",
+      "yearRequired": "Year is required",
+      "delta": "Days to Adjust",
+      "deltaRequired": "Days must be a non-zero number",
+      "deltaPlaceholder": "e.g. 2 or -1.5",
+      "deltaHint": "Positive = add days, negative = deduct days",
+      "reason": "Reason",
+      "reasonPlaceholder": "e.g. Annual leave correction",
+      "noAdjustments": "No leave adjustments yet",
+      "created": "Leave adjustment applied",
+      "deleted": "Leave adjustment reversed",
+      "deleteFailed": "Failed to reverse adjustment",
+      "saveFailed": "Failed to apply adjustment",
+      "deleteTitle": "Reverse Adjustment",
+      "deleteDesc": "This will reverse the balance change. Are you sure?"
+    },
+    "airTicket": {
+      "desc": "Track employee air ticket entitlements under UAE labour law.",
+      "newAirTicket": "+ Air Ticket",
+      "editTitle": "Edit Air Ticket",
+      "ticketFor": "Ticket For",
+      "forSelf": "Self",
+      "forFamily": "Family",
+      "forBoth": "Self & Family",
+      "destination": "Destination",
+      "destinationPlaceholder": "e.g. Colombo, Manila",
+      "amount": "Amount",
+      "reasonPlaceholder": "Reason for ticket entitlement…",
+      "employeeRequired": "Employee is required",
+      "noTickets": "No air ticket records yet",
+      "created": "Air ticket record created",
+      "updated": "Air ticket record updated",
+      "deleted": "Air ticket record deleted",
+      "deleteFailed": "Failed to delete air ticket",
+      "saveFailed": "Failed to save air ticket",
+      "deleteTitle": "Delete Air Ticket",
+      "deleteDesc": "Are you sure you want to delete this air ticket record?",
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "used": "Used"
+      }
+    },
+    "offset": {
+      "desc": "Record compensatory leave for employees who worked on public holidays or weekends.",
+      "newOffset": "+ Offset Adjustment",
+      "editTitle": "Edit Offset Adjustment",
+      "workDate": "Work Date",
+      "workDateRequired": "Work date is required",
+      "days": "Days",
+      "daysRequired": "Days must be greater than 0",
+      "reasonPlaceholder": "e.g. Worked during Eid holiday",
+      "employeeRequired": "Employee is required",
+      "noOffsets": "No offset adjustments yet",
+      "created": "Offset adjustment created",
+      "updated": "Offset adjustment updated",
+      "deleted": "Offset adjustment deleted",
+      "deleteFailed": "Failed to delete offset",
+      "saveFailed": "Failed to save offset",
+      "deleteTitle": "Delete Offset Adjustment",
+      "deleteDesc": "Are you sure you want to delete this offset adjustment?",
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "rejected": "Rejected"
+      }
     }
   }
 }
