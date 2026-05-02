@@ -90,6 +90,7 @@ const employeeBaseSchema = z.object({
     homeCountryAddress: z.string().max(500).optional(),
     visaNumber: z.string().max(50).optional(),
     visaIssueDate: dateField,
+    visaExpiry: dateField,
     visaType: z.enum(['employment', 'investor', 'dependent', 'mission']).optional(),
     emiratesIdExpiry: dateField,
     sponsoringEntity: z.string().max(200).optional(),

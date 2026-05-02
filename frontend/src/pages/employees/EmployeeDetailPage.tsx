@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { labelFor } from '@/lib/enums'
+import { labelFor, VISA_TYPE_LABELS } from '@/lib/enums'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, User, Briefcase, Plane, FileText, CreditCard, Star,
@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { useEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision } from '@/hooks/useEmployees'
+import { useEmployee, useUpdateEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision } from '@/hooks/useEmployees'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { useEmployeeTeams } from '@/hooks/useTeams'
 import { useDocuments } from '@/hooks/useDocuments'
@@ -539,9 +539,16 @@ export function EmployeeDetailPage() {
   const { data: transfersData, isLoading: transfersLoading } = useEmployeeTransfers(id)
 
   const uploadAvatar = useUploadEmployeeAvatar(id!)
+  const updateEmployee = useUpdateEmployee(id!)
   const [editOpen, setEditOpen] = React.useState(false)
   const [inviteOpen, setInviteOpen] = React.useState(false)
   const [viewDoc, setViewDoc] = React.useState<{ id: string; fileName?: string } | null>(null)
+  const [visaEditOpen, setVisaEditOpen] = React.useState(false)
+  const [visaForm, setVisaForm] = React.useState({
+    visaType: '', visaNumber: '', visaIssueDate: '', visaExpiry: '',
+    sponsoringEntity: '', emiratesId: '', emiratesIdExpiry: '',
+    passportNo: '', passportExpiry: '', labourCardNumber: '',
+  })
   const [changeSalaryOpen, setChangeSalaryOpen] = React.useState(false)
   const [transferOpen, setTransferOpen] = React.useState(false)
   const [createReviewOpen, setCreateReviewOpen] = React.useState(false)
@@ -913,34 +920,144 @@ export function EmployeeDetailPage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <CardTitle className="text-base">Visa &amp; Immigration</CardTitle>
-                  {visaDays !== null && (
-                    <Badge
-                      variant={visaDays < 30 ? 'destructive' : visaDays < 90 ? 'warning' : 'success'}
-                      className="text-xs"
+                  <div className="flex items-center gap-3">
+                    <CardTitle className="text-base">Visa &amp; Immigration</CardTitle>
+                    {visaDays !== null && (
+                      <Badge
+                        variant={visaDays < 30 ? 'destructive' : visaDays < 90 ? 'warning' : 'success'}
+                        className="text-xs"
+                      >
+                        {visaDays < 0 ? 'Visa Expired' : visaDays < 30 ? `Expiring in ${visaDays}d` : `Valid — ${visaDays}d left`}
+                      </Badge>
+                    )}
+                  </div>
+                  {canManage && !visaEditOpen && (
+                    <Button
+                      size="sm" variant="outline"
+                      leftIcon={<Edit2 className="h-3.5 w-3.5" />}
+                      onClick={() => {
+                        setVisaForm({
+                          visaType: e.visaType ?? '',
+                          visaNumber: e.visaNumber ?? '',
+                          visaIssueDate: e.visaIssueDate ? String(e.visaIssueDate).slice(0, 10) : '',
+                          visaExpiry: e.visaExpiry ? String(e.visaExpiry).slice(0, 10) : '',
+                          sponsoringEntity: e.sponsoringEntity ?? '',
+                          emiratesId: e.emiratesId ?? '',
+                          emiratesIdExpiry: e.emiratesIdExpiry ? String(e.emiratesIdExpiry).slice(0, 10) : '',
+                          passportNo: e.passportNo ?? '',
+                          passportExpiry: e.passportExpiry ? String(e.passportExpiry).slice(0, 10) : '',
+                          labourCardNumber: (e as any).labourCardNumber ?? '',
+                        })
+                        setVisaEditOpen(true)
+                      }}
                     >
-                      {visaDays < 0 ? 'Visa Expired' : visaDays < 30 ? `Expiring in ${visaDays}d` : `Valid — ${visaDays}d left`}
-                    </Badge>
+                      Edit
+                    </Button>
                   )}
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-                  <div>
-                    <InfoRow label="Visa Type" value={labelFor(e.visaType)} icon={Plane} />
-                    <InfoRow label="Visa Number" value={e.visaNumber} icon={Hash} />
-                    <InfoRow label="Visa Issue Date" value={e.visaIssueDate ? formatDate(e.visaIssueDate) : null} icon={Calendar} />
-                    <InfoRow label="Visa Expiry" value={e.visaExpiry ? formatDate(e.visaExpiry) : null} icon={Calendar} />
-                    <InfoRow label="Sponsoring Entity" value={e.sponsoringEntity} icon={Building2} />
+                {visaEditOpen ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Visa Type</Label>
+                        <Select value={visaForm.visaType} onValueChange={v => setVisaForm(f => ({ ...f, visaType: v }))}>
+                          <SelectTrigger className="h-9"><SelectValue placeholder="Select visa type…" /></SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(VISA_TYPE_LABELS).filter(([k]) => ['employment', 'investor', 'dependent', 'mission'].includes(k)).map(([k, v]) => (
+                              <SelectItem key={k} value={k}>{v}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Visa Number</Label>
+                        <Input value={visaForm.visaNumber} onChange={e => setVisaForm(f => ({ ...f, visaNumber: e.target.value }))} placeholder="e.g. 201/2024/12345" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Visa Issue Date</Label>
+                        <DatePicker value={visaForm.visaIssueDate} onChange={v => setVisaForm(f => ({ ...f, visaIssueDate: v ?? '' }))} placeholder="Select date" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Visa Expiry</Label>
+                        <DatePicker value={visaForm.visaExpiry} onChange={v => setVisaForm(f => ({ ...f, visaExpiry: v ?? '' }))} placeholder="Select date" />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label>Sponsoring Entity</Label>
+                        <Input value={visaForm.sponsoringEntity} onChange={e => setVisaForm(f => ({ ...f, sponsoringEntity: e.target.value }))} placeholder="e.g. Company LLC" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Emirates ID</Label>
+                        <Input value={visaForm.emiratesId} onChange={e => setVisaForm(f => ({ ...f, emiratesId: e.target.value }))} placeholder="784-XXXX-XXXXXXX-X" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>EID Expiry</Label>
+                        <DatePicker value={visaForm.emiratesIdExpiry} onChange={v => setVisaForm(f => ({ ...f, emiratesIdExpiry: v ?? '' }))} placeholder="Select date" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Passport No.</Label>
+                        <Input value={visaForm.passportNo} onChange={e => setVisaForm(f => ({ ...f, passportNo: e.target.value }))} placeholder="e.g. A12345678" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Passport Expiry</Label>
+                        <DatePicker value={visaForm.passportExpiry} onChange={v => setVisaForm(f => ({ ...f, passportExpiry: v ?? '' }))} placeholder="Select date" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Labour Card No.</Label>
+                        <Input value={visaForm.labourCardNumber} onChange={e => setVisaForm(f => ({ ...f, labourCardNumber: e.target.value }))} placeholder="e.g. 12345678" />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <Button variant="outline" size="sm" onClick={() => setVisaEditOpen(false)} disabled={updateEmployee.isPending}>
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        loading={updateEmployee.isPending}
+                        onClick={async () => {
+                          const payload: Record<string, string | null> = {}
+                          if (visaForm.visaType) payload.visaType = visaForm.visaType
+                          payload.visaNumber = visaForm.visaNumber || null as any
+                          payload.visaIssueDate = visaForm.visaIssueDate || null as any
+                          payload.visaExpiry = visaForm.visaExpiry || null as any
+                          payload.sponsoringEntity = visaForm.sponsoringEntity || null as any
+                          payload.emiratesId = visaForm.emiratesId || null as any
+                          payload.emiratesIdExpiry = visaForm.emiratesIdExpiry || null as any
+                          payload.passportNo = visaForm.passportNo || null as any
+                          payload.passportExpiry = visaForm.passportExpiry || null as any
+                          payload.labourCardNumber = visaForm.labourCardNumber || null as any
+                          try {
+                            await updateEmployee.mutateAsync(payload as any)
+                            toast.success('Visa & ID updated')
+                            setVisaEditOpen(false)
+                          } catch {
+                            toast.error('Save failed', 'Could not update visa & ID details.')
+                          }
+                        }}
+                      >
+                        Save Changes
+                      </Button>
+                    </div>
                   </div>
-                  <div>
-                    <InfoRow label="Emirates ID" value={e.emiratesId} icon={Hash} />
-                    <InfoRow label="EID Expiry" value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : null} icon={Calendar} />
-                    <InfoRow label="Passport No." value={e.passportNo} icon={Hash} />
-                    <InfoRow label="Passport Expiry" value={e.passportExpiry ? formatDate(e.passportExpiry) : null} icon={Calendar} />
-                    <InfoRow label="Labour Card No." value={e.labourCardNumber} icon={Hash} />
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                    <div>
+                      <InfoRow label="Visa Type" value={labelFor(e.visaType)} icon={Plane} />
+                      <InfoRow label="Visa Number" value={e.visaNumber} icon={Hash} />
+                      <InfoRow label="Visa Issue Date" value={e.visaIssueDate ? formatDate(e.visaIssueDate) : null} icon={Calendar} />
+                      <InfoRow label="Visa Expiry" value={e.visaExpiry ? formatDate(e.visaExpiry) : null} icon={Calendar} />
+                      <InfoRow label="Sponsoring Entity" value={e.sponsoringEntity} icon={Building2} />
+                    </div>
+                    <div>
+                      <InfoRow label="Emirates ID" value={e.emiratesId} icon={Hash} />
+                      <InfoRow label="EID Expiry" value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : null} icon={Calendar} />
+                      <InfoRow label="Passport No." value={e.passportNo} icon={Hash} />
+                      <InfoRow label="Passport Expiry" value={e.passportExpiry ? formatDate(e.passportExpiry) : null} icon={Calendar} />
+                      <InfoRow label="Labour Card No." value={(e as any).labourCardNumber} icon={Hash} />
+                    </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
