@@ -309,7 +309,7 @@ export default async function (fastify: any): Promise<void> {
 
         if (!fileMeta) return reply.code(400).send({ message: 'No file provided' })
 
-        const { employeeId, category, expiryDate, docType } = fields
+        const { employeeId, category, expiryDate, issueDate, notes, docType } = fields
         if (!category) return reply.code(400).send({ message: 'category is required' })
 
         const doc = await createDocument(request.user.tenantId, request.user.id, {
@@ -319,7 +319,9 @@ export default async function (fastify: any): Promise<void> {
             fileName: fileMeta.fileName,
             s3Key: fileMeta.s3Key,
             fileSize: fileMeta.size,
+            issueDate: issueDate ? new Date(issueDate) : null,
             expiryDate: expiryDate ? new Date(expiryDate) : null,
+            notes: notes || null,
             status: 'under_review' as any,
         } as any)
 

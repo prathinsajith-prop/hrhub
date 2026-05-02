@@ -938,7 +938,7 @@
     },
     "adjustment": {
       "desc": "Manually add or deduct days from an employee's leave balance.",
-      "newAdjustment": "+ Leave Adjustment",
+      "newAdjustment": "Leave Adjustment",
       "employee": "Employee",
       "employeeRequired": "Employee is required",
       "leaveType": "Leave Type",
@@ -960,7 +960,7 @@
     },
     "airTicket": {
       "desc": "Track employee air ticket entitlements under UAE labour law.",
-      "newAirTicket": "+ Air Ticket",
+      "newAirTicket": "Air Ticket",
       "editTitle": "Edit Air Ticket",
       "ticketFor": "Ticket For",
       "forSelf": "Self",
@@ -988,7 +988,7 @@
     },
     "offset": {
       "desc": "Record compensatory leave for employees who worked on public holidays or weekends.",
-      "newOffset": "+ Offset Adjustment",
+      "newOffset": "Offset Adjustment",
       "editTitle": "Edit Offset Adjustment",
       "workDate": "Work Date",
       "workDateRequired": "Work date is required",

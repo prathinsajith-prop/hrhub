@@ -6,7 +6,7 @@ import {
   ArrowLeft, User, Briefcase, Plane, FileText, CreditCard, Star,
   Phone, Mail, MapPin, Calendar, Building2, Hash, Shield, Edit2,
   Clock, Download, Eye, Camera, Loader2, Plus, Package,
-  CalendarDays, ClipboardList, TrendingDown, UserCheck, Users, GraduationCap, Landmark,
+  CalendarDays, ClipboardList, UserCheck, Users, GraduationCap, Landmark,
   ArrowRightLeft,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,10 +30,12 @@ import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { useEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision } from '@/hooks/useEmployees'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { useEmployeeTeams } from '@/hooks/useTeams'
-import { useDocuments, useUploadDocument } from '@/hooks/useDocuments'
+import { useDocuments } from '@/hooks/useDocuments'
 import { usePerformanceReviews } from '@/hooks/usePerformance'
+import { CreatePerformanceReviewDialog } from '@/components/shared/CreatePerformanceReviewDialog'
+import { AddDocumentDialog } from '@/components/shared/AddDocumentDialog'
+import { EmployeeLeavePanel } from '@/components/shared/EmployeeLeavePanel'
 import { useEmployeeAssets } from '@/hooks/useAssets'
-import { useLeaveBalance, useLeaveRequests } from '@/hooks/useLeave'
 import { useAttendance } from '@/hooks/useAttendance'
 import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -63,15 +65,6 @@ interface AttendanceRecord {
   checkIn?: string
   checkOut?: string
   hoursWorked?: string
-}
-
-interface LeaveRecord {
-  id: string
-  leaveType: string
-  startDate: string
-  endDate: string
-  days: number
-  status: string
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -313,13 +306,15 @@ interface TransferDialogProps {
   currentDeptId?: string | null
 }
 
+const NONE = '__none__'
+
 function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept, currentDeptId }: TransferDialogProps) {
   const mutation = useCreateTransfer(employeeId)
 
   const [transferDate, setTransferDate] = React.useState('')
-  const [branchId, setBranchId] = React.useState<string>('')
-  const [divisionId, setDivisionId] = React.useState<string>('')
-  const [departmentId, setDepartmentId] = React.useState<string>('')
+  const [branchId, setBranchId] = React.useState(NONE)
+  const [divisionId, setDivisionId] = React.useState(NONE)
+  const [departmentId, setDepartmentId] = React.useState(NONE)
   const [toDesignation, setToDesignation] = React.useState('')
   const [newSalary, setNewSalary] = React.useState('')
   const [reason, setReason] = React.useState('')
@@ -329,14 +324,14 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
   const departments = React.useMemo(() => orgUnits.filter(u => u.type === 'department'), [orgUnits])
 
   const selectedDept = departments.find(d => d.id === departmentId)
-  const fromLabel = currentDept ?? (currentDeptId ? orgUnits.find(u => u.id === currentDeptId)?.name : null) ?? 'Current'
+  const fromLabel = currentDept ?? (currentDeptId ? orgUnits.find(u => u.id === currentDeptId)?.name : null) ?? 'Current department'
   const toLabel = selectedDept?.name ?? null
 
   function resetForm() {
     setTransferDate('')
-    setBranchId('')
-    setDivisionId('')
-    setDepartmentId('')
+    setBranchId(NONE)
+    setDivisionId(NONE)
+    setDepartmentId(NONE)
     setToDesignation('')
     setNewSalary('')
     setReason('')
@@ -350,131 +345,109 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!transferDate) {
-      toast.error('Missing fields', 'Transfer Date is required.')
+      toast.error('Required', 'Transfer date is required.')
+      return
+    }
+    if (branchId === NONE && divisionId === NONE && departmentId === NONE && !toDesignation && !newSalary) {
+      toast.error('Nothing to transfer', 'Please select at least one destination (branch, division, department, or new designation).')
       return
     }
 
-    mutation.mutate(
-      {
+    try {
+      await mutation.mutateAsync({
         transferDate,
-        toBranchId: branchId || null,
-        toDivisionId: divisionId || null,
-        toDepartmentId: departmentId || null,
+        toBranchId: branchId !== NONE ? branchId : null,
+        toDivisionId: divisionId !== NONE ? divisionId : null,
+        toDepartmentId: departmentId !== NONE ? departmentId : null,
         toDesignation: toDesignation || undefined,
         newSalary: newSalary ? parseFloat(newSalary) : null,
         reason: reason || undefined,
-      },
-      {
-        onSuccess: () => {
-          toast.success('Transfer recorded', 'Employee transfer recorded successfully.')
-          handleClose(false)
-        },
-        onError: (err: Error) => {
-          toast.error('Failed', err?.message ?? 'Could not record transfer.')
-        },
-      },
-    )
+      })
+      toast.success('Transfer recorded', 'Employee transfer has been recorded.')
+      handleClose(false)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not record transfer.'
+      toast.error('Transfer failed', msg)
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Transfer Employee</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
           <div className="space-y-1.5">
-            <Label htmlFor="tr-date">Transfer Date <span className="text-destructive">*</span></Label>
-            <DatePicker
-              id="tr-date"
-              value={transferDate}
-              onChange={setTransferDate}
-              placeholder="Select transfer date"
-            />
+            <Label>Transfer Date <span className="text-destructive">*</span></Label>
+            <DatePicker value={transferDate} onChange={v => setTransferDate(v ?? '')} placeholder="Select transfer date" />
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="tr-branch">Branch <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Select value={branchId} onValueChange={setBranchId}>
-              <SelectTrigger id="tr-branch">
-                <SelectValue placeholder="Select branch…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">— None —</SelectItem>
-                {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="tr-division">Division <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Select value={divisionId} onValueChange={setDivisionId}>
-              <SelectTrigger id="tr-division">
-                <SelectValue placeholder="Select division…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">— None —</SelectItem>
-                {divisions.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="tr-dept">Department <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Select value={departmentId} onValueChange={setDepartmentId}>
-              <SelectTrigger id="tr-dept">
-                <SelectValue placeholder="Select department…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">— None —</SelectItem>
-                {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Branch</Label>
+              <Select value={branchId} onValueChange={setBranchId}>
+                <SelectTrigger><SelectValue placeholder="Branch…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Keep current —</SelectItem>
+                  {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Division</Label>
+              <Select value={divisionId} onValueChange={setDivisionId}>
+                <SelectTrigger><SelectValue placeholder="Division…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Keep current —</SelectItem>
+                  {divisions.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Department</Label>
+              <Select value={departmentId} onValueChange={setDepartmentId}>
+                <SelectTrigger><SelectValue placeholder="Department…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Keep current —</SelectItem>
+                  {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {toLabel && (
-            <div className="rounded-lg bg-muted/40 border px-3 py-2 text-xs text-muted-foreground">
-              Transferring from: <span className="font-medium text-foreground">{fromLabel}</span>
-              {' '}&rarr;{' '}
-              <span className="font-medium text-foreground">{toLabel}</span>
+            <div className="rounded-lg bg-muted/50 border px-3 py-2 text-xs">
+              <span className="text-muted-foreground">Department: </span>
+              <span className="font-medium">{fromLabel}</span>
+              <span className="text-muted-foreground mx-1.5">→</span>
+              <span className="font-medium text-primary">{toLabel}</span>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="tr-designation">New Designation <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Input
-              id="tr-designation"
-              placeholder="e.g. Senior Engineer"
-              value={toDesignation}
-              onChange={e => setToDesignation(e.target.value)}
-            />
+            <Label>New Designation <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+            <Input placeholder="e.g. Senior Engineer" value={toDesignation} onChange={e => setToDesignation(e.target.value)} />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="tr-salary">New Salary (AED) <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <NumericInput
-              id="tr-salary"
-              placeholder="0.00"
-              value={newSalary}
-              onChange={e => setNewSalary(e.target.value)}
-            />
+            <Label>New Salary (AED) <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+            <NumericInput placeholder="0.00" value={newSalary} onChange={e => setNewSalary(e.target.value)} />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="tr-reason">Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Textarea
-              id="tr-reason"
-              placeholder="Reason for transfer…"
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-              rows={3}
-            />
+            <Label>Reason <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+            <Textarea placeholder="Reason for transfer…" value={reason} onChange={e => setReason(e.target.value)} rows={3} />
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={mutation.isPending}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Saving…</> : 'Record Transfer'}
+              {mutation.isPending
+                ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Saving…</>
+                : 'Record Transfer'}
             </Button>
           </DialogFooter>
         </form>
@@ -543,9 +516,6 @@ export function EmployeeDetailPage() {
   const { data: docsResult, isLoading: docsLoading } = useDocuments({ employeeId: id })
   const { data: reviews, isLoading: reviewsLoading } = usePerformanceReviews({ employeeId: id })
   const { data: employeeAssignments, isLoading: assetsLoading } = useEmployeeAssets(id!)
-  const { data: leaveBalanceData, isLoading: leaveBalanceLoading } = useLeaveBalance(id)
-  const { data: leaveHistoryData, isLoading: leaveHistoryLoading } = useLeaveRequests({ employeeId: id, limit: 20 })
-
   const attendanceStart = React.useMemo(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10) }, [])
   const attendanceEnd = React.useMemo(() => new Date().toISOString().slice(0, 10), [])
   const { data: attendanceData, isLoading: attendanceLoading } = useAttendance({ employeeId: id, startDate: attendanceStart, endDate: attendanceEnd, limit: 100 })
@@ -569,14 +539,14 @@ export function EmployeeDetailPage() {
   const { data: transfersData, isLoading: transfersLoading } = useEmployeeTransfers(id)
 
   const uploadAvatar = useUploadEmployeeAvatar(id!)
-  const uploadDoc = useUploadDocument()
   const [editOpen, setEditOpen] = React.useState(false)
   const [inviteOpen, setInviteOpen] = React.useState(false)
   const [viewDoc, setViewDoc] = React.useState<{ id: string; fileName?: string } | null>(null)
   const [changeSalaryOpen, setChangeSalaryOpen] = React.useState(false)
   const [transferOpen, setTransferOpen] = React.useState(false)
+  const [createReviewOpen, setCreateReviewOpen] = React.useState(false)
+  const [addDocOpen, setAddDocOpen] = React.useState(false)
   const avatarInputRef = React.useRef<HTMLInputElement>(null)
-  const docInputRef = React.useRef<HTMLInputElement>(null)
 
   const e = employee
 
@@ -598,19 +568,6 @@ export function EmployeeDetailPage() {
     ev.target.value = ''
   }
 
-  function handleDocChange(ev: React.ChangeEvent<HTMLInputElement>) {
-    const file = ev.target.files?.[0]
-    if (!file) return
-    if (file.size > 10 * 1024 * 1024) { toast.error('File too large', 'File must be smaller than 10 MB'); return }
-    uploadDoc.mutate(
-      { file, employeeId: id, category: 'other', docType: file.name },
-      {
-        onSuccess: () => toast.success('Uploaded', 'Document uploaded.'),
-        onError: (err: Error) => toast.error('Upload failed', err?.message ?? 'Upload failed'),
-      },
-    )
-    ev.target.value = ''
-  }
 
   if (isLoading) {
     return (
@@ -809,7 +766,8 @@ export function EmployeeDetailPage() {
                     <InfoRow label="Mobile" value={e.mobileNo ?? e.phone} icon={Phone} />
                     <InfoRow label="Personal Email" value={e.personalEmail} icon={Mail} />
                     <InfoRow label="Work Email" value={e.workEmail || e.email || null} icon={Mail} />
-                    <InfoRow label="Emergency Contact" value={e.emergencyContact} icon={Phone} />
+                    <InfoRow label="Emergency Name" value={(e as any).emergencyContactName ?? e.emergencyContact} icon={Phone} />
+                    <InfoRow label="Emergency Phone" value={(e as any).emergencyContactPhone} icon={Phone} />
                     <InfoRow label="Address" value={e.homeCountryAddress} icon={MapPin} />
                   </div>
                 </div>
@@ -837,7 +795,7 @@ export function EmployeeDetailPage() {
                     <InfoRow label="Designation" value={e.designation} icon={Briefcase} />
                     <InfoRow label="Branch" value={orgUnitName((e as any).branchId) ?? '—'} icon={Building2} />
                     <InfoRow label="Division" value={orgUnitName((e as any).divisionId) ?? '—'} icon={Building2} />
-                    <InfoRow label="Department" value={orgUnitName((e as any).departmentId) ?? e.department ?? '—'} icon={Building2} />
+                    <InfoRow label="Department" value={orgUnitName((e as any).departmentId) ?? '—'} icon={Building2} />
                     <InfoRow label="Company" value={(e as unknown as Record<string, unknown>)['entityName'] as string ?? '—'} icon={Building2} />
                     <InfoRow label="Contract Type" value={labelFor(e.contractType)} icon={Briefcase} />
                     <InfoRow label="Work Location" value={e.workLocation} icon={MapPin} />
@@ -995,11 +953,10 @@ export function EmployeeDetailPage() {
                   <CardTitle className="text-base">Employee Documents</CardTitle>
                   <Button
                     size="sm"
-                    leftIcon={uploadDoc.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-                    onClick={() => docInputRef.current?.click()}
-                    disabled={uploadDoc.isPending}
+                    leftIcon={<Plus className="h-3.5 w-3.5" />}
+                    onClick={() => setAddDocOpen(true)}
                   >
-                    {uploadDoc.isPending ? 'Uploading…' : 'Upload'}
+                    Add Document
                   </Button>
                 </div>
               </CardHeader>
@@ -1066,8 +1023,26 @@ export function EmployeeDetailPage() {
                   <div>
                     <InfoRow label="Total Salary" value={formatCurrency(e.totalSalary ?? 0)} icon={CreditCard} />
                     <InfoRow label="Payment Method" value={labelFor(e.paymentMethod)} icon={Landmark} />
-                    <InfoRow label="Bank" value={e.bankName} icon={Building2} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Bank Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                  <div>
+                    <InfoRow label="Account Name" value={e.accountName} icon={User} />
+                    <InfoRow label="Account Number" value={e.accountNumber} icon={Hash} />
+                    <InfoRow label="Bank Name" value={e.bankName} icon={Building2} />
+                  </div>
+                  <div>
                     <InfoRow label="IBAN" value={e.iban} icon={Hash} />
+                    <InfoRow label="Swift Code" value={e.swiftCode} icon={Hash} />
+                    <InfoRow label="Branch" value={e.bankBranch} icon={Building2} />
                   </div>
                 </div>
               </CardContent>
@@ -1148,9 +1123,11 @@ export function EmployeeDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">Performance &amp; Notes</CardTitle>
-                  <Button size="sm" variant="outline" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => navigate(`/performance?employeeId=${id}`)}>
-                    New review
-                  </Button>
+                  {canManage && (
+                    <Button size="sm" variant="outline" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setCreateReviewOpen(true)}>
+                      New review
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -1224,95 +1201,8 @@ export function EmployeeDetailPage() {
           </TabsContent>
 
           {/* ── Leave ── */}
-          <TabsContent value="leave" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader><CardTitle className="text-base">Leave Balance — {new Date().getFullYear()}</CardTitle></CardHeader>
-              <CardContent>
-                {leaveBalanceLoading ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 rounded-lg" />)}
-                  </div>
-                ) : !leaveBalanceData?.balance ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">No leave data available</p>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {Object.entries(leaveBalanceData.balance)
-                      .filter(([, b]) => b.entitled !== 0)
-                      .map(([type, b]) => {
-                        const isUnlimited = b.entitled === -1
-                        const pct = isUnlimited ? 0 : Math.min(100, Math.round((b.taken / (b.entitled || 1)) * 100))
-                        const isLow = !isUnlimited && b.available <= 3 && b.entitled > 0
-                        return (
-                          <div key={type} className="rounded-lg border bg-card p-3 space-y-2">
-                            <div className="flex items-start justify-between gap-1">
-                              <span className="text-xs font-medium leading-tight">{labelFor(type)}</span>
-                              {isLow && <TrendingDown className="h-3 w-3 text-destructive shrink-0 mt-0.5" />}
-                            </div>
-                            <div className="flex items-baseline gap-1">
-                              <span className={cn('text-xl font-bold font-display', isLow ? 'text-destructive' : 'text-foreground')}>
-                                {isUnlimited ? '∞' : b.available}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground">/ {isUnlimited ? '∞' : b.entitled} days</span>
-                            </div>
-                            {!isUnlimited && (
-                              <div className="w-full bg-muted rounded-full h-1.5">
-                                <div
-                                  className={cn('h-1.5 rounded-full transition-all', pct >= 80 ? 'bg-destructive' : pct >= 50 ? 'bg-warning' : 'bg-success')}
-                                  style={{ width: `${pct}%` }}
-                                />
-                              </div>
-                            )}
-                            <div className="flex gap-2 text-[10px] text-muted-foreground">
-                              <span>Used: <strong className="text-foreground">{b.taken}</strong></span>
-                              {b.pending > 0 && <span>Pending: <strong className="text-warning">{b.pending}</strong></span>}
-                            </div>
-                          </div>
-                        )
-                      })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Leave History</CardTitle>
-                  <Button size="sm" variant="outline" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => navigate(`/leave?employeeId=${id}`)}>
-                    View all
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {leaveHistoryLoading ? (
-                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
-                ) : !leaveHistoryData?.data || leaveHistoryData.data.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm font-medium">No leave requests found</p>
-                  </div>
-                ) : (
-                  <div className="divide-y">
-                    {(leaveHistoryData.data as LeaveRecord[]).map(req => (
-                      <div key={req.id} className="py-3 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium capitalize">{labelFor(req.leaveType)} Leave</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(req.startDate)} — {formatDate(req.endDate)} · {req.days} day{req.days !== 1 ? 's' : ''}
-                          </p>
-                        </div>
-                        <Badge
-                          variant={req.status === 'approved' ? 'success' : req.status === 'rejected' ? 'destructive' : req.status === 'pending' ? 'warning' : 'secondary'}
-                          className="text-[10px] capitalize shrink-0"
-                        >
-                          {req.status}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          <TabsContent value="leave" className="mt-4">
+            <EmployeeLeavePanel employeeId={id!} canManage={canManage} />
           </TabsContent>
 
           {/* ── Account ── */}
@@ -1451,9 +1341,8 @@ export function EmployeeDetailPage() {
         </div>
       </Tabs>
 
-      {/* Hidden file inputs */}
+      {/* Hidden avatar input */}
       <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
-      <input ref={docInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx" className="hidden" onChange={handleDocChange} />
 
       {editOpen && <EditEmployeeDialog open={editOpen} onOpenChange={setEditOpen} employee={e} />}
       {inviteOpen && canManage && (
@@ -1473,6 +1362,24 @@ export function EmployeeDetailPage() {
           onOpenChange={setChangeSalaryOpen}
           employeeId={id}
           currentBasic={e.basicSalary ? parseFloat(String(e.basicSalary)) : null}
+        />
+      )}
+
+      {/* Add Document Dialog */}
+      {id && (
+        <AddDocumentDialog
+          open={addDocOpen}
+          onOpenChange={setAddDocOpen}
+          employeeId={id}
+        />
+      )}
+
+      {/* Create Review Dialog */}
+      {canManage && id && (
+        <CreatePerformanceReviewDialog
+          open={createReviewOpen}
+          onOpenChange={setCreateReviewOpen}
+          lockedEmployeeId={id}
         />
       )}
 

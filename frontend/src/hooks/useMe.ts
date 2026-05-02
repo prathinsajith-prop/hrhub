@@ -31,7 +31,7 @@ export function useMyEmployee() {
 export function useUpdateMyProfile() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (data: Partial<Pick<Employee, 'phone' | 'mobileNo' | 'personalEmail' | 'emergencyContact' | 'homeCountryAddress'>>) =>
+        mutationFn: (data: Partial<Pick<Employee, 'phone' | 'mobileNo' | 'personalEmail' | 'emergencyContact' | 'emergencyContactName' | 'emergencyContactPhone' | 'homeCountryAddress'>>) =>
             api.patch<{ data: Employee }>('/employees/me', data).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['employees', 'me'] }),
     })

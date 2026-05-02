@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { Check, ChevronDown, X, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
@@ -24,6 +24,8 @@ interface ComboboxProps {
     className?: string
     disabled?: boolean
     clearable?: boolean
+    /** Allow typing a custom value not in the list */
+    creatable?: boolean
 }
 
 export function Combobox({
@@ -31,13 +33,36 @@ export function Combobox({
     placeholder = 'Select…',
     searchPlaceholder = 'Search…',
     emptyMessage = 'No results.',
-    className, disabled = false, clearable = false,
+    className, disabled = false, clearable = false, creatable = false,
 }: ComboboxProps) {
     const [open, setOpen] = useState(false)
-    const selected = options.find(o => o.value === value)
+    const [search, setSearch] = useState('')
+
+    const selected = options.find(o => o.value.toLowerCase() === value.toLowerCase())
+    const displayLabel = selected?.label ?? value
+
+    const exactMatch = options.some(
+        o => o.label.toLowerCase() === search.trim().toLowerCase(),
+    )
+    const showCreate = creatable && search.trim().length > 0 && !exactMatch
+
+    function handleSelect(optValue: string) {
+        onValueChange(optValue === value ? '' : optValue)
+        setSearch('')
+        setOpen(false)
+    }
+
+    function handleCreate() {
+        const trimmed = search.trim()
+        if (trimmed) {
+            onValueChange(trimmed)
+            setSearch('')
+            setOpen(false)
+        }
+    }
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={o => { setOpen(o); if (!o) setSearch('') }}>
             <PopoverTrigger asChild>
                 <button
                     type="button"
@@ -51,15 +76,15 @@ export function Combobox({
                             : 'border-input hover:border-input/80',
                         'focus:outline-none',
                         'disabled:cursor-not-allowed disabled:opacity-50',
-                        !selected && 'text-muted-foreground',
+                        !value && 'text-muted-foreground',
                         className,
                     )}
                 >
                     <span className="truncate text-left flex-1 min-w-0 text-sm">
-                        {selected ? selected.label : placeholder}
+                        {value ? displayLabel : placeholder}
                     </span>
                     <span className="flex items-center shrink-0 ml-2 gap-1">
-                        {clearable && selected && (
+                        {clearable && value && (
                             <span
                                 role="button"
                                 aria-label="Clear"
@@ -83,42 +108,63 @@ export function Combobox({
                 sideOffset={2}
                 style={{ width: 'var(--radix-popover-trigger-width)' }}
             >
-                <Command>
-                    {/* CommandInput already renders its own border-b wrapper — no extra div needed */}
+                <Command shouldFilter={false}>
                     <CommandInput
                         placeholder={searchPlaceholder}
                         className="h-9 py-2 text-sm"
+                        value={search}
+                        onValueChange={setSearch}
                     />
                     <CommandList className="max-h-56 overflow-y-auto">
-                        <CommandEmpty className="py-5 text-sm text-muted-foreground text-center">
-                            {emptyMessage}
-                        </CommandEmpty>
+                        {!showCreate && (
+                            <CommandEmpty className="py-5 text-sm text-muted-foreground text-center">
+                                {emptyMessage}
+                            </CommandEmpty>
+                        )}
                         <CommandGroup className="p-1">
-                            {options.map(opt => (
+                            {options
+                                .filter(o =>
+                                    search.trim() === '' ||
+                                    o.label.toLowerCase().includes(search.trim().toLowerCase()) ||
+                                    (o.secondary?.toLowerCase().includes(search.trim().toLowerCase()) ?? false),
+                                )
+                                .map(opt => (
+                                    <CommandItem
+                                        key={opt.value}
+                                        value={opt.secondary ? `${opt.label} ${opt.secondary}` : opt.label}
+                                        onSelect={() => handleSelect(opt.value)}
+                                        className="flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer"
+                                    >
+                                        <Check className={cn(
+                                            'h-3.5 w-3.5 shrink-0 text-primary transition-opacity',
+                                            value.toLowerCase() === opt.value.toLowerCase() ? 'opacity-100' : 'opacity-0',
+                                        )} />
+                                        <span className="flex-1 min-w-0">
+                                            <span className="block text-sm leading-tight text-foreground">{opt.label}</span>
+                                            {opt.secondary && (
+                                                <span className="block text-[11px] text-muted-foreground mt-0.5 leading-tight">
+                                                    {opt.secondary}
+                                                </span>
+                                            )}
+                                        </span>
+                                    </CommandItem>
+                                ))}
+                        </CommandGroup>
+
+                        {showCreate && (
+                            <CommandGroup className="p-1 border-t border-border/50">
                                 <CommandItem
-                                    key={opt.value}
-                                    value={opt.secondary ? `${opt.label} ${opt.secondary}` : opt.label}
-                                    onSelect={() => {
-                                        onValueChange(opt.value === value ? '' : opt.value)
-                                        setOpen(false)
-                                    }}
-                                    className="flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer"
+                                    value={`__create__${search.trim()}`}
+                                    onSelect={handleCreate}
+                                    className="flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer text-primary"
                                 >
-                                    <Check className={cn(
-                                        'h-3.5 w-3.5 shrink-0 text-primary transition-opacity',
-                                        value === opt.value ? 'opacity-100' : 'opacity-0',
-                                    )} />
-                                    <span className="flex-1 min-w-0">
-                                        <span className="block text-sm leading-tight text-foreground">{opt.label}</span>
-                                        {opt.secondary && (
-                                            <span className="block text-[11px] text-muted-foreground mt-0.5 leading-tight">
-                                                {opt.secondary}
-                                            </span>
-                                        )}
+                                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="text-sm">
+                                        Use <span className="font-medium">"{search.trim()}"</span>
                                     </span>
                                 </CommandItem>
-                            ))}
-                        </CommandGroup>
+                            </CommandGroup>
+                        )}
                     </CommandList>
                 </Command>
             </PopoverContent>

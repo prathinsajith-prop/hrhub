@@ -1,10 +1,9 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
-import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus, ShieldCheck, Edit2, AlertCircle, RefreshCcw } from 'lucide-react'
-import { DOC_TYPE_CATALOG, CATEGORY_LABELS, type DocCategory } from '@/lib/docTypes'
+import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus, ShieldCheck, Edit2, RefreshCcw } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -12,24 +11,20 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Card } from '@/components/ui/primitives'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast, ConfirmDialog } from '@/components/ui/overlays'
-import { ImageUpload } from '@/components/ui/form-controls'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
-import { DatePicker } from '@/components/ui/date-picker'
-import { Label } from '@/components/ui/primitives'
+import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import { api } from '@/lib/api'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
 import { useDocuments, useDeleteDocument } from '@/hooks/useDocuments'
 import { usePermissions } from '@/hooks/usePermissions'
-import { useEmployees } from '@/hooks/useEmployees'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { DOC_CATEGORY_OPTIONS, DOC_STATUS_OPTIONS } from '@/lib/options'
 import { EditDocumentDialog } from '@/components/shared/action-dialogs'
+import { AddDocumentDialog } from '@/components/shared/AddDocumentDialog'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { VerifyDocumentDialog } from '@/components/shared/VerifyDocumentDialog'
-import type { Document, DocStatus, Employee } from '@/types'
+import type { Document, DocStatus } from '@/types'
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info'
 const statusBadge: Record<DocStatus, { variant: BadgeVariant; label: string }> = {
@@ -60,158 +55,6 @@ const ExpiryCell = memo(function ExpiryCell({ date }: { date?: string }) {
     </div>
   )
 })
-
-function UploadDocumentDialog({ open, onOpenChange, defaultEmployeeId, defaultCategory }: { open: boolean; onOpenChange: (o: boolean) => void; defaultEmployeeId?: string; defaultCategory?: string }) {
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [employeeId, setEmployeeId] = useState(defaultEmployeeId ?? '')
-  const [category, setCategory] = useState<DocCategory | ''>(defaultCategory as DocCategory ?? '')
-  const [docType, setDocType] = useState('')
-  const [expiryDate, setExpiryDate] = useState('')
-  const [saving, setSaving] = useState(false)
-  const { data: empData } = useEmployees({ limit: 100 })
-  const employees = (empData?.data as Employee[]) ?? []
-  const qc = useQueryClient()
-
-  const categoryDocs = category ? DOC_TYPE_CATALOG[category] : []
-  const selectedDocDef = categoryDocs.find(d => d.docType === docType)
-  const expiryRequired = selectedDocDef?.expiryRequired ?? false
-
-  useEffect(() => {
-    if (open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (defaultEmployeeId) setEmployeeId(defaultEmployeeId)
-      if (defaultCategory) setCategory(defaultCategory as DocCategory)
-    }
-  }, [open, defaultEmployeeId, defaultCategory])
-
-  const resetForm = () => {
-    setUploadedFile(null)
-    setEmployeeId('')
-    setCategory('')
-    setDocType('')
-    setExpiryDate('')
-  }
-
-  const handleSave = async () => {
-    if (!uploadedFile) { toast.warning('No file selected', 'Please select a document to upload.'); return }
-    if (!category) { toast.warning('Category required', 'Please select a document category.'); return }
-    if (!docType) { toast.warning('Document type required', 'Please select the document type.'); return }
-    if (expiryRequired && !expiryDate) { toast.warning('Expiry date required', `${docType} requires an expiry date.`); return }
-
-    setSaving(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', uploadedFile)
-      if (employeeId) fd.append('employeeId', employeeId)
-      fd.append('category', category)
-      fd.append('docType', docType)
-      if (expiryDate) fd.append('expiryDate', expiryDate)
-
-      await api.upload('/documents/upload', fd)
-      await qc.invalidateQueries({ queryKey: ['documents'] })
-      toast.success('Document uploaded', `${docType} has been submitted for review.`)
-      onOpenChange(false)
-      resetForm()
-    } catch {
-      toast.error('Upload failed', 'Could not upload the document. Please try again.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) resetForm(); onOpenChange(o) }}>
-      <DialogContent size="md">
-        <DialogHeader>
-          <DialogTitle>Upload Document</DialogTitle>
-        </DialogHeader>
-        <DialogBody className="space-y-4">
-          {/* Employee selector */}
-          <div className="space-y-1.5">
-            <Label>Employee <span className="text-muted-foreground text-xs">(optional — for company docs leave blank)</span></Label>
-            <Select value={employeeId || '__none__'} onValueChange={v => setEmployeeId(v === '__none__' ? '' : v)}>
-              <SelectTrigger><SelectValue placeholder="Select employee…" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">— Company document (no employee) —</SelectItem>
-                {employees.map((e: any) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.fullName ?? `${e.firstName} ${e.lastName}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Category + Doc type in a 2-col grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label required>Category</Label>
-              <Select value={category} onValueChange={(v) => { setCategory(v as DocCategory); setDocType('') }}>
-                <SelectTrigger><SelectValue placeholder="Select category…" /></SelectTrigger>
-                <SelectContent>
-                  {(Object.entries(CATEGORY_LABELS) as [DocCategory, string][]).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label required>Document Type</Label>
-              <Select value={docType} onValueChange={setDocType} disabled={!category}>
-                <SelectTrigger><SelectValue placeholder={category ? 'Select type…' : 'Select category first'} /></SelectTrigger>
-                <SelectContent>
-                  {categoryDocs.map(d => (
-                    <SelectItem key={d.docType} value={d.docType}>
-                      <span className="flex items-center gap-2">
-                        {d.label}
-                        {d.expiryRequired && (
-                          <span className="text-[10px] text-amber-600 font-medium bg-amber-50 px-1 py-0.5 rounded">exp. req.</span>
-                        )}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Expiry date — shown and required only when the selected doc type needs it */}
-          {selectedDocDef && (
-            <div className="space-y-1.5">
-              <Label className={cn('flex items-center gap-1.5', expiryRequired ? 'text-foreground' : 'text-muted-foreground')}>
-                {expiryRequired && <AlertCircle className="h-3.5 w-3.5 text-amber-500" />}
-                Expiry Date {expiryRequired ? <span className="text-destructive">*</span> : <span className="text-muted-foreground text-xs">(not required for this type)</span>}
-              </Label>
-              {expiryRequired ? (
-                <DatePicker value={expiryDate} min={new Date().toISOString().split('T')[0]} onChange={setExpiryDate} />
-              ) : (
-                <DatePicker value={expiryDate} min={new Date().toISOString().split('T')[0]} onChange={setExpiryDate} />
-              )}
-              {selectedDocDef.hint && <p className="text-[11px] text-muted-foreground">{selectedDocDef.hint}</p>}
-            </div>
-          )}
-
-          {/* File upload */}
-          <div className="space-y-1.5">
-            <Label required>Document File</Label>
-            <ImageUpload
-              variant="document"
-              accept=".pdf,.jpg,.jpeg,.png"
-              maxSizeMB={10}
-              label="Upload Document (PDF, JPG, PNG)"
-              hint="Max file size: 10MB. Supported formats: PDF, JPG, PNG"
-              onChange={(file) => setUploadedFile(file)}
-            />
-          </div>
-        </DialogBody>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => { onOpenChange(false); resetForm() }}>Cancel</Button>
-          <Button onClick={handleSave} loading={saving} leftIcon={<Upload className="h-3.5 w-3.5" />}>Upload Document</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 const columns = (
   onView: (d: Document) => void,
@@ -533,7 +376,7 @@ export function DocumentsPage() {
           )}
         />
       </Card>
-      <UploadDocumentDialog
+      <AddDocumentDialog
         open={uploadOpen}
         onOpenChange={(o) => {
           setUploadOpen(o)
@@ -545,8 +388,7 @@ export function DocumentsPage() {
             setSearchParams(next, { replace: true })
           }
         }}
-        defaultEmployeeId={qpEmployee || undefined}
-        defaultCategory={qpCategory || undefined}
+        employeeId={qpEmployee || undefined}
       />
       {editTarget && (
         <EditDocumentDialog

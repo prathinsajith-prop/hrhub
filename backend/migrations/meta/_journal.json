@@ -57,6 +57,27 @@
       "when": 1746748800000,
       "tag": "0007_employee_transfers",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1746835200000,
+      "tag": "0008_bank_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1746921600000,
+      "tag": "0009_emergency_contact_split",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1746979200000,
+      "tag": "0010_document_issue_notes",
+      "breakpoints": true
     }
   ]
 }

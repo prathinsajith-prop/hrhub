@@ -1,0 +1,4 @@
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS account_name TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS account_number TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS swift_code TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS bank_branch TEXT;

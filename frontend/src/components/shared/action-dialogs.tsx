@@ -13,7 +13,7 @@ import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useEmployees } from '@/hooks/useEmployees'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
-import { useDesignations } from '@/hooks/useDesignations'
+import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
 import { useTeams } from '@/hooks/useTeams'
 import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
@@ -375,6 +375,9 @@ interface EmpForm {
     personalEmail: string
     maritalStatus: string
     emergencyContact: string
+    emergencyContactName: string
+    emergencyContactPhone: string
+    homeCountryAddress: string
     // Step 2 — Employment
     employeeNo: string
     workEmail: string
@@ -398,18 +401,22 @@ interface EmpForm {
     otherAllowances: string
     paymentMethod: string
     bankName: string
+    accountName: string
+    accountNumber: string
+    swiftCode: string
+    bankBranch: string
     iban: string
     emiratisationCategory: string
 }
 
 const EMPTY_FORM: EmpForm = {
     firstName: '', lastName: '', dateOfBirth: '', gender: 'male', nationality: '', passportNo: '',
-    mobileNo: '', personalEmail: '', maritalStatus: 'single', emergencyContact: '',
+    mobileNo: '', personalEmail: '', maritalStatus: 'single', emergencyContact: '', emergencyContactName: '', emergencyContactPhone: '', homeCountryAddress: '',
     employeeNo: '', workEmail: '', divisionId: '', departmentId: '', branchId: '', department: '', designation: '',
     joinDate: new Date().toISOString().split('T')[0],
     contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevel: '', status: 'onboarding', teamId: '',
     basicSalary: '', housingAllowance: '', transportAllowance: '', otherAllowances: '',
-    paymentMethod: 'bank_transfer', bankName: '', iban: '', emiratisationCategory: 'expat',
+    paymentMethod: 'bank_transfer', bankName: '', accountName: '', accountNumber: '', swiftCode: '', bankBranch: '', iban: '', emiratisationCategory: 'expat',
 }
 
 function StepIndicator({ step }: { step: Step }) {
@@ -451,6 +458,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     const navigate = useNavigate()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const { data: designationList = [] } = useDesignations()
+    const createDesignation = useCreateDesignation()
     const { data: teamsRaw = [] } = useTeams()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const orgOptions = buildOrgOptions(orgUnits)
@@ -503,6 +511,12 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
         const transport = parseFloat(form.transportAllowance) || 0
         const other = parseFloat(form.otherAllowances) || 0
         try {
+            // Auto-create designation if it's a new name not in the existing list
+            if (form.designation) {
+                const exists = (Array.isArray(designationList) ? designationList : [])
+                    .some((d: { name: string; isActive: boolean }) => d.isActive && d.name.toLowerCase() === form.designation.toLowerCase())
+                if (!exists) await createDesignation.mutateAsync({ name: form.designation })
+            }
             const newEmp = await createEmployee.mutateAsync({
                 firstName: form.firstName, lastName: form.lastName,
                 dateOfBirth: form.dateOfBirth || undefined,
@@ -514,6 +528,9 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 workEmail: form.workEmail || undefined,
                 maritalStatus: (form.maritalStatus as Employee['maritalStatus']) || undefined,
                 emergencyContact: form.emergencyContact || undefined,
+                emergencyContactName: form.emergencyContactName || undefined,
+                emergencyContactPhone: form.emergencyContactPhone || undefined,
+                homeCountryAddress: form.homeCountryAddress || undefined,
                 employeeNo: empNo || undefined,
                 divisionId: form.divisionId || undefined,
                 departmentId: form.departmentId || undefined,
@@ -534,6 +551,10 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 totalSalary: basic + housing + transport + other || undefined,
                 paymentMethod: (form.paymentMethod as Employee['paymentMethod']) || undefined,
                 bankName: form.bankName || undefined,
+                accountName: form.accountName || undefined,
+                accountNumber: form.accountNumber || undefined,
+                swiftCode: form.swiftCode || undefined,
+                bankBranch: form.bankBranch || undefined,
                 iban: form.iban || undefined,
                 emiratisationCategory: (form.emiratisationCategory as Employee['emiratisationCategory']) || 'expat',
             })
@@ -636,8 +657,16 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <Input type="email" value={form.personalEmail} onChange={set('personalEmail')} placeholder="ahmed@gmail.com" aria-invalid={!!errors.personalEmail} className={errors.personalEmail ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
-                            <FormField label="Emergency Contact" error={errors.emergencyContact}>
-                                <Input value={form.emergencyContact} onChange={set('emergencyContact')} placeholder="Name — +971 50 000 0000" />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <FormField label="Emergency Contact Name">
+                                    <Input value={form.emergencyContactName} onChange={set('emergencyContactName')} placeholder="Full name" />
+                                </FormField>
+                                <FormField label="Emergency Contact Phone">
+                                    <Input value={form.emergencyContactPhone} onChange={set('emergencyContactPhone')} placeholder="+971 50 000 0000" />
+                                </FormField>
+                            </div>
+                            <FormField label="Home Country Address">
+                                <Textarea value={form.homeCountryAddress} onChange={e => setForm(f => ({ ...f, homeCountryAddress: e.target.value }))} placeholder="Street, City, Country" rows={2} />
                             </FormField>
                         </div>
                     )}
@@ -704,24 +733,19 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     )}
                                 </div>
                             )}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Department (freeform)</Label>
-                                    <Input value={form.department} onChange={set('department')} placeholder="e.g. Sales" />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label>Designation / Title</Label>
-                                    <Combobox
-                                        value={form.designation}
-                                        onValueChange={v => setForm(f => ({ ...f, designation: v }))}
-                                        options={(Array.isArray(designationList) ? designationList : [])
-                                            .filter((d: { isActive: boolean }) => d.isActive)
-                                            .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
-                                        placeholder="Select designation…"
-                                        searchPlaceholder="Search designations…"
-                                        clearable
-                                    />
-                                </div>
+                            <div className="space-y-1.5">
+                                <Label>Designation / Title</Label>
+                                <Combobox
+                                    value={form.designation}
+                                    onValueChange={v => setForm(f => ({ ...f, designation: v }))}
+                                    options={(Array.isArray(designationList) ? designationList : [])
+                                        .filter((d: { isActive: boolean }) => d.isActive)
+                                        .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
+                                    placeholder="Select or type designation…"
+                                    searchPlaceholder="Search or create…"
+                                    clearable
+                                    creatable
+                                />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
@@ -801,14 +825,36 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 </Select>
                             </div>
                             {form.paymentMethod === 'bank_transfer' && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                        <Label>Bank Name</Label>
-                                        <Input value={form.bankName} onChange={set('bankName')} placeholder="e.g. Emirates NBD" />
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <Label>Account Name</Label>
+                                            <Input value={form.accountName} onChange={set('accountName')} placeholder="Account holder name" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label>Account Number</Label>
+                                            <Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="e.g. 1234567890" />
+                                        </div>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <Label>IBAN</Label>
-                                        <Input value={form.iban} onChange={set('iban')} placeholder="AE070331234567890123456" />
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <Label>Bank Name</Label>
+                                            <Input value={form.bankName} onChange={set('bankName')} placeholder="e.g. Emirates NBD" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label>Branch</Label>
+                                            <Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="e.g. Dubai Main Branch" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <Label>IBAN Number</Label>
+                                            <Input value={form.iban} onChange={set('iban')} placeholder="AE070331234567890123456" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label>Swift Code</Label>
+                                            <Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="e.g. EBILAEAD" />
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -862,6 +908,9 @@ export function EditEmployeeDialog({
         workEmail: employee.workEmail ?? '',
         maritalStatus: employee.maritalStatus ?? 'single',
         emergencyContact: employee.emergencyContact ?? '',
+        emergencyContactName: employee.emergencyContactName ?? '',
+        emergencyContactPhone: employee.emergencyContactPhone ?? '',
+        homeCountryAddress: employee.homeCountryAddress ?? '',
         employeeNo: employee.employeeNo ?? '',
         divisionId: employee.divisionId ?? '',
         departmentId: employee.departmentId ?? '',
@@ -881,6 +930,10 @@ export function EditEmployeeDialog({
         otherAllowances: String(employee.otherAllowances ?? ''),
         paymentMethod: employee.paymentMethod ?? 'bank_transfer',
         bankName: employee.bankName ?? '',
+        accountName: employee.accountName ?? '',
+        accountNumber: employee.accountNumber ?? '',
+        swiftCode: employee.swiftCode ?? '',
+        bankBranch: employee.bankBranch ?? '',
         iban: employee.iban ?? '',
         emiratisationCategory: employee.emiratisationCategory ?? 'expat',
         teamId: '',
@@ -889,6 +942,7 @@ export function EditEmployeeDialog({
     const updateEmployee = useUpdateEmployee(employee.id)
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const { data: designationList = [] } = useDesignations()
+    const createDesignation = useCreateDesignation()
     const editOrgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const editOrgOptions = buildOrgOptions(editOrgUnits)
 
@@ -903,7 +957,7 @@ export function EditEmployeeDialog({
 
     const close = () => { onOpenChange(false); setTimeout(() => { setStep(1); setErrors({}) }, 300) }
 
-    const submit = () => {
+    const submit = async () => {
         const basic = parseFloat(form.basicSalary) || 0
         const housing = parseFloat(form.housingAllowance) || 0
         const transport = parseFloat(form.transportAllowance) || 0
@@ -927,6 +981,12 @@ export function EditEmployeeDialog({
             toast.warning('Fix the highlighted fields', 'Please correct the errors before saving.')
             return
         }
+        // Auto-create designation if it's a new name not in the existing list
+        if (form.designation) {
+            const exists = (Array.isArray(designationList) ? designationList : [])
+                .some((d: { name: string; isActive: boolean }) => d.isActive && d.name.toLowerCase() === form.designation.toLowerCase())
+            if (!exists) await createDesignation.mutateAsync({ name: form.designation }).catch(() => {})
+        }
         updateEmployee.mutate(
             {
                 firstName: form.firstName, lastName: form.lastName,
@@ -939,6 +999,9 @@ export function EditEmployeeDialog({
                 workEmail: form.workEmail || undefined,
                 maritalStatus: (form.maritalStatus as Employee['maritalStatus']) || undefined,
                 emergencyContact: form.emergencyContact || undefined,
+                emergencyContactName: form.emergencyContactName || undefined,
+                emergencyContactPhone: form.emergencyContactPhone || undefined,
+                homeCountryAddress: form.homeCountryAddress || undefined,
                 employeeNo: form.employeeNo || undefined,
                 divisionId: form.divisionId || undefined,
                 departmentId: form.departmentId || undefined,
@@ -959,6 +1022,10 @@ export function EditEmployeeDialog({
                 totalSalary: basic + housing + transport + other || undefined,
                 paymentMethod: (form.paymentMethod as Employee['paymentMethod']) || undefined,
                 bankName: form.bankName || undefined,
+                accountName: form.accountName || undefined,
+                accountNumber: form.accountNumber || undefined,
+                swiftCode: form.swiftCode || undefined,
+                bankBranch: form.bankBranch || undefined,
                 iban: form.iban || undefined,
                 emiratisationCategory: (form.emiratisationCategory as Employee['emiratisationCategory']) || 'expat',
             },
@@ -1033,7 +1100,14 @@ export function EditEmployeeDialog({
                                 <div className="space-y-1.5"><Label>Mobile</Label><PhoneInput value={form.mobileNo} onChange={(v) => setForm((f) => ({ ...f, mobileNo: v }))} defaultCountry={resolveCountryIso(form.nationality) ?? 'AE'} /></div>
                                 <div className="space-y-1.5"><Label>Personal Email</Label><Input type="email" value={form.personalEmail} onChange={set('personalEmail')} /></div>
                             </div>
-                            <div className="space-y-1.5"><Label>Emergency Contact</Label><Input value={form.emergencyContact} onChange={set('emergencyContact')} /></div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1.5"><Label>Emergency Contact Name</Label><Input value={form.emergencyContactName} onChange={set('emergencyContactName')} placeholder="Full name" /></div>
+                                <div className="space-y-1.5"><Label>Emergency Contact Phone</Label><Input value={form.emergencyContactPhone} onChange={set('emergencyContactPhone')} placeholder="+971 50 000 0000" /></div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Home Country Address</Label>
+                                <Textarea value={form.homeCountryAddress} onChange={e => setForm(f => ({ ...f, homeCountryAddress: e.target.value }))} placeholder="Street, City, Country" rows={2} />
+                            </div>
                         </div>
                     )}
 
@@ -1084,21 +1158,19 @@ export function EditEmployeeDialog({
                                     </div>
                                 </div>
                             )}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Department (freeform)</Label><Input value={form.department} onChange={set('department')} placeholder="e.g. Sales" /></div>
-                                <div className="space-y-1.5">
-                                    <Label>Designation</Label>
-                                    <Combobox
-                                        value={form.designation}
-                                        onValueChange={v => setForm(f => ({ ...f, designation: v }))}
-                                        options={(Array.isArray(designationList) ? designationList : [])
-                                            .filter((d: { isActive: boolean }) => d.isActive)
-                                            .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
-                                        placeholder="Select designation…"
-                                        searchPlaceholder="Search designations…"
-                                        clearable
-                                    />
-                                </div>
+                            <div className="space-y-1.5">
+                                <Label>Designation</Label>
+                                <Combobox
+                                    value={form.designation}
+                                    onValueChange={v => setForm(f => ({ ...f, designation: v }))}
+                                    options={(Array.isArray(designationList) ? designationList : [])
+                                        .filter((d: { isActive: boolean }) => d.isActive)
+                                        .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
+                                    placeholder="Select or type designation…"
+                                    searchPlaceholder="Search or create…"
+                                    clearable
+                                    creatable
+                                />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
@@ -1154,9 +1226,19 @@ export function EditEmployeeDialog({
                                 </Select>
                             </div>
                             {form.paymentMethod === 'bank_transfer' && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div className="space-y-1.5"><Label>Bank Name</Label><Input value={form.bankName} onChange={set('bankName')} /></div>
-                                    <div className="space-y-1.5"><Label>IBAN</Label><Input value={form.iban} onChange={set('iban')} /></div>
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="space-y-1.5"><Label>Account Name</Label><Input value={form.accountName} onChange={set('accountName')} placeholder="Account holder name" /></div>
+                                        <div className="space-y-1.5"><Label>Account Number</Label><Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="e.g. 1234567890" /></div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="space-y-1.5"><Label>Bank Name</Label><Input value={form.bankName} onChange={set('bankName')} placeholder="e.g. Emirates NBD" /></div>
+                                        <div className="space-y-1.5"><Label>Branch</Label><Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="e.g. Dubai Main Branch" /></div>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div className="space-y-1.5"><Label>IBAN Number</Label><Input value={form.iban} onChange={set('iban')} placeholder="AE070331234567890123456" /></div>
+                                        <div className="space-y-1.5"><Label>Swift Code</Label><Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="e.g. EBILAEAD" /></div>
+                                    </div>
                                 </div>
                             )}
                             <div className="space-y-1.5">
