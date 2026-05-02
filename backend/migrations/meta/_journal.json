@@ -50,6 +50,13 @@
       "when": 1746662400000,
       "tag": "0006_leave_adjustments",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1746748800000,
+      "tag": "0007_employee_transfers",
+      "breakpoints": true
     }
   ]
 }

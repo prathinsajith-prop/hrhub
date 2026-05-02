@@ -7,6 +7,7 @@ import {
   Phone, Mail, MapPin, Calendar, Building2, Hash, Shield, Edit2,
   Clock, Download, Eye, Camera, Loader2, Plus, Package,
   CalendarDays, ClipboardList, TrendingDown, UserCheck, Users, GraduationCap, Landmark,
+  ArrowRightLeft,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -14,8 +15,19 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
+import { NumericInput } from '@/components/ui/numeric-input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { useEmployee, useUploadEmployeeAvatar, useEmployeeAccount } from '@/hooks/useEmployees'
+import { useEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision } from '@/hooks/useEmployees'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { useEmployeeTeams } from '@/hooks/useTeams'
 import { useDocuments, useUploadDocument } from '@/hooks/useDocuments'
@@ -23,6 +35,7 @@ import { usePerformanceReviews } from '@/hooks/usePerformance'
 import { useEmployeeAssets } from '@/hooks/useAssets'
 import { useLeaveBalance, useLeaveRequests } from '@/hooks/useLeave'
 import { useAttendance } from '@/hooks/useAttendance'
+import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { EditEmployeeDialog } from '@/components/shared/action-dialogs'
 import { InviteEmployeeDialog } from '@/components/shared/InviteEmployeeDialog'
@@ -71,6 +84,24 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'info' | 'destructi
 const ATTENDANCE_STATUS_VARIANT: Record<string, 'success' | 'destructive' | 'warning' | 'info' | 'secondary'> = {
   present: 'success', absent: 'destructive', late: 'warning',
   half_day: 'info', wfh: 'secondary', on_leave: 'secondary',
+}
+
+const REVISION_TYPE_LABELS: Record<string, string> = {
+  increment: 'Increment',
+  decrement: 'Decrement',
+  promotion: 'Promotion',
+  annual_review: 'Annual Review',
+  probation_completion: 'Probation Completion',
+  correction: 'Correction',
+}
+
+const REVISION_TYPE_VARIANT: Record<string, 'success' | 'destructive' | 'info' | 'warning' | 'secondary'> = {
+  increment: 'success',
+  decrement: 'destructive',
+  promotion: 'info',
+  annual_review: 'secondary',
+  probation_completion: 'warning',
+  correction: 'secondary',
 }
 
 // ─── Small components ─────────────────────────────────────────────────────────
@@ -123,6 +154,334 @@ const AttendanceSummary = React.memo(function AttendanceSummary({ records }: { r
     </div>
   )
 })
+
+// ─── Change Salary Dialog ─────────────────────────────────────────────────────
+
+interface ChangeSalaryDialogProps {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  employeeId: string
+  currentBasic?: number | null
+}
+
+function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic }: ChangeSalaryDialogProps) {
+  const mutation = useRecordSalaryRevision(employeeId)
+
+  const [effectiveDate, setEffectiveDate] = React.useState('')
+  const [revisionType, setRevisionType] = React.useState('increment')
+  const [newBasic, setNewBasic] = React.useState('')
+  const [newTotal, setNewTotal] = React.useState('')
+  const [remarks, setRemarks] = React.useState('')
+
+  // Auto-fill yearly total when basic changes and total is empty
+  const basicNum = parseFloat(newBasic) || 0
+  const computedYearly = basicNum > 0 ? basicNum * 12 : null
+
+  function resetForm() {
+    setEffectiveDate('')
+    setRevisionType('increment')
+    setNewBasic('')
+    setNewTotal('')
+    setRemarks('')
+  }
+
+  function handleClose(o: boolean) {
+    if (!o) resetForm()
+    onOpenChange(o)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!effectiveDate || !newBasic) {
+      toast.error('Missing fields', 'Effective Date and New Basic Salary are required.')
+      return
+    }
+
+    const totalValue = newTotal ? parseFloat(newTotal) : undefined
+
+    mutation.mutate(
+      {
+        effectiveDate,
+        revisionType,
+        newBasicSalary: parseFloat(newBasic),
+        newTotalSalary: totalValue,
+        reason: remarks || undefined,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Salary updated', 'Salary revision recorded successfully.')
+          handleClose(false)
+        },
+        onError: (err: Error) => {
+          toast.error('Failed', err?.message ?? 'Could not record salary revision.')
+        },
+      },
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Change Salary</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="cs-date">Effective Date <span className="text-destructive">*</span></Label>
+            <DatePicker
+              id="cs-date"
+              value={effectiveDate}
+              onChange={setEffectiveDate}
+              placeholder="Select effective date"
+              aria-invalid={!effectiveDate && undefined}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="cs-type">Revision Type <span className="text-destructive">*</span></Label>
+            <Select value={revisionType} onValueChange={setRevisionType}>
+              <SelectTrigger id="cs-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(REVISION_TYPE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="cs-basic">New Basic Salary (AED) <span className="text-destructive">*</span></Label>
+            {currentBasic != null && (
+              <p className="text-xs text-muted-foreground">Current: {formatCurrency(currentBasic)}</p>
+            )}
+            <NumericInput
+              id="cs-basic"
+              placeholder="0.00"
+              value={newBasic}
+              onChange={e => setNewBasic(e.target.value)}
+            />
+            {computedYearly != null && (
+              <p className="text-xs text-muted-foreground">
+                Yearly = {formatCurrency(computedYearly)} (monthly × 12)
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="cs-total">New Total Salary (AED) <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <NumericInput
+              id="cs-total"
+              placeholder={computedYearly != null ? `e.g. ${basicNum.toFixed(2)}` : '0.00'}
+              value={newTotal}
+              onChange={e => setNewTotal(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="cs-remarks">Remarks / Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Textarea
+              id="cs-remarks"
+              placeholder="Reason for salary change…"
+              value={remarks}
+              onChange={e => setRemarks(e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Saving…</> : 'Save Revision'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Transfer Dialog ──────────────────────────────────────────────────────────
+
+interface TransferDialogProps {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  employeeId: string
+  orgUnits: Array<{ id: string; name: string; type: string }>
+  currentDept?: string | null
+  currentDeptId?: string | null
+}
+
+function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept, currentDeptId }: TransferDialogProps) {
+  const mutation = useCreateTransfer(employeeId)
+
+  const [transferDate, setTransferDate] = React.useState('')
+  const [branchId, setBranchId] = React.useState<string>('')
+  const [divisionId, setDivisionId] = React.useState<string>('')
+  const [departmentId, setDepartmentId] = React.useState<string>('')
+  const [toDesignation, setToDesignation] = React.useState('')
+  const [newSalary, setNewSalary] = React.useState('')
+  const [reason, setReason] = React.useState('')
+
+  const branches = React.useMemo(() => orgUnits.filter(u => u.type === 'branch'), [orgUnits])
+  const divisions = React.useMemo(() => orgUnits.filter(u => u.type === 'division'), [orgUnits])
+  const departments = React.useMemo(() => orgUnits.filter(u => u.type === 'department'), [orgUnits])
+
+  const selectedDept = departments.find(d => d.id === departmentId)
+  const fromLabel = currentDept ?? (currentDeptId ? orgUnits.find(u => u.id === currentDeptId)?.name : null) ?? 'Current'
+  const toLabel = selectedDept?.name ?? null
+
+  function resetForm() {
+    setTransferDate('')
+    setBranchId('')
+    setDivisionId('')
+    setDepartmentId('')
+    setToDesignation('')
+    setNewSalary('')
+    setReason('')
+  }
+
+  function handleClose(o: boolean) {
+    if (!o) resetForm()
+    onOpenChange(o)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!transferDate) {
+      toast.error('Missing fields', 'Transfer Date is required.')
+      return
+    }
+
+    mutation.mutate(
+      {
+        transferDate,
+        toBranchId: branchId || null,
+        toDivisionId: divisionId || null,
+        toDepartmentId: departmentId || null,
+        toDesignation: toDesignation || undefined,
+        newSalary: newSalary ? parseFloat(newSalary) : null,
+        reason: reason || undefined,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Transfer recorded', 'Employee transfer recorded successfully.')
+          handleClose(false)
+        },
+        onError: (err: Error) => {
+          toast.error('Failed', err?.message ?? 'Could not record transfer.')
+        },
+      },
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Transfer Employee</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="tr-date">Transfer Date <span className="text-destructive">*</span></Label>
+            <DatePicker
+              id="tr-date"
+              value={transferDate}
+              onChange={setTransferDate}
+              placeholder="Select transfer date"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="tr-branch">Branch <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Select value={branchId} onValueChange={setBranchId}>
+              <SelectTrigger id="tr-branch">
+                <SelectValue placeholder="Select branch…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">— None —</SelectItem>
+                {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="tr-division">Division <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Select value={divisionId} onValueChange={setDivisionId}>
+              <SelectTrigger id="tr-division">
+                <SelectValue placeholder="Select division…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">— None —</SelectItem>
+                {divisions.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="tr-dept">Department <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Select value={departmentId} onValueChange={setDepartmentId}>
+              <SelectTrigger id="tr-dept">
+                <SelectValue placeholder="Select department…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">— None —</SelectItem>
+                {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {toLabel && (
+            <div className="rounded-lg bg-muted/40 border px-3 py-2 text-xs text-muted-foreground">
+              Transferring from: <span className="font-medium text-foreground">{fromLabel}</span>
+              {' '}&rarr;{' '}
+              <span className="font-medium text-foreground">{toLabel}</span>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="tr-designation">New Designation <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Input
+              id="tr-designation"
+              placeholder="e.g. Senior Engineer"
+              value={toDesignation}
+              onChange={e => setToDesignation(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="tr-salary">New Salary (AED) <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <NumericInput
+              id="tr-salary"
+              placeholder="0.00"
+              value={newSalary}
+              onChange={e => setNewSalary(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="tr-reason">Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Textarea
+              id="tr-reason"
+              placeholder="Reason for transfer…"
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Saving…</> : 'Record Transfer'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -203,11 +562,19 @@ export function EmployeeDetailPage() {
   const { data: accountData, isLoading: accountLoading } = useEmployeeAccount(canManage ? id : undefined)
   const { data: employeeTeams = [] } = useEmployeeTeams(id)
 
+  // Salary history — only fetch when canManage (same guard as the route)
+  const { data: salaryHistoryData, isLoading: salaryHistoryLoading } = useSalaryHistory(canManage ? (id ?? '') : '')
+
+  // Transfer history
+  const { data: transfersData, isLoading: transfersLoading } = useEmployeeTransfers(id)
+
   const uploadAvatar = useUploadEmployeeAvatar(id!)
   const uploadDoc = useUploadDocument()
   const [editOpen, setEditOpen] = React.useState(false)
   const [inviteOpen, setInviteOpen] = React.useState(false)
   const [viewDoc, setViewDoc] = React.useState<{ id: string; fileName?: string } | null>(null)
+  const [changeSalaryOpen, setChangeSalaryOpen] = React.useState(false)
+  const [transferOpen, setTransferOpen] = React.useState(false)
   const avatarInputRef = React.useRef<HTMLInputElement>(null)
   const docInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -453,7 +820,16 @@ export function EmployeeDetailPage() {
           {/* ── Employment ── */}
           <TabsContent value="employment" className="mt-4 space-y-4">
             <Card>
-              <CardHeader><CardTitle className="text-base">Employment Details</CardTitle></CardHeader>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-base">Employment Details</CardTitle>
+                  {canManage && (
+                    <Button size="sm" variant="outline" leftIcon={<ArrowRightLeft className="h-3.5 w-3.5" />} onClick={() => setTransferOpen(true)}>
+                      Transfer
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
@@ -504,6 +880,70 @@ export function EmployeeDetailPage() {
                         </Badge>
                       </div>
                     ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Transfer History */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-base">Transfer History</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {transfersLoading ? (
+                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                ) : !transfersData || transfersData.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <ArrowRightLeft className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm font-medium">No transfers recorded</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {transfersData.map(tr => {
+                      const fromDept = tr.fromDepartment ?? (tr.fromDepartmentId ? orgUnitName(tr.fromDepartmentId) : null)
+                      const toDept = tr.toDepartment ?? (tr.toDepartmentId ? orgUnitName(tr.toDepartmentId) : null)
+                      const fromDesig = tr.fromDesignation
+                      const toDesig = tr.toDesignation
+                      return (
+                        <div key={tr.id} className="py-3 flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="info" className="text-[10px] shrink-0">Transfer</Badge>
+                              <span className="text-xs text-muted-foreground">{formatDate(tr.transferDate)}</span>
+                            </div>
+                            <div className="mt-1 text-sm">
+                              {(fromDept || toDept) && (
+                                <p className="text-sm text-foreground">
+                                  <span className="text-muted-foreground">{fromDept ?? '—'}</span>
+                                  {' '}&rarr;{' '}
+                                  <span className="font-medium">{toDept ?? '—'}</span>
+                                </p>
+                              )}
+                              {(fromDesig || toDesig) && (
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {fromDesig ?? '—'} &rarr; {toDesig ?? '—'}
+                                </p>
+                              )}
+                              {tr.newSalary && (
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  New salary: <span className="font-medium text-foreground">{formatCurrency(parseFloat(tr.newSalary))}</span>
+                                </p>
+                              )}
+                              {tr.reason && (
+                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{tr.reason}</p>
+                              )}
+                            </div>
+                          </div>
+                          {tr.approvedByName && (
+                            <span className="text-xs text-muted-foreground shrink-0">by {tr.approvedByName}</span>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -603,9 +1043,18 @@ export function EmployeeDetailPage() {
           </TabsContent>
 
           {/* ── Payroll ── */}
-          <TabsContent value="payroll" className="mt-4">
+          <TabsContent value="payroll" className="mt-4 space-y-4">
             <Card>
-              <CardHeader><CardTitle className="text-base">Payroll Summary</CardTitle></CardHeader>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-base">Payroll Summary</CardTitle>
+                  {canManage && (
+                    <Button size="sm" variant="outline" leftIcon={<CreditCard className="h-3.5 w-3.5" />} onClick={() => setChangeSalaryOpen(true)}>
+                      Change Salary
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
@@ -621,6 +1070,74 @@ export function EmployeeDetailPage() {
                     <InfoRow label="IBAN" value={e.iban} icon={Hash} />
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Salary History */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-base">Salary History</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {salaryHistoryLoading ? (
+                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                ) : !salaryHistoryData || salaryHistoryData.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CreditCard className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm font-medium">No salary revisions recorded</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b bg-muted/40">
+                          <th className="text-left font-medium text-muted-foreground px-3 py-2.5">Effective Date</th>
+                          <th className="text-left font-medium text-muted-foreground px-3 py-2.5">Type</th>
+                          <th className="text-right font-medium text-muted-foreground px-3 py-2.5">Prev. Basic</th>
+                          <th className="text-right font-medium text-muted-foreground px-3 py-2.5">New Basic</th>
+                          <th className="text-right font-medium text-muted-foreground px-3 py-2.5">Change</th>
+                          <th className="text-left font-medium text-muted-foreground px-3 py-2.5 hidden sm:table-cell">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {salaryHistoryData.map(rev => {
+                          const prev = rev.previousBasicSalary ? parseFloat(rev.previousBasicSalary) : null
+                          const next = parseFloat(rev.newBasicSalary)
+                          const delta = prev != null ? next - prev : null
+                          return (
+                            <tr key={rev.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                              <td className="px-3 py-2.5 font-medium">{formatDate(rev.effectiveDate)}</td>
+                              <td className="px-3 py-2.5">
+                                <Badge variant={REVISION_TYPE_VARIANT[rev.revisionType] ?? 'secondary'} className="text-[10px]">
+                                  {REVISION_TYPE_LABELS[rev.revisionType] ?? rev.revisionType}
+                                </Badge>
+                              </td>
+                              <td className="px-3 py-2.5 text-right text-muted-foreground">
+                                {prev != null ? formatCurrency(prev) : '—'}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-medium">
+                                {formatCurrency(next)}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-medium">
+                                {delta != null ? (
+                                  <span className={delta >= 0 ? 'text-success' : 'text-destructive'}>
+                                    {delta >= 0 ? '+' : ''}{formatCurrency(delta)}
+                                  </span>
+                                ) : '—'}
+                              </td>
+                              <td className="px-3 py-2.5 text-muted-foreground hidden sm:table-cell max-w-[180px] truncate">
+                                {rev.reason ?? '—'}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -948,6 +1465,28 @@ export function EmployeeDetailPage() {
         documentId={viewDoc?.id ?? null}
         fileName={viewDoc?.fileName}
       />
+
+      {/* Change Salary Dialog */}
+      {canManage && id && (
+        <ChangeSalaryDialog
+          open={changeSalaryOpen}
+          onOpenChange={setChangeSalaryOpen}
+          employeeId={id}
+          currentBasic={e.basicSalary ? parseFloat(String(e.basicSalary)) : null}
+        />
+      )}
+
+      {/* Transfer Dialog */}
+      {canManage && id && (
+        <TransferDialog
+          open={transferOpen}
+          onOpenChange={setTransferOpen}
+          employeeId={id}
+          orgUnits={orgUnits}
+          currentDept={orgUnitName((e as any).departmentId) ?? e.department}
+          currentDeptId={(e as any).departmentId}
+        />
+      )}
     </PageWrapper>
   )
 }
