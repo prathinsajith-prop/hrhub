@@ -987,7 +987,7 @@ export function EditEmployeeDialog({
                             <div className="space-y-1.5"><Label>Date of Birth</Label><DatePicker value={form.dateOfBirth} max={(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 10); return d.toISOString().split('T')[0] })()} min="1950-01-01" onChange={setDate('dateOfBirth')} /></div>
                             <div className="space-y-1.5">
                                 <Label>Gender</Label>
-                                <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v as any }))}>
+                                <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v as NonNullable<Employee['gender']> }))}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         {GENDER_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -996,7 +996,7 @@ export function EditEmployeeDialog({
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Marital Status</Label>
-                                <Select value={form.maritalStatus} onValueChange={v => setForm(f => ({ ...f, maritalStatus: v as any }))}>
+                                <Select value={form.maritalStatus} onValueChange={v => setForm(f => ({ ...f, maritalStatus: v as NonNullable<Employee['maritalStatus']> }))}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         {MARITAL_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -1052,9 +1052,9 @@ export function EditEmploymentDialog({
     const [form, setForm] = useState({
         joinDate: employee.joinDate ?? '',
         workEmail: employee.workEmail ?? '',
-        departmentId: (employee as any).departmentId ?? '',
-        divisionId: (employee as any).divisionId ?? '',
-        branchId: (employee as any).branchId ?? '',
+        departmentId: employee.departmentId ?? '',
+        divisionId: employee.divisionId ?? '',
+        branchId: employee.branchId ?? '',
         managerName: employee.managerName ?? '',
         reportingTo: employee.reportingTo ?? '',
         designation: employee.designation ?? '',
@@ -1185,7 +1185,7 @@ export function EditEmploymentDialog({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label>Contract Type</Label>
-                                <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v as any }))}>
+                                <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v as NonNullable<Employee['contractType']> }))}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         {CONTRACT_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -1200,7 +1200,7 @@ export function EditEmploymentDialog({
                         </div>
                         <div className="space-y-1.5">
                             <Label>Status</Label>
-                            <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as any }))}>
+                            <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as Employee['status'] }))}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {EDIT_EMPLOYEE_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -1314,7 +1314,7 @@ export function EditPayrollDialog({
                         )}
                         <div className="space-y-1.5">
                             <Label>Payment Method</Label>
-                            <Select value={form.paymentMethod} onValueChange={v => setForm(f => ({ ...f, paymentMethod: v as any }))}>
+                            <Select value={form.paymentMethod} onValueChange={v => setForm(f => ({ ...f, paymentMethod: v as NonNullable<Employee['paymentMethod']> }))}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {PAYMENT_METHOD_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -1339,7 +1339,7 @@ export function EditPayrollDialog({
                         )}
                         <div className="space-y-1.5">
                             <Label>Emiratisation Category</Label>
-                            <Select value={form.emiratisationCategory} onValueChange={v => setForm(f => ({ ...f, emiratisationCategory: v as any }))}>
+                            <Select value={form.emiratisationCategory} onValueChange={v => setForm(f => ({ ...f, emiratisationCategory: v as NonNullable<Employee['emiratisationCategory']> }))}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {EMIRATISATION_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}

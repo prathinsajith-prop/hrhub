@@ -16,6 +16,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useOnboardingChecklists, useCreateOnboardingChecklist, useOnboardingAnalytics, type OnboardingChecklist } from '@/hooks/useOnboarding'
 import { useEmployees } from '@/hooks/useEmployees'
+import type { Employee } from '@/types'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import {
@@ -35,11 +36,11 @@ export function OnboardingPage() {
     // Include both active and onboarding employees in the "start checklist" dropdown
     const { data: empDataActive } = useEmployees({ limit: 100, status: 'active' })
     const { data: empDataOnboarding } = useEmployees({ limit: 100, status: 'onboarding' })
-    const allEmployees = useMemo(() => {
-        const active = (empDataActive?.data ?? []) as any[]
-        const onboarding = (empDataOnboarding?.data ?? []) as any[]
-        const seen = new Set(active.map((e: any) => e.id))
-        return [...active, ...onboarding.filter((e: any) => !seen.has(e.id))]
+    const allEmployees = useMemo<Employee[]>(() => {
+        const active: Employee[] = empDataActive?.data ?? []
+        const onboarding: Employee[] = empDataOnboarding?.data ?? []
+        const seen = new Set(active.map(e => e.id))
+        return [...active, ...onboarding.filter(e => !seen.has(e.id))]
     }, [empDataActive?.data, empDataOnboarding?.data])
 
     const [newOpen, setNewOpen] = useState(false)

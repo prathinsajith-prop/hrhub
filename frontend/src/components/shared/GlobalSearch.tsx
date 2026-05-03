@@ -139,7 +139,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                                                 {emp.designation}
                                             </span>
                                         )}
-                                        <OrgHierarchyPath parts={resolveOrgPath(orgMap, (emp as any).branchId, (emp as any).divisionId, (emp as any).departmentId ?? null)} />
+                                        <OrgHierarchyPath parts={resolveOrgPath(orgMap, emp.branchId, emp.divisionId, emp.departmentId ?? null)} />
                                     </div>
                                 </CommandItem>
                             ))}

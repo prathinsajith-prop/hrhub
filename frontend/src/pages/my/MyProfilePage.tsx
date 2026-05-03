@@ -113,8 +113,8 @@ export function MyProfileContent() {
             phone: employee.phone ?? '',
             mobileNo: employee.mobileNo ?? '',
             personalEmail: employee.personalEmail ?? '',
-            emergencyContactName: (employee as any).emergencyContactName ?? '',
-            emergencyContactPhone: (employee as any).emergencyContactPhone ?? '',
+            emergencyContactName: employee.emergencyContactName ?? '',
+            emergencyContactPhone: employee.emergencyContactPhone ?? '',
             homeCountryAddress: employee.homeCountryAddress ?? '',
         })
     }, [employee])
@@ -124,7 +124,7 @@ export function MyProfileContent() {
 
     async function save() {
         try {
-            await update.mutateAsync(form as any)
+            await update.mutateAsync(form)
             toast.success('Saved', 'Your profile has been updated.')
             setEditing(false)
         } catch { toast.error('Error', 'Could not update profile.') }
@@ -280,7 +280,7 @@ export function MyProfileContent() {
                         <SectionTitle>Role</SectionTitle>
                         <InfoRow icon={Briefcase}  label="Designation"    value={e.designation} />
                         {(() => {
-                            const [branch, division, dept] = resolveOrgPath(orgMap, (e as any).branchId, (e as any).divisionId, (e as any).departmentId)
+                            const [branch, division, dept] = resolveOrgPath(orgMap, e.branchId, e.divisionId, e.departmentId)
                             return (<>
                                 <InfoRow icon={Building2} label="Branch"     value={branch ?? e.department ?? null} />
                                 <InfoRow icon={Building2} label="Division"   value={division} />
@@ -369,8 +369,8 @@ export function MyProfileContent() {
                                 <InfoRow icon={Phone} label="Phone"          value={e.phone} />
                                 <InfoRow icon={Phone} label="Mobile"         value={e.mobileNo} />
                                 <SectionTitle>Emergency Contact</SectionTitle>
-                                <InfoRow icon={User}  label="Contact Name"   value={(e as any).emergencyContactName} />
-                                <InfoRow icon={Phone} label="Contact Phone"  value={(e as any).emergencyContactPhone} />
+                                <InfoRow icon={User}  label="Contact Name"   value={e.emergencyContactName} />
+                                <InfoRow icon={Phone} label="Contact Phone"  value={e.emergencyContactPhone} />
                                 <SectionTitle>Address</SectionTitle>
                                 <InfoRow icon={MapPin} label="Home Address"  value={e.homeCountryAddress} />
                             </>

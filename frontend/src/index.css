@@ -500,11 +500,11 @@ html[dir="rtl"] [data-rtl-flip] {
 
 /* Public holiday day highlight — soft rose tint on the day cell background */
 .hrhub-fullcalendar .fc-day-holiday {
-  background-color: #fff1f2 !important;
+  background-color: hsl(var(--destructive) / 0.06) !important;
 }
 
 .hrhub-fullcalendar .fc-day-holiday .fc-daygrid-day-number {
-  color: #f43f5e;
+  color: hsl(var(--destructive));
   font-weight: 600;
 }
 

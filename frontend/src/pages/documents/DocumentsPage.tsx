@@ -234,7 +234,7 @@ export function DocumentsPage() {
       const res = await api.get<{ data: { downloadUrl: string } }>(`/documents/${d.id}/download-url`)
       const a = document.createElement('a')
       a.href = res.data.downloadUrl
-      a.download = (d as any).fileName ?? d.docType ?? 'document'
+      a.download = d.fileName ?? d.docType ?? 'document'
       a.target = '_blank'
       a.rel = 'noopener'
       document.body.appendChild(a)
@@ -350,7 +350,7 @@ export function DocumentsPage() {
             <>
               <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}
                 onClick={async () => {
-                  for (const row of selected as any[]) {
+                  for (const row of selected as Document[]) {
                     try {
                       const res = await api.get<{ data: { downloadUrl: string } }>(`/documents/${row.id}/download-url`)
                       const a = document.createElement('a')
@@ -369,7 +369,7 @@ export function DocumentsPage() {
                 Download
               </Button>
               <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                onClick={() => setBulkArchiveTarget(selected as any[])}>
+                onClick={() => setBulkArchiveTarget(selected as Document[])}>
                 Archive
               </Button>
             </>
@@ -429,12 +429,12 @@ export function DocumentsPage() {
         open={!!viewTarget}
         onOpenChange={(o) => !o && setViewTarget(null)}
         documentId={viewTarget?.id ?? null}
-        fileName={(viewTarget as any)?.fileName ?? viewTarget?.docType}
+        fileName={viewTarget?.fileName ?? viewTarget?.docType}
       />
       <VerifyDocumentDialog
         open={!!verifyTarget}
         onOpenChange={(o) => !o && setVerifyTarget(null)}
-        document={verifyTarget as any}
+        document={verifyTarget}
       />
     </PageWrapper>
   )

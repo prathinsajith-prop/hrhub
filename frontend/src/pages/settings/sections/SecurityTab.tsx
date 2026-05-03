@@ -11,7 +11,7 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { labelFor } from '@/lib/enums'
 import { useSecuritySettings, useUpdateSecuritySettings, useIpAllowlist, useUpdateIpAllowlist, useTwoFaStatus, useTwoFaSetup, useTwoFaVerify, useTwoFaDisable, useTwoFaRegenerateBackupCodes } from '@/hooks/useSettings'
-import { useInfiniteLoginHistory } from '@/hooks/useAudit'
+import { useInfiniteLoginHistory, type LoginHistoryRecord } from '@/hooks/useAudit'
 import { Section } from './_shared'
 
 // ─── Security Policies Card ────────────────────────────────────────────────────
@@ -456,7 +456,7 @@ function LoginHistoryCard() {
         hasNextPage,
         isFetchingNextPage,
     } = useInfiniteLoginHistory({ pageSize: 10 })
-    const history = (data?.pages.flat() ?? []) as any[]
+    const history = (data?.pages.flat() ?? []) as LoginHistoryRecord[]
 
     const sentinelRef = useRef<HTMLDivElement | null>(null)
     useEffect(() => {

@@ -46,6 +46,7 @@ import { toast } from '@/components/ui/overlays'
 import { api } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { CopyableEmail, CopyablePhone } from '@/components/shared'
+import type { Employee } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -650,9 +651,9 @@ export function EmployeeDetailPage() {
                     </Badge>
                     {(() => {
                       const parts = [
-                        orgUnitName((e as any).branchId),
-                        orgUnitName((e as any).divisionId),
-                        orgUnitName((e as any).departmentId) ?? e.department,
+                        orgUnitName(e.branchId),
+                        orgUnitName(e.divisionId),
+                        orgUnitName(e.departmentId) ?? e.department,
                       ].filter(Boolean) as string[]
                       return parts.length > 0 ? (
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -776,8 +777,8 @@ export function EmployeeDetailPage() {
                     <InfoRow label="Mobile" value={e.mobileNo ?? e.phone} icon={Phone} />
                     <InfoRow label="Personal Email" value={e.personalEmail} icon={Mail} />
                     <InfoRow label="Work Email" value={e.workEmail || e.email || null} icon={Mail} />
-                    <InfoRow label="Emergency Name" value={(e as any).emergencyContactName ?? e.emergencyContact} icon={Phone} />
-                    <InfoRow label="Emergency Phone" value={(e as any).emergencyContactPhone} icon={Phone} />
+                    <InfoRow label="Emergency Name" value={e.emergencyContactName ?? e.emergencyContact} icon={Phone} />
+                    <InfoRow label="Emergency Phone" value={e.emergencyContactPhone} icon={Phone} />
                     <InfoRow label="Address" value={e.homeCountryAddress} icon={MapPin} />
                   </div>
                 </div>
@@ -808,9 +809,9 @@ export function EmployeeDetailPage() {
                   <div>
                     <InfoRow label="Employee No." value={e.employeeNo} icon={Hash} />
                     <InfoRow label="Designation" value={e.designation} icon={Briefcase} />
-                    <InfoRow label="Branch" value={orgUnitName((e as any).branchId) ?? '—'} icon={Building2} />
-                    <InfoRow label="Division" value={orgUnitName((e as any).divisionId) ?? '—'} icon={Building2} />
-                    <InfoRow label="Department" value={orgUnitName((e as any).departmentId) ?? '—'} icon={Building2} />
+                    <InfoRow label="Branch" value={orgUnitName(e.branchId) ?? '—'} icon={Building2} />
+                    <InfoRow label="Division" value={orgUnitName(e.divisionId) ?? '—'} icon={Building2} />
+                    <InfoRow label="Department" value={orgUnitName(e.departmentId) ?? '—'} icon={Building2} />
                     <InfoRow label="Company" value={(e as unknown as Record<string, unknown>)['entityName'] as string ?? '—'} icon={Building2} />
                     <InfoRow label="Contract Type" value={labelFor(e.contractType)} icon={Briefcase} />
                     <InfoRow label="Work Location" value={e.workLocation} icon={MapPin} />
@@ -954,7 +955,7 @@ export function EmployeeDetailPage() {
                           emiratesIdExpiry: e.emiratesIdExpiry ? String(e.emiratesIdExpiry).slice(0, 10) : '',
                           passportNo: e.passportNo ?? '',
                           passportExpiry: e.passportExpiry ? String(e.passportExpiry).slice(0, 10) : '',
-                          labourCardNumber: (e as any).labourCardNumber ?? '',
+                          labourCardNumber: e.labourCardNumber ?? '',
                         })
                         setVisaEditOpen(true)
                       }}
@@ -1024,19 +1025,19 @@ export function EmployeeDetailPage() {
                         size="sm"
                         loading={updateEmployee.isPending}
                         onClick={async () => {
-                          const payload: Record<string, string | null> = {}
-                          if (visaForm.visaType) payload.visaType = visaForm.visaType
-                          payload.visaNumber = visaForm.visaNumber || null as any
-                          payload.visaIssueDate = visaForm.visaIssueDate || null as any
-                          payload.visaExpiry = visaForm.visaExpiry || null as any
-                          payload.sponsoringEntity = visaForm.sponsoringEntity || null as any
-                          payload.emiratesId = visaForm.emiratesId || null as any
-                          payload.emiratesIdExpiry = visaForm.emiratesIdExpiry || null as any
-                          payload.passportNo = visaForm.passportNo || null as any
-                          payload.passportExpiry = visaForm.passportExpiry || null as any
-                          payload.labourCardNumber = visaForm.labourCardNumber || null as any
+                          const payload: Partial<Employee> = {}
+                          if (visaForm.visaType) payload.visaType = visaForm.visaType as Employee['visaType']
+                          payload.visaNumber = visaForm.visaNumber || undefined
+                          payload.visaIssueDate = visaForm.visaIssueDate || undefined
+                          payload.visaExpiry = visaForm.visaExpiry || undefined
+                          payload.sponsoringEntity = visaForm.sponsoringEntity || undefined
+                          payload.emiratesId = visaForm.emiratesId || undefined
+                          payload.emiratesIdExpiry = visaForm.emiratesIdExpiry || undefined
+                          payload.passportNo = visaForm.passportNo || undefined
+                          payload.passportExpiry = visaForm.passportExpiry || undefined
+                          payload.labourCardNumber = visaForm.labourCardNumber || undefined
                           try {
-                            await updateEmployee.mutateAsync(payload as any)
+                            await updateEmployee.mutateAsync(payload)
                             toast.success('Visa & ID updated')
                             setVisaEditOpen(false)
                           } catch {
@@ -1062,7 +1063,7 @@ export function EmployeeDetailPage() {
                       <InfoRow label="EID Expiry" value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : null} icon={Calendar} />
                       <InfoRow label="Passport No." value={e.passportNo} icon={Hash} />
                       <InfoRow label="Passport Expiry" value={e.passportExpiry ? formatDate(e.passportExpiry) : null} icon={Calendar} />
-                      <InfoRow label="Labour Card No." value={(e as any).labourCardNumber} icon={Hash} />
+                      <InfoRow label="Labour Card No." value={e.labourCardNumber} icon={Hash} />
                     </div>
                   </div>
                 )}
@@ -1534,8 +1535,8 @@ export function EmployeeDetailPage() {
           onOpenChange={setTransferOpen}
           employeeId={id}
           orgUnits={orgUnits}
-          currentDept={orgUnitName((e as any).departmentId) ?? e.department}
-          currentDeptId={(e as any).departmentId}
+          currentDept={orgUnitName(e.departmentId) ?? e.department}
+          currentDeptId={e.departmentId}
         />
       )}
     </PageWrapper>
