@@ -111,9 +111,8 @@ export function OnboardingPage() {
                     toast.success('Onboarding started', useTemplate ? 'Checklist created with 9 default steps.' : 'Empty checklist created.')
                     setNewOpen(false); setNewEmpId(''); setNewStartDate(''); setNewDueDate(''); setUseTemplate(true)
                 },
-                onError: (err: any) => {
-                    const msg = err?.response?.data?.message ?? 'Could not create checklist.'
-                    toast.error('Failed', msg)
+                onError: (err: Error) => {
+                    toast.error('Failed', err.message ?? 'Could not create checklist.')
                 },
             },
         )
@@ -265,7 +264,7 @@ export function OnboardingPage() {
                                         <SelectValue placeholder="Select employee…" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {allEmployees.filter((e: any) => !enrolledIds.has(e.id)).map((e: any) => (
+                                        {allEmployees.filter((e) => !enrolledIds.has(e.id)).map((e) => (
                                             <SelectItem key={e.id} value={e.id}>
                                                 {e.firstName} {e.lastName}
                                                 {e.designation ? ` — ${e.designation}` : ''}
@@ -273,16 +272,16 @@ export function OnboardingPage() {
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {allEmployees.filter((e: any) => !enrolledIds.has(e.id)).length === 0 && (
+                                {allEmployees.filter((e) => !enrolledIds.has(e.id)).length === 0 && (
                                     <p className="text-xs text-muted-foreground">All active employees already have a checklist.</p>
                                 )}
                             </div>
                         ) : (
                             <div className="flex items-center gap-2 rounded-lg bg-muted/50 border px-3 py-2">
                                 <span className="text-sm font-medium">
-                                    {(() => { const e = allEmployees.find((e: any) => e.id === newEmpId); return e ? `${e.firstName} ${e.lastName}` : '' })()}
+                                    {(() => { const e = allEmployees.find((e) => e.id === newEmpId); return e ? `${e.firstName} ${e.lastName}` : '' })()}
                                 </span>
-                                {(() => { const e = allEmployees.find((e: any) => e.id === newEmpId); return e?.designation ? <span className="text-xs text-muted-foreground">— {e.designation}</span> : null })()}
+                                {(() => { const e = allEmployees.find((e) => e.id === newEmpId); return e?.designation ? <span className="text-xs text-muted-foreground">— {e.designation}</span> : null })()}
                             </div>
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

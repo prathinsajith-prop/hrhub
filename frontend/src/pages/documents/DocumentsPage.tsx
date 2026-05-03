@@ -204,7 +204,7 @@ export function DocumentsPage() {
   const [uploadOpen, setUploadOpen] = useState(qpUpload)
   const [editTarget, setEditTarget] = useState<Document | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
-  const [bulkArchiveTarget, setBulkArchiveTarget] = useState<any[] | null>(null)
+  const [bulkArchiveTarget, setBulkArchiveTarget] = useState<Document[] | null>(null)
   const [viewTarget, setViewTarget] = useState<Document | null>(null)
   const [verifyTarget, setVerifyTarget] = useState<Document | null>(null)
   const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: 100 })
@@ -221,7 +221,7 @@ export function DocumentsPage() {
       searchInput: search.searchInput,
       appliedFilters: search.appliedFilters,
       searchFields: ['employeeName', 'employeeNo', 'docType', 'fileName', 'category'],
-    }),
+    }) as unknown as Document[],
     [documents, search.appliedFilters, search.searchInput],
   )
 
@@ -316,9 +316,9 @@ export function DocumentsPage() {
         ) : (
           <>
             <KpiCardCompact label="Total Documents" value={documents.length} icon={FileText} color="blue" />
-            <KpiCardCompact label="Valid" value={documents.filter((d: any) => d.status === 'valid').length} icon={CheckCircle2} color="green" />
+            <KpiCardCompact label="Valid" value={documents.filter((d) => d.status === 'valid').length} icon={CheckCircle2} color="green" />
             <KpiCardCompact label="Expiring Soon" value={expiring} icon={AlertTriangle} color="amber" />
-            <KpiCardCompact label="Under Review" value={documents.filter((d: any) => d.status === 'under_review').length} icon={Clock} color="purple" />
+            <KpiCardCompact label="Under Review" value={documents.filter((d) => d.status === 'under_review').length} icon={Clock} color="purple" />
           </>
         )}
       </div>
@@ -335,7 +335,7 @@ export function DocumentsPage() {
           }}
           pageSize={8}
           enableSelection
-          getRowId={(row: any) => String(row.id)}
+          getRowId={(row) => String(row.id)}
           toolbar={
             <Button
               variant="outline"
@@ -416,7 +416,7 @@ export function DocumentsPage() {
         onConfirm={() => {
           if (!bulkArchiveTarget) return
           const count = bulkArchiveTarget.length
-          Promise.all(bulkArchiveTarget.map((row: any) => api.delete(`/documents/${row.id}`)))
+          Promise.all(bulkArchiveTarget.map((row) => api.delete(`/documents/${row.id}`)))
             .then(() => toast.warning(`${count} document${count === 1 ? '' : 's'} archived`))
             .catch(() => toast.error('Some documents could not be archived'))
             .finally(() => {

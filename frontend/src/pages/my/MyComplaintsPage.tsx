@@ -81,7 +81,7 @@ function NewComplaintDialog({ onClose }: { onClose: () => void }) {
             setDraft(res.data)
             qc.invalidateQueries({ queryKey: ['my-complaints'] })
         },
-        onError: (err: any) => toast.error(t('complaints.newDialog.saveError'), err?.message),
+        onError: (err: Error) => toast.error(t('complaints.newDialog.saveError'), err?.message),
     })
 
     const submit = useMutation({
@@ -91,7 +91,7 @@ function NewComplaintDialog({ onClose }: { onClose: () => void }) {
             qc.invalidateQueries({ queryKey: ['my-complaints'] })
             onClose()
         },
-        onError: (err: any) => toast.error(t('complaints.newDialog.submitError'), err?.message),
+        onError: (err: Error) => toast.error(t('complaints.newDialog.submitError'), err?.message),
     })
 
     const isValid = form.title.trim().length >= 3 && form.description.trim().length >= 10

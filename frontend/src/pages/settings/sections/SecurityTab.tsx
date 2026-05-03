@@ -497,11 +497,11 @@ function LoginHistoryCard() {
             ) : (
                 <div className="border rounded-lg overflow-hidden">
                     <div className="max-h-[480px] overflow-y-auto divide-y text-sm">
-                        {history.map((h: any) => (
+                        {history.map((h) => (
                             <div key={h.id} className="flex items-start justify-between px-4 py-3 gap-3 hover:bg-muted/30 transition-colors">
                                 <div className="flex items-center gap-2 shrink-0 mt-0.5">
                                     {eventIcon(h.eventType)}
-                                    {deviceIcon(h.deviceType)}
+                                    {deviceIcon(h.deviceType ?? 'unknown')}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-medium capitalize">{labelFor(h.eventType)}</p>

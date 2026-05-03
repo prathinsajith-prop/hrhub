@@ -134,8 +134,8 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                 )
             }
             handleClose()
-        } catch (err: any) {
-            toast.error(err?.message ?? 'Failed to send invitations')
+        } catch (err) {
+            toast.error((err as Error)?.message ?? 'Failed to send invitations')
         }
     }
 
