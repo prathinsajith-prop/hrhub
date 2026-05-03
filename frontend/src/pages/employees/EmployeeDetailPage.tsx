@@ -39,7 +39,7 @@ import { useEmployeeAssets } from '@/hooks/useAssets'
 import { useAttendance } from '@/hooks/useAttendance'
 import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { EditEmployeeDialog } from '@/components/shared/action-dialogs'
+import { EditEmployeeDialog, EditEmploymentDialog, EditPayrollDialog, AssignAssetToEmployeeDialog } from '@/components/shared/action-dialogs'
 import { InviteEmployeeDialog } from '@/components/shared/InviteEmployeeDialog'
 import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { toast } from '@/components/ui/overlays'
@@ -541,6 +541,8 @@ export function EmployeeDetailPage() {
   const uploadAvatar = useUploadEmployeeAvatar(id!)
   const updateEmployee = useUpdateEmployee(id!)
   const [editOpen, setEditOpen] = React.useState(false)
+  const [editEmploymentOpen, setEditEmploymentOpen] = React.useState(false)
+  const [editPayrollOpen, setEditPayrollOpen] = React.useState(false)
   const [inviteOpen, setInviteOpen] = React.useState(false)
   const [viewDoc, setViewDoc] = React.useState<{ id: string; fileName?: string } | null>(null)
   const [visaEditOpen, setVisaEditOpen] = React.useState(false)
@@ -553,6 +555,7 @@ export function EmployeeDetailPage() {
   const [transferOpen, setTransferOpen] = React.useState(false)
   const [createReviewOpen, setCreateReviewOpen] = React.useState(false)
   const [addDocOpen, setAddDocOpen] = React.useState(false)
+  const [assignAssetOpen, setAssignAssetOpen] = React.useState(false)
   const avatarInputRef = React.useRef<HTMLInputElement>(null)
 
   const e = employee
@@ -706,7 +709,7 @@ export function EmployeeDetailPage() {
                     return null
                   })()}
                   <Button size="sm" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditOpen(true)}>
-                    Edit
+                    Edit Profile
                   </Button>
                 </div>
               </div>
@@ -789,9 +792,14 @@ export function EmployeeDetailPage() {
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="text-base">Employment Details</CardTitle>
                   {canManage && (
-                    <Button size="sm" variant="outline" leftIcon={<ArrowRightLeft className="h-3.5 w-3.5" />} onClick={() => setTransferOpen(true)}>
-                      Transfer
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditEmploymentOpen(true)}>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="outline" leftIcon={<ArrowRightLeft className="h-3.5 w-3.5" />} onClick={() => setTransferOpen(true)}>
+                        Transfer
+                      </Button>
+                    </div>
                   )}
                 </div>
               </CardHeader>
@@ -1123,9 +1131,14 @@ export function EmployeeDetailPage() {
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="text-base">Payroll Summary</CardTitle>
                   {canManage && (
-                    <Button size="sm" variant="outline" leftIcon={<CreditCard className="h-3.5 w-3.5" />} onClick={() => setChangeSalaryOpen(true)}>
-                      Change Salary
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditPayrollOpen(true)}>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="outline" leftIcon={<CreditCard className="h-3.5 w-3.5" />} onClick={() => setChangeSalaryOpen(true)}>
+                        Change Salary
+                      </Button>
+                    </div>
                   )}
                 </div>
               </CardHeader>
@@ -1282,7 +1295,14 @@ export function EmployeeDetailPage() {
           {/* ── Assets ── */}
           <TabsContent value="assets" className="mt-4">
             <Card>
-              <CardHeader><CardTitle className="text-base">Assigned Assets</CardTitle></CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <CardTitle className="text-base">Assigned Assets</CardTitle>
+                {canManage && (
+                  <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAssignAssetOpen(true)}>
+                    Assign Asset
+                  </Button>
+                )}
+              </CardHeader>
               <CardContent>
                 {assetsLoading ? (
                   <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
@@ -1290,7 +1310,11 @@ export function EmployeeDetailPage() {
                   <div className="text-center py-10 text-muted-foreground">
                     <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
                     <p className="text-sm font-medium">No assets assigned</p>
-                    <p className="text-xs mt-1">Assets assigned to this employee will appear here</p>
+                    {canManage && (
+                      <Button size="sm" variant="outline" className="mt-3" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAssignAssetOpen(true)}>
+                        Assign First Asset
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="divide-y">
@@ -1462,6 +1486,9 @@ export function EmployeeDetailPage() {
       <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
 
       {editOpen && <EditEmployeeDialog open={editOpen} onOpenChange={setEditOpen} employee={e} />}
+      {editEmploymentOpen && canManage && <EditEmploymentDialog open={editEmploymentOpen} onOpenChange={setEditEmploymentOpen} employee={e} />}
+      {editPayrollOpen && canManage && <EditPayrollDialog open={editPayrollOpen} onOpenChange={setEditPayrollOpen} employee={e} />}
+      {assignAssetOpen && canManage && <AssignAssetToEmployeeDialog open={assignAssetOpen} onOpenChange={setAssignAssetOpen} employee={e} />}
       {inviteOpen && canManage && (
         <InviteEmployeeDialog employee={e} open={inviteOpen} onOpenChange={setInviteOpen} />
       )}

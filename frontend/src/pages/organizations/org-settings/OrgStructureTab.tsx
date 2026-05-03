@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import {
-    useOrgUnits, useCreateOrgUnit, useUpdateOrgUnit, useDeleteOrgUnit,
+    useOrgUnits, useCreateOrgUnit, useUpdateOrgUnit, useDeleteOrgUnit, useCascadeManager,
     type OrgUnit, type OrgUnitInput,
 } from '@/hooks/useOrgUnits'
 import { useEmployees } from '@/hooks/useEmployees'
@@ -59,7 +59,9 @@ function OrgUnitDialog({
 }) {
     const create = useCreateOrgUnit()
     const update = useUpdateOrgUnit()
+    const cascade = useCascadeManager()
     const [form, setForm] = useState<OrgUnitFormState>(EMPTY_FORM)
+    const [cascadePrompt, setCascadePrompt] = useState<{ departmentId: string; newManagerName: string } | null>(null)
 
     useEffect(() => {
         if (open) {
@@ -92,6 +94,14 @@ function OrgUnitDialog({
             if (editing) {
                 await update.mutateAsync({ id: editing.id, data: payload })
                 toast.success('Updated', `${form.name} has been updated.`)
+                // If this is a department and the head changed, offer to cascade
+                const headChanged = editing.type === 'department' && form.headEmployeeId && form.headEmployeeId !== (editing.headEmployeeId ?? '')
+                if (headChanged) {
+                    const newManager = empList.find(e => e.id === form.headEmployeeId)
+                    const newManagerName = newManager ? `${newManager.firstName} ${newManager.lastName}` : 'the new manager'
+                    setCascadePrompt({ departmentId: editing.id, newManagerName })
+                    return // keep dialog open for cascade prompt
+                }
             } else {
                 await create.mutateAsync(payload)
                 toast.success('Created', `${form.name} has been created.`)
@@ -99,6 +109,20 @@ function OrgUnitDialog({
             onClose()
         } catch (err) {
             toast.error('Save failed', err instanceof ApiError ? err.message : 'Could not save org unit.')
+        }
+    }
+
+    async function handleCascadeConfirm() {
+        if (!cascadePrompt) return
+        try {
+            const res = await cascade.mutateAsync(cascadePrompt.departmentId)
+            const count = res?.data?.updated ?? 0
+            toast.success('Reporting managers updated', `${count} employee${count !== 1 ? 's' : ''} now report to ${cascadePrompt.newManagerName}.`)
+        } catch {
+            toast.error('Cascade failed', 'Could not update reporting managers.')
+        } finally {
+            setCascadePrompt(null)
+            onClose()
         }
     }
 
@@ -220,6 +244,19 @@ function OrgUnitDialog({
                     </Button>
                 </UiDialogFooter>
             </UiDialogContent>
+
+            {/* Cascade reporting manager confirmation */}
+            {cascadePrompt && (
+                <ConfirmDialog
+                    open={!!cascadePrompt}
+                    onOpenChange={o => { if (!o) { setCascadePrompt(null); onClose() } }}
+                    title="Update reporting managers?"
+                    description={`All employees in this department currently report to the previous manager. Would you like to update their reporting person to ${cascadePrompt.newManagerName}?`}
+                    confirmLabel={cascade.isPending ? 'Updating…' : 'Yes, update all'}
+                    variant="warning"
+                    onConfirm={handleCascadeConfirm}
+                />
+            )}
         </UiDialog>
     )
 }

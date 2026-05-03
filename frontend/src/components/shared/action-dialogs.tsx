@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { DatePicker } from '@/components/ui/date-picker'
+import { useAssets, useAssignAsset, type Asset } from '@/hooks/useAssets'
 import { useCreateJob, useUpdateJob } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
@@ -70,7 +71,7 @@ function ManagerPicker({
 }
 
 // Build flat department options with hierarchy path for the org structure picker.
-function buildOrgOptions(units: OrgUnit[]): Array<ComboboxOption & { branchId: string; divisionId: string }> {
+export function buildOrgOptions(units: OrgUnit[]): Array<ComboboxOption & { branchId: string; divisionId: string; headEmployeeId: string | null; headEmployeeName: string | null }> {
     return units
         .filter(u => u.type === 'department' && u.isActive)
         .map(dept => {
@@ -83,6 +84,8 @@ function buildOrgOptions(units: OrgUnit[]): Array<ComboboxOption & { branchId: s
                 secondary: path || undefined,
                 branchId: branch?.id ?? '',
                 divisionId: division?.id ?? '',
+                headEmployeeId: dept.headEmployeeId ?? null,
+                headEmployeeName: dept.headEmployeeName ?? null,
             }
         })
 }
@@ -687,50 +690,61 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                             <FormField label="Work Email" error={errors.workEmail} hint="Used for login invites and official communications">
                                 <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
                             </FormField>
-                            {/* Org Structure — single searchable department picker */}
-                            {orgOptions.length > 0 && (
-                                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organization Structure</p>
-                                    <div className="space-y-1.5">
-                                        <Label>Department</Label>
-                                        <Combobox
-                                            value={form.departmentId}
-                                            onValueChange={deptId => {
-                                                const opt = orgOptions.find(o => o.value === deptId)
-                                                setForm(f => ({
-                                                    ...f,
-                                                    departmentId: deptId,
-                                                    branchId: opt?.branchId ?? '',
-                                                    divisionId: opt?.divisionId ?? '',
-                                                    teamId: '',
-                                                }))
-                                            }}
-                                            options={orgOptions}
-                                            placeholder="Select department…"
-                                            searchPlaceholder="Search by department, division or branch…"
-                                            emptyMessage="No departments found. Add them in Org Structure settings."
-                                            clearable
-                                        />
-                                        {form.departmentId && (
-                                            <p className="text-[11px] text-muted-foreground">
-                                                Branch and division will be assigned automatically.
-                                            </p>
-                                        )}
+                            {/* Department picker — Branch and Division auto-assigned */}
+                            <div className="space-y-1.5">
+                                <Label>Department</Label>
+                                <Combobox
+                                    value={form.departmentId}
+                                    onValueChange={deptId => {
+                                        const opt = orgOptions.find(o => o.value === deptId)
+                                        setForm(f => ({
+                                            ...f,
+                                            departmentId: deptId,
+                                            branchId: opt?.branchId ?? '',
+                                            divisionId: opt?.divisionId ?? '',
+                                            teamId: '',
+                                            reportingTo: opt?.headEmployeeId ?? '',
+                                            managerName: opt?.headEmployeeName ?? '',
+                                        }))
+                                    }}
+                                    options={orgOptions}
+                                    placeholder="Select department…"
+                                    searchPlaceholder="Search by department, division or branch…"
+                                    emptyMessage="No departments found. Add them in Org Structure settings."
+                                    clearable
+                                />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <Label>Division</Label>
+                                    <div className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm text-muted-foreground select-none">
+                                        {form.divisionId ? (orgUnits.find(u => u.id === form.divisionId)?.name ?? '—') : <span className="italic">Auto-assigned from department</span>}
                                     </div>
-                                    {/* Team — filtered to the selected department */}
-                                    {teamOptions.length > 0 && (
-                                        <div className="space-y-1.5">
-                                            <Label>Team <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                                            <Combobox
-                                                value={form.teamId}
-                                                onValueChange={v => setForm(f => ({ ...f, teamId: v }))}
-                                                options={teamOptions}
-                                                placeholder="Assign to a team…"
-                                                searchPlaceholder="Search teams…"
-                                                clearable
-                                            />
-                                        </div>
-                                    )}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label>Branch</Label>
+                                    <div className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm text-muted-foreground select-none">
+                                        {form.branchId ? (orgUnits.find(u => u.id === form.branchId)?.name ?? '—') : <span className="italic">Auto-assigned from department</span>}
+                                    </div>
+                                </div>
+                            </div>
+                            {form.managerName && (
+                                <p className="text-[11px] text-muted-foreground">
+                                    Reporting to <span className="font-medium">{form.managerName}</span>.
+                                </p>
+                            )}
+                            {/* Team — filtered to the selected department */}
+                            {teamOptions.length > 0 && (
+                                <div className="space-y-1.5">
+                                    <Label>Team <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                                    <Combobox
+                                        value={form.teamId}
+                                        onValueChange={v => setForm(f => ({ ...f, teamId: v }))}
+                                        options={teamOptions}
+                                        placeholder="Assign to a team…"
+                                        searchPlaceholder="Search teams…"
+                                        clearable
+                                    />
                                 </div>
                             )}
                             <div className="space-y-1.5">
@@ -762,18 +776,9 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <Input value={form.workLocation} onChange={set('workLocation')} placeholder="e.g. Dubai HQ" />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Reporting Manager</Label>
-                                    <ManagerPicker
-                                        value={form.reportingTo}
-                                        onChange={(id, name) => setForm((f) => ({ ...f, reportingTo: id, managerName: name }))}
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label>Grade Level</Label>
-                                    <Input value={form.gradeLevel} onChange={set('gradeLevel')} placeholder="e.g. L4" />
-                                </div>
+                            <div className="space-y-1.5">
+                                <Label>Grade Level</Label>
+                                <Input value={form.gradeLevel} onChange={set('gradeLevel')} placeholder="e.g. L4" />
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Status</Label>
@@ -895,8 +900,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
 export function EditEmployeeDialog({
     open, onOpenChange, employee,
 }: { open: boolean; onOpenChange: (o: boolean) => void; employee: Employee }) {
-    const [step, setStep] = useState<Step>(1)
-    const [form, setForm] = useState<EmpForm>({
+    const [form, setForm] = useState({
         firstName: employee.firstName ?? '',
         lastName: employee.lastName ?? '',
         dateOfBirth: employee.dateOfBirth ?? '',
@@ -905,25 +909,321 @@ export function EditEmployeeDialog({
         passportNo: employee.passportNo ?? '',
         mobileNo: employee.mobileNo ?? employee.phone ?? '',
         personalEmail: employee.personalEmail ?? '',
-        workEmail: employee.workEmail ?? '',
         maritalStatus: employee.maritalStatus ?? 'single',
-        emergencyContact: employee.emergencyContact ?? '',
         emergencyContactName: employee.emergencyContactName ?? '',
         emergencyContactPhone: employee.emergencyContactPhone ?? '',
         homeCountryAddress: employee.homeCountryAddress ?? '',
-        employeeNo: employee.employeeNo ?? '',
-        divisionId: employee.divisionId ?? '',
-        departmentId: employee.departmentId ?? '',
-        branchId: employee.branchId ?? '',
-        department: employee.department ?? '',
-        designation: employee.designation ?? '',
-        joinDate: employee.joinDate ?? new Date().toISOString().split('T')[0],
-        contractType: employee.contractType ?? 'permanent',
-        workLocation: employee.workLocation ?? '',
+    })
+    const [errors, setErrors] = useState<Record<string, string>>({})
+    const updateEmployee = useUpdateEmployee(employee.id)
+
+    const set = (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement>) => {
+        setForm(f => ({ ...f, [field]: e.target.value }))
+        if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
+    }
+    const setDate = (field: keyof typeof form) => (value: string) => {
+        setForm(f => ({ ...f, [field]: value }))
+        if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
+    }
+
+    const close = () => { onOpenChange(false); setTimeout(() => setErrors({}), 300) }
+
+    const submit = () => {
+        const result = zodToFieldErrors(employeeStep1Schema, {
+            firstName: form.firstName,
+            lastName: form.lastName,
+            nationality: form.nationality,
+            personalEmail: form.personalEmail,
+            mobileNo: form.mobileNo,
+            dateOfBirth: form.dateOfBirth,
+        })
+        if (Object.keys(result.errors).length) {
+            setErrors(result.errors)
+            toast.warning('Fix the highlighted fields', 'Please correct the errors before saving.')
+            return
+        }
+        updateEmployee.mutate(
+            {
+                firstName: form.firstName, lastName: form.lastName,
+                dateOfBirth: form.dateOfBirth || undefined,
+                gender: (form.gender as Employee['gender']) || undefined,
+                nationality: form.nationality || undefined,
+                passportNo: form.passportNo || undefined,
+                mobileNo: form.mobileNo || undefined,
+                personalEmail: form.personalEmail || undefined,
+                maritalStatus: (form.maritalStatus as Employee['maritalStatus']) || undefined,
+                emergencyContactName: form.emergencyContactName || undefined,
+                emergencyContactPhone: form.emergencyContactPhone || undefined,
+                homeCountryAddress: form.homeCountryAddress || undefined,
+            },
+            {
+                onSuccess: () => { toast.success('Profile updated', `${form.firstName} ${form.lastName} has been updated.`); close() },
+                onError: (err: Error & { message?: string }) => {
+                    const fieldErrors = apiErrorToFieldMap(err)
+                    if (Object.keys(fieldErrors).length) setErrors(fieldErrors)
+                    toast.error('Failed to update', err?.message ?? 'Please try again.')
+                },
+            },
+        )
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={close}>
+            <DialogContent size="lg">
+                <DialogHeader>
+                    <DialogTitle>Edit Profile — {employee.fullName}</DialogTitle>
+                </DialogHeader>
+                <DialogBody>
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <FormField label="First Name" required error={errors.firstName}>
+                                <Input value={form.firstName} onChange={set('firstName')} aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />
+                            </FormField>
+                            <FormField label="Last Name" required error={errors.lastName}>
+                                <Input value={form.lastName} onChange={set('lastName')} aria-invalid={!!errors.lastName} className={errors.lastName ? 'border-destructive' : ''} />
+                            </FormField>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="space-y-1.5"><Label>Date of Birth</Label><DatePicker value={form.dateOfBirth} max={(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 10); return d.toISOString().split('T')[0] })()} min="1950-01-01" onChange={setDate('dateOfBirth')} /></div>
+                            <div className="space-y-1.5">
+                                <Label>Gender</Label>
+                                <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v as any }))}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {GENDER_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Marital Status</Label>
+                                <Select value={form.maritalStatus} onValueChange={v => setForm(f => ({ ...f, maritalStatus: v as any }))}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {MARITAL_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <FormField label="Nationality" required error={errors.nationality}>
+                                <CountrySelect
+                                    value={resolveCountryIso(form.nationality)}
+                                    onChange={(iso) => {
+                                        setForm((f) => ({ ...f, nationality: countryNameFromIso(iso) }))
+                                        if (errors.nationality) setErrors(prev => { const n = { ...prev }; delete n.nationality; return n })
+                                    }}
+                                    placeholder="Select"
+                                />
+                            </FormField>
+                            <div className="space-y-1.5"><Label>Passport No</Label><Input value={form.passportNo} onChange={set('passportNo')} /></div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <FormField label="Mobile" required error={errors.mobileNo}>
+                                <PhoneInput value={form.mobileNo} onChange={(v) => setForm((f) => ({ ...f, mobileNo: v }))} defaultCountry={resolveCountryIso(form.nationality) ?? 'AE'} />
+                            </FormField>
+                            <FormField label="Personal Email" error={errors.personalEmail}>
+                                <Input type="email" value={form.personalEmail} onChange={set('personalEmail')} aria-invalid={!!errors.personalEmail} className={errors.personalEmail ? 'border-destructive' : ''} />
+                            </FormField>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1.5"><Label>Emergency Contact Name</Label><Input value={form.emergencyContactName} onChange={set('emergencyContactName')} placeholder="Full name" /></div>
+                            <div className="space-y-1.5"><Label>Emergency Contact Phone</Label><Input value={form.emergencyContactPhone} onChange={set('emergencyContactPhone')} placeholder="+971 50 000 0000" /></div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Home Country Address</Label>
+                            <Textarea value={form.homeCountryAddress} onChange={e => setForm(f => ({ ...f, homeCountryAddress: e.target.value }))} placeholder="Street, City, Country" rows={2} />
+                        </div>
+                    </div>
+                </DialogBody>
+                <DialogFooter>
+                    <Button variant="outline" onClick={close}>Cancel</Button>
+                    <Button onClick={submit} loading={updateEmployee.isPending}>Save Changes</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// ─── Edit Employment Dialog ──────────────────────────────────────────────────
+
+export function EditEmploymentDialog({
+    open, onOpenChange, employee,
+}: { open: boolean; onOpenChange: (o: boolean) => void; employee: Employee }) {
+    const [form, setForm] = useState({
+        joinDate: employee.joinDate ?? '',
+        workEmail: employee.workEmail ?? '',
+        departmentId: (employee as any).departmentId ?? '',
+        divisionId: (employee as any).divisionId ?? '',
+        branchId: (employee as any).branchId ?? '',
         managerName: employee.managerName ?? '',
         reportingTo: employee.reportingTo ?? '',
+        designation: employee.designation ?? '',
+        contractType: employee.contractType ?? 'permanent',
+        workLocation: employee.workLocation ?? '',
         gradeLevel: employee.gradeLevel ?? '',
         status: employee.status ?? 'active',
+    })
+    const [errors, setErrors] = useState<Record<string, string>>({})
+    const updateEmployee = useUpdateEmployee(employee.id)
+    const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const { data: designationList = [] } = useDesignations()
+    const createDesignation = useCreateDesignation()
+    const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
+    const orgOptions = buildOrgOptions(orgUnits)
+
+    const set = (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement>) => {
+        setForm(f => ({ ...f, [field]: e.target.value }))
+        if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
+    }
+
+    const close = () => { onOpenChange(false); setTimeout(() => setErrors({}), 300) }
+
+    const submit = async () => {
+        const result = zodToFieldErrors(employeeStep2Schema, { joinDate: form.joinDate })
+        if (Object.keys(result.errors).length) {
+            setErrors(result.errors)
+            toast.warning('Fix the highlighted fields', 'Please correct the errors before saving.')
+            return
+        }
+        if (form.designation) {
+            const exists = (Array.isArray(designationList) ? designationList : [])
+                .some((d: { name: string; isActive: boolean }) => d.isActive && d.name.toLowerCase() === form.designation.toLowerCase())
+            if (!exists) await createDesignation.mutateAsync({ name: form.designation }).catch(() => {})
+        }
+        updateEmployee.mutate(
+            {
+                joinDate: form.joinDate,
+                workEmail: form.workEmail || undefined,
+                departmentId: form.departmentId || undefined,
+                divisionId: form.divisionId || undefined,
+                branchId: form.branchId || undefined,
+                managerName: form.managerName || undefined,
+                reportingTo: form.reportingTo || null,
+                designation: form.designation || undefined,
+                contractType: (form.contractType as Employee['contractType']) || undefined,
+                workLocation: form.workLocation || undefined,
+                gradeLevel: form.gradeLevel || undefined,
+                status: form.status as Employee['status'],
+            },
+            {
+                onSuccess: () => { toast.success('Employment updated', 'Employment details have been saved.'); close() },
+                onError: (err: Error & { message?: string }) => {
+                    const fieldErrors = apiErrorToFieldMap(err)
+                    if (Object.keys(fieldErrors).length) setErrors(fieldErrors)
+                    toast.error('Failed to update', err?.message ?? 'Please try again.')
+                },
+            },
+        )
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={close}>
+            <DialogContent size="lg">
+                <DialogHeader>
+                    <DialogTitle>Edit Employment — {employee.fullName}</DialogTitle>
+                </DialogHeader>
+                <DialogBody>
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <FormField label="Join Date" required error={errors.joinDate}>
+                                <DatePicker value={form.joinDate} min="1970-01-01" onChange={v => { setForm(f => ({ ...f, joinDate: v ?? '' })); if (errors.joinDate) setErrors(p => { const n = { ...p }; delete n.joinDate; return n }) }} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
+                            </FormField>
+                            <FormField label="Work Email" error={errors.workEmail} hint="Used for login and communications">
+                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
+                            </FormField>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Department</Label>
+                            <Combobox
+                                value={form.departmentId}
+                                onValueChange={deptId => {
+                                    const opt = orgOptions.find(o => o.value === deptId)
+                                    setForm(f => ({
+                                        ...f,
+                                        departmentId: deptId,
+                                        branchId: opt?.branchId ?? '',
+                                        divisionId: opt?.divisionId ?? '',
+                                        reportingTo: opt?.headEmployeeId ?? f.reportingTo,
+                                        managerName: opt?.headEmployeeName ?? f.managerName,
+                                    }))
+                                }}
+                                options={orgOptions}
+                                placeholder="Select department…"
+                                searchPlaceholder="Search by department, division or branch…"
+                                emptyMessage="No departments found."
+                                clearable
+                            />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label>Division</Label>
+                                <div className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm text-muted-foreground select-none">
+                                    {form.divisionId ? (orgUnits.find(u => u.id === form.divisionId)?.name ?? '—') : <span className="italic">Auto-assigned from department</span>}
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Branch</Label>
+                                <div className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm text-muted-foreground select-none">
+                                    {form.branchId ? (orgUnits.find(u => u.id === form.branchId)?.name ?? '—') : <span className="italic">Auto-assigned from department</span>}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Designation</Label>
+                            <Combobox
+                                value={form.designation}
+                                onValueChange={v => setForm(f => ({ ...f, designation: v }))}
+                                options={(Array.isArray(designationList) ? designationList : [])
+                                    .filter((d: { isActive: boolean }) => d.isActive)
+                                    .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
+                                placeholder="Select or type designation…"
+                                searchPlaceholder="Search or create…"
+                                clearable
+                                creatable
+                            />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label>Contract Type</Label>
+                                <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v as any }))}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {CONTRACT_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5"><Label>Work Location</Label><Input value={form.workLocation} onChange={set('workLocation')} /></div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1.5"><Label>Reporting Manager</Label><ManagerPicker value={form.reportingTo} excludeId={employee.id} onChange={(id, name) => setForm(f => ({ ...f, reportingTo: id, managerName: name }))} /></div>
+                            <div className="space-y-1.5"><Label>Grade Level</Label><Input value={form.gradeLevel} onChange={set('gradeLevel')} /></div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Status</Label>
+                            <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as any }))}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {EDIT_EMPLOYEE_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </DialogBody>
+                <DialogFooter>
+                    <Button variant="outline" onClick={close}>Cancel</Button>
+                    <Button onClick={submit} loading={updateEmployee.isPending}>Save Changes</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// ─── Edit Payroll Dialog ─────────────────────────────────────────────────────
+
+export function EditPayrollDialog({
+    open, onOpenChange, employee,
+}: { open: boolean; onOpenChange: (o: boolean) => void; employee: Employee }) {
+    const [form, setForm] = useState({
         basicSalary: String(employee.basicSalary ?? ''),
         housingAllowance: String(employee.housingAllowance ?? ''),
         transportAllowance: String(employee.transportAllowance ?? ''),
@@ -936,90 +1236,36 @@ export function EditEmployeeDialog({
         bankBranch: employee.bankBranch ?? '',
         iban: employee.iban ?? '',
         emiratisationCategory: employee.emiratisationCategory ?? 'expat',
-        teamId: '',
     })
     const [errors, setErrors] = useState<Record<string, string>>({})
     const updateEmployee = useUpdateEmployee(employee.id)
-    const { data: orgUnitsRaw = [] } = useOrgUnits()
-    const { data: designationList = [] } = useDesignations()
-    const createDesignation = useCreateDesignation()
-    const editOrgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
-    const editOrgOptions = buildOrgOptions(editOrgUnits)
 
-    const set = (field: keyof EmpForm) => (e: ChangeEvent<HTMLInputElement>) => {
+    const set = (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
         if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
     }
-    const setDate = (field: keyof EmpForm) => (value: string) => {
-        setForm(f => ({ ...f, [field]: value }))
-        if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
-    }
 
-    const close = () => { onOpenChange(false); setTimeout(() => { setStep(1); setErrors({}) }, 300) }
+    const close = () => { onOpenChange(false); setTimeout(() => setErrors({}), 300) }
 
-    const submit = async () => {
+    const submit = () => {
         const basic = parseFloat(form.basicSalary) || 0
         const housing = parseFloat(form.housingAllowance) || 0
         const transport = parseFloat(form.transportAllowance) || 0
         const other = parseFloat(form.otherAllowances) || 0
         const total = basic + housing + transport + other
-
-        const step1 = zodToFieldErrors(employeeStep1Schema, {
-            firstName: form.firstName,
-            lastName: form.lastName,
-            nationality: form.nationality,
-            personalEmail: form.personalEmail,
-            mobileNo: form.mobileNo,
-            dateOfBirth: form.dateOfBirth,
-        })
-        const step2 = zodToFieldErrors(employeeStep2Schema, { joinDate: form.joinDate })
-        const salary = zodToFieldErrors(employeeSalaryRuleSchema, { basicSalary: basic, totalSalary: total })
-
-        const e = { ...step1.errors, ...step2.errors, ...salary.errors }
-        if (Object.keys(e).length) {
-            setErrors(e)
+        const result = zodToFieldErrors(employeeSalaryRuleSchema, { basicSalary: basic, totalSalary: total })
+        if (Object.keys(result.errors).length) {
+            setErrors(result.errors)
             toast.warning('Fix the highlighted fields', 'Please correct the errors before saving.')
             return
         }
-        // Auto-create designation if it's a new name not in the existing list
-        if (form.designation) {
-            const exists = (Array.isArray(designationList) ? designationList : [])
-                .some((d: { name: string; isActive: boolean }) => d.isActive && d.name.toLowerCase() === form.designation.toLowerCase())
-            if (!exists) await createDesignation.mutateAsync({ name: form.designation }).catch(() => {})
-        }
         updateEmployee.mutate(
             {
-                firstName: form.firstName, lastName: form.lastName,
-                dateOfBirth: form.dateOfBirth || undefined,
-                gender: (form.gender as Employee['gender']) || undefined,
-                nationality: form.nationality || undefined,
-                passportNo: form.passportNo || undefined,
-                mobileNo: form.mobileNo || undefined,
-                personalEmail: form.personalEmail || undefined,
-                workEmail: form.workEmail || undefined,
-                maritalStatus: (form.maritalStatus as Employee['maritalStatus']) || undefined,
-                emergencyContact: form.emergencyContact || undefined,
-                emergencyContactName: form.emergencyContactName || undefined,
-                emergencyContactPhone: form.emergencyContactPhone || undefined,
-                homeCountryAddress: form.homeCountryAddress || undefined,
-                employeeNo: form.employeeNo || undefined,
-                divisionId: form.divisionId || undefined,
-                departmentId: form.departmentId || undefined,
-                branchId: form.branchId || undefined,
-                department: form.department || undefined,
-                designation: form.designation || undefined,
-                joinDate: form.joinDate,
-                contractType: (form.contractType as Employee['contractType']) || undefined,
-                workLocation: form.workLocation || undefined,
-                managerName: form.managerName || undefined,
-                reportingTo: form.reportingTo || null,
-                gradeLevel: form.gradeLevel || undefined,
-                status: form.status as Employee['status'],
                 basicSalary: basic || undefined,
                 housingAllowance: housing || undefined,
                 transportAllowance: transport || undefined,
                 otherAllowances: other || undefined,
-                totalSalary: basic + housing + transport + other || undefined,
+                totalSalary: total || undefined,
                 paymentMethod: (form.paymentMethod as Employee['paymentMethod']) || undefined,
                 bankName: form.bankName || undefined,
                 accountName: form.accountName || undefined,
@@ -1030,238 +1276,80 @@ export function EditEmployeeDialog({
                 emiratisationCategory: (form.emiratisationCategory as Employee['emiratisationCategory']) || 'expat',
             },
             {
-                onSuccess: () => {
-                    toast.success('Employee updated', `${form.firstName} ${form.lastName} has been updated.`)
-                    close()
-                },
+                onSuccess: () => { toast.success('Payroll updated', 'Payroll details have been saved.'); close() },
                 onError: (err: Error & { message?: string }) => {
                     const fieldErrors = apiErrorToFieldMap(err)
                     if (Object.keys(fieldErrors).length) setErrors(fieldErrors)
-                    toast.error('Failed to update employee', err?.message ?? 'Please try again.')
+                    toast.error('Failed to update', err?.message ?? 'Please try again.')
                 },
             },
         )
     }
 
+    const totalPackage = (parseFloat(form.basicSalary) || 0) + (parseFloat(form.housingAllowance) || 0) + (parseFloat(form.transportAllowance) || 0) + (parseFloat(form.otherAllowances) || 0)
+
     return (
         <Dialog open={open} onOpenChange={close}>
             <DialogContent size="lg">
                 <DialogHeader>
-                    <DialogTitle>Edit Employee — {employee.fullName}</DialogTitle>
+                    <DialogTitle>Edit Payroll — {employee.fullName}</DialogTitle>
                 </DialogHeader>
                 <DialogBody>
-                    <StepIndicator step={step} />
-
-                    {step === 1 && (
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <FormField label="First Name" required error={errors.firstName}>
-                                    <Input value={form.firstName} onChange={set('firstName')} aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />
-                                </FormField>
-                                <FormField label="Last Name" required error={errors.lastName}>
-                                    <Input value={form.lastName} onChange={set('lastName')} aria-invalid={!!errors.lastName} className={errors.lastName ? 'border-destructive' : ''} />
-                                </FormField>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <div className="space-y-1.5"><Label>Date of Birth</Label><DatePicker value={form.dateOfBirth} max={(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 10); return d.toISOString().split('T')[0] })()} min="1950-01-01" onChange={setDate('dateOfBirth')} /></div>
-                                <div className="space-y-1.5">
-                                    <Label>Gender</Label>
-                                    <Select value={form.gender} onValueChange={v => setForm(f => ({ ...f, gender: v }))}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {GENDER_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label>Marital Status</Label>
-                                    <Select value={form.maritalStatus} onValueChange={v => setForm(f => ({ ...f, maritalStatus: v }))}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {MARITAL_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <FormField label="Nationality" required error={errors.nationality}>
-                                    <CountrySelect
-                                        value={resolveCountryIso(form.nationality)}
-                                        onChange={(iso) => {
-                                            setForm((f) => ({ ...f, nationality: countryNameFromIso(iso) }))
-                                            if (errors.nationality) setErrors(prev => { const n = { ...prev }; delete n.nationality; return n })
-                                        }}
-                                        placeholder="Select"
-                                    />
-                                </FormField>
-                                <div className="space-y-1.5"><Label>Passport No</Label><Input value={form.passportNo} onChange={set('passportNo')} /></div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Mobile</Label><PhoneInput value={form.mobileNo} onChange={(v) => setForm((f) => ({ ...f, mobileNo: v }))} defaultCountry={resolveCountryIso(form.nationality) ?? 'AE'} /></div>
-                                <div className="space-y-1.5"><Label>Personal Email</Label><Input type="email" value={form.personalEmail} onChange={set('personalEmail')} /></div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Emergency Contact Name</Label><Input value={form.emergencyContactName} onChange={set('emergencyContactName')} placeholder="Full name" /></div>
-                                <div className="space-y-1.5"><Label>Emergency Contact Phone</Label><Input value={form.emergencyContactPhone} onChange={set('emergencyContactPhone')} placeholder="+971 50 000 0000" /></div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Home Country Address</Label>
-                                <Textarea value={form.homeCountryAddress} onChange={e => setForm(f => ({ ...f, homeCountryAddress: e.target.value }))} placeholder="Street, City, Country" rows={2} />
-                            </div>
-                        </div>
-                    )}
-
-                    {step === 2 && (
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Employee No</Label>
-                                    <div className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm font-mono select-none">
-                                        {form.employeeNo || '—'}
-                                    </div>
-                                </div>
-                                <FormField label="Join Date" required error={errors.joinDate}>
-                                    <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
-                                </FormField>
-                            </div>
-                            <FormField label="Work Email" error={errors.workEmail} hint="Used for login invites and official communications">
-                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <FormField label="Basic Salary (AED)" error={errors.basicSalary}>
+                                <NumericInput value={form.basicSalary} onChange={set('basicSalary')} aria-invalid={!!errors.basicSalary} className={errors.basicSalary ? 'border-destructive' : ''} />
                             </FormField>
-                            {/* Org Structure — single searchable department picker */}
-                            {editOrgOptions.length > 0 && (
-                                <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Organization Structure</p>
-                                    <div className="space-y-1.5">
-                                        <Label>Department</Label>
-                                        <Combobox
-                                            value={form.departmentId}
-                                            onValueChange={deptId => {
-                                                const opt = editOrgOptions.find(o => o.value === deptId)
-                                                setForm(f => ({
-                                                    ...f,
-                                                    departmentId: deptId,
-                                                    branchId: opt?.branchId ?? '',
-                                                    divisionId: opt?.divisionId ?? '',
-                                                }))
-                                            }}
-                                            options={editOrgOptions}
-                                            placeholder="Select department…"
-                                            searchPlaceholder="Search by department, division or branch…"
-                                            emptyMessage="No departments found."
-                                            clearable
-                                        />
-                                        {form.departmentId && (
-                                            <p className="text-[11px] text-muted-foreground">
-                                                Branch and division will be assigned automatically.
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                            <div className="space-y-1.5">
-                                <Label>Designation</Label>
-                                <Combobox
-                                    value={form.designation}
-                                    onValueChange={v => setForm(f => ({ ...f, designation: v }))}
-                                    options={(Array.isArray(designationList) ? designationList : [])
-                                        .filter((d: { isActive: boolean }) => d.isActive)
-                                        .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
-                                    placeholder="Select or type designation…"
-                                    searchPlaceholder="Search or create…"
-                                    clearable
-                                    creatable
-                                />
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Contract Type</Label>
-                                    <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v }))}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {CONTRACT_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-1.5"><Label>Work Location</Label><Input value={form.workLocation} onChange={set('workLocation')} /></div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Reporting Manager</Label><ManagerPicker value={form.reportingTo} excludeId={employee.id} onChange={(id, name) => setForm((f) => ({ ...f, reportingTo: id, managerName: name }))} /></div>
-                                <div className="space-y-1.5"><Label>Grade Level</Label><Input value={form.gradeLevel} onChange={set('gradeLevel')} /></div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Status</Label>
-                                <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {EDIT_EMPLOYEE_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            <div className="space-y-1.5"><Label>Housing Allowance (AED)</Label><NumericInput value={form.housingAllowance} onChange={set('housingAllowance')} /></div>
                         </div>
-                    )}
-
-                    {step === 3 && (
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Basic Salary (AED)</Label><NumericInput value={form.basicSalary} onChange={set('basicSalary')} /></div>
-                                <div className="space-y-1.5"><Label>Housing Allowance (AED)</Label><NumericInput value={form.housingAllowance} onChange={set('housingAllowance')} /></div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5"><Label>Transport Allowance (AED)</Label><NumericInput value={form.transportAllowance} onChange={set('transportAllowance')} /></div>
-                                <div className="space-y-1.5"><Label>Other Allowances (AED)</Label><NumericInput value={form.otherAllowances} onChange={set('otherAllowances')} /></div>
-                            </div>
-                            {(parseFloat(form.basicSalary) || 0) + (parseFloat(form.housingAllowance) || 0) + (parseFloat(form.transportAllowance) || 0) + (parseFloat(form.otherAllowances) || 0) > 0 && (
-                                <div className="flex justify-between items-center px-3 py-2 bg-muted rounded-lg text-sm">
-                                    <span className="text-muted-foreground">Total Package</span>
-                                    <span className="font-bold">AED {((parseFloat(form.basicSalary) || 0) + (parseFloat(form.housingAllowance) || 0) + (parseFloat(form.transportAllowance) || 0) + (parseFloat(form.otherAllowances) || 0)).toLocaleString()}</span>
-                                </div>
-                            )}
-                            <div className="space-y-1.5">
-                                <Label>Payment Method</Label>
-                                <Select value={form.paymentMethod} onValueChange={v => setForm(f => ({ ...f, paymentMethod: v }))}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {PAYMENT_METHOD_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            {form.paymentMethod === 'bank_transfer' && (
-                                <div className="space-y-3">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div className="space-y-1.5"><Label>Account Name</Label><Input value={form.accountName} onChange={set('accountName')} placeholder="Account holder name" /></div>
-                                        <div className="space-y-1.5"><Label>Account Number</Label><Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="e.g. 1234567890" /></div>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div className="space-y-1.5"><Label>Bank Name</Label><Input value={form.bankName} onChange={set('bankName')} placeholder="e.g. Emirates NBD" /></div>
-                                        <div className="space-y-1.5"><Label>Branch</Label><Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="e.g. Dubai Main Branch" /></div>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div className="space-y-1.5"><Label>IBAN Number</Label><Input value={form.iban} onChange={set('iban')} placeholder="AE070331234567890123456" /></div>
-                                        <div className="space-y-1.5"><Label>Swift Code</Label><Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="e.g. EBILAEAD" /></div>
-                                    </div>
-                                </div>
-                            )}
-                            <div className="space-y-1.5">
-                                <Label>Emiratisation Category</Label>
-                                <Select value={form.emiratisationCategory} onValueChange={v => setForm(f => ({ ...f, emiratisationCategory: v }))}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {EMIRATISATION_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1.5"><Label>Transport Allowance (AED)</Label><NumericInput value={form.transportAllowance} onChange={set('transportAllowance')} /></div>
+                            <div className="space-y-1.5"><Label>Other Allowances (AED)</Label><NumericInput value={form.otherAllowances} onChange={set('otherAllowances')} /></div>
                         </div>
-                    )}
+                        {totalPackage > 0 && (
+                            <div className="flex justify-between items-center px-3 py-2 bg-muted rounded-lg text-sm">
+                                <span className="text-muted-foreground">Total Package</span>
+                                <span className="font-bold">AED {totalPackage.toLocaleString()}</span>
+                            </div>
+                        )}
+                        <div className="space-y-1.5">
+                            <Label>Payment Method</Label>
+                            <Select value={form.paymentMethod} onValueChange={v => setForm(f => ({ ...f, paymentMethod: v as any }))}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {PAYMENT_METHOD_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {form.paymentMethod === 'bank_transfer' && (
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-1.5"><Label>Account Name</Label><Input value={form.accountName} onChange={set('accountName')} placeholder="Account holder name" /></div>
+                                    <div className="space-y-1.5"><Label>Account Number</Label><Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="e.g. 1234567890" /></div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-1.5"><Label>Bank Name</Label><Input value={form.bankName} onChange={set('bankName')} placeholder="e.g. Emirates NBD" /></div>
+                                    <div className="space-y-1.5"><Label>Bank Branch</Label><Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="e.g. Dubai Main Branch" /></div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-1.5"><Label>IBAN Number</Label><Input value={form.iban} onChange={set('iban')} placeholder="AE070331234567890123456" /></div>
+                                    <div className="space-y-1.5"><Label>Swift Code</Label><Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="e.g. EBILAEAD" /></div>
+                                </div>
+                            </div>
+                        )}
+                        <div className="space-y-1.5">
+                            <Label>Emiratisation Category</Label>
+                            <Select value={form.emiratisationCategory} onValueChange={v => setForm(f => ({ ...f, emiratisationCategory: v as any }))}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {EMIRATISATION_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
                 </DialogBody>
                 <DialogFooter>
-                    {step > 1 ? (
-                        <Button variant="outline" onClick={() => setStep(s => (s - 1) as Step)}>Back</Button>
-                    ) : (
-                        <Button variant="outline" onClick={close}>Cancel</Button>
-                    )}
-                    {step < 3 && (
-                        <Button variant="outline" onClick={() => setStep(s => (s + 1) as Step)}>Next →</Button>
-                    )}
+                    <Button variant="outline" onClick={close}>Cancel</Button>
                     <Button onClick={submit} loading={updateEmployee.isPending}>Save Changes</Button>
                 </DialogFooter>
             </DialogContent>
@@ -1469,6 +1557,149 @@ export function EditDocumentDialog({
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                     <Button onClick={submit} loading={updateDoc.isPending}>Save Changes</Button>
                 </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// ─── Assign Asset to Employee ─────────────────────────────────────────────────
+
+export function AssignAssetToEmployeeDialog({
+    employee,
+    open,
+    onOpenChange,
+}: {
+    employee: Pick<Employee, 'id' | 'firstName' | 'lastName'>
+    open: boolean
+    onOpenChange: (open: boolean) => void
+}) {
+    const { data: assetsResult, isLoading: assetsLoading } = useAssets({ status: 'available', limit: 100 })
+    const availableAssets: Asset[] = assetsResult?.data ?? []
+    const assignAsset = useAssignAsset()
+
+    const [assetId, setAssetId] = useState('')
+    const [assignedDate, setAssignedDate] = useState(new Date().toISOString().slice(0, 10))
+    const [expectedReturnDate, setExpectedReturnDate] = useState('')
+    const [notes, setNotes] = useState('')
+    const [assetError, setAssetError] = useState('')
+
+    useEffect(() => {
+        if (!open) {
+            setAssetId('')
+            setAssignedDate(new Date().toISOString().slice(0, 10))
+            setExpectedReturnDate('')
+            setNotes('')
+            setAssetError('')
+        }
+    }, [open])
+
+    const assetOptions: ComboboxOption[] = useMemo(() =>
+        availableAssets.map(a => ({
+            value: a.id,
+            label: a.name,
+            secondary: [a.assetCode, a.categoryName, a.brand && a.model ? `${a.brand} ${a.model}` : (a.brand ?? a.model ?? null)].filter(Boolean).join(' · '),
+        })),
+        [availableAssets],
+    )
+
+    const selectedAsset = availableAssets.find(a => a.id === assetId) ?? null
+
+    async function handleSubmit(e: { preventDefault(): void }) {
+        e.preventDefault()
+        if (!assetId) { setAssetError('Please select an asset'); return }
+        setAssetError('')
+        try {
+            await assignAsset.mutateAsync({
+                assetId,
+                employeeId: employee.id,
+                assignedDate,
+                expectedReturnDate: expectedReturnDate || undefined,
+                notes: notes.trim() || undefined,
+            })
+            toast.success('Asset assigned', `${selectedAsset?.name ?? 'Asset'} has been assigned to ${employee.firstName} ${employee.lastName}.`)
+            onOpenChange(false)
+        } catch (err) {
+            toast.error('Assignment failed', err instanceof Error ? err.message : 'Please try again.')
+        }
+    }
+
+    const CONDITION_LABEL: Record<string, string> = { new: 'New', good: 'Good', damaged: 'Damaged' }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent size="sm">
+                <DialogHeader>
+                    <DialogTitle>Assign Asset — {employee.firstName} {employee.lastName}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit}>
+                    <DialogBody className="space-y-4">
+                        <FormField label="Asset" required error={assetError}>
+                            <Combobox
+                                value={assetId}
+                                onValueChange={v => { setAssetId(v); setAssetError('') }}
+                                options={assetOptions}
+                                placeholder={assetsLoading ? 'Loading assets…' : availableAssets.length === 0 ? 'No available assets' : 'Select an available asset…'}
+                                searchPlaceholder="Search by name, code, or category…"
+                                emptyMessage="No available assets match your search."
+                                disabled={assetsLoading || availableAssets.length === 0}
+                                clearable
+                            />
+                        </FormField>
+
+                        {selectedAsset && (
+                            <div className="rounded-md border bg-muted/30 px-3 py-2.5 space-y-1">
+                                <div className="flex items-center justify-between gap-2">
+                                    <p className="text-sm font-medium leading-tight">{selectedAsset.name}</p>
+                                    <span className="text-[10px] font-mono text-muted-foreground shrink-0">{selectedAsset.assetCode}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                                    {selectedAsset.categoryName && (
+                                        <p className="text-xs text-muted-foreground">{selectedAsset.categoryName}</p>
+                                    )}
+                                    {(selectedAsset.brand || selectedAsset.model) && (
+                                        <p className="text-xs text-muted-foreground">
+                                            {[selectedAsset.brand, selectedAsset.model].filter(Boolean).join(' ')}
+                                        </p>
+                                    )}
+                                    {selectedAsset.serialNumber && (
+                                        <p className="text-xs text-muted-foreground">S/N: {selectedAsset.serialNumber}</p>
+                                    )}
+                                    {selectedAsset.condition && (
+                                        <p className="text-xs text-muted-foreground">Condition: {CONDITION_LABEL[selectedAsset.condition] ?? selectedAsset.condition}</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <FormField label="Assigned Date" required>
+                                <DatePicker
+                                    value={assignedDate}
+                                    onChange={v => setAssignedDate(v || assignedDate)}
+                                />
+                            </FormField>
+                            <FormField label="Expected Return Date">
+                                <DatePicker
+                                    value={expectedReturnDate}
+                                    onChange={v => setExpectedReturnDate(v ?? '')}
+                                />
+                            </FormField>
+                        </div>
+
+                        <FormField label="Notes">
+                            <Textarea
+                                value={notes}
+                                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)}
+                                rows={2}
+                                placeholder="Optional notes about this assignment…"
+                            />
+                        </FormField>
+                    </DialogBody>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                        <Button type="submit" loading={assignAsset.isPending}>Assign Asset</Button>
+                    </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     )

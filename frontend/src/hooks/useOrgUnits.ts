@@ -83,3 +83,12 @@ export function useDeleteOrgUnit() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['org-units'] }),
     })
 }
+
+export function useCascadeManager() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (departmentId: string) =>
+            api.post<{ data: { updated: number; managerName: string } }>(`/org-units/${departmentId}/cascade-manager`, {}),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+    })
+}

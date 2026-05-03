@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
 import { labelFor } from '@/lib/enums'
 import {
@@ -181,6 +181,10 @@ function AssetFormDialog({
 
     const [form, setForm] = useState<Partial<Asset>>(() => asset ?? { status: 'available', condition: 'good' })
 
+    useEffect(() => {
+        if (!open && !asset) setForm({ status: 'available', condition: 'good' })
+    }, [open, asset])
+
     const isEdit = !!asset
     const pending = createAsset.isPending || updateAsset.isPending
 
@@ -330,6 +334,15 @@ function AssignAssetDialog({
     const [notes, setNotes] = useState('')
     const [errors, setErrors] = useState<Record<string, string>>({})
 
+    useEffect(() => {
+        if (!open) {
+            setEmployeeId('')
+            setAssignedDate(new Date().toISOString().slice(0, 10))
+            setExpectedReturnDate(undefined)
+            setNotes('')
+            setErrors({})
+        }
+    }, [open])
 
     async function handleSubmit(e: { preventDefault(): void }) {
         e.preventDefault()

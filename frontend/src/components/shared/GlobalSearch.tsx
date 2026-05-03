@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     CommandDialog,
@@ -28,6 +28,9 @@ import {
     Bell,
 } from 'lucide-react'
 import { useEmployees } from '@/hooks/useEmployees'
+import { useOrgUnits } from '@/hooks/useOrgUnits'
+import { buildOrgUnitMap, resolveOrgPath } from '@/lib/orgUtils'
+import { OrgHierarchyPath } from '@/components/shared/OrgHierarchyPath'
 
 const NAV_ITEMS = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, keywords: 'home overview' },
@@ -63,6 +66,9 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
         limit: 5,
     })
     const employees = query.length >= 2 ? (empData?.data ?? []) : []
+
+    const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const orgMap = useMemo(() => buildOrgUnitMap(orgUnitsRaw), [orgUnitsRaw])
 
     const handleSelect = useCallback((path: string) => {
         navigate(path)
@@ -128,9 +134,12 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                                         <span className="block truncate">
                                             {emp.fullName ?? `${emp.firstName} ${emp.lastName}`}
                                         </span>
-                                        <span className="block text-xs text-muted-foreground truncate">
-                                            {emp.designation}{emp.department ? ` · ${emp.department}` : ''}
-                                        </span>
+                                        {emp.designation && (
+                                            <span className="block text-xs text-muted-foreground truncate mb-0.5">
+                                                {emp.designation}
+                                            </span>
+                                        )}
+                                        <OrgHierarchyPath parts={resolveOrgPath(orgMap, (emp as any).branchId, (emp as any).divisionId, (emp as any).departmentId ?? null)} />
                                     </div>
                                 </CommandItem>
                             ))}

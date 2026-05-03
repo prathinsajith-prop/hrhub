@@ -257,6 +257,36 @@ export async function deleteOrgUnit(tenantId: string, id: string) {
     return row ?? null
 }
 
+export async function cascadeDepartmentManager(tenantId: string, departmentId: string) {
+    const [dept] = await db
+        .select({
+            id: orgUnits.id,
+            type: orgUnits.type,
+            headEmployeeId: orgUnits.headEmployeeId,
+            headFirstName: employees.firstName,
+            headLastName: employees.lastName,
+        })
+        .from(orgUnits)
+        .leftJoin(employees, eq(orgUnits.headEmployeeId, employees.id))
+        .where(and(eq(orgUnits.id, departmentId), eq(orgUnits.tenantId, tenantId)))
+        .limit(1)
+
+    if (!dept || dept.type !== 'department' || !dept.headEmployeeId) return null
+
+    const managerName = [dept.headFirstName, dept.headLastName].filter(Boolean).join(' ')
+
+    const result = await db
+        .update(employees)
+        .set({ reportingTo: dept.headEmployeeId, managerName, updatedAt: new Date() })
+        .where(and(
+            eq(employees.tenantId, tenantId),
+            eq(employees.departmentId as any, departmentId),
+        ))
+        .returning({ id: employees.id })
+
+    return { updated: result.length, managerName }
+}
+
 export async function getOrgUnitStats(tenantId: string) {
     const [counts] = await db
         .select({

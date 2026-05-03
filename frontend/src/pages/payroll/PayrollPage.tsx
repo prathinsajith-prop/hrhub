@@ -832,7 +832,7 @@ export function PayrollPage() {
       <PayslipsSheet run={selectedRun} open={payslipsOpen} onClose={() => setPayslipsOpen(false)} />
 
       {/* Create run dialog */}
-      <Dialog open={createOpen} onOpenChange={(v) => { if (!createRun.isPending) setCreateOpen(v) }}>
+      <Dialog open={createOpen} onOpenChange={(v) => { if (!createRun.isPending) { setCreateOpen(v); if (!v) { setCreateMonth(currentMonth); setCreateYear(currentYear) } } }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>New Payroll Run</DialogTitle>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,10 +18,12 @@ import { toast } from '@/components/ui/overlays'
 import { cn } from '@/lib/utils'
 import { useMyEmployee, useUpdateMyProfile } from '@/hooks/useMe'
 import { useLeaveBalance } from '@/hooks/useLeave'
+import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { labelFor } from '@/lib/enums'
 import { useAuthStore } from '@/store/authStore'
 import { api } from '@/lib/api'
 import { useQueryClient } from '@tanstack/react-query'
+import { buildOrgUnitMap, resolveOrgPath } from '@/lib/orgUtils'
 import type { Employee } from '@/types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -92,6 +94,8 @@ function QuickStat({ label, value, accent }: { label: string; value?: string | n
 export function MyProfileContent() {
     const { data: employee, isLoading } = useMyEmployee()
     const { data: leaveData } = useLeaveBalance(employee?.id)
+    const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const orgMap = useMemo(() => buildOrgUnitMap(orgUnitsRaw), [orgUnitsRaw])
     const update = useUpdateMyProfile()
     const { user, setUser } = useAuthStore()
     const qc = useQueryClient()
@@ -275,7 +279,14 @@ export function MyProfileContent() {
                         </div>
                         <SectionTitle>Role</SectionTitle>
                         <InfoRow icon={Briefcase}  label="Designation"    value={e.designation} />
-                        <InfoRow icon={Building2}  label="Department"     value={e.department} />
+                        {(() => {
+                            const [branch, division, dept] = resolveOrgPath(orgMap, (e as any).branchId, (e as any).divisionId, (e as any).departmentId)
+                            return (<>
+                                <InfoRow icon={Building2} label="Branch"     value={branch ?? e.department ?? null} />
+                                <InfoRow icon={Building2} label="Division"   value={division} />
+                                <InfoRow icon={Building2} label="Department" value={dept ?? e.department ?? null} />
+                            </>)
+                        })()}
                         <InfoRow icon={MapPin}     label="Work Location"  value={e.workLocation} />
                         <InfoRow icon={User}       label="Reports To"     value={e.managerName} />
                         <InfoRow icon={Shield}     label="Grade Level"    value={e.gradeLevel} />

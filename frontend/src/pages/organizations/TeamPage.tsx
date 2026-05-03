@@ -8,11 +8,12 @@ import {
     useCreateTeam, useUpdateTeam, useDeleteTeam, useAddTeamMembers, useRemoveTeamMember,
     type TeamRow, type MyTeamRow,
 } from '@/hooks/useTeams'
-import { useOrgUnits } from '@/hooks/useOrgUnits'
+import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
+import { buildOrgUnitMap, resolveOrgPathFromDeptId } from '@/lib/orgUtils'
+import { OrgHierarchyPath } from '@/components/shared/OrgHierarchyPath'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -307,9 +308,10 @@ interface TeamDetailDialogProps {
     open: boolean
     onClose: () => void
     canManage: boolean
+    orgMap: Map<string, OrgUnit>
 }
 
-function TeamDetailDialog({ team, open, onClose, canManage }: TeamDetailDialogProps) {
+function TeamDetailDialog({ team, open, onClose, canManage, orgMap }: TeamDetailDialogProps) {
     const { data: members = [], isLoading } = useTeamMembers(open && team ? team.id : null)
     const removeMut = useRemoveTeamMember(team?.id ?? '')
     const [addOpen, setAddOpen] = useState(false)
@@ -363,13 +365,16 @@ function TeamDetailDialog({ team, open, onClose, canManage }: TeamDetailDialogPr
                                     {team.name}
                                 </DialogTitle>
                                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                    {team.department && (
-                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                            <Building2 className="h-3 w-3" />
-                                            {team.department}
-                                        </div>
-                                    )}
-                                    {team.department && <span className="text-muted-foreground/40 text-xs">·</span>}
+                                    {(team.departmentId || team.department) && (() => {
+                                        const parts = resolveOrgPathFromDeptId(orgMap, team.departmentId)
+                                        return (
+                                            <div className="flex items-center gap-1">
+                                                <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
+                                                <OrgHierarchyPath parts={parts.some(Boolean) ? parts : [null, null, team.department]} />
+                                            </div>
+                                        )
+                                    })()}
+                                    {(team.departmentId || team.department) && <span className="text-muted-foreground/40 text-xs">·</span>}
                                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                         <Users className="h-3 w-3" />
                                         {members.length} {members.length === 1 ? 'member' : 'members'}
@@ -530,12 +535,14 @@ function TeamDetailDialog({ team, open, onClose, canManage }: TeamDetailDialogPr
 interface TeamCardProps {
     team: TeamRow | MyTeamRow
     canManage: boolean
+    orgMap: Map<string, OrgUnit>
     onView: () => void
     onEdit?: () => void
     onDelete?: () => void
 }
 
-function TeamCard({ team, canManage, onView, onEdit, onDelete }: TeamCardProps) {
+function TeamCard({ team, canManage, orgMap, onView, onEdit, onDelete }: TeamCardProps) {
+    const orgParts = resolveOrgPathFromDeptId(orgMap, team.departmentId)
     return (
         <Card
             className="cursor-pointer hover:shadow-md transition-shadow group relative"
@@ -545,8 +552,10 @@ function TeamCard({ team, canManage, onView, onEdit, onDelete }: TeamCardProps) 
                 <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                         <CardTitle className="text-sm font-semibold truncate">{team.name}</CardTitle>
-                        {team.department && (
-                            <Badge variant="outline" className="mt-1 text-[10px] font-normal">{team.department}</Badge>
+                        {(team.departmentId || team.department) && (
+                            <div className="mt-1">
+                                <OrgHierarchyPath parts={orgParts.some(Boolean) ? orgParts : [null, null, team.department]} />
+                            </div>
                         )}
                     </div>
                     {canManage && onEdit && onDelete && (
@@ -592,6 +601,8 @@ export function TeamPage() {
 
     const { data: allTeams = [], isLoading: teamsLoading } = useTeams()
     const { data: myTeams = [], isLoading: myTeamsLoading } = useMyTeams()
+    const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const orgMap = useMemo(() => buildOrgUnitMap(orgUnitsRaw), [orgUnitsRaw])
 
     const [formOpen, setFormOpen] = useState(false)
     const [editTarget, setEditTarget] = useState<TeamRow | null>(null)
@@ -659,6 +670,7 @@ export function TeamPage() {
                                         key={team.id}
                                         team={team}
                                         canManage={canManage}
+                                        orgMap={orgMap}
                                         onView={() => setDetailTeam(team)}
                                         onEdit={() => openEdit(team)}
                                         onDelete={() => setDeleteTarget(team)}
@@ -685,6 +697,7 @@ export function TeamPage() {
                                         key={team.id}
                                         team={team}
                                         canManage={false}
+                                        orgMap={orgMap}
                                         onView={() => setDetailTeam(team)}
                                     />
                                 ))}
@@ -719,6 +732,7 @@ export function TeamPage() {
                                         key={team.id}
                                         team={team}
                                         canManage={canManage}
+                                        orgMap={orgMap}
                                         onView={() => setDetailTeam(team)}
                                         onEdit={canManage && isOwner ? () => openEdit(team as unknown as TeamRow) : undefined}
                                         onDelete={canManage && isOwner ? () => setDeleteTarget(team as unknown as TeamRow) : undefined}
@@ -741,6 +755,7 @@ export function TeamPage() {
                 open={!!detailTeam}
                 onClose={() => setDetailTeam(null)}
                 canManage={canManage}
+                orgMap={orgMap}
             />
 
             <ConfirmDialog

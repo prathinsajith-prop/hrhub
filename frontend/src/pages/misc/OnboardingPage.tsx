@@ -252,7 +252,7 @@ export function OnboardingPage() {
             )}
 
             {/* New Onboarding Dialog */}
-            <Dialog open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open) { setNewEmpId(''); setNewStartDate(''); setNewDueDate('') } }}>
+            <Dialog open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open) { setNewEmpId(''); setNewStartDate(''); setNewDueDate(''); setUseTemplate(true) } }}>
                 <DialogContent className="max-w-md">
                     <DialogHeader><DialogTitle>Start Onboarding</DialogTitle></DialogHeader>
                     <DialogBody className="space-y-4">
