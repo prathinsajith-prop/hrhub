@@ -20,6 +20,12 @@ interface Props {
     employeeId?: string
 }
 
+function addOneYear(dateStr: string): string {
+    const d = new Date(dateStr)
+    d.setFullYear(d.getFullYear() + 1)
+    return d.toISOString().split('T')[0]!
+}
+
 export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
     const { mutateAsync, isPending } = useUploadDocument()
 
@@ -30,9 +36,31 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
     const [file, setFile] = useState<File | null>(null)
     const [dragging, setDragging] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    // Track the last auto-set expiry value so re-picking the issue date keeps expiry in sync
+    const autoExpiryRef = useRef<string>('')
 
     const selectedDef = FLAT_DOC_TYPES.find(d => d.docType === docType)
     const expiryRequired = selectedDef?.expiryRequired ?? false
+
+    function handleIssueDateChange(v: string | undefined) {
+        const date = v ?? ''
+        setIssueDate(date)
+        if (date) {
+            const auto = addOneYear(date)
+            // Auto-fill expiry if empty or if it still matches the previous auto-set value
+            if (!expiryDate || expiryDate === autoExpiryRef.current) {
+                setExpiryDate(auto)
+                autoExpiryRef.current = auto
+            }
+        }
+    }
+
+    function handleExpiryDateChange(v: string | undefined) {
+        const date = v ?? ''
+        setExpiryDate(date)
+        // User manually changed expiry — stop tracking auto-set
+        autoExpiryRef.current = date
+    }
 
     function reset() {
         setDocType('')
@@ -41,6 +69,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
         setNotes('')
         setFile(null)
         setDragging(false)
+        autoExpiryRef.current = ''
     }
 
     function handleClose(next: boolean) {
@@ -50,10 +79,11 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
 
     function pickFile(picked: File | null | undefined) {
         if (!picked) return
-        const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp',
-            'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-        if (!allowed.includes(picked.type) && !picked.name.match(/\.(pdf|jpg|jpeg|png|webp|doc|docx)$/i)) {
-            toast.error('Invalid file type', 'Please upload a PDF, image, or Word document.')
+        const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+            'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+        if (!allowed.includes(picked.type) && !picked.name.match(/\.(pdf|jpg|jpeg|png|webp|gif|doc|docx|xlsx)$/i)) {
+            toast.error('Invalid file type', 'Please upload a PDF, image, Word, or Excel document.')
             return
         }
         if (picked.size > 10 * 1024 * 1024) {
@@ -133,7 +163,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                             </Label>
                             <DatePicker
                                 value={issueDate}
-                                onChange={v => setIssueDate(v ?? '')}
+                                onChange={handleIssueDateChange}
                                 placeholder="Select issue date"
                             />
                         </div>
@@ -146,7 +176,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                             </Label>
                             <DatePicker
                                 value={expiryDate}
-                                onChange={v => setExpiryDate(v ?? '')}
+                                onChange={handleExpiryDateChange}
                                 placeholder="Select expiry date"
                             />
                             {selectedDef?.hint && (
@@ -178,7 +208,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                             ref={fileInputRef}
                             type="file"
                             className="hidden"
-                            accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xlsx"
                             onChange={e => pickFile(e.target.files?.[0])}
                         />
 
@@ -220,7 +250,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                                     <p className="text-sm font-medium text-foreground">
                                         Click to upload <span className="text-muted-foreground font-normal">or drag and drop</span>
                                     </p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">PDF, JPG, PNG, DOCX · Max 10 MB</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">PDF, JPG, PNG, WEBP, GIF, DOCX, XLSX · Max 10 MB</p>
                                 </div>
                             </button>
                         )}

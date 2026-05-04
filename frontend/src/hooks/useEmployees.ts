@@ -129,6 +129,12 @@ export interface SalaryRevision {
     newBasicSalary: string
     previousTotalSalary: string | null
     newTotalSalary: string | null
+    previousHousingAllowance: string | null
+    newHousingAllowance: string | null
+    previousTransportAllowance: string | null
+    newTransportAllowance: string | null
+    previousOtherAllowances: string | null
+    newOtherAllowances: string | null
     reason: string | null
     approvedBy: string | null
     approvedByName: string | null
@@ -150,6 +156,9 @@ export function useRecordSalaryRevision(employeeId: string) {
             effectiveDate: string
             revisionType: string
             newBasicSalary: string | number
+            newHousingAllowance?: number | null
+            newTransportAllowance?: number | null
+            newOtherAllowances?: number | null
             newTotalSalary?: string | number
             reason?: string
         }) => api.post<{ data: SalaryRevision }>(`/employees/${employeeId}/salary-revision`, data).then(r => r.data),

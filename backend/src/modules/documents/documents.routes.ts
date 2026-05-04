@@ -1,5 +1,6 @@
 import { listDocuments, getDocument, createDocument, updateDocument, verifyDocument, rejectDocument, getExpiringDocuments, softDeleteDocument } from './documents.service.js'
 import { generateUploadUrl, generateDownloadUrl, buildS3Key, uploadObject, objectExists } from '../../plugins/s3.js'
+import { fileTypeFromBuffer } from 'file-type'
 import { e403 } from '../../lib/errors.js'
 import { templateRoutes } from './templates.routes.js'
 import { recordActivity } from '../audit/audit.service.js'
@@ -8,7 +9,6 @@ import { sendEmail, documentVerifiedEmail, documentRejectedEmail } from '../../p
 import { db } from '../../db/index.js'
 import { employees, tenants } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
-import { extname } from 'path'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -260,57 +260,59 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Documents'] },
     }, async (request: any, reply: any) => {
         const parts = request.parts()
-        let fileMeta: { fileName: string; mime: string; s3Key: string; size: number } | null = null
         const fields: Record<string, string> = {}
 
-        // Allowed MIME types + their magic byte signatures (P0-07)
-        const ALLOWED: Record<string, Buffer[]> = {
-            'application/pdf': [Buffer.from([0x25, 0x50, 0x44, 0x46])], // %PDF
-            'image/jpeg': [Buffer.from([0xFF, 0xD8, 0xFF])],
-            'image/png': [Buffer.from([0x89, 0x50, 0x4E, 0x47])],
-            'image/gif': [Buffer.from([0x47, 0x49, 0x46, 0x38])],
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [Buffer.from([0x50, 0x4B, 0x03, 0x04])], // DOCX (ZIP)
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': [Buffer.from([0x50, 0x4B, 0x03, 0x04])], // XLSX (ZIP)
-        }
+        // Allowed MIME types (validated via file-type magic byte detection)
+        const ALLOWED_MIMES = new Set([
+            'application/pdf',
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])
+
+        // Collect all fields FIRST, then process the file — the browser sends the file
+        // part before the other form fields, so fields.employeeId etc. are not yet
+        // available when iterating the stream. We buffer the file and defer the S3
+        // upload until after the entire multipart body has been consumed.
+        let pendingFile: { buffer: Buffer; originalName: string } | null = null
 
         for await (const part of parts) {
             if (part.type === 'file') {
                 const chunks: Buffer[] = []
                 for await (const chunk of part.file) chunks.push(chunk as Buffer)
-                const buffer = Buffer.concat(chunks)
-
-                // Magic bytes validation — reject files whose content doesn't match declared MIME
-                const declared = part.mimetype || 'application/octet-stream'
-                const signatures = ALLOWED[declared]
-                if (!signatures) {
-                    return reply.code(415).send({ message: `File type '${declared}' is not permitted.` })
-                }
-                const matchesMagic = signatures.some(sig => buffer.slice(0, sig.length).equals(sig))
-                if (!matchesMagic) {
-                    return reply.code(415).send({ message: 'File content does not match its declared type.' })
-                }
-
-                const safeName = part.filename.replace(/[^a-zA-Z0-9._-]/g, '_')
-                const s3Key = buildS3Key(request.user.tenantId, fields.employeeId ? `employees/${fields.employeeId}/documents` : 'documents', safeName)
-                const mime = declared
-
-                try {
-                    await uploadObject(s3Key, buffer, mime)
-                } catch (err) {
-                    request.log.error({ err }, 'S3 upload failed')
-                    return reply.code(503).send({ message: 'File storage service is unavailable. Please try again later.' })
-                }
-
-                fileMeta = { fileName: part.filename, mime, s3Key, size: buffer.length }
+                pendingFile = { buffer: Buffer.concat(chunks), originalName: part.filename }
             } else {
                 fields[part.fieldname] = part.value as string
             }
         }
 
-        if (!fileMeta) return reply.code(400).send({ message: 'No file provided' })
+        if (!pendingFile) return reply.code(400).send({ message: 'No file provided' })
+
+        // Validate file type via magic bytes — never trust client-supplied Content-Type
+        const detected = await fileTypeFromBuffer(pendingFile.buffer)
+        const mime = detected?.mime ?? 'application/octet-stream'
+        if (!ALLOWED_MIMES.has(mime)) {
+            return reply.code(415).send({ message: `File type '${mime}' is not permitted. Please upload a PDF, image, or Word/Excel document.` })
+        }
 
         const { employeeId, category, expiryDate, issueDate, notes, docType } = fields
         if (!category) return reply.code(400).send({ message: 'category is required' })
+
+        const folder = employeeId ? `employees/${employeeId}/documents` : 'documents'
+        const s3Key = buildS3Key(request.user.tenantId, folder, pendingFile.originalName)
+
+        try {
+            await uploadObject(s3Key, pendingFile.buffer, mime)
+        } catch (err) {
+            request.log.error({ err }, 'S3 upload failed')
+            return reply.code(503).send({ message: 'File storage service is unavailable. Please try again later.' })
+        }
+
+        const fileMeta = { fileName: pendingFile.originalName, mime, s3Key, size: pendingFile.buffer.length }
 
         const doc = await createDocument(request.user.tenantId, request.user.id, {
             employeeId: employeeId || null,
@@ -319,8 +321,8 @@ export default async function (fastify: any): Promise<void> {
             fileName: fileMeta.fileName,
             s3Key: fileMeta.s3Key,
             fileSize: fileMeta.size,
-            issueDate: issueDate ? new Date(issueDate) : null,
-            expiryDate: expiryDate ? new Date(expiryDate) : null,
+            issueDate: issueDate || null,
+            expiryDate: expiryDate || null,
             notes: notes || null,
             status: 'under_review' as any,
         } as any)

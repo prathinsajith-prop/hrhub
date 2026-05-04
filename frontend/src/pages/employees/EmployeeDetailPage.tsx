@@ -162,26 +162,36 @@ interface ChangeSalaryDialogProps {
   employeeId: string
   currentBasic?: number | null
   currentTotal?: number | null
+  currentHousing?: number | null
+  currentTransport?: number | null
+  currentOther?: number | null
 }
 
-function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, currentTotal }: ChangeSalaryDialogProps) {
+function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, currentTotal, currentHousing, currentTransport, currentOther }: ChangeSalaryDialogProps) {
   const mutation = useRecordSalaryRevision(employeeId)
 
   const [effectiveDate, setEffectiveDate] = React.useState('')
   const [revisionType, setRevisionType] = React.useState('increment')
   const [newBasic, setNewBasic] = React.useState('')
-  const [newTotal, setNewTotal] = React.useState('')
+  const [newHousing, setNewHousing] = React.useState('')
+  const [newTransport, setNewTransport] = React.useState('')
+  const [newOther, setNewOther] = React.useState('')
   const [remarks, setRemarks] = React.useState('')
 
-  // Auto-fill yearly total when basic changes and total is empty
+  // Auto-compute total from components
   const basicNum = parseFloat(newBasic) || 0
-  const computedYearly = basicNum > 0 ? basicNum * 12 : null
+  const housingNum = parseFloat(newHousing) || 0
+  const transportNum = parseFloat(newTransport) || 0
+  const otherNum = parseFloat(newOther) || 0
+  const computedTotal = basicNum > 0 ? basicNum + housingNum + transportNum + otherNum : null
 
   function resetForm() {
     setEffectiveDate('')
     setRevisionType('increment')
     setNewBasic('')
-    setNewTotal('')
+    setNewHousing('')
+    setNewTransport('')
+    setNewOther('')
     setRemarks('')
   }
 
@@ -197,14 +207,14 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
       return
     }
 
-    const totalValue = newTotal ? parseFloat(newTotal) : undefined
-
     mutation.mutate(
       {
         effectiveDate,
         revisionType,
         newBasicSalary: parseFloat(newBasic),
-        newTotalSalary: totalValue,
+        newHousingAllowance: newHousing ? parseFloat(newHousing) : null,
+        newTransportAllowance: newTransport ? parseFloat(newTransport) : null,
+        newOtherAllowances: newOther ? parseFloat(newOther) : null,
         reason: remarks || undefined,
       },
       {
@@ -221,7 +231,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Change Salary</DialogTitle>
         </DialogHeader>
@@ -233,7 +243,6 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
               value={effectiveDate}
               onChange={setEffectiveDate}
               placeholder="Select effective date"
-              aria-invalid={!effectiveDate && undefined}
             />
           </div>
 
@@ -252,35 +261,46 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="cs-basic">New Basic Salary (AED) <span className="text-destructive">*</span></Label>
+            <Label htmlFor="cs-basic">Basic Salary (AED) <span className="text-destructive">*</span></Label>
             {currentBasic != null && (
-              <p className="text-xs text-muted-foreground">Current basic: {formatCurrency(currentBasic)}</p>
+              <p className="text-xs text-muted-foreground">Current: {formatCurrency(currentBasic)}</p>
             )}
-            <NumericInput
-              id="cs-basic"
-              placeholder="0.00"
-              value={newBasic}
-              onChange={e => setNewBasic(e.target.value)}
-            />
-            {computedYearly != null && (
-              <p className="text-xs text-muted-foreground">
-                Yearly = {formatCurrency(computedYearly)} (monthly × 12)
-              </p>
-            )}
+            <NumericInput id="cs-basic" placeholder="0.00" value={newBasic} onChange={e => setNewBasic(e.target.value)} />
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="cs-total">New Total Salary (AED) <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            {currentTotal != null && (
-              <p className="text-xs text-muted-foreground">Current total: {formatCurrency(currentTotal)}</p>
-            )}
-            <NumericInput
-              id="cs-total"
-              placeholder={computedYearly != null ? `e.g. ${basicNum.toFixed(2)}` : '0.00'}
-              value={newTotal}
-              onChange={e => setNewTotal(e.target.value)}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="cs-housing">Housing Allowance <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              {currentHousing != null && (
+                <p className="text-xs text-muted-foreground">Current: {formatCurrency(currentHousing)}</p>
+              )}
+              <NumericInput id="cs-housing" placeholder="0.00" value={newHousing} onChange={e => setNewHousing(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cs-transport">Transport Allowance <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              {currentTransport != null && (
+                <p className="text-xs text-muted-foreground">Current: {formatCurrency(currentTransport)}</p>
+              )}
+              <NumericInput id="cs-transport" placeholder="0.00" value={newTransport} onChange={e => setNewTransport(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cs-other">Other Allowances <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              {currentOther != null && (
+                <p className="text-xs text-muted-foreground">Current: {formatCurrency(currentOther)}</p>
+              )}
+              <NumericInput id="cs-other" placeholder="0.00" value={newOther} onChange={e => setNewOther(e.target.value)} />
+            </div>
           </div>
+
+          {computedTotal != null && (
+            <div className="rounded-lg bg-muted/50 border px-3 py-2 text-xs flex items-center justify-between">
+              <span className="text-muted-foreground">Computed Total Salary</span>
+              <span className="font-semibold text-sm">{formatCurrency(computedTotal)}</span>
+            </div>
+          )}
+          {currentTotal != null && (
+            <p className="text-xs text-muted-foreground -mt-2">Previous total: {formatCurrency(currentTotal)}</p>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="cs-remarks">Remarks / Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
@@ -316,53 +336,35 @@ interface TransferDialogProps {
   currentDeptId?: string | null
 }
 
-const NONE = '__none__'
-
 function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept, currentDeptId }: TransferDialogProps) {
   const mutation = useCreateTransfer(employeeId)
 
   const [transferDate, setTransferDate] = React.useState('')
-  const [branchId, setBranchId] = React.useState(NONE)
-  const [divisionId, setDivisionId] = React.useState(NONE)
-  const [departmentId, setDepartmentId] = React.useState(NONE)
+  const [departmentId, setDepartmentId] = React.useState('')
   const [toDesignation, setToDesignation] = React.useState('')
-  const [newSalary, setNewSalary] = React.useState('')
   const [reason, setReason] = React.useState('')
   const [notes, setNotes] = React.useState('')
 
-  const branches = React.useMemo(() => orgUnits.filter(u => u.type === 'branch'), [orgUnits])
+  // Build flat department options with full breadcrumb path (Branch → Division → Department)
+  const deptOptions: ComboboxOption[] = React.useMemo(() => {
+    return orgUnits
+      .filter(u => u.type === 'department')
+      .map(dept => {
+        const division = orgUnits.find(u => u.id === dept.parentId && u.type === 'division')
+        const branch = division ? orgUnits.find(u => u.id === division.parentId && u.type === 'branch') : null
+        const parts = [branch?.name, division?.name, dept.name].filter(Boolean)
+        return { value: dept.id, label: parts.join(' → ') }
+      })
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [orgUnits])
 
-  // Divisions filtered by selected branch; if no branch selected show all
-  const divisions = React.useMemo(() =>
-    orgUnits.filter(u => u.type === 'division' && (branchId === NONE || u.parentId === branchId)),
-    [orgUnits, branchId])
-
-  // Departments filtered by selected division; if no division selected show all
-  const departments = React.useMemo(() =>
-    orgUnits.filter(u => u.type === 'department' && (divisionId === NONE || u.parentId === divisionId)),
-    [orgUnits, divisionId])
-
-  function handleBranchChange(val: string) {
-    setBranchId(val)
-    setDivisionId(NONE)
-    setDepartmentId(NONE)
-  }
-
-  function handleDivisionChange(val: string) {
-    setDivisionId(val)
-    setDepartmentId(NONE)
-  }
-
-  const selectedDept = departments.find(d => d.id === departmentId)
+  const selectedDeptOpt = deptOptions.find(o => o.value === departmentId)
   const fromLabel = currentDept ?? (currentDeptId ? orgUnits.find(u => u.id === currentDeptId)?.name : null) ?? 'Current department'
 
   function resetForm() {
     setTransferDate('')
-    setBranchId(NONE)
-    setDivisionId(NONE)
-    setDepartmentId(NONE)
+    setDepartmentId('')
     setToDesignation('')
-    setNewSalary('')
     setReason('')
     setNotes('')
   }
@@ -378,23 +380,24 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
       toast.error('Required', 'Transfer date is required.')
       return
     }
-    if (departmentId === NONE) {
+    if (!departmentId) {
       toast.error('Required', 'Please select a department to transfer to.')
       return
     }
-    if (!newSalary || parseFloat(newSalary) <= 0) {
-      toast.error('Required', 'New salary is required for a transfer.')
-      return
-    }
+
+    // Derive branch/division IDs from the selected department's parent chain
+    const dept = orgUnits.find(u => u.id === departmentId)
+    const division = dept ? orgUnits.find(u => u.id === dept.parentId && u.type === 'division') : null
+    const branch = division ? orgUnits.find(u => u.id === division.parentId && u.type === 'branch') : null
 
     try {
       await mutation.mutateAsync({
         transferDate,
-        toBranchId: branchId !== NONE ? branchId : null,
-        toDivisionId: divisionId !== NONE ? divisionId : null,
+        toBranchId: branch?.id ?? null,
+        toDivisionId: division?.id ?? null,
         toDepartmentId: departmentId,
         toDesignation: toDesignation || null,
-        newSalary: parseFloat(newSalary),
+        newSalary: null,
         reason: reason || null,
         notes: notes || null,
       })
@@ -408,7 +411,7 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Transfer Employee</DialogTitle>
         </DialogHeader>
@@ -418,67 +421,28 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
             <DatePicker value={transferDate} onChange={v => setTransferDate(v ?? '')} placeholder="Select transfer date" />
           </div>
 
-          {/* Cascading Branch → Division → Department */}
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-sm">Branch</Label>
-              <Select value={branchId} onValueChange={handleBranchChange}>
-                <SelectTrigger><SelectValue placeholder="Select branch…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>— Keep current —</SelectItem>
-                  {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-sm">Division</Label>
-              <Select value={divisionId} onValueChange={handleDivisionChange} disabled={divisions.length === 0}>
-                <SelectTrigger><SelectValue placeholder={divisions.length === 0 ? 'No divisions available' : 'Select division…'} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>— Keep current —</SelectItem>
-                  {divisions.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-sm">Department <span className="text-destructive">*</span></Label>
-              <Select value={departmentId} onValueChange={setDepartmentId} disabled={departments.length === 0}>
-                <SelectTrigger
-                  className={departmentId === NONE ? 'border-destructive/50' : ''}
-                >
-                  <SelectValue placeholder={departments.length === 0 ? 'No departments available' : 'Select department…'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1.5">
+            <Label>Department <span className="text-destructive">*</span></Label>
+            <Combobox
+              options={deptOptions}
+              value={departmentId}
+              onValueChange={setDepartmentId}
+              placeholder="Search department…"
+              emptyMessage="No departments found"
+            />
+            {selectedDeptOpt && (
+              <div className="rounded-lg bg-muted/50 border px-3 py-2 text-xs">
+                <span className="text-muted-foreground">From: </span>
+                <span className="font-medium">{fromLabel}</span>
+                <span className="text-muted-foreground mx-1.5">→</span>
+                <span className="font-medium text-primary">{selectedDeptOpt.label}</span>
+              </div>
+            )}
           </div>
-
-          {selectedDept && (
-            <div className="rounded-lg bg-muted/50 border px-3 py-2 text-xs">
-              <span className="text-muted-foreground">Department: </span>
-              <span className="font-medium">{fromLabel}</span>
-              <span className="text-muted-foreground mx-1.5">→</span>
-              <span className="font-medium text-primary">{selectedDept.name}</span>
-            </div>
-          )}
 
           <div className="space-y-1.5">
             <Label>New Designation <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
             <Input placeholder="e.g. Senior Engineer" value={toDesignation} onChange={e => setToDesignation(e.target.value)} />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>New Salary (AED) <span className="text-destructive">*</span></Label>
-            <NumericInput
-              placeholder="0.00"
-              value={newSalary}
-              onChange={e => setNewSalary(e.target.value)}
-              className={!newSalary ? 'border-destructive/50' : ''}
-            />
           </div>
 
           <div className="space-y-1.5">
@@ -495,7 +459,7 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
             <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={mutation.isPending}>
               Cancel
             </Button>
-            <Button type="submit" disabled={mutation.isPending || !transferDate || departmentId === NONE || !newSalary}>
+            <Button type="submit" disabled={mutation.isPending || !transferDate || !departmentId}>
               {mutation.isPending
                 ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Saving…</>
                 : 'Record Transfer'}
@@ -1917,6 +1881,9 @@ export function EmployeeDetailPage() {
           employeeId={id}
           currentBasic={e.basicSalary ? parseFloat(String(e.basicSalary)) : null}
           currentTotal={e.totalSalary ? parseFloat(String(e.totalSalary)) : null}
+          currentHousing={e.housingAllowance ? parseFloat(String(e.housingAllowance)) : null}
+          currentTransport={e.transportAllowance ? parseFloat(String(e.transportAllowance)) : null}
+          currentOther={e.otherAllowances ? parseFloat(String(e.otherAllowances)) : null}
         />
       )}
 
@@ -2050,10 +2017,30 @@ function AddWarningDialog({
   const [file, setFile] = React.useState<File | null>(null)
   const [dragging, setDragging] = React.useState(false)
   const fileRef = React.useRef<HTMLInputElement>(null)
+  const autoExpiryRef = React.useRef<string>('')
 
   React.useEffect(() => {
-    if (!open) { setIssueDate(''); setExpiryDate(''); setReason(''); setFile(null); setDragging(false) }
+    if (!open) { setIssueDate(''); setExpiryDate(''); setReason(''); setFile(null); setDragging(false); autoExpiryRef.current = '' }
   }, [open])
+
+  function handleIssueDateChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const date = e.target.value
+    setIssueDate(date)
+    if (date) {
+      const d = new Date(date)
+      d.setFullYear(d.getFullYear() + 1)
+      const auto = d.toISOString().split('T')[0]!
+      if (!expiryDate || expiryDate === autoExpiryRef.current) {
+        setExpiryDate(auto)
+        autoExpiryRef.current = auto
+      }
+    }
+  }
+
+  function handleExpiryDateChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setExpiryDate(e.target.value)
+    autoExpiryRef.current = e.target.value
+  }
 
   function pickFile(f: File | null | undefined) {
     if (!f) return
@@ -2087,12 +2074,12 @@ function AddWarningDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Issue date <span className="text-destructive">*</span></Label>
-              <Input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}
+              <Input type="date" value={issueDate} onChange={handleIssueDateChange}
                 className={cn(!issueDate && 'border-destructive focus-visible:ring-destructive')} />
             </div>
             <div className="space-y-1.5">
               <Label>Expiry date</Label>
-              <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
+              <Input type="date" value={expiryDate} onChange={handleExpiryDateChange} />
             </div>
           </div>
           <div className="space-y-1.5">
