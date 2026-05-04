@@ -40,7 +40,7 @@ export type IndustryType =
   | 'retail'
 
 // Employee
-export type EmployeeStatus = 'active' | 'onboarding' | 'probation' | 'suspended' | 'terminated' | 'visa_expired'
+export type EmployeeStatus = 'active' | 'onboarding' | 'suspended' | 'terminated' | 'visa_expired'
 
 export interface Employee {
   id: string
@@ -87,19 +87,22 @@ export interface Employee {
   visaType?: 'employment' | 'investor' | 'dependent' | 'mission'
   passportExpiry?: string
   emiratesIdExpiry?: string
-  sponsoringEntity?: string
+  sponsoringEntityId?: string
+  sponsoringEntityName?: string
   avatar?: string
   avatarUrl?: string
   emiratisationCategory?: 'emirati' | 'expat'
   maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed'
-  gradeLevel?: string
+  gradeLevelId?: string
+  gradeLevelName?: string
   managerName?: string
   labourCardNumber?: string
+  labourCardExpiry?: string
   emergencyContact?: string
   emergencyContactName?: string
   emergencyContactPhone?: string
   homeCountryAddress?: string
-  contractType?: 'permanent' | 'contract' | 'part_time'
+  contractType?: 'permanent' | 'contract' | 'part_time' | 'probation'
   workLocation?: string
   probationEndDate?: string
   contractEndDate?: string

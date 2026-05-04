@@ -7,7 +7,7 @@ import {
   Phone, Mail, MapPin, Calendar, Building2, Hash, Shield, Edit2,
   Clock, Download, Eye, Camera, Loader2, Plus, Package,
   CalendarDays, ClipboardList, UserCheck, Users, GraduationCap, Landmark,
-  ArrowRightLeft,
+  ArrowRightLeft, Heart, StickyNote, History, Trash2, AlertTriangle, Upload, X as XIcon,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
@@ -38,6 +39,10 @@ import { EmployeeLeavePanel } from '@/components/shared/EmployeeLeavePanel'
 import { useEmployeeAssets } from '@/hooks/useAssets'
 import { useAttendance } from '@/hooks/useAttendance'
 import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
+import { useDependents, useCreateDependent, useUpdateDependent, useDeleteDependent, useEmployeeNotes, useAddEmployeeNote, useDeleteEmployeeNote, type Dependent } from '@/hooks/useEmployeeDependents'
+import { useActivityLogs, type ActivityLog } from '@/hooks/useAudit'
+import { useEmployeeWarnings, useCreateEmployeeWarning, useDeleteEmployeeWarning, useWarningDocumentUrl } from '@/hooks/useEmployeeWarnings'
+import { useSponsoringEntities, useCreateSponsoringEntity, type SponsoringEntity } from '@/hooks/useSponsoringEntities'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { EditEmployeeDialog, EditEmploymentDialog, EditPayrollDialog, AssignAssetToEmployeeDialog } from '@/components/shared/action-dialogs'
 import { InviteEmployeeDialog } from '@/components/shared/InviteEmployeeDialog'
@@ -71,7 +76,7 @@ interface AttendanceRecord {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'info' | 'destructive' | 'secondary'> = {
-  active: 'success', probation: 'warning', onboarding: 'info',
+  active: 'success', onboarding: 'info',
   suspended: 'destructive', terminated: 'secondary', visa_expired: 'destructive',
 }
 
@@ -539,6 +544,33 @@ export function EmployeeDetailPage() {
   // Transfer history
   const { data: transfersData, isLoading: transfersLoading } = useEmployeeTransfers(id)
 
+  // Dependents
+  const { data: dependentsData, isLoading: dependentsLoading } = useDependents(canManage ? (id ?? '') : '')
+  const createDependent = useCreateDependent(id ?? '')
+  const updateDependent = useUpdateDependent(id ?? '')
+  const deleteDependent = useDeleteDependent(id ?? '')
+
+  // Notes
+  const { data: notesData, isLoading: notesLoading } = useEmployeeNotes(canManage ? (id ?? '') : '')
+  const addNote = useAddEmployeeNote(id ?? '')
+  const deleteNote = useDeleteEmployeeNote(id ?? '')
+
+  // Updates (audit trail for this employee)
+  const { data: auditData, isLoading: auditLoading } = useActivityLogs(
+    canManage && id ? { entityType: 'employee', entityId: id, limit: 100 } : {},
+  )
+
+  // Warnings
+  const { data: warningsData, isLoading: warningsLoading } = useEmployeeWarnings(canManage ? (id ?? '') : '')
+  const createWarning = useCreateEmployeeWarning(id ?? '')
+  const deleteWarning = useDeleteEmployeeWarning(id ?? '')
+  const downloadWarningDoc = useWarningDocumentUrl(id ?? '')
+
+  const { data: sponsoringEntitiesData = [] } = useSponsoringEntities()
+  const createSponsoringEntity = useCreateSponsoringEntity()
+  const sponsoringEntityOptions: ComboboxOption[] = (Array.isArray(sponsoringEntitiesData) ? sponsoringEntitiesData as SponsoringEntity[] : [])
+    .map(se => ({ value: se.id, label: se.name }))
+
   const uploadAvatar = useUploadEmployeeAvatar(id!)
   const updateEmployee = useUpdateEmployee(id!)
   const [editOpen, setEditOpen] = React.useState(false)
@@ -549,14 +581,18 @@ export function EmployeeDetailPage() {
   const [visaEditOpen, setVisaEditOpen] = React.useState(false)
   const [visaForm, setVisaForm] = React.useState({
     visaType: '', visaNumber: '', visaIssueDate: '', visaExpiry: '',
-    sponsoringEntity: '', emiratesId: '', emiratesIdExpiry: '',
-    passportNo: '', passportExpiry: '', labourCardNumber: '',
+    sponsoringEntityId: '', emiratesId: '', emiratesIdExpiry: '',
+    passportNo: '', passportExpiry: '', labourCardNumber: '', labourCardExpiry: '',
   })
   const [changeSalaryOpen, setChangeSalaryOpen] = React.useState(false)
   const [transferOpen, setTransferOpen] = React.useState(false)
   const [createReviewOpen, setCreateReviewOpen] = React.useState(false)
   const [addDocOpen, setAddDocOpen] = React.useState(false)
   const [assignAssetOpen, setAssignAssetOpen] = React.useState(false)
+  const [dependentDialogOpen, setDependentDialogOpen] = React.useState(false)
+  const [editingDependent, setEditingDependent] = React.useState<Dependent | null>(null)
+  const [noteInput, setNoteInput] = React.useState('')
+  const [warningDialogOpen, setWarningDialogOpen] = React.useState(false)
   const avatarInputRef = React.useRef<HTMLInputElement>(null)
 
   const e = employee
@@ -720,7 +756,7 @@ export function EmployeeDetailPage() {
                 <QuickStat label="Join Date" value={formatDate(e.joinDate) || '—'} />
                 <QuickStat label="Total Salary" value={formatCurrency(e.totalSalary ?? 0)} />
                 <QuickStat label="Visa" value={visaLabel} valueClass={visaClass} />
-                {e.contractType && <QuickStat label="Contract" value={labelFor(e.contractType)} />}
+                {e.contractType && <QuickStat label="Employment" value={labelFor(e.contractType)} />}
                 {e.workLocation && <QuickStat label="Location" value={e.workLocation} />}
               </div>
             </div>
@@ -743,6 +779,10 @@ export function EmployeeDetailPage() {
                 { value: 'assets', icon: Package, label: 'Assets' },
                 { value: 'leave', icon: CalendarDays, label: 'Leave' },
                 { value: 'attendance', icon: ClipboardList, label: 'Attendance' },
+                ...(canManage ? [{ value: 'warnings', icon: AlertTriangle, label: 'Warnings' }] : []),
+                ...(canManage ? [{ value: 'dependents', icon: Heart, label: 'Dependents' }] : []),
+                ...(canManage ? [{ value: 'notes', icon: StickyNote, label: 'Notes' }] : []),
+                ...(canManage ? [{ value: 'updates', icon: History, label: 'Updates' }] : []),
                 ...(canManage ? [{ value: 'account', icon: UserCheck, label: 'Account' }] : []),
               ].map(tab => (
                 <TabsTrigger
@@ -813,15 +853,19 @@ export function EmployeeDetailPage() {
                     <InfoRow label="Division" value={orgUnitName(e.divisionId) ?? '—'} icon={Building2} />
                     <InfoRow label="Department" value={orgUnitName(e.departmentId) ?? '—'} icon={Building2} />
                     <InfoRow label="Company" value={(e as unknown as Record<string, unknown>)['entityName'] as string ?? '—'} icon={Building2} />
-                    <InfoRow label="Contract Type" value={labelFor(e.contractType)} icon={Briefcase} />
+                    <InfoRow label="Employment Type" value={labelFor(e.contractType)} icon={Briefcase} />
                     <InfoRow label="Work Location" value={e.workLocation} icon={MapPin} />
                   </div>
                   <div>
                     <InfoRow label="Join Date" value={formatDate(e.joinDate)} icon={Calendar} />
-                    <InfoRow label="Probation End" value={e.probationEndDate ? formatDate(e.probationEndDate) : null} icon={Clock} />
-                    <InfoRow label="Contract End" value={e.contractEndDate ? formatDate(e.contractEndDate) : null} icon={Calendar} />
+                    {(e.contractType === 'probation' || e.probationEndDate) && (
+                      <InfoRow label="Probation End" value={e.probationEndDate ? formatDate(e.probationEndDate) : '—'} icon={Clock} />
+                    )}
+                    {(e.contractType === 'contract' || e.contractEndDate) && (
+                      <InfoRow label="Contract End" value={e.contractEndDate ? formatDate(e.contractEndDate) : '—'} icon={Calendar} />
+                    )}
                     <InfoRow label="Status" value={labelFor(e.status)} icon={Shield} />
-                    <InfoRow label="Grade / Band" value={e.gradeLevel} icon={GraduationCap} />
+                    <InfoRow label="Grade Level" value={e.gradeLevelName} icon={GraduationCap} />
                     <InfoRow label="Direct Manager" value={e.managerName} icon={User} />
                   </div>
                 </div>
@@ -950,12 +994,13 @@ export function EmployeeDetailPage() {
                           visaNumber: e.visaNumber ?? '',
                           visaIssueDate: e.visaIssueDate ? String(e.visaIssueDate).slice(0, 10) : '',
                           visaExpiry: e.visaExpiry ? String(e.visaExpiry).slice(0, 10) : '',
-                          sponsoringEntity: e.sponsoringEntity ?? '',
+                          sponsoringEntityId: e.sponsoringEntityId ?? '',
                           emiratesId: e.emiratesId ?? '',
                           emiratesIdExpiry: e.emiratesIdExpiry ? String(e.emiratesIdExpiry).slice(0, 10) : '',
                           passportNo: e.passportNo ?? '',
                           passportExpiry: e.passportExpiry ? String(e.passportExpiry).slice(0, 10) : '',
                           labourCardNumber: e.labourCardNumber ?? '',
+                          labourCardExpiry: e.labourCardExpiry ? String(e.labourCardExpiry).slice(0, 10) : '',
                         })
                         setVisaEditOpen(true)
                       }}
@@ -994,7 +1039,27 @@ export function EmployeeDetailPage() {
                       </div>
                       <div className="space-y-1.5 sm:col-span-2">
                         <Label>Sponsoring Entity</Label>
-                        <Input value={visaForm.sponsoringEntity} onChange={e => setVisaForm(f => ({ ...f, sponsoringEntity: e.target.value }))} placeholder="e.g. Company LLC" />
+                        <Combobox
+                          value={visaForm.sponsoringEntityId}
+                          onValueChange={async (val) => {
+                            const existing = sponsoringEntityOptions.find(o => o.value === val)
+                            if (existing) {
+                              setVisaForm(f => ({ ...f, sponsoringEntityId: val }))
+                            } else if (val) {
+                              try {
+                                const created = await createSponsoringEntity.mutateAsync({ name: val })
+                                setVisaForm(f => ({ ...f, sponsoringEntityId: (created as SponsoringEntity).id }))
+                              } catch { /* ignore duplicate errors */ }
+                            } else {
+                              setVisaForm(f => ({ ...f, sponsoringEntityId: '' }))
+                            }
+                          }}
+                          options={sponsoringEntityOptions}
+                          placeholder="Select or type to add…"
+                          searchPlaceholder="Search or add entity…"
+                          creatable
+                          clearable
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <Label>Emirates ID</Label>
@@ -1016,6 +1081,10 @@ export function EmployeeDetailPage() {
                         <Label>Labour Card No.</Label>
                         <Input value={visaForm.labourCardNumber} onChange={e => setVisaForm(f => ({ ...f, labourCardNumber: e.target.value }))} placeholder="e.g. 12345678" />
                       </div>
+                      <div className="space-y-1.5">
+                        <Label>Labour Card Expiry</Label>
+                        <DatePicker value={visaForm.labourCardExpiry} onChange={v => setVisaForm(f => ({ ...f, labourCardExpiry: v ?? '' }))} placeholder="Select date" />
+                      </div>
                     </div>
                     <div className="flex justify-end gap-2 pt-1">
                       <Button variant="outline" size="sm" onClick={() => setVisaEditOpen(false)} disabled={updateEmployee.isPending}>
@@ -1030,12 +1099,13 @@ export function EmployeeDetailPage() {
                           payload.visaNumber = visaForm.visaNumber || undefined
                           payload.visaIssueDate = visaForm.visaIssueDate || undefined
                           payload.visaExpiry = visaForm.visaExpiry || undefined
-                          payload.sponsoringEntity = visaForm.sponsoringEntity || undefined
+                          payload.sponsoringEntityId = visaForm.sponsoringEntityId || undefined
                           payload.emiratesId = visaForm.emiratesId || undefined
                           payload.emiratesIdExpiry = visaForm.emiratesIdExpiry || undefined
                           payload.passportNo = visaForm.passportNo || undefined
                           payload.passportExpiry = visaForm.passportExpiry || undefined
                           payload.labourCardNumber = visaForm.labourCardNumber || undefined
+                          payload.labourCardExpiry = visaForm.labourCardExpiry || undefined
                           try {
                             await updateEmployee.mutateAsync(payload)
                             toast.success('Visa & ID updated')
@@ -1056,7 +1126,7 @@ export function EmployeeDetailPage() {
                       <InfoRow label="Visa Number" value={e.visaNumber} icon={Hash} />
                       <InfoRow label="Visa Issue Date" value={e.visaIssueDate ? formatDate(e.visaIssueDate) : null} icon={Calendar} />
                       <InfoRow label="Visa Expiry" value={e.visaExpiry ? formatDate(e.visaExpiry) : null} icon={Calendar} />
-                      <InfoRow label="Sponsoring Entity" value={e.sponsoringEntity} icon={Building2} />
+                      <InfoRow label="Sponsoring Entity" value={e.sponsoringEntityName} icon={Building2} />
                     </div>
                     <div>
                       <InfoRow label="Emirates ID" value={e.emiratesId} icon={Hash} />
@@ -1064,6 +1134,7 @@ export function EmployeeDetailPage() {
                       <InfoRow label="Passport No." value={e.passportNo} icon={Hash} />
                       <InfoRow label="Passport Expiry" value={e.passportExpiry ? formatDate(e.passportExpiry) : null} icon={Calendar} />
                       <InfoRow label="Labour Card No." value={e.labourCardNumber} icon={Hash} />
+                      <InfoRow label="Labour Card Expiry" value={e.labourCardExpiry ? formatDate(e.labourCardExpiry) : null} icon={Calendar} />
                     </div>
                   </div>
                 )}
@@ -1480,6 +1551,241 @@ export function EmployeeDetailPage() {
             </Card>
           </TabsContent>
 
+          {/* ── Warnings ──────────────────────────────────────────────────── */}
+          {canManage && (
+            <TabsContent value="warnings" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle className="text-base">Warnings</CardTitle>
+                    <Button size="sm" onClick={() => setWarningDialogOpen(true)}>
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />Warning
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {warningsLoading ? (
+                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
+                  ) : !warningsData?.length ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No warnings on record</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-muted/40">
+                            {['Issue Date', 'Expiry Date', 'Documents', 'Created By', 'Created', 'Actions'].map(h => (
+                              <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {warningsData.map(w => (
+                            <tr key={w.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                              <td className="px-4 py-2.5 whitespace-nowrap">{formatDate(w.issueDate)}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{w.expiryDate ? formatDate(w.expiryDate) : '—'}</td>
+                              <td className="px-4 py-2.5">
+                                {w.documentFileName ? (
+                                  <button
+                                    className="text-primary hover:underline flex items-center gap-1 text-xs"
+                                    onClick={() => downloadWarningDoc.mutate(w.id, {
+                                      onSuccess: (res) => window.open(res.url, '_blank'),
+                                      onError: (e: Error) => toast.error('Download failed', e.message),
+                                    })}
+                                  >
+                                    <Download className="h-3 w-3" />{w.documentFileName}
+                                  </button>
+                                ) : '—'}
+                              </td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{w.createdByName ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(w.createdAt)}</td>
+                              <td className="px-4 py-2.5">
+                                <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive"
+                                  onClick={() => deleteWarning.mutate(w.id, { onError: (e: Error) => toast.error('Failed', e.message) })}>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {/* ── Dependents ────────────────────────────────────────────────── */}
+          {canManage && (
+            <TabsContent value="dependents" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle className="text-base">Dependents</CardTitle>
+                    <Button size="sm" onClick={() => { setEditingDependent(null); setDependentDialogOpen(true) }}>
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />Add Dependent
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {dependentsLoading ? (
+                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
+                  ) : !dependentsData?.length ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Heart className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No dependents on file</p>
+                      <p className="text-xs mt-1">Add a spouse, child, or other family member.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-muted/40">
+                            {['Reference', 'Name', 'Birth Date', 'Relation', 'Nationality', 'Visa No.', 'Medical Ins.', 'Created By', 'Created', ''].map(h => (
+                              <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dependentsData.map(dep => (
+                            <tr key={dep.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                              <td className="px-4 py-2.5 font-mono text-[11px]">{dep.reference}</td>
+                              <td className="px-4 py-2.5 font-medium">{dep.name}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{dep.birthDate ? formatDate(dep.birthDate) : '—'}</td>
+                              <td className="px-4 py-2.5 capitalize">{dep.relation}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{dep.nationality ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{dep.visaNumber ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{dep.medicalInsurance ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{dep.createdByName ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(dep.createdAt)}</td>
+                              <td className="px-4 py-2.5">
+                                <div className="flex gap-1">
+                                  <Button size="icon" variant="ghost" className="h-6 w-6"
+                                    onClick={() => { setEditingDependent(dep); setDependentDialogOpen(true) }}>
+                                    <Edit2 className="h-3 w-3" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive"
+                                    onClick={() => deleteDependent.mutate(dep.id, { onError: (e: Error) => toast.error('Failed', e.message) })}>
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {/* ── Notes ─────────────────────────────────────────────────────── */}
+          {canManage && (
+            <TabsContent value="notes" className="mt-4">
+              <Card>
+                <CardHeader><CardTitle className="text-base">HR Notes</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-2 items-start">
+                    <Textarea
+                      placeholder="Add a confidential note about this employee…"
+                      value={noteInput}
+                      onChange={e => setNoteInput(e.target.value)}
+                      rows={2}
+                      className="flex-1 resize-none"
+                    />
+                    <Button size="sm" className="shrink-0"
+                      disabled={!noteInput.trim() || addNote.isPending}
+                      onClick={() => {
+                        if (!noteInput.trim()) return
+                        addNote.mutate(noteInput.trim(), {
+                          onSuccess: () => { setNoteInput(''); toast.success('Note added') },
+                          onError: (e: Error) => toast.error('Failed', e.message),
+                        })
+                      }}>
+                      {addNote.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add'}
+                    </Button>
+                  </div>
+                  {notesLoading ? (
+                    <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-16 rounded bg-muted animate-pulse" />)}</div>
+                  ) : !notesData?.length ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <StickyNote className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No notes yet</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border/40">
+                      {notesData.map(note => (
+                        <div key={note.id} className="py-3 flex gap-3 first:pt-0">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-foreground whitespace-pre-wrap">{note.content}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {note.createdByName ?? 'Unknown'} · {formatDate(note.createdAt)}
+                            </p>
+                          </div>
+                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive shrink-0"
+                            onClick={() => deleteNote.mutate(note.id, { onError: (e: Error) => toast.error('Failed', e.message) })}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {/* ── Updates ───────────────────────────────────────────────────── */}
+          {canManage && (
+            <TabsContent value="updates" className="mt-4">
+              <Card>
+                <CardHeader><CardTitle className="text-base">Activity History</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                  {auditLoading ? (
+                    <div className="p-4 space-y-2">{[1, 2, 3, 4, 5].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
+                  ) : !auditData?.length ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <History className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No activity recorded</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-muted/40">
+                            {['Date', 'Actor', 'Role', 'Action', 'Fields Changed'].map(h => (
+                              <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(auditData as ActivityLog[]).map(log => (
+                            <tr key={log.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(log.createdAt)}</td>
+                              <td className="px-4 py-2.5 font-medium">{log.actorName ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground capitalize">{log.actorRole?.replace('_', ' ') ?? '—'}</td>
+                              <td className="px-4 py-2.5">
+                                <Badge variant="secondary" className="text-[10px] capitalize">{log.action}</Badge>
+                              </td>
+                              <td className="px-4 py-2.5 text-muted-foreground">
+                                {log.changes ? Object.keys(log.changes).join(', ') : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
         </div>
       </Tabs>
 
@@ -1490,6 +1796,38 @@ export function EmployeeDetailPage() {
       {editEmploymentOpen && canManage && <EditEmploymentDialog open={editEmploymentOpen} onOpenChange={setEditEmploymentOpen} employee={e} />}
       {editPayrollOpen && canManage && <EditPayrollDialog open={editPayrollOpen} onOpenChange={setEditPayrollOpen} employee={e} />}
       {assignAssetOpen && canManage && <AssignAssetToEmployeeDialog open={assignAssetOpen} onOpenChange={setAssignAssetOpen} employee={e} />}
+      {canManage && (
+        <AddWarningDialog
+          open={warningDialogOpen}
+          onOpenChange={setWarningDialogOpen}
+          onSave={(fd) => createWarning.mutate(fd, {
+            onSuccess: () => { setWarningDialogOpen(false); toast.success('Warning added') },
+            onError: (e: Error) => toast.error('Failed', e.message),
+          })}
+          isSaving={createWarning.isPending}
+        />
+      )}
+      {canManage && (
+        <DependentFormDialog
+          open={dependentDialogOpen}
+          onOpenChange={(o) => { setDependentDialogOpen(o); if (!o) setEditingDependent(null) }}
+          dependent={editingDependent}
+          onSave={(data) => {
+            if (editingDependent) {
+              updateDependent.mutate({ id: editingDependent.id, ...data }, {
+                onSuccess: () => { setDependentDialogOpen(false); setEditingDependent(null); toast.success('Dependent updated') },
+                onError: (e: Error) => toast.error('Failed', e.message),
+              })
+            } else {
+              createDependent.mutate(data, {
+                onSuccess: () => { setDependentDialogOpen(false); toast.success('Dependent added') },
+                onError: (e: Error) => toast.error('Failed', e.message),
+              })
+            }
+          }}
+          isSaving={createDependent.isPending || updateDependent.isPending}
+        />
+      )}
       {inviteOpen && canManage && (
         <InviteEmployeeDialog employee={e} open={inviteOpen} onOpenChange={setInviteOpen} />
       )}
@@ -1540,5 +1878,195 @@ export function EmployeeDetailPage() {
         />
       )}
     </PageWrapper>
+  )
+}
+
+// ─── Dependent Form Dialog ─────────────────────────────────────────────────────
+
+type DependentFormData = Omit<Dependent, 'id' | 'employeeId' | 'reference' | 'createdByName' | 'createdAt' | 'updatedAt'>
+
+function DependentFormDialog({
+  open, onOpenChange, dependent, onSave, isSaving,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  dependent: Dependent | null
+  onSave: (data: DependentFormData) => void
+  isSaving: boolean
+}) {
+  const blank: DependentFormData = { name: '', birthDate: null, relation: 'spouse', nationality: null, visaNumber: null, medicalInsurance: null }
+  const [form, setForm] = React.useState<DependentFormData>(blank)
+
+  React.useEffect(() => {
+    if (open) setForm(dependent ? {
+      name: dependent.name,
+      birthDate: dependent.birthDate,
+      relation: dependent.relation,
+      nationality: dependent.nationality,
+      visaNumber: dependent.visaNumber,
+      medicalInsurance: dependent.medicalInsurance,
+    } : blank)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const set = (k: keyof DependentFormData, v: string | null) => setForm(f => ({ ...f, [k]: v || null }))
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{dependent ? 'Edit Dependent' : 'Add Dependent'}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-4 py-2">
+          <div className="col-span-2 space-y-1.5">
+            <Label>Full Name *</Label>
+            <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Sarah Johnson" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Relation *</Label>
+            <Select value={form.relation} onValueChange={v => set('relation', v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(['spouse', 'child', 'parent', 'sibling', 'other'] as const).map(r => (
+                  <SelectItem key={r} value={r} className="capitalize">{r.charAt(0).toUpperCase() + r.slice(1)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Date of Birth</Label>
+            <Input type="date" value={form.birthDate ?? ''} onChange={e => set('birthDate', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Nationality</Label>
+            <Input value={form.nationality ?? ''} onChange={e => set('nationality', e.target.value)} placeholder="e.g. UAE" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Visa Number</Label>
+            <Input value={form.visaNumber ?? ''} onChange={e => set('visaNumber', e.target.value)} placeholder="Optional" />
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label>Medical Insurance</Label>
+            <Input value={form.medicalInsurance ?? ''} onChange={e => set('medicalInsurance', e.target.value)} placeholder="Policy number or provider" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button disabled={!form.name.trim() || isSaving} onClick={() => onSave(form)}>
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            {dependent ? 'Save Changes' : 'Add Dependent'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Add Warning Dialog ────────────────────────────────────────────────────────
+
+function AddWarningDialog({
+  open, onOpenChange, onSave, isSaving,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onSave: (formData: FormData) => void
+  isSaving: boolean
+}) {
+  const [issueDate, setIssueDate] = React.useState('')
+  const [expiryDate, setExpiryDate] = React.useState('')
+  const [reason, setReason] = React.useState('')
+  const [file, setFile] = React.useState<File | null>(null)
+  const [dragging, setDragging] = React.useState(false)
+  const fileRef = React.useRef<HTMLInputElement>(null)
+
+  React.useEffect(() => {
+    if (!open) { setIssueDate(''); setExpiryDate(''); setReason(''); setFile(null); setDragging(false) }
+  }, [open])
+
+  function pickFile(f: File | null | undefined) {
+    if (!f) return
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+    if (!allowed.includes(f.type) && !f.name.match(/\.(pdf|jpg|jpeg|png|webp|docx?)$/i)) {
+      toast.error('Invalid file type', 'PDF, image or Word document only.')
+      return
+    }
+    if (f.size > 10 * 1024 * 1024) { toast.error('File too large', 'Maximum 10 MB.'); return }
+    setFile(f)
+  }
+
+  function handleSubmit() {
+    if (!issueDate) { toast.warning('Issue date required'); return }
+    const fd = new FormData()
+    fd.append('issueDate', issueDate)
+    if (expiryDate) fd.append('expiryDate', expiryDate)
+    if (reason.trim()) fd.append('reason', reason.trim())
+    if (file) fd.append('file', file)
+    onSave(fd)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <DialogTitle>Add Warning</DialogTitle>
+        </DialogHeader>
+        <div className="px-6 py-5 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Issue date <span className="text-destructive">*</span></Label>
+              <Input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}
+                className={cn(!issueDate && 'border-destructive focus-visible:ring-destructive')} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Expiry date</Label>
+              <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Reason</Label>
+            <Textarea value={reason} onChange={e => setReason(e.target.value)}
+              placeholder="Describe the reason for this warning…" rows={4} className="resize-none" />
+          </div>
+          {/* File upload dropzone */}
+          <div
+            className={cn(
+              'border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors text-center',
+              dragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-muted/30',
+            )}
+            onClick={() => fileRef.current?.click()}
+            onDragOver={e => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={e => { e.preventDefault(); setDragging(false); pickFile(e.dataTransfer.files[0]) }}
+          >
+            {file ? (
+              <div className="flex items-center gap-2 text-sm">
+                <FileText className="h-4 w-4 text-primary shrink-0" />
+                <span className="truncate max-w-[240px]">{file.name}</span>
+                <button className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={e => { e.stopPropagation(); setFile(null) }}>
+                  <XIcon className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <Upload className="h-6 w-6 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Upload supporting document</p>
+                <p className="text-xs text-muted-foreground">PDF, image or Word · max 10 MB</p>
+              </>
+            )}
+          </div>
+          <input ref={fileRef} type="file" className="hidden"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+            onChange={e => pickFile(e.target.files?.[0])} />
+        </div>
+        <DialogFooter className="px-6 py-4 border-t bg-muted/30">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button disabled={!issueDate || isSaving} onClick={handleSubmit}>
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}Submit
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

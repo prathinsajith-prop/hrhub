@@ -49,7 +49,6 @@ function serviceLength(joinDate?: string) {
 const STATUS_CONFIG: Record<Employee['status'], { variant: 'success' | 'warning' | 'info' | 'destructive' | 'secondary'; dot: string }> = {
     active:      { variant: 'success',     dot: 'bg-emerald-500' },
     onboarding:  { variant: 'info',        dot: 'bg-blue-500'    },
-    probation:   { variant: 'warning',     dot: 'bg-amber-500'   },
     suspended:   { variant: 'secondary',   dot: 'bg-orange-500'  },
     terminated:  { variant: 'destructive', dot: 'bg-red-500'     },
     visa_expired:{ variant: 'destructive', dot: 'bg-red-600'     },
@@ -289,7 +288,7 @@ export function MyProfileContent() {
                         })()}
                         <InfoRow icon={MapPin}     label="Work Location"  value={e.workLocation} />
                         <InfoRow icon={User}       label="Reports To"     value={e.managerName} />
-                        <InfoRow icon={Shield}     label="Grade Level"    value={e.gradeLevel} />
+                        <InfoRow icon={Shield}     label="Grade Level"    value={e.gradeLevelName} />
                         <SectionTitle>Contract</SectionTitle>
                         <InfoRow icon={Shield}     label="Contract Type"  value={labelFor(e.contractType)} />
                         <InfoRow icon={Calendar}   label="Join Date"      value={fmt(e.joinDate)} />
@@ -313,7 +312,7 @@ export function MyProfileContent() {
                         <SectionTitle>Passport</SectionTitle>
                         <InfoRow icon={Hash}      label="Passport No."   value={e.passportNo} mono />
                         <InfoRow icon={Calendar}  label="Expiry"         value={fmt(e.passportExpiry)} />
-                        <InfoRow icon={MapPin}    label="Sponsoring"     value={e.sponsoringEntity} />
+                        <InfoRow icon={MapPin}    label="Sponsoring"     value={e.sponsoringEntityName} />
                     </CardContent>
                 </Card>
 

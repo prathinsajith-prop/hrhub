@@ -2,7 +2,7 @@ import { eq, and, ilike, desc, asc, getTableColumns, inArray, sql, or, lt, gte, 
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { employees, entities, tenants } from '../../db/schema/index.js'
+import { employees, entities, tenants, gradeLevels, sponsoringEntities } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
 
@@ -102,8 +102,14 @@ export async function listEmployees(params: ListEmployeesParams) {
 
     const pageSize = limit + 1 // fetch one extra to determine hasMore
     const rows = await db
-        .select(getTableColumns(employees))
+        .select({
+            ...getTableColumns(employees),
+            gradeLevelName: gradeLevels.name,
+            sponsoringEntityName: sponsoringEntities.name,
+        })
         .from(employees)
+        .leftJoin(gradeLevels, eq(employees.gradeLevelId, gradeLevels.id))
+        .leftJoin(sponsoringEntities, eq(employees.sponsoringEntityId, sponsoringEntities.id))
         .where(and(...conditions))
         .orderBy(desc(employees.createdAt), desc(employees.id))
         .limit(cursor ? pageSize : limit)
@@ -141,9 +147,13 @@ export async function getEmployee(tenantId: string, id: string) {
         .select({
             ...getTableColumns(employees),
             entityName: entities.entityName,
+            gradeLevelName: gradeLevels.name,
+            sponsoringEntityName: sponsoringEntities.name,
         })
         .from(employees)
         .leftJoin(entities, eq(employees.entityId, entities.id))
+        .leftJoin(gradeLevels, eq(employees.gradeLevelId, gradeLevels.id))
+        .leftJoin(sponsoringEntities, eq(employees.sponsoringEntityId, sponsoringEntities.id))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .limit(1)
 

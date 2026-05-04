@@ -56,7 +56,6 @@ const EMPLOYEE_FILTERS: FilterConfig[] = [
     icon: Star,
     options: [
       { value: 'active', label: 'Active' },
-      { value: 'probation', label: 'Probation' },
       { value: 'onboarding', label: 'Onboarding' },
       { value: 'suspended', label: 'Suspended' },
       { value: 'terminated', label: 'Terminated' },
@@ -77,7 +76,6 @@ const statusVariant: Record<
   'success' | 'warning' | 'destructive' | 'info' | 'secondary'
 > = {
   active: 'success',
-  probation: 'warning',
   onboarding: 'info',
   suspended: 'destructive',
   terminated: 'secondary',
@@ -211,7 +209,7 @@ export function EmployeesPage() {
 
   const active = employees.filter((e: Employee) => e.status === 'active').length
   const onboarding = employees.filter((e: Employee) => e.status === 'onboarding').length
-  const probation = employees.filter((e: Employee) => e.status === 'probation').length
+  const probation = employees.filter((e: Employee) => e.contractType === 'probation').length
   const emiratis = employees.filter((e: Employee) => e.emiratisationCategory === 'emirati').length
 
   const handleDelete = () => {

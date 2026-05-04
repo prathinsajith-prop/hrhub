@@ -44,9 +44,14 @@ import extRoutes from './modules/apps/ext.routes.js'
 import publicHolidaysRoutes from './modules/hr/public-holidays.routes.js'
 import salaryRevisionsRoutes from './modules/employees/salary-revisions.routes.js'
 import transfersRoutes from './modules/employees/transfers.routes.js'
+import employeeDependentsRoutes from './modules/employees/employee-dependents.routes.js'
+import employeeNotesRoutes from './modules/employees/employee-notes.routes.js'
+import employeeWarningsRoutes from './modules/employees/employee-warnings.routes.js'
 import subscriptionRoutes from './modules/subscription/subscription.routes.js'
 import { orgUnitsRoutes } from './modules/orgUnits/orgUnits.routes.js'
 import { designationsRoutes } from './modules/designations/designations.routes.js'
+import { gradeLevelsRoutes } from './modules/gradeLevels/grade-levels.routes.js'
+import { sponsoringEntitiesRoutes } from './modules/sponsoringEntities/sponsoring-entities.routes.js'
 import calendarRoutes from './modules/calendar/calendar.routes.js'
 import teamsModuleRoutes from './modules/teams/teams.routes.js'
 import { complaintsRoutes } from './modules/complaints/complaints.routes.js'
@@ -229,9 +234,14 @@ async function bootstrap() {
     await app.register(publicHolidaysRoutes, { prefix: '/api/v1/hr' })
     await app.register(salaryRevisionsRoutes, { prefix: '/api/v1/employees' })
     await app.register(transfersRoutes, { prefix: '/api/v1/employees' })
+    await app.register(employeeDependentsRoutes, { prefix: '/api/v1/employees' })
+    await app.register(employeeNotesRoutes, { prefix: '/api/v1/employees' })
+    await app.register(employeeWarningsRoutes, { prefix: '/api/v1/employees' })
     await app.register(subscriptionRoutes, { prefix: '/api/v1/subscription' })
     await app.register(orgUnitsRoutes, { prefix: '/api/v1' })
     await app.register(designationsRoutes, { prefix: '/api/v1' })
+    await app.register(gradeLevelsRoutes, { prefix: '/api/v1' })
+    await app.register(sponsoringEntitiesRoutes, { prefix: '/api/v1' })
     await app.register(calendarRoutes, { prefix: '/api/v1' })
     await app.register(teamsModuleRoutes, { prefix: '/api/v1' })
     await app.register(complaintsRoutes, { prefix: '/api/v1' })
