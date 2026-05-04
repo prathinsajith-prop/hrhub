@@ -1,19 +1,19 @@
 import { z } from 'zod'
 import { listTransfers, createTransfer } from './transfers.service.js'
 import { recordActivity } from '../audit/audit.service.js'
-import { employees } from '../../db/schema/index.js'
+import { employees, orgUnits } from '../../db/schema/index.js'
 import { db } from '../../db/index.js'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 
 const transferSchema = z.object({
     transferDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transferDate must be YYYY-MM-DD'),
-    toDesignation: z.string().optional(),
+    toDesignation: z.string().max(200).optional().nullable(),
     toBranchId: z.string().uuid().optional().nullable(),
     toDivisionId: z.string().uuid().optional().nullable(),
     toDepartmentId: z.string().uuid().optional().nullable(),
     newSalary: z.number().positive().optional().nullable(),
-    reason: z.string().optional(),
-    notes: z.string().optional(),
+    reason: z.string().max(500).optional().nullable(),
+    notes: z.string().max(1000).optional().nullable(),
 })
 
 export default async function transfersRoutes(fastify: any): Promise<void> {
@@ -44,13 +44,26 @@ export default async function transfersRoutes(fastify: any): Promise<void> {
                 branchId: employees.branchId,
                 divisionId: employees.divisionId,
                 departmentId: employees.departmentId,
-                fullName: employees.firstName,
             })
             .from(employees)
             .where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
             .limit(1)
 
         if (!emp) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+
+        // Resolve org unit names for "to" fields so history is self-contained
+        const unitIdsToResolve = [body.toBranchId, body.toDivisionId, body.toDepartmentId].filter(Boolean) as string[]
+        const unitNameMap = new Map<string, string>()
+        if (unitIdsToResolve.length > 0) {
+            const units = await db
+                .select({ id: orgUnits.id, name: orgUnits.name })
+                .from(orgUnits)
+                .where(and(
+                    inArray(orgUnits.id, unitIdsToResolve),
+                    eq(orgUnits.tenantId, request.user.tenantId),
+                ))
+            units.forEach(u => unitNameMap.set(u.id, u.name))
+        }
 
         const transfer = await createTransfer(request.user.tenantId, {
             employeeId: id,
@@ -61,11 +74,11 @@ export default async function transfersRoutes(fastify: any): Promise<void> {
             fromDivisionId: emp.divisionId ?? null,
             fromDepartmentId: emp.departmentId ?? null,
             toDesignation: body.toDesignation ?? null,
-            toDepartment: null,
+            toDepartment: body.toDepartmentId ? (unitNameMap.get(body.toDepartmentId) ?? null) : null,
             toBranchId: body.toBranchId ?? null,
             toDivisionId: body.toDivisionId ?? null,
             toDepartmentId: body.toDepartmentId ?? null,
-            newSalary: body.newSalary ? String(body.newSalary) : null,
+            newSalary: body.newSalary != null ? String(body.newSalary) : null,
             reason: body.reason ?? null,
             notes: body.notes ?? null,
             approvedBy: request.user.id,

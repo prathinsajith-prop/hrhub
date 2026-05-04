@@ -1,6 +1,7 @@
 import { eq, and, inArray, notInArray, ne, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { teams, teamMembers, employees, orgUnits } from '../../db/schema/index.js'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 
 export interface CreateTeamInput {
     name: string
@@ -127,7 +128,7 @@ export interface TeamMemberRow {
 }
 
 export async function getTeamMembers(tenantId: string, teamId: string): Promise<TeamMemberRow[]> {
-    return db
+    const rows = await db
         .select({
             id: teamMembers.id,
             employeeId: employees.id,
@@ -143,6 +144,7 @@ export async function getTeamMembers(tenantId: string, teamId: string): Promise<
         .innerJoin(employees, eq(teamMembers.employeeId, employees.id))
         .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.tenantId, tenantId)))
         .orderBy(employees.firstName, employees.lastName)
+    return Promise.all(rows.map(async r => ({ ...r, avatarUrl: await resolveAvatarUrl(r.avatarUrl) })))
 }
 
 export async function addTeamMembers(tenantId: string, teamId: string, employeeIds: string[]) {
@@ -264,7 +266,7 @@ export async function getEligibleEmployees(tenantId: string, teamId: string) {
     if (team.departmentId) conditions.push(eq(employees.departmentId, team.departmentId))
     if (existingIds.length > 0) conditions.push(notInArray(employees.id, existingIds))
 
-    return db
+    const rows = await db
         .select({
             id: employees.id,
             firstName: employees.firstName,
@@ -277,4 +279,5 @@ export async function getEligibleEmployees(tenantId: string, teamId: string) {
         .where(and(...conditions))
         .orderBy(employees.firstName, employees.lastName)
         .limit(200)
+    return Promise.all(rows.map(async r => ({ ...r, avatarUrl: await resolveAvatarUrl(r.avatarUrl) })))
 }

@@ -24,7 +24,6 @@ export const ROLE_LABELS: Record<string, string> = {
 export const EMPLOYEE_STATUS_LABELS: Record<string, string> = {
     active: 'Active',
     onboarding: 'Onboarding',
-    probation: 'Probation',
     suspended: 'Suspended',
     terminated: 'Terminated',
     visa_expired: 'Visa Expired',
@@ -226,6 +225,7 @@ export const SALARY_REVISION_LABELS: Record<string, string> = {
 // ─── Contract type ───────────────────────────────────────────────────────────
 export const CONTRACT_TYPE_LABELS: Record<string, string> = {
     permanent: 'Permanent',
+    probation: 'Probation',
     contract: 'Contract',
     part_time: 'Part Time',
 }

@@ -131,6 +131,7 @@ export interface SalaryRevision {
     newTotalSalary: string | null
     reason: string | null
     approvedBy: string | null
+    approvedByName: string | null
     createdAt: string
 }
 

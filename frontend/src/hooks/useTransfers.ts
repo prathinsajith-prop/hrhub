@@ -14,11 +14,15 @@ export interface EmployeeTransfer {
     fromBranchId: string | null
     fromDivisionId: string | null
     fromDepartmentId: string | null
+    fromBranchName: string | null
+    fromDivisionName: string | null
     toDesignation: string | null
     toDepartment: string | null
     toBranchId: string | null
     toDivisionId: string | null
     toDepartmentId: string | null
+    toBranchName: string | null
+    toDivisionName: string | null
     newSalary: string | null
     reason: string | null
     notes: string | null
@@ -29,13 +33,13 @@ export interface EmployeeTransfer {
 
 export interface CreateTransferInput {
     transferDate: string
-    toDesignation?: string
+    toDesignation?: string | null
     toBranchId?: string | null
     toDivisionId?: string | null
     toDepartmentId?: string | null
     newSalary?: number | null
-    reason?: string
-    notes?: string
+    reason?: string | null
+    notes?: string | null
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────

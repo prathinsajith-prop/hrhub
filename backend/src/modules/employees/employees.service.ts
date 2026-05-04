@@ -2,9 +2,10 @@ import { eq, and, ilike, desc, asc, getTableColumns, inArray, sql, or, lt, gte, 
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { employees, entities, tenants } from '../../db/schema/index.js'
+import { employees, entities, tenants, gradeLevels, sponsoringEntities } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 
 type Employee = InferSelectModel<typeof employees>
 type NewEmployee = InferInsertModel<typeof employees>
@@ -102,8 +103,14 @@ export async function listEmployees(params: ListEmployeesParams) {
 
     const pageSize = limit + 1 // fetch one extra to determine hasMore
     const rows = await db
-        .select(getTableColumns(employees))
+        .select({
+            ...getTableColumns(employees),
+            gradeLevelName: gradeLevels.name,
+            sponsoringEntityName: sponsoringEntities.name,
+        })
         .from(employees)
+        .leftJoin(gradeLevels, eq(employees.gradeLevelId, gradeLevels.id))
+        .leftJoin(sponsoringEntities, eq(employees.sponsoringEntityId, sponsoringEntities.id))
         .where(and(...conditions))
         .orderBy(desc(employees.createdAt), desc(employees.id))
         .limit(cursor ? pageSize : limit)
@@ -126,8 +133,13 @@ export async function listEmployees(params: ListEmployeesParams) {
         total = Number(countRow?.count ?? 0)
     }
 
+    const data = await Promise.all(pageRows.map(async r => {
+        const base = withFullName(r as any)
+        return { ...base, avatarUrl: await resolveAvatarUrl((r as any).avatarUrl) }
+    }))
+
     return {
-        data: pageRows.map(withFullName),
+        data,
         total: cursor ? undefined : total,
         limit,
         offset: cursor ? undefined : offset,
@@ -141,13 +153,19 @@ export async function getEmployee(tenantId: string, id: string) {
         .select({
             ...getTableColumns(employees),
             entityName: entities.entityName,
+            gradeLevelName: gradeLevels.name,
+            sponsoringEntityName: sponsoringEntities.name,
         })
         .from(employees)
         .leftJoin(entities, eq(employees.entityId, entities.id))
+        .leftJoin(gradeLevels, eq(employees.gradeLevelId, gradeLevels.id))
+        .leftJoin(sponsoringEntities, eq(employees.sponsoringEntityId, sponsoringEntities.id))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .limit(1)
 
-    return row ? withFullName(row as typeof row & { firstName: string; lastName: string }) : null
+    if (!row) return null
+    const employee = withFullName(row as typeof row & { firstName: string; lastName: string })
+    return { ...employee, avatarUrl: await resolveAvatarUrl(employee.avatarUrl) }
 }
 
 export async function createEmployee(tenantId: string, data: Omit<NewEmployee, 'tenantId' | 'id'>) {
@@ -309,8 +327,14 @@ export async function getOrgChart(tenantId: string, rootEmployeeId?: string) {
         const subtreeSet = new Set(subtreeIds)
         const ancestorSet = new Set(ancestorIds)
 
+        // Resolve avatarUrls to presigned download URLs
+        const resolvedRows = await Promise.all(rows.map(async r => ({
+            ...r,
+            avatarUrl: await resolveAvatarUrl(r.avatarUrl),
+        })))
+
         // 4. Build node map — ancestors are flagged so the frontend can style them
-        const map = new Map(rows.map(r => [r.id, {
+        const map = new Map(resolvedRows.map(r => [r.id, {
             ...r,
             fullName: `${r.firstName} ${r.lastName}`,
             isAncestor: ancestorSet.has(r.id),
@@ -363,7 +387,12 @@ export async function getOrgChart(tenantId: string, rootEmployeeId?: string) {
         status: employees.status,
     }).from(employees).where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false)))
 
-    const map = new Map(rows.map(r => [r.id, {
+    const resolvedRows = await Promise.all(rows.map(async r => ({
+        ...r,
+        avatarUrl: await resolveAvatarUrl(r.avatarUrl),
+    })))
+
+    const map = new Map(resolvedRows.map(r => [r.id, {
         ...r, fullName: `${r.firstName} ${r.lastName}`, isAncestor: false, children: [] as any[],
     }]))
     const visited = new Set<string>()

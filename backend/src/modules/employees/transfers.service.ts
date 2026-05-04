@@ -1,6 +1,6 @@
-import { eq, and, desc, isNull, sql } from 'drizzle-orm'
+import { eq, and, desc, isNull, inArray, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
-import { employeeTransfers, employees, users } from '../../db/schema/index.js'
+import { employeeTransfers, employees, users, orgUnits } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewTransfer = Omit<InferInsertModel<typeof employeeTransfers>, 'id' | 'tenantId' | 'createdAt' | 'deletedAt'>
@@ -26,8 +26,8 @@ export async function listTransfers(tenantId: string, employeeId: string) {
             reason: employeeTransfers.reason,
             notes: employeeTransfers.notes,
             approvedBy: employeeTransfers.approvedBy,
-            createdAt: employeeTransfers.createdAt,
             approvedByName: sql<string | null>`${users.name}`,
+            createdAt: employeeTransfers.createdAt,
         })
         .from(employeeTransfers)
         .leftJoin(users, eq(users.id, employeeTransfers.approvedBy))
@@ -40,7 +40,27 @@ export async function listTransfers(tenantId: string, employeeId: string) {
         )
         .orderBy(desc(employeeTransfers.transferDate))
 
-    return rows
+    // Resolve org unit names for all branch/division IDs in one query
+    const orgUnitIds = [...new Set(rows.flatMap(r => [
+        r.fromBranchId, r.fromDivisionId, r.toBranchId, r.toDivisionId,
+    ]).filter(Boolean) as string[])]
+
+    const unitNameMap = new Map<string, string>()
+    if (orgUnitIds.length > 0) {
+        const units = await db
+            .select({ id: orgUnits.id, name: orgUnits.name })
+            .from(orgUnits)
+            .where(inArray(orgUnits.id, orgUnitIds))
+        units.forEach(u => unitNameMap.set(u.id, u.name))
+    }
+
+    return rows.map(r => ({
+        ...r,
+        fromBranchName: r.fromBranchId ? (unitNameMap.get(r.fromBranchId) ?? null) : null,
+        fromDivisionName: r.fromDivisionId ? (unitNameMap.get(r.fromDivisionId) ?? null) : null,
+        toBranchName: r.toBranchId ? (unitNameMap.get(r.toBranchId) ?? null) : null,
+        toDivisionName: r.toDivisionId ? (unitNameMap.get(r.toDivisionId) ?? null) : null,
+    }))
 }
 
 export async function createTransfer(
@@ -60,6 +80,7 @@ export async function createTransfer(
         if (data.toDivisionId !== undefined) updateFields['divisionId'] = data.toDivisionId
         if (data.toDepartmentId !== undefined) updateFields['departmentId'] = data.toDepartmentId
         if (data.toDesignation !== undefined) updateFields['designation'] = data.toDesignation
+        if (data.toDepartment !== undefined && data.toDepartment !== null) updateFields['department'] = data.toDepartment
         if (data.newSalary !== undefined && data.newSalary !== null) {
             updateFields['totalSalary'] = String(data.newSalary)
         }

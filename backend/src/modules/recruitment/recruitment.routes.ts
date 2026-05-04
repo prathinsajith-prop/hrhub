@@ -152,7 +152,6 @@ export default async function (fastify: any): Promise<void> {
                     experience: { type: 'integer', minimum: 0 },
                     expectedSalary: { type: 'number', minimum: 0 },
                     currentSalary: { type: 'number', minimum: 0 },
-                    resumeUrl: { type: 'string' },
                     notes: { type: 'string' },
                 },
                 additionalProperties: false,
@@ -319,7 +318,7 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
-        const downloadUrl = await generateDownloadUrl(s3Key)
+        const downloadUrl = await generateDownloadUrl(s3Key, 3600, safeName)
         return reply.send({ data: { s3Key, downloadUrl } })
     })
 

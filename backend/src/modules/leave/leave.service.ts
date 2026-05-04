@@ -2,6 +2,7 @@ import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns, aliased
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { leaveRequests, leavePolicies, leaveBalances, publicHolidays, attendanceRecords, leaveAdjustments, airTickets, leaveOffsets } from '../../db/schema/index.js'
 import { employees } from '../../db/schema/employees.js'
 import { users } from '../../db/schema/users.js'
@@ -40,7 +41,8 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
         .limit(limit).offset(offset)
 
     const total = rows.length > 0 ? Number(rows[0].totalCount ?? 0) : 0
-    const data = rows.map(({ totalCount: _tc, ...row }) => row)
+    const rawData = rows.map(({ totalCount: _tc, ...row }) => row)
+    const data = await Promise.all(rawData.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
     return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 
