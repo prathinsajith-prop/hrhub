@@ -16,16 +16,16 @@ const queryClient = postgres(env.DATABASE_URL, {
 
 export const db = drizzle(queryClient, { schema, logger: env.NODE_ENV === 'development' })
 
+type DrizzleTx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
 /**
  * Run a block of DB operations with PostgreSQL RLS tenant context set.
- * Usage: withTenantContext(tenantId, () => db.select()...)
- * This issues SET LOCAL app.current_tenant = '<id>' within the same transaction,
- * satisfying the RLS policy on all tenant-scoped tables.
+ * SET LOCAL scopes the variable to the transaction and resets automatically on commit/rollback.
  */
-export async function withTenantContext<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
+export async function withTenantContext<T>(tenantId: string, fn: (tx: DrizzleTx) => Promise<T>): Promise<T> {
     return db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL "app.current_tenant" = ${tenantId}`)
-        return fn()
+        return fn(tx)
     })
 }
 

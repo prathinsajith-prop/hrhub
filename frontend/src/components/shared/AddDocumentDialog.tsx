@@ -1,16 +1,19 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { DatePicker } from '@/components/ui/date-picker'
 import {
     Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { InitialsAvatar } from '@/components/shared/Avatar'
 import { useUploadDocument } from '@/hooks/useDocuments'
+import { useEmployees } from '@/hooks/useEmployees'
 import { DOC_TYPE_CATALOG, CATEGORY_LABELS } from '@/lib/docTypes'
 import { toast } from '@/components/ui/overlays'
-import { Upload, FileText, X } from 'lucide-react'
+import { Upload, FileText, X, Search, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -26,18 +29,43 @@ function addOneYear(dateStr: string): string {
     return d.toISOString().split('T')[0]!
 }
 
-export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
+export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmployeeId }: Props) {
     const { mutateAsync, isPending } = useUploadDocument()
+    const { data: empList, isLoading: empLoading } = useEmployees({ limit: 500 })
 
+    const employeeOptions = useMemo(() =>
+        (empList?.data ?? [])
+            .filter(e => e.status !== 'terminated')
+            .map(e => ({ value: e.id, label: e.fullName, secondary: e.employeeNo ?? '' })),
+        [empList],
+    )
+
+    const [selectedEmpId, setSelectedEmpId] = useState('')
+    const [empSearch, setEmpSearch] = useState('')
+    const [empOpen, setEmpOpen] = useState(false)
     const [docType, setDocType] = useState('')
     const [issueDate, setIssueDate] = useState('')
     const [expiryDate, setExpiryDate] = useState('')
     const [notes, setNotes] = useState('')
     const [file, setFile] = useState<File | null>(null)
     const [dragging, setDragging] = useState(false)
-    const [errors, setErrors] = useState<{ docType?: string; expiryDate?: string; file?: string }>({})
+    const [errors, setErrors] = useState<{ employee?: string; docType?: string; expiryDate?: string; file?: string }>({})
     const fileInputRef = useRef<HTMLInputElement>(null)
     const autoExpiryRef = useRef<string>('')
+    const empInputRef = useRef<HTMLInputElement>(null)
+
+    const effectiveEmployeeId = fixedEmployeeId ?? (selectedEmpId || undefined)
+    const selectedEmployee = employeeOptions.find(e => e.value === selectedEmpId)
+
+    const filteredEmployees = useMemo(() => {
+        const q = empSearch.trim().toLowerCase()
+        const list = q
+            ? employeeOptions.filter(e =>
+                e.label.toLowerCase().includes(q) || e.secondary.toLowerCase().includes(q),
+            )
+            : employeeOptions
+        return list.slice(0, 8)
+    }, [employeeOptions, empSearch])
 
     const allDocTypes = Object.values(DOC_TYPE_CATALOG).flat()
     const selectedDef = allDocTypes.find(d => d.docType === docType)
@@ -48,7 +76,6 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
         setIssueDate(date)
         if (date) {
             const auto = addOneYear(date)
-            // Auto-fill expiry if empty or if it still matches the previous auto-set value
             if (!expiryDate || expiryDate === autoExpiryRef.current) {
                 setExpiryDate(auto)
                 autoExpiryRef.current = auto
@@ -59,11 +86,27 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
     function handleExpiryDateChange(v: string | undefined) {
         const date = v ?? ''
         setExpiryDate(date)
-        // User manually changed expiry — stop tracking auto-set
         autoExpiryRef.current = date
     }
 
+    function selectEmployee(id: string) {
+        setSelectedEmpId(id)
+        setEmpSearch('')
+        setEmpOpen(false)
+        setErrors(e => ({ ...e, employee: undefined }))
+    }
+
+    function clearEmployee() {
+        setSelectedEmpId('')
+        setEmpSearch('')
+        setEmpOpen(false)
+        setTimeout(() => empInputRef.current?.focus(), 50)
+    }
+
     function reset() {
+        setSelectedEmpId('')
+        setEmpSearch('')
+        setEmpOpen(false)
         setDocType('')
         setIssueDate('')
         setExpiryDate('')
@@ -110,6 +153,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
 
     async function handleSubmit() {
         const newErrors: typeof errors = {}
+        if (!fixedEmployeeId && !selectedEmpId) newErrors.employee = 'Please select an employee'
         if (!docType) newErrors.docType = 'Please select a document type'
         if (expiryRequired && !expiryDate) newErrors.expiryDate = `${docType} requires an expiry date`
         if (!file) newErrors.file = 'Please select a file to upload'
@@ -118,7 +162,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
         try {
             await mutateAsync({
                 file: file!,
-                employeeId,
+                employeeId: effectiveEmployeeId,
                 category: selectedDef?.category ?? 'identity',
                 docType,
                 issueDate: issueDate || undefined,
@@ -128,19 +172,117 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
             toast.success('Document uploaded', `${docType} has been submitted for review.`)
             handleClose(false)
         } catch {
-            // error toast handled by hook
+            // error handled by hook
         }
     }
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-lg p-0 overflow-hidden">
-                <DialogHeader className="px-6 pt-6 pb-4 border-b">
+            <DialogContent className="max-w-lg p-0 flex flex-col max-h-[90vh]">
+                <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
                     <DialogTitle className="text-lg font-semibold">Add Document</DialogTitle>
                 </DialogHeader>
 
-                <div className="px-6 py-5 space-y-4">
-                    {/* Document type */}
+                <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
+
+                    {/* ── Employee selector (only when not pre-set) ── */}
+                    {!fixedEmployeeId && (
+                        <div className="space-y-1.5">
+                            <Label className="text-sm font-medium">
+                                Employee <span className="text-destructive">*</span>
+                            </Label>
+
+                            {selectedEmployee ? (
+                                /* Selected state — show employee chip */
+                                <div className={cn(
+                                    'flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2.5',
+                                    errors.employee && 'border-destructive',
+                                )}>
+                                    <InitialsAvatar name={selectedEmployee.label} size="sm" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium leading-tight truncate">{selectedEmployee.label}</p>
+                                        {selectedEmployee.secondary && (
+                                            <p className="text-xs text-muted-foreground">{selectedEmployee.secondary}</p>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={clearEmployee}
+                                        className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                        aria-label="Clear employee"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                /* Search state */
+                                <div className="space-y-1">
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                        <Input
+                                            ref={empInputRef}
+                                            value={empSearch}
+                                            onChange={e => { setEmpSearch(e.target.value); setEmpOpen(true) }}
+                                            onFocus={() => setEmpOpen(true)}
+                                            placeholder={empLoading ? 'Loading employees…' : 'Search by name or employee no…'}
+                                            disabled={empLoading}
+                                            className={cn(
+                                                'pl-9 h-9 text-sm',
+                                                errors.employee && 'border-destructive focus-visible:ring-destructive/30',
+                                            )}
+                                            autoComplete="off"
+                                        />
+                                    </div>
+
+                                    {/* Inline dropdown — no portal, no z-index conflict */}
+                                    {empOpen && !empLoading && (
+                                        <div className="rounded-lg border bg-background shadow-sm overflow-hidden">
+                                            {filteredEmployees.length === 0 ? (
+                                                <p className="px-3 py-4 text-sm text-muted-foreground text-center">
+                                                    {empSearch ? 'No employees match your search' : 'No employees found'}
+                                                </p>
+                                            ) : (
+                                                <ul className="max-h-44 overflow-y-auto divide-y divide-border/50">
+                                                    {filteredEmployees.map(emp => (
+                                                        <li key={emp.value}>
+                                                            <button
+                                                                type="button"
+                                                                onMouseDown={e => e.preventDefault()}
+                                                                onClick={() => selectEmployee(emp.value)}
+                                                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/60 transition-colors text-left"
+                                                            >
+                                                                <InitialsAvatar name={emp.label} size="sm" />
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-medium truncate">{emp.label}</p>
+                                                                    {emp.secondary && (
+                                                                        <p className="text-xs text-muted-foreground">{emp.secondary}</p>
+                                                                    )}
+                                                                </div>
+                                                                {emp.value === selectedEmpId && (
+                                                                    <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                                                                )}
+                                                            </button>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                            {employeeOptions.length > 8 && (
+                                                <p className="px-3 py-1.5 text-[11px] text-muted-foreground border-t bg-muted/20">
+                                                    Type to filter · showing {filteredEmployees.length} of {employeeOptions.length}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {errors.employee && (
+                                <p className="text-xs text-destructive">{errors.employee}</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── Document type ── */}
                     <div className="space-y-1.5">
                         <Label className="text-sm font-medium">
                             Document Type <span className="text-destructive">*</span>
@@ -156,9 +298,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                                             {CATEGORY_LABELS[cat]}
                                         </SelectLabel>
                                         {DOC_TYPE_CATALOG[cat].map(d => (
-                                            <SelectItem key={d.docType} value={d.docType}>
-                                                {d.label}
-                                            </SelectItem>
+                                            <SelectItem key={d.docType} value={d.docType}>{d.label}</SelectItem>
                                         ))}
                                     </SelectGroup>
                                 ))}
@@ -170,22 +310,16 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                                 </SelectGroup>
                             </SelectContent>
                         </Select>
-                        {errors.docType && (
-                            <p className="text-xs text-destructive">{errors.docType}</p>
-                        )}
+                        {errors.docType && <p className="text-xs text-destructive">{errors.docType}</p>}
                     </div>
 
-                    {/* Issue date + Expiry date side by side */}
+                    {/* ── Issue + Expiry dates ── */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label className="text-sm font-medium text-muted-foreground">
                                 Issue Date <span className="text-xs font-normal">(optional)</span>
                             </Label>
-                            <DatePicker
-                                value={issueDate}
-                                onChange={handleIssueDateChange}
-                                placeholder="Select issue date"
-                            />
+                            <DatePicker value={issueDate} onChange={handleIssueDateChange} placeholder="Select issue date" />
                         </div>
                         <div className="space-y-1.5">
                             <Label className={cn('text-sm font-medium', !expiryRequired && 'text-muted-foreground')}>
@@ -206,7 +340,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                         </div>
                     </div>
 
-                    {/* Notes / comment */}
+                    {/* ── Notes ── */}
                     <div className="space-y-1.5">
                         <Label className="text-sm font-medium text-muted-foreground">
                             Notes <span className="text-xs font-normal">(optional)</span>
@@ -220,7 +354,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                         />
                     </div>
 
-                    {/* File upload zone */}
+                    {/* ── File upload ── */}
                     <div className="space-y-1.5">
                         <Label className="text-sm font-medium">
                             File <span className="text-destructive">*</span>
@@ -277,13 +411,11 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                                 </div>
                             </button>
                         )}
-                        {errors.file && (
-                            <p className="text-xs text-destructive">{errors.file}</p>
-                        )}
+                        {errors.file && <p className="text-xs text-destructive">{errors.file}</p>}
                     </div>
                 </div>
 
-                <DialogFooter className="px-6 py-4 border-t bg-muted/20">
+                <DialogFooter className="px-6 py-4 border-t bg-muted/20 shrink-0">
                     <Button variant="outline" onClick={() => handleClose(false)} disabled={isPending}>
                         Cancel
                     </Button>

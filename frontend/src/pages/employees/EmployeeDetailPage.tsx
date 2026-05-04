@@ -8,7 +8,12 @@ import {
   Clock, Download, Eye, Camera, Loader2, Plus, Package,
   CalendarDays, ClipboardList, UserCheck, Users, GraduationCap, Landmark,
   ArrowRightLeft, Heart, StickyNote, History, Trash2, AlertTriangle, Upload, X as XIcon,
+  MoreHorizontal, CheckCircle2, Ban, UserX,
 } from 'lucide-react'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ConfirmDialog } from '@/components/ui/overlays'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -28,7 +33,7 @@ import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { useEmployee, useUpdateEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision } from '@/hooks/useEmployees'
+import { useEmployee, useUpdateEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision, useUpdateEmployeeStatus, useArchiveEmployee } from '@/hooks/useEmployees'
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { useEmployeeTeams } from '@/hooks/useTeams'
@@ -135,8 +140,8 @@ const EmpField = React.memo(function EmpField({
 
 const EmployeeStatusBadge = React.memo(function EmployeeStatusBadge({ status }: { status: string }) {
   return (
-    <Badge variant={STATUS_VARIANT[status] ?? 'secondary'} className="capitalize text-[11px] mt-0.5">
-      {status.replace('_', ' ')}
+    <Badge variant={STATUS_VARIANT[status] ?? 'secondary'} className="text-[11px] mt-0.5">
+      {labelFor(status)}
     </Badge>
   )
 })
@@ -681,6 +686,10 @@ export function EmployeeDetailPage() {
 
   const uploadAvatar = useUploadEmployeeAvatar(id!)
   const updateEmployee = useUpdateEmployee(id!)
+  const updateStatus = useUpdateEmployeeStatus()
+  const archiveEmployee = useArchiveEmployee()
+  const [statusTarget, setStatusTarget] = React.useState<{ status: 'active' | 'suspended' | 'terminated' } | null>(null)
+  const [archiveConfirm, setArchiveConfirm] = React.useState(false)
   const [editOpen, setEditOpen] = React.useState(false)
   const [editEmploymentOpen, setEditEmploymentOpen] = React.useState(false)
   const [editPayrollOpen, setEditPayrollOpen] = React.useState(false)
@@ -707,6 +716,41 @@ export function EmployeeDetailPage() {
 
   // Terminated or suspended employees must not be granted/managed system access
   const isAccessRestricted = ['terminated', 'suspended'].includes(e?.status ?? '')
+
+  const STATUS_CONFIG = {
+    active:     { label: 'Activate',  past: 'activated',  confirmLabel: 'Activate',  variant: 'success'     as const, description: 'This will set the employee status back to active.' },
+    suspended:  { label: 'Suspend',   past: 'suspended',  confirmLabel: 'Suspend',   variant: 'warning'     as const, description: 'The employee will be suspended and cannot log in.' },
+    terminated: { label: 'Terminate', past: 'terminated', confirmLabel: 'Terminate', variant: 'destructive' as const, description: 'This will mark the employee as terminated. This can be reversed later.' },
+  }
+
+  function handleStatusChange() {
+    if (!statusTarget || !e) return
+    updateStatus.mutate({ id: e.id, status: statusTarget.status }, {
+      onSuccess: () => {
+        const cfg = STATUS_CONFIG[statusTarget.status]
+        toast.success('Status updated', `${e.fullName} has been ${cfg.past}.`)
+        setStatusTarget(null)
+      },
+      onError: () => {
+        toast.error('Failed', 'Could not update status. Please try again.')
+        setStatusTarget(null)
+      },
+    })
+  }
+
+  function handleArchive() {
+    if (!e) return
+    archiveEmployee.mutate(e.id, {
+      onSuccess: () => {
+        toast.success('Record archived', `${e.fullName}'s record has been archived.`)
+        navigate('/employees')
+      },
+      onError: () => {
+        toast.error('Failed', 'Could not archive employee record.')
+        setArchiveConfirm(false)
+      },
+    })
+  }
 
   const visaDays = e?.visaExpiry ? Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000) : null
   const visaLabel = visaDays === null ? 'N/A' : visaDays < 0 ? 'Expired' : `${visaDays}d left`
@@ -856,6 +900,52 @@ export function EmployeeDetailPage() {
                   <Button size="sm" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditOpen(true)}>
                     Edit Profile
                   </Button>
+                  {canManage && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" aria-label="More actions">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        {e.status !== 'active' && (
+                          <DropdownMenuItem
+                            onClick={() => setStatusTarget({ status: 'active' })}
+                            className="text-success focus:text-success focus:bg-success/10"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
+                            Activate
+                          </DropdownMenuItem>
+                        )}
+                        {(e.status === 'active' || e.status === 'onboarding') && (
+                          <DropdownMenuItem
+                            onClick={() => setStatusTarget({ status: 'suspended' })}
+                            className="text-amber-600 focus:text-amber-600 focus:bg-amber-50"
+                          >
+                            <Ban className="h-3.5 w-3.5 mr-2" />
+                            Suspend
+                          </DropdownMenuItem>
+                        )}
+                        {e.status !== 'terminated' && (
+                          <DropdownMenuItem
+                            onClick={() => setStatusTarget({ status: 'terminated' })}
+                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                          >
+                            <UserX className="h-3.5 w-3.5 mr-2" />
+                            Terminate
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => setArchiveConfirm(true)}
+                          className="text-muted-foreground focus:text-destructive focus:bg-destructive/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" />
+                          Archive Record
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </div>
 
@@ -1035,7 +1125,7 @@ export function EmployeeDetailPage() {
                     <p className="text-sm font-medium">No transfers recorded</p>
                   </div>
                 ) : (
-                  <div className="divide-y">
+                  <div className="space-y-3">
                     {transfersData.map(tr => {
                       const fromDept = tr.fromDepartment ?? (tr.fromDepartmentId ? orgUnitName(tr.fromDepartmentId) : null)
                       const toDept = tr.toDepartment ?? (tr.toDepartmentId ? orgUnitName(tr.toDepartmentId) : null)
@@ -1043,54 +1133,45 @@ export function EmployeeDetailPage() {
                       const toBranch = tr.toBranchName ?? (tr.toBranchId ? orgUnitName(tr.toBranchId) : null)
                       const fromDiv = tr.fromDivisionName ?? (tr.fromDivisionId ? orgUnitName(tr.fromDivisionId) : null)
                       const toDiv = tr.toDivisionName ?? (tr.toDivisionId ? orgUnitName(tr.toDivisionId) : null)
+                      type ChangeRow = { label: string; from: string | null; to: string | null }
+                      const changes: ChangeRow[] = [
+                        fromBranch !== toBranch && (fromBranch || toBranch) ? { label: 'Branch', from: fromBranch, to: toBranch } : null,
+                        fromDiv !== toDiv && (fromDiv || toDiv) ? { label: 'Division', from: fromDiv, to: toDiv } : null,
+                        fromDept !== toDept && (fromDept || toDept) ? { label: 'Department', from: fromDept, to: toDept } : null,
+                        tr.fromDesignation !== tr.toDesignation && (tr.fromDesignation || tr.toDesignation) ? { label: 'Designation', from: tr.fromDesignation ?? null, to: tr.toDesignation ?? null } : null,
+                        tr.newSalary ? { label: 'Salary', from: null, to: formatCurrency(parseFloat(tr.newSalary)) } : null,
+                      ].filter(Boolean) as ChangeRow[]
                       return (
-                        <div key={tr.id} className="py-3 flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant="info" className="text-[10px] shrink-0">Transfer</Badge>
-                              <span className="text-xs text-muted-foreground">{formatDate(tr.transferDate)}</span>
+                        <div key={tr.id} className="rounded-lg border bg-card overflow-hidden">
+                          {/* Header */}
+                          <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-muted/30 border-b">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="info" className="text-[10px] px-2 py-0.5">Transfer</Badge>
+                              <span className="text-sm font-medium text-foreground">{formatDate(tr.transferDate)}</span>
                             </div>
-                            <div className="mt-1 space-y-0.5">
-                              {(fromBranch || toBranch) && (
-                                <p className="text-xs text-muted-foreground">
-                                  <span className="font-medium text-foreground/60">Branch: </span>
-                                  {fromBranch ?? '—'} &rarr; <span className="font-medium text-foreground">{toBranch ?? '—'}</span>
-                                </p>
-                              )}
-                              {(fromDiv || toDiv) && (
-                                <p className="text-xs text-muted-foreground">
-                                  <span className="font-medium text-foreground/60">Division: </span>
-                                  {fromDiv ?? '—'} &rarr; <span className="font-medium text-foreground">{toDiv ?? '—'}</span>
-                                </p>
-                              )}
-                              {(fromDept || toDept) && (
-                                <p className="text-sm text-foreground">
-                                  <span className="text-muted-foreground">{fromDept ?? '—'}</span>
-                                  {' '}&rarr;{' '}
-                                  <span className="font-medium">{toDept ?? '—'}</span>
-                                </p>
-                              )}
-                              {(tr.fromDesignation || tr.toDesignation) && (
-                                <p className="text-xs text-muted-foreground">
-                                  <span className="font-medium text-foreground/60">Designation: </span>
-                                  {tr.fromDesignation ?? '—'} &rarr; <span className="font-medium text-foreground">{tr.toDesignation ?? '—'}</span>
-                                </p>
-                              )}
-                              {tr.newSalary && (
-                                <p className="text-xs text-muted-foreground">
-                                  New salary: <span className="font-medium text-foreground">{formatCurrency(parseFloat(tr.newSalary))}</span>
-                                </p>
-                              )}
-                              {tr.reason && (
-                                <p className="text-xs text-muted-foreground line-clamp-1">{tr.reason}</p>
-                              )}
-                              {tr.notes && (
-                                <p className="text-xs text-muted-foreground/70 italic line-clamp-1">{tr.notes}</p>
-                              )}
-                            </div>
+                            {tr.approvedByName && (
+                              <span className="text-xs text-muted-foreground">by {tr.approvedByName}</span>
+                            )}
                           </div>
-                          {tr.approvedByName && (
-                            <span className="text-xs text-muted-foreground shrink-0">by {tr.approvedByName}</span>
+                          {/* Change rows */}
+                          {changes.length > 0 && (
+                            <div className="divide-y">
+                              {changes.map(row => (
+                                <div key={row.label} className="grid grid-cols-[80px_1fr_20px_1fr] items-center gap-2 px-4 py-2.5">
+                                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{row.label}</span>
+                                  <span className="text-xs text-muted-foreground truncate">{row.from ?? '—'}</span>
+                                  <ArrowRightLeft className="h-3 w-3 text-muted-foreground/40 justify-self-center shrink-0" />
+                                  <span className="text-xs font-medium text-foreground truncate">{row.to ?? '—'}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {/* Reason / notes */}
+                          {(tr.reason || tr.notes) && (
+                            <div className="px-4 py-2 border-t bg-muted/10">
+                              {tr.reason && <p className="text-xs text-muted-foreground line-clamp-2">{tr.reason}</p>}
+                              {tr.notes && <p className="text-xs text-muted-foreground/60 italic line-clamp-1 mt-0.5">{tr.notes}</p>}
+                            </div>
                           )}
                         </div>
                       )
@@ -1311,8 +1392,8 @@ export function EmployeeDetailPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-2">
-                          <Badge variant={doc.status === 'verified' ? 'success' : doc.status === 'expired' ? 'destructive' : 'secondary'} className="text-[10px] capitalize">
-                            {doc.status}
+                          <Badge variant={doc.status === 'verified' ? 'success' : doc.status === 'expired' ? 'destructive' : 'secondary'} className="text-[10px]">
+                            {labelFor(doc.status)}
                           </Badge>
                           <Button variant="ghost" size="icon-sm" aria-label="View document" onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}>
                             <Eye className="h-3.5 w-3.5" />
@@ -1494,8 +1575,8 @@ export function EmployeeDetailPage() {
                           </p>
                           {r.managerComments && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.managerComments}</p>}
                         </div>
-                        <Badge variant={r.status === 'completed' ? 'success' : r.status === 'submitted' ? 'info' : 'secondary'} className="text-[10px] capitalize shrink-0">
-                          {r.status}
+                        <Badge variant={r.status === 'completed' ? 'success' : r.status === 'submitted' ? 'info' : 'secondary'} className="text-[10px] shrink-0">
+                          {labelFor(r.status)}
                         </Badge>
                       </div>
                     ))}
@@ -1585,7 +1666,7 @@ export function EmployeeDetailPage() {
                       <div>
                         <p className="text-sm font-medium">Access unavailable</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Login access cannot be granted or managed for <span className="capitalize font-medium">{e.status}</span> employees.
+                          Login access cannot be granted or managed for <span className="font-medium">{labelFor(e.status)}</span> employees.
                         </p>
                       </div>
                     </div>
@@ -2020,6 +2101,32 @@ export function EmployeeDetailPage() {
           orgUnits={orgUnits}
           currentDept={orgUnitName(e.departmentId) ?? e.department}
           currentDeptId={e.departmentId}
+        />
+      )}
+
+      {/* Status change confirmation */}
+      {statusTarget && e && (
+        <ConfirmDialog
+          open={!!statusTarget}
+          onOpenChange={o => !o && setStatusTarget(null)}
+          title={`${STATUS_CONFIG[statusTarget.status].label} employee?`}
+          description={STATUS_CONFIG[statusTarget.status].description}
+          confirmLabel={updateStatus.isPending ? 'Updating…' : STATUS_CONFIG[statusTarget.status].confirmLabel}
+          variant={statusTarget.status === 'active' ? 'success' : statusTarget.status === 'suspended' ? 'warning' : 'destructive'}
+          onConfirm={handleStatusChange}
+        />
+      )}
+
+      {/* Archive confirmation */}
+      {e && (
+        <ConfirmDialog
+          open={archiveConfirm}
+          onOpenChange={o => setArchiveConfirm(o)}
+          title="Archive employee record?"
+          description={`This will permanently remove ${e.fullName}'s record from the active list. This action cannot be undone.`}
+          confirmLabel={archiveEmployee.isPending ? 'Archiving…' : 'Archive'}
+          variant="destructive"
+          onConfirm={handleArchive}
         />
       )}
     </PageWrapper>
