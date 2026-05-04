@@ -330,6 +330,15 @@ async function bootstrap() {
     // Run once on startup
     cleanupExpiredTokens().catch((e) => app.log.warn('Initial token cleanup skipped: %s', e))
 
+    // Ensure S3 bucket exists and CORS policy is applied (non-fatal)
+    try {
+        const { ensureBucket } = await import('./plugins/s3.js')
+        await ensureBucket()
+        app.log.info('[S3] Bucket ready')
+    } catch (e) {
+        app.log.warn('[S3] Bucket check failed — file uploads/downloads may not work: %s', e)
+    }
+
     // Start background workers (expiry alerts + async payroll via BullMQ)
     await startExpiryWorkers()
     await startPayrollWorker()

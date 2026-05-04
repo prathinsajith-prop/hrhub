@@ -1,6 +1,7 @@
 import { eq, and, inArray, isNull, isNotNull, or, desc } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { onboardingChecklists, onboardingSteps, employees } from '../../db/schema/index.js'
 
 const DEFAULT_TEMPLATE_STEPS = [
@@ -56,7 +57,7 @@ export async function getChecklist(tenantId: string, employeeId: string) {
         employeeNo: row.employeeNo,
         designation: row.designation,
         department: row.department,
-        avatarUrl: row.avatarUrl,
+        avatarUrl: await resolveAvatarUrl(row.avatarUrl),
         email: row.email,
         phone: row.phone,
         joinDate: row.joinDate,
@@ -222,7 +223,7 @@ export async function listChecklists(tenantId: string, params: { limit: number; 
         stepsByChecklist.set(s.checklistId, arr)
     }
 
-    return rows.map(r => {
+    return Promise.all(rows.map(async r => {
         const steps = r.checklistId ? (stepsByChecklist.get(r.checklistId) ?? []) : []
         const completedCount = steps.filter(s => s.status === 'completed').length
         const totalCount = steps.length
@@ -233,7 +234,7 @@ export async function listChecklists(tenantId: string, params: { limit: number; 
             employeeNo: r.employeeNo,
             designation: r.designation,
             department: r.department,
-            avatarUrl: r.avatarUrl,
+            avatarUrl: await resolveAvatarUrl(r.avatarUrl),
             email: r.email,
             phone: r.phone,
             joinDate: r.joinDate,
@@ -247,7 +248,7 @@ export async function listChecklists(tenantId: string, params: { limit: number; 
             totalCount,
             steps,
         }
-    })
+    }))
 }
 
 export async function createChecklist(tenantId: string, data: {

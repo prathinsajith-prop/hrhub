@@ -120,7 +120,7 @@ export default async function employeeWarningsRoutes(fastify: any): Promise<void
             .limit(1)
         if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Warning not found' })
         if (!row.documentS3Key) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'No document attached' })
-        const url = await generateDownloadUrl(row.documentS3Key)
+        const url = await generateDownloadUrl(row.documentS3Key, 3600, row.documentFileName ?? undefined)
         return reply.send({ url, fileName: row.documentFileName })
     })
 

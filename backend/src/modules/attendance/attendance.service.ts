@@ -2,6 +2,7 @@ import { db } from '../../db/index.js'
 import { attendanceRecords, employees } from '../../db/schema/index.js'
 import { eq, and, gte, lte, sql } from 'drizzle-orm'
 import { encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 
 export async function checkIn(tenantId: string, employeeId: string) {
     const today = new Date().toISOString().split('T')[0]
@@ -155,7 +156,8 @@ export async function getAttendance(tenantId: string, params: GetAttendanceParam
                 .from(attendanceRecords)
                 .where(and(...conditions)),
         ])
-        return { items, nextCursor: null, total: totalRow[0]?.count ?? 0 }
+        const resolvedItems = await Promise.all(items.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
+        return { items: resolvedItems, nextCursor: null, total: totalRow[0]?.count ?? 0 }
     }
 
     const rows = await baseQuery
@@ -165,7 +167,8 @@ export async function getAttendance(tenantId: string, params: GetAttendanceParam
     const nextCursor = hasMore && last
         ? encodeCursor(String((last as { date: string }).date), String((last as { id: string }).id))
         : null
-    return { items, nextCursor }
+    const resolvedItems = await Promise.all(items.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
+    return { items: resolvedItems, nextCursor }
 }
 
 export async function upsertAttendance(tenantId: string, data: {
