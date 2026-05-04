@@ -138,8 +138,9 @@ export async function generateDownloadUrl(key: string, expiresIn = 3600, fileNam
         Bucket: env.S3_BUCKET,
         Key: key,
         // Force inline display so PDFs and images render in the browser rather than downloading
+        // RFC 5987 extended notation — handles non-ASCII and all special chars safely.
         ResponseContentDisposition: fileName
-            ? `inline; filename="${fileName.replace(/"/g, '\\"')}"`
+            ? `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`
             : 'inline',
     })
     return getSignedUrl(getS3Client(), command, { expiresIn })
