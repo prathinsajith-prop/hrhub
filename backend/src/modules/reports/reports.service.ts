@@ -2,6 +2,7 @@ import { eq, and, count, lte, gte, sql, desc, isNotNull } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, payrollRuns } from '../../db/schema/index.js'
 import { getPROCostReport } from '../visa/visa_costs.service.js'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 
 export { getPROCostReport }
 
@@ -115,23 +116,25 @@ export async function getVisaExpiryReport(tenantId: string, days = 90) {
         }
     }
 
+    const resolvedEmployees = await Promise.all(expiring.map(async e => ({
+        ...e,
+        avatarUrl: await resolveAvatarUrl(e.avatarUrl),
+        daysLeft: e.visaExpiry
+            ? Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000)
+            : null,
+        urgency: e.visaExpiry
+            ? (e.visaExpiry < today ? 'expired' : (() => {
+                const d = Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000)
+                return d <= 30 ? 'critical' : d <= 60 ? 'urgent' : 'normal'
+            })())
+            : 'unknown',
+    })))
     return {
         total: expiring.length,
         expired: expired.length,
         critical: critical.length,
         urgent: urgent.length,
         normal: normal.length,
-        employees: expiring.map(e => ({
-            ...e,
-            daysLeft: e.visaExpiry
-                ? Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000)
-                : null,
-            urgency: e.visaExpiry
-                ? (e.visaExpiry < today ? 'expired' : (() => {
-                    const d = Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000)
-                    return d <= 30 ? 'critical' : d <= 60 ? 'urgent' : 'normal'
-                })())
-                : 'unknown',
-        })),
+        employees: resolvedEmployees,
     }
 }

@@ -1,6 +1,7 @@
 import { eq, and, isNull, isNotNull, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { tenants, users, passwordResetTokens, employees } from '../../db/schema/index.js'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { randomBytes, createHash } from 'crypto'
 import { hash } from 'bcrypt'
 import { sendEmail, inviteUserEmail } from '../../plugins/email.js'
@@ -100,7 +101,7 @@ export async function listTenantUsers(tenantId: string) {
         ))
         .orderBy(employees.firstName, employees.lastName)
 
-    return rows
+    return Promise.all(rows.map(async r => ({ ...r, avatarUrl: await resolveAvatarUrl(r.avatarUrl) })))
 }
 
 export async function updateUserStatus(tenantId: string, userId: string, data: { isActive?: boolean; role?: string }) {
@@ -147,12 +148,13 @@ export async function listInvitableEmployees(tenantId: string) {
         ))
         .orderBy(employees.firstName, employees.lastName)
 
-    return rows.map(e => ({
+    return Promise.all(rows.map(async e => ({
         ...e,
+        avatarUrl: await resolveAvatarUrl(e.avatarUrl),
         fullName: `${e.firstName} ${e.lastName}`.trim(),
         // Prefer work email (company email) for login, fall back to personal email
         inviteEmail: e.workEmail || e.email || e.personalEmail || null,
-    }))
+    })))
 }
 
 /**

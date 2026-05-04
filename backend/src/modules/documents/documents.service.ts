@@ -1,6 +1,7 @@
 import { eq, and, desc, lte, gte, isNull, isNotNull, sql, getTableColumns, or, lt } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { documents, employees } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
@@ -58,8 +59,9 @@ export async function listDocuments(tenantId: string, params: { employeeId?: str
         total = Number(countRow?.count ?? 0)
     }
 
+    const resolvedRows = await Promise.all(pageRows.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
     return {
-        data: pageRows,
+        data: resolvedRows,
         total: cursor ? undefined : total,
         limit,
         offset: cursor ? undefined : offset,

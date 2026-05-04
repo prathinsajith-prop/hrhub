@@ -5,8 +5,7 @@ import {
 } from './employees.service.js'
 import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSchema } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
-import { uploadObject, buildS3Key } from '../../plugins/s3.js'
-import { loadEnv } from '../../config/env.js'
+import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { db } from '../../db/index.js'
 import { entities, employees, tenants, users } from '../../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
@@ -431,14 +430,12 @@ export default async function (fastify: any): Promise<void> {
 
         try {
             await uploadObject(s3Key, buffer, detected.mime)
-        } catch (err) {
-            request.log.error({ err }, 'S3 avatar upload failed')
+        } catch (err: any) {
+            request.log.error({ err, s3Message: err?.message, s3Code: err?.name, s3Status: err?.$metadata?.httpStatusCode }, 'S3 avatar upload failed')
             return reply.code(503).send({ message: 'File storage service is unavailable. Please try again later.' })
         }
 
-        const env = loadEnv()
-        const avatarUrl = `${env.S3_PUBLIC_URL}/${s3Key}`
-        const updated = await updateEmployee(request.user.tenantId, id, { avatarUrl } as never)
+        const updated = await updateEmployee(request.user.tenantId, id, { avatarUrl: s3Key } as never)
         if (!updated) return reply.code(404).send({ message: 'Employee not found' })
 
         recordActivity({
@@ -454,7 +451,8 @@ export default async function (fastify: any): Promise<void> {
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
 
-        return reply.send({ data: { avatarUrl } })
+        const presignedUrl = await generateDownloadUrl(s3Key, 86400)
+        return reply.send({ data: { avatarUrl: presignedUrl } })
     })
 }
 

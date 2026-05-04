@@ -319,7 +319,7 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
-        const downloadUrl = await generateDownloadUrl(s3Key)
+        const downloadUrl = await generateDownloadUrl(s3Key, 3600, safeName)
         return reply.send({ data: { s3Key, downloadUrl } })
     })
 

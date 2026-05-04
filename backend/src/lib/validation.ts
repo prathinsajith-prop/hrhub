@@ -50,7 +50,7 @@ const employeeBaseSchema = z.object({
     employeeNo: z.string().min(1).max(50).optional(),
     firstName: z.string().min(1).max(100),
     lastName: z.string().min(1).max(100),
-    status: z.enum(['active', 'onboarding', 'probation', 'suspended', 'terminated', 'visa_expired']).optional(),
+    status: z.enum(['active', 'onboarding', 'suspended', 'terminated', 'visa_expired']).optional(),
     email: z.string().email().optional(),
     phone: z.string().max(30).optional(),
     nationality: z.string().max(100).optional(),
@@ -70,10 +70,11 @@ const employeeBaseSchema = z.object({
     personalEmail: z.string().email().optional(),
     mobileNo: z.string().max(30).optional(),
     maritalStatus: z.enum(['single', 'married', 'divorced', 'widowed']).optional(),
-    gradeLevel: z.string().max(50).optional(),
+    gradeLevelId: z.string().uuid().nullable().optional(),
     managerName: z.string().max(150).optional(),
     reportingTo: z.string().uuid().nullable().optional(),
     labourCardNumber: z.string().max(50).optional(),
+    labourCardExpiry: dateField,
     bankName: z.string().max(150).optional(),
     accountName: z.string().max(150).optional(),
     accountNumber: z.string().max(50).optional(),
@@ -93,8 +94,8 @@ const employeeBaseSchema = z.object({
     visaExpiry: dateField,
     visaType: z.enum(['employment', 'investor', 'dependent', 'mission']).optional(),
     emiratesIdExpiry: dateField,
-    sponsoringEntity: z.string().max(200).optional(),
-    contractType: z.enum(['permanent', 'contract', 'part_time']).optional(),
+    sponsoringEntityId: z.string().uuid().nullable().optional(),
+    contractType: z.enum(['permanent', 'contract', 'part_time', 'probation']).optional(),
     workLocation: z.string().max(150).optional(),
     probationEndDate: dateField,
     contractEndDate: dateField,
@@ -153,7 +154,7 @@ export const updateEmployeeSchema = employeeBaseSchema
 
 export const listEmployeesSchema = paginationSchema.extend({
     search: z.string().max(100).optional(),
-    status: z.enum(['active', 'onboarding', 'probation', 'suspended', 'terminated', 'visa_expired']).optional(),
+    status: z.enum(['active', 'onboarding', 'suspended', 'terminated', 'visa_expired']).optional(),
     department: z.string().max(100).optional(),
 })
 

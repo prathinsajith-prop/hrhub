@@ -57,7 +57,7 @@ export const LEAVE_POLICY_TYPE_OPTIONS: SelectOption[] = toOptions(LEAVE_POLICY_
 export const EMPLOYEE_STATUS_OPTIONS: SelectOption[] = toOptions(EMPLOYEE_STATUS_LABELS)
 // Valid statuses when creating a new employee
 export const NEW_EMPLOYEE_STATUS_OPTIONS: SelectOption[] = EMPLOYEE_STATUS_OPTIONS.filter(o =>
-    ['onboarding', 'probation', 'active'].includes(o.value),
+    ['onboarding', 'active'].includes(o.value),
 )
 // All editable statuses (excludes visa_expired — set automatically)
 export const EDIT_EMPLOYEE_STATUS_OPTIONS: SelectOption[] = EMPLOYEE_STATUS_OPTIONS.filter(o =>

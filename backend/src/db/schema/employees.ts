@@ -2,6 +2,8 @@ import { pgTable, uuid, text, boolean, timestamp, numeric, date, index, uniqueIn
 import { relations, sql } from 'drizzle-orm'
 import { tenants, entities } from './tenants.js'
 import { orgUnits } from './orgUnits.js'
+import { gradeLevels } from './grade_levels.js'
+import { sponsoringEntities } from './sponsoring_entities.js'
 
 export const employees = pgTable('employees', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -24,7 +26,7 @@ export const employees = pgTable('employees', {
     reportingTo: uuid('reporting_to').references((): AnyPgColumn => employees.id, { onDelete: 'set null' }),
     joinDate: date('join_date').notNull(),
     status: text('status').notNull().default('onboarding')
-        .$type<'active' | 'onboarding' | 'probation' | 'suspended' | 'terminated' | 'visa_expired'>(),
+        .$type<'active' | 'onboarding' | 'suspended' | 'terminated' | 'visa_expired'>(),
     basicSalary: numeric('basic_salary', { precision: 12, scale: 2 }),
     totalSalary: numeric('total_salary', { precision: 12, scale: 2 }),
     visaStatus: text('visa_status')
@@ -38,9 +40,10 @@ export const employees = pgTable('employees', {
     personalEmail: text('personal_email'),
     mobileNo: text('mobile_no'),
     maritalStatus: text('marital_status').$type<'single' | 'married' | 'divorced' | 'widowed'>(),
-    gradeLevel: text('grade_level'),
+    gradeLevelId: uuid('grade_level_id').references(() => gradeLevels.id, { onDelete: 'set null' }),
     managerName: text('manager_name'),
     labourCardNumber: text('labour_card_number'),
+    labourCardExpiry: date('labour_card_expiry'),
     bankName: text('bank_name'),
     accountName: text('account_name'),
     accountNumber: text('account_number'),
@@ -59,8 +62,8 @@ export const employees = pgTable('employees', {
     visaIssueDate: date('visa_issue_date'),
     visaType: text('visa_type').$type<'employment' | 'investor' | 'dependent' | 'mission'>(),
     emiratesIdExpiry: date('emirates_id_expiry'),
-    sponsoringEntity: text('sponsoring_entity'),
-    contractType: text('contract_type').$type<'permanent' | 'contract' | 'part_time'>(),
+    sponsoringEntityId: uuid('sponsoring_entity_id').references(() => sponsoringEntities.id, { onDelete: 'set null' }),
+    contractType: text('contract_type').$type<'permanent' | 'contract' | 'part_time' | 'probation'>(),
     workLocation: text('work_location'),
     probationEndDate: date('probation_end_date'),
     contractEndDate: date('contract_end_date'),
@@ -102,4 +105,6 @@ export const employeesRelations = relations(employees, ({ one }) => ({
     tenant: one(tenants, { fields: [employees.tenantId], references: [tenants.id] }),
     entity: one(entities, { fields: [employees.entityId], references: [entities.id] }),
     manager: one(employees, { fields: [employees.reportingTo], references: [employees.id], relationName: 'employee_manager' }),
+    gradeLevel: one(gradeLevels, { fields: [employees.gradeLevelId], references: [gradeLevels.id] }),
+    sponsoringEntity: one(sponsoringEntities, { fields: [employees.sponsoringEntityId], references: [sponsoringEntities.id] }),
 }))
