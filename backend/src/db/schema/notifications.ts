@@ -17,6 +17,8 @@ export const notifications = pgTable('notifications', {
     tenantIdx: index('idx_notifications_tenant').on(t.tenantId),
     userIdx: index('idx_notifications_user').on(t.userId),
     readIdx: index('idx_notifications_read').on(t.isRead),
+    // Composite index for the common query pattern: get unread notifications for a user within a tenant
+    tenantUserReadIdx: index('idx_notifications_tenant_user_read').on(t.tenantId, t.userId, t.isRead),
 }))
 
 export const auditLogs = pgTable('audit_logs', {

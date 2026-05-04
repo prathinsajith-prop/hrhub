@@ -31,8 +31,8 @@ export async function performanceRoutes(fastify: any) {
         const role = request.user.role
         const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(role)
         const resolvedEmployeeId = isAdmin ? employeeId : (request.user.employeeId ?? undefined)
-        const data = await getReviews(request.user.tenantId, { employeeId: resolvedEmployeeId, from, to, limit: Number(limit), offset: Number(offset) })
-        return reply.send({ data })
+        const result = await getReviews(request.user.tenantId, { employeeId: resolvedEmployeeId, from, to, limit: Number(limit), offset: Number(offset) })
+        return reply.send(result)
     })
 
     // POST /api/v1/performance

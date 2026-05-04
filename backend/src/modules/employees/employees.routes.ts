@@ -357,25 +357,18 @@ export default async function (fastify: any): Promise<void> {
         const results: { row: number; error: string }[] = []
         let created = 0
 
-        // Pre-generate employee numbers outside the transaction, then batch-insert
-        // inside a real transaction so all rows roll back on any failure.
-        const valuesToInsert: Record<string, unknown>[] = []
-        for (let i = 0; i < rows.length; i++) {
-            try {
-                const row = rows[i]
-                const employeeNo = row.employeeNo || await generateNextEmployeeNo(request.user.tenantId)
-                valuesToInsert.push({ ...row, employeeNo, tenantId: request.user.tenantId })
-            } catch (e: any) {
-                results.push({ row: i + 1, error: e.message ?? 'Unknown error' })
-            }
-        }
-
-        if (valuesToInsert.length > 0) {
+        // Insert all rows inside a single transaction so any failure rolls back
+        // the whole batch. Employee numbers are generated inside the transaction
+        // so the COUNT sees in-progress inserts and produces unique sequences
+        // even under concurrent imports.
+        if (rows.length > 0) {
             try {
                 await db.transaction(async (tx) => {
-                    for (let i = 0; i < valuesToInsert.length; i++) {
+                    for (let i = 0; i < rows.length; i++) {
                         try {
-                            await tx.insert(employees).values(valuesToInsert[i] as never)
+                            const row = rows[i]
+                            const employeeNo = row.employeeNo || await generateNextEmployeeNo(request.user.tenantId, tx)
+                            await tx.insert(employees).values({ ...row, employeeNo, tenantId: request.user.tenantId } as never)
                             created++
                         } catch (e: any) {
                             results.push({ row: i + 1, error: e.message ?? 'Unknown error' })
@@ -437,6 +430,12 @@ export default async function (fastify: any): Promise<void> {
 
         const updated = await updateEmployee(request.user.tenantId, id, { avatarUrl: s3Key } as never)
         if (!updated) return reply.code(404).send({ message: 'Employee not found' })
+
+        // Sync avatar to the linked user account (employees.id → users.employeeId)
+        await db.update(users)
+            .set({ avatarUrl: s3Key, updatedAt: new Date() })
+            .where(and(eq(users.employeeId, id), eq(users.tenantId, request.user.tenantId)))
+            .catch(() => { })
 
         recordActivity({
             tenantId: request.user.tenantId,

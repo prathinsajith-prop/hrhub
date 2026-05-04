@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/store/authStore'
 
 export interface ExitRequest {
     id: string
@@ -48,17 +49,20 @@ export interface SettlementPreview {
 }
 
 export function useExitRequests() {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useQuery({
-        queryKey: ['exit'],
-        queryFn: () => api.get<{ data: ExitRequest[] }>('/exit').then(r => r.data ?? []),
+        queryKey: ['exit', tenantId],
+        queryFn: () => api.get<{ data: ExitRequest[]; total: number; hasMore: boolean }>('/exit').then(r => r.data ?? []),
+        enabled: !!tenantId,
     })
 }
 
 export function useExitRequest(id: string | undefined) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useQuery({
-        queryKey: ['exit', id],
+        queryKey: ['exit', tenantId, id],
         queryFn: () => api.get<{ data: ExitRequest }>(`/exit/${id}`).then(r => r.data),
-        enabled: !!id,
+        enabled: !!id && !!tenantId,
     })
 }
 
@@ -93,7 +97,7 @@ export function useInitiateExit() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (data: InitiateExitInput) => api.post('/exit', data),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['exit'] }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['exit'] }), // broad invalidation covers all tenant variants
     })
 }
 
@@ -113,7 +117,7 @@ export function useRejectExit() {
     return useMutation({
         mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
             api.patch(`/exit/${id}/reject`, { reason }),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['exit'] }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['exit'] }), // broad invalidation covers all tenant variants
     })
 }
 
@@ -121,6 +125,6 @@ export function useMarkSettlementPaid() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (id: string) => api.patch(`/exit/${id}/settlement-paid`, {}),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['exit'] }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['exit'] }), // broad invalidation covers all tenant variants
     })
 }

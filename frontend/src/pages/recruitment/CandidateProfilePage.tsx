@@ -307,9 +307,9 @@ export function CandidateProfilePage() {
                         {/* Resume upload / download */}
                         <div className="pt-2 border-t border-border space-y-2">
                             <p className="text-xs font-medium text-muted-foreground">Resume / CV</p>
-                            {(candidate.resumeUrl || resumeDownloadUrl) && (
+                            {(resumeDownloadUrl || candidate.resumeUrl) && (
                                 <a
-                                    href={resumeDownloadUrl ?? '#'}
+                                    href={resumeDownloadUrl ?? candidate.resumeUrl ?? '#'}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="text-xs text-primary underline underline-offset-2"
@@ -348,7 +348,7 @@ export function CandidateProfilePage() {
                                     onClick={() => document.getElementById('resume-upload')?.click()}
                                     type="button"
                                 >
-                                    {uploadResume.isPending ? 'Uploading…' : candidate.resumeUrl ? 'Replace Resume' : 'Upload Resume'}
+                                    {uploadResume.isPending ? 'Uploading…' : (candidate.resumeUrl || resumeDownloadUrl) ? 'Replace Resume' : 'Upload Resume'}
                                 </Button>
                             </label>
                         </div>
