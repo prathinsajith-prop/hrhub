@@ -17,6 +17,7 @@ import { db } from '../../db/index.js'
 import { onboardingChecklists, onboardingSteps, onboardingStepRequiredDocs, documents, tenants, employees } from '../../db/schema/index.js'
 import { eq, and, isNull, inArray } from 'drizzle-orm'
 import { buildS3Key, uploadObject } from '../../plugins/s3.js'
+import { fileTypeFromBuffer } from 'file-type'
 import { loadEnv } from '../../config/env.js'
 
 // Suggested doc types per step title keyword (used for upload-info endpoint
@@ -422,45 +423,56 @@ export default async function (fastify: any): Promise<void> {
             if (!tokenRow) return reply.code(401).send({ message: 'This upload link has been revoked or expired.' })
         }
 
-        const ALLOWED: Record<string, Buffer[]> = {
-            'application/pdf': [Buffer.from([0x25, 0x50, 0x44, 0x46])],
-            'image/jpeg': [Buffer.from([0xFF, 0xD8, 0xFF])],
-            'image/png': [Buffer.from([0x89, 0x50, 0x4E, 0x47])],
+        const ALLOWED_MIMES = new Set([
+            'application/pdf',
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])
+        const EXT_MIME: Record<string, string> = {
+            pdf: 'application/pdf',
+            jpg: 'image/jpeg', jpeg: 'image/jpeg',
+            png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+            doc: 'application/msword',
+            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         }
 
         const parts = request.parts()
-        let fileMeta: { fileName: string; mime: string; s3Key: string; size: number } | null = null
+        let pendingFile: { buffer: Buffer; originalName: string } | null = null
         const fields: Record<string, string> = {}
 
         for await (const part of parts) {
             if (part.type === 'file') {
                 const chunks: Buffer[] = []
                 for await (const chunk of part.file) chunks.push(chunk as Buffer)
-                const buffer = Buffer.concat(chunks)
-
-                const declared = part.mimetype || 'application/octet-stream'
-                const signatures = ALLOWED[declared]
-                if (!signatures) return reply.code(415).send({ message: `File type '${declared}' is not permitted.` })
-                if (!signatures.some(sig => buffer.slice(0, sig.length).equals(sig))) {
-                    return reply.code(415).send({ message: 'File content does not match its declared type.' })
-                }
-
-                const safeName = part.filename.replace(/[^a-zA-Z0-9._-]/g, '_')
-                const s3Key = buildS3Key(claims.tenantId, `employees/${claims.employeeId}/documents`, safeName)
-
-                try {
-                    await uploadObject(s3Key, buffer, declared)
-                } catch {
-                    return reply.code(503).send({ message: 'File storage unavailable. Please try again later.' })
-                }
-
-                fileMeta = { fileName: part.filename, mime: declared, s3Key, size: buffer.length }
+                pendingFile = { buffer: Buffer.concat(chunks), originalName: part.filename }
             } else {
                 fields[part.fieldname] = part.value as string
             }
         }
 
-        if (!fileMeta) return reply.code(400).send({ message: 'No file provided' })
+        if (!pendingFile) return reply.code(400).send({ message: 'No file provided' })
+
+        const detected = await fileTypeFromBuffer(pendingFile.buffer)
+        const ext = pendingFile.originalName.split('.').pop()?.toLowerCase() ?? ''
+        const mime = (detected?.mime && detected.mime !== 'application/zip')
+            ? detected.mime
+            : (EXT_MIME[ext] ?? 'application/octet-stream')
+        if (!ALLOWED_MIMES.has(mime)) {
+            return reply.code(415).send({ message: `File type not permitted. Please upload a PDF, image, Word, or Excel document.` })
+        }
+
+        const safeName = pendingFile.originalName.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const s3Key = buildS3Key(claims.tenantId, `employees/${claims.employeeId}/documents`, safeName)
+        try {
+            await uploadObject(s3Key, pendingFile.buffer, mime)
+        } catch {
+            return reply.code(503).send({ message: 'File storage unavailable. Please try again later.' })
+        }
+
+        const fileMeta = { fileName: pendingFile.originalName, mime, s3Key, size: pendingFile.buffer.length }
 
         const { stepId, category, docType, expiryDate } = fields
         if (!category) return reply.code(400).send({ message: 'category is required' })

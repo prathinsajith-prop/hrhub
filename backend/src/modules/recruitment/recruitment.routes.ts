@@ -226,6 +226,7 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const deleted = await softDeleteApplication(request.user.tenantId, id)
         if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'application', entityId: id, entityName: (deleted as any).name ?? 'Candidate', action: 'delete', ipAddress: (request as any).ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(204).send()
     })
 
@@ -264,6 +265,7 @@ export default async function (fastify: any): Promise<void> {
             ...(b.score !== undefined && { score: Number(b.score) }),
         } as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'application', entityId: id, entityName: (updated as any).name ?? 'Candidate', action: 'update', ipAddress: (request as any).ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.send({ data: updated })
     })
 

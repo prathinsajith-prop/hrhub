@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/store/authStore'
 
 export interface EmployeeWarning {
     id: string
@@ -21,15 +22,17 @@ export interface CreateWarningInput {
 }
 
 export function useEmployeeWarnings(employeeId: string) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useQuery({
-        queryKey: ['employee-warnings', employeeId],
+        queryKey: ['employee-warnings', tenantId, employeeId],
         queryFn: () => api.get<{ data: EmployeeWarning[] }>(`/employees/${employeeId}/warnings`).then(r => r.data),
-        enabled: !!employeeId,
+        enabled: !!employeeId && !!tenantId,
         staleTime: 30_000,
     })
 }
 
 export function useCreateEmployeeWarning(employeeId: string) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const qc = useQueryClient()
     return useMutation({
         mutationFn: async (input: CreateWarningInput) => {
@@ -63,15 +66,16 @@ export function useCreateEmployeeWarning(employeeId: string) {
                 fileName,
             }).then(r => r.data)
         },
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-warnings', employeeId] }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-warnings', tenantId, employeeId] }),
     })
 }
 
 export function useDeleteEmployeeWarning(employeeId: string) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (warningId: string) => api.delete(`/employees/${employeeId}/warnings/${warningId}`),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-warnings', employeeId] }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-warnings', tenantId, employeeId] }),
     })
 }
 

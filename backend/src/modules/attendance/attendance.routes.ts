@@ -105,6 +105,12 @@ export async function attendanceRoutes(fastify: any) {
         // without this an attacker from tenant A could punch in/out for employees in tenant B.
         const emp = await findById(request.user.tenantId, employeeId)
         if (!emp) return reply.code(403).send(e403('Employee not found in your organization'))
+
+        // Non-elevated roles can only punch for themselves.
+        const isElevated = ['hr_manager', 'super_admin', 'pro_officer'].includes(request.user.role)
+        if (!isElevated && request.user.employeeId !== employeeId) {
+            return reply.code(403).send(e403('You can only record attendance for yourself'))
+        }
         const data = await externalPunch(request.user.tenantId, { employeeId, timestamp, deviceId, deviceName, punchType, source })
         return reply.send({ data })
     })

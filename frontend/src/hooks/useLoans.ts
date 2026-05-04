@@ -60,7 +60,7 @@ export function useLoans(params?: {
     limit?: number
     offset?: number
 }) {
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const qs = new URLSearchParams()
     if (params?.employeeId) qs.set('employeeId', params.employeeId)
     if (params?.status) qs.set('status', params.status)
@@ -76,7 +76,7 @@ export function useLoans(params?: {
 }
 
 export function useMyLoans() {
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useQuery<{ data: EmployeeLoan[] }>({
         queryKey: ['loans', tenantId, 'my'],
         queryFn: () => api.get('/loans/my'),
@@ -87,7 +87,7 @@ export function useMyLoans() {
 
 export function useCreateLoan() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: (data: CreateLoanInput) => api.post('/loans', data),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans', tenantId] }) },
@@ -96,7 +96,7 @@ export function useCreateLoan() {
 
 export function useApproveLoan() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: ({ id, startDate }: { id: string; startDate?: string }) =>
             api.post(`/loans/${id}/approve`, { startDate }),
@@ -106,7 +106,7 @@ export function useApproveLoan() {
 
 export function useRejectLoan() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: ({ id, notes }: { id: string; notes?: string }) =>
             api.post(`/loans/${id}/reject`, { notes }),
@@ -116,7 +116,7 @@ export function useRejectLoan() {
 
 export function useRecordLoanPayment() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: (id: string) => api.post(`/loans/${id}/payment`),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans', tenantId] }) },
