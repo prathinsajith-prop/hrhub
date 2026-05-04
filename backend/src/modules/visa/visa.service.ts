@@ -1,6 +1,7 @@
 import { eq, and, desc, isNull, sql, getTableColumns, or, lt, gte, lte } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { visaApplications, employees, visaStepHistory, visaCosts } from '../../db/schema/index.js'
 import { cacheDel } from '../../lib/redis.js'
 import { VISA_STEP_LABELS, visaStepLabel } from './visa.constants.js'
@@ -60,8 +61,9 @@ export async function listVisas(tenantId: string, params: { status?: string; urg
         total = Number(countRow?.count ?? 0)
     }
 
+    const resolvedRows = await Promise.all(pageRows.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
     return {
-        data: pageRows,
+        data: resolvedRows,
         total: cursor ? undefined : total,
         limit,
         offset: cursor ? undefined : offset,
@@ -82,7 +84,8 @@ export async function getVisa(tenantId: string, id: string) {
         .leftJoin(employees, eq(employees.id, visaApplications.employeeId))
         .where(and(eq(visaApplications.id, id), eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)))
         .limit(1)
-    return row ?? null
+    if (!row) return null
+    return { ...row, employeeAvatarUrl: await resolveAvatarUrl(row.employeeAvatarUrl) }
 }
 
 export async function softDeleteVisa(tenantId: string, id: string) {

@@ -1,6 +1,7 @@
 import { db } from '../../db/index.js'
 import { exitRequests, employees, leaveRequests, leaveBalances } from '../../db/schema/index.js'
 import { eq, and, sql, desc } from 'drizzle-orm'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 
 /**
  * UAE Gratuity — Federal Decree-Law No. 33 of 2021 (in force Feb 2, 2022).
@@ -163,7 +164,7 @@ export async function getExitRequests(tenantId: string) {
         .leftJoin(employees, eq(employees.id, exitRequests.employeeId))
         .where(eq(exitRequests.tenantId, tenantId))
         .orderBy(desc(exitRequests.createdAt))
-    return rows
+    return Promise.all(rows.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
 }
 
 export async function getExitRequest(tenantId: string, id: string) {
@@ -198,7 +199,8 @@ export async function getExitRequest(tenantId: string, id: string) {
         .from(exitRequests)
         .leftJoin(employees, eq(employees.id, exitRequests.employeeId))
         .where(and(eq(exitRequests.id, id), eq(exitRequests.tenantId, tenantId)))
-    return row ?? null
+    if (!row) return null
+    return { ...row, employeeAvatarUrl: await resolveAvatarUrl(row.employeeAvatarUrl) }
 }
 
 export async function approveExit(tenantId: string, id: string, approverId: string) {

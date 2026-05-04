@@ -11,6 +11,7 @@ import {
     GitBranch,
     Briefcase,
     CalendarClock,
+    GraduationCap,
 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -26,6 +27,7 @@ import { RolesPermissionsTab } from './org-settings/RolesPermissionsTab'
 import { HolidaysTab } from './org-settings/HolidaysTab'
 import { OrgStructureTab } from './org-settings/OrgStructureTab'
 import { DesignationsTab } from './org-settings/DesignationsTab'
+import { GradeLevelsTab } from './org-settings/GradeLevelsTab'
 import { SubscriptionTab } from './org-settings/SubscriptionTab'
 import { LeaveSettingsTab } from './org-settings/LeaveSettingsTab'
 
@@ -34,6 +36,7 @@ const tabs = [
     { value: 'profile', label: 'Organization Profile', desc: 'Company details & regional settings', icon: Building2, requires: 'manage_settings' as Permission | null },
     { value: 'structure', label: 'Org Structure', desc: 'Divisions, departments & branches', icon: GitBranch, requires: 'manage_settings' as Permission | null },
     { value: 'designations', label: 'Designations', desc: 'Job titles & designations', icon: Briefcase, requires: 'manage_settings' as Permission | null },
+    { value: 'grade-levels', label: 'Grade Levels', desc: 'Employee grade & band configuration', icon: GraduationCap, requires: 'manage_settings' as Permission | null },
     { value: 'members', label: 'Users', desc: 'Users, roles & access', icon: Users, requires: 'manage_users' as Permission | null },
     { value: 'roles', label: 'Roles & Permissions', desc: 'View built-in role permissions', icon: KeyRound, requires: 'manage_users' as Permission | null },
     { value: 'holidays', label: 'Public Holidays', desc: 'Manage company-wide holidays by year', icon: CalendarDays, requires: 'manage_settings' as Permission | null },
@@ -108,6 +111,7 @@ export function OrganizationSettingsPage() {
                     <TabsContent value="profile" className="mt-0"><ProfileTab /></TabsContent>
                     <TabsContent value="structure" className="mt-0"><OrgStructureTab /></TabsContent>
                     <TabsContent value="designations" className="mt-0"><DesignationsTab /></TabsContent>
+                    <TabsContent value="grade-levels" className="mt-0"><GradeLevelsTab /></TabsContent>
                     <TabsContent value="members" className="mt-0"><MembersTab /></TabsContent>
                     <TabsContent value="roles" className="mt-0"><RolesPermissionsTab /></TabsContent>
                     <TabsContent value="holidays" className="mt-0"><HolidaysTab /></TabsContent>

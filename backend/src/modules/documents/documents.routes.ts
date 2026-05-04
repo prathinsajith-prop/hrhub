@@ -378,7 +378,7 @@ export default async function (fastify: any): Promise<void> {
 
         if (doc.s3Key) {
             try {
-                const downloadUrl = await generateDownloadUrl(doc.s3Key)
+                const downloadUrl = await generateDownloadUrl(doc.s3Key, 3600, doc.fileName)
                 logDocumentAction({
                     tenantId: claims.tenantId,
                     documentId: id,
@@ -419,7 +419,7 @@ export default async function (fastify: any): Promise<void> {
         if (!doc) return reply.code(404).send({ message: 'Document not found' })
         if (!doc.s3Key) return reply.code(400).send({ message: 'No file stored for this document' })
 
-        const downloadUrl = await generateDownloadUrl(doc.s3Key)
+        const downloadUrl = await generateDownloadUrl(doc.s3Key, 3600, doc.fileName)
         logDocumentAction({
             tenantId: request.user.tenantId,
             documentId: id,

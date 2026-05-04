@@ -15,6 +15,7 @@ import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useEmployees } from '@/hooks/useEmployees'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
+import { useGradeLevels } from '@/hooks/useGradeLevels'
 import { useTeams } from '@/hooks/useTeams'
 import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
@@ -394,7 +395,9 @@ interface EmpForm {
     workLocation: string
     managerName: string
     reportingTo: string
-    gradeLevel: string
+    gradeLevelId: string
+    probationEndDate: string
+    contractEndDate: string
     status: string
     teamId: string
     // Step 3 — Salary
@@ -417,7 +420,7 @@ const EMPTY_FORM: EmpForm = {
     mobileNo: '', personalEmail: '', maritalStatus: 'single', emergencyContact: '', emergencyContactName: '', emergencyContactPhone: '', homeCountryAddress: '',
     employeeNo: '', workEmail: '', divisionId: '', departmentId: '', branchId: '', department: '', designation: '',
     joinDate: new Date().toISOString().split('T')[0],
-    contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevel: '', status: 'onboarding', teamId: '',
+    contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevelId: '', probationEndDate: '', contractEndDate: '', status: 'onboarding', teamId: '',
     basicSalary: '', housingAllowance: '', transportAllowance: '', otherAllowances: '',
     paymentMethod: 'bank_transfer', bankName: '', accountName: '', accountNumber: '', swiftCode: '', bankBranch: '', iban: '', emiratisationCategory: 'expat',
 }
@@ -462,6 +465,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const { data: designationList = [] } = useDesignations()
     const createDesignation = useCreateDesignation()
+    const { data: gradeLevelList = [] } = useGradeLevels()
     const { data: teamsRaw = [] } = useTeams()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const orgOptions = buildOrgOptions(orgUnits)
@@ -545,7 +549,9 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 workLocation: form.workLocation || undefined,
                 managerName: form.managerName || undefined,
                 reportingTo: form.reportingTo || null,
-                gradeLevel: form.gradeLevel || undefined,
+                gradeLevelId: form.gradeLevelId || undefined,
+                probationEndDate: form.probationEndDate || undefined,
+                contractEndDate: form.contractEndDate || undefined,
                 status: form.status as Employee['status'],
                 basicSalary: basic || undefined,
                 housingAllowance: housing || undefined,
@@ -763,8 +769,8 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
-                                    <Label>Contract Type</Label>
-                                    <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v }))}>
+                                    <Label>Employment Type</Label>
+                                    <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v, probationEndDate: '', contractEndDate: '' }))}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             {CONTRACT_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -776,9 +782,28 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <Input value={form.workLocation} onChange={set('workLocation')} placeholder="e.g. Dubai HQ" />
                                 </div>
                             </div>
+                            {form.contractType === 'probation' && (
+                                <div className="space-y-1.5">
+                                    <Label>Probation End Date</Label>
+                                    <DatePicker value={form.probationEndDate} min={form.joinDate || undefined} onChange={v => setForm(f => ({ ...f, probationEndDate: v ?? '' }))} placeholder="Select date" />
+                                </div>
+                            )}
+                            {form.contractType === 'contract' && (
+                                <div className="space-y-1.5">
+                                    <Label>Contract End Date</Label>
+                                    <DatePicker value={form.contractEndDate} min={form.joinDate || undefined} onChange={v => setForm(f => ({ ...f, contractEndDate: v ?? '' }))} placeholder="Select date" />
+                                </div>
+                            )}
                             <div className="space-y-1.5">
                                 <Label>Grade Level</Label>
-                                <Input value={form.gradeLevel} onChange={set('gradeLevel')} placeholder="e.g. L4" />
+                                <Select value={form.gradeLevelId} onValueChange={v => setForm(f => ({ ...f, gradeLevelId: v }))}>
+                                    <SelectTrigger><SelectValue placeholder="Select grade level…" /></SelectTrigger>
+                                    <SelectContent>
+                                        {(Array.isArray(gradeLevelList) ? gradeLevelList : []).map((gl: { id: string; name: string }) => (
+                                            <SelectItem key={gl.id} value={gl.id}>{gl.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Status</Label>
@@ -1060,7 +1085,9 @@ export function EditEmploymentDialog({
         designation: employee.designation ?? '',
         contractType: employee.contractType ?? 'permanent',
         workLocation: employee.workLocation ?? '',
-        gradeLevel: employee.gradeLevel ?? '',
+        gradeLevelId: employee.gradeLevelId ?? '',
+        probationEndDate: employee.probationEndDate ? String(employee.probationEndDate).slice(0, 10) : '',
+        contractEndDate: employee.contractEndDate ? String(employee.contractEndDate).slice(0, 10) : '',
         status: employee.status ?? 'active',
     })
     const [errors, setErrors] = useState<Record<string, string>>({})
@@ -1068,6 +1095,7 @@ export function EditEmploymentDialog({
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const { data: designationList = [] } = useDesignations()
     const createDesignation = useCreateDesignation()
+    const { data: gradeLevelList = [] } = useGradeLevels()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const orgOptions = buildOrgOptions(orgUnits)
 
@@ -1102,7 +1130,9 @@ export function EditEmploymentDialog({
                 designation: form.designation || undefined,
                 contractType: (form.contractType as Employee['contractType']) || undefined,
                 workLocation: form.workLocation || undefined,
-                gradeLevel: form.gradeLevel || undefined,
+                gradeLevelId: form.gradeLevelId || undefined,
+                probationEndDate: form.contractType === 'probation' ? (form.probationEndDate || undefined) : undefined,
+                contractEndDate: form.contractType === 'contract' ? (form.contractEndDate || undefined) : undefined,
                 status: form.status as Employee['status'],
             },
             {
@@ -1184,8 +1214,8 @@ export function EditEmploymentDialog({
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label>Contract Type</Label>
-                                <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v as NonNullable<Employee['contractType']> }))}>
+                                <Label>Employment Type</Label>
+                                <Select value={form.contractType} onValueChange={v => setForm(f => ({ ...f, contractType: v as NonNullable<Employee['contractType']>, probationEndDate: '', contractEndDate: '' }))}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         {CONTRACT_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -1194,9 +1224,31 @@ export function EditEmploymentDialog({
                             </div>
                             <div className="space-y-1.5"><Label>Work Location</Label><Input value={form.workLocation} onChange={set('workLocation')} /></div>
                         </div>
+                        {form.contractType === 'probation' && (
+                            <div className="space-y-1.5">
+                                <Label>Probation End Date</Label>
+                                <DatePicker value={form.probationEndDate} min={form.joinDate || undefined} onChange={v => setForm(f => ({ ...f, probationEndDate: v ?? '' }))} placeholder="Select date" />
+                            </div>
+                        )}
+                        {form.contractType === 'contract' && (
+                            <div className="space-y-1.5">
+                                <Label>Contract End Date</Label>
+                                <DatePicker value={form.contractEndDate} min={form.joinDate || undefined} onChange={v => setForm(f => ({ ...f, contractEndDate: v ?? '' }))} placeholder="Select date" />
+                            </div>
+                        )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1.5"><Label>Reporting Manager</Label><ManagerPicker value={form.reportingTo} excludeId={employee.id} onChange={(id, name) => setForm(f => ({ ...f, reportingTo: id, managerName: name }))} /></div>
-                            <div className="space-y-1.5"><Label>Grade Level</Label><Input value={form.gradeLevel} onChange={set('gradeLevel')} /></div>
+                            <div className="space-y-1.5">
+                                <Label>Grade Level</Label>
+                                <Select value={form.gradeLevelId} onValueChange={v => setForm(f => ({ ...f, gradeLevelId: v }))}>
+                                    <SelectTrigger><SelectValue placeholder="Select grade level…" /></SelectTrigger>
+                                    <SelectContent>
+                                        {(Array.isArray(gradeLevelList) ? gradeLevelList : []).map((gl: { id: string; name: string }) => (
+                                            <SelectItem key={gl.id} value={gl.id}>{gl.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                         <div className="space-y-1.5">
                             <Label>Status</Label>
