@@ -26,26 +26,36 @@ export const DOC_TYPE_CATALOG: Record<DocCategory, DocTypeDefinition[]> = {
         { docType: 'Passport', label: 'Passport', category: 'identity', expiryRequired: true, hint: 'Valid passport — all pages' },
         { docType: 'Emirates ID', label: 'Emirates ID', category: 'identity', expiryRequired: true, hint: 'Front and back scan' },
         { docType: 'National ID', label: 'National ID', category: 'identity', expiryRequired: true },
+        { docType: 'Driving License', label: 'Driving License', category: 'identity', expiryRequired: true },
         { docType: 'Birth Certificate', label: 'Birth Certificate', category: 'identity', expiryRequired: false },
     ],
     visa: [
-        { docType: 'Residence Visa', label: 'Residence Visa', category: 'visa', expiryRequired: true, hint: 'UAE Residence Visa stamp page' },
+        { docType: 'Visa', label: 'Visa', category: 'visa', expiryRequired: true, hint: 'UAE Residence Visa stamp page' },
+        { docType: 'Residence Visa', label: 'Residence Visa', category: 'visa', expiryRequired: true },
         { docType: 'Entry Permit', label: 'Entry Permit', category: 'visa', expiryRequired: true },
         { docType: 'Labour Card', label: 'Labour Card', category: 'visa', expiryRequired: true },
         { docType: 'Work Permit', label: 'Work Permit', category: 'visa', expiryRequired: true },
         { docType: 'Visit Visa', label: 'Visit Visa', category: 'visa', expiryRequired: true },
+        { docType: 'Cancellation Paper', label: 'Cancellation Paper', category: 'visa', expiryRequired: false },
     ],
     employment: [
         { docType: 'Employment Contract', label: 'Employment Contract', category: 'employment', expiryRequired: false },
+        { docType: 'Labour Contract', label: 'Labour Contract', category: 'employment', expiryRequired: false },
         { docType: 'Offer Letter', label: 'Offer Letter', category: 'employment', expiryRequired: false },
+        { docType: 'Offer Letter & Conduct Policy', label: 'Offer Letter & Conduct Policy', category: 'employment', expiryRequired: false },
+        { docType: 'Conduct Policy', label: 'Conduct Policy', category: 'employment', expiryRequired: false },
         { docType: 'NOC Letter', label: 'NOC Letter', category: 'employment', expiryRequired: false },
         { docType: 'Salary Certificate', label: 'Salary Certificate', category: 'employment', expiryRequired: false },
         { docType: 'Experience Letter', label: 'Experience Letter', category: 'employment', expiryRequired: false },
         { docType: 'Appointment Letter', label: 'Appointment Letter', category: 'employment', expiryRequired: false },
         { docType: 'Termination Letter', label: 'Termination Letter', category: 'employment', expiryRequired: false },
+        { docType: 'Resume', label: 'Resume', category: 'employment', expiryRequired: false },
+        { docType: 'Business Card', label: 'Business Card', category: 'employment', expiryRequired: false },
+        { docType: 'ILOE', label: 'ILOE', category: 'employment', expiryRequired: false, hint: 'Involuntary Loss of Employment insurance' },
     ],
     insurance: [
-        { docType: 'Health Insurance Card', label: 'Health Insurance Card', category: 'insurance', expiryRequired: true, hint: 'Medical insurance card or policy document' },
+        { docType: 'Health Insurance Card', label: 'Health Insurance Card', category: 'insurance', expiryRequired: true },
+        { docType: 'Medical Insurance Card', label: 'Medical Insurance Card', category: 'insurance', expiryRequired: true, hint: 'Medical insurance card or policy document' },
         { docType: 'Life Insurance Policy', label: 'Life Insurance Policy', category: 'insurance', expiryRequired: true },
         { docType: 'Workers Compensation', label: 'Workers Compensation', category: 'insurance', expiryRequired: true },
     ],
@@ -53,6 +63,7 @@ export const DOC_TYPE_CATALOG: Record<DocCategory, DocTypeDefinition[]> = {
         { docType: 'Degree Certificate', label: 'Degree Certificate', category: 'qualification', expiryRequired: false },
         { docType: 'Diploma', label: 'Diploma', category: 'qualification', expiryRequired: false },
         { docType: 'Academic Transcript', label: 'Academic Transcript', category: 'qualification', expiryRequired: false },
+        { docType: 'Educational Certificate', label: 'Educational Certificate', category: 'qualification', expiryRequired: false },
         { docType: 'Professional Certificate', label: 'Professional Certificate', category: 'qualification', expiryRequired: true, hint: 'Some professional certs expire — note renewal date' },
         { docType: 'Attestation Certificate', label: 'Attestation Certificate', category: 'qualification', expiryRequired: false },
     ],
@@ -65,7 +76,10 @@ export const DOC_TYPE_CATALOG: Record<DocCategory, DocTypeDefinition[]> = {
     compliance: [
         { docType: 'MOHRE Registration', label: 'MOHRE Registration', category: 'compliance', expiryRequired: true },
         { docType: 'Professional License', label: 'Professional License', category: 'compliance', expiryRequired: true },
-        { docType: 'Police Clearance Certificate', label: 'Police Clearance Certificate', category: 'compliance', expiryRequired: true, hint: 'Valid for 6 months in most jurisdictions' },
+        { docType: 'Broker License', label: 'Broker License', category: 'compliance', expiryRequired: true },
+        { docType: 'Broker Certificate', label: 'Broker Certificate', category: 'compliance', expiryRequired: true },
+        { docType: 'Police Clearance Certificate', label: 'Police Clearance Certificate', category: 'compliance', expiryRequired: true },
+        { docType: 'Police Report', label: 'Police Report', category: 'compliance', expiryRequired: false },
         { docType: 'Medical Fitness Certificate', label: 'Medical Fitness Certificate', category: 'compliance', expiryRequired: true },
         { docType: 'Background Check Report', label: 'Background Check Report', category: 'compliance', expiryRequired: false },
     ],
@@ -76,6 +90,19 @@ export const DOC_TYPE_CATALOG: Record<DocCategory, DocTypeDefinition[]> = {
         { docType: 'Establishment Card', label: 'Establishment Card', category: 'company', expiryRequired: true },
     ],
 }
+
+/** Flat ordered list matching the screenshot / preferred display order */
+export const FLAT_DOC_TYPES: DocTypeDefinition[] = [
+    ...DOC_TYPE_CATALOG.identity,
+    ...DOC_TYPE_CATALOG.visa,
+    ...DOC_TYPE_CATALOG.insurance,
+    ...DOC_TYPE_CATALOG.employment,
+    ...DOC_TYPE_CATALOG.qualification,
+    ...DOC_TYPE_CATALOG.compliance,
+    ...DOC_TYPE_CATALOG.financial,
+    ...DOC_TYPE_CATALOG.company,
+    { docType: 'Other', label: 'Other', category: 'identity', expiryRequired: false },
+]
 
 export const CATEGORY_LABELS: Record<DocCategory, string> = {
     identity: 'Identity Documents',

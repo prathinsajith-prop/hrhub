@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
+import type { Employee } from '@/types'
 
 interface EmployeeSelectProps {
     value: string
@@ -19,6 +20,25 @@ interface EmployeeSelectProps {
     clearable?: boolean
     /** Exclude a specific employee ID from the results (e.g. exclude self in handover selects) */
     excludeId?: string
+}
+
+function EmployeeAvatar({ employee, size = 'sm' }: { employee: Pick<Employee, 'firstName' | 'lastName' | 'avatarUrl'>; size?: 'sm' | 'xs' }) {
+    const initials = `${employee.firstName?.[0] ?? ''}${employee.lastName?.[0] ?? ''}`.toUpperCase()
+    const sizeClass = size === 'xs' ? 'h-5 w-5 text-[9px]' : 'h-6 w-6 text-[10px]'
+    return employee.avatarUrl ? (
+        <img
+            src={employee.avatarUrl}
+            alt={`${employee.firstName} ${employee.lastName}`}
+            className={cn('rounded-full object-cover shrink-0 ring-1 ring-border', sizeClass)}
+        />
+    ) : (
+        <span className={cn(
+            'rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center shrink-0 ring-1 ring-border',
+            sizeClass,
+        )}>
+            {initials}
+        </span>
+    )
 }
 
 export function EmployeeSelect({
@@ -47,11 +67,10 @@ export function EmployeeSelect({
     // Pre-fetch selected employee name if not in current search results
     const { data: resolvedEmployee } = useEmployee(value && !selectedInResults ? value : '')
 
-    const displayName = selectedInResults
-        ? `${selectedInResults.firstName} ${selectedInResults.lastName}`
-        : resolvedEmployee
-            ? `${resolvedEmployee.firstName} ${resolvedEmployee.lastName}`
-            : value ? '…' : null
+    const selectedEmployee = selectedInResults ?? resolvedEmployee ?? null
+    const displayName = selectedEmployee
+        ? `${selectedEmployee.firstName} ${selectedEmployee.lastName}`
+        : value ? '…' : null
 
     function handleOpenChange(next: boolean) {
         setOpen(next)
@@ -76,8 +95,13 @@ export function EmployeeSelect({
                         className,
                     )}
                 >
-                    <span className="truncate text-left flex-1 min-w-0 text-sm">
-                        {displayName ?? (placeholder ?? t('common.selectEmployee', 'Select employee…'))}
+                    <span className="flex items-center gap-2 flex-1 min-w-0">
+                        {selectedEmployee && (
+                            <EmployeeAvatar employee={selectedEmployee} size="xs" />
+                        )}
+                        <span className="truncate text-left text-sm">
+                            {displayName ?? (placeholder ?? t('common.selectEmployee', 'Select employee…'))}
+                        </span>
                     </span>
                     <span className="flex items-center shrink-0 ml-2 gap-1">
                         {clearable && value && (
@@ -134,12 +158,13 @@ export function EmployeeSelect({
                                             setOpen(false)
                                             setSearch('')
                                         }}
-                                        className="flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer"
+                                        className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer"
                                     >
                                         <Check className={cn(
                                             'h-3.5 w-3.5 shrink-0 text-primary transition-opacity',
                                             value === emp.id ? 'opacity-100' : 'opacity-0',
                                         )} />
+                                        <EmployeeAvatar employee={emp} size="sm" />
                                         <span className="flex-1 min-w-0">
                                             <span className="block text-sm leading-tight">
                                                 {emp.firstName} {emp.lastName}

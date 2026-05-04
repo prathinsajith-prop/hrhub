@@ -49,19 +49,19 @@ export function LeavePoliciesPage() {
         try {
             await saveMut.mutateAsync(draft)
             toast.success(t('leavePolicies.saved'))
-        } catch (e: any) {
-            toast.error(e?.message ?? t('leavePolicies.saveFailed'))
+        } catch (e) {
+            toast.error((e as Error)?.message ?? t('leavePolicies.saveFailed'))
         }
     }
 
     const onRollover = async () => {
         try {
             const fromYear = new Date().getFullYear() - 1
-            const res: any = await rolloverMut.mutateAsync(fromYear)
-            const summary = res?.data ?? res
+            const res = await rolloverMut.mutateAsync(fromYear) as { data?: { closed?: number }; closed?: number }
+            const summary = (res as { data?: { closed?: number } })?.data ?? res
             toast.success(t('leavePolicies.rolloverSuccess', { count: summary?.closed ?? 0, from: fromYear, to: fromYear + 1 }))
-        } catch (e: any) {
-            toast.error(e?.message ?? t('leavePolicies.rolloverFailed'))
+        } catch (e) {
+            toast.error((e as Error)?.message ?? t('leavePolicies.rolloverFailed'))
         } finally {
             setRolloverOpen(false)
         }

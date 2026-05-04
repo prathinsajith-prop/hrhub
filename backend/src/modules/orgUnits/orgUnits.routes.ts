@@ -1,4 +1,4 @@
-import { listOrgUnits, getOrgUnitTree, getScopedOrgUnitTree, createOrgUnit, updateOrgUnit, deleteOrgUnit, getOrgUnitStats } from './orgUnits.service.js'
+import { listOrgUnits, getOrgUnitTree, getScopedOrgUnitTree, createOrgUnit, updateOrgUnit, deleteOrgUnit, getOrgUnitStats, cascadeDepartmentManager } from './orgUnits.service.js'
 import { z } from 'zod'
 import { recordActivity } from '../audit/audit.service.js'
 
@@ -64,6 +64,16 @@ export async function orgUnitsRoutes(fastify: any) {
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Org unit not found' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'org_unit', entityId: id, entityName: data.name, action: 'update', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.send({ data })
+    })
+
+    // POST /api/v1/org-units/:id/cascade-manager
+    // Updates reportingTo + managerName for all employees in the department to the current head.
+    fastify.post('/org-units/:id/cascade-manager', { ...adminAuth, schema: { tags: ['OrgUnits'] } }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const result = await cascadeDepartmentManager(request.user.tenantId, id)
+        if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Department not found or no head assigned' })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'org_unit', entityId: id, action: 'update', metadata: { cascadeManager: true, updated: result.updated }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        return reply.send({ data: result })
     })
 
     // DELETE /api/v1/org-units/:id

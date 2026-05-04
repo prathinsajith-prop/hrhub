@@ -154,8 +154,8 @@ function InvitePanel({ onClose }: { onClose: () => void }) {
             await inviteUser.mutateAsync({ employeeId: selected.id, role })
             toast.success(`Invitation sent to ${selected.inviteEmail}`)
             onClose()
-        } catch (err: any) {
-            toast.error(err?.message ?? 'Failed to send invitation')
+        } catch (err) {
+            toast.error((err as Error)?.message ?? 'Failed to send invitation')
         }
     }
 
@@ -238,8 +238,8 @@ export function MembersTab() {
         try {
             await resendInvite.mutateAsync(employeeId)
             toast.success(`Invite resent to ${name}`)
-        } catch (err: any) {
-            toast.error(err?.message ?? 'Failed to resend invite')
+        } catch (err) {
+            toast.error((err as Error)?.message ?? 'Failed to resend invite')
         }
     }
 

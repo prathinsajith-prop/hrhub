@@ -20,7 +20,6 @@ export function ProfileTab() {
     const { user, setUser } = useAuthStore()
     const [firstName, setFirstName] = useState(() => splitName(user?.name ?? '').firstName)
     const [lastName, setLastName] = useState(() => splitName(user?.name ?? '').lastName)
-    const [department, setDepartment] = useState(user?.department ?? '')
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState(false)
     const [uploading, setUploading] = useState(false)
@@ -32,8 +31,7 @@ export function ProfileTab() {
         const { firstName: fn, lastName: ln } = splitName(user?.name ?? '')
         setFirstName(fn)
         setLastName(ln)
-        setDepartment(user?.department ?? '')
-    }, [user?.id, user?.name, user?.department])
+    }, [user?.id, user?.name])
 
     const initials = (user?.name ?? 'U')
         .split(' ').filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase()
@@ -77,7 +75,7 @@ export function ProfileTab() {
             setSaving(true)
             const res = await api.patch<{ data: { name: string; department: string | null; avatarUrl: string | null } }>(
                 '/auth/me',
-                { name: fullName, department: department.trim() || null },
+                { name: fullName },
             )
             setUser({
                 name: res.data.name,
@@ -154,10 +152,6 @@ export function ProfileTab() {
                         <Label htmlFor="profile-email">Email</Label>
                         <Input id="profile-email" value={user?.email ?? ''} disabled />
                         <p className="text-[11px] text-muted-foreground mt-1">Contact an admin to change your email.</p>
-                    </div>
-                    <div>
-                        <Label htmlFor="profile-department">Department</Label>
-                        <Input id="profile-department" value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. People Operations" />
                     </div>
                     <div>
                         <Label htmlFor="profile-role">Role</Label>
