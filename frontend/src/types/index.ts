@@ -75,6 +75,10 @@ export interface Employee {
   otherAllowances?: number
   paymentMethod?: 'bank_transfer' | 'cash' | 'cheque'
   bankName?: string
+  accountName?: string
+  accountNumber?: string
+  swiftCode?: string
+  bankBranch?: string
   iban?: string
   visaStatus?: VisaStatus
   visaExpiry?: string
@@ -92,6 +96,8 @@ export interface Employee {
   managerName?: string
   labourCardNumber?: string
   emergencyContact?: string
+  emergencyContactName?: string
+  emergencyContactPhone?: string
   homeCountryAddress?: string
   contractType?: 'permanent' | 'contract' | 'part_time'
   workLocation?: string

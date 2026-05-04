@@ -106,7 +106,7 @@ export default async function (fastify: any): Promise<void> {
     fastify.patch('/me', { ...auth, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
         const { employeeId, tenantId } = request.user
         if (!employeeId) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'No employee record linked to this account.' })
-        const allowed = ['phone', 'mobileNo', 'personalEmail', 'emergencyContact', 'homeCountryAddress']
+        const allowed = ['phone', 'mobileNo', 'personalEmail', 'emergencyContact', 'emergencyContactName', 'emergencyContactPhone', 'homeCountryAddress']
         const body = request.body as Record<string, unknown>
         const patch: Record<string, unknown> = {}
         for (const key of allowed) {

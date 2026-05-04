@@ -216,12 +216,12 @@ export function CandidateProfilePage() {
                         {
                             onSuccess: (res) => {
                                 setConvertOpen(false)
-                                const empNo = (res as any)?.data?.employee?.employeeNo
+                                const empNo = res?.data?.employee?.employeeNo
                                 toast.success('Candidate converted', empNo ? `Employee ${empNo} created.` : 'Employee created.')
-                                const empId = (res as any)?.data?.employee?.id
+                                const empId = res?.data?.employee?.id
                                 if (empId) navigate(`/employees/${empId}`)
                             },
-                            onError: (err: any) => toast.error('Conversion failed', err?.message ?? 'Could not create employee.'),
+                            onError: (err: Error & { message?: string }) => toast.error('Conversion failed', err?.message ?? 'Could not create employee.'),
                         },
                     )
                 },
@@ -331,7 +331,7 @@ export function CandidateProfilePage() {
                                             { id: candidate.id, file },
                                             {
                                                 onSuccess: (res) => {
-                                                    setResumeDownloadUrl((res as any)?.data?.downloadUrl ?? null)
+                                                    setResumeDownloadUrl(res?.data?.downloadUrl ?? null)
                                                     toast.success('Resume uploaded')
                                                 },
                                                 onError: () => toast.error('Upload failed', 'Could not upload resume.'),
