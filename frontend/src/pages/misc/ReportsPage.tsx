@@ -524,7 +524,7 @@ export function ReportsPage() {
                                     cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => {
                                         const u = getValue() as string
                                         const v: 'destructive' | 'warning' | 'success' = u === 'expired' ? 'destructive' : u === 'critical' ? 'destructive' : u === 'urgent' ? 'warning' : 'success'
-                                        return <Badge variant={v} className="capitalize text-[11px]">{u}</Badge>
+                                        return <Badge variant={v} className="text-[11px]">{labelFor(u)}</Badge>
                                     },
                                 },
                             ]}

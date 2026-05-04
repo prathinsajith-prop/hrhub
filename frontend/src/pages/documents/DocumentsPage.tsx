@@ -14,6 +14,7 @@ import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import { api } from '@/lib/api'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
+import { labelFor } from '@/lib/enums'
 import { useDocuments, useDeleteDocument } from '@/hooks/useDocuments'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
@@ -74,7 +75,7 @@ const columns = (
           </div>
           <div>
             <p className="text-sm font-medium">{d.docType}</p>
-            <p className="text-[10px] text-muted-foreground capitalize">{d.category}</p>
+            <p className="text-[10px] text-muted-foreground">{labelFor(d.category)}</p>
           </div>
         </div>
       ),

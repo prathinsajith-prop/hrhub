@@ -219,7 +219,7 @@ export function VisaDetailPage() {
                             </div>
                             <div className="flex items-center gap-2 text-sm">
                                 <UrgencyIcon level={visa.urgencyLevel} />
-                                <span className="capitalize font-medium">{visa.urgencyLevel} {t('common.priority')}</span>
+                                <span className="font-medium">{labelFor(visa.urgencyLevel)} {t('common.priority')}</span>
                             </div>
                         </Card>
 
