@@ -7,6 +7,26 @@ import { z } from 'zod'
 // ── Common ───────────────────────────────────────────────────────────────────
 export const uuidSchema = z.string().uuid('Invalid UUID format')
 
+/**
+ * Parse a route param as UUID. Returns the validated string or throws a
+ * FastifyReply-compatible object that callers return immediately:
+ *
+ *   const id = parseUuidParam(request.params, 'id', reply)
+ *   if (!id) return   // reply already sent with 400
+ */
+export function parseUuidParam(
+    params: Record<string, unknown>,
+    key: string,
+    reply: { code: (c: number) => { send: (b: unknown) => unknown } },
+): string | null {
+    const result = uuidSchema.safeParse(params[key])
+    if (!result.success) {
+        reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `${key}: Invalid UUID format` })
+        return null
+    }
+    return result.data
+}
+
 export const paginationSchema = z.object({
     limit: z.coerce.number().int().min(1).max(100).default(20),
     offset: z.coerce.number().int().min(0).default(0),

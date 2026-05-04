@@ -1051,7 +1051,7 @@ export function EmployeeDetailPage() {
                   <EmpField label="Grade Level" icon={GraduationCap} value={(e as any).gradeLevelName} />
 
                   {/* Row 3 — Org */}
-                  <EmpField label="Company" icon={Building2} value={((e as any).entityName as string) ?? undefined} />
+                  <EmpField label="Company" icon={Building2} value={e.entityName ?? undefined} />
                   <EmpField label="Branch" icon={Building2} value={orgUnitName(e.branchId) ?? undefined} />
                   <EmpField label="Division" icon={Building2} value={orgUnitName(e.divisionId) ?? undefined} />
 

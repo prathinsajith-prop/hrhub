@@ -16,6 +16,7 @@ import { sendEmail, leaveNotificationEmail } from '../../plugins/email.js'
 import { loadEnv } from '../../config/env.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { z } from 'zod'
+import { parseUuidParam } from '../../lib/validation.js'
 
 const createAirTicketSchema = z.object({
     employeeId: z.string().uuid(),
@@ -172,7 +173,8 @@ export default async function (fastify: any): Promise<void> {
             querystring: { type: 'object', properties: { year: { type: 'integer' } } },
         },
     }, async (request, reply) => {
-        const { employeeId } = request.params as { employeeId: string }
+        const employeeId = parseUuidParam(request.params as Record<string, unknown>, 'employeeId', reply as any)
+        if (!employeeId) return
         const user = request.user
         const isElevated = ['hr_manager', 'super_admin', 'dept_head', 'pro_officer'].includes(user.role)
         if (!isElevated && user.employeeId !== employeeId) {
@@ -247,7 +249,8 @@ export default async function (fastify: any): Promise<void> {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['Leave'] },
     }, async (request, reply) => {
-        const { employeeId } = request.params as { employeeId: string }
+        const employeeId = parseUuidParam(request.params as Record<string, unknown>, 'employeeId', reply as any)
+        if (!employeeId) return
         const { leaveType, year, delta, reason } = (request.body ?? {}) as { leaveType: string; year: number; delta: number; reason?: string }
         if (!leaveType || typeof year !== 'number' || typeof delta !== 'number') {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'leaveType, year, delta required' })
