@@ -1,4 +1,5 @@
 import { getTemplates, getTemplate, createTemplate, updateTemplate, deleteTemplate, renderTemplate, getDocumentVersions, addDocumentVersion } from './templates.service.js'
+import { objectExists } from '../../plugins/s3.js'
 
 export async function templateRoutes(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -60,6 +61,11 @@ export async function templateRoutes(fastify: any): Promise<void> {
     fastify.post('/:id/versions', { ...adminAuth, schema: { tags: ['Documents'] } }, async (request: any, reply: any) => {
         const { s3Key, fileName, fileSize, notes } = request.body as any
         if (!s3Key || !fileName) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 's3Key and fileName are required' })
+        if (!s3Key.startsWith(`tenants/${request.user.tenantId}/`)) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'The referenced file does not belong to your organization' })
+        }
+        const exists = await objectExists(s3Key)
+        if (!exists) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'The referenced file was not found in storage. Please upload the file first.' })
         const row = await addDocumentVersion(request.user.tenantId, request.params.id, request.user.id, { s3Key, fileName, fileSize, notes })
         return reply.code(201).send({ data: row })
     })

@@ -152,7 +152,6 @@ export default async function (fastify: any): Promise<void> {
                     experience: { type: 'integer', minimum: 0 },
                     expectedSalary: { type: 'number', minimum: 0 },
                     currentSalary: { type: 'number', minimum: 0 },
-                    resumeUrl: { type: 'string' },
                     notes: { type: 'string' },
                 },
                 additionalProperties: false,

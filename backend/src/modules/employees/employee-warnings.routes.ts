@@ -77,6 +77,10 @@ export default async function employeeWarningsRoutes(fastify: any): Promise<void
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const body = parse.data
 
+        if (body.s3Key && !body.s3Key.startsWith(`tenants/${request.user.tenantId}/`)) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'The referenced file does not belong to your organization' })
+        }
+
         const [emp] = await db
             .select({ id: employees.id })
             .from(employees)
