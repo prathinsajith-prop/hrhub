@@ -18,13 +18,16 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     componentDidCatch(error: Error, info: ErrorInfo) {
-        // Wire to an error monitoring service in production:
+        // Always surface to the console — in production this feeds into any
+        // browser-side monitoring (DataDog RUM, Sentry, etc.) that reads
+        // console.error. In dev it gives the full component stack inline.
+        // eslint-disable-next-line no-console
+        console.error('[ErrorBoundary]', error.message, {
+            stack: error.stack,
+            componentStack: info.componentStack,
+        })
+        // Wire to an error monitoring service:
         // Sentry.captureException(error, { extra: { componentStack: info.componentStack } })
-        if (import.meta.env.DEV) {
-            // Dev-only: surface the full stack in the browser console for faster diagnosis.
-            // eslint-disable-next-line no-console
-            console.error('[ErrorBoundary]', error, info.componentStack)
-        }
     }
 
     reset = () => this.setState({ hasError: false, error: null })

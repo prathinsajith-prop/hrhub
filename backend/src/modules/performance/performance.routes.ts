@@ -8,7 +8,7 @@ import { recordActivity } from '../audit/audit.service.js'
 
 const createReviewSchema = z.object({
     employeeId: z.string().uuid(),
-    reviewPeriod: z.string().min(1),
+    period: z.string().min(1),
     reviewerId: z.string().uuid().optional(),
     overallRating: z.number().min(1).max(5).optional(),
     status: z.enum(['draft', 'submitted', 'acknowledged', 'completed']).optional(),

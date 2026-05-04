@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { toast } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
 import { labelFor } from '@/lib/enums'
-import { useMyTenants, useSwitchTenant } from '@/hooks/useTenants'
+import { useMyTenants, useSwitchTenant, type TenantMembershipSummary } from '@/hooks/useTenants'
 import { Section } from './_shared'
 
 // ─── Switch Organizations Tab ─────────────────────────────────────────────────
@@ -36,7 +36,7 @@ export function SwitchTab() {
                     <p className="text-sm text-muted-foreground italic">You don't belong to any organization yet.</p>
                 ) : (
                     <div className="grid sm:grid-cols-2 gap-3">
-                        {(tenants ?? []).map((m: any) => {
+                        {(tenants ?? []).map((m: TenantMembershipSummary) => {
                             const isActive = currentTenant?.id === m.tenantId
                             return (
                                 <button

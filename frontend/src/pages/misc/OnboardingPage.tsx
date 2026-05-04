@@ -16,6 +16,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useOnboardingChecklists, useCreateOnboardingChecklist, useOnboardingAnalytics, type OnboardingChecklist } from '@/hooks/useOnboarding'
 import { useEmployees } from '@/hooks/useEmployees'
+import type { Employee } from '@/types'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import {
@@ -35,11 +36,11 @@ export function OnboardingPage() {
     // Include both active and onboarding employees in the "start checklist" dropdown
     const { data: empDataActive } = useEmployees({ limit: 100, status: 'active' })
     const { data: empDataOnboarding } = useEmployees({ limit: 100, status: 'onboarding' })
-    const allEmployees = useMemo(() => {
-        const active = (empDataActive?.data ?? []) as any[]
-        const onboarding = (empDataOnboarding?.data ?? []) as any[]
-        const seen = new Set(active.map((e: any) => e.id))
-        return [...active, ...onboarding.filter((e: any) => !seen.has(e.id))]
+    const allEmployees = useMemo<Employee[]>(() => {
+        const active: Employee[] = empDataActive?.data ?? []
+        const onboarding: Employee[] = empDataOnboarding?.data ?? []
+        const seen = new Set(active.map(e => e.id))
+        return [...active, ...onboarding.filter(e => !seen.has(e.id))]
     }, [empDataActive?.data, empDataOnboarding?.data])
 
     const [newOpen, setNewOpen] = useState(false)
@@ -110,9 +111,8 @@ export function OnboardingPage() {
                     toast.success('Onboarding started', useTemplate ? 'Checklist created with 9 default steps.' : 'Empty checklist created.')
                     setNewOpen(false); setNewEmpId(''); setNewStartDate(''); setNewDueDate(''); setUseTemplate(true)
                 },
-                onError: (err: any) => {
-                    const msg = err?.response?.data?.message ?? 'Could not create checklist.'
-                    toast.error('Failed', msg)
+                onError: (err: Error) => {
+                    toast.error('Failed', err.message ?? 'Could not create checklist.')
                 },
             },
         )
@@ -252,7 +252,7 @@ export function OnboardingPage() {
             )}
 
             {/* New Onboarding Dialog */}
-            <Dialog open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open) { setNewEmpId(''); setNewStartDate(''); setNewDueDate('') } }}>
+            <Dialog open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open) { setNewEmpId(''); setNewStartDate(''); setNewDueDate(''); setUseTemplate(true) } }}>
                 <DialogContent className="max-w-md">
                     <DialogHeader><DialogTitle>Start Onboarding</DialogTitle></DialogHeader>
                     <DialogBody className="space-y-4">
@@ -264,7 +264,7 @@ export function OnboardingPage() {
                                         <SelectValue placeholder="Select employee…" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {allEmployees.filter((e: any) => !enrolledIds.has(e.id)).map((e: any) => (
+                                        {allEmployees.filter((e) => !enrolledIds.has(e.id)).map((e) => (
                                             <SelectItem key={e.id} value={e.id}>
                                                 {e.firstName} {e.lastName}
                                                 {e.designation ? ` — ${e.designation}` : ''}
@@ -272,16 +272,16 @@ export function OnboardingPage() {
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {allEmployees.filter((e: any) => !enrolledIds.has(e.id)).length === 0 && (
+                                {allEmployees.filter((e) => !enrolledIds.has(e.id)).length === 0 && (
                                     <p className="text-xs text-muted-foreground">All active employees already have a checklist.</p>
                                 )}
                             </div>
                         ) : (
                             <div className="flex items-center gap-2 rounded-lg bg-muted/50 border px-3 py-2">
                                 <span className="text-sm font-medium">
-                                    {(() => { const e = allEmployees.find((e: any) => e.id === newEmpId); return e ? `${e.firstName} ${e.lastName}` : '' })()}
+                                    {(() => { const e = allEmployees.find((e) => e.id === newEmpId); return e ? `${e.firstName} ${e.lastName}` : '' })()}
                                 </span>
-                                {(() => { const e = allEmployees.find((e: any) => e.id === newEmpId); return e?.designation ? <span className="text-xs text-muted-foreground">— {e.designation}</span> : null })()}
+                                {(() => { const e = allEmployees.find((e) => e.id === newEmpId); return e?.designation ? <span className="text-xs text-muted-foreground">— {e.designation}</span> : null })()}
                             </div>
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

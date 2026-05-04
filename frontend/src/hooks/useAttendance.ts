@@ -95,3 +95,12 @@ export function useAttendanceSummary(params: { month?: number; year?: number } =
         queryFn: () => api.get<{ data: AttendanceSummary }>(`/attendance/summary?${qs}`).then(r => r.data),
     })
 }
+
+export function useExternalPunch() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: { employeeId: string; punchType: 'in' | 'out'; timestamp?: string; deviceId?: string; source?: string }) =>
+            api.post('/attendance/external-punch', data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
+    })
+}

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
     ChevronLeft, ChevronRight, CalendarDays, Clock, UserCheck, UserX,
-    AlarmClock, Home, CalendarOff, TrendingUp, Edit2, RefreshCcw,
+    AlarmClock, Home, CalendarOff, TrendingUp, Edit2, RefreshCcw, Zap,
 } from 'lucide-react'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -26,8 +26,12 @@ import {
 } from '@/components/shared'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
-import { useAttendance, useUpsertAttendance, type AttendanceRecord } from '@/hooks/useAttendance'
+import { useAttendance, useUpsertAttendance, useExternalPunch, type AttendanceRecord } from '@/hooks/useAttendance'
 import { useEmployees } from '@/hooks/useEmployees'
+import { useOrgUnits } from '@/hooks/useOrgUnits'
+import { usePermissions } from '@/hooks/usePermissions'
+import { buildOrgUnitMap, resolveOrgPath } from '@/lib/orgUtils'
+import { OrgHierarchyPath } from '@/components/shared/OrgHierarchyPath'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { ATTENDANCE_STATUS_OPTIONS } from '@/lib/options'
@@ -91,10 +95,16 @@ function getMonthRange(offset = 0) {
 
 export function AttendancePage() {
     const { t } = useTranslation()
+    const { can } = usePermissions()
+    const canManage = can('manage_attendance')
     const [monthOffset, setMonthOffset] = useState(0)
     const [filterEmployee, setFilterEmployee] = useState('')
     const [filterStatus, setFilterStatus] = useState<'all' | AttendanceRecord['status']>('all')
     const [editing, setEditing] = useState<AttendanceRecord | null>(null)
+    const [punchEmpId, setPunchEmpId] = useState('')
+    const [punchType, setPunchType] = useState<'in' | 'out'>('in')
+    const [punchTimestamp, setPunchTimestamp] = useState('')
+    const externalPunch = useExternalPunch()
 
     const { start, end, label } = useMemo(() => getMonthRange(monthOffset), [monthOffset])
 
@@ -105,6 +115,8 @@ export function AttendancePage() {
         limit: 100,
     })
     const { data: employeesData } = useEmployees({ limit: 100 })
+    const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const orgMap = useMemo(() => buildOrgUnitMap(orgUnitsRaw), [orgUnitsRaw])
     const upsert = useUpsertAttendance()
 
     const list = useMemo<AttendanceRecord[]>(
@@ -126,7 +138,7 @@ export function AttendancePage() {
 
     // O(1) employee lookup instead of empList.find() per row
     const empMap = useMemo(() => {
-        const m = new Map<string, { name: string; initials: string; department?: string; avatarUrl?: string }>()
+        const m = new Map<string, { name: string; initials: string; department?: string; branchId?: string; divisionId?: string; departmentId?: string; avatarUrl?: string }>()
         for (const e of empList) {
             const fullName = (e.fullName as string | undefined)
                 ?? `${(e.firstName as string | undefined) ?? ''} ${(e.lastName as string | undefined) ?? ''}`.trim()
@@ -141,6 +153,9 @@ export function AttendancePage() {
                     .join('')
                     .toUpperCase() || '—',
                 department: e.department as string | undefined,
+                branchId: e.branchId as string | undefined,
+                divisionId: e.divisionId as string | undefined,
+                departmentId: e.departmentId as string | undefined,
                 avatarUrl: (e.avatarUrl as string | undefined) ?? (e.photoUrl as string | undefined),
             })
         }
@@ -286,22 +301,23 @@ export function AttendancePage() {
             cell: ({ row: { original: r } }) => {
                 const emp = empMap.get(r.employeeId)
                 const name = r.employeeName ?? emp?.name ?? '—'
-                const dept = r.employeeDepartment ?? emp?.department
                 const avatar = r.employeeAvatarUrl ?? emp?.avatarUrl
+                const orgParts = resolveOrgPath(orgMap, emp?.branchId, emp?.divisionId, emp?.departmentId)
+                const hasParts = orgParts.some(Boolean)
                 return (
                     <div className="flex items-center gap-2.5 min-w-0">
-                        <InitialsAvatar
-                            name={name}
-                            src={avatar}
-                            size="sm"
-                        />
+                        <InitialsAvatar name={name} src={avatar} size="sm" />
                         <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{name}</p>
-                            {(r.employeeNo || dept) && (
-                                <p className="text-[11px] text-muted-foreground truncate">
-                                    {[r.employeeNo, dept].filter(Boolean).join(' · ')}
-                                </p>
+                            {r.employeeNo && (
+                                <p className="text-[11px] text-muted-foreground truncate">{r.employeeNo}</p>
                             )}
+                            {hasParts
+                                ? <OrgHierarchyPath parts={orgParts} />
+                                : r.employeeDepartment && (
+                                    <p className="text-[11px] text-muted-foreground truncate">{r.employeeDepartment}</p>
+                                )
+                            }
                         </div>
                     </div>
                 )
@@ -605,6 +621,84 @@ export function AttendancePage() {
                                 <Bar dataKey="ot" fill="hsl(var(--info))" name="Overtime" radius={[4, 4, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* External punch — HR only */}
+            {canManage && (
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-sm flex items-center gap-1.5">
+                            <Zap className="h-3.5 w-3.5 text-amber-500" />
+                            External Punch
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">Manually record a punch-in or punch-out for an employee (biometric / device integration).</p>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex flex-wrap items-end gap-3">
+                            <div className="space-y-1.5 flex-1 min-w-40">
+                                <Label className="text-xs">Employee *</Label>
+                                <Select value={punchEmpId || '__none'} onValueChange={(v) => setPunchEmpId(v === '__none' ? '' : v)}>
+                                    <SelectTrigger className="h-9 text-sm">
+                                        <SelectValue placeholder="Select employee…" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__none" disabled>Select employee…</SelectItem>
+                                        {empList.map((e) => {
+                                            const name = (e.fullName as string | undefined)
+                                                ?? `${(e.firstName as string | undefined) ?? ''} ${(e.lastName as string | undefined) ?? ''}`.trim()
+                                            return <SelectItem key={e.id} value={e.id}>{name || '—'}</SelectItem>
+                                        })}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5 w-32">
+                                <Label className="text-xs">Punch type *</Label>
+                                <Select value={punchType} onValueChange={(v) => setPunchType(v as 'in' | 'out')}>
+                                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="in">Punch In</SelectItem>
+                                        <SelectItem value="out">Punch Out</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5 w-52">
+                                <Label className="text-xs">Timestamp (optional)</Label>
+                                <Input
+                                    type="datetime-local"
+                                    value={punchTimestamp}
+                                    onChange={(e) => setPunchTimestamp(e.target.value)}
+                                    className="h-9 text-sm"
+                                />
+                            </div>
+                            <Button
+                                size="sm"
+                                loading={externalPunch.isPending}
+                                disabled={!punchEmpId}
+                                onClick={() => {
+                                    externalPunch.mutate(
+                                        {
+                                            employeeId: punchEmpId,
+                                            punchType,
+                                            timestamp: punchTimestamp ? new Date(punchTimestamp).toISOString() : undefined,
+                                            source: 'hr_manual',
+                                        },
+                                        {
+                                            onSuccess: () => {
+                                                toast.success('Punch recorded', `Punch-${punchType} logged successfully.`)
+                                                setPunchEmpId('')
+                                                setPunchTimestamp('')
+                                            },
+                                            onError: () => toast.error('Punch failed', 'Could not record the punch. Please try again.'),
+                                        },
+                                    )
+                                }}
+                            >
+                                <Zap className="h-3.5 w-3.5 mr-1.5" />
+                                Record punch
+                            </Button>
+                        </div>
                     </CardContent>
                 </Card>
             )}

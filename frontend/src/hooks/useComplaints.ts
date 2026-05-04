@@ -66,7 +66,7 @@ export function useAcknowledgeComplaint() {
             toast.success('Complaint acknowledged')
             qc.invalidateQueries({ queryKey: ['complaints'] })
         },
-        onError: (err: any) => toast.error('Failed to acknowledge', err?.message),
+        onError: (err: Error) => toast.error('Failed to acknowledge', err?.message),
     })
 }
 
@@ -78,7 +78,7 @@ export function useEscalateComplaint() {
             toast.success('Complaint escalated')
             qc.invalidateQueries({ queryKey: ['complaints'] })
         },
-        onError: (err: any) => toast.error('Failed to escalate', err?.message),
+        onError: (err: Error) => toast.error('Failed to escalate', err?.message),
     })
 }
 
@@ -91,7 +91,7 @@ export function useResolveComplaint() {
             toast.success('Complaint resolved')
             qc.invalidateQueries({ queryKey: ['complaints'] })
         },
-        onError: (err: any) => toast.error('Failed to resolve', err?.message),
+        onError: (err: Error) => toast.error('Failed to resolve', err?.message),
     })
 }
 
@@ -104,6 +104,6 @@ export function useCreateComplaint() {
             toast.success('Complaint submitted')
             qc.invalidateQueries({ queryKey: ['complaints'] })
         },
-        onError: (err: any) => toast.error('Failed to submit complaint', err?.message),
+        onError: (err: Error) => toast.error('Failed to submit complaint', err?.message),
     })
 }

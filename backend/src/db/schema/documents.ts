@@ -17,7 +17,9 @@ export const documents = pgTable('documents', {
     fileName: text('file_name').notNull(),
     s3Key: text('s3_key'),
     fileSize: bigint('file_size', { mode: 'number' }),
+    issueDate: date('issue_date'),
     expiryDate: date('expiry_date'),
+    notes: text('notes'),
     status: text('status').notNull().default('pending_upload')
         .$type<'valid' | 'expiring_soon' | 'expired' | 'pending_upload' | 'under_review' | 'rejected'>(),
     verified: boolean('verified').notNull().default(false),
