@@ -153,6 +153,7 @@ export const updateEmployeeSchema = employeeBaseSchema
     )
 
 export const listEmployeesSchema = paginationSchema.extend({
+    limit: z.coerce.number().int().min(1).max(500).default(20),
     search: z.string().max(100).optional(),
     status: z.enum(['active', 'onboarding', 'suspended', 'terminated', 'visa_expired']).optional(),
     department: z.string().max(100).optional(),
