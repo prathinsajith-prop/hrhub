@@ -9,6 +9,7 @@ import { recordLoginEvent } from '../audit/audit.service.js'
 import { verifyTotpCode, verifyAndConsumeBackupCode } from './twofa.service.js'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { seedDefaultTemplates } from '../documents/templates.service.js'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 import type { FastifyInstance } from 'fastify'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -169,7 +170,7 @@ export async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ip
             entityId: user.entityId,
             employeeId: user.employeeId,
             department: user.department,
-            avatarUrl: user.avatarUrl,
+            avatarUrl: (await resolveAvatarUrl(user.avatarUrl)) ?? user.avatarUrl,
         },
         tenant: tenant ? {
             id: tenant.id,

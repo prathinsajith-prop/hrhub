@@ -5,11 +5,8 @@ import { validate, loginSchema, forgotPasswordSchema, resetPasswordSchema, chang
 import { db } from '../../db/index.js'
 import { users } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
-import { createWriteStream, existsSync, createReadStream } from 'fs'
-import { mkdir } from 'fs/promises'
-import { join, extname } from 'path'
-import { pipeline } from 'stream/promises'
-import { randomUUID } from 'crypto'
+import { uploadObject, buildS3Key, generateDownloadUrl, resolveAvatarUrl } from '../../plugins/s3.js'
+import { fileTypeFromBuffer } from 'file-type'
 
 export default async function (fastify: any): Promise<void> {
     // POST /api/v1/auth/login
@@ -385,10 +382,11 @@ export default async function (fastify: any): Promise<void> {
             department: users.department, avatarUrl: users.avatarUrl,
         })
         if (!updated) return reply.code(404).send({ message: 'User not found' })
-        return reply.send({ data: updated })
+        const avatarUrl = (await resolveAvatarUrl(updated.avatarUrl)) ?? updated.avatarUrl
+        return reply.send({ data: { ...updated, avatarUrl } })
     })
 
-    // POST /api/v1/auth/me/avatar — upload own profile image
+    // POST /api/v1/auth/me/avatar — upload own profile image to S3
     fastify.post('/me/avatar', {
         preHandler: [fastify.authenticate],
         schema: { tags: ['Auth'] },
@@ -396,41 +394,35 @@ export default async function (fastify: any): Promise<void> {
         const part = await request.file()
         if (!part) return reply.code(400).send({ message: 'No file provided' })
 
-        const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-        if (!allowed.includes(part.mimetype)) {
-            return reply.code(400).send({ message: 'Only JPEG, PNG, WEBP, or GIF images are allowed' })
+        const chunks: Buffer[] = []
+        for await (const chunk of part.file) chunks.push(chunk as Buffer)
+        const buffer = Buffer.concat(chunks)
+
+        const allowedMime: Record<string, string> = {
+            'image/jpeg': '.jpg',
+            'image/png': '.png',
+            'image/webp': '.webp',
+            'image/gif': '.gif',
+        }
+        const detected = await fileTypeFromBuffer(buffer)
+        if (!detected || !allowedMime[detected.mime]) {
+            return reply.code(415).send({ message: 'Only JPEG, PNG, WEBP, or GIF images are allowed' })
         }
 
-        const uploadsDir = join(new URL('../../../../uploads', import.meta.url).pathname, 'user-avatars')
-        if (!existsSync(uploadsDir)) await mkdir(uploadsDir, { recursive: true })
+        const safeName = `avatar${allowedMime[detected.mime]}`
+        const s3Key = buildS3Key(request.user.tenantId, `users/${request.user.id}/avatar`, safeName)
 
-        const ext = extname(part.filename) || '.jpg'
-        const savedName = `${request.user.id}-${randomUUID()}${ext}`
-        const filePath = join(uploadsDir, savedName)
-        await pipeline(part.file, createWriteStream(filePath))
-
-        const avatarUrl = `/api/v1/auth/avatars/${savedName}`
-        await db.update(users).set({ avatarUrl, updatedAt: new Date() }).where(eq(users.id, request.user.id))
-
-        return reply.send({ data: { avatarUrl } })
-    })
-
-    // GET /api/v1/auth/avatars/:filename — public so <img> tags load without auth header
-    fastify.get('/avatars/:filename', { schema: { tags: ['Auth'] } }, async (request: any, reply: any) => {
-        const { filename } = request.params as { filename: string }
-        if (filename.includes('/') || filename.includes('..') || filename.includes('\\')) {
-            return reply.code(400).send({ message: 'Invalid filename' })
+        try {
+            await uploadObject(s3Key, buffer, detected.mime)
+        } catch (err: any) {
+            request.log.error({ err }, 'S3 user avatar upload failed')
+            return reply.code(503).send({ message: 'File storage service is unavailable. Please try again later.' })
         }
-        const filePath = join(new URL('../../../../uploads', import.meta.url).pathname, 'user-avatars', filename)
-        if (!existsSync(filePath)) return reply.code(404).send({ message: 'Avatar not found' })
-        const ext = extname(filename).toLowerCase()
-        const mimeMap: Record<string, string> = {
-            '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-            '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif',
-        }
-        reply.header('Content-Type', mimeMap[ext] ?? 'application/octet-stream')
-        reply.header('Cache-Control', 'public, max-age=86400')
-        return reply.send(createReadStream(filePath))
+
+        await db.update(users).set({ avatarUrl: s3Key, updatedAt: new Date() }).where(eq(users.id, request.user.id))
+
+        const presignedUrl = await generateDownloadUrl(s3Key, 86400)
+        return reply.send({ data: { avatarUrl: presignedUrl } })
     })
 }
 

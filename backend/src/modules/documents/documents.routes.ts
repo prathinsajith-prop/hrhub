@@ -406,6 +406,17 @@ export default async function (fastify: any): Promise<void> {
         if (!fileName || !contentType) {
             return reply.code(400).send({ message: 'fileName and contentType are required' })
         }
+        const ALLOWED_UPLOAD_TYPES = new Set([
+            'application/pdf',
+            'image/jpeg', 'image/png', 'image/webp',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])
+        if (!ALLOWED_UPLOAD_TYPES.has(contentType)) {
+            return reply.code(415).send({ statusCode: 415, error: 'Unsupported Media Type', message: `File type '${contentType}' is not permitted.` })
+        }
         const folder = employeeId ? `employees/${employeeId}/documents` : 'documents'
         const s3Key = buildS3Key(request.user.tenantId, folder, fileName)
         const uploadUrl = await generateUploadUrl(s3Key, contentType)
