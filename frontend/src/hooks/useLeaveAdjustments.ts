@@ -62,7 +62,7 @@ interface PaginatedResponse<T> {
 // ─── Leave Adjustments ────────────────────────────────────────────────────────
 
 export function useLeaveAdjustments(params?: { employeeId?: string; limit?: number; offset?: number }) {
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const qs = new URLSearchParams()
     if (params?.employeeId) qs.set('employeeId', params.employeeId)
     qs.set('limit', String(params?.limit ?? 25))
@@ -78,7 +78,7 @@ export function useLeaveAdjustments(params?: { employeeId?: string; limit?: numb
 
 export function useDeleteLeaveAdjustment() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: (id: string) => api.delete(`/leave/adjustments/${id}`),
         onSuccess: () => {
@@ -91,7 +91,7 @@ export function useDeleteLeaveAdjustment() {
 // ─── Air Tickets ──────────────────────────────────────────────────────────────
 
 export function useAirTickets(params?: { employeeId?: string; status?: string; limit?: number; offset?: number }) {
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const qs = new URLSearchParams()
     if (params?.employeeId) qs.set('employeeId', params.employeeId)
     if (params?.status) qs.set('status', params.status)
@@ -119,7 +119,7 @@ export interface CreateAirTicketInput {
 
 export function useCreateAirTicket() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: (data: CreateAirTicketInput) => api.post('/leave/air-tickets', data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['leave', 'air-tickets', tenantId] }),
@@ -128,7 +128,7 @@ export function useCreateAirTicket() {
 
 export function useUpdateAirTicket() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: ({ id, ...data }: Partial<CreateAirTicketInput> & { id: string; status?: AirTicket['status'] }) =>
             api.patch(`/leave/air-tickets/${id}`, data),
@@ -138,7 +138,7 @@ export function useUpdateAirTicket() {
 
 export function useDeleteAirTicket() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: (id: string) => api.delete(`/leave/air-tickets/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['leave', 'air-tickets', tenantId] }),
@@ -148,7 +148,7 @@ export function useDeleteAirTicket() {
 // ─── Leave Offsets ────────────────────────────────────────────────────────────
 
 export function useLeaveOffsets(params?: { employeeId?: string; status?: string; limit?: number; offset?: number }) {
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const qs = new URLSearchParams()
     if (params?.employeeId) qs.set('employeeId', params.employeeId)
     if (params?.status) qs.set('status', params.status)
@@ -173,7 +173,7 @@ export interface CreateLeaveOffsetInput {
 
 export function useCreateLeaveOffset() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: (data: CreateLeaveOffsetInput) => api.post('/leave/offsets', data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['leave', 'offsets', tenantId] }),
@@ -182,7 +182,7 @@ export function useCreateLeaveOffset() {
 
 export function useUpdateLeaveOffset() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: ({ id, ...data }: Partial<CreateLeaveOffsetInput> & { id: string; status?: LeaveOffset['status'] }) =>
             api.patch(`/leave/offsets/${id}`, data),
@@ -192,7 +192,7 @@ export function useUpdateLeaveOffset() {
 
 export function useDeleteLeaveOffset() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: (id: string) => api.delete(`/leave/offsets/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['leave', 'offsets', tenantId] }),

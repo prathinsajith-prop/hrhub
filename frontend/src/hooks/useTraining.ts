@@ -70,7 +70,7 @@ export function useTraining(params?: {
     limit?: number
     offset?: number
 }) {
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const qs = new URLSearchParams()
     if (params?.employeeId) qs.set('employeeId', params.employeeId)
     if (params?.status) qs.set('status', params.status)
@@ -88,7 +88,7 @@ export function useTraining(params?: {
 }
 
 export function useMyTraining() {
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useQuery<{ data: TrainingRecord[] }>({
         queryKey: ['training', tenantId, 'my'],
         queryFn: () => api.get('/training/my'),
@@ -98,7 +98,7 @@ export function useMyTraining() {
 }
 
 export function useEmployeeTraining(employeeId: string | undefined) {
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useQuery<{ data: TrainingRecord[] }>({
         queryKey: ['training', tenantId, 'employee', employeeId],
         queryFn: () => api.get(`/training/employee/${employeeId}`),
@@ -109,7 +109,7 @@ export function useEmployeeTraining(employeeId: string | undefined) {
 
 export function useCreateTraining() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: (data: CreateTrainingInput) => api.post('/training', data),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ['training', tenantId] }) },
@@ -118,7 +118,7 @@ export function useCreateTraining() {
 
 export function useUpdateTraining() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: ({ id, ...data }: Partial<TrainingRecord> & { id: string }) =>
             api.patch(`/training/${id}`, data),
@@ -128,7 +128,7 @@ export function useUpdateTraining() {
 
 export function useDeleteTraining() {
     const qc = useQueryClient()
-    const tenantId = useAuthStore(s => s.user?.tenantId)
+    const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
         mutationFn: (id: string) => api.delete(`/training/${id}`),
         onSuccess: () => { qc.invalidateQueries({ queryKey: ['training', tenantId] }) },

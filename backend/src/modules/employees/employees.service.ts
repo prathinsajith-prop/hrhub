@@ -185,8 +185,9 @@ export async function createEmployee(tenantId: string, data: Omit<NewEmployee, '
  * - NNN: employees created this calendar month (zero-padded, 3 digits)
  * - MM/YYYY: current month and year
  */
-export async function generateNextEmployeeNo(tenantId: string): Promise<string> {
-    const [tenant] = await db
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function generateNextEmployeeNo(tenantId: string, conn: any = db): Promise<string> {
+    const [tenant] = await conn
         .select({ companyCode: tenants.companyCode })
         .from(tenants)
         .where(eq(tenants.id, tenantId))
@@ -201,7 +202,7 @@ export async function generateNextEmployeeNo(tenantId: string): Promise<string> 
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
 
-    const [row] = await db
+    const [row] = await conn
         .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
         .from(employees)
         .where(and(

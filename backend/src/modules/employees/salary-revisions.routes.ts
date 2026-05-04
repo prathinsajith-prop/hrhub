@@ -8,6 +8,9 @@ const createRevisionSchema = z.object({
     effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'effectiveDate must be YYYY-MM-DD'),
     revisionType: z.enum(['increment', 'decrement', 'promotion', 'annual_review', 'probation_completion', 'correction']).default('increment'),
     newBasicSalary: z.number().positive(),
+    newHousingAllowance: z.number().min(0).optional().nullable(),
+    newTransportAllowance: z.number().min(0).optional().nullable(),
+    newOtherAllowances: z.number().min(0).optional().nullable(),
     newTotalSalary: z.number().positive().optional().nullable(),
     reason: z.string().max(500).optional().nullable(),
 })
@@ -51,16 +54,27 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
         if (!parsed.success) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parsed.error.issues[0]?.message ?? 'Invalid input' })
         }
-        const { effectiveDate, revisionType, newBasicSalary, newTotalSalary, reason } = parsed.data
+        const { effectiveDate, revisionType, newBasicSalary, newHousingAllowance, newTransportAllowance, newOtherAllowances, newTotalSalary, reason } = parsed.data
 
         // Load current salary for snapshot
         const [emp] = await db
-            .select({ basicSalary: employees.basicSalary, totalSalary: employees.totalSalary })
+            .select({
+                basicSalary: employees.basicSalary,
+                totalSalary: employees.totalSalary,
+                housingAllowance: employees.housingAllowance,
+                transportAllowance: employees.transportAllowance,
+                otherAllowances: employees.otherAllowances,
+            })
             .from(employees)
             .where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
             .limit(1)
 
         if (!emp) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+
+        // Auto-calculate total if not provided: basic + housing + transport + other
+        const effectiveTotal = newTotalSalary != null
+            ? newTotalSalary
+            : newBasicSalary + (newHousingAllowance ?? 0) + (newTransportAllowance ?? 0) + (newOtherAllowances ?? 0)
 
         const [revision] = await db.insert(salaryRevisions).values({
             tenantId: request.user.tenantId,
@@ -70,7 +84,13 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
             previousBasicSalary: emp.basicSalary ?? null,
             newBasicSalary: String(newBasicSalary),
             previousTotalSalary: emp.totalSalary ?? null,
-            newTotalSalary: newTotalSalary != null ? String(newTotalSalary) : null,
+            newTotalSalary: String(effectiveTotal),
+            previousHousingAllowance: emp.housingAllowance ?? null,
+            newHousingAllowance: newHousingAllowance != null ? String(newHousingAllowance) : null,
+            previousTransportAllowance: emp.transportAllowance ?? null,
+            newTransportAllowance: newTransportAllowance != null ? String(newTransportAllowance) : null,
+            previousOtherAllowances: emp.otherAllowances ?? null,
+            newOtherAllowances: newOtherAllowances != null ? String(newOtherAllowances) : null,
             reason: reason ?? null,
             approvedBy: request.user.id,
         }).returning()
@@ -80,7 +100,10 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
         if (effectiveDate <= today) {
             await db.update(employees).set({
                 basicSalary: String(newBasicSalary),
-                ...(newTotalSalary != null ? { totalSalary: String(newTotalSalary) } : {}),
+                totalSalary: String(effectiveTotal),
+                ...(newHousingAllowance != null ? { housingAllowance: String(newHousingAllowance) } : {}),
+                ...(newTransportAllowance != null ? { transportAllowance: String(newTransportAllowance) } : {}),
+                ...(newOtherAllowances != null ? { otherAllowances: String(newOtherAllowances) } : {}),
                 updatedAt: new Date(),
             }).where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
         }

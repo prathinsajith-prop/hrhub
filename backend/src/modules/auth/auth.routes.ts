@@ -3,8 +3,8 @@ import { setupTotp, verifyAndEnableTotp, disableTotp, getTotpStatus, regenerateB
 import { recordLoginEvent } from '../audit/audit.service.js'
 import { validate, loginSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema } from '../../lib/validation.js'
 import { db } from '../../db/index.js'
-import { users } from '../../db/schema/index.js'
-import { eq } from 'drizzle-orm'
+import { users, employees } from '../../db/schema/index.js'
+import { eq, and } from 'drizzle-orm'
 import { uploadObject, buildS3Key, generateDownloadUrl, resolveAvatarUrl } from '../../plugins/s3.js'
 import { fileTypeFromBuffer } from 'file-type'
 
@@ -420,6 +420,14 @@ export default async function (fastify: any): Promise<void> {
         }
 
         await db.update(users).set({ avatarUrl: s3Key, updatedAt: new Date() }).where(eq(users.id, request.user.id))
+
+        // Sync avatar to the linked employee record
+        if (request.user.employeeId) {
+            await db.update(employees)
+                .set({ avatarUrl: s3Key, updatedAt: new Date() })
+                .where(and(eq(employees.id, request.user.employeeId), eq(employees.tenantId, request.user.tenantId)))
+                .catch(() => { })
+        }
 
         const presignedUrl = await generateDownloadUrl(s3Key, 86400)
         return reply.send({ data: { avatarUrl: presignedUrl } })

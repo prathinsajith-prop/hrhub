@@ -923,9 +923,9 @@ function StepDocPanel({
                                             <span className="font-medium truncate max-w-[180px]">{file.name}</span>
                                         </div>
                                     ) : (
-                                        <p className="text-[11px] text-muted-foreground">Click to choose file (PDF, JPG, PNG)</p>
+                                        <p className="text-[11px] text-muted-foreground">Click to choose file (PDF, JPG, PNG, DOCX, XLSX…)</p>
                                     )}
-                                    <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+                                    <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xlsx" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
                                 </div>
                             </div>
 

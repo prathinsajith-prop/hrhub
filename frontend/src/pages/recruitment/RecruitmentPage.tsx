@@ -304,13 +304,12 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
   const [nationality, setNationality] = useState('')
   const [experience, setExperience] = useState('')
   const [expectedSalary, setExpectedSalary] = useState('')
-  const [resumeUrl, setResumeUrl] = useState('')
   const [notes, setNotes] = useState('')
   const createApp = useCreateApplication()
 
   const reset = () => {
     setJobId(''); setName(''); setEmail(''); setPhone(''); setNationality('')
-    setExperience(''); setExpectedSalary(''); setResumeUrl(''); setNotes('')
+    setExperience(''); setExpectedSalary(''); setNotes('')
   }
 
   const handleSave = async () => {
@@ -327,7 +326,6 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           nationality: nationality.trim() || undefined,
           experience: experience ? Number(experience) : undefined,
           expectedSalary: expectedSalary ? Number(expectedSalary) : undefined,
-          resumeUrl: resumeUrl.trim() || undefined,
           notes: notes.trim() || undefined,
         },
       })
@@ -387,10 +385,6 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
               <Label>Expected salary (AED)</Label>
               <NumericInput value={expectedSalary} onChange={(e) => setExpectedSalary(e.target.value)} />
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Resume URL</Label>
-            <Input value={resumeUrl} onChange={(e) => setResumeUrl(e.target.value)} placeholder="https://..." />
           </div>
           <div className="space-y-1.5">
             <Label>Notes</Label>

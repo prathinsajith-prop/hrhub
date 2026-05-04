@@ -14,6 +14,9 @@ import {
   Star,
   UserCheck,
   RefreshCcw,
+  CheckCircle2,
+  Ban,
+  UserX,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { DataTable } from '@/components/ui/data-table'
@@ -34,7 +37,7 @@ import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { useEmployees, useArchiveEmployee, exportEmployeesCsv } from '@/hooks/useEmployees'
+import { useEmployees, useArchiveEmployee, useUpdateEmployeeStatus, exportEmployeesCsv } from '@/hooks/useEmployees'
 import { exportEmployees } from '@/lib/export'
 import { AddEmployeeDialog, EditEmployeeDialog } from '@/components/shared/action-dialogs'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
@@ -87,15 +90,18 @@ const ActionMenu = memo(function ActionMenu({
   onDelete,
   onEdit,
   onInvite,
+  onStatusChange,
   canManage,
 }: {
   employee: Employee
   onDelete: (e: Employee) => void
   onEdit: (e: Employee) => void
   onInvite: (e: Employee) => void
+  onStatusChange: (e: Employee, status: 'active' | 'suspended' | 'terminated') => void
   canManage: boolean
 }) {
   const navigate = useNavigate()
+  const s = employee.status
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -103,7 +109,7 @@ const ActionMenu = memo(function ActionMenu({
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem onClick={() => navigate(`/employees/${employee.id}`)}>
           <Eye className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           View Profile
@@ -132,12 +138,40 @@ const ActionMenu = memo(function ActionMenu({
               Manage Login Access
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            {s !== 'active' && (
+              <DropdownMenuItem
+                onClick={() => onStatusChange(employee, 'active')}
+                className="text-success focus:text-success focus:bg-success/10"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
+                Activate
+              </DropdownMenuItem>
+            )}
+            {(s === 'active' || s === 'onboarding') && (
+              <DropdownMenuItem
+                onClick={() => onStatusChange(employee, 'suspended')}
+                className="text-amber-600 focus:text-amber-600 focus:bg-amber-50"
+              >
+                <Ban className="h-3.5 w-3.5 mr-2" />
+                Suspend
+              </DropdownMenuItem>
+            )}
+            {s !== 'terminated' && (
+              <DropdownMenuItem
+                onClick={() => onStatusChange(employee, 'terminated')}
+                className="text-destructive focus:text-destructive focus:bg-destructive/10"
+              >
+                <UserX className="h-3.5 w-3.5 mr-2" />
+                Terminate
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onDelete(employee)}
-              className="text-destructive focus:text-destructive focus:bg-destructive/10"
+              className="text-muted-foreground focus:text-destructive focus:bg-destructive/10"
             >
               <Trash2 className="h-3.5 w-3.5 mr-2" />
-              Terminate
+              Archive Record
             </DropdownMenuItem>
           </>
         )}
@@ -162,8 +196,10 @@ export function EmployeesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
   const [editTarget, setEditTarget] = useState<Employee | null>(null)
   const [inviteTarget, setInviteTarget] = useState<Employee | null>(null)
+  const [statusTarget, setStatusTarget] = useState<{ employee: Employee; status: 'active' | 'suspended' | 'terminated' } | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const archiveEmployee = useArchiveEmployee()
+  const updateStatus = useUpdateEmployeeStatus()
 
   async function handleExportCsv() {
     await exportEmployeesCsv({
@@ -216,12 +252,33 @@ export function EmployeesPage() {
     if (!deleteTarget) return
     archiveEmployee.mutate(deleteTarget.id, {
       onSuccess: () => {
-        toast.success('Termination initiated', `${deleteTarget.fullName}'s record has been archived.`)
+        toast.success('Record archived', `${deleteTarget.fullName}'s record has been archived.`)
         setDeleteTarget(null)
       },
       onError: () => {
         toast.error('Failed', 'Could not archive employee. Please try again.')
         setDeleteTarget(null)
+      },
+    })
+  }
+
+  const STATUS_CONFIG = {
+    active:     { label: 'Activate',  past: 'activated',  variant: 'success'     as const },
+    suspended:  { label: 'Suspend',   past: 'suspended',  variant: 'warning'     as const },
+    terminated: { label: 'Terminate', past: 'terminated', variant: 'destructive' as const },
+  }
+
+  const handleStatusChange = () => {
+    if (!statusTarget) return
+    updateStatus.mutate({ id: statusTarget.employee.id, status: statusTarget.status }, {
+      onSuccess: () => {
+        const cfg = STATUS_CONFIG[statusTarget.status]
+        toast.success('Status updated', `${statusTarget.employee.fullName} has been ${cfg.past}.`)
+        setStatusTarget(null)
+      },
+      onError: () => {
+        toast.error('Failed', 'Could not update employee status. Please try again.')
+        setStatusTarget(null)
       },
     })
   }
@@ -384,7 +441,7 @@ export function EmployeesPage() {
       id: 'actions',
       header: '',
       cell: ({ row }) => (
-        <ActionMenu employee={row.original} onDelete={setDeleteTarget} onEdit={setEditTarget} onInvite={setInviteTarget} canManage={canManage} />
+        <ActionMenu employee={row.original} onDelete={setDeleteTarget} onEdit={setEditTarget} onInvite={setInviteTarget} onStatusChange={(e, s) => setStatusTarget({ employee: e, status: s })} canManage={canManage} />
       ),
       size: 44,
     },
@@ -493,12 +550,30 @@ export function EmployeesPage() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Terminate Employee"
-        description={`Are you sure you want to initiate termination for ${deleteTarget?.fullName}? This will start the exit workflow and visa cancellation process.`}
-        confirmLabel="Terminate"
+        title="Archive Employee Record"
+        description={`Are you sure you want to archive ${deleteTarget?.fullName}'s record? This action removes them from all active lists.`}
+        confirmLabel="Archive"
         onConfirm={handleDelete}
         variant="destructive"
       />
+
+      {statusTarget && (
+        <ConfirmDialog
+          open
+          onOpenChange={(open) => !open && setStatusTarget(null)}
+          title={`${STATUS_CONFIG[statusTarget.status].label} Employee`}
+          description={
+            statusTarget.status === 'active'
+              ? `Restore ${statusTarget.employee.fullName} to active status. They will regain access to all HR systems.`
+              : statusTarget.status === 'suspended'
+              ? `Suspend ${statusTarget.employee.fullName}'s account. Their access will be disabled until reactivated.`
+              : `Mark ${statusTarget.employee.fullName} as terminated. This updates their employment status across all records.`
+          }
+          confirmLabel={STATUS_CONFIG[statusTarget.status].label}
+          onConfirm={handleStatusChange}
+          variant={STATUS_CONFIG[statusTarget.status].variant}
+        />
+      )}
 
       <AddEmployeeDialog open={addOpen} onOpenChange={setAddOpen} />
       {editTarget && (

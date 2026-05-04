@@ -2,6 +2,7 @@ import { eq, and, ilike, asc, desc, isNull, sql, getTableColumns, ne } from 'dri
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { recruitmentJobs, jobApplications } from '../../db/schema/index.js'
+import { resolveAvatarUrl } from '../../plugins/s3.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewJob = InferInsertModel<typeof recruitmentJobs>
@@ -64,7 +65,11 @@ export async function listApplications(tenantId: string, params: { jobId?: strin
         .limit(limit).offset(offset)
 
     const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
-    return { data: rows, total, limit, offset, hasMore: offset + limit < total }
+    const data = await Promise.all(rows.map(async r => ({
+        ...r,
+        resumeUrl: (await resolveAvatarUrl(r.resumeUrl)) ?? r.resumeUrl,
+    })))
+    return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 
 export async function createApplication(tenantId: string, jobId: string, data: Omit<NewApplication, 'tenantId' | 'jobId' | 'id'>) {
@@ -111,7 +116,8 @@ export async function getApplication(tenantId: string, id: string) {
     const [row] = await db.select().from(jobApplications)
         .where(and(eq(jobApplications.id, id), eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
         .limit(1)
-    return row ?? null
+    if (!row) return null
+    return { ...row, resumeUrl: (await resolveAvatarUrl(row.resumeUrl)) ?? row.resumeUrl }
 }
 
 export async function softDeleteApplication(tenantId: string, id: string) {

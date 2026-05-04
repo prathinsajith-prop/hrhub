@@ -120,6 +120,18 @@ export function useArchiveEmployee() {
     })
 }
 
+export function useUpdateEmployeeStatus() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, status }: { id: string; status: 'active' | 'suspended' | 'terminated' }) =>
+            api.patch<{ data: Employee }>(`/employees/${id}`, { status }).then(r => r.data),
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: ['employees'] })
+            qc.invalidateQueries({ queryKey: ['employees', variables.id] })
+        },
+    })
+}
+
 export interface SalaryRevision {
     id: string
     employeeId: string
@@ -129,6 +141,12 @@ export interface SalaryRevision {
     newBasicSalary: string
     previousTotalSalary: string | null
     newTotalSalary: string | null
+    previousHousingAllowance: string | null
+    newHousingAllowance: string | null
+    previousTransportAllowance: string | null
+    newTransportAllowance: string | null
+    previousOtherAllowances: string | null
+    newOtherAllowances: string | null
     reason: string | null
     approvedBy: string | null
     approvedByName: string | null
@@ -150,6 +168,9 @@ export function useRecordSalaryRevision(employeeId: string) {
             effectiveDate: string
             revisionType: string
             newBasicSalary: string | number
+            newHousingAllowance?: number | null
+            newTransportAllowance?: number | null
+            newOtherAllowances?: number | null
             newTotalSalary?: string | number
             reason?: string
         }) => api.post<{ data: SalaryRevision }>(`/employees/${employeeId}/salary-revision`, data).then(r => r.data),
