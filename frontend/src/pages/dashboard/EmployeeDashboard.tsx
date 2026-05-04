@@ -132,7 +132,7 @@ export function EmployeeDashboard() {
                       <p className="text-sm font-medium">
                         {new Date(p.year, p.month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
                       </p>
-                      <p className="text-xs text-muted-foreground capitalize">{p.runStatus}</p>
+                      <p className="text-xs text-muted-foreground">{labelFor(p.runStatus)}</p>
                     </div>
                     <p className="text-sm font-semibold tabular-figures">{formatCurrency(parseFloat(p.netSalary))}</p>
                   </div>

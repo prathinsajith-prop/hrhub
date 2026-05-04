@@ -20,7 +20,7 @@ import { ApplyLeaveDialog } from '@/components/shared/action-dialogs'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { LeaveRequest } from '@/types'
-import { LEAVE_TYPE_LABELS } from '@/lib/enums'
+import { LEAVE_TYPE_LABELS, labelFor } from '@/lib/enums'
 import { LEAVE_TYPE_OPTIONS, LEAVE_STATUS_OPTIONS } from '@/lib/options'
 import { exportLeave } from '@/lib/export'
 
@@ -252,7 +252,7 @@ export function LeavePage() {
             header: 'Status',
             cell: ({ getValue }) => {
                 const s = getValue() as string
-                return <Badge variant={leaveStatusVariant[s] as 'warning' | 'success' | 'destructive' | 'secondary'} className="capitalize text-[11px]">{s}</Badge>
+                return <Badge variant={leaveStatusVariant[s] as 'warning' | 'success' | 'destructive' | 'secondary'} className="text-[11px]">{labelFor(s)}</Badge>
             },
         },
         {

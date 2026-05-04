@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -7,10 +7,12 @@ import { DatePicker } from '@/components/ui/date-picker'
 import {
     Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { useUploadDocument } from '@/hooks/useDocuments'
+import { useEmployees } from '@/hooks/useEmployees'
 import { DOC_TYPE_CATALOG, CATEGORY_LABELS } from '@/lib/docTypes'
 import { toast } from '@/components/ui/overlays'
-import { Upload, FileText, X } from 'lucide-react'
+import { Upload, FileText, X, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -26,18 +28,33 @@ function addOneYear(dateStr: string): string {
     return d.toISOString().split('T')[0]!
 }
 
-export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
+export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmployeeId }: Props) {
     const { mutateAsync, isPending } = useUploadDocument()
+    // Fetch all non-terminated employees — no status filter so onboarding/suspended also appear
+    const { data: empList, isLoading: empLoading } = useEmployees({ limit: 500 })
+    const employeeOptions = useMemo(() =>
+        (empList?.data ?? [])
+            .filter(e => e.status !== 'terminated')
+            .map(e => ({
+                value: e.id,
+                label: e.fullName,
+                secondary: e.employeeNo ?? undefined,
+            })),
+        [empList],
+    )
 
+    const [selectedEmpId, setSelectedEmpId] = useState('')
     const [docType, setDocType] = useState('')
     const [issueDate, setIssueDate] = useState('')
     const [expiryDate, setExpiryDate] = useState('')
     const [notes, setNotes] = useState('')
     const [file, setFile] = useState<File | null>(null)
     const [dragging, setDragging] = useState(false)
-    const [errors, setErrors] = useState<{ docType?: string; expiryDate?: string; file?: string }>({})
+    const [errors, setErrors] = useState<{ employee?: string; docType?: string; expiryDate?: string; file?: string }>({})
     const fileInputRef = useRef<HTMLInputElement>(null)
     const autoExpiryRef = useRef<string>('')
+
+    const effectiveEmployeeId = fixedEmployeeId ?? (selectedEmpId || undefined)
 
     const allDocTypes = Object.values(DOC_TYPE_CATALOG).flat()
     const selectedDef = allDocTypes.find(d => d.docType === docType)
@@ -64,6 +81,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
     }
 
     function reset() {
+        setSelectedEmpId('')
         setDocType('')
         setIssueDate('')
         setExpiryDate('')
@@ -110,6 +128,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
 
     async function handleSubmit() {
         const newErrors: typeof errors = {}
+        if (!fixedEmployeeId && !selectedEmpId) newErrors.employee = 'Please select an employee'
         if (!docType) newErrors.docType = 'Please select a document type'
         if (expiryRequired && !expiryDate) newErrors.expiryDate = `${docType} requires an expiry date`
         if (!file) newErrors.file = 'Please select a file to upload'
@@ -118,7 +137,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
         try {
             await mutateAsync({
                 file: file!,
-                employeeId,
+                employeeId: effectiveEmployeeId,
                 category: selectedDef?.category ?? 'identity',
                 docType,
                 issueDate: issueDate || undefined,
@@ -140,6 +159,29 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                 </DialogHeader>
 
                 <div className="px-6 py-5 space-y-4">
+                    {/* Employee — shown only when not pre-set from context */}
+                    {!fixedEmployeeId && (
+                        <div className="space-y-1.5">
+                            <Label className="text-sm font-medium flex items-center gap-1.5">
+                                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                                Employee <span className="text-destructive">*</span>
+                            </Label>
+                            <Combobox
+                                value={selectedEmpId}
+                                onValueChange={v => { setSelectedEmpId(v); setErrors(e => ({ ...e, employee: undefined })) }}
+                                options={employeeOptions}
+                                placeholder={empLoading ? 'Loading employees…' : 'Search by name or employee no…'}
+                                searchPlaceholder="Search employees…"
+                                emptyMessage={empLoading ? 'Loading…' : 'No employees found'}
+                                disabled={empLoading}
+                                className={errors.employee ? 'border-destructive ring-destructive/20' : ''}
+                            />
+                            {errors.employee && (
+                                <p className="text-xs text-destructive">{errors.employee}</p>
+                            )}
+                        </div>
+                    )}
+
                     {/* Document type */}
                     <div className="space-y-1.5">
                         <Label className="text-sm font-medium">

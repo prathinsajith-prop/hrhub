@@ -109,7 +109,7 @@ const ActionMenu = memo(function ActionMenu({
           <MoreHorizontal className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
+      <DropdownMenuContent align="end" className="w-52" onClick={e => e.stopPropagation()}>
         <DropdownMenuItem onClick={() => navigate(`/employees/${employee.id}`)}>
           <Eye className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
           View Profile
