@@ -29,6 +29,7 @@ import { NumericInput } from '@/components/ui/numeric-input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { useEmployee, useUpdateEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision } from '@/hooks/useEmployees'
+import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { useEmployeeTeams } from '@/hooks/useTeams'
 import { useDocuments } from '@/hooks/useDocuments'
@@ -112,6 +113,31 @@ const InfoRow = React.memo(function InfoRow({ label, value, icon: Icon }: { labe
       <span className="text-sm text-muted-foreground w-36 shrink-0">{label}</span>
       <span className="text-sm font-medium text-foreground truncate flex-1">{value || '—'}</span>
     </div>
+  )
+})
+
+/** Compact stacked label + value cell for the Employment Details grid */
+const EmpField = React.memo(function EmpField({
+  label, value, icon: Icon, children,
+}: { label: string; value?: string | null; icon?: React.ElementType; children?: React.ReactNode }) {
+  return (
+    <div className="space-y-1 min-w-0">
+      <div className="flex items-center gap-1.5">
+        {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+        <p className="text-xs text-muted-foreground leading-none">{label}</p>
+      </div>
+      {children
+        ? <div>{children}</div>
+        : <p className="text-sm font-medium text-foreground truncate">{value || '—'}</p>}
+    </div>
+  )
+})
+
+const EmployeeStatusBadge = React.memo(function EmployeeStatusBadge({ status }: { status: string }) {
+  return (
+    <Badge variant={STATUS_VARIANT[status] ?? 'secondary'} className="capitalize text-[11px] mt-0.5">
+      {status.replace('_', ' ')}
+    </Badge>
   )
 })
 
@@ -229,94 +255,143 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
     )
   }
 
+  const prevTotal = currentTotal ?? ((currentBasic ?? 0) + (currentHousing ?? 0) + (currentTransport ?? 0) + (currentOther ?? 0))
+  const displayTotal = computedTotal ?? prevTotal
+  const diff = computedTotal != null && prevTotal > 0 ? computedTotal - prevTotal : null
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Change Salary</DialogTitle>
+      <DialogContent className="max-w-lg p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <DialogTitle className="text-lg font-semibold">Change Salary</DialogTitle>
+          <p className="text-sm text-muted-foreground mt-0.5">Record a salary revision and update the employee's compensation package.</p>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="cs-date">Effective Date <span className="text-destructive">*</span></Label>
-            <DatePicker
-              id="cs-date"
-              value={effectiveDate}
-              onChange={setEffectiveDate}
-              placeholder="Select effective date"
-            />
-          </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="cs-type">Revision Type <span className="text-destructive">*</span></Label>
-            <Select value={revisionType} onValueChange={setRevisionType}>
-              <SelectTrigger id="cs-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(REVISION_TYPE_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <form onSubmit={handleSubmit}>
+          <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
 
-          <div className="space-y-1.5">
-            <Label htmlFor="cs-basic">Basic Salary (AED) <span className="text-destructive">*</span></Label>
-            {currentBasic != null && (
-              <p className="text-xs text-muted-foreground">Current: {formatCurrency(currentBasic)}</p>
+            {/* Effective date + Revision type */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-date" className="text-sm font-medium">
+                  Effective Date <span className="text-destructive">*</span>
+                </Label>
+                <DatePicker
+                  id="cs-date"
+                  value={effectiveDate}
+                  onChange={setEffectiveDate}
+                  placeholder="Select date"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cs-type" className="text-sm font-medium">
+                  Revision Type <span className="text-destructive">*</span>
+                </Label>
+                <Select value={revisionType} onValueChange={setRevisionType}>
+                  <SelectTrigger id="cs-type" className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(REVISION_TYPE_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Current package summary */}
+            {(currentBasic != null || currentHousing != null || currentTransport != null || currentOther != null) && (
+              <div className="rounded-lg border bg-muted/30 px-4 py-3 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Current Package</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { label: 'Basic', value: currentBasic },
+                    { label: 'Housing', value: currentHousing },
+                    { label: 'Transport', value: currentTransport },
+                    { label: 'Other', value: currentOther },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="text-center">
+                      <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
+                      <p className="text-xs font-semibold tabular-nums">{value != null ? formatCurrency(value) : '—'}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
-            <NumericInput id="cs-basic" placeholder="0.00" value={newBasic} onChange={e => setNewBasic(e.target.value)} />
+
+            {/* Basic salary */}
+            <div className="space-y-1.5">
+              <Label htmlFor="cs-basic" className="text-sm font-medium">
+                Basic Salary <span className="text-muted-foreground font-normal text-xs">(AED)</span> <span className="text-destructive">*</span>
+              </Label>
+              <NumericInput id="cs-basic" placeholder="0.00" value={newBasic} onChange={e => setNewBasic(e.target.value)} className="h-9" />
+            </div>
+
+            {/* Allowances — 3 equal columns */}
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">Allowances <span className="font-normal">(optional)</span></p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cs-housing" className="text-xs text-muted-foreground">Housing</Label>
+                  <NumericInput id="cs-housing" placeholder="0.00" value={newHousing} onChange={e => setNewHousing(e.target.value)} className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cs-transport" className="text-xs text-muted-foreground">Transport</Label>
+                  <NumericInput id="cs-transport" placeholder="0.00" value={newTransport} onChange={e => setNewTransport(e.target.value)} className="h-9" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cs-other" className="text-xs text-muted-foreground">Other</Label>
+                  <NumericInput id="cs-other" placeholder="0.00" value={newOther} onChange={e => setNewOther(e.target.value)} className="h-9" />
+                </div>
+              </div>
+            </div>
+
+            {/* Total package — always visible */}
+            <div className="rounded-lg border bg-primary/5 border-primary/20 px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {computedTotal != null ? 'New Total Package' : 'Current Total Package'}
+                  </p>
+                  <p className="text-xl font-bold tabular-nums mt-0.5">{formatCurrency(displayTotal)}</p>
+                </div>
+                {diff != null && (
+                  <div className={cn(
+                    'text-right px-3 py-1.5 rounded-md text-sm font-semibold',
+                    diff > 0 ? 'bg-green-100 text-green-700' : diff < 0 ? 'bg-red-100 text-red-700' : 'bg-muted text-muted-foreground'
+                  )}>
+                    <p className="text-xs font-normal mb-0.5">vs current</p>
+                    {diff > 0 ? '+' : ''}{formatCurrency(diff)}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Remarks */}
+            <div className="space-y-1.5">
+              <Label htmlFor="cs-remarks" className="text-sm font-medium text-muted-foreground">
+                Remarks / Reason <span className="text-xs font-normal">(optional)</span>
+              </Label>
+              <Textarea
+                id="cs-remarks"
+                placeholder="Reason for salary change…"
+                value={remarks}
+                onChange={e => setRemarks(e.target.value)}
+                rows={2}
+                className="resize-none text-sm"
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="cs-housing">Housing Allowance <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              {currentHousing != null && (
-                <p className="text-xs text-muted-foreground">Current: {formatCurrency(currentHousing)}</p>
-              )}
-              <NumericInput id="cs-housing" placeholder="0.00" value={newHousing} onChange={e => setNewHousing(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cs-transport">Transport Allowance <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              {currentTransport != null && (
-                <p className="text-xs text-muted-foreground">Current: {formatCurrency(currentTransport)}</p>
-              )}
-              <NumericInput id="cs-transport" placeholder="0.00" value={newTransport} onChange={e => setNewTransport(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cs-other">Other Allowances <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              {currentOther != null && (
-                <p className="text-xs text-muted-foreground">Current: {formatCurrency(currentOther)}</p>
-              )}
-              <NumericInput id="cs-other" placeholder="0.00" value={newOther} onChange={e => setNewOther(e.target.value)} />
-            </div>
-          </div>
-
-          {computedTotal != null && (
-            <div className="rounded-lg bg-muted/50 border px-3 py-2 text-xs flex items-center justify-between">
-              <span className="text-muted-foreground">Computed Total Salary</span>
-              <span className="font-semibold text-sm">{formatCurrency(computedTotal)}</span>
-            </div>
-          )}
-          {currentTotal != null && (
-            <p className="text-xs text-muted-foreground -mt-2">Previous total: {formatCurrency(currentTotal)}</p>
-          )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor="cs-remarks">Remarks / Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Textarea
-              id="cs-remarks"
-              placeholder="Reason for salary change…"
-              value={remarks}
-              onChange={e => setRemarks(e.target.value)}
-              rows={3}
-            />
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+          <DialogFooter className="px-6 py-4 border-t bg-muted/20">
+            <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={mutation.isPending}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Saving…</> : 'Save Revision'}
+              {mutation.isPending
+                ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Saving…</>
+                : 'Save Revision'}
             </Button>
           </DialogFooter>
         </form>
@@ -338,6 +413,8 @@ interface TransferDialogProps {
 
 function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept, currentDeptId }: TransferDialogProps) {
   const mutation = useCreateTransfer(employeeId)
+  const { data: designationList = [] } = useDesignations()
+  const createDesignation = useCreateDesignation()
 
   const [transferDate, setTransferDate] = React.useState('')
   const [departmentId, setDepartmentId] = React.useState('')
@@ -390,6 +467,13 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
     const division = dept ? orgUnits.find(u => u.id === dept.parentId && u.type === 'division') : null
     const branch = division ? orgUnits.find(u => u.id === division.parentId && u.type === 'branch') : null
 
+    // Auto-create designation if it doesn't exist yet
+    if (toDesignation) {
+      const exists = (Array.isArray(designationList) ? designationList : [])
+        .some((d: { name: string; isActive: boolean }) => d.isActive && d.name.toLowerCase() === toDesignation.toLowerCase())
+      if (!exists) await createDesignation.mutateAsync({ name: toDesignation })
+    }
+
     try {
       await mutation.mutateAsync({
         transferDate,
@@ -411,51 +495,66 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Transfer Employee</DialogTitle>
+      <DialogContent className="max-w-2xl p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <DialogTitle className="text-lg font-semibold">Transfer Employee</DialogTitle>
+          <p className="text-sm text-muted-foreground mt-0.5">Move the employee to a new department or branch.</p>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-          <div className="space-y-1.5">
-            <Label>Transfer Date <span className="text-destructive">*</span></Label>
-            <DatePicker value={transferDate} onChange={v => setTransferDate(v ?? '')} placeholder="Select transfer date" />
-          </div>
 
-          <div className="space-y-1.5">
-            <Label>Department <span className="text-destructive">*</span></Label>
-            <Combobox
-              options={deptOptions}
-              value={departmentId}
-              onValueChange={setDepartmentId}
-              placeholder="Search department…"
-              emptyMessage="No departments found"
-            />
-            {selectedDeptOpt && (
-              <div className="rounded-lg bg-muted/50 border px-3 py-2 text-xs">
-                <span className="text-muted-foreground">From: </span>
-                <span className="font-medium">{fromLabel}</span>
-                <span className="text-muted-foreground mx-1.5">→</span>
-                <span className="font-medium text-primary">{selectedDeptOpt.label}</span>
+        <form onSubmit={handleSubmit}>
+          <div className="px-6 py-5 space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Transfer Date <span className="text-destructive">*</span></Label>
+              <DatePicker value={transferDate} onChange={v => setTransferDate(v ?? '')} placeholder="Select transfer date" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Department <span className="text-destructive">*</span></Label>
+              <Combobox
+                options={deptOptions}
+                value={departmentId}
+                onValueChange={setDepartmentId}
+                placeholder="Search department…"
+                emptyMessage="No departments found"
+              />
+              {selectedDeptOpt && (
+                <div className="rounded-lg border bg-muted/30 px-4 py-3 mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+                  <span className="text-muted-foreground font-semibold uppercase tracking-wide text-[10px] pt-px">From</span>
+                  <span className="font-medium text-foreground break-words min-w-0">{fromLabel}</span>
+                  <span className="text-muted-foreground font-semibold uppercase tracking-wide text-[10px] pt-px">To</span>
+                  <span className="font-semibold text-primary break-words min-w-0">{selectedDeptOpt.label}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-muted-foreground">New Designation <span className="text-xs font-normal">(optional)</span></Label>
+              <Combobox
+                value={toDesignation}
+                onValueChange={setToDesignation}
+                options={(Array.isArray(designationList) ? designationList : [])
+                  .filter((d: { isActive: boolean }) => d.isActive)
+                  .map((d: { name: string }) => ({ value: d.name, label: d.name }))}
+                placeholder="Select or type designation…"
+                searchPlaceholder="Search or create…"
+                clearable
+                creatable
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-muted-foreground">Reason <span className="text-xs font-normal">(optional)</span></Label>
+                <Textarea placeholder="Reason for transfer…" value={reason} onChange={e => setReason(e.target.value)} rows={2} className="resize-none text-sm" />
               </div>
-            )}
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-muted-foreground">Notes <span className="text-xs font-normal">(optional)</span></Label>
+                <Textarea placeholder="Additional notes…" value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="resize-none text-sm" />
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>New Designation <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
-            <Input placeholder="e.g. Senior Engineer" value={toDesignation} onChange={e => setToDesignation(e.target.value)} />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Reason <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
-            <Textarea placeholder="Reason for transfer…" value={reason} onChange={e => setReason(e.target.value)} rows={2} />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Notes <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
-            <Textarea placeholder="Additional notes…" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
-          </div>
-
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t bg-muted/20">
             <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={mutation.isPending}>
               Cancel
             </Button>
@@ -838,7 +937,7 @@ export function EmployeeDetailPage() {
           {/* ── Employment ── */}
           <TabsContent value="employment" className="mt-4 space-y-4">
             <Card>
-              <CardHeader>
+              <CardHeader className="pb-4">
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="text-base">Employment Details</CardTitle>
                   {canManage && (
@@ -853,30 +952,37 @@ export function EmployeeDetailPage() {
                   )}
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-                  <div>
-                    <InfoRow label="Employee No." value={e.employeeNo} icon={Hash} />
-                    <InfoRow label="Designation" value={e.designation} icon={Briefcase} />
-                    <InfoRow label="Branch" value={orgUnitName(e.branchId) ?? '—'} icon={Building2} />
-                    <InfoRow label="Division" value={orgUnitName(e.divisionId) ?? '—'} icon={Building2} />
-                    <InfoRow label="Department" value={orgUnitName(e.departmentId) ?? '—'} icon={Building2} />
-                    <InfoRow label="Company" value={(e as unknown as Record<string, unknown>)['entityName'] as string ?? '—'} icon={Building2} />
-                    <InfoRow label="Employment Type" value={labelFor(e.contractType)} icon={Briefcase} />
-                    <InfoRow label="Work Location" value={e.workLocation} icon={MapPin} />
-                  </div>
-                  <div>
-                    <InfoRow label="Join Date" value={formatDate(e.joinDate)} icon={Calendar} />
-                    {(e.contractType === 'probation' || e.probationEndDate) && (
-                      <InfoRow label="Probation End" value={e.probationEndDate ? formatDate(e.probationEndDate) : '—'} icon={Clock} />
-                    )}
-                    {(e.contractType === 'contract' || e.contractEndDate) && (
-                      <InfoRow label="Contract End" value={e.contractEndDate ? formatDate(e.contractEndDate) : '—'} icon={Calendar} />
-                    )}
-                    <InfoRow label="Status" value={labelFor(e.status)} icon={Shield} />
-                    <InfoRow label="Grade Level" value={e.gradeLevelName} icon={GraduationCap} />
-                    <InfoRow label="Direct Manager" value={e.managerName} icon={User} />
-                  </div>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5">
+                  {/* Row 1 — Identity */}
+                  <EmpField label="Employee No." icon={Hash} value={e.employeeNo} />
+                  <EmpField label="Join Date" icon={Calendar} value={formatDate(e.joinDate)} />
+                  <EmpField label="Status" icon={Shield}>
+                    <EmployeeStatusBadge status={e.status} />
+                  </EmpField>
+
+                  {/* Row 2 — Role */}
+                  <EmpField label="Designation" icon={Briefcase} value={e.designation} />
+                  <EmpField label="Employment Type" icon={Briefcase} value={labelFor(e.contractType)} />
+                  <EmpField label="Grade Level" icon={GraduationCap} value={(e as any).gradeLevelName} />
+
+                  {/* Row 3 — Org */}
+                  <EmpField label="Company" icon={Building2} value={((e as any).entityName as string) ?? undefined} />
+                  <EmpField label="Branch" icon={Building2} value={orgUnitName(e.branchId) ?? undefined} />
+                  <EmpField label="Division" icon={Building2} value={orgUnitName(e.divisionId) ?? undefined} />
+
+                  {/* Row 4 — Location / Manager */}
+                  <EmpField label="Department" icon={Building2} value={orgUnitName(e.departmentId) ?? undefined} />
+                  <EmpField label="Work Location" icon={MapPin} value={e.workLocation ?? undefined} />
+                  <EmpField label="Direct Manager" icon={User} value={(e as any).managerName ?? undefined} />
+
+                  {/* Conditional dates */}
+                  {(e.contractType === 'probation' || e.probationEndDate) && (
+                    <EmpField label="Probation End" icon={Clock} value={e.probationEndDate ? formatDate(e.probationEndDate) : undefined} />
+                  )}
+                  {(e.contractType === 'contract' || e.contractEndDate) && (
+                    <EmpField label="Contract End" icon={Calendar} value={e.contractEndDate ? formatDate(e.contractEndDate) : undefined} />
+                  )}
                 </div>
               </CardContent>
             </Card>

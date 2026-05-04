@@ -5,10 +5,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { DatePicker } from '@/components/ui/date-picker'
 import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { useUploadDocument } from '@/hooks/useDocuments'
-import { FLAT_DOC_TYPES } from '@/lib/docTypes'
+import { DOC_TYPE_CATALOG, CATEGORY_LABELS } from '@/lib/docTypes'
 import { toast } from '@/components/ui/overlays'
 import { Upload, FileText, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -35,11 +35,12 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
     const [notes, setNotes] = useState('')
     const [file, setFile] = useState<File | null>(null)
     const [dragging, setDragging] = useState(false)
+    const [errors, setErrors] = useState<{ docType?: string; expiryDate?: string; file?: string }>({})
     const fileInputRef = useRef<HTMLInputElement>(null)
-    // Track the last auto-set expiry value so re-picking the issue date keeps expiry in sync
     const autoExpiryRef = useRef<string>('')
 
-    const selectedDef = FLAT_DOC_TYPES.find(d => d.docType === docType)
+    const allDocTypes = Object.values(DOC_TYPE_CATALOG).flat()
+    const selectedDef = allDocTypes.find(d => d.docType === docType)
     const expiryRequired = selectedDef?.expiryRequired ?? false
 
     function handleIssueDateChange(v: string | undefined) {
@@ -69,6 +70,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
         setNotes('')
         setFile(null)
         setDragging(false)
+        setErrors({})
         autoExpiryRef.current = ''
     }
 
@@ -107,13 +109,15 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
     const onDragLeave = useCallback(() => setDragging(false), [])
 
     async function handleSubmit() {
-        if (!docType) { toast.warning('Document type required', 'Please select a document type.'); return }
-        if (expiryRequired && !expiryDate) { toast.warning('Expiry date required', `${docType} requires an expiry date.`); return }
-        if (!file) { toast.warning('File required', 'Please select a file to upload.'); return }
+        const newErrors: typeof errors = {}
+        if (!docType) newErrors.docType = 'Please select a document type'
+        if (expiryRequired && !expiryDate) newErrors.expiryDate = `${docType} requires an expiry date`
+        if (!file) newErrors.file = 'Please select a file to upload'
+        if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return }
 
         try {
             await mutateAsync({
-                file,
+                file: file!,
                 employeeId,
                 category: selectedDef?.category ?? 'identity',
                 docType,
@@ -141,18 +145,34 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                         <Label className="text-sm font-medium">
                             Document Type <span className="text-destructive">*</span>
                         </Label>
-                        <Select value={docType} onValueChange={setDocType}>
-                            <SelectTrigger className="h-9">
+                        <Select value={docType} onValueChange={v => { setDocType(v); setErrors(e => ({ ...e, docType: undefined })) }}>
+                            <SelectTrigger className={cn('h-9', errors.docType && 'border-destructive ring-destructive/20')}>
                                 <SelectValue placeholder="Select document type…" />
                             </SelectTrigger>
-                            <SelectContent className="max-h-72">
-                                {FLAT_DOC_TYPES.map(d => (
-                                    <SelectItem key={d.docType} value={d.docType}>
-                                        {d.label}
-                                    </SelectItem>
+                            <SelectContent className="max-h-80">
+                                {(Object.keys(DOC_TYPE_CATALOG) as (keyof typeof DOC_TYPE_CATALOG)[]).map(cat => (
+                                    <SelectGroup key={cat}>
+                                        <SelectLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5 uppercase tracking-wide">
+                                            {CATEGORY_LABELS[cat]}
+                                        </SelectLabel>
+                                        {DOC_TYPE_CATALOG[cat].map(d => (
+                                            <SelectItem key={d.docType} value={d.docType}>
+                                                {d.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectGroup>
                                 ))}
+                                <SelectGroup>
+                                    <SelectLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5 uppercase tracking-wide">
+                                        Other
+                                    </SelectLabel>
+                                    <SelectItem value="Other">Other</SelectItem>
+                                </SelectGroup>
                             </SelectContent>
                         </Select>
+                        {errors.docType && (
+                            <p className="text-xs text-destructive">{errors.docType}</p>
+                        )}
                     </div>
 
                     {/* Issue date + Expiry date side by side */}
@@ -176,12 +196,13 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                             </Label>
                             <DatePicker
                                 value={expiryDate}
-                                onChange={handleExpiryDateChange}
+                                onChange={v => { handleExpiryDateChange(v); setErrors(e => ({ ...e, expiryDate: undefined })) }}
                                 placeholder="Select expiry date"
                             />
-                            {selectedDef?.hint && (
-                                <p className="text-[11px] text-muted-foreground">{selectedDef.hint}</p>
-                            )}
+                            {errors.expiryDate
+                                ? <p className="text-xs text-destructive">{errors.expiryDate}</p>
+                                : selectedDef?.hint && <p className="text-[11px] text-muted-foreground">{selectedDef.hint}</p>
+                            }
                         </div>
                     </div>
 
@@ -209,7 +230,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                             type="file"
                             className="hidden"
                             accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xlsx"
-                            onChange={e => pickFile(e.target.files?.[0])}
+                            onChange={e => { pickFile(e.target.files?.[0]); setErrors(err => ({ ...err, file: undefined })) }}
                         />
 
                         {file ? (
@@ -240,7 +261,9 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                                     'w-full rounded-lg border-2 border-dashed px-6 py-8 flex flex-col items-center gap-2 transition-colors cursor-pointer',
                                     dragging
                                         ? 'border-primary bg-primary/5'
-                                        : 'border-border hover:border-primary/50 hover:bg-muted/30',
+                                        : errors.file
+                                            ? 'border-destructive bg-destructive/5 hover:border-destructive/70'
+                                            : 'border-border hover:border-primary/50 hover:bg-muted/30',
                                 )}
                             >
                                 <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
@@ -253,6 +276,9 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId }: Props) {
                                     <p className="text-xs text-muted-foreground mt-0.5">PDF, JPG, PNG, WEBP, GIF, DOCX, XLSX · Max 10 MB</p>
                                 </div>
                             </button>
+                        )}
+                        {errors.file && (
+                            <p className="text-xs text-destructive">{errors.file}</p>
                         )}
                     </div>
                 </div>

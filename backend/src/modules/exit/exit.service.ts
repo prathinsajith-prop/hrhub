@@ -131,7 +131,12 @@ export async function initiateExit(tenantId: string, body: {
     return { request: req, settlement }
 }
 
-export async function getExitRequests(tenantId: string) {
+export async function getExitRequests(tenantId: string, opts: { limit?: number; offset?: number; status?: string } = {}) {
+    const { limit = 50, offset = 0, status } = opts
+    const where = status
+        ? and(eq(exitRequests.tenantId, tenantId), sql`${exitRequests.status} = ${status}`)
+        : eq(exitRequests.tenantId, tenantId)
+
     const rows = await db
         .select({
             id: exitRequests.id,
@@ -159,12 +164,18 @@ export async function getExitRequests(tenantId: string) {
             employeeDesignation: employees.designation,
             employeeDepartment: employees.department,
             employeeAvatarUrl: employees.avatarUrl,
+            total: sql<number>`COUNT(*) OVER()`,
         })
         .from(exitRequests)
         .leftJoin(employees, eq(employees.id, exitRequests.employeeId))
-        .where(eq(exitRequests.tenantId, tenantId))
+        .where(where)
         .orderBy(desc(exitRequests.createdAt))
-    return Promise.all(rows.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
+        .limit(limit)
+        .offset(offset)
+
+    const total = rows[0]?.total ?? 0
+    const data = await Promise.all(rows.map(async ({ total: _, ...r }) => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
+    return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 
 export async function getExitRequest(tenantId: string, id: string) {

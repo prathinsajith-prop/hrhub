@@ -292,11 +292,23 @@ export default async function (fastify: any): Promise<void> {
 
         if (!pendingFile) return reply.code(400).send({ message: 'No file provided' })
 
-        // Validate file type via magic bytes — never trust client-supplied Content-Type
+        // Resolve MIME: prefer magic-byte detection; fall back to file extension for
+        // ZIP-based Office formats (.docx/.xlsx) where file-type may return 'application/zip'.
+        const EXT_MIME: Record<string, string> = {
+            pdf: 'application/pdf',
+            jpg: 'image/jpeg', jpeg: 'image/jpeg',
+            png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+            doc: 'application/msword',
+            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }
         const detected = await fileTypeFromBuffer(pendingFile.buffer)
-        const mime = detected?.mime ?? 'application/octet-stream'
+        const ext = pendingFile.originalName.split('.').pop()?.toLowerCase() ?? ''
+        const mime = (detected?.mime && detected.mime !== 'application/zip')
+            ? detected.mime
+            : (EXT_MIME[ext] ?? 'application/octet-stream')
         if (!ALLOWED_MIMES.has(mime)) {
-            return reply.code(415).send({ message: `File type '${mime}' is not permitted. Please upload a PDF, image, or Word/Excel document.` })
+            return reply.code(415).send({ message: `File type not permitted. Please upload a PDF, image, Word, or Excel document.` })
         }
 
         const { employeeId, category, expiryDate, issueDate, notes, docType } = fields

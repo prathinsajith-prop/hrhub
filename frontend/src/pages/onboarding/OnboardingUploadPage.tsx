@@ -339,7 +339,7 @@ function StepUploadArea({
                                 <input
                                     ref={fileRef}
                                     type="file"
-                                    accept=".pdf,.jpg,.jpeg,.png"
+                                    accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xlsx"
                                     className="hidden"
                                     onChange={handleFile}
                                 />

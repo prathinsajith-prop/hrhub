@@ -42,8 +42,9 @@ export async function exitRoutes(fastify: any) {
 
     // GET /api/v1/exit
     fastify.get('/exit', { ...auth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
-        const data = await getExitRequests(request.user.tenantId)
-        return reply.send({ data })
+        const { limit = '50', offset = '0', status } = request.query as Record<string, string>
+        const result = await getExitRequests(request.user.tenantId, { limit: Number(limit), offset: Number(offset), status })
+        return reply.send(result)
     })
 
     // GET /api/v1/exit/:id
@@ -86,8 +87,7 @@ export async function exitRoutes(fastify: any) {
     fastify.get('/exit/export', { ...adminAuth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
         const { format = 'csv', status } = request.query as Record<string, string>
         if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
-        const allExits = await getExitRequests(request.user.tenantId)
-        const rows = (status ? allExits.filter((r: any) => r.status === status) : allExits) as any[]
+        const { data: rows } = await getExitRequests(request.user.tenantId, { limit: 10_000, offset: 0, status })
         const dateStr = new Date().toISOString().slice(0, 10)
 
         if (format === 'pdf') {

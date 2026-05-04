@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js'
 import { performanceReviews } from '../../db/schema/index.js'
-import { eq, and, desc, gte, lte, isNull } from 'drizzle-orm'
+import { eq, and, desc, gte, lte, isNull, sql } from 'drizzle-orm'
 
 export async function getReviews(tenantId: string, params: { employeeId?: string; from?: string; to?: string; limit?: number; offset?: number }) {
     const { employeeId, from, to, limit = 20, offset = 0 } = params
@@ -9,12 +9,38 @@ export async function getReviews(tenantId: string, params: { employeeId?: string
     if (from) conditions.push(gte(performanceReviews.reviewDate, from))
     if (to) conditions.push(lte(performanceReviews.reviewDate, to))
 
-    const rows = await db.select().from(performanceReviews)
+    const rows = await db.select({
+        id: performanceReviews.id,
+        tenantId: performanceReviews.tenantId,
+        employeeId: performanceReviews.employeeId,
+        reviewerId: performanceReviews.reviewerId,
+        period: performanceReviews.period,
+        reviewDate: performanceReviews.reviewDate,
+        status: performanceReviews.status,
+        overallRating: performanceReviews.overallRating,
+        qualityScore: performanceReviews.qualityScore,
+        productivityScore: performanceReviews.productivityScore,
+        teamworkScore: performanceReviews.teamworkScore,
+        attendanceScore: performanceReviews.attendanceScore,
+        initiativeScore: performanceReviews.initiativeScore,
+        strengths: performanceReviews.strengths,
+        improvements: performanceReviews.improvements,
+        goals: performanceReviews.goals,
+        managerComments: performanceReviews.managerComments,
+        employeeComments: performanceReviews.employeeComments,
+        createdAt: performanceReviews.createdAt,
+        updatedAt: performanceReviews.updatedAt,
+        deletedAt: performanceReviews.deletedAt,
+        total: sql<number>`COUNT(*) OVER()`,
+    }).from(performanceReviews)
         .where(and(...conditions))
         .orderBy(desc(performanceReviews.createdAt))
         .limit(limit)
         .offset(offset)
-    return rows
+
+    const total = rows[0]?.total ?? 0
+    const data = rows.map(({ total: _, ...r }) => r)
+    return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 
 export async function createReview(tenantId: string, reviewerId: string, data: {

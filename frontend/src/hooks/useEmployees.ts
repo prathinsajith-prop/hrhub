@@ -120,6 +120,18 @@ export function useArchiveEmployee() {
     })
 }
 
+export function useUpdateEmployeeStatus() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, status }: { id: string; status: 'active' | 'suspended' | 'terminated' }) =>
+            api.patch<{ data: Employee }>(`/employees/${id}`, { status }).then(r => r.data),
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: ['employees'] })
+            qc.invalidateQueries({ queryKey: ['employees', variables.id] })
+        },
+    })
+}
+
 export interface SalaryRevision {
     id: string
     employeeId: string
