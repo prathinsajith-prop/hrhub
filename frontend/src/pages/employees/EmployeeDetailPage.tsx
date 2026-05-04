@@ -311,7 +311,7 @@ interface TransferDialogProps {
   open: boolean
   onOpenChange: (o: boolean) => void
   employeeId: string
-  orgUnits: Array<{ id: string; name: string; type: string }>
+  orgUnits: Array<{ id: string; name: string; type: string; parentId: string | null }>
   currentDept?: string | null
   currentDeptId?: string | null
 }
@@ -331,12 +331,30 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
   const [notes, setNotes] = React.useState('')
 
   const branches = React.useMemo(() => orgUnits.filter(u => u.type === 'branch'), [orgUnits])
-  const divisions = React.useMemo(() => orgUnits.filter(u => u.type === 'division'), [orgUnits])
-  const departments = React.useMemo(() => orgUnits.filter(u => u.type === 'department'), [orgUnits])
+
+  // Divisions filtered by selected branch; if no branch selected show all
+  const divisions = React.useMemo(() =>
+    orgUnits.filter(u => u.type === 'division' && (branchId === NONE || u.parentId === branchId)),
+    [orgUnits, branchId])
+
+  // Departments filtered by selected division; if no division selected show all
+  const departments = React.useMemo(() =>
+    orgUnits.filter(u => u.type === 'department' && (divisionId === NONE || u.parentId === divisionId)),
+    [orgUnits, divisionId])
+
+  function handleBranchChange(val: string) {
+    setBranchId(val)
+    setDivisionId(NONE)
+    setDepartmentId(NONE)
+  }
+
+  function handleDivisionChange(val: string) {
+    setDivisionId(val)
+    setDepartmentId(NONE)
+  }
 
   const selectedDept = departments.find(d => d.id === departmentId)
   const fromLabel = currentDept ?? (currentDeptId ? orgUnits.find(u => u.id === currentDeptId)?.name : null) ?? 'Current department'
-  const toLabel = selectedDept?.name ?? null
 
   function resetForm() {
     setTransferDate('')
@@ -360,8 +378,12 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
       toast.error('Required', 'Transfer date is required.')
       return
     }
-    if (branchId === NONE && divisionId === NONE && departmentId === NONE && !toDesignation && !newSalary) {
-      toast.error('Nothing to transfer', 'Please select at least one destination (branch, division, department, or new designation).')
+    if (departmentId === NONE) {
+      toast.error('Required', 'Please select a department to transfer to.')
+      return
+    }
+    if (!newSalary || parseFloat(newSalary) <= 0) {
+      toast.error('Required', 'New salary is required for a transfer.')
       return
     }
 
@@ -370,9 +392,9 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
         transferDate,
         toBranchId: branchId !== NONE ? branchId : null,
         toDivisionId: divisionId !== NONE ? divisionId : null,
-        toDepartmentId: departmentId !== NONE ? departmentId : null,
+        toDepartmentId: departmentId,
         toDesignation: toDesignation || null,
-        newSalary: newSalary ? parseFloat(newSalary) : null,
+        newSalary: parseFloat(newSalary),
         reason: reason || null,
         notes: notes || null,
       })
@@ -396,45 +418,51 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
             <DatePicker value={transferDate} onChange={v => setTransferDate(v ?? '')} placeholder="Select transfer date" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Cascading Branch → Division → Department */}
+          <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Branch</Label>
-              <Select value={branchId} onValueChange={setBranchId}>
-                <SelectTrigger><SelectValue placeholder="Branch…" /></SelectTrigger>
+              <Label className="text-sm">Branch</Label>
+              <Select value={branchId} onValueChange={handleBranchChange}>
+                <SelectTrigger><SelectValue placeholder="Select branch…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— Keep current —</SelectItem>
                   {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Division</Label>
-              <Select value={divisionId} onValueChange={setDivisionId}>
-                <SelectTrigger><SelectValue placeholder="Division…" /></SelectTrigger>
+              <Label className="text-sm">Division</Label>
+              <Select value={divisionId} onValueChange={handleDivisionChange} disabled={divisions.length === 0}>
+                <SelectTrigger><SelectValue placeholder={divisions.length === 0 ? 'No divisions available' : 'Select division…'} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>— Keep current —</SelectItem>
                   {divisions.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Department</Label>
-              <Select value={departmentId} onValueChange={setDepartmentId}>
-                <SelectTrigger><SelectValue placeholder="Department…" /></SelectTrigger>
+              <Label className="text-sm">Department <span className="text-destructive">*</span></Label>
+              <Select value={departmentId} onValueChange={setDepartmentId} disabled={departments.length === 0}>
+                <SelectTrigger
+                  className={departmentId === NONE ? 'border-destructive/50' : ''}
+                >
+                  <SelectValue placeholder={departments.length === 0 ? 'No departments available' : 'Select department…'} />
+                </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE}>— Keep current —</SelectItem>
                   {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          {toLabel && (
+          {selectedDept && (
             <div className="rounded-lg bg-muted/50 border px-3 py-2 text-xs">
               <span className="text-muted-foreground">Department: </span>
               <span className="font-medium">{fromLabel}</span>
               <span className="text-muted-foreground mx-1.5">→</span>
-              <span className="font-medium text-primary">{toLabel}</span>
+              <span className="font-medium text-primary">{selectedDept.name}</span>
             </div>
           )}
 
@@ -444,8 +472,13 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
           </div>
 
           <div className="space-y-1.5">
-            <Label>New Salary (AED) <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
-            <NumericInput placeholder="0.00" value={newSalary} onChange={e => setNewSalary(e.target.value)} />
+            <Label>New Salary (AED) <span className="text-destructive">*</span></Label>
+            <NumericInput
+              placeholder="0.00"
+              value={newSalary}
+              onChange={e => setNewSalary(e.target.value)}
+              className={!newSalary ? 'border-destructive/50' : ''}
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -462,7 +495,7 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
             <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={mutation.isPending}>
               Cancel
             </Button>
-            <Button type="submit" disabled={mutation.isPending}>
+            <Button type="submit" disabled={mutation.isPending || !transferDate || departmentId === NONE || !newSalary}>
               {mutation.isPending
                 ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Saving…</>
                 : 'Record Transfer'}
