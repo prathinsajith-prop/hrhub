@@ -2,7 +2,7 @@ import { db } from '../../db/index.js'
 import { employeeWarnings, employees } from '../../db/schema/index.js'
 import { eq, and, desc } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
-import { generateUploadUrl, buildS3Key, generateDownloadUrl, deleteObject } from '../../plugins/s3.js'
+import { generateUploadUrl, buildS3Key, generateDownloadUrl, deleteObject, objectExists } from '../../plugins/s3.js'
 import { z } from 'zod'
 
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -77,8 +77,12 @@ export default async function employeeWarningsRoutes(fastify: any): Promise<void
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const body = parse.data
 
-        if (body.s3Key && !body.s3Key.startsWith(`tenants/${request.user.tenantId}/`)) {
-            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'The referenced file does not belong to your organization' })
+        if (body.s3Key) {
+            if (!body.s3Key.startsWith(`tenants/${request.user.tenantId}/`)) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'The referenced file does not belong to your organization' })
+            }
+            const exists = await objectExists(body.s3Key)
+            if (!exists) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'The referenced file was not found in storage. Please upload the file first.' })
         }
 
         const [emp] = await db

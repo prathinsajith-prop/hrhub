@@ -53,9 +53,7 @@ export function ProfileTab() {
             const fd = new FormData()
             fd.append('file', file)
             const res = await api.upload<{ data: { avatarUrl: string } }>('/auth/me/avatar', fd)
-            // Cache-bust so the new image appears immediately
-            const fresh = `${res.data.avatarUrl}?t=${Date.now()}`
-            setUser({ avatarUrl: fresh })
+            setUser({ avatarUrl: res.data.avatarUrl })
             toast.success('Profile photo updated')
         } catch {
             toast.error('Upload failed', 'Could not update your profile photo.')
