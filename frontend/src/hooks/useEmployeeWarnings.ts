@@ -13,6 +13,13 @@ export interface EmployeeWarning {
     createdAt: string
 }
 
+export interface CreateWarningInput {
+    issueDate: string
+    expiryDate?: string
+    reason?: string
+    file?: File | null
+}
+
 export function useEmployeeWarnings(employeeId: string) {
     return useQuery({
         queryKey: ['employee-warnings', employeeId],
@@ -25,8 +32,37 @@ export function useEmployeeWarnings(employeeId: string) {
 export function useCreateEmployeeWarning(employeeId: string) {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (formData: FormData) =>
-            api.upload<{ data: EmployeeWarning }>(`/employees/${employeeId}/warnings`, formData).then(r => r.data),
+        mutationFn: async (input: CreateWarningInput) => {
+            let s3Key: string | undefined
+            let fileName: string | undefined
+
+            if (input.file) {
+                // Step 1: get presigned upload URL
+                const urlRes = await api.post<{ data: { uploadUrl: string; s3Key: string; fileName: string } }>(
+                    `/employees/${employeeId}/warnings/upload-url`,
+                    { fileName: input.file.name, contentType: input.file.type || 'application/octet-stream' },
+                )
+                s3Key = urlRes.data.s3Key
+                fileName = urlRes.data.fileName
+
+                // Step 2: PUT file directly to S3
+                const putRes = await fetch(urlRes.data.uploadUrl, {
+                    method: 'PUT',
+                    body: input.file,
+                    headers: { 'Content-Type': input.file.type || 'application/octet-stream' },
+                })
+                if (!putRes.ok) throw new Error('File upload failed')
+            }
+
+            // Step 3: create warning record with optional s3Key
+            return api.post<{ data: EmployeeWarning }>(`/employees/${employeeId}/warnings`, {
+                issueDate: input.issueDate,
+                expiryDate: input.expiryDate || undefined,
+                reason: input.reason || undefined,
+                s3Key,
+                fileName,
+            }).then(r => r.data)
+        },
         onSuccess: () => qc.invalidateQueries({ queryKey: ['employee-warnings', employeeId] }),
     })
 }

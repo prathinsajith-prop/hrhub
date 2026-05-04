@@ -41,7 +41,7 @@ import { useAttendance } from '@/hooks/useAttendance'
 import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
 import { useDependents, useCreateDependent, useUpdateDependent, useDeleteDependent, useEmployeeNotes, useAddEmployeeNote, useDeleteEmployeeNote, type Dependent } from '@/hooks/useEmployeeDependents'
 import { useActivityLogs, type ActivityLog } from '@/hooks/useAudit'
-import { useEmployeeWarnings, useCreateEmployeeWarning, useDeleteEmployeeWarning, useWarningDocumentUrl } from '@/hooks/useEmployeeWarnings'
+import { useEmployeeWarnings, useCreateEmployeeWarning, useDeleteEmployeeWarning, useWarningDocumentUrl, type CreateWarningInput } from '@/hooks/useEmployeeWarnings'
 import { useSponsoringEntities, useCreateSponsoringEntity, type SponsoringEntity } from '@/hooks/useSponsoringEntities'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { EditEmployeeDialog, EditEmploymentDialog, EditPayrollDialog, AssignAssetToEmployeeDialog } from '@/components/shared/action-dialogs'
@@ -161,9 +161,10 @@ interface ChangeSalaryDialogProps {
   onOpenChange: (o: boolean) => void
   employeeId: string
   currentBasic?: number | null
+  currentTotal?: number | null
 }
 
-function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic }: ChangeSalaryDialogProps) {
+function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, currentTotal }: ChangeSalaryDialogProps) {
   const mutation = useRecordSalaryRevision(employeeId)
 
   const [effectiveDate, setEffectiveDate] = React.useState('')
@@ -253,7 +254,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic }: Ch
           <div className="space-y-1.5">
             <Label htmlFor="cs-basic">New Basic Salary (AED) <span className="text-destructive">*</span></Label>
             {currentBasic != null && (
-              <p className="text-xs text-muted-foreground">Current: {formatCurrency(currentBasic)}</p>
+              <p className="text-xs text-muted-foreground">Current basic: {formatCurrency(currentBasic)}</p>
             )}
             <NumericInput
               id="cs-basic"
@@ -270,6 +271,9 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic }: Ch
 
           <div className="space-y-1.5">
             <Label htmlFor="cs-total">New Total Salary (AED) <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            {currentTotal != null && (
+              <p className="text-xs text-muted-foreground">Current total: {formatCurrency(currentTotal)}</p>
+            )}
             <NumericInput
               id="cs-total"
               placeholder={computedYearly != null ? `e.g. ${basicNum.toFixed(2)}` : '0.00'}
@@ -324,6 +328,7 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
   const [toDesignation, setToDesignation] = React.useState('')
   const [newSalary, setNewSalary] = React.useState('')
   const [reason, setReason] = React.useState('')
+  const [notes, setNotes] = React.useState('')
 
   const branches = React.useMemo(() => orgUnits.filter(u => u.type === 'branch'), [orgUnits])
   const divisions = React.useMemo(() => orgUnits.filter(u => u.type === 'division'), [orgUnits])
@@ -341,6 +346,7 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
     setToDesignation('')
     setNewSalary('')
     setReason('')
+    setNotes('')
   }
 
   function handleClose(o: boolean) {
@@ -365,9 +371,10 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
         toBranchId: branchId !== NONE ? branchId : null,
         toDivisionId: divisionId !== NONE ? divisionId : null,
         toDepartmentId: departmentId !== NONE ? departmentId : null,
-        toDesignation: toDesignation || undefined,
+        toDesignation: toDesignation || null,
         newSalary: newSalary ? parseFloat(newSalary) : null,
-        reason: reason || undefined,
+        reason: reason || null,
+        notes: notes || null,
       })
       toast.success('Transfer recorded', 'Employee transfer has been recorded.')
       handleClose(false)
@@ -443,7 +450,12 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
 
           <div className="space-y-1.5">
             <Label>Reason <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
-            <Textarea placeholder="Reason for transfer…" value={reason} onChange={e => setReason(e.target.value)} rows={3} />
+            <Textarea placeholder="Reason for transfer…" value={reason} onChange={e => setReason(e.target.value)} rows={2} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Notes <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+            <Textarea placeholder="Additional notes…" value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
           </div>
 
           <DialogFooter>
@@ -924,8 +936,10 @@ export function EmployeeDetailPage() {
                     {transfersData.map(tr => {
                       const fromDept = tr.fromDepartment ?? (tr.fromDepartmentId ? orgUnitName(tr.fromDepartmentId) : null)
                       const toDept = tr.toDepartment ?? (tr.toDepartmentId ? orgUnitName(tr.toDepartmentId) : null)
-                      const fromDesig = tr.fromDesignation
-                      const toDesig = tr.toDesignation
+                      const fromBranch = tr.fromBranchName ?? (tr.fromBranchId ? orgUnitName(tr.fromBranchId) : null)
+                      const toBranch = tr.toBranchName ?? (tr.toBranchId ? orgUnitName(tr.toBranchId) : null)
+                      const fromDiv = tr.fromDivisionName ?? (tr.fromDivisionId ? orgUnitName(tr.fromDivisionId) : null)
+                      const toDiv = tr.toDivisionName ?? (tr.toDivisionId ? orgUnitName(tr.toDivisionId) : null)
                       return (
                         <div key={tr.id} className="py-3 flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
@@ -933,7 +947,19 @@ export function EmployeeDetailPage() {
                               <Badge variant="info" className="text-[10px] shrink-0">Transfer</Badge>
                               <span className="text-xs text-muted-foreground">{formatDate(tr.transferDate)}</span>
                             </div>
-                            <div className="mt-1 text-sm">
+                            <div className="mt-1 space-y-0.5">
+                              {(fromBranch || toBranch) && (
+                                <p className="text-xs text-muted-foreground">
+                                  <span className="font-medium text-foreground/60">Branch: </span>
+                                  {fromBranch ?? '—'} &rarr; <span className="font-medium text-foreground">{toBranch ?? '—'}</span>
+                                </p>
+                              )}
+                              {(fromDiv || toDiv) && (
+                                <p className="text-xs text-muted-foreground">
+                                  <span className="font-medium text-foreground/60">Division: </span>
+                                  {fromDiv ?? '—'} &rarr; <span className="font-medium text-foreground">{toDiv ?? '—'}</span>
+                                </p>
+                              )}
                               {(fromDept || toDept) && (
                                 <p className="text-sm text-foreground">
                                   <span className="text-muted-foreground">{fromDept ?? '—'}</span>
@@ -941,18 +967,22 @@ export function EmployeeDetailPage() {
                                   <span className="font-medium">{toDept ?? '—'}</span>
                                 </p>
                               )}
-                              {(fromDesig || toDesig) && (
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {fromDesig ?? '—'} &rarr; {toDesig ?? '—'}
+                              {(tr.fromDesignation || tr.toDesignation) && (
+                                <p className="text-xs text-muted-foreground">
+                                  <span className="font-medium text-foreground/60">Designation: </span>
+                                  {tr.fromDesignation ?? '—'} &rarr; <span className="font-medium text-foreground">{tr.toDesignation ?? '—'}</span>
                                 </p>
                               )}
                               {tr.newSalary && (
-                                <p className="text-xs text-muted-foreground mt-0.5">
+                                <p className="text-xs text-muted-foreground">
                                   New salary: <span className="font-medium text-foreground">{formatCurrency(parseFloat(tr.newSalary))}</span>
                                 </p>
                               )}
                               {tr.reason && (
-                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{tr.reason}</p>
+                                <p className="text-xs text-muted-foreground line-clamp-1">{tr.reason}</p>
+                              )}
+                              {tr.notes && (
+                                <p className="text-xs text-muted-foreground/70 italic line-clamp-1">{tr.notes}</p>
                               )}
                             </div>
                           </div>
@@ -1276,7 +1306,9 @@ export function EmployeeDetailPage() {
                           <th className="text-right font-medium text-muted-foreground px-3 py-2.5">Prev. Basic</th>
                           <th className="text-right font-medium text-muted-foreground px-3 py-2.5">New Basic</th>
                           <th className="text-right font-medium text-muted-foreground px-3 py-2.5">Change</th>
+                          <th className="text-right font-medium text-muted-foreground px-3 py-2.5 hidden md:table-cell">New Total</th>
                           <th className="text-left font-medium text-muted-foreground px-3 py-2.5 hidden sm:table-cell">Remarks</th>
+                          <th className="text-left font-medium text-muted-foreground px-3 py-2.5 hidden lg:table-cell">Approved By</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1305,8 +1337,14 @@ export function EmployeeDetailPage() {
                                   </span>
                                 ) : '—'}
                               </td>
+                              <td className="px-3 py-2.5 text-right text-muted-foreground hidden md:table-cell">
+                                {rev.newTotalSalary ? formatCurrency(parseFloat(rev.newTotalSalary)) : '—'}
+                              </td>
                               <td className="px-3 py-2.5 text-muted-foreground hidden sm:table-cell max-w-[180px] truncate">
                                 {rev.reason ?? '—'}
+                              </td>
+                              <td className="px-3 py-2.5 text-muted-foreground hidden lg:table-cell text-xs">
+                                {rev.approvedByName ?? '—'}
                               </td>
                             </tr>
                           )
@@ -1845,6 +1883,7 @@ export function EmployeeDetailPage() {
           onOpenChange={setChangeSalaryOpen}
           employeeId={id}
           currentBasic={e.basicSalary ? parseFloat(String(e.basicSalary)) : null}
+          currentTotal={e.totalSalary ? parseFloat(String(e.totalSalary)) : null}
         />
       )}
 
@@ -1969,7 +2008,7 @@ function AddWarningDialog({
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
-  onSave: (formData: FormData) => void
+  onSave: (input: CreateWarningInput) => void
   isSaving: boolean
 }) {
   const [issueDate, setIssueDate] = React.useState('')
@@ -1997,12 +2036,12 @@ function AddWarningDialog({
 
   function handleSubmit() {
     if (!issueDate) { toast.warning('Issue date required'); return }
-    const fd = new FormData()
-    fd.append('issueDate', issueDate)
-    if (expiryDate) fd.append('expiryDate', expiryDate)
-    if (reason.trim()) fd.append('reason', reason.trim())
-    if (file) fd.append('file', file)
-    onSave(fd)
+    onSave({
+      issueDate,
+      expiryDate: expiryDate || undefined,
+      reason: reason.trim() || undefined,
+      file: file ?? undefined,
+    })
   }
 
   return (
