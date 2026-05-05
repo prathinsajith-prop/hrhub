@@ -570,7 +570,9 @@ export function PayrollPage() {
   const currentYear = now.getFullYear()
 
   const { data: payrollData, isLoading, isFetching, refetch } = usePayrollRuns({ year: currentYear })
+  const { data: prevYearData } = usePayrollRuns({ year: currentYear - 1 })
   const payrollRuns = useMemo<PayrollRun[]>(() => (payrollData?.data as PayrollRun[]) ?? [], [payrollData?.data])
+  const prevYearRuns = useMemo<PayrollRun[]>(() => (prevYearData?.data as PayrollRun[]) ?? [], [prevYearData?.data])
 
   const runPayroll = useRunPayroll()
   const createRun = useCreatePayrollRun()
@@ -585,6 +587,12 @@ export function PayrollPage() {
 
   // Disable months in the future when selected year = current year
   const maxSelectableMonth = createYear === currentYear ? currentMonth : 12
+
+  // Months that already have a payroll run for the selected year
+  const existingRunMonths = useMemo(() => {
+    const runs = createYear === currentYear ? payrollRuns : prevYearRuns
+    return new Set(runs.map(r => r.month))
+  }, [createYear, currentYear, payrollRuns, prevYearRuns])
 
   const draftRun = payrollRuns.find(r => r.status === 'draft')
   const latestPaidRun = payrollRuns.find(r => r.status === 'paid' || r.status === 'wps_submitted')
@@ -832,7 +840,18 @@ export function PayrollPage() {
       <PayslipsSheet run={selectedRun} open={payslipsOpen} onClose={() => setPayslipsOpen(false)} />
 
       {/* Create run dialog */}
-      <Dialog open={createOpen} onOpenChange={(v) => { if (!createRun.isPending) { setCreateOpen(v); if (!v) { setCreateMonth(currentMonth); setCreateYear(currentYear) } } }}>
+      <Dialog open={createOpen} onOpenChange={(v) => {
+        if (!createRun.isPending) {
+          if (v) {
+            // pick first available month for current year when opening
+            const taken = new Set(payrollRuns.map(r => r.month))
+            const first = Array.from({ length: currentMonth }, (_, i) => i + 1).find(m => !taken.has(m))
+            setCreateMonth(first ?? currentMonth)
+            setCreateYear(currentYear)
+          }
+          setCreateOpen(v)
+        }
+      }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>New Payroll Run</DialogTitle>
@@ -847,10 +866,12 @@ export function PayrollPage() {
                   onValueChange={v => {
                     const y = Number(v)
                     setCreateYear(y)
-                    // clamp month when switching to current year
-                    if (y === currentYear && createMonth > currentMonth) {
-                      setCreateMonth(currentMonth)
-                    }
+                    // pick the first available (past, non-existing) month for the new year
+                    const max = y === currentYear ? currentMonth : 12
+                    const runs = y === currentYear ? payrollRuns : prevYearRuns
+                    const taken = new Set(runs.map(r => r.month))
+                    const first = Array.from({ length: max }, (_, i) => i + 1).find(m => !taken.has(m))
+                    setCreateMonth(first ?? 1)
                   }}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -869,10 +890,13 @@ export function PayrollPage() {
                     {MONTH_NAMES.map((name, i) => {
                       const monthNum = i + 1
                       const isFuture = monthNum > maxSelectableMonth
+                      const hasRun = existingRunMonths.has(monthNum)
+                      const isDisabled = isFuture || hasRun
                       return (
-                        <SelectItem key={monthNum} value={String(monthNum)} disabled={isFuture}>
-                          <span className={cn(isFuture && 'text-muted-foreground')}>{name}</span>
+                        <SelectItem key={monthNum} value={String(monthNum)} disabled={isDisabled}>
+                          <span className={cn(isDisabled && 'text-muted-foreground')}>{name}</span>
                           {isFuture && <span className="ml-1.5 text-[10px] text-muted-foreground">(future)</span>}
+                          {!isFuture && hasRun && <span className="ml-1.5 text-[10px] text-muted-foreground">(exists)</span>}
                         </SelectItem>
                       )
                     })}
@@ -890,7 +914,7 @@ export function PayrollPage() {
             <Separator />
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setCreateOpen(false)} disabled={createRun.isPending}>Cancel</Button>
-              <Button onClick={handleCreateRun} loading={createRun.isPending}>Create Draft</Button>
+              <Button onClick={handleCreateRun} loading={createRun.isPending} disabled={existingRunMonths.has(createMonth)}>Create Draft</Button>
             </div>
           </div>
         </DialogContent>

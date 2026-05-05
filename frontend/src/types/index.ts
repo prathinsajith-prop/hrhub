@@ -213,6 +213,8 @@ export interface Document {
   uploadedByName?: string | null
   status: DocStatus
   verified: boolean
+  verifiedAt?: string | null
+  verifiedByName?: string | null
   s3Key?: string
 }
 

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useTranslation } from 'react-i18next'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Toaster } from '@/components/ui/overlays'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary'
 import { useAuthStore } from '@/store/authStore'
 import { canAccessRoute, type RouteKey } from '@/lib/permissions'
@@ -141,6 +142,7 @@ function RoleRoute({ routeKey, children }: { routeKey: RouteKey; children: React
 export default function App() {
   return (
     <BrowserRouter>
+      <TooltipProvider delayDuration={300}>
       <TitleManager />
       <Suspense fallback={<PageLoader />}>
         <Routes>
@@ -201,6 +203,7 @@ export default function App() {
         </Routes>
       </Suspense>
       <Toaster />
+      </TooltipProvider>
     </BrowserRouter>
   )
 }

@@ -123,10 +123,21 @@ const columns = (
     {
       accessorKey: 'verified',
       header: 'Verified',
-      cell: ({ getValue }) => getValue()
-        ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-        : <Clock className="h-4 w-4 text-amber-400" />,
-      size: 80,
+      cell: ({ row: { original: d } }) => d.verified ? (
+        <div>
+          <div className="flex items-center gap-1">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            {d.verifiedByName && <span className="text-[11px] text-muted-foreground truncate max-w-[100px]">{d.verifiedByName}</span>}
+          </div>
+          {d.verifiedAt && <p className="text-[10px] text-muted-foreground mt-0.5">{formatDate(d.verifiedAt)}</p>}
+        </div>
+      ) : (
+        <div className="flex items-center gap-1">
+          <Clock className="h-3.5 w-3.5 text-amber-400" />
+          <span className="text-[11px] text-muted-foreground">Pending</span>
+        </div>
+      ),
+      size: 140,
     },
     {
       accessorKey: 'createdAt',

@@ -74,6 +74,8 @@ interface DocRecord {
   fileSize?: number | null
   notes?: string | null
   createdAt: string
+  verifiedAt?: string | null
+  verifiedByName?: string | null
 }
 
 interface AttendanceRecord {
@@ -1423,6 +1425,12 @@ export function EmployeeDetailPage() {
                                     </span>
                                   )}
                                   <span className="text-[11px] text-muted-foreground">Uploaded {formatDate(doc.createdAt)}</span>
+                                  {doc.status === 'valid' && doc.verifiedByName && (
+                                    <span className="text-[11px] text-emerald-600 flex items-center gap-1">
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      Approved by {doc.verifiedByName}{doc.verifiedAt ? ` on ${formatDate(doc.verifiedAt)}` : ''}
+                                    </span>
+                                  )}
                                 </div>
                                 {doc.notes && <p className="text-[11px] text-muted-foreground/70 mt-1 italic truncate">{doc.notes}</p>}
                               </div>

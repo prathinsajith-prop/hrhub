@@ -1,4 +1,4 @@
-import { eq, and, desc, lte, gte, isNull, isNotNull, sql, getTableColumns, or, lt } from 'drizzle-orm'
+import { eq, and, desc, lte, gte, isNull, isNotNull, sql, getTableColumns, or, lt, aliasedTable } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
@@ -22,6 +22,8 @@ const DOC_EXPIRY_MAP: Record<string, {
 }
 
 type NewDocument = InferInsertModel<typeof documents>
+
+const verifierUsers = aliasedTable(users, 'verifier')
 
 export async function listDocuments(tenantId: string, params: { employeeId?: string; category?: string; status?: string; from?: string; to?: string; limit: number; offset: number; after?: string }) {
     const { employeeId, category, status, from, to, limit, offset, after } = params
@@ -52,10 +54,12 @@ export async function listDocuments(tenantId: string, params: { employeeId?: str
         employeeAvatarUrl: employees.avatarUrl,
         employeeDepartment: employees.department,
         uploadedByName: users.name,
+        verifiedByName: verifierUsers.name,
     })
         .from(documents)
         .leftJoin(employees, eq(employees.id, documents.employeeId))
         .leftJoin(users, eq(users.id, documents.uploadedBy))
+        .leftJoin(verifierUsers, eq(verifierUsers.id, documents.verifiedBy))
         .where(and(...conditions))
         .orderBy(desc(documents.createdAt), desc(documents.id))
         .limit(cursor ? pageSize : limit)
