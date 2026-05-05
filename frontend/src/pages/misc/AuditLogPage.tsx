@@ -133,10 +133,17 @@ export function AuditLogPage() {
     const actorRoleFilter = (auditSearch.appliedFilters.actorRole?.value as string | undefined) ?? ''
     const entityNameFilter = (auditSearch.appliedFilters.entityName?.value as string | undefined) ?? ''
     const ipFilter = (auditSearch.appliedFilters.ipAddress?.value as string | undefined) ?? ''
-    const createdAtRange = (auditSearch.appliedFilters.createdAt?.value as [string | null, string | null] | undefined) ?? null
+    const createdAtRange = (auditSearch.appliedFilters.createdAt?.value as { from?: string; to?: string } | undefined) ?? null
 
     const { data, isLoading, isFetching, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteActivityLogs({
         entityType: entityTypeFilter || undefined,
+        action: actionFilter || undefined,
+        actorRole: actorRoleFilter || undefined,
+        actorName: actorNameFilter || undefined,
+        entityName: entityNameFilter || undefined,
+        from: createdAtRange?.from || undefined,
+        to: createdAtRange?.to || undefined,
+        ipAddress: ipFilter || undefined,
         pageSize: 30,
     })
 
@@ -172,30 +179,6 @@ export function AuditLogPage() {
         if (cutoff !== null) {
             result = result.filter(l => now - new Date(l.createdAt).getTime() <= cutoff)
         }
-        if (createdAtRange) {
-            const [from, to] = createdAtRange
-            if (from) {
-                const fromTs = new Date(from).getTime()
-                result = result.filter(l => new Date(l.createdAt).getTime() >= fromTs)
-            }
-            if (to) {
-                const toTs = new Date(to).getTime() + 24 * 3600 * 1000 - 1
-                result = result.filter(l => new Date(l.createdAt).getTime() <= toTs)
-            }
-        }
-        if (actionFilter) result = result.filter(l => l.action === actionFilter)
-        if (actorRoleFilter) result = result.filter(l => l.actorRole === actorRoleFilter)
-        if (actorNameFilter) {
-            const q = actorNameFilter.toLowerCase()
-            result = result.filter(l => (l.actorName ?? '').toLowerCase().includes(q))
-        }
-        if (entityNameFilter) {
-            const q = entityNameFilter.toLowerCase()
-            result = result.filter(l => (l.entityName ?? '').toLowerCase().includes(q))
-        }
-        if (ipFilter) {
-            result = result.filter(l => (l.ipAddress ?? '').includes(ipFilter))
-        }
         const search = auditSearch.searchInput.trim()
         if (search) {
             const q = search.toLowerCase()
@@ -207,7 +190,7 @@ export function AuditLogPage() {
             )
         }
         return result
-    }, [logs, auditSearch.searchInput, actionFilter, actorRoleFilter, actorNameFilter, entityNameFilter, ipFilter, createdAtRange, dateRange])
+    }, [logs, auditSearch.searchInput, dateRange])
 
     const grouped = useMemo(() => {
         const map = new Map<string, ActivityLog[]>()

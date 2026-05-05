@@ -11,6 +11,24 @@ export function withTimestamp<T extends Record<string, unknown>>(data: T): T & {
     return { ...data, updatedAt: new Date() }
 }
 
+/**
+ * Safely extracts rows from a db.execute() result.
+ *
+ * Drizzle's execute() return type varies by driver:
+ *   - postgres-js  → returns rows directly as T[]
+ *   - Neon HTTP    → returns { rows: T[], rowCount: number, ... }
+ *
+ * Use this instead of [...result] or (result as T[]) to avoid
+ * "rows is not iterable" TypeErrors at runtime.
+ */
+export function extractRows<T = Record<string, unknown>>(result: unknown): T[] {
+    if (Array.isArray(result)) return result as T[]
+    if (result && typeof result === 'object' && Array.isArray((result as any).rows)) {
+        return (result as any).rows as T[]
+    }
+    return []
+}
+
 /** Keyset cursor = {c: createdAt ISO string, i: uuid} encoded as base64url */
 export interface CursorPayload { c: string; i: string }
 

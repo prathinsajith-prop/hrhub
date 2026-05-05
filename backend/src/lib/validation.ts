@@ -177,6 +177,7 @@ export const listEmployeesSchema = paginationSchema.extend({
     search: z.string().max(100).optional(),
     status: z.enum(['active', 'onboarding', 'suspended', 'terminated', 'visa_expired']).optional(),
     department: z.string().max(100).optional(),
+    filter: z.string().max(2000).optional(),
 })
 
 // ── Leave ─────────────────────────────────────────────────────────────────────

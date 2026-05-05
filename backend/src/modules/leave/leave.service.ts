@@ -7,21 +7,34 @@ import { leaveRequests, leavePolicies, leaveBalances, publicHolidays, attendance
 import { employees } from '../../db/schema/employees.js'
 import { users } from '../../db/schema/users.js'
 import { sendEmail } from '../../plugins/email.js'
+import { Conditions } from '../../lib/filters.js'
 import type { InferInsertModel } from 'drizzle-orm'
+
+const LEAVE_FIELD_MAP = {
+    status: leaveRequests.status,
+    leaveType: leaveRequests.leaveType,
+    startDate: leaveRequests.startDate,
+    endDate: leaveRequests.endDate,
+    days: leaveRequests.days,
+}
+const LEAVE_ALLOWED = new Set(Object.keys(LEAVE_FIELD_MAP))
 
 type NewLeaveRequest = InferInsertModel<typeof leaveRequests>
 
-export async function listLeaveRequests(tenantId: string, params: { employeeId?: string; department?: string; status?: string; leaveType?: string; from?: string; to?: string; limit: number; offset: number }) {
-    const { employeeId, department, status, leaveType, from, to, limit, offset } = params
-    const conditions = [eq(leaveRequests.tenantId, tenantId), isNull(leaveRequests.deletedAt)]
-    if (employeeId) conditions.push(eq(leaveRequests.employeeId, employeeId))
-    if (department) conditions.push(eq(employees.department, department))
-    if (status) conditions.push(eq(leaveRequests.status, status as never))
-    if (leaveType) conditions.push(eq(leaveRequests.leaveType, leaveType as never))
-    // Date-range overlap: include any request that intersects [from, to].
-    // (startDate <= to) AND (endDate >= from)
-    if (to) conditions.push(lte(leaveRequests.startDate, to))
-    if (from) conditions.push(gte(leaveRequests.endDate, from))
+export async function listLeaveRequests(tenantId: string, params: { employeeId?: string; department?: string; status?: string; leaveType?: string; from?: string; to?: string; search?: string; filter?: string; limit: number; offset: number }) {
+    const { employeeId, department, status, leaveType, from, to, search, filter, limit, offset } = params
+
+    const conds = Conditions.create()
+        .tenant(leaveRequests.tenantId, tenantId)
+        .notDeleted(leaveRequests.deletedAt)
+        .match(leaveRequests.employeeId, employeeId)
+        .match(employees.department, department)
+        .match(leaveRequests.status, status)
+        .match(leaveRequests.leaveType, leaveType)
+        .nameSearch(search, employees.firstName, employees.lastName)
+        // Date-range overlap: include any request that intersects [from, to]
+        .dateOverlap(leaveRequests.startDate, leaveRequests.endDate, from, to)
+        .filterWithName(filter, LEAVE_FIELD_MAP, LEAVE_ALLOWED, employees.firstName, employees.lastName)
 
     const handoverEmployee = aliasedTable(employees, 'handover_emp')
     const rows = await db.select({
@@ -36,7 +49,7 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
         .from(leaveRequests)
         .leftJoin(employees, eq(employees.id, leaveRequests.employeeId))
         .leftJoin(handoverEmployee, eq(handoverEmployee.id, leaveRequests.handoverTo))
-        .where(and(...conditions))
+        .where(conds.where())
         .orderBy(desc(leaveRequests.createdAt))
         .limit(limit).offset(offset)
 

@@ -36,4 +36,5 @@ export * from './employee_notes.js'
 export * from './employee_warnings.js'
 export * from './grade_levels.js'
 export * from './sponsoring_entities.js'
+export * from './employee_no_sequences.js'
 // leave.ts re-export already covers leaveAdjustments, airTickets, leaveOffsets via wildcard above

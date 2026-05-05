@@ -1,20 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
+import { buildSearchQuery, type AppliedFiltersMap } from '@/lib/filters'
 
-interface LeaveParams { employeeId?: string; department?: string; status?: string; leaveType?: string; from?: string; to?: string; limit?: number; offset?: number }
-
-function toQS(params: Record<string, string | number | undefined>) {
-    const q = new URLSearchParams()
-    Object.entries(params).forEach(([k, v]) => v !== undefined && q.set(k, String(v)))
-    return q.toString()
-}
+interface LeaveParams { employeeId?: string; department?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number }
 
 export function useLeaveRequests(params: LeaveParams = {}) {
-    const { employeeId, department, status, leaveType, from, to, limit = 20, offset = 0 } = params
+    const { employeeId, department, q, filters, limit = 20, offset = 0 } = params
+    const qs = buildSearchQuery(q, filters, { limit, offset })
+    const extra = new URLSearchParams()
+    if (employeeId) extra.set('employeeId', employeeId)
+    if (department) extra.set('department', department)
+    const extraStr = extra.toString()
     return useQuery({
-        queryKey: ['leave', employeeId, department, status, leaveType, from, to, limit, offset],
-        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/leave?${toQS({ employeeId, department, status, leaveType, from, to, limit, offset })}`),
+        queryKey: ['leave', employeeId, department, q, filters, limit, offset],
+        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/leave?${qs}${extraStr ? `&${extraStr}` : ''}`),
         staleTime: 30_000,
     })
 }
@@ -47,6 +47,7 @@ export function useApproveLeave() {
             api.post(`/leave/${id}/approve`, { approved }),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['leave'] })
+            qc.invalidateQueries({ queryKey: ['leave-balance'] })
             qc.invalidateQueries({ queryKey: ['dashboard'] })
         },
         onError: (err: Error) => toast.error('Action failed', err?.message ?? 'Could not update the leave request.'),

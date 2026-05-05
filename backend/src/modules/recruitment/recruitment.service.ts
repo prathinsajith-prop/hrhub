@@ -1,22 +1,43 @@
-import { eq, and, ilike, asc, desc, isNull, sql, getTableColumns, ne } from 'drizzle-orm'
+import { eq, and, asc, desc, isNull, sql, getTableColumns, ne } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { recruitmentJobs, jobApplications } from '../../db/schema/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
+import { Conditions } from '../../lib/filters.js'
 import type { InferInsertModel } from 'drizzle-orm'
+
+const JOB_FIELD_MAP = {
+    status: recruitmentJobs.status,
+    department: recruitmentJobs.department,
+    title: recruitmentJobs.title,
+    location: recruitmentJobs.location,
+    openings: recruitmentJobs.openings,
+    minSalary: recruitmentJobs.minSalary,
+    maxSalary: recruitmentJobs.maxSalary,
+    closingDate: recruitmentJobs.closingDate,
+}
+const JOB_ALLOWED = new Set(Object.keys(JOB_FIELD_MAP))
+
+const APP_FIELD_MAP = { stage: jobApplications.stage, jobId: jobApplications.jobId }
+const APP_ALLOWED = new Set(Object.keys(APP_FIELD_MAP))
 
 type NewJob = InferInsertModel<typeof recruitmentJobs>
 type NewApplication = InferInsertModel<typeof jobApplications>
 
-export async function listJobs(tenantId: string, params: { status?: string; department?: string; limit: number; offset: number }) {
-    const { status, department, limit, offset } = params
-    const conditions = [eq(recruitmentJobs.tenantId, tenantId), isNull(recruitmentJobs.deletedAt)]
-    if (status) conditions.push(eq(recruitmentJobs.status, status as never))
-    if (department) conditions.push(eq(recruitmentJobs.department, department))
+export async function listJobs(tenantId: string, params: { status?: string; department?: string; q?: string; filter?: string; limit: number; offset: number }) {
+    const { status, department, q, filter, limit, offset } = params
+
+    const conds = Conditions.create()
+        .tenant(recruitmentJobs.tenantId, tenantId)
+        .notDeleted(recruitmentJobs.deletedAt)
+        .match(recruitmentJobs.status, status)
+        .match(recruitmentJobs.department, department)
+        .search(q, recruitmentJobs.title, recruitmentJobs.department)
+        .filter(filter, JOB_FIELD_MAP, JOB_ALLOWED)
 
     const rows = await db.select({ ...getTableColumns(recruitmentJobs), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
         .from(recruitmentJobs)
-        .where(and(...conditions))
+        .where(conds.where())
         .orderBy(desc(recruitmentJobs.createdAt))
         .limit(limit).offset(offset)
 
@@ -52,15 +73,20 @@ export async function updateJob(tenantId: string, id: string, data: Partial<NewJ
     return row ?? null
 }
 
-export async function listApplications(tenantId: string, params: { jobId?: string; stage?: string; limit: number; offset: number }) {
-    const { jobId, stage, limit, offset } = params
-    const conditions = [eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)]
-    if (jobId) conditions.push(eq(jobApplications.jobId, jobId))
-    if (stage) conditions.push(eq(jobApplications.stage, stage as never))
+export async function listApplications(tenantId: string, params: { jobId?: string; stage?: string; q?: string; filter?: string; limit: number; offset: number }) {
+    const { jobId, stage, q, filter, limit, offset } = params
+
+    const conds = Conditions.create()
+        .tenant(jobApplications.tenantId, tenantId)
+        .notDeleted(jobApplications.deletedAt)
+        .match(jobApplications.jobId, jobId)
+        .match(jobApplications.stage, stage)
+        .search(q, jobApplications.name, jobApplications.email)
+        .filter(filter, APP_FIELD_MAP, APP_ALLOWED)
 
     const rows = await db.select({ ...getTableColumns(jobApplications), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
         .from(jobApplications)
-        .where(and(...conditions))
+        .where(conds.where())
         .orderBy(desc(jobApplications.createdAt))
         .limit(limit).offset(offset)
 

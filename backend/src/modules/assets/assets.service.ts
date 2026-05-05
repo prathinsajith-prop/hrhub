@@ -1,5 +1,6 @@
-import { eq, and, desc, ilike, isNull, sql, getTableColumns, or, lt, count } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns, count } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
+import { Conditions } from '../../lib/filters.js'
 import { db } from '../../db/index.js'
 import { assets, assetCategories, assetAssignments, assetMaintenance, employees, tenants } from '../../db/schema/index.js'
 import { cacheDel } from '../../lib/redis.js'
@@ -69,21 +70,15 @@ export async function listAssets(
 ) {
     const { status, categoryId, search, limit, offset, after } = params
 
-    const conditions = [eq(assets.tenantId, tenantId), isNull(assets.deletedAt)]
-    if (status) conditions.push(eq(assets.status, status as never))
-    if (categoryId) conditions.push(eq(assets.categoryId, categoryId))
-    if (search) conditions.push(ilike(assets.name, `%${search}%`))
-
     const cursor = after ? decodeCursor(after) : null
-    if (cursor) {
-        const cursorDate = new Date(cursor.c)
-        conditions.push(
-            or(
-                lt(assets.createdAt, cursorDate),
-                and(eq(assets.createdAt, cursorDate), lt(assets.id, cursor.i))
-            )!
-        )
-    }
+
+    const conds = Conditions.create()
+        .tenant(assets.tenantId, tenantId)
+        .notDeleted(assets.deletedAt)
+        .match(assets.status, status)
+        .match(assets.categoryId, categoryId)
+        .like(assets.name, search)
+        .cursor(after, assets.createdAt, assets.id)
 
     const pageSize = limit + 1
     const rows = await db
@@ -111,7 +106,7 @@ export async function listAssets(
         })
         .from(assets)
         .leftJoin(assetCategories, eq(assetCategories.id, assets.categoryId))
-        .where(and(...conditions))
+        .where(conds.where())
         .orderBy(desc(assets.createdAt), desc(assets.id))
         .limit(cursor ? pageSize : limit)
         .offset(cursor ? 0 : offset)
@@ -129,7 +124,7 @@ export async function listAssets(
         const [countRow] = await db
             .select({ count: sql<number>`COUNT(*)`.as('count') })
             .from(assets)
-            .where(and(...conditions))
+            .where(conds.where())
         total = Number(countRow?.count ?? 0)
     }
 

@@ -49,7 +49,7 @@ function RequestLoanDialog({ onClose }: { onClose: () => void }) {
                     <DialogTitle>{t('loans.requestLoan')}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={`${t('loans.amount')} (AED)`} required error={errors.amount}>
                             <NumericInput
                                 maxDecimals={2}

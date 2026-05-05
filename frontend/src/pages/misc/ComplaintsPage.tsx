@@ -4,15 +4,16 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import type { FilterConfig } from '@/lib/filters'
 import {
     AlertCircle, AlertTriangle, CheckCircle2, Clock, ChevronRight,
-    Search, ShieldAlert, ArrowUpRight,
+    ShieldAlert, ArrowUpRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -119,7 +120,7 @@ function ComplaintDetail({ complaint, onClose }: { complaint: Complaint; onClose
                         </div>
 
                         {/* Meta */}
-                        <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                             <div>
                                 <p className="text-xs text-muted-foreground">{t('complaints.detail.submittedBy')}</p>
                                 <p className="font-medium">{complaint.submittedByName ?? '—'}</p>
@@ -246,20 +247,46 @@ function ComplaintRow({ c, onClick }: { c: Complaint; onClick: () => void }) {
     )
 }
 
+const COMPLAINT_FILTERS: FilterConfig[] = [
+    {
+        name: 'status',
+        label: 'Status',
+        type: 'select',
+        options: [
+            { value: 'submitted', label: 'Submitted' },
+            { value: 'under_review', label: 'Under Review' },
+            { value: 'escalated', label: 'Escalated' },
+            { value: 'resolved', label: 'Resolved' },
+        ],
+    },
+    {
+        name: 'severity',
+        label: 'Severity',
+        type: 'select',
+        options: [
+            { value: 'critical', label: 'Critical' },
+            { value: 'high', label: 'High' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'low', label: 'Low' },
+        ],
+    },
+]
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function ComplaintsPage() {
     const { t } = useTranslation()
-    const [search, setSearch] = useState('')
-    const [status, setStatus] = useState('all')
-    const [severity, setSeverity] = useState('all')
     const [selected, setSelected] = useState<Complaint | null>(null)
+
+    const compSearch = useSearchFilters({ storageKey: 'complaints.search', availableFilters: COMPLAINT_FILTERS })
+    const statusVal = compSearch.appliedFilters.status?.value
+    const severityVal = compSearch.appliedFilters.severity?.value
 
     const { data: stats, isLoading: statsLoading } = useComplaintStats()
     const { data: list = [], isLoading } = useComplaints({
-        search: search || undefined,
-        status: status !== 'all' ? status : undefined,
-        severity: severity !== 'all' ? severity : undefined,
+        search: compSearch.searchInput || undefined,
+        status: typeof statusVal === 'string' ? statusVal : undefined,
+        severity: typeof severityVal === 'string' ? severityVal : undefined,
     })
 
     return (
@@ -290,42 +317,14 @@ export function ComplaintsPage() {
                 }
             </div>
 
-            {/* Filters */}
-            <div className="flex flex-wrap gap-3 mb-4">
-                <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder={t('complaints.filters.search')}
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="pl-9"
-                    />
-                </div>
-                <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger className="w-[160px]">
-                        <SelectValue placeholder={t('complaints.filters.allStatuses')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">{t('complaints.filters.allStatuses')}</SelectItem>
-                        <SelectItem value="submitted">{t('complaints.status.submitted')}</SelectItem>
-                        <SelectItem value="under_review">{t('complaints.status.under_review')}</SelectItem>
-                        <SelectItem value="escalated">{t('complaints.status.escalated')}</SelectItem>
-                        <SelectItem value="resolved">{t('complaints.status.resolved')}</SelectItem>
-                    </SelectContent>
-                </Select>
-                <Select value={severity} onValueChange={setSeverity}>
-                    <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder={t('complaints.filters.allSeverity')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">{t('complaints.filters.allSeverity')}</SelectItem>
-                        <SelectItem value="critical">{t('complaints.severity.critical')}</SelectItem>
-                        <SelectItem value="high">{t('complaints.severity.high')}</SelectItem>
-                        <SelectItem value="medium">{t('complaints.severity.medium')}</SelectItem>
-                        <SelectItem value="low">{t('complaints.severity.low')}</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
+            {/* Search + Filters */}
+            <AdvancedSearchBar
+                search={compSearch}
+                filters={COMPLAINT_FILTERS}
+                placeholder={t('complaints.filters.search')}
+                resultCount={list.length}
+                className="mb-4"
+            />
 
             {/* Table */}
             <div className="rounded-xl border overflow-hidden">

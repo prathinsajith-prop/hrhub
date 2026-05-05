@@ -64,7 +64,7 @@ export function useInfiniteLoginHistory(params: { userId?: string; pageSize?: nu
     })
 }
 
-export function useActivityLogs(params: { entityType?: string; entityId?: string; userId?: string; limit?: number } = {}) {
+export function useActivityLogs(params: { entityType?: string; entityId?: string; userId?: string; action?: string; actorRole?: string; actorName?: string; entityName?: string; from?: string; to?: string; ipAddress?: string; limit?: number } = {}) {
     const qs = new URLSearchParams()
     Object.entries(params).forEach(([k, v]) => v !== undefined && qs.set(k, String(v)))
     return useQuery({
@@ -73,16 +73,23 @@ export function useActivityLogs(params: { entityType?: string; entityId?: string
     })
 }
 
-export function useInfiniteActivityLogs(params: { entityType?: string; entityId?: string; userId?: string; pageSize?: number } = {}) {
+export function useInfiniteActivityLogs(params: { entityType?: string; entityId?: string; userId?: string; action?: string; actorRole?: string; actorName?: string; entityName?: string; from?: string; to?: string; ipAddress?: string; pageSize?: number } = {}) {
     const pageSize = params.pageSize ?? 30
     return useInfiniteQuery({
-        queryKey: ['activity-logs-infinite', params.entityType, params.entityId, params.userId, pageSize],
+        queryKey: ['activity-logs-infinite', params.entityType, params.entityId, params.userId, params.action, params.actorRole, params.actorName, params.entityName, params.from, params.to, params.ipAddress, pageSize],
         initialPageParam: 0,
         queryFn: ({ pageParam }) => {
             const qs = new URLSearchParams()
             if (params.entityType) qs.set('entityType', params.entityType)
             if (params.entityId) qs.set('entityId', params.entityId)
             if (params.userId) qs.set('userId', params.userId)
+            if (params.action) qs.set('action', params.action)
+            if (params.actorRole) qs.set('actorRole', params.actorRole)
+            if (params.actorName) qs.set('actorName', params.actorName)
+            if (params.entityName) qs.set('entityName', params.entityName)
+            if (params.from) qs.set('from', params.from)
+            if (params.to) qs.set('to', params.to)
+            if (params.ipAddress) qs.set('ipAddress', params.ipAddress)
             qs.set('limit', String(pageSize))
             qs.set('offset', String(pageParam))
             return api.get<{ data: ActivityLog[] }>(`/audit/activity?${qs}`).then(r => r.data)

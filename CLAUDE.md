@@ -252,7 +252,7 @@ if (externalValue !== lastSynced) {
 
 - Auth header: `Authorization: Bearer <accessToken>`
 - Base path: `/api/v1/`
-- Swagger UI: `http://localhost:4000/docs` (dev only)
+- Swagger UI: `http://localhost:4000/api/docs` (always enabled in dev; set `ENABLE_API_DOCS=true` to enable in production/staging)
 - Paginated response: `{ data: T[], total, limit, offset, hasMore, nextCursor? }`
 - Error response: `{ statusCode, error, message }`
 - `dept_head` role is scoped server-side to their department — enforced in route handlers, not just client
@@ -317,6 +317,18 @@ if (externalValue !== lastSynced) {
 | Email | Password | Role |
 |---|---|---|
 | `admin@hrhub.ae` | `Admin@12345` | Super Admin |
+
+---
+
+## Git Workflow
+
+**Branch hierarchy:** `feature/*` or `fix/*` → `development` → `staging` → `main`
+
+- Always confirm `git branch --show-current` is NOT `main`, `staging`, or `development` before making edits. If it is, ask which feature branch to switch to first.
+- PRs always target `development` (not `main`, not `staging`).
+- Before opening a PR: run `pnpm tsc --noEmit` in both workspaces and `pnpm test` in both. Only open the PR when both are green.
+- If `gh` CLI is not authenticated, stop and tell the user to run `gh auth login` — do not attempt workarounds.
+- When the user gives short commands like "create", "continue", "go", or "do it", proceed using the most recently discussed file/location/plan. Only ask for clarification if there is genuine ambiguity between two equally likely options.
 
 ---
 

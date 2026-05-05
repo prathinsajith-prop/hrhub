@@ -62,15 +62,25 @@ function matchOperator(rowValue: unknown, applied: AppliedFilter): boolean {
             return !arr.map(String).includes(String(rowValue))
         }
         case 'greater_than':
-            return Number(rowValue ?? 0) > Number(value ?? 0)
         case 'less_than':
-            return Number(rowValue ?? 0) < Number(value ?? 0)
         case 'gte':
-            return Number(rowValue ?? 0) >= Number(value ?? 0)
-        case 'lte':
-            return Number(rowValue ?? 0) <= Number(value ?? 0)
+        case 'lte': {
+            const numVal = (value !== null && typeof value === 'object' && !Array.isArray(value))
+                ? Number((value as { min?: unknown }).min ?? 0)
+                : Number(value ?? 0)
+            const n = Number(rowValue ?? 0)
+            if (operator === 'greater_than') return n > numVal
+            if (operator === 'less_than') return n < numVal
+            if (operator === 'gte') return n >= numVal
+            return n <= numVal
+        }
         case 'between': {
-            const [a, b] = Array.isArray(value) ? value : [null, null]
+            let a: unknown = null, b: unknown = null
+            if (Array.isArray(value)) { [a, b] = value }
+            else if (value !== null && typeof value === 'object') {
+                const obj = value as { min?: unknown; max?: unknown }
+                a = obj.min ?? null; b = obj.max ?? null
+            }
             const n = Number(rowValue)
             if (a != null && !Number.isNaN(Number(a)) && n < Number(a)) return false
             if (b != null && !Number.isNaN(Number(b)) && n > Number(b)) return false
@@ -133,11 +143,12 @@ export function applyClientFilters<T extends Row>(
             }
 
             // Date range as a paired tuple.
-            if (Array.isArray(applied.value) && applied.value.length === 2) {
+            if (Array.isArray(applied.value) && applied.value.length === 2
+                && applied.operator !== 'in' && applied.operator !== 'not_in') {
                 const [a, b] = applied.value as [unknown, unknown]
                 const isDate =
                     typeof a === 'string' && /\d{4}-\d{2}-\d{2}/.test(a)
-                if (isDate || typeof b === 'string') {
+                if (isDate) {
                     const rowDate = getValue(row, name, fieldAccessors[name])
                     if (rowDate == null) {
                         if (a != null || b != null) return false

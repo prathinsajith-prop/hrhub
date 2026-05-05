@@ -60,10 +60,11 @@ export default async function (fastify: any): Promise<void> {
     })
 
     fastify.get('/', { ...auth, schema: { tags: ['Visa'] } }, async (request: any, reply: any) => {
-        const { status, urgencyLevel, from, to, limit = '20', offset = '0', after } = request.query as Record<string, string>
+        const { status, urgencyLevel, from, to, search, q, filter, limit = '20', offset = '0', after } = request.query as Record<string, string>
+        if (filter && filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
         const result = await listVisas(request.user.tenantId, {
-            status, urgencyLevel, from, to,
-            limit: Number(limit), offset: Number(offset), after,
+            status, urgencyLevel, from, to, search: q || search || undefined,
+            filter: filter || undefined, limit: Number(limit), offset: Number(offset), after,
         })
         return reply.send({
             data: result.data, total: result.total,

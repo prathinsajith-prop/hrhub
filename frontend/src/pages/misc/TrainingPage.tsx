@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -14,9 +15,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ConfirmDialog } from '@/components/ui/overlays'
 import { toast } from '@/components/ui/overlays'
 import { zodToFieldErrors } from '@/lib/schemas'
+import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import type { FilterConfig } from '@/lib/filters'
 import {
     GraduationCap, BookOpen, CheckCircle2, TrendingUp,
-    Search, Plus, Pencil, Trash2, ExternalLink,
+    Plus, Pencil, Trash2, ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -28,6 +32,7 @@ import {
     useDeleteTraining,
 } from '@/hooks/useTraining'
 import { EmployeeSelect } from '@/components/shared'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import type { UserRole } from '@/types'
@@ -114,7 +119,7 @@ function TrainingFormDialog({
                         />
                     </FormField>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('training.provider')}>
                             <Input
                                 value={form.provider}
@@ -135,7 +140,7 @@ function TrainingFormDialog({
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('training.startDate')} required error={errors.startDate}>
                             <Input
                                 type="date"
@@ -153,7 +158,7 @@ function TrainingFormDialog({
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={`${t('training.cost')} (AED)`}>
                             <NumericInput
                                 maxDecimals={2}
@@ -204,22 +209,49 @@ function TrainingFormDialog({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+const TRAINING_FILTERS: FilterConfig[] = [
+    {
+        name: 'status',
+        label: 'Status',
+        type: 'select',
+        options: [
+            { value: 'planned', label: 'Planned' },
+            { value: 'in_progress', label: 'In Progress' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'cancelled', label: 'Cancelled' },
+        ],
+    },
+    {
+        name: 'type',
+        label: 'Type',
+        type: 'select',
+        options: [
+            { value: 'internal', label: 'Internal' },
+            { value: 'external', label: 'External' },
+            { value: 'online', label: 'Online' },
+            { value: 'conference', label: 'Conference' },
+        ],
+    },
+]
+
 export function TrainingPage() {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const role = useAuthStore(s => s.user?.role) as UserRole | undefined
     const canManage = hasPermission(role ?? 'employee', 'manage_training')
 
-    const [search, setSearch] = useState('')
-    const [statusFilter, setStatusFilter] = useState('all')
-    const [typeFilter, setTypeFilter] = useState('all')
     const [formOpen, setFormOpen] = useState(false)
     const [editRecord, setEditRecord] = useState<TrainingRecord | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<TrainingRecord | null>(null)
 
+    const trainSearch = useSearchFilters({ storageKey: 'training.search', availableFilters: TRAINING_FILTERS })
+    const statusVal = trainSearch.appliedFilters.status?.value
+    const typeVal = trainSearch.appliedFilters.type?.value
+
     const { data, isLoading } = useTraining({
-        status: statusFilter === 'all' ? undefined : statusFilter,
-        type: typeFilter === 'all' ? undefined : typeFilter,
-        search: search || undefined,
+        status: typeof statusVal === 'string' ? statusVal : undefined,
+        type: typeof typeVal === 'string' ? typeVal : undefined,
+        search: trainSearch.searchInput || undefined,
     })
     const deleteTraining = useDeleteTraining()
 
@@ -266,38 +298,13 @@ export function TrainingPage() {
                 )}
             </div>
 
-            {/* Filters */}
-            <div className="flex flex-wrap gap-2 items-center">
-                <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        className="pl-8"
-                        placeholder={t('training.searchPlaceholder')}
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                    />
-                </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">{t('common.all')} {t('common.status')}</SelectItem>
-                        <SelectItem value="planned">{t('training.statuses.planned')}</SelectItem>
-                        <SelectItem value="in_progress">{t('training.statuses.in_progress')}</SelectItem>
-                        <SelectItem value="completed">{t('training.statuses.completed')}</SelectItem>
-                        <SelectItem value="cancelled">{t('training.statuses.cancelled')}</SelectItem>
-                    </SelectContent>
-                </Select>
-                <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">{t('common.all')} {t('training.type')}</SelectItem>
-                        <SelectItem value="internal">{t('training.types.internal')}</SelectItem>
-                        <SelectItem value="external">{t('training.types.external')}</SelectItem>
-                        <SelectItem value="online">{t('training.types.online')}</SelectItem>
-                        <SelectItem value="conference">{t('training.types.conference')}</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
+            {/* Search + Filters */}
+            <AdvancedSearchBar
+                search={trainSearch}
+                filters={TRAINING_FILTERS}
+                placeholder={t('training.searchPlaceholder')}
+                resultCount={data?.total}
+            />
 
             {/* Table */}
             <div className="rounded-xl border bg-card overflow-hidden">
@@ -332,9 +339,14 @@ export function TrainingPage() {
                                 </tr>
                             ) : (
                                 records.map(r => (
-                                    <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                                    <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => r.employeeId && navigate(`/employees/${r.employeeId}`)}>
                                         <td className="px-4 py-3">
-                                            <div className="font-medium">{r.employeeName}</div>
+                                            <div className="font-medium">
+                                                {r.employeeId
+                                                    ? <EmployeeLink id={r.employeeId} name={r.employeeName ?? '—'} />
+                                                    : r.employeeName
+                                                }
+                                            </div>
                                             <div className="text-xs text-muted-foreground">{r.employeeNo}</div>
                                         </td>
                                         <td className="px-4 py-3">
