@@ -891,6 +891,8 @@
     "rejected": "Loan rejected",
     "paymentRecorded": "Payment recorded",
     "actionFailed": "Action failed",
+    "employee": "Employee",
+    "selectEmployee": "Select employee…",
     "amount": "Loan Amount",
     "monthlyDeduction": "Monthly Deduction",
     "reason": "Reason",

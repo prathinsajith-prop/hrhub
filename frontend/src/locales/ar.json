@@ -891,6 +891,8 @@
     "rejected": "تم رفض القرض",
     "paymentRecorded": "تم تسجيل الدفعة",
     "actionFailed": "فشل الإجراء",
+    "employee": "الموظف",
+    "selectEmployee": "اختر موظفاً…",
     "amount": "مبلغ القرض",
     "monthlyDeduction": "الخصم الشهري",
     "reason": "السبب",

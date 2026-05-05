@@ -21,40 +21,40 @@ export async function listLoans(
     if (employeeId) conditions.push(eq(employeeLoans.employeeId, employeeId))
     if (status) conditions.push(eq(employeeLoans.status, status as never))
 
-    const rows = await db
-        .select({
-            ...getTableColumns(employeeLoans),
-            employeeName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
-            employeeNo: employees.employeeNo,
-            employeeDepartment: employees.department,
-            approverName: sql<string | null>`${users.name}`,
-            total: sql<number>`COUNT(*) OVER()`.as('total'),
-        })
-        .from(employeeLoans)
-        .leftJoin(employees, eq(employees.id, employeeLoans.employeeId))
-        .leftJoin(users, eq(users.id, employeeLoans.approvedBy))
-        .where(and(...conditions))
-        .orderBy(desc(employeeLoans.createdAt))
-        .limit(limit)
-        .offset(offset)
+    const [rows, [kpi]] = await Promise.all([
+        db
+            .select({
+                ...getTableColumns(employeeLoans),
+                employeeName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
+                employeeNo: employees.employeeNo,
+                employeeDepartment: employees.department,
+                approverName: sql<string | null>`${users.name}`,
+                total: sql<number>`COUNT(*) OVER()`.as('total'),
+            })
+            .from(employeeLoans)
+            .leftJoin(employees, eq(employees.id, employeeLoans.employeeId))
+            .leftJoin(users, eq(users.id, employeeLoans.approvedBy))
+            .where(and(...conditions))
+            .orderBy(desc(employeeLoans.createdAt))
+            .limit(limit)
+            .offset(offset),
+        db
+            .select({
+                total: sql<number>`COUNT(*)`.as('total'),
+                pending: sql<number>`COUNT(*) FILTER (WHERE status = 'pending')`.as('pending'),
+                active: sql<number>`COUNT(*) FILTER (WHERE status = 'active')`.as('active'),
+                totalDisbursed: sql<number>`COALESCE(SUM(CAST(amount AS NUMERIC)) FILTER (WHERE status IN ('active', 'completed')), 0)`.as('totalDisbursed'),
+                totalOutstanding: sql<number>`COALESCE(SUM(CAST(remaining_balance AS NUMERIC)) FILTER (WHERE status = 'active'), 0)`.as('totalOutstanding'),
+            })
+            .from(employeeLoans)
+            .where(and(
+                eq(employeeLoans.tenantId, tenantId),
+                isNull(employeeLoans.deletedAt),
+                ...(employeeId ? [eq(employeeLoans.employeeId, employeeId)] : []),
+            )),
+    ])
 
     const total = rows.length > 0 ? Number(rows[0]!.total) : 0
-
-    // KPI summary
-    const [kpi] = await db
-        .select({
-            total: sql<number>`COUNT(*)`.as('total'),
-            pending: sql<number>`COUNT(*) FILTER (WHERE status = 'pending')`.as('pending'),
-            active: sql<number>`COUNT(*) FILTER (WHERE status = 'active')`.as('active'),
-            totalDisbursed: sql<number>`COALESCE(SUM(CAST(amount AS NUMERIC)) FILTER (WHERE status IN ('active', 'completed')), 0)`.as('totalDisbursed'),
-            totalOutstanding: sql<number>`COALESCE(SUM(CAST(remaining_balance AS NUMERIC)) FILTER (WHERE status = 'active'), 0)`.as('totalOutstanding'),
-        })
-        .from(employeeLoans)
-        .where(and(
-            eq(employeeLoans.tenantId, tenantId),
-            isNull(employeeLoans.deletedAt),
-            ...(employeeId ? [eq(employeeLoans.employeeId, employeeId)] : []),
-        ))
 
     return {
         data: rows.map(r => { const { total: _, ...rest } = r; return rest }),

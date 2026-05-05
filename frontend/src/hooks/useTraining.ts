@@ -60,6 +60,15 @@ export interface CreateTrainingInput {
     notes?: string
 }
 
+// ─── Shared constants ─────────────────────────────────────────────────────────
+
+export const TRAINING_STATUS_STYLE: Record<string, string> = {
+    planned:     'bg-slate-100 text-slate-600',
+    in_progress: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
+    completed:   'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+    cancelled:   'bg-red-50 text-red-600 ring-1 ring-red-200',
+}
+
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 export function useTraining(params?: {
