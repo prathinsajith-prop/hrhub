@@ -5,14 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { GraduationCap, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { useMyTraining } from '@/hooks/useTraining'
-
-const STATUS_STYLE: Record<string, string> = {
-    planned:     'bg-slate-100 text-slate-600',
-    in_progress: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
-    completed:   'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-    cancelled:   'bg-red-50 text-red-600 ring-1 ring-red-200',
-}
+import { TRAINING_STATUS_STYLE, useMyTraining } from '@/hooks/useTraining'
 
 export function MyTrainingPage() {
     const { t } = useTranslation()
@@ -69,7 +62,7 @@ export function MyTrainingPage() {
                                             {r.startDate}{r.endDate && ` – ${r.endDate}`}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', STATUS_STYLE[r.status])}>
+                                            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', TRAINING_STATUS_STYLE[r.status])}>
                                                 {t(`training.statuses.${r.status}`)}
                                             </span>
                                         </td>

@@ -21,6 +21,7 @@ import {
 import { cn } from '@/lib/utils'
 import {
     type TrainingRecord,
+    TRAINING_STATUS_STYLE,
     useTraining,
     useCreateTraining,
     useUpdateTraining,
@@ -43,15 +44,6 @@ const trainingFormSchema = z.object({
     notes: z.string().optional(),
     certificateExpiry: z.string().optional(),
 })
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const STATUS_STYLE: Record<string, string> = {
-    planned:     'bg-slate-100 text-slate-600',
-    in_progress: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
-    completed:   'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-    cancelled:   'bg-red-50 text-red-600 ring-1 ring-red-200',
-}
 
 // ─── Training Form Dialog ─────────────────────────────────────────────────────
 
@@ -362,7 +354,7 @@ export function TrainingPage() {
                                             {r.cost ? `AED ${Number(r.cost).toLocaleString()}` : '—'}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', STATUS_STYLE[r.status])}>
+                                            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', TRAINING_STATUS_STYLE[r.status])}>
                                                 {t(`training.statuses.${r.status}`)}
                                             </span>
                                         </td>

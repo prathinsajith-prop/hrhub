@@ -13,7 +13,7 @@ import { toast } from '@/components/ui/overlays'
 import { zodToFieldErrors } from '@/lib/schemas'
 import { Banknote, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useMyLoans, useCreateLoan } from '@/hooks/useLoans'
+import { LOAN_STATUS_STYLE, useMyLoans, useCreateLoan } from '@/hooks/useLoans'
 
 const requestLoanSchema = z.object({
     amount: z.string().min(1, 'Amount is required').refine(v => parseFloat(v) > 0, 'Amount must be greater than 0'),
@@ -21,14 +21,6 @@ const requestLoanSchema = z.object({
     reason: z.string().optional(),
 })
 
-const STATUS_STYLE: Record<string, string> = {
-    pending:   'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
-    approved:  'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
-    active:    'bg-violet-50 text-violet-700 ring-1 ring-violet-200',
-    completed: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-    rejected:  'bg-red-50 text-red-600 ring-1 ring-red-200',
-    cancelled: 'bg-slate-100 text-slate-600',
-}
 
 function RequestLoanDialog({ onClose }: { onClose: () => void }) {
     const { t } = useTranslation()
@@ -180,7 +172,7 @@ export function MyLoansPage() {
                                                 {loan.reason ?? '—'}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', STATUS_STYLE[loan.status])}>
+                                                <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', LOAN_STATUS_STYLE[loan.status])}>
                                                     {t(`loans.statuses.${loan.status}`)}
                                                 </span>
                                             </td>
