@@ -78,6 +78,6 @@ function toSQL(op: string, col: AnyColumn, value: ParsedFilter['value']): SQL | 
         case 'DATE_GT': return gt(col, value as never)
         case 'IS_NULL': return isNull(col)
         case 'IS_NOT_NULL': return isNotNull(col)
-        default: return eq(col, value as never)
+        default: return null
     }
 }

@@ -1,25 +1,45 @@
-import { eq, and, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns, ilike, or } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { employeeLoans, employees, users } from '../../db/schema/index.js'
+import { parseFilterString, buildDrizzleFilters } from '../../lib/filters.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewLoan = InferInsertModel<typeof employeeLoans>
+
+const LOAN_FIELD_MAP = {
+    status: employeeLoans.status,
+    amount: employeeLoans.amount,
+    startDate: employeeLoans.startDate,
+}
+const LOAN_ALLOWED = new Set(Object.keys(LOAN_FIELD_MAP))
 
 export async function listLoans(
     tenantId: string,
     params: {
         employeeId?: string
         status?: string
+        q?: string
+        filter?: string
         limit: number
         offset: number
     },
 ) {
-    const { employeeId, status, limit, offset } = params
+    const { employeeId, status, q, filter, limit, offset } = params
 
     const conditions = [eq(employeeLoans.tenantId, tenantId), isNull(employeeLoans.deletedAt)]
     if (employeeId) conditions.push(eq(employeeLoans.employeeId, employeeId))
     if (status) conditions.push(eq(employeeLoans.status, status as never))
+    if (q) {
+        const term = `%${q.trim()}%`
+        conditions.push(or(
+            ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, term),
+            ilike(employees.employeeNo, term),
+        ))
+    }
+    if (filter) {
+        conditions.push(...buildDrizzleFilters(parseFilterString(filter), LOAN_FIELD_MAP, LOAN_ALLOWED))
+    }
 
     const [rows, [kpi]] = await Promise.all([
         db

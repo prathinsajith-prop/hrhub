@@ -9,12 +9,14 @@ import { FormField } from '@/components/shared/FormField'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfirmDialog } from '@/components/ui/overlays'
 import { toast } from '@/components/ui/overlays'
 import { zodToFieldErrors } from '@/lib/schemas'
+import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
+import { useSearchFilters } from '@/hooks/useSearchFilters'
+import { buildFilterQueryString } from '@/lib/filters'
 import {
     Banknote, Clock, CheckCircle2, AlertCircle,
     Plus, Check, X,
@@ -34,6 +36,22 @@ import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import type { UserRole } from '@/types'
+import type { FilterConfig } from '@/lib/filters'
+
+const LOAN_FILTERS: FilterConfig[] = [
+    {
+        name: 'status',
+        label: 'Status',
+        type: 'select',
+        options: [
+            { value: 'pending', label: 'Pending' },
+            { value: 'active', label: 'Active' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'rejected', label: 'Rejected' },
+            { value: 'cancelled', label: 'Cancelled' },
+        ],
+    },
+]
 
 const createLoanSchema = z.object({
     employeeId: z.string().min(1, 'Employee is required'),
@@ -159,12 +177,17 @@ export function LoansPage() {
     const role = useAuthStore(s => s.user?.role) as UserRole | undefined
     const canManage = hasPermission(role ?? 'employee', 'manage_loans')
 
-    const [statusFilter, setStatusFilter] = useState('all')
     const [createOpen, setCreateOpen] = useState(false)
     const [rejectTarget, setRejectTarget] = useState<EmployeeLoan | null>(null)
     const [paymentTarget, setPaymentTarget] = useState<EmployeeLoan | null>(null)
 
-    const { data, isLoading } = useLoans({ status: statusFilter === 'all' ? undefined : statusFilter })
+    const loanSearch = useSearchFilters({ storageKey: 'loans.search', availableFilters: LOAN_FILTERS })
+    const filterStr = buildFilterQueryString(loanSearch.appliedFilters)
+
+    const { data, isLoading } = useLoans({
+        q: loanSearch.searchInput || undefined,
+        filter: filterStr || undefined,
+    })
     const approve = useApproveLoan()
     const recordPayment = useRecordLoanPayment()
 
@@ -218,19 +241,13 @@ export function LoansPage() {
                 )}
             </div>
 
-            {/* Filter */}
-            <div className="flex gap-2">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">{t('common.all')} {t('common.status')}</SelectItem>
-                        <SelectItem value="pending">{t('loans.statuses.pending')}</SelectItem>
-                        <SelectItem value="active">{t('loans.statuses.active')}</SelectItem>
-                        <SelectItem value="completed">{t('loans.statuses.completed')}</SelectItem>
-                        <SelectItem value="rejected">{t('loans.statuses.rejected')}</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
+            {/* Search + Filters */}
+            <AdvancedSearchBar
+                search={loanSearch}
+                filters={LOAN_FILTERS}
+                placeholder={t('loans.searchPlaceholder', 'Search loans…')}
+                resultCount={data?.total}
+            />
 
             {/* Table */}
             <div className="rounded-xl border bg-card overflow-hidden">

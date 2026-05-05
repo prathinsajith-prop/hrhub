@@ -24,10 +24,10 @@ export default async function loansRoutes(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
     const hrOnly = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
 
-    // GET /api/v1/loans?employeeId=&status=&limit=&offset=
+    // GET /api/v1/loans?employeeId=&status=&q=&filter=&limit=&offset=
     fastify.get('/', auth, async (request: any, reply: any) => {
         const user = request.user
-        const qs = request.query as { employeeId?: string; status?: string; limit?: string; offset?: string }
+        const qs = request.query as { employeeId?: string; status?: string; q?: string; filter?: string; limit?: string; offset?: string }
 
         // Employees can only see their own loans
         let employeeId = qs.employeeId
@@ -37,6 +37,8 @@ export default async function loansRoutes(fastify: any): Promise<void> {
         const result = await listLoans(user.tenantId, {
             employeeId,
             status: qs.status,
+            q: isElevated ? qs.q : undefined,
+            filter: isElevated ? qs.filter : undefined,
             limit: Math.min(Number(qs.limit ?? 25), 100),
             offset: Number(qs.offset ?? 0),
         })
