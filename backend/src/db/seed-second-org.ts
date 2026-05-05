@@ -33,7 +33,6 @@ async function run() {
         console.log('ℹ️  Second org already exists, id:', existing.id)
         tenant2Id = existing.id
     } else {
-        // Use only columns guaranteed to be in the DB (from 0000_init.sql)
         const [tenant2] = await db.insert(tenants).values({
             name: 'Noor Tech Solutions DIFC',
             tradeLicenseNo: SECOND_LICENSE,
@@ -41,18 +40,11 @@ async function run() {
             industryType: 'technology',
             subscriptionPlan: 'starter',
             isActive: true,
-        } as any).returning({ id: tenants.id, name: tenants.name })
+        }).returning({ id: tenants.id, name: tenants.name })
         tenant2Id = tenant2.id
         console.log('✓ Created second tenant:', tenant2.name, '—', tenant2.id)
     }
 
-    // Check if membership already exists
-    const [existingMembership] = await db.select({ id: tenantMemberships.id })
-        .from(tenantMemberships)
-        .where(eq(tenantMemberships.userId, adminUser.id))
-        .limit(1)
-
-    // Find any membership for this specific tenant
     const allMemberships = await db.select({ id: tenantMemberships.id, tenantId: tenantMemberships.tenantId })
         .from(tenantMemberships)
         .where(eq(tenantMemberships.userId, adminUser.id))

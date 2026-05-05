@@ -223,8 +223,9 @@ async function seed() {
     console.log(`✓ ${insertedJobs.length} jobs + 5 candidates created`)
 
     // ── 9. Visa applications ───────────────────────────────────
-    const priya = insertedEmployees.find(e => e.firstName === 'Priya')!
-    const maria = insertedEmployees.find(e => e.firstName === 'Maria')!
+    const priya = insertedEmployees.find(e => e.firstName === 'Priya')
+    const maria = insertedEmployees.find(e => e.firstName === 'Maria')
+    if (!priya || !maria) throw new Error('Expected seed employees Priya/Maria not found')
 
     await db.insert(visaApplications).values([
         { tenantId: tenant.id, employeeId: priya.id, visaType: 'employment_new', status: 'eid_pending', currentStep: 5, totalSteps: 8, mohreRef: 'MOHRE-2026-44521', startDate: '2026-03-01', urgencyLevel: 'normal' },
@@ -242,8 +243,9 @@ async function seed() {
     console.log('✓ Payroll runs created')
 
     // ── 11. Leave requests ─────────────────────────────────────
-    const rahul = insertedEmployees.find(e => e.firstName === 'Rahul')!
-    const fatima = insertedEmployees.find(e => e.firstName === 'Fatima')!
+    const rahul = insertedEmployees.find(e => e.firstName === 'Rahul')
+    const fatima = insertedEmployees.find(e => e.firstName === 'Fatima')
+    if (!rahul || !fatima) throw new Error('Expected seed employees Rahul/Fatima not found')
 
     await db.insert(leaveRequests).values([
         { tenantId: tenant.id, employeeId: ahmed.id, leaveType: 'annual', startDate: '2026-05-01', endDate: '2026-05-15', days: 15, status: 'approved', reason: 'Family vacation', approvedBy: hrManager.id, appliedDate: '2026-04-10' },

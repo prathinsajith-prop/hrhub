@@ -9,10 +9,15 @@ export default defineConfig({
         globals: true,
         setupFiles: ['./src/__tests__/setup.ts'],
         include: ['src/**/*.test.tsx', 'src/**/*.test.ts'],
+        reporters: process.env.CI ? ['verbose', 'github-actions'] : ['verbose'],
         coverage: {
             provider: 'v8',
-            reporter: ['text', 'html'],
+            reporter: process.env.CI ? ['text', 'lcov'] : ['text', 'html'],
             include: ['src/lib/**', 'src/hooks/**'],
+            thresholds: {
+                lines: 50,
+                functions: 50,
+            },
         },
     },
     resolve: {
