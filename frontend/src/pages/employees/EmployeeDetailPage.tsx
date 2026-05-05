@@ -6,7 +6,7 @@ import {
   ArrowLeft, User, Briefcase, Plane, FileText, CreditCard, Star,
   Phone, Mail, MapPin, Calendar, Building2, Hash, Shield, Edit2,
   Clock, Download, Eye, Camera, Loader2, Plus, Package,
-  CalendarDays, ClipboardList, UserCheck, Users, GraduationCap, Landmark,
+  CalendarDays, ClipboardList, UserCheck, Users, GraduationCap, Landmark, DollarSign,
   ArrowRightLeft, Heart, StickyNote, History, Trash2, AlertTriangle, Upload, X as XIcon,
   MoreHorizontal, CheckCircle2, Ban, UserX,
 } from 'lucide-react'
@@ -38,11 +38,12 @@ import { useEmployee, useUpdateEmployee, useUploadEmployeeAvatar, useEmployeeAcc
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { useEmployeeTeams } from '@/hooks/useTeams'
-import { useDocuments } from '@/hooks/useDocuments'
+import { useDocuments, useVerifyDocument, useRejectDocument } from '@/hooks/useDocuments'
 import { usePerformanceReviews } from '@/hooks/usePerformance'
 import { CreatePerformanceReviewDialog } from '@/components/shared/CreatePerformanceReviewDialog'
 import { AddDocumentDialog } from '@/components/shared/AddDocumentDialog'
 import { EmployeeLeavePanel } from '@/components/shared/EmployeeLeavePanel'
+import { EmployeeLoansPanel } from '@/components/shared/EmployeeLoansPanel'
 import { useEmployeeAssets } from '@/hooks/useAssets'
 import { useAttendance } from '@/hooks/useAttendance'
 import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
@@ -626,6 +627,7 @@ export function EmployeeDetailPage() {
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_employees')
+  const canManageDocuments = can('manage_documents')
 
   const { data: employee, isLoading } = useEmployee(id!)
   const { data: orgUnits = [] } = useOrgUnits()
@@ -689,6 +691,8 @@ export function EmployeeDetailPage() {
   const updateEmployee = useUpdateEmployee(id!)
   const updateStatus = useUpdateEmployeeStatus()
   const archiveEmployee = useArchiveEmployee()
+  const verifyDocument = useVerifyDocument()
+  const rejectDocument = useRejectDocument()
   const [activeTab, setActiveTab] = React.useState('personal')
   const [statusTarget, setStatusTarget] = React.useState<{ status: 'active' | 'suspended' | 'terminated' } | null>(null)
   const [archiveConfirm, setArchiveConfirm] = React.useState(false)
@@ -697,6 +701,8 @@ export function EmployeeDetailPage() {
   const [editPayrollOpen, setEditPayrollOpen] = React.useState(false)
   const [inviteOpen, setInviteOpen] = React.useState(false)
   const [viewDoc, setViewDoc] = React.useState<{ id: string; fileName?: string } | null>(null)
+  const [rejectDocId, setRejectDocId] = React.useState<string | null>(null)
+  const [rejectDocReason, setRejectDocReason] = React.useState('')
   const [visaEditOpen, setVisaEditOpen] = React.useState(false)
   const [visaForm, setVisaForm] = React.useState({
     visaType: '', visaNumber: '', visaIssueDate: '', visaExpiry: '',
@@ -975,6 +981,7 @@ export function EmployeeDetailPage() {
           { value: 'performance', icon: Star, label: 'Performance' },
           { value: 'assets', icon: Package, label: 'Assets' },
           { value: 'leave', icon: CalendarDays, label: 'Leave' },
+          ...(canManage ? [{ value: 'loans', icon: DollarSign, label: 'Loans' }] : []),
           { value: 'attendance', icon: ClipboardList, label: 'Attendance' },
           ...(canManage ? [{ value: 'warnings', icon: AlertTriangle, label: 'Warnings' }] : []),
           ...(canManage ? [{ value: 'dependents', icon: Heart, label: 'Dependents' }] : []),
@@ -1389,6 +1396,32 @@ export function EmployeeDetailPage() {
                           <Badge variant={doc.status === 'verified' ? 'success' : doc.status === 'expired' ? 'destructive' : 'secondary'} className="text-[10px]">
                             {labelFor(doc.status)}
                           </Badge>
+                          {canManageDocuments && doc.status === 'pending' && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                aria-label="Verify document"
+                                disabled={verifyDocument.isPending}
+                                onClick={() => verifyDocument.mutate(doc.id, {
+                                  onSuccess: () => toast.success('Document verified'),
+                                  onError: (err: Error) => toast.error('Failed to verify', err?.message),
+                                })}
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                aria-label="Reject document"
+                                onClick={() => { setRejectDocId(doc.id); setRejectDocReason('') }}
+                              >
+                                <Ban className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
                           <Button variant="ghost" size="icon-sm" aria-label="View document" onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
@@ -1633,6 +1666,13 @@ export function EmployeeDetailPage() {
           <TabsContent value="leave" className="mt-4">
             <EmployeeLeavePanel employeeId={id!} canManage={canManage} />
           </TabsContent>
+
+          {/* ── Loans ── */}
+          {canManage && (
+            <TabsContent value="loans" className="mt-4">
+              <EmployeeLoansPanel employeeId={id!} canManage={canManage} />
+            </TabsContent>
+          )}
 
           {/* ── Account ── */}
           {canManage && (
@@ -2055,6 +2095,42 @@ export function EmployeeDetailPage() {
         documentId={viewDoc?.id ?? null}
         fileName={viewDoc?.fileName}
       />
+
+      {/* Reject Document Dialog */}
+      {canManageDocuments && (
+        <Dialog open={!!rejectDocId} onOpenChange={o => !o && setRejectDocId(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Reject Document</DialogTitle>
+            </DialogHeader>
+            <Textarea
+              placeholder="Reason for rejection (optional)"
+              value={rejectDocReason}
+              onChange={e => setRejectDocReason(e.target.value)}
+              rows={3}
+            />
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setRejectDocId(null)} disabled={rejectDocument.isPending}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={rejectDocument.isPending}
+                onClick={() => {
+                  if (!rejectDocId) return
+                  rejectDocument.mutate({ id: rejectDocId, reason: rejectDocReason }, {
+                    onSuccess: () => { toast.success('Document rejected'); setRejectDocId(null) },
+                    onError: (err: Error) => { toast.error('Failed to reject', err?.message) },
+                  })
+                }}
+              >
+                Reject
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Change Salary Dialog */}
       {canManage && id && (
