@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { buildSearchQuery, type AppliedFiltersMap } from '@/lib/filters'
 
 export interface PerformanceReview {
     id: string
@@ -24,18 +25,15 @@ export interface PerformanceReview {
     updatedAt: string
 }
 
-export function usePerformanceReviews(params: { employeeId?: string; from?: string; to?: string } = {}) {
-    const { employeeId, from, to } = params
-    const qs = new URLSearchParams()
-    if (employeeId) qs.set('employeeId', employeeId)
-    if (from) qs.set('from', from)
-    if (to) qs.set('to', to)
-    const search = qs.toString()
+export function usePerformanceReviews(params: { employeeId?: string; q?: string; filters?: AppliedFiltersMap } = {}) {
+    const { employeeId, q, filters } = params
+    const qs = buildSearchQuery(q, filters)
+    const extra = employeeId ? `&employeeId=${employeeId}` : ''
     return useQuery({
-        queryKey: ['performance', employeeId, from, to],
+        queryKey: ['performance', employeeId, q, filters],
         queryFn: () =>
             api
-                .get<{ data: PerformanceReview[] }>(`/performance${search ? `?${search}` : ''}`)
+                .get<{ data: PerformanceReview[] }>(`/performance?${qs}${extra}`)
                 .then((res) => res.data ?? []),
     })
 }

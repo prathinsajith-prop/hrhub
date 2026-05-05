@@ -1,4 +1,5 @@
 import { getDashboardKPIs, getRecentNotifications, getPayrollTrend, getNationalityBreakdown, getDeptHeadcount, getEmiratisationStatus, getOnboardingSummary, getGenderBreakdown, getMaritalStatusBreakdown, getUpcomingBirthdays, getWorkAnniversaries } from './dashboard.service.js'
+import { dashboardSummaryCache } from '../../lib/cache.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -68,6 +69,9 @@ export default async function (fastify: any): Promise<void> {
     // and have a separate cache lifecycle.
     fastify.get('/summary', { ...hrOnly, schema: { tags: ['Dashboard'] } }, async (request: any, reply: any) => {
         const tenantId: string = request.user.tenantId
+        const cached = await dashboardSummaryCache.get(tenantId)
+        if (cached) return reply.send(cached)
+
         const [kpis, payrollTrend, nationalityBreakdown, deptHeadcount, emiratisation, onboardingSummary, genderBreakdown, maritalBreakdown, birthdays, anniversaries] =
             await Promise.all([
                 getDashboardKPIs(tenantId),
@@ -81,7 +85,9 @@ export default async function (fastify: any): Promise<void> {
                 getUpcomingBirthdays(tenantId),
                 getWorkAnniversaries(tenantId),
             ])
-        return reply.send({ kpis, payrollTrend, nationalityBreakdown, deptHeadcount, emiratisation, onboardingSummary, genderBreakdown, maritalBreakdown, birthdays, anniversaries })
+        const result = { kpis, payrollTrend, nationalityBreakdown, deptHeadcount, emiratisation, onboardingSummary, genderBreakdown, maritalBreakdown, birthdays, anniversaries }
+        await dashboardSummaryCache.set([tenantId], result)
+        return reply.send(result)
     })
 }
 

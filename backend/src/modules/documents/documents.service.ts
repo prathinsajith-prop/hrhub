@@ -1,21 +1,60 @@
-import { eq, and, desc, lte, gte, isNull, isNotNull, sql, getTableColumns, or, lt } from 'drizzle-orm'
+import { eq, and, desc, lte, gte, isNull, isNotNull, sql, getTableColumns, or, lt, aliasedTable, ilike } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
-import { documents, employees } from '../../db/schema/index.js'
+import { documents, employees, users } from '../../db/schema/index.js'
+import { parseFilterString, buildDrizzleFilters } from '../../lib/filters.js'
 import type { InferInsertModel } from 'drizzle-orm'
+
+const DOCUMENT_FIELD_MAP = {
+    category: documents.category,
+    status: documents.status,
+    docType: documents.docType,
+    expiryDate: documents.expiryDate,
+}
+const DOCUMENT_ALLOWED = new Set(Object.keys(DOCUMENT_FIELD_MAP))
+
+// Maps docType strings → which employee expiry/date fields to update on verify.
+// Only doc types that carry meaningful employee-level date data are listed.
+const DOC_EXPIRY_MAP: Record<string, {
+    expiryField: 'passportExpiry' | 'emiratesIdExpiry' | 'visaExpiry' | 'labourCardExpiry'
+    issueDateField?: 'visaIssueDate'
+}> = {
+    'Passport':       { expiryField: 'passportExpiry' },
+    'Emirates ID':    { expiryField: 'emiratesIdExpiry' },
+    'Visa':           { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
+    'Residence Visa': { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
+    'Entry Permit':   { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
+    'Work Permit':    { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
+    'Visit Visa':     { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
+    'Labour Card':    { expiryField: 'labourCardExpiry' },
+}
 
 type NewDocument = InferInsertModel<typeof documents>
 
-export async function listDocuments(tenantId: string, params: { employeeId?: string; category?: string; status?: string; from?: string; to?: string; limit: number; offset: number; after?: string }) {
-    const { employeeId, category, status, from, to, limit, offset, after } = params
+const verifierUsers = aliasedTable(users, 'verifier')
+
+export async function listDocuments(tenantId: string, params: { employeeId?: string; category?: string; status?: string; from?: string; to?: string; search?: string; filter?: string; limit: number; offset: number; after?: string }) {
+    const { employeeId, category, status, from, to, search, filter, limit, offset, after } = params
     const conditions = [eq(documents.tenantId, tenantId), isNull(documents.deletedAt)]
     if (employeeId) conditions.push(eq(documents.employeeId, employeeId))
     if (category) conditions.push(eq(documents.category, category as never))
     if (status) conditions.push(eq(documents.status, status as never))
+    if (search) {
+        const q = `%${search.trim()}%`
+        conditions.push(or(
+            ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, q),
+            ilike(employees.firstName, q),
+            ilike(employees.lastName, q),
+            ilike(documents.docType, q),
+        )!)
+    }
     // Calendar uses expiryDate as the event date; filter by [from, to] when provided.
     if (from) conditions.push(gte(documents.expiryDate, from))
     if (to) conditions.push(lte(documents.expiryDate, to))
+    if (filter) {
+        buildDrizzleFilters(parseFilterString(filter), DOCUMENT_FIELD_MAP, DOCUMENT_ALLOWED).forEach(c => conditions.push(c))
+    }
 
     const cursor = after ? decodeCursor(after) : null
     if (cursor) {
@@ -35,9 +74,13 @@ export async function listDocuments(tenantId: string, params: { employeeId?: str
         employeeNo: employees.employeeNo,
         employeeAvatarUrl: employees.avatarUrl,
         employeeDepartment: employees.department,
+        uploadedByName: users.name,
+        verifiedByName: verifierUsers.name,
     })
         .from(documents)
         .leftJoin(employees, eq(employees.id, documents.employeeId))
+        .leftJoin(users, eq(users.id, documents.uploadedBy))
+        .leftJoin(verifierUsers, eq(verifierUsers.id, documents.verifiedBy))
         .where(and(...conditions))
         .orderBy(desc(documents.createdAt), desc(documents.id))
         .limit(cursor ? pageSize : limit)
@@ -99,11 +142,32 @@ export async function updateDocument(tenantId: string, id: string, data: Partial
 }
 
 export async function verifyDocument(tenantId: string, id: string, verifiedBy: string) {
-    const [row] = await db.update(documents)
-        .set(withTimestamp({ verified: true, verifiedBy, verifiedAt: new Date(), status: 'valid' as const, rejectionReason: null, rejectedAt: null, rejectedBy: null }))
-        .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId), isNull(documents.deletedAt)))
-        .returning()
-    return row ?? null
+    return db.transaction(async (tx) => {
+        const [row] = await tx.update(documents)
+            .set(withTimestamp({ verified: true, verifiedBy, verifiedAt: new Date(), status: 'valid' as const, rejectionReason: null, rejectedAt: null, rejectedBy: null }))
+            .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId), isNull(documents.deletedAt)))
+            .returning()
+
+        if (!row) return null
+
+        // Propagate expiry / issue dates back to the employee record so that
+        // the Visa & ID tab, compliance alerts, and expiry workers stay in sync.
+        if (row.employeeId && row.docType) {
+            const mapping = DOC_EXPIRY_MAP[row.docType]
+            if (mapping) {
+                const patch: Record<string, unknown> = { updatedAt: new Date() }
+                if (row.expiryDate) patch[mapping.expiryField] = row.expiryDate
+                if (mapping.issueDateField && row.issueDate) patch[mapping.issueDateField] = row.issueDate
+                if (Object.keys(patch).length > 1) {
+                    await tx.update(employees)
+                        .set(patch as any)
+                        .where(and(eq(employees.id, row.employeeId), eq(employees.tenantId, tenantId)))
+                }
+            }
+        }
+
+        return row
+    })
 }
 
 export async function rejectDocument(tenantId: string, id: string, rejectedBy: string, reason: string) {

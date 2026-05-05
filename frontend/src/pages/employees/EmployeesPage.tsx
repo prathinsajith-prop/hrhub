@@ -185,7 +185,15 @@ export function EmployeesPage() {
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_employees')
-  const { data: empData, isLoading, isFetching, isError, error, refetch } = useEmployees({ limit: 50 })
+  const search = useSearchFilters({
+    storageKey: 'hrhub.employees.searchHistory',
+    availableFilters: EMPLOYEE_FILTERS,
+  })
+
+  const filterStatus = (search.appliedFilters.status?.value as string | undefined) || undefined
+  const filterDept = (search.appliedFilters.department?.value as string | undefined) || undefined
+
+  const { data: empData, isLoading, isFetching, isError, error, refetch } = useEmployees({ limit: 50, search: search.searchInput || undefined, status: filterStatus, department: filterDept })
   const { data: orgUnits = [] } = useOrgUnits()
   const orgUnitName = useMemo(() => {
     const map = new Map(orgUnits.map(u => [u.id, u.name]))
@@ -207,41 +215,31 @@ export function EmployeesPage() {
       status: search.appliedFilters.status?.value as string | undefined,
     })
   }
-  const search = useSearchFilters({
-    storageKey: 'hrhub.employees.searchHistory',
-    availableFilters: EMPLOYEE_FILTERS,
-  })
-
   const filtered = useMemo(() => {
     const f = search.appliedFilters
-    const q = search.searchInput.trim().toLowerCase()
     return employees.filter((e: Employee) => {
-      const emailStr = e.workEmail || e.email || e.personalEmail || ''
-      if (q && !`${e.fullName} ${e.employeeNo} ${emailStr}`.toLowerCase().includes(q)) return false
-      if (f.status?.value && e.status !== f.status.value) return false
-      if (f.department?.value && !String(e.department ?? '').toLowerCase().includes(String(f.department.value).toLowerCase())) return false
       if (f.designation?.value && !String(e.designation ?? '').toLowerCase().includes(String(f.designation.value).toLowerCase())) return false
       if (f.nationality?.value && !String(e.nationality ?? '').toLowerCase().includes(String(f.nationality.value).toLowerCase())) return false
       if (f.salary?.value) {
-        const [min, max] = f.salary.value as [number | null, number | null]
+        const { min, max } = f.salary.value as { min?: number; max?: number }
         const v = Number(e.totalSalary ?? 0)
         if (min != null && v < min) return false
         if (max != null && v > max) return false
       }
       if (f.joinDate?.value) {
-        const [from, to] = f.joinDate.value as [string | null, string | null]
+        const { from, to } = f.joinDate.value as { from?: string; to?: string }
         if (from && e.joinDate && new Date(e.joinDate) < new Date(from)) return false
         if (to && e.joinDate && new Date(e.joinDate) > new Date(to)) return false
       }
       if (f.visaExpiry?.value) {
-        const [from, to] = f.visaExpiry.value as [string | null, string | null]
+        const { from, to } = f.visaExpiry.value as { from?: string; to?: string }
         if (from && e.visaExpiry && new Date(e.visaExpiry) < new Date(from)) return false
         if (to && e.visaExpiry && new Date(e.visaExpiry) > new Date(to)) return false
       }
       if (f.emirati?.value === true && e.emiratisationCategory !== 'emirati') return false
       return true
     })
-  }, [employees, search.appliedFilters, search.searchInput])
+  }, [employees, search.appliedFilters])
 
   const active = employees.filter((e: Employee) => e.status === 'active').length
   const onboarding = employees.filter((e: Employee) => e.status === 'onboarding').length
@@ -298,27 +296,28 @@ export function EmployeesPage() {
               {getInitials(e.fullName)}
             </AvatarFallback>
           </Avatar>
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-0.5">
             <p className="font-semibold text-sm text-foreground truncate">{e.fullName}</p>
-            <p className="text-[11px] text-muted-foreground">{e.employeeNo}</p>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p className="text-[11px] text-muted-foreground shrink-0">{e.employeeNo}</p>
+              {e.designation && (
+                <Badge className="text-[10px] font-medium px-1.5 py-0 rounded-md truncate bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800">
+                  {e.designation}
+                </Badge>
+              )}
+            </div>
+            {(() => {
+              const email = e.workEmail || (e as any).email || e.personalEmail || null
+              return email ? (
+                <span onClick={ev => ev.stopPropagation()}>
+                  <CopyableEmail email={email} className="text-[11px] text-muted-foreground/70 truncate" />
+                </span>
+              ) : null
+            })()}
           </div>
         </button>
       ),
-      size: 220,
-    },
-    {
-      accessorKey: 'designation',
-      header: 'Designation',
-      cell: ({ getValue }) => {
-        const val = getValue() as string | null
-        if (!val) return <span className="text-xs text-muted-foreground">—</span>
-        return (
-          <Badge variant="secondary" className="text-[11px] font-medium px-2 py-0.5 rounded-md">
-            {val}
-          </Badge>
-        )
-      },
-      size: 160,
+      size: 260,
     },
     {
       id: 'department',
@@ -348,21 +347,6 @@ export function EmployeesPage() {
         )
       },
       size: 200,
-    },
-    {
-      id: 'email',
-      header: 'Email',
-      cell: ({ row: { original: e } }) => {
-        const email = e.workEmail || e.email || e.personalEmail || null
-        if (!email) return <span className="text-xs text-muted-foreground">—</span>
-        return (
-          <div className="flex items-center gap-1 max-w-[180px]" onClick={ev => ev.stopPropagation()}>
-            <Mail className="h-3 w-3 shrink-0 text-muted-foreground" />
-            <CopyableEmail email={email} className="text-xs text-muted-foreground truncate" />
-          </div>
-        )
-      },
-      size: 190,
     },
     {
       accessorKey: 'nationality',

@@ -1,8 +1,8 @@
 import { eq, and, ilike, desc, asc, getTableColumns, inArray, sql, or, lt, gte, lte } from 'drizzle-orm'
-import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
+import { withTimestamp, encodeCursor, decodeCursor, extractRows } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { employees, entities, tenants, gradeLevels, sponsoringEntities } from '../../db/schema/index.js'
+import { employees, entities, tenants, gradeLevels, sponsoringEntities, employeeNoSequences } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
@@ -48,7 +48,7 @@ export async function getSubtreeEmployeeIds(tenantId: string, rootId: string): P
         )
         SELECT id FROM subtree
     `)
-    return [...rows].map(r => r.id)
+    return extractRows<{ id: string }>(rows).map(r => r.id)
 }
 
 export async function listEmployees(params: ListEmployeesParams) {
@@ -179,11 +179,11 @@ export async function createEmployee(tenantId: string, data: Omit<NewEmployee, '
 
 /**
  * Generate the next sequential employee number for a tenant.
- * Format: `{COMPANYCODE}-{NNN}-{MM}-{YYYY}`
- * e.g. PROP-001-04-2026
- * - COMPANYCODE: uppercase initials of each word in tenant name, max 4 chars
- * - NNN: employees created this calendar month (zero-padded, 3 digits)
- * - MM/YYYY: current month and year
+ * Format: `{COMPANYCODE}-{NNN}-{MM}-{YYYY}`   e.g. PROP-001-04-2026
+ *
+ * Uses an atomic upsert on `employee_no_sequences` so concurrent creates
+ * for the same tenant can never receive the same sequence number — no
+ * retry loop or pessimistic locking required.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function generateNextEmployeeNo(tenantId: string, conn: any = db): Promise<string> {
@@ -198,20 +198,18 @@ export async function generateNextEmployeeNo(tenantId: string, conn: any = db): 
     const now = new Date()
     const mm = String(now.getMonth() + 1).padStart(2, '0')
     const yyyy = String(now.getFullYear())
-
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+    const yearMonth = `${yyyy}-${mm}`
 
     const [row] = await conn
-        .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
-        .from(employees)
-        .where(and(
-            eq(employees.tenantId, tenantId),
-            gte(employees.createdAt, startOfMonth),
-            lte(employees.createdAt, endOfMonth),
-        ))
+        .insert(employeeNoSequences)
+        .values({ tenantId, yearMonth, lastSeq: 1 })
+        .onConflictDoUpdate({
+            target: [employeeNoSequences.tenantId, employeeNoSequences.yearMonth],
+            set: { lastSeq: sql`${employeeNoSequences.lastSeq} + 1` },
+        })
+        .returning({ lastSeq: employeeNoSequences.lastSeq })
 
-    const seq = String((row?.count ?? 0) + 1).padStart(3, '0')
+    const seq = String(row.lastSeq).padStart(3, '0')
     return `${companyCode}-${seq}-${mm}-${yyyy}`
 }
 
@@ -296,7 +294,7 @@ export async function getAncestorChain(tenantId: string, employeeId: string): Pr
         WHERE id != ${employeeId}::uuid
         ORDER BY depth ASC
     `)
-    return [...rows].map(r => r.id)
+    return extractRows<{ id: string }>(rows).map(r => r.id)
 }
 
 export async function getOrgChart(tenantId: string, rootEmployeeId?: string) {

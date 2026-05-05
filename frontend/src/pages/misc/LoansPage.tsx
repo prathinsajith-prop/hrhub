@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -29,6 +30,7 @@ import {
     useRecordLoanPayment,
 } from '@/hooks/useLoans'
 import { EmployeeSelect } from '@/components/shared'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import type { UserRole } from '@/types'
@@ -76,7 +78,7 @@ function CreateLoanDialog({ onClose }: { onClose: () => void }) {
                             onValueChange={v => { setForm(f => ({ ...f, employeeId: v })); setErrors(e => ({ ...e, employeeId: '' })) }}
                         />
                     </FormField>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={`${t('loans.amount')} (AED)`} required error={errors.amount}>
                             <NumericInput
                                 maxDecimals={2}
@@ -153,6 +155,7 @@ function RejectDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () => vo
 
 export function LoansPage() {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const role = useAuthStore(s => s.user?.role) as UserRole | undefined
     const canManage = hasPermission(role ?? 'employee', 'manage_loans')
 
@@ -266,9 +269,14 @@ export function LoansPage() {
                                     const total = loan.totalInstallments ?? 0
                                     const pct = total > 0 ? Math.round((paid / total) * 100) : 0
                                     return (
-                                        <tr key={loan.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                                        <tr key={loan.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => loan.employeeId && navigate(`/employees/${loan.employeeId}`)}>
                                             <td className="px-4 py-3">
-                                                <div className="font-medium">{loan.employeeName}</div>
+                                                <div className="font-medium">
+                                                    {loan.employeeId
+                                                        ? <EmployeeLink id={loan.employeeId} name={loan.employeeName ?? '—'} />
+                                                        : loan.employeeName
+                                                    }
+                                                </div>
                                                 <div className="text-xs text-muted-foreground">{loan.employeeNo}</div>
                                             </td>
                                             <td className="px-4 py-3 text-right font-medium">
@@ -307,11 +315,13 @@ export function LoansPage() {
                                                     <div className="flex items-center gap-1 justify-end">
                                                         {loan.status === 'pending' && (
                                                             <>
-                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:text-emerald-700" onClick={() => handleApprove(loan)} disabled={approve.isPending}>
-                                                                    <Check className="h-3.5 w-3.5" />
+                                                                <Button variant="outline" size="sm" className="h-7 text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800" onClick={() => handleApprove(loan)} disabled={approve.isPending}>
+                                                                    <Check className="h-3.5 w-3.5 mr-1" />
+                                                                    Approve
                                                                 </Button>
-                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setRejectTarget(loan)}>
-                                                                    <X className="h-3.5 w-3.5" />
+                                                                <Button variant="outline" size="sm" className="h-7 text-red-700 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-800" onClick={() => setRejectTarget(loan)}>
+                                                                    <X className="h-3.5 w-3.5 mr-1" />
+                                                                    Reject
                                                                 </Button>
                                                             </>
                                                         )}

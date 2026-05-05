@@ -1,20 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
+import { buildSearchQuery, type AppliedFiltersMap } from '@/lib/filters'
 
-interface VisaParams { status?: string; urgencyLevel?: string; from?: string; to?: string; limit?: number; offset?: number }
-
-function toQS(params: Record<string, string | number | undefined>) {
-    const q = new URLSearchParams()
-    Object.entries(params).forEach(([k, v]) => v !== undefined && q.set(k, String(v)))
-    return q.toString()
-}
+interface VisaParams { q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number; after?: string }
 
 export function useVisas(params: VisaParams = {}) {
-    const { status, urgencyLevel, from, to, limit = 20, offset = 0 } = params
+    const { q, filters, limit = 20, offset = 0 } = params
+    const qs = buildSearchQuery(q, filters, { pageSize: limit })
     return useQuery({
-        queryKey: ['visa', status, urgencyLevel, from, to, limit, offset],
-        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/visa?${toQS({ status, urgencyLevel, from, to, limit, offset })}`),
+        queryKey: ['visa', q, filters, limit, offset],
+        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/visa?${qs}&offset=${offset}`),
         staleTime: 30_000,
     })
 }

@@ -10,6 +10,11 @@ import { loadEnv } from '../config/env.js'
 let s3Client: S3Client | null = null
 let bucketEnsured = false
 
+// In-memory cache for presigned avatar URLs — keyed by S3 object key.
+// TTL is 23h (presigned URLs last 24h), so we never serve an expired URL.
+const avatarUrlCache = new Map<string, { url: string; expiresAt: number }>()
+const AVATAR_CACHE_TTL_MS = 23 * 60 * 60 * 1000
+
 export function getS3Client(): S3Client {
     if (s3Client) return s3Client
     const env = loadEnv()
@@ -185,7 +190,13 @@ export async function resolveAvatarUrl(stored: string | null | undefined): Promi
         }
     }
     if (!key.startsWith('tenants/')) return null
-    return generateDownloadUrl(key, 86400) // 24-hour presigned URL
+
+    const cached = avatarUrlCache.get(key)
+    if (cached && cached.expiresAt > Date.now()) return cached.url
+
+    const url = await generateDownloadUrl(key, 86400)
+    avatarUrlCache.set(key, { url, expiresAt: Date.now() + AVATAR_CACHE_TTL_MS })
+    return url
 }
 
 const s3Plugin = fp(async (fastify) => {

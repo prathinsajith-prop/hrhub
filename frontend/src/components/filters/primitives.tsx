@@ -3,12 +3,12 @@ import type { AppliedFilter, FilterConfig, FilterOperator } from '@/lib/filters'
 import { DEFAULT_OPERATORS, DEFAULT_OPERATOR_BY_TYPE } from './operators'
 import { OperatorPills } from './OperatorPills'
 import { Input } from '@/components/ui/input'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { Switch } from '@/components/ui/switch'
 import { DatePicker } from '@/components/ui/date-picker'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { Badge } from '@/components/ui/primitives'
-import { X } from 'lucide-react'
+import { Check, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface PrimitiveProps {
     config: FilterConfig
@@ -43,6 +43,8 @@ export function TextFilter({ config, value, onChange }: PrimitiveProps) {
 }
 
 // ─── SelectFilter ────────────────────────────────────────────────────────────
+// Uses plain inline buttons instead of Radix Select to avoid nested-portal
+// focus conflicts when rendered inside the filter Popover.
 export function SelectFilter({ config, value, onChange }: PrimitiveProps) {
     const ops = operatorsFor(config)
     const op = (value?.operator ?? defaultOp(config)) as FilterOperator
@@ -62,49 +64,53 @@ export function SelectFilter({ config, value, onChange }: PrimitiveProps) {
         }
     }
 
+    const options = config.options ?? []
+
     return (
         <div>
             <OperatorPills value={op} onChange={switchOperator} operators={ops} />
-            {isMulti ? (
-                <div className="space-y-1.5">
-                    <div className="flex flex-wrap gap-1">
-                        {arrVal.map((val) => {
-                            const opt = config.options?.find((o) => String(o.value) === val)
-                            return (
-                                <Badge key={val} variant="secondary" className="text-[11px] gap-1">
-                                    {opt?.label ?? val}
-                                    <button type="button" onClick={() => onChange({ value: arrVal.filter((x) => x !== val), operator: op })}>
-                                        <X className="h-3 w-3" />
-                                    </button>
-                                </Badge>
-                            )
-                        })}
-                    </div>
-                    <Select
-                        onValueChange={(val) => {
-                            if (!val) return
-                            const next = Array.from(new Set([...arrVal, val]))
-                            onChange({ value: next, operator: op })
-                        }}
-                    >
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Add option…" /></SelectTrigger>
-                        <SelectContent>
-                            {(config.options ?? []).filter((o) => !arrVal.includes(String(o.value))).map((o) => (
-                                <SelectItem key={String(o.value)} value={String(o.value)}>{o.label}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            ) : (
-                <Select value={singleVal} onValueChange={(val) => onChange(val ? { value: val, operator: op } : null)}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Select…" /></SelectTrigger>
-                    <SelectContent>
-                        {(config.options ?? []).map((o) => (
-                            <SelectItem key={String(o.value)} value={String(o.value)}>{o.label}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            )}
+            <div className="mt-1 rounded-md border border-border overflow-hidden max-h-52 overflow-y-auto">
+                {options.map((opt) => {
+                    const val = String(opt.value)
+                    const isSelected = isMulti ? arrVal.includes(val) : singleVal === val
+                    return (
+                        <button
+                            key={val}
+                            type="button"
+                            onClick={() => {
+                                if (isMulti) {
+                                    const next = isSelected
+                                        ? arrVal.filter((x) => x !== val)
+                                        : Array.from(new Set([...arrVal, val]))
+                                    onChange(next.length ? { value: next, operator: op } : null)
+                                } else {
+                                    onChange(isSelected ? null : { value: val, operator: op })
+                                }
+                            }}
+                            className={cn(
+                                'w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors border-b border-border/40 last:border-0',
+                                isSelected
+                                    ? 'bg-primary/10 text-primary font-medium'
+                                    : 'hover:bg-muted/60 text-foreground',
+                            )}
+                        >
+                            <span className={cn(
+                                'flex h-4 w-4 shrink-0 items-center justify-center rounded',
+                                isMulti ? 'border border-border' : '',
+                                isSelected && isMulti ? 'bg-primary border-primary' : '',
+                            )}>
+                                {isSelected && (
+                                    <Check className={cn('h-3 w-3', isMulti ? 'text-primary-foreground' : 'text-primary')} />
+                                )}
+                            </span>
+                            {opt.label}
+                        </button>
+                    )
+                })}
+                {options.length === 0 && (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">No options</p>
+                )}
+            </div>
         </div>
     )
 }

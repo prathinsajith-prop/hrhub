@@ -1,20 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
+import { buildSearchQuery, type AppliedFiltersMap } from '@/lib/filters'
 
-interface DocParams { employeeId?: string; category?: string; status?: string; from?: string; to?: string; limit?: number; offset?: number }
-
-function toQS(params: Record<string, string | number | undefined>) {
-    const q = new URLSearchParams()
-    Object.entries(params).forEach(([k, v]) => v !== undefined && q.set(k, String(v)))
-    return q.toString()
-}
+interface DocParams { employeeId?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number }
 
 export function useDocuments(params: DocParams = {}) {
-    const { employeeId, category, status, from, to, limit = 20, offset = 0 } = params
+    const { employeeId, q, filters, limit = 20, offset = 0 } = params
+    const qs = buildSearchQuery(q, filters, { pageSize: limit, page: Math.floor(offset / limit) })
+    const extraQS = employeeId ? `&employeeId=${employeeId}` : ''
     return useQuery({
-        queryKey: ['documents', employeeId, category, status, from, to, limit, offset],
-        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/documents?${toQS({ employeeId, category, status, from, to, limit, offset })}`),
+        queryKey: ['documents', employeeId, q, filters, limit, offset],
+        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/documents?${qs}${extraQS}`),
         staleTime: 30_000,
     })
 }
@@ -67,7 +64,12 @@ export function useVerifyDocument() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (id: string) => api.post(`/documents/${id}/verify`),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['documents'] })
+            // The verify back-writes expiry dates to the employee record, so
+            // the Visa & ID tab and compliance alerts must re-fetch the employee.
+            qc.invalidateQueries({ queryKey: ['employees'] })
+        },
         onError: (err: Error) => toast.error('Verification failed', err?.message ?? 'Could not verify document.'),
     })
 }

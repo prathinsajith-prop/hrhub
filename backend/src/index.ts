@@ -152,8 +152,9 @@ async function bootstrap() {
         sign: { expiresIn: env.JWT_EXPIRES_IN as never },
     })
 
-    // Swagger docs (dev only)
-    if (env.NODE_ENV !== 'production') {
+    // API documentation — enabled in dev always; in staging/production only when ENABLE_API_DOCS=true.
+    const docsEnabled = env.NODE_ENV !== 'production' || env.ENABLE_API_DOCS
+    if (docsEnabled) {
         await app.register(swagger, {
             openapi: {
                 info: { title: 'HRHub API', description: 'HRHub.ae HR & PRO Management Platform', version: '1.0.0' },
@@ -165,7 +166,11 @@ async function bootstrap() {
                 security: [{ bearerAuth: [] }],
             },
         })
-        await app.register(swaggerUi, { routePrefix: '/docs', uiConfig: { docExpansion: 'list' } })
+        await app.register(swaggerUi, {
+            routePrefix: '/api/docs',
+            uiConfig: { docExpansion: 'list', persistAuthorization: true },
+            staticCSP: true,
+        })
     }
 
     // Auth plugin (adds fastify.authenticate + fastify.requireRole)
@@ -179,10 +184,57 @@ async function bootstrap() {
 
         // PostgreSQL / Drizzle constraint violations → return user-friendly 400
         const pgCode: string | undefined = error?.cause?.code ?? error?.code
+        let duplicateField: string | undefined
         if (pgCode && /^(22|23)/.test(pgCode)) {
             statusCode = 400
             name = 'ValidationError'
-            if (pgCode === '23505') message = 'Duplicate value — that record already exists.'
+            if (pgCode === '23505') {
+                // Extract columns + values from: "Key (col1, col2)=(val1, val2) already exists."
+                const detail: string = error?.cause?.detail ?? error?.detail ?? ''
+                const colMatch = detail.match(/Key \(([^)]+)\)=\(([^)]*)\)/)
+                if (colMatch) {
+                    const rawCols = colMatch[1]!.split(',').map(s => s.trim())
+                    const rawVals = colMatch[2]!.split(',').map(s => s.trim())
+
+                    // Strip internal/tenant columns that have no meaning to the user
+                    const INTERNAL_COLS = new Set(['tenant_id', 'id', 'year_month'])
+                    const visible = rawCols
+                        .map((col, i) => ({ col, val: rawVals[i] ?? '' }))
+                        .filter(({ col }) => !INTERNAL_COLS.has(col))
+
+                    if (visible.length === 0) {
+                        // All columns were internal — generic message
+                        message = 'This record already exists.'
+                    } else if (visible.length === 1) {
+                        // Single meaningful field — keep existing field-level behaviour
+                        const { col, val } = visible[0]!
+                        const label = col.replace(/_/g, ' ')
+                        duplicateField = col.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
+                        message = `"${val}" is already in use for ${label}. Please use a different value.`
+                    } else {
+                        // Multi-column — build a friendly contextual message
+                        const colSet = new Set(visible.map(v => v.col))
+                        const valMap = Object.fromEntries(visible.map(({ col, val }) => [col, val]))
+
+                        if (colSet.has('month') && colSet.has('year')) {
+                            const MONTH_NAMES = ['January','February','March','April','May','June',
+                                                 'July','August','September','October','November','December']
+                            const monthName = MONTH_NAMES[(Number(valMap['month']) || 0) - 1] ?? valMap['month']
+                            message = `A record for ${monthName} ${valMap['year']} already exists.`
+                        } else if (colSet.has('employee_id') && colSet.has('year')) {
+                            message = `A record for this employee in ${valMap['year']} already exists.`
+                        } else if (colSet.has('employee_id') && colSet.has('leave_type')) {
+                            message = `A leave balance for this employee and leave type already exists.`
+                        } else {
+                            // Fallback: list the visible fields without internal UUIDs
+                            const parts = visible.map(({ col, val }) => `${col.replace(/_/g, ' ')}: "${val}"`)
+                            message = `A record with ${parts.join(', ')} already exists.`
+                        }
+                    }
+                } else {
+                    message = 'This record already exists.'
+                }
+            }
             else if (pgCode === '23503') message = 'Referenced record not found.'
             else if (pgCode === '23514') message = 'One or more fields violate a business rule (e.g. totalSalary must be ≥ basicSalary).'
             else if (pgCode === '23502') message = 'A required field is missing.'
@@ -204,6 +256,7 @@ async function bootstrap() {
             statusCode,
             error: name,
             message,
+            ...(duplicateField ? { field: duplicateField } : {}),
             ...(error.validationErrors ? { validationErrors: error.validationErrors } : {}),
         })
     })
@@ -247,6 +300,17 @@ async function bootstrap() {
     await app.register(complaintsRoutes, { prefix: '/api/v1' })
     await app.register(trainingRoutes, { prefix: '/api/v1/training' })
     await app.register(loansRoutes, { prefix: '/api/v1/loans' })
+
+    // Meta — returns runtime capability flags so the frontend can adapt without
+    // hardcoding env assumptions (e.g. whether to show the API docs link).
+    app.get('/api/v1/meta', { schema: { tags: ['Meta'] } }, async (_req: any, reply: any) => {
+        const baseUrl = `${env.APP_URL.replace(/\/$/, '').replace(':5174', ':4000').replace(':5173', ':4000')}`
+        return reply.send({
+            version: '1.0.0',
+            docsEnabled,
+            docsUrl: docsEnabled ? `${baseUrl}/api/docs` : null,
+        })
+    })
 
     // Health check — basic
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
@@ -302,8 +366,8 @@ async function bootstrap() {
 
     await app.listen({ port: env.PORT, host: env.HOST })
     app.log.info(`HRHub API running on http://${env.HOST}:${env.PORT}`)
-    if (env.NODE_ENV !== 'production') {
-        app.log.info(`Swagger docs at http://${env.HOST}:${env.PORT}/docs`)
+    if (docsEnabled) {
+        app.log.info(`API docs at http://${env.HOST}:${env.PORT}/api/docs`)
     }
 
     // Verify mail transport is reachable (non-fatal — emails will retry per send)

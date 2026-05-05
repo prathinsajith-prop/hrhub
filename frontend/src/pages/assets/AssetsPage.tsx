@@ -33,6 +33,7 @@ import {
     type Asset, type AssetAssignment, type AssetMaintenance,
 } from '@/hooks/useAssets'
 import { EmployeeSelect } from '@/components/shared'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 
@@ -576,7 +577,10 @@ function HistoryDialog({ asset, open, onOpenChange }: { asset: Asset; open: bool
                             {(data ?? []).map((a: AssetAssignment) => (
                                 <div key={a.id} className="border rounded-lg p-3 text-sm space-y-1">
                                     <div className="flex items-center justify-between">
-                                        <p className="font-medium">{a.employeeName} <span className="text-muted-foreground font-normal">({a.employeeNo})</span></p>
+                                        <p className="font-medium">
+                                            <EmployeeLink id={a.employeeId} name={a.employeeName ?? '—'} />
+                                            {' '}<span className="text-muted-foreground font-normal">({a.employeeNo})</span>
+                                        </p>
                                         <Badge variant={a.status === 'returned' ? 'success' : a.status === 'lost' ? 'destructive' : 'info'}>
                                             {a.status}
                                         </Badge>
@@ -677,7 +681,10 @@ export function AssetsPage() {
             cell: ({ row }) => row.original.assignedEmployeeName
                 ? (
                     <div>
-                        <p className="text-sm">{row.original.assignedEmployeeName}</p>
+                        {row.original.assignedEmployeeId
+                            ? <EmployeeLink id={row.original.assignedEmployeeId} name={row.original.assignedEmployeeName} className="text-sm" />
+                            : <p className="text-sm">{row.original.assignedEmployeeName}</p>
+                        }
                         <p className="text-xs text-muted-foreground">{row.original.assignedEmployeeNo}</p>
                     </div>
                 )

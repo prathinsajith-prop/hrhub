@@ -13,6 +13,8 @@ import type { Employee } from '@/types'
 interface EmployeeSelectProps {
     value: string
     onValueChange: (id: string) => void
+    /** Called with the full employee object whenever a selection or clear happens. */
+    onEmployeeChange?: (employee: Employee | null) => void
     status?: 'active' | 'onboarding' | 'inactive'
     placeholder?: string
     className?: string
@@ -42,7 +44,7 @@ function EmployeeAvatar({ employee, size = 'sm' }: { employee: Pick<Employee, 'f
 }
 
 export function EmployeeSelect({
-    value, onValueChange, status = 'active',
+    value, onValueChange, onEmployeeChange, status = 'active',
     placeholder, className, disabled = false, clearable = false, excludeId,
 }: EmployeeSelectProps) {
     const { t } = useTranslation()
@@ -108,7 +110,7 @@ export function EmployeeSelect({
                             <span
                                 role="button"
                                 aria-label="Clear"
-                                onClick={e => { e.stopPropagation(); onValueChange('') }}
+                                onClick={e => { e.stopPropagation(); onValueChange(''); onEmployeeChange?.(null) }}
                                 className="flex items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
                             >
                                 <X className="h-3 w-3" />
@@ -155,6 +157,7 @@ export function EmployeeSelect({
                                         value={emp.id}
                                         onSelect={() => {
                                             onValueChange(emp.id)
+                                            onEmployeeChange?.(emp)
                                             setOpen(false)
                                             setSearch('')
                                         }}

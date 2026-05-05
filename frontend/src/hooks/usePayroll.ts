@@ -2,8 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
 
-export function usePayrollRuns(params: { year?: number; limit?: number; offset?: number } = {}) {
-    const { year, limit = 12, offset = 0 } = params
+export function usePayrollRuns(params: { year?: number; limit?: number; offset?: number; enabled?: boolean } = {}) {
+    const { year, limit = 12, offset = 0, enabled = true } = params
     const q = new URLSearchParams()
     if (year) q.set('year', String(year))
     q.set('limit', String(limit))
@@ -13,6 +13,7 @@ export function usePayrollRuns(params: { year?: number; limit?: number; offset?:
         queryKey: ['payroll', year, limit, offset],
         queryFn: () => api.get<{ data: unknown[]; total: number }>(`/payroll?${q}`),
         staleTime: 30_000,
+        enabled,
     })
 }
 

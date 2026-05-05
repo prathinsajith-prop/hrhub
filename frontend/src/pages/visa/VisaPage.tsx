@@ -24,6 +24,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { NewVisaApplicationDialog } from '@/components/shared/action-dialogs'
 import { exportVisa } from '@/lib/export'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 
 const VISA_FILTERS: FilterConfig[] = [
   { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
@@ -147,7 +148,10 @@ const columns: ColumnDef<VisaApplication>[] = [
       <div className="flex items-center gap-2.5 min-w-0">
         <InitialsAvatar name={v.employeeName || '—'} src={v.employeeAvatarUrl} size="sm" />
         <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{v.employeeName || '—'}</p>
+          {v.employeeId
+            ? <EmployeeLink id={v.employeeId} name={v.employeeName || '—'} className="text-sm font-medium truncate block" />
+            : <p className="text-sm font-medium truncate">{v.employeeName || '—'}</p>
+          }
           {(v.employeeNo || v.employeeDepartment) && (
             <p className="text-[11px] text-muted-foreground truncate">
               {v.employeeNo}{v.employeeNo && v.employeeDepartment ? ' · ' : ''}{v.employeeDepartment}
@@ -380,7 +384,12 @@ export function VisaPage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('all')
   const [newAppOpen, setNewAppOpen] = useState(false)
-  const { data: visaData, isLoading, isFetching, refetch } = useVisas({ limit: 50 })
+  const search = useSearchFilters({
+    storageKey: 'hrhub.visa.searchHistory',
+    availableFilters: VISA_FILTERS,
+  })
+
+  const { data: visaData, isLoading, isFetching, refetch } = useVisas({ limit: 50, q: search.searchInput || undefined, filters: search.appliedFilters })
   const recalcUrgency = useRecalcVisaUrgency()
   const updateVisa = useUpdateVisa()
   const visaApplications: VisaApplication[] = (visaData?.data as VisaApplication[]) ?? []
@@ -425,17 +434,13 @@ export function VisaPage() {
       activeTab === 'active' ? visaApplications.filter((v) => v.status === 'active' || v.status === 'expiring_soon') :
         visaApplications
 
-  const search = useSearchFilters({
-    storageKey: 'hrhub.visa.searchHistory',
-    availableFilters: VISA_FILTERS,
-  })
   const filteredVisas = useMemo(
     () => applyClientFilters(filtered as unknown as Record<string, unknown>[], {
-      searchInput: search.searchInput,
-      appliedFilters: search.appliedFilters,
-      searchFields: ['employeeName', 'employeeNo', 'visaType', 'mohreRef', 'gdfrRef'],
+      searchInput: '',
+      appliedFilters: {},
+      searchFields: [],
     }) as unknown as VisaApplication[],
-    [filtered, search.appliedFilters, search.searchInput],
+    [filtered],
   )
 
   const activeCount = visaApplications.filter((v) => v.status === 'active').length

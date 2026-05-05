@@ -252,7 +252,7 @@ if (externalValue !== lastSynced) {
 
 - Auth header: `Authorization: Bearer <accessToken>`
 - Base path: `/api/v1/`
-- Swagger UI: `http://localhost:4000/docs` (dev only)
+- Swagger UI: `http://localhost:4000/api/docs` (always enabled in dev; set `ENABLE_API_DOCS=true` to enable in production/staging)
 - Paginated response: `{ data: T[], total, limit, offset, hasMore, nextCursor? }`
 - Error response: `{ statusCode, error, message }`
 - `dept_head` role is scoped server-side to their department — enforced in route handlers, not just client

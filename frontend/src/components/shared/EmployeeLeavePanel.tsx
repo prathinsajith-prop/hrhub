@@ -112,7 +112,7 @@ function LeaveAdjustmentDialog({ employeeId, onClose }: { employeeId: string; on
                     <DialogTitle>{t('leaveAdjustments.adjustment.newAdjustment')}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.adjustment.leaveType')} required>
                             <Select value={form.leaveType} onValueChange={v => setForm(f => ({ ...f, leaveType: v }))}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -241,7 +241,7 @@ function AirTicketDialog({ employeeId, ticket, onClose }: { employeeId: string; 
                     </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.adjustment.year')} required error={errors.year}>
                             <NumericInput
                                 value={form.year}
@@ -261,7 +261,7 @@ function AirTicketDialog({ employeeId, ticket, onClose }: { employeeId: string; 
                             </Select>
                         </FormField>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.airTicket.destination')}>
                             <Input
                                 value={form.destination}
@@ -365,7 +365,7 @@ function OffsetDialog({ employeeId, offset, onClose }: { employeeId: string; off
                     </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.offset.workDate')} required error={errors.workDate}>
                             <Input
                                 type="date"

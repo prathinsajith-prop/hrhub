@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js'
 import { loginHistory, activityLogs } from '../../db/schema/index.js'
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, and, desc, ilike, gte, lte } from 'drizzle-orm'
 
 /** Parse basic browser/OS info from User-Agent string */
 function parseUserAgent(ua: string): {
@@ -114,13 +114,20 @@ export async function recordActivity(params: RecordActivityParams): Promise<void
 }
 
 export async function getActivityLogs(tenantId: string, params: {
-    entityType?: string; entityId?: string; userId?: string; limit?: number; offset?: number
+    entityType?: string; entityId?: string; userId?: string; action?: string; actorRole?: string; actorName?: string; entityName?: string; from?: string; to?: string; ipAddress?: string; limit?: number; offset?: number
 }) {
-    const { entityType, entityId, userId, limit = 50, offset = 0 } = params
+    const { entityType, entityId, userId, action, actorRole, actorName, entityName, from, to, ipAddress, limit = 50, offset = 0 } = params
     const conditions = [eq(activityLogs.tenantId, tenantId)]
     if (entityType) conditions.push(eq(activityLogs.entityType, entityType))
     if (entityId) conditions.push(eq(activityLogs.entityId, entityId))
     if (userId) conditions.push(eq(activityLogs.userId, userId))
+    if (action) conditions.push(eq(activityLogs.action, action as never))
+    if (actorRole) conditions.push(eq(activityLogs.actorRole, actorRole))
+    if (actorName) conditions.push(ilike(activityLogs.actorName, '%' + actorName + '%'))
+    if (entityName) conditions.push(ilike(activityLogs.entityName, '%' + entityName + '%'))
+    if (from) conditions.push(gte(activityLogs.createdAt, new Date(from)))
+    if (to) conditions.push(lte(activityLogs.createdAt, new Date(to)))
+    if (ipAddress) conditions.push(eq(activityLogs.ipAddress, ipAddress))
 
     return db.select().from(activityLogs)
         .where(and(...conditions))

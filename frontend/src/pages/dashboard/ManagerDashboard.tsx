@@ -12,6 +12,7 @@ import { labelFor } from '@/lib/enums'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useAuthStore } from '@/store/authStore'
 import { useLeaveRequests } from '@/hooks/useLeave'
 import { useAttendanceSummary } from '@/hooks/useAttendance'
@@ -23,6 +24,7 @@ import { QuickAction, SectionHeading, SkeletonRows } from './_shared'
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface LeaveRequest {
   id: string
+  employeeId?: string
   employeeName?: string
   employee?: { firstName?: string; lastName?: string }
   leaveType: string
@@ -53,15 +55,16 @@ export function ManagerDashboard() {
   // Scope leave and employee queries to this manager's department.
   // The backend also enforces this for dept_head regardless of what params are sent,
   // but passing it explicitly makes the query key stable and avoids a double-render.
-  const { data: leaveData, isLoading: leaveLoading } = useLeaveRequests({ status: 'pending', department: department || undefined, limit: 10 })
+  const { data: leaveData, isLoading: leaveLoading } = useLeaveRequests({ filters: { status: { operator: 'equals', value: 'pending' } }, department: department || undefined, limit: 10 })
   const { data: attendanceSummary, isLoading: attLoading } = useAttendanceSummary()
-  const { data: employeesData, isLoading: empLoading } = useEmployees({ department: department || undefined, limit: 100 })
+  const { data: employeesData, isLoading: empLoading } = useEmployees({ department: department || undefined, status: 'active', limit: 1 })
+  const { data: totalEmployeesData } = useEmployees({ department: department || undefined, limit: 1 })
   const { data: onboarding, isLoading: onboardingLoading } = useOnboardingSummary()
   const approveLeave = useApproveLeave()
 
   const pendingLeave = (Array.isArray(leaveData?.data) ? leaveData.data : []) as LeaveRequest[]
-  const employees = Array.isArray(employeesData?.data) ? employeesData.data : []
-  const activeCount = employees.filter((e: { status?: string }) => e.status === 'active').length
+  const activeCount = employeesData?.total ?? 0
+  const totalCount = totalEmployeesData?.total ?? 0
 
   const today = new Date().toLocaleDateString('en-AE', { weekday: 'long', day: 'numeric', month: 'long' })
 
@@ -76,7 +79,7 @@ export function ManagerDashboard() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCardCompact
           label="Team Size"
-          value={empLoading ? undefined : employees.length}
+          value={empLoading ? undefined : totalCount}
           icon={Users}
           color="blue"
           loading={empLoading}
@@ -160,7 +163,9 @@ export function ManagerDashboard() {
                         {name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{name}</p>
+                        {req.employeeId
+                          ? <EmployeeLink id={req.employeeId} name={name} className="text-sm font-semibold text-foreground truncate" />
+                          : <p className="text-sm font-semibold text-foreground truncate">{name}</p>}
                         <p className="text-xs text-muted-foreground">
                           {labelFor(req.leaveType)} · {req.days} day{req.days !== 1 ? 's' : ''}
                         </p>

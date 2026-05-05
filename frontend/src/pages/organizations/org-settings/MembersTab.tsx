@@ -3,6 +3,7 @@ import { Users, Plus, XCircle, CheckCircle2, UserCircle, Search, Send, MailCheck
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -10,7 +11,7 @@ import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
 import { useTenantUsers, useUpdateUser, useInvitableEmployees, useInviteUser, useResendInvite, type InvitableEmployee } from '@/hooks/useSettings'
 import { usePermissions } from '@/hooks/usePermissions'
-import { labelFor } from '@/lib/enums'
+import { labelFor, ROLE_BADGE_STYLE } from '@/lib/enums'
 import { Card, Section } from './_shared'
 import { CopyableEmail } from '@/components/shared'
 
@@ -318,18 +319,41 @@ export function MembersTab() {
                                     </div>
                                     <div className="flex items-center gap-2.5 shrink-0">
                                         {canEditThisUser ? (
-                                            <select
+                                            <Select
                                                 value={u.role}
-                                                onChange={e => handleRoleChange(u.id, e.target.value)}
-                                                className="h-7 rounded-md border border-input bg-background px-2 py-0 text-xs font-medium"
+                                                onValueChange={role => handleRoleChange(u.id, role)}
                                                 disabled={updateUser.isPending}
                                             >
-                                                {availableRoles.map(r => (
-                                                    <option key={r.id} value={r.id}>{r.label}</option>
-                                                ))}
-                                            </select>
+                                                <SelectTrigger className="h-7 w-40 text-xs px-2">
+                                                    <SelectValue>
+                                                        <span className={cn(
+                                                            "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                                            ROLE_BADGE_STYLE[u.role] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                                                        )}>
+                                                            {labelFor(u.role)}
+                                                        </span>
+                                                    </SelectValue>
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {availableRoles.map(r => (
+                                                        <SelectItem key={r.id} value={r.id}>
+                                                            <span className={cn(
+                                                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                                                ROLE_BADGE_STYLE[r.id] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                                                            )}>
+                                                                {r.label}
+                                                            </span>
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         ) : (
-                                            <Badge variant="outline" className="text-xs capitalize">{labelFor(u.role)}</Badge>
+                                            <span className={cn(
+                                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                                ROLE_BADGE_STYLE[u.role] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                                            )}>
+                                                {labelFor(u.role)}
+                                            </span>
                                         )}
 
                                         {canEditThisUser && isPendingInvite && (

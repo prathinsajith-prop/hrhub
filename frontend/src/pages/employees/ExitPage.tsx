@@ -24,6 +24,7 @@ import {
     useSettlementPreview, type ExitRequest,
 } from '@/hooks/useExit'
 import { EmployeeSelect } from '@/components/shared'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -132,7 +133,6 @@ export function ExitPage() {
     const { can } = usePermissions()
     const canManage = can('manage_exit')
 
-    const { data: exits, isLoading, isFetching, refetch } = useExitRequests()
     const initiate = useInitiateExit()
     const approve = useApproveExit()
     const reject = useRejectExit()
@@ -149,6 +149,9 @@ export function ExitPage() {
         storageKey: 'hrhub.exit.searchHistory',
         availableFilters: EXIT_FILTERS,
     })
+
+    const exitStatus = (exitSearch.appliedFilters.status?.value as string | undefined) || undefined
+    const { data: exits, isLoading, isFetching, refetch } = useExitRequests({ status: exitStatus })
 
     const previewEnabled = !!form.employeeId && !!form.exitDate && !!form.exitType
     const { data: preview, isLoading: previewLoading } = useSettlementPreview(
@@ -177,14 +180,14 @@ export function ExitPage() {
         [exits],
     )
 
-    const filteredExits = useMemo(
-        () => applyClientFilters(exitList as unknown as Record<string, unknown>[], {
+    const filteredExits = useMemo(() => {
+        const { status: _omitStatus, ...exitFiltersWithoutStatus } = exitSearch.appliedFilters
+        return applyClientFilters(exitList as unknown as Record<string, unknown>[], {
             searchInput: exitSearch.searchInput,
-            appliedFilters: exitSearch.appliedFilters,
-            searchFields: ['employeeName', 'exitType', 'status', 'reason'],
-        }),
-        [exitList, exitSearch.appliedFilters, exitSearch.searchInput],
-    )
+            appliedFilters: exitFiltersWithoutStatus,
+            searchFields: ['employeeName', 'exitType', 'reason'],
+        })
+    }, [exitList, exitSearch.appliedFilters, exitSearch.searchInput])
 
     const pending = exitList.filter((e) => e.status === 'pending').length
     const approved = exitList.filter((e) => e.status === 'approved').length
@@ -198,7 +201,10 @@ export function ExitPage() {
                 <div className="flex items-center gap-2.5 min-w-0">
                     <InitialsAvatar name={e.employeeName ?? '—'} src={e.employeeAvatarUrl ?? undefined} size="sm" />
                     <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{e.employeeName ?? '—'}</p>
+                        {e.employeeId
+                            ? <EmployeeLink id={e.employeeId} name={e.employeeName ?? '—'} className="text-sm font-medium truncate block" />
+                            : <p className="text-sm font-medium truncate">{e.employeeName ?? '—'}</p>
+                        }
                         {e.employeeDesignation && (
                             <p className="text-[11px] text-muted-foreground truncate">{e.employeeDesignation}</p>
                         )}

@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import { useVerifyDocument, useRejectDocument, useDocumentAuditLog } from '@/hooks/useDocuments'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatFileSize } from '@/lib/utils'
 
 interface Doc {
     id: string
@@ -150,7 +150,7 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
                             </p>
                             {document.fileSize && (
                                 <p className="text-[11px] text-gray-500">
-                                    {(document.fileSize / 1024 / 1024).toFixed(2)} MB
+                                    {formatFileSize(document.fileSize)}
                                 </p>
                             )}
                         </ContextItem>

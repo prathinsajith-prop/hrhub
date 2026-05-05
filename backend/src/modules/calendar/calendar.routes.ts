@@ -40,7 +40,7 @@ export default async function calendarRoutes(fastify: any): Promise<void> {
             visas: visaResult.data,
             documents: docResult.data,
             leaves: leaveResult.data,
-            reviews,
+            reviews: reviews.data,
             holidays: holidayRows,
         })
     })

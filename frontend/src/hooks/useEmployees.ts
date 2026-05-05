@@ -80,6 +80,17 @@ export function useInfiniteEmployees(params: Omit<ListParams, 'offset'> = {}) {
     })
 }
 
+export function useNextEmployeeNo(enabled = true) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
+    return useQuery<{ data: { employeeNo: string } }>({
+        queryKey: ['employees', tenantId, 'next-employee-no'],
+        queryFn: () => api.get('/employees/next-employee-no'),
+        enabled: !!tenantId && enabled,
+        staleTime: 0,
+        gcTime: 0,
+    })
+}
+
 export function useEmployee(id: string) {
     const tenantId = useAuthStore(s => s.tenant?.id)
     return useQuery({
@@ -106,7 +117,6 @@ export function useUpdateEmployee(id: string) {
         mutationFn: (data: Partial<Employee>) => api.patch<{ data: Employee }>(`/employees/${id}`, data).then(r => r.data),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['employees'] })
-            qc.invalidateQueries({ queryKey: ['employees', id] })
             qc.invalidateQueries({ queryKey: ['org-chart'] })
         },
     })
@@ -125,9 +135,8 @@ export function useUpdateEmployeeStatus() {
     return useMutation({
         mutationFn: ({ id, status }: { id: string; status: 'active' | 'suspended' | 'terminated' }) =>
             api.patch<{ data: Employee }>(`/employees/${id}`, { status }).then(r => r.data),
-        onSuccess: (_data, variables) => {
+        onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['employees'] })
-            qc.invalidateQueries({ queryKey: ['employees', variables.id] })
         },
     })
 }
@@ -176,7 +185,7 @@ export function useRecordSalaryRevision(employeeId: string) {
         }) => api.post<{ data: SalaryRevision }>(`/employees/${employeeId}/salary-revision`, data).then(r => r.data),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['salary-history', employeeId] })
-            qc.invalidateQueries({ queryKey: ['employees', employeeId] })
+            qc.invalidateQueries({ queryKey: ['employees'] })
         },
     })
 }
@@ -203,6 +212,7 @@ export interface EmployeeAccount {
     account: {
         id: string
         email: string
+        role: string
         isActive: boolean
         lastLoginAt: string | null
         createdAt: string
@@ -222,8 +232,8 @@ export function useEmployeeAccount(employeeId: string | undefined) {
 export function useInviteEmployee() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: ({ employeeId, email, name }: { employeeId: string; email?: string; name?: string }) =>
-            api.post<{ message: string }>(`/employees/${employeeId}/invite`, { email, name }),
+        mutationFn: ({ employeeId, email, name, role }: { employeeId: string; email?: string; name?: string; role?: string }) =>
+            api.post<{ message: string }>(`/employees/${employeeId}/invite`, { email, name, role }),
         onSuccess: (_data, variables) => {
             qc.invalidateQueries({ queryKey: ['employees', variables.employeeId, 'account'] })
         },
