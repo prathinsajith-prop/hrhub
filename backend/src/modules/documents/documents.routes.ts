@@ -433,6 +433,9 @@ export default async function (fastify: any): Promise<void> {
         }
         const folder = employeeId ? `employees/${employeeId}/documents` : 'documents'
         const s3Key = buildS3Key(request.user.tenantId, folder, fileName)
+        if (!s3Key.startsWith(`tenants/${request.user.tenantId}/`)) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'File path does not belong to your organization' })
+        }
         const uploadUrl = await generateUploadUrl(s3Key, contentType)
         return reply.send({ data: { uploadUrl, s3Key, category } })
     })

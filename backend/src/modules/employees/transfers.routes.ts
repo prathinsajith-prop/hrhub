@@ -10,7 +10,7 @@ const transferSchema = z.object({
     toDesignation: z.string().max(200).optional().nullable(),
     toBranchId: z.string().uuid().optional().nullable(),
     toDivisionId: z.string().uuid().optional().nullable(),
-    toDepartmentId: z.string().uuid().optional().nullable(),
+    toDepartmentId: z.string().uuid({ message: 'toDepartmentId must be a valid UUID' }),
     newSalary: z.number().positive().optional().nullable(),
     reason: z.string().max(500).optional().nullable(),
     notes: z.string().max(1000).optional().nullable(),

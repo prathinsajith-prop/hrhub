@@ -3,6 +3,7 @@ import { eq, and, asc } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { sponsoringEntities } from '../../db/schema/index.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { parseUuidParam } from '../../lib/validation.js'
 
 const createSchema = z.object({
     name: z.string().min(1).max(200),
@@ -44,6 +45,8 @@ export async function sponsoringEntitiesRoutes(fastify: any): Promise<void> {
 
     // PATCH /api/v1/sponsoring-entities/:id
     fastify.patch('/sponsoring-entities/:id', { ...adminAuth, schema: { tags: ['Sponsoring Entities'] } }, async (req: any, reply: any) => {
+        const id = parseUuidParam(req.params, 'id', reply)
+        if (!id) return
         const parsed = updateSchema.safeParse(req.body)
         if (!parsed.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid input' })
         const patch: Partial<typeof sponsoringEntities.$inferInsert> = {}
@@ -51,7 +54,7 @@ export async function sponsoringEntitiesRoutes(fastify: any): Promise<void> {
         if (parsed.data.isActive !== undefined) patch.isActive = parsed.data.isActive
         if (parsed.data.sortOrder !== undefined) patch.sortOrder = parsed.data.sortOrder
         const [row] = await db.update(sponsoringEntities).set(patch)
-            .where(and(eq(sponsoringEntities.id, req.params.id), eq(sponsoringEntities.tenantId, req.user.tenantId)))
+            .where(and(eq(sponsoringEntities.id, id), eq(sponsoringEntities.tenantId, req.user.tenantId)))
             .returning()
         if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Sponsoring entity not found' })
         recordActivity({ tenantId: req.user.tenantId, userId: req.user.id, actorName: req.user.name, actorRole: req.user.role, entityType: 'sponsoring_entity', entityId: row.id, entityName: row.name, action: 'update', ipAddress: req.ip, userAgent: req.headers['user-agent'] }).catch(() => {})
@@ -60,11 +63,13 @@ export async function sponsoringEntitiesRoutes(fastify: any): Promise<void> {
 
     // DELETE /api/v1/sponsoring-entities/:id — soft delete
     fastify.delete('/sponsoring-entities/:id', { ...adminAuth, schema: { tags: ['Sponsoring Entities'] } }, async (req: any, reply: any) => {
+        const id = parseUuidParam(req.params, 'id', reply)
+        if (!id) return
         const [row] = await db.update(sponsoringEntities).set({ isActive: false })
-            .where(and(eq(sponsoringEntities.id, req.params.id), eq(sponsoringEntities.tenantId, req.user.tenantId)))
+            .where(and(eq(sponsoringEntities.id, id), eq(sponsoringEntities.tenantId, req.user.tenantId)))
             .returning({ id: sponsoringEntities.id, name: sponsoringEntities.name })
         if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Sponsoring entity not found' })
-        recordActivity({ tenantId: req.user.tenantId, userId: req.user.id, actorName: req.user.name, actorRole: req.user.role, entityType: 'sponsoring_entity', entityId: row.id, action: 'delete', ipAddress: req.ip, userAgent: req.headers['user-agent'] }).catch(() => {})
+        recordActivity({ tenantId: req.user.tenantId, userId: req.user.id, actorName: req.user.name, actorRole: req.user.role, entityType: 'sponsoring_entity', entityId: row.id, entityName: row.name, action: 'delete', ipAddress: req.ip, userAgent: req.headers['user-agent'] }).catch(() => {})
         return reply.code(204).send()
     })
 }

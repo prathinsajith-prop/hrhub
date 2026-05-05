@@ -46,6 +46,7 @@ export interface Employee {
   id: string
   tenantId: string
   entityId: string
+  entityName?: string    // populated via entities JOIN in getEmployee / listEmployees
   employeeNo: string
   firstName: string
   lastName: string

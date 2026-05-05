@@ -12,6 +12,7 @@ import {
 import { listVisaCosts, addVisaCost, deleteVisaCost, getVisaCost } from './visa_costs.service.js'
 import { visaStepLabel, VISA_STEP_LABELS, VISA_TOTAL_STEPS } from './visa.constants.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { parseUuidParam } from '../../lib/validation.js'
 import { cacheDel } from '../../lib/redis.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
@@ -385,7 +386,8 @@ export default async function (fastify: any): Promise<void> {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'pro_officer', 'super_admin')],
         schema: { tags: ['Visa'] },
     }, async (request: any, reply: any) => {
-        const { costId } = request.params as { costId: string }
+        const costId = parseUuidParam(request.params, 'costId', reply)
+        if (!costId) return
         const before = await getVisaCost(request.user.tenantId, costId)
         const deleted = await deleteVisaCost(request.user.tenantId, costId)
         if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Cost record not found' })
