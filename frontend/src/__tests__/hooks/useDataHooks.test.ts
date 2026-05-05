@@ -41,7 +41,8 @@ describe('useLeaveRequests', () => {
         await waitFor(() => expect(apiMock.get).toHaveBeenCalled())
         const url = apiMock.get.mock.calls[0][0] as string
         expect(url).toMatch(/^\/leave\?/)
-        expect(url).toContain('pageSize=20')
+        expect(url).toContain('limit=20')
+        expect(url).toContain('offset=0')
     })
 
     it('forwards employeeId and filters as query params', async () => {
@@ -61,7 +62,7 @@ describe('useLeaveRequests', () => {
         const url = apiMock.get.mock.calls[0][0] as string
         expect(url).toContain('employeeId=emp-1')
         expect(url).toContain('filter=')
-        expect(url).toContain('pageSize=50')
+        expect(url).toContain('limit=50')
     })
 
     it('omits undefined params from the query string', async () => {
@@ -89,7 +90,7 @@ describe('useVisas', () => {
         const url = apiMock.get.mock.calls[0][0] as string
         expect(url).toMatch(/^\/visa\?/)
         expect(url).toContain('filter=')
-        expect(url).toContain('pageSize=100')
+        expect(url).toContain('limit=100')
     })
 })
 

@@ -18,6 +18,7 @@ export default async function (fastify: any): Promise<void> {
 
     fastify.get('/', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {
         const { employeeId, category, status, from, to, search, q, filter, limit = '20', offset = '0', after } = request.query as Record<string, string>
+        if (filter && filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
         const isElevated = ['hr_manager', 'super_admin', 'pro_officer'].includes(request.user.role)
         const effectiveEmployeeId = isElevated ? employeeId : request.user.employeeId
         const result = await listDocuments(request.user.tenantId, { employeeId: effectiveEmployeeId, category, status, from, to, search: q || search || undefined, filter: filter || undefined, limit: Number(limit), offset: Number(offset), after })

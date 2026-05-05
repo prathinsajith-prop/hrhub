@@ -279,20 +279,27 @@ export default async function (fastify: any): Promise<void> {
         }
 
         const employeeNo = body.employeeNo ?? (await generateNextEmployeeNo(request.user.tenantId))
-        const employee = await createEmployee(request.user.tenantId, { ...body, employeeNo, entityId } as never)
-        recordActivity({
-            tenantId: request.user.tenantId,
-            userId: request.user.id,
-            actorName: request.user.name,
-            actorRole: request.user.role,
-            entityType: 'employee',
-            entityId: employee.id,
-            entityName: employee.fullName,
-            action: 'create',
-            ipAddress: (request as any).ip,
-            userAgent: request.headers['user-agent'],
-        }).catch(() => { })
-        return reply.code(201).send({ data: employee })
+        try {
+            const employee = await createEmployee(request.user.tenantId, { ...body, employeeNo, entityId } as never)
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: employee.id,
+                entityName: employee.fullName,
+                action: 'create',
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+            return reply.code(201).send({ data: employee })
+        } catch (err: any) {
+            if (err?.code === '23505') {
+                return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: `Employee ID "${employeeNo}" is already in use` })
+            }
+            throw err
+        }
     })
 
     // PATCH /api/v1/employees/:id

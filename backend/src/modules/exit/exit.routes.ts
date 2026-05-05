@@ -43,6 +43,7 @@ export async function exitRoutes(fastify: any) {
     // GET /api/v1/exit
     fastify.get('/exit', { ...auth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
         const { limit = '50', offset = '0', status, q, filter } = request.query as Record<string, string>
+        if (filter && filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
         const result = await getExitRequests(request.user.tenantId, {
             limit: Number(limit), offset: Number(offset), status, q, filter,
         })

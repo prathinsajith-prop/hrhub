@@ -143,11 +143,12 @@ export function applyClientFilters<T extends Row>(
             }
 
             // Date range as a paired tuple.
-            if (Array.isArray(applied.value) && applied.value.length === 2) {
+            if (Array.isArray(applied.value) && applied.value.length === 2
+                && applied.operator !== 'in' && applied.operator !== 'not_in') {
                 const [a, b] = applied.value as [unknown, unknown]
                 const isDate =
                     typeof a === 'string' && /\d{4}-\d{2}-\d{2}/.test(a)
-                if (isDate || typeof b === 'string') {
+                if (isDate) {
                     const rowDate = getValue(row, name, fieldAccessors[name])
                     if (rowDate == null) {
                         if (a != null || b != null) return false

@@ -1,4 +1,5 @@
-import { eq, and, inArray, notInArray, ne, sql } from 'drizzle-orm'
+import { eq, and, inArray, sql } from 'drizzle-orm'
+import { Conditions } from '../../lib/filters.js'
 import { db } from '../../db/index.js'
 import { teams, teamMembers, employees, orgUnits } from '../../db/schema/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
@@ -32,8 +33,10 @@ export async function listTeams(tenantId: string, filterDepartmentId?: string): 
         .groupBy(teamMembers.teamId)
         .as('mc')
 
-    const conditions = [eq(teams.tenantId, tenantId), eq(teams.isActive, true)]
-    if (filterDepartmentId) conditions.push(eq(teams.departmentId, filterDepartmentId))
+    const conds = Conditions.create()
+        .tenant(teams.tenantId, tenantId)
+        .notArchived(teams.isActive)
+        .match(teams.departmentId, filterDepartmentId)
 
     const rows = await db
         .select({
@@ -51,7 +54,7 @@ export async function listTeams(tenantId: string, filterDepartmentId?: string): 
         })
         .from(teams)
         .leftJoin(memberCounts, eq(teams.id, memberCounts.teamId))
-        .where(and(...conditions))
+        .where(conds.where())
         .orderBy(teams.name)
 
     return rows
@@ -258,13 +261,12 @@ export async function getEligibleEmployees(tenantId: string, teamId: string) {
         .where(eq(teamMembers.teamId, teamId))
     const existingIds = existing.map(m => m.employeeId)
 
-    const conditions = [
-        eq(employees.tenantId, tenantId),
-        eq(employees.isArchived, false),
-        ne(employees.status, 'terminated'),
-    ]
-    if (team.departmentId) conditions.push(eq(employees.departmentId, team.departmentId))
-    if (existingIds.length > 0) conditions.push(notInArray(employees.id, existingIds))
+    const conds = Conditions.create()
+        .tenant(employees.tenantId, tenantId)
+        .match(employees.isArchived, false)
+        .ne(employees.status, 'terminated')
+        .match(employees.departmentId, team.departmentId)
+        .notInList(employees.id, existingIds)
 
     const rows = await db
         .select({
@@ -276,7 +278,7 @@ export async function getEligibleEmployees(tenantId: string, teamId: string) {
             avatarUrl: employees.avatarUrl,
         })
         .from(employees)
-        .where(and(...conditions))
+        .where(conds.where())
         .orderBy(employees.firstName, employees.lastName)
         .limit(200)
     return Promise.all(rows.map(async r => ({ ...r, avatarUrl: await resolveAvatarUrl(r.avatarUrl) })))

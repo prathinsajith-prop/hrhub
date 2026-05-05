@@ -91,6 +91,11 @@ export interface SearchHistoryEntry {
 }
 
 export interface SearchPagination {
+    /** Preferred: maps directly to the `limit` query param the backend reads. */
+    limit?: number
+    /** Preferred: maps directly to the `offset` query param the backend reads. */
+    offset?: number
+    /** Legacy aliases — converted to limit/offset automatically. */
     page?: number
     pageSize?: number
     sortBy?: string

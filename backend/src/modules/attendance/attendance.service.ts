@@ -2,6 +2,7 @@ import { db } from '../../db/index.js'
 import { attendanceRecords, employees } from '../../db/schema/index.js'
 import { eq, and, gte, lte, sql } from 'drizzle-orm'
 import { encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
+import { Conditions } from '../../lib/filters.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 
 export async function checkIn(tenantId: string, employeeId: string) {
@@ -86,19 +87,19 @@ const DEFAULT_ATTENDANCE_PAGE = 50
 
 export async function getAttendance(tenantId: string, params: GetAttendanceParams): Promise<GetAttendanceResult> {
     const limit = Math.min(Math.max(1, params.limit ?? DEFAULT_ATTENDANCE_PAGE), MAX_ATTENDANCE_PAGE)
-    const conditions = [eq(attendanceRecords.tenantId, tenantId)]
-    if (params.employeeId) conditions.push(eq(attendanceRecords.employeeId, params.employeeId))
-    if (params.startDate) conditions.push(gte(attendanceRecords.date, params.startDate))
-    if (params.endDate) conditions.push(lte(attendanceRecords.date, params.endDate))
-    if (params.status) conditions.push(eq(attendanceRecords.status, params.status as never))
 
     // Cursor: { c: ISO date, i: row id } — keyset on (date DESC, id DESC).
-    if (params.cursor) {
-        const decoded = decodeCursor(params.cursor)
-        if (decoded) {
-            conditions.push(sql`(${attendanceRecords.date}, ${attendanceRecords.id}) < (${decoded.c}, ${decoded.i})`)
-        }
-    }
+    // Uses raw SQL tuple comparison (not the standard createdAt cursor) — no .cursor() helper.
+    const decodedCursor = params.cursor ? decodeCursor(params.cursor) : null
+
+    const conds = Conditions.create()
+        .tenant(attendanceRecords.tenantId, tenantId)
+        .match(attendanceRecords.employeeId, params.employeeId)
+        .match(attendanceRecords.status, params.status)
+        .dateRange(attendanceRecords.date, params.startDate, params.endDate)
+        .when(!!decodedCursor, c => c.add(
+            sql`(${attendanceRecords.date}, ${attendanceRecords.id}) < (${decodedCursor!.c}, ${decodedCursor!.i})`
+        ))
 
     const baseQuery = db.select({
         id: attendanceRecords.id,
@@ -120,7 +121,7 @@ export async function getAttendance(tenantId: string, params: GetAttendanceParam
     })
         .from(attendanceRecords)
         .leftJoin(employees, eq(employees.id, attendanceRecords.employeeId))
-        .where(and(...conditions))
+        .where(conds.where())
         .orderBy(sql`${attendanceRecords.date} DESC, ${attendanceRecords.id} DESC`)
         .limit(limit + 1) // fetch one extra to detect "has more"
 
@@ -148,13 +149,13 @@ export async function getAttendance(tenantId: string, params: GetAttendanceParam
             })
                 .from(attendanceRecords)
                 .leftJoin(employees, eq(employees.id, attendanceRecords.employeeId))
-                .where(and(...conditions))
+                .where(conds.where())
                 .orderBy(sql`${attendanceRecords.date} DESC, ${attendanceRecords.id} DESC`)
                 .limit(limit)
                 .offset(offset),
             db.select({ count: sql<number>`count(*)::int` })
                 .from(attendanceRecords)
-                .where(and(...conditions)),
+                .where(conds.where()),
         ])
         const resolvedItems = await Promise.all(items.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
         return { items: resolvedItems, nextCursor: null, total: totalRow[0]?.count ?? 0 }

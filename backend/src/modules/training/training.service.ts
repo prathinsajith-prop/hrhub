@@ -1,7 +1,8 @@
-import { eq, and, desc, ilike, isNull, sql, getTableColumns } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { trainingRecords, employees } from '../../db/schema/index.js'
+import { Conditions } from '../../lib/filters.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewTraining = InferInsertModel<typeof trainingRecords>
@@ -19,14 +20,17 @@ export async function listTraining(
 ) {
     const { employeeId, status, type, search, limit, offset } = params
 
-    const conditions = [eq(trainingRecords.tenantId, tenantId), isNull(trainingRecords.deletedAt)]
-    if (employeeId) conditions.push(eq(trainingRecords.employeeId, employeeId))
-    if (status) conditions.push(eq(trainingRecords.status, status as never))
-    if (type) conditions.push(eq(trainingRecords.type, type as never))
-    if (search) conditions.push(ilike(trainingRecords.title, `%${search}%`))
+    // Base: tenant + soft-delete + employee scope — shared by the KPI aggregation.
+    const baseConds = Conditions.create()
+        .tenant(trainingRecords.tenantId, tenantId)
+        .notDeleted(trainingRecords.deletedAt)
+        .match(trainingRecords.employeeId, employeeId)
 
-    const kpiConditions = [eq(trainingRecords.tenantId, tenantId), isNull(trainingRecords.deletedAt)]
-    if (employeeId) kpiConditions.push(eq(trainingRecords.employeeId, employeeId))
+    // Main query adds status / type / search filters on top.
+    const mainConds = baseConds.fork()
+        .match(trainingRecords.status, status)
+        .match(trainingRecords.type, type)
+        .search(search, trainingRecords.title)
 
     const [rows, [kpi]] = await Promise.all([
         db
@@ -39,11 +43,11 @@ export async function listTraining(
             })
             .from(trainingRecords)
             .leftJoin(employees, eq(employees.id, trainingRecords.employeeId))
-            .where(and(...conditions))
+            .where(mainConds.where())
             .orderBy(desc(trainingRecords.startDate), desc(trainingRecords.createdAt))
             .limit(limit)
             .offset(offset),
-        // KPI summary — scoped to the same employee filter so non-HR callers don't see company-wide stats
+        // KPI summary — scoped to employee only (no status/search) so counts reflect all training for that employee
         db
             .select({
                 total: sql<number>`COUNT(*)`.as('total'),
@@ -53,7 +57,7 @@ export async function listTraining(
                 totalCost: sql<number>`COALESCE(SUM(CAST(cost AS NUMERIC)), 0)`.as('totalCost'),
             })
             .from(trainingRecords)
-            .where(and(...kpiConditions)),
+            .where(baseConds.where()),
     ])
 
     const total = rows.length > 0 ? Number(rows[0]!.total) : 0

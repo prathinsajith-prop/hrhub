@@ -1,9 +1,9 @@
-import { eq, and, desc, lte, gte, isNull, isNotNull, sql, getTableColumns, or, lt, aliasedTable, ilike } from 'drizzle-orm'
+import { eq, and, desc, isNull, isNotNull, gte, lte, sql, getTableColumns, aliasedTable } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { documents, employees, users } from '../../db/schema/index.js'
-import { parseFilterString, buildDrizzleFilters } from '../../lib/filters.js'
+import { Conditions } from '../../lib/filters.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 const DOCUMENT_FIELD_MAP = {
@@ -37,48 +37,33 @@ const verifierUsers = aliasedTable(users, 'verifier')
 
 export async function listDocuments(tenantId: string, params: { employeeId?: string; category?: string; status?: string; from?: string; to?: string; search?: string; filter?: string; limit: number; offset: number; after?: string }) {
     const { employeeId, category, status, from, to, search, filter, limit, offset, after } = params
-    const conditions = [eq(documents.tenantId, tenantId), isNull(documents.deletedAt)]
-    if (employeeId) conditions.push(eq(documents.employeeId, employeeId))
-    if (category) conditions.push(eq(documents.category, category as never))
-    if (status) conditions.push(eq(documents.status, status as never))
-    if (search) {
-        const q = `%${search.trim()}%`
-        conditions.push(or(
-            ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, q),
-            ilike(employees.firstName, q),
-            ilike(employees.lastName, q),
-            ilike(documents.docType, q),
-        )!)
-    }
-    // Calendar uses expiryDate as the event date; filter by [from, to] when provided.
-    if (from) conditions.push(gte(documents.expiryDate, from))
-    if (to) conditions.push(lte(documents.expiryDate, to))
-    if (filter) {
-        const parsed = parseFilterString(filter)
-        // Handle employeeName text filter against the joined employees table
-        for (const f of parsed) {
-            if (f.field === 'employeeName' && typeof f.value === 'string' && f.value) {
-                const term = `%${f.value}%`
-                conditions.push(or(
-                    ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, term),
-                    ilike(employees.firstName, term),
-                    ilike(employees.lastName, term),
-                )!)
-            }
-        }
-        buildDrizzleFilters(parsed.filter(f => f.field !== 'employeeName'), DOCUMENT_FIELD_MAP, DOCUMENT_ALLOWED).forEach(c => conditions.push(c))
-    }
+
+    // Base conditions (no cursor) — used for count query.
+    const baseConds = Conditions.create()
+        .tenant(documents.tenantId, tenantId)
+        .notDeleted(documents.deletedAt)
+        .match(documents.employeeId, employeeId)
+        .match(documents.category, category)
+        .match(documents.status, status)
+        // Calendar uses expiryDate as the event date; filter by [from, to] when provided.
+        .dateRange(documents.expiryDate, from, to)
+        .nameSearch(search, employees.firstName, employees.lastName, documents.docType)
+        .filterWithName(filter, DOCUMENT_FIELD_MAP, DOCUMENT_ALLOWED, employees.firstName, employees.lastName)
 
     const cursor = after ? decodeCursor(after) : null
-    if (cursor) {
-        const cursorDate = new Date(cursor.c)
-        conditions.push(
-            or(
-                lt(documents.createdAt, cursorDate),
-                and(eq(documents.createdAt, cursorDate), lt(documents.id, cursor.i))
-            )!
-        )
+
+    let total = 0
+    if (!cursor) {
+        const [countRow] = await db
+            .select({ count: sql<number>`COUNT(*)`.as('count') })
+            .from(documents)
+            .leftJoin(employees, eq(employees.id, documents.employeeId))
+            .where(baseConds.where())
+        total = Number(countRow?.count ?? 0)
     }
+
+    // Extend base with cursor condition for the data query.
+    baseConds.cursor(after, documents.createdAt, documents.id)
 
     const pageSize = limit + 1
     const rows = await db.select({
@@ -94,7 +79,7 @@ export async function listDocuments(tenantId: string, params: { employeeId?: str
         .leftJoin(employees, eq(employees.id, documents.employeeId))
         .leftJoin(users, eq(users.id, documents.uploadedBy))
         .leftJoin(verifierUsers, eq(verifierUsers.id, documents.verifiedBy))
-        .where(and(...conditions))
+        .where(baseConds.where())
         .orderBy(desc(documents.createdAt), desc(documents.id))
         .limit(cursor ? pageSize : limit)
         .offset(cursor ? 0 : offset)
@@ -105,15 +90,6 @@ export async function listDocuments(tenantId: string, params: { employeeId?: str
     const nextCursor = (cursor && hasMore && lastRow)
         ? encodeCursor(lastRow.createdAt, lastRow.id)
         : undefined
-
-    let total = 0
-    if (!cursor) {
-        const [countRow] = await db
-            .select({ count: sql<number>`COUNT(*)`.as('count') })
-            .from(documents)
-            .where(and(...conditions))
-        total = Number(countRow?.count ?? 0)
-    }
 
     const resolvedRows = await Promise.all(pageRows.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
     return {

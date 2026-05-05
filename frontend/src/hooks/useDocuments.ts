@@ -7,7 +7,7 @@ interface DocParams { employeeId?: string; q?: string; filters?: AppliedFiltersM
 
 export function useDocuments(params: DocParams = {}) {
     const { employeeId, q, filters, limit = 20, offset = 0 } = params
-    const qs = buildSearchQuery(q, filters, { pageSize: limit, page: Math.floor(offset / limit) })
+    const qs = buildSearchQuery(q, filters, { limit, offset })
     const extraQS = employeeId ? `&employeeId=${employeeId}` : ''
     return useQuery({
         queryKey: ['documents', employeeId, q, filters, limit, offset],

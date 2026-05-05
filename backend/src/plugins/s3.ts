@@ -13,6 +13,7 @@ let bucketEnsured = false
 // In-memory cache for presigned avatar URLs — keyed by S3 object key.
 // TTL is 23h (presigned URLs last 24h), so we never serve an expired URL.
 const avatarUrlCache = new Map<string, { url: string; expiresAt: number }>()
+const AVATAR_CACHE_MAX = 5000
 const AVATAR_CACHE_TTL_MS = 23 * 60 * 60 * 1000
 
 export function getS3Client(): S3Client {
@@ -195,6 +196,7 @@ export async function resolveAvatarUrl(stored: string | null | undefined): Promi
     if (cached && cached.expiresAt > Date.now()) return cached.url
 
     const url = await generateDownloadUrl(key, 86400)
+    if (avatarUrlCache.size >= AVATAR_CACHE_MAX) avatarUrlCache.delete(avatarUrlCache.keys().next().value!)
     avatarUrlCache.set(key, { url, expiresAt: Date.now() + AVATAR_CACHE_TTL_MS })
     return url
 }

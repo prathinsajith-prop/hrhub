@@ -320,6 +320,18 @@ if (externalValue !== lastSynced) {
 
 ---
 
+## Git Workflow
+
+**Branch hierarchy:** `feature/*` or `fix/*` → `development` → `staging` → `main`
+
+- Always confirm `git branch --show-current` is NOT `main`, `staging`, or `development` before making edits. If it is, ask which feature branch to switch to first.
+- PRs always target `development` (not `main`, not `staging`).
+- Before opening a PR: run `pnpm tsc --noEmit` in both workspaces and `pnpm test` in both. Only open the PR when both are green.
+- If `gh` CLI is not authenticated, stop and tell the user to run `gh auth login` — do not attempt workarounds.
+- When the user gives short commands like "create", "continue", "go", or "do it", proceed using the most recently discussed file/location/plan. Only ask for clarification if there is genuine ambiguity between two equally likely options.
+
+---
+
 ## Known Security Items (open)
 
 These issues were identified in a security review and have not yet been fixed:

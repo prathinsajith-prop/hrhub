@@ -1,6 +1,7 @@
 import { db } from '../../db/index.js'
 import { loginHistory, activityLogs } from '../../db/schema/index.js'
-import { eq, and, desc, ilike, gte, lte } from 'drizzle-orm'
+import { desc } from 'drizzle-orm'
+import { Conditions } from '../../lib/filters.js'
 
 /** Parse basic browser/OS info from User-Agent string */
 function parseUserAgent(ua: string): {
@@ -72,10 +73,8 @@ export async function recordLoginEvent(params: RecordLoginParams): Promise<void>
 }
 
 export async function getLoginHistory(tenantId: string, userId?: string, limit = 50, offset = 0) {
-    const conditions = [eq(loginHistory.tenantId, tenantId)]
-    if (userId) conditions.push(eq(loginHistory.userId, userId))
     return db.select().from(loginHistory)
-        .where(and(...conditions))
+        .where(Conditions.create().tenant(loginHistory.tenantId, tenantId).match(loginHistory.userId, userId).where())
         .orderBy(desc(loginHistory.createdAt))
         .limit(Math.min(limit, 200))
         .offset(Math.max(offset, 0))
@@ -117,20 +116,21 @@ export async function getActivityLogs(tenantId: string, params: {
     entityType?: string; entityId?: string; userId?: string; action?: string; actorRole?: string; actorName?: string; entityName?: string; from?: string; to?: string; ipAddress?: string; limit?: number; offset?: number
 }) {
     const { entityType, entityId, userId, action, actorRole, actorName, entityName, from, to, ipAddress, limit = 50, offset = 0 } = params
-    const conditions = [eq(activityLogs.tenantId, tenantId)]
-    if (entityType) conditions.push(eq(activityLogs.entityType, entityType))
-    if (entityId) conditions.push(eq(activityLogs.entityId, entityId))
-    if (userId) conditions.push(eq(activityLogs.userId, userId))
-    if (action) conditions.push(eq(activityLogs.action, action as never))
-    if (actorRole) conditions.push(eq(activityLogs.actorRole, actorRole))
-    if (actorName) conditions.push(ilike(activityLogs.actorName, '%' + actorName + '%'))
-    if (entityName) conditions.push(ilike(activityLogs.entityName, '%' + entityName + '%'))
-    if (from) conditions.push(gte(activityLogs.createdAt, new Date(from)))
-    if (to) conditions.push(lte(activityLogs.createdAt, new Date(to)))
-    if (ipAddress) conditions.push(eq(activityLogs.ipAddress, ipAddress))
+
+    const conds = Conditions.create()
+        .tenant(activityLogs.tenantId, tenantId)
+        .match(activityLogs.entityType, entityType)
+        .match(activityLogs.entityId, entityId)
+        .match(activityLogs.userId, userId)
+        .match(activityLogs.action, action)
+        .match(activityLogs.actorRole, actorRole)
+        .match(activityLogs.ipAddress, ipAddress)
+        .like(activityLogs.actorName, actorName)
+        .like(activityLogs.entityName, entityName)
+        .dateRange(activityLogs.createdAt, from ? new Date(from) : null, to ? new Date(to) : null)
 
     return db.select().from(activityLogs)
-        .where(and(...conditions))
+        .where(conds.where())
         .orderBy(desc(activityLogs.createdAt))
         .limit(Math.min(limit, 200))
         .offset(offset)

@@ -87,8 +87,16 @@ export function buildSearchQuery(
     if (q && q.trim()) params.set('q', q.trim())
     const f = buildFilterQueryString(filters)
     if (f) params.set('filter', f)
-    if (pagination?.page !== undefined) params.set('page', String(pagination.page))
-    if (pagination?.pageSize !== undefined) params.set('pageSize', String(pagination.pageSize))
+    // Emit limit/offset — the canonical params the backend reads.
+    // Support legacy page/pageSize by converting them.
+    const limit = pagination?.limit ?? pagination?.pageSize
+    const offset = pagination?.offset ?? (
+        pagination?.page !== undefined && pagination?.pageSize !== undefined
+            ? pagination.page * pagination.pageSize
+            : undefined
+    )
+    if (limit !== undefined) params.set('limit', String(limit))
+    if (offset !== undefined) params.set('offset', String(offset))
     if (pagination?.sortBy) params.set('sortBy', pagination.sortBy)
     if (pagination?.sortDir) params.set('sortDir', pagination.sortDir)
     return params.toString()

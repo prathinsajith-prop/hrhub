@@ -7,7 +7,7 @@ interface LeaveParams { employeeId?: string; department?: string; q?: string; fi
 
 export function useLeaveRequests(params: LeaveParams = {}) {
     const { employeeId, department, q, filters, limit = 20, offset = 0 } = params
-    const qs = buildSearchQuery(q, filters, { pageSize: limit, page: Math.floor(offset / limit) })
+    const qs = buildSearchQuery(q, filters, { limit, offset })
     const extra = new URLSearchParams()
     if (employeeId) extra.set('employeeId', employeeId)
     if (department) extra.set('department', department)
