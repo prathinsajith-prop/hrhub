@@ -55,13 +55,14 @@ export function ManagerDashboard() {
   // but passing it explicitly makes the query key stable and avoids a double-render.
   const { data: leaveData, isLoading: leaveLoading } = useLeaveRequests({ status: 'pending', department: department || undefined, limit: 10 })
   const { data: attendanceSummary, isLoading: attLoading } = useAttendanceSummary()
-  const { data: employeesData, isLoading: empLoading } = useEmployees({ department: department || undefined, limit: 100 })
+  const { data: employeesData, isLoading: empLoading } = useEmployees({ department: department || undefined, status: 'active', limit: 1 })
+  const { data: totalEmployeesData } = useEmployees({ department: department || undefined, limit: 1 })
   const { data: onboarding, isLoading: onboardingLoading } = useOnboardingSummary()
   const approveLeave = useApproveLeave()
 
   const pendingLeave = (Array.isArray(leaveData?.data) ? leaveData.data : []) as LeaveRequest[]
-  const employees = Array.isArray(employeesData?.data) ? employeesData.data : []
-  const activeCount = employees.filter((e: { status?: string }) => e.status === 'active').length
+  const activeCount = employeesData?.total ?? 0
+  const totalCount = totalEmployeesData?.total ?? 0
 
   const today = new Date().toLocaleDateString('en-AE', { weekday: 'long', day: 'numeric', month: 'long' })
 
@@ -76,7 +77,7 @@ export function ManagerDashboard() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCardCompact
           label="Team Size"
-          value={empLoading ? undefined : employees.length}
+          value={empLoading ? undefined : totalCount}
           icon={Users}
           color="blue"
           loading={empLoading}

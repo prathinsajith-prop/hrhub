@@ -152,8 +152,9 @@ async function bootstrap() {
         sign: { expiresIn: env.JWT_EXPIRES_IN as never },
     })
 
-    // Swagger docs (dev only)
-    if (env.NODE_ENV !== 'production') {
+    // API documentation — enabled in dev always; in staging/production only when ENABLE_API_DOCS=true.
+    const docsEnabled = env.NODE_ENV !== 'production' || env.ENABLE_API_DOCS
+    if (docsEnabled) {
         await app.register(swagger, {
             openapi: {
                 info: { title: 'HRHub API', description: 'HRHub.ae HR & PRO Management Platform', version: '1.0.0' },
@@ -165,7 +166,11 @@ async function bootstrap() {
                 security: [{ bearerAuth: [] }],
             },
         })
-        await app.register(swaggerUi, { routePrefix: '/docs', uiConfig: { docExpansion: 'list' } })
+        await app.register(swaggerUi, {
+            routePrefix: '/api/docs',
+            uiConfig: { docExpansion: 'list', persistAuthorization: true },
+            staticCSP: true,
+        })
     }
 
     // Auth plugin (adds fastify.authenticate + fastify.requireRole)
@@ -264,6 +269,17 @@ async function bootstrap() {
     await app.register(trainingRoutes, { prefix: '/api/v1/training' })
     await app.register(loansRoutes, { prefix: '/api/v1/loans' })
 
+    // Meta — returns runtime capability flags so the frontend can adapt without
+    // hardcoding env assumptions (e.g. whether to show the API docs link).
+    app.get('/api/v1/meta', { schema: { tags: ['Meta'] } }, async (_req: any, reply: any) => {
+        const baseUrl = `${env.APP_URL.replace(/\/$/, '').replace(':5174', ':4000').replace(':5173', ':4000')}`
+        return reply.send({
+            version: '1.0.0',
+            docsEnabled,
+            docsUrl: docsEnabled ? `${baseUrl}/api/docs` : null,
+        })
+    })
+
     // Health check — basic
     app.get('/health', { schema: { tags: ['Health'] } }, async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
 
@@ -318,8 +334,8 @@ async function bootstrap() {
 
     await app.listen({ port: env.PORT, host: env.HOST })
     app.log.info(`HRHub API running on http://${env.HOST}:${env.PORT}`)
-    if (env.NODE_ENV !== 'production') {
-        app.log.info(`Swagger docs at http://${env.HOST}:${env.PORT}/docs`)
+    if (docsEnabled) {
+        app.log.info(`API docs at http://${env.HOST}:${env.PORT}/api/docs`)
     }
 
     // Verify mail transport is reachable (non-fatal — emails will retry per send)

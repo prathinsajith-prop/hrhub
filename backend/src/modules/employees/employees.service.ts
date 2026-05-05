@@ -48,7 +48,7 @@ export async function getSubtreeEmployeeIds(tenantId: string, rootId: string): P
         )
         SELECT id FROM subtree
     `)
-    return [...rows].map(r => r.id)
+    return (Array.isArray(rows) ? rows : (rows as any).rows ?? []).map((r: { id: string }) => r.id)
 }
 
 export async function listEmployees(params: ListEmployeesParams) {
@@ -294,7 +294,7 @@ export async function getAncestorChain(tenantId: string, employeeId: string): Pr
         WHERE id != ${employeeId}::uuid
         ORDER BY depth ASC
     `)
-    return [...rows].map(r => r.id)
+    return (Array.isArray(rows) ? rows : (rows as any).rows ?? []).map((r: { id: string }) => r.id)
 }
 
 export async function getOrgChart(tenantId: string, rootEmployeeId?: string) {

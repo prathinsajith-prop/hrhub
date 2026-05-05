@@ -48,6 +48,12 @@ export const dashboardCache = makeNamespace<[tenantId: string]>({
     ttl: 120, // 2 minutes
 })
 
+/** Full dashboard summary (BFF aggregator), scoped by tenant. */
+export const dashboardSummaryCache = makeNamespace<[tenantId: string]>({
+    prefix: 'dashboard:summary',
+    ttl: 120,
+})
+
 /** List of employees for a tenant — invalidated on any employee mutation. */
 export const employeeListCache = makeNamespace<[tenantId: string, key: string]>({
     prefix: 'employees:list',
@@ -87,8 +93,7 @@ export const tenantConfigCache = makeNamespace<[tenantId: string]>({
 export async function invalidateEmployeeCaches(tenantId: string, employeeId?: string): Promise<void> {
     await Promise.all([
         dashboardCache.invalidate(tenantId),
-        // We don't know the list-key suffix here, so we rely on TTL expiry for
-        // list caches. Future: switch to a tag-based invalidation scheme.
+        dashboardSummaryCache.invalidate(tenantId),
         employeeId ? employeeDetailCache.invalidate(tenantId, employeeId) : Promise.resolve(),
     ])
 }
@@ -99,6 +104,7 @@ export async function invalidateEmployeeCaches(tenantId: string, employeeId?: st
 export async function invalidateLeaveCaches(tenantId: string): Promise<void> {
     await Promise.all([
         dashboardCache.invalidate(tenantId),
+        dashboardSummaryCache.invalidate(tenantId),
         leavePoliciesCache.invalidate(tenantId),
     ])
 }
