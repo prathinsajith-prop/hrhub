@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseUuidParam } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
 import {
     listTraining,
@@ -55,7 +56,8 @@ export default async function trainingRoutes(fastify: any): Promise<void> {
 
     // GET /api/v1/training/employee/:employeeId
     fastify.get('/employee/:employeeId', auth, async (request: any, reply: any) => {
-        const { employeeId } = request.params as { employeeId: string }
+        const employeeId = parseUuidParam(request.params, 'employeeId', reply)
+        if (!employeeId) return
         const user = request.user
         const isElevated = ['hr_manager', 'super_admin', 'dept_head'].includes(user.role)
         if (!isElevated && user.employeeId !== employeeId) {

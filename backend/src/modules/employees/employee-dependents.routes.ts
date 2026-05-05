@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { db } from '../../db/index.js'
 import { employeeDependents, employees } from '../../db/schema/index.js'
-import { eq, and, count, desc } from 'drizzle-orm'
+import { eq, and, sql, desc } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
 
 const createSchema = z.object({
@@ -15,13 +15,19 @@ const createSchema = z.object({
 
 const updateSchema = createSchema.partial()
 
+// Uses SELECT ... FOR UPDATE to atomically claim the next sequence number for a
+// tenant+employee pair — prevents duplicate references under concurrent creates.
 async function generateReference(tenantId: string, employeeNo: string): Promise<string> {
-    const [{ total }] = await db
-        .select({ total: count() })
-        .from(employeeDependents)
-        .where(eq(employeeDependents.tenantId, tenantId))
-    const seq = String(Number(total) + 1).padStart(3, '0')
-    return `DEP-${employeeNo}-${seq}`
+    return db.transaction(async tx => {
+        const [row] = await tx.execute<{ cnt: string }>(sql`
+            SELECT COUNT(*) AS cnt
+            FROM employee_dependents
+            WHERE tenant_id = ${tenantId}
+            FOR UPDATE
+        `)
+        const seq = String(Number(row?.cnt ?? 0) + 1).padStart(3, '0')
+        return `DEP-${employeeNo}-${seq}`
+    })
 }
 
 export default async function employeeDependentsRoutes(fastify: any): Promise<void> {

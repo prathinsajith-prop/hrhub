@@ -121,7 +121,7 @@ function CreateLoanDialog({ onClose }: { onClose: () => void }) {
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
                     <Button onClick={handleSubmit} disabled={create.isPending}>
-                        {create.isPending ? t('common.loading') : t('common.submit')}
+                        {create.isPending ? t('common.saving') : t('common.submit')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -151,7 +151,7 @@ function RejectDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () => vo
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
                     <Button variant="destructive" onClick={() => reject.mutate({ id: loan.id, notes }, { onSuccess: () => { toast.success(t('loans.rejected')); onClose() } })} disabled={reject.isPending}>
-                        {reject.isPending ? t('common.loading') : t('common.reject')}
+                        {reject.isPending ? t('loans.rejecting') : t('common.reject')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
