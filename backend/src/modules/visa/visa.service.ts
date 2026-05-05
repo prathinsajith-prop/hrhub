@@ -14,6 +14,7 @@ const VISA_FIELD_MAP = {
     urgencyLevel: visaApplications.urgencyLevel,
     visaType: visaApplications.visaType,
     expiryDate: visaApplications.expiryDate,
+    currentStep: visaApplications.currentStep,
 }
 const VISA_ALLOWED = new Set(Object.keys(VISA_FIELD_MAP))
 
@@ -37,7 +38,18 @@ export async function listVisas(tenantId: string, params: { status?: string; urg
     if (from) conditions.push(gte(visaApplications.expiryDate, from))
     if (to) conditions.push(lte(visaApplications.expiryDate, to))
     if (filter) {
-        buildDrizzleFilters(parseFilterString(filter), VISA_FIELD_MAP, VISA_ALLOWED).forEach(c => conditions.push(c))
+        const parsed = parseFilterString(filter)
+        for (const f of parsed) {
+            if (f.field === 'employeeName' && typeof f.value === 'string' && f.value) {
+                const term = `%${f.value}%`
+                conditions.push(or(
+                    ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, term),
+                    ilike(employees.firstName, term),
+                    ilike(employees.lastName, term),
+                )!)
+            }
+        }
+        buildDrizzleFilters(parsed.filter(f => f.field !== 'employeeName'), VISA_FIELD_MAP, VISA_ALLOWED).forEach(c => conditions.push(c))
     }
 
     const cursor = after ? decodeCursor(after) : null

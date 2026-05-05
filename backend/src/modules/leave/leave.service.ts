@@ -13,6 +13,9 @@ import type { InferInsertModel } from 'drizzle-orm'
 const LEAVE_FIELD_MAP = {
     status: leaveRequests.status,
     leaveType: leaveRequests.leaveType,
+    startDate: leaveRequests.startDate,
+    endDate: leaveRequests.endDate,
+    days: leaveRequests.days,
 }
 const LEAVE_ALLOWED = new Set(Object.keys(LEAVE_FIELD_MAP))
 
@@ -38,7 +41,18 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
     if (to) conditions.push(lte(leaveRequests.startDate, to))
     if (from) conditions.push(gte(leaveRequests.endDate, from))
     if (filter) {
-        buildDrizzleFilters(parseFilterString(filter), LEAVE_FIELD_MAP, LEAVE_ALLOWED).forEach(c => conditions.push(c))
+        const parsed = parseFilterString(filter)
+        for (const f of parsed) {
+            if (f.field === 'employeeName' && typeof f.value === 'string' && f.value) {
+                const term = `%${f.value}%`
+                conditions.push(or(
+                    ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, term),
+                    ilike(employees.firstName, term),
+                    ilike(employees.lastName, term),
+                )!)
+            }
+        }
+        buildDrizzleFilters(parsed.filter(f => f.field !== 'employeeName'), LEAVE_FIELD_MAP, LEAVE_ALLOWED).forEach(c => conditions.push(c))
     }
 
     const handoverEmployee = aliasedTable(employees, 'handover_emp')

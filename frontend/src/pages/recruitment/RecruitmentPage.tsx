@@ -36,7 +36,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { NewJobDialog, EditJobDialog } from '@/components/shared/action-dialogs'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
-import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { type FilterConfig } from '@/lib/filters'
 import { JOB_STATUS_OPTIONS } from '@/lib/options'
 import { exportRecruitment } from '@/lib/export'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
@@ -526,20 +526,27 @@ export function RecruitmentPage() {
   const jobStatus = (jobSearch.appliedFilters.status?.value as string | undefined) || undefined
   const jobDept = (jobSearch.appliedFilters.department?.value as string | undefined) || undefined
 
-  const { data: jobsData, isLoading: jobsLoading, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({ limit: 50, status: jobStatus, department: jobDept, q: jobSearch.searchInput || undefined })
+  // Pass remaining filters (title, location, openings, minSalary, closingDate) to the server
+  const serverJobFilters = useMemo(() => {
+    const { status: _s, department: _d, ...rest } = jobSearch.appliedFilters
+    return rest
+  }, [jobSearch.appliedFilters])
+
+  const { data: jobsData, isLoading: jobsLoading, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({
+    limit: 50,
+    status: jobStatus,
+    department: jobDept,
+    q: jobSearch.searchInput || undefined,
+    filters: serverJobFilters,
+  })
   const { data: appsData, isLoading: appsLoading, refetch: refetchApps } = useApplications({ limit: 100 })
   const isLoading = jobsLoading || appsLoading
   const updateStage = useUpdateApplicationStage()
   const updateJob = useUpdateJob()
   const createJob = useCreateJob()
   const jobs = useMemo<Job[]>(() => (jobsData?.data as Job[]) ?? [], [jobsData?.data])
-  const filteredJobs = useMemo(() => {
-    const { status: _omitStatus, department: _omitDept, ...jobFiltersWithoutServerSide } = jobSearch.appliedFilters
-    return applyClientFilters(jobs as unknown as Record<string, unknown>[], {
-      appliedFilters: jobFiltersWithoutServerSide,
-      searchFields: ['title', 'location'],
-    }) as unknown as Job[]
-  }, [jobs, jobSearch.appliedFilters])
+  // Server now handles all filtering — no client-side filtering needed.
+  const filteredJobs = jobs
   const candidates: Candidate[] = (appsData?.data as Candidate[]) ?? []
   const jobColumns = useMemo(() => buildJobColumns((j) => setEditJob(j)), [])
 
