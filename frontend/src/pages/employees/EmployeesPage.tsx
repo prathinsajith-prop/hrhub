@@ -193,7 +193,20 @@ export function EmployeesPage() {
   const filterStatus = (search.appliedFilters.status?.value as string | undefined) || undefined
   const filterDept = (search.appliedFilters.department?.value as string | undefined) || undefined
 
-  const { data: empData, isLoading, isFetching, isError, error, refetch } = useEmployees({ limit: 50, search: search.searchInput || undefined, status: filterStatus, department: filterDept })
+  // Separate status/department (handled as explicit params) and emirati toggle (client-only)
+  // from the remaining filters that the backend can process via the compact filter string.
+  const serverFilters = useMemo(() => {
+    const { status: _s, department: _d, emirati: _e, ...rest } = search.appliedFilters
+    return rest
+  }, [search.appliedFilters])
+
+  const { data: empData, isLoading, isFetching, isError, error, refetch } = useEmployees({
+    limit: 200,
+    search: search.searchInput || undefined,
+    status: filterStatus,
+    department: filterDept,
+    filters: serverFilters,
+  })
   const { data: orgUnits = [] } = useOrgUnits()
   const orgUnitName = useMemo(() => {
     const map = new Map(orgUnits.map(u => [u.id, u.name]))
@@ -215,30 +228,12 @@ export function EmployeesPage() {
       status: search.appliedFilters.status?.value as string | undefined,
     })
   }
+  // Only the emirati toggle remains as client-side since it maps a boolean to a text enum value.
   const filtered = useMemo(() => {
-    const f = search.appliedFilters
-    return employees.filter((e: Employee) => {
-      if (f.designation?.value && !String(e.designation ?? '').toLowerCase().includes(String(f.designation.value).toLowerCase())) return false
-      if (f.nationality?.value && !String(e.nationality ?? '').toLowerCase().includes(String(f.nationality.value).toLowerCase())) return false
-      if (f.salary?.value) {
-        const { min, max } = f.salary.value as { min?: number; max?: number }
-        const v = Number(e.totalSalary ?? 0)
-        if (min != null && v < min) return false
-        if (max != null && v > max) return false
-      }
-      if (f.joinDate?.value) {
-        const { from, to } = f.joinDate.value as { from?: string; to?: string }
-        if (from && e.joinDate && new Date(e.joinDate) < new Date(from)) return false
-        if (to && e.joinDate && new Date(e.joinDate) > new Date(to)) return false
-      }
-      if (f.visaExpiry?.value) {
-        const { from, to } = f.visaExpiry.value as { from?: string; to?: string }
-        if (from && e.visaExpiry && new Date(e.visaExpiry) < new Date(from)) return false
-        if (to && e.visaExpiry && new Date(e.visaExpiry) > new Date(to)) return false
-      }
-      if (f.emirati?.value === true && e.emiratisationCategory !== 'emirati') return false
-      return true
-    })
+    const emiratiOnly = search.appliedFilters.emirati?.value === true
+    return emiratiOnly
+      ? employees.filter((e: Employee) => e.emiratisationCategory === 'emirati')
+      : employees
   }, [employees, search.appliedFilters])
 
   const active = employees.filter((e: Employee) => e.status === 'active').length

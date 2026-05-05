@@ -1,6 +1,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
+import { buildFilterQueryString, type AppliedFiltersMap } from '@/lib/filters'
 import type { Employee } from '@/types'
 
 export async function exportEmployeesCsv(params: { department?: string; status?: string } = {}) {
@@ -31,6 +32,8 @@ interface ListParams {
     search?: string
     status?: string
     department?: string
+    /** Additional filters sent as compact query string to the backend. */
+    filters?: AppliedFiltersMap
     limit?: number
     offset?: number
 }
@@ -46,16 +49,20 @@ interface PaginatedResult<T> {
 
 export function useEmployees(params: ListParams = {}) {
     const tenantId = useAuthStore(s => s.tenant?.id)
-    const { search, status, department, limit = 20, offset = 0 } = params
+    const { search, status, department, filters, limit = 20, offset = 0 } = params
     const query = new URLSearchParams()
     if (search) query.set('search', search)
     if (status) query.set('status', status)
     if (department) query.set('department', department)
     query.set('limit', String(limit))
     query.set('offset', String(offset))
+    if (filters && Object.keys(filters).length > 0) {
+        const filterStr = buildFilterQueryString(filters)
+        if (filterStr) query.set('filter', filterStr)
+    }
 
     return useQuery({
-        queryKey: ['employees', tenantId, search, status, department, limit, offset],
+        queryKey: ['employees', tenantId, search, status, department, filters, limit, offset],
         queryFn: () => api.get<PaginatedResult<Employee>>(`/employees?${query}`),
         enabled: !!tenantId,
         staleTime: 30_000,

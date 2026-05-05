@@ -526,7 +526,7 @@ export function RecruitmentPage() {
   const jobStatus = (jobSearch.appliedFilters.status?.value as string | undefined) || undefined
   const jobDept = (jobSearch.appliedFilters.department?.value as string | undefined) || undefined
 
-  const { data: jobsData, isLoading: jobsLoading, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({ limit: 50, status: jobStatus, department: jobDept })
+  const { data: jobsData, isLoading: jobsLoading, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({ limit: 50, status: jobStatus, department: jobDept, q: jobSearch.searchInput || undefined })
   const { data: appsData, isLoading: appsLoading, refetch: refetchApps } = useApplications({ limit: 100 })
   const isLoading = jobsLoading || appsLoading
   const updateStage = useUpdateApplicationStage()
@@ -536,11 +536,10 @@ export function RecruitmentPage() {
   const filteredJobs = useMemo(() => {
     const { status: _omitStatus, department: _omitDept, ...jobFiltersWithoutServerSide } = jobSearch.appliedFilters
     return applyClientFilters(jobs as unknown as Record<string, unknown>[], {
-      searchInput: jobSearch.searchInput,
       appliedFilters: jobFiltersWithoutServerSide,
       searchFields: ['title', 'location'],
     }) as unknown as Job[]
-  }, [jobs, jobSearch.appliedFilters, jobSearch.searchInput])
+  }, [jobs, jobSearch.appliedFilters])
   const candidates: Candidate[] = (appsData?.data as Candidate[]) ?? []
   const jobColumns = useMemo(() => buildJobColumns((j) => setEditJob(j)), [])
 

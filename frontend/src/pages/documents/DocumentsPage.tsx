@@ -18,7 +18,7 @@ import { labelFor, DOC_STATUS_BADGE } from '@/lib/enums'
 import { useDocuments, useDeleteDocument } from '@/hooks/useDocuments'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
-import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { type FilterConfig } from '@/lib/filters'
 import { DOC_CATEGORY_OPTIONS, DOC_STATUS_OPTIONS } from '@/lib/options'
 import { EditDocumentDialog } from '@/components/shared/action-dialogs'
 import { AddDocumentDialog } from '@/components/shared/AddDocumentDialog'
@@ -227,14 +227,8 @@ export function DocumentsPage() {
   const expired = documents.filter((d) => d.status === 'expired').length
   const deleteDoc = useDeleteDocument()
 
-  const filteredDocuments = useMemo(
-    () => applyClientFilters(documents as unknown as Record<string, unknown>[], {
-      searchInput: '',
-      appliedFilters: {},
-      searchFields: [],
-    }) as unknown as Document[],
-    [documents],
-  )
+  // Server-side filtering via useDocuments({ q, filters }) handles all filter logic.
+  const filteredDocuments = documents
 
   const handleView = (d: Document) => {
     setViewTarget(d)
