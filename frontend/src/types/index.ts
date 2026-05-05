@@ -204,10 +204,13 @@ export interface Document {
   category: DocCategory
   docType: string
   fileName: string
-  fileSize: number
-  uploadedAt: string
-  uploadedBy: string
-  expiryDate?: string
+  fileSize?: number | null
+  issueDate?: string | null
+  expiryDate?: string | null
+  notes?: string | null
+  createdAt: string
+  uploadedBy?: string | null
+  uploadedByName?: string | null
   status: DocStatus
   verified: boolean
   s3Key?: string

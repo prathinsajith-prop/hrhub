@@ -67,7 +67,12 @@ export function useVerifyDocument() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (id: string) => api.post(`/documents/${id}/verify`),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['documents'] }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['documents'] })
+            // The verify back-writes expiry dates to the employee record, so
+            // the Visa & ID tab and compliance alerts must re-fetch the employee.
+            qc.invalidateQueries({ queryKey: ['employees'] })
+        },
         onError: (err: Error) => toast.error('Verification failed', err?.message ?? 'Could not verify document.'),
     })
 }

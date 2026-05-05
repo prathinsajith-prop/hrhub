@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/card'
@@ -17,6 +17,7 @@ import { PERFORMANCE_STATUS_OPTIONS } from '@/lib/options'
 import { exportPerformance } from '@/lib/export'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { CreatePerformanceReviewDialog } from '@/components/shared/CreatePerformanceReviewDialog'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 
 const PERFORMANCE_FILTERS: FilterConfig[] = [
     { name: 'status', label: 'Status', type: 'select', field: 'status', options: PERFORMANCE_STATUS_OPTIONS },
@@ -68,6 +69,7 @@ function ScoreBar({ label, score }: { label: string; score?: number }) {
 
 export function PerformancePage() {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const [searchParams, setSearchParams] = useSearchParams()
     const lockedEmployeeId = searchParams.get('employeeId') ?? ''
     const { data: reviews, isLoading, isFetching, refetch } = usePerformanceReviews()
@@ -196,10 +198,10 @@ export function PerformancePage() {
                 {filtered.map((rev) => {
                     const sc = statusConfig[rev.status]
                     return (
-                        <Card key={rev.id} className="p-5 space-y-4">
+                        <Card key={rev.id} className="p-5 space-y-4 cursor-pointer hover:ring-1 hover:ring-primary/20 transition-all" onClick={() => navigate(`/employees/${rev.employeeId}`)}>
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <p className="font-semibold text-sm">{rev.employeeName || 'Unknown'}</p>
+                                    <EmployeeLink id={rev.employeeId} name={rev.employeeName || 'Unknown'} className="font-semibold text-sm" />
                                     <p className="text-xs text-muted-foreground mt-0.5">{rev.period} · {rev.reviewDate ?? 'No date'}</p>
                                     <div className="mt-2">
                                         <RatingStars rating={rev.overallRating} />

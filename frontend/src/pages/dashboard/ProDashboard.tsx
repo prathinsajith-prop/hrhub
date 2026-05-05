@@ -11,6 +11,7 @@ import { labelFor } from '@/lib/enums'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useAuthStore } from '@/store/authStore'
 import { useVisas } from '@/hooks/useVisa'
 import { useDocuments, useExpiringDocuments } from '@/hooks/useDocuments'
@@ -20,6 +21,7 @@ import { QuickAction, SectionHeading, SkeletonRows } from './_shared'
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface VisaItem {
   id: string
+  employeeId?: string
   employee?: { firstName?: string; lastName?: string }
   employeeName?: string
   visaType?: string
@@ -32,6 +34,7 @@ interface VisaItem {
 
 interface DocItem {
   id: string
+  employeeId?: string
   fileName?: string
   docType?: string
   category?: string
@@ -171,7 +174,9 @@ export function ProDashboard() {
                     <div key={v.id} className="space-y-1.5">
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold truncate">{name}</p>
+                          {v.employeeId
+                            ? <EmployeeLink id={v.employeeId} name={name} className="text-sm font-semibold" />
+                            : <p className="text-sm font-semibold truncate">{name}</p>}
                           <p className="text-[11px] text-muted-foreground">{labelFor(v.visaType ?? '')}</p>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
@@ -233,7 +238,9 @@ export function ProDashboard() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{doc.fileName ?? doc.docType ?? 'Document'}</p>
-                        <p className="text-[10px] text-muted-foreground">{doc.employeeName ?? '—'}</p>
+                        {doc.employeeId && doc.employeeName
+                          ? <EmployeeLink id={doc.employeeId} name={doc.employeeName} className="text-[10px] text-muted-foreground" />
+                          : <p className="text-[10px] text-muted-foreground">{doc.employeeName ?? '—'}</p>}
                       </div>
                       <Badge variant="warning" className="text-[9px] h-4 px-1.5 shrink-0">Review</Badge>
                     </div>

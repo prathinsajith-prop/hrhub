@@ -189,18 +189,50 @@ async function bootstrap() {
             statusCode = 400
             name = 'ValidationError'
             if (pgCode === '23505') {
-                // Extract column name from PostgreSQL detail: "Key (work_email)=(foo) already exists."
+                // Extract columns + values from: "Key (col1, col2)=(val1, val2) already exists."
                 const detail: string = error?.cause?.detail ?? error?.detail ?? ''
                 const colMatch = detail.match(/Key \(([^)]+)\)=\(([^)]*)\)/)
                 if (colMatch) {
-                    const snakeCol = colMatch[1]!
-                    const val = colMatch[2]
-                    const label = snakeCol.replace(/_/g, ' ')
-                    // snake_case → camelCase for frontend field mapping
-                    duplicateField = snakeCol.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
-                    message = `"${val}" is already in use for ${label}. Please use a different value.`
+                    const rawCols = colMatch[1]!.split(',').map(s => s.trim())
+                    const rawVals = colMatch[2]!.split(',').map(s => s.trim())
+
+                    // Strip internal/tenant columns that have no meaning to the user
+                    const INTERNAL_COLS = new Set(['tenant_id', 'id', 'year_month'])
+                    const visible = rawCols
+                        .map((col, i) => ({ col, val: rawVals[i] ?? '' }))
+                        .filter(({ col }) => !INTERNAL_COLS.has(col))
+
+                    if (visible.length === 0) {
+                        // All columns were internal — generic message
+                        message = 'This record already exists.'
+                    } else if (visible.length === 1) {
+                        // Single meaningful field — keep existing field-level behaviour
+                        const { col, val } = visible[0]!
+                        const label = col.replace(/_/g, ' ')
+                        duplicateField = col.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())
+                        message = `"${val}" is already in use for ${label}. Please use a different value.`
+                    } else {
+                        // Multi-column — build a friendly contextual message
+                        const colSet = new Set(visible.map(v => v.col))
+                        const valMap = Object.fromEntries(visible.map(({ col, val }) => [col, val]))
+
+                        if (colSet.has('month') && colSet.has('year')) {
+                            const MONTH_NAMES = ['January','February','March','April','May','June',
+                                                 'July','August','September','October','November','December']
+                            const monthName = MONTH_NAMES[(Number(valMap['month']) || 0) - 1] ?? valMap['month']
+                            message = `A record for ${monthName} ${valMap['year']} already exists.`
+                        } else if (colSet.has('employee_id') && colSet.has('year')) {
+                            message = `A record for this employee in ${valMap['year']} already exists.`
+                        } else if (colSet.has('employee_id') && colSet.has('leave_type')) {
+                            message = `A leave balance for this employee and leave type already exists.`
+                        } else {
+                            // Fallback: list the visible fields without internal UUIDs
+                            const parts = visible.map(({ col, val }) => `${col.replace(/_/g, ' ')}: "${val}"`)
+                            message = `A record with ${parts.join(', ')} already exists.`
+                        }
+                    }
                 } else {
-                    message = 'Duplicate value — that record already exists.'
+                    message = 'This record already exists.'
                 }
             }
             else if (pgCode === '23503') message = 'Referenced record not found.'

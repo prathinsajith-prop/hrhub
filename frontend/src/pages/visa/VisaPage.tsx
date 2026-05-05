@@ -24,6 +24,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { NewVisaApplicationDialog } from '@/components/shared/action-dialogs'
 import { exportVisa } from '@/lib/export'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 
 const VISA_FILTERS: FilterConfig[] = [
   { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
@@ -147,7 +148,10 @@ const columns: ColumnDef<VisaApplication>[] = [
       <div className="flex items-center gap-2.5 min-w-0">
         <InitialsAvatar name={v.employeeName || '—'} src={v.employeeAvatarUrl} size="sm" />
         <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{v.employeeName || '—'}</p>
+          {v.employeeId
+            ? <EmployeeLink id={v.employeeId} name={v.employeeName || '—'} className="text-sm font-medium truncate block" />
+            : <p className="text-sm font-medium truncate">{v.employeeName || '—'}</p>
+          }
           {(v.employeeNo || v.employeeDepartment) && (
             <p className="text-[11px] text-muted-foreground truncate">
               {v.employeeNo}{v.employeeNo && v.employeeDepartment ? ' · ' : ''}{v.employeeDepartment}

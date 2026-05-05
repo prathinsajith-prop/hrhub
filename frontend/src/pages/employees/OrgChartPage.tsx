@@ -512,7 +512,7 @@ function StatsRow({ branches, divisions, departments }: { branches: number; divi
         { label: 'Departments', value: departments, icon: Users2, color: 'text-sky-600', bg: 'bg-sky-50 border-sky-100' },
     ]
     return (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {items.map(({ label, value, icon: Icon, color, bg }) => (
                 <div key={label} className="flex items-center gap-3 rounded-xl border bg-card px-4 py-4 shadow-sm">
                     <div className={cn('w-9 h-9 rounded-lg border flex items-center justify-center shrink-0', bg)}>
@@ -530,7 +530,7 @@ function StatsRow({ branches, divisions, departments }: { branches: number; divi
 
 function StatsRowSkeleton() {
     return (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 rounded-xl border bg-card px-4 py-4 shadow-sm">
                     <Skeleton className="w-9 h-9 rounded-lg shrink-0" />

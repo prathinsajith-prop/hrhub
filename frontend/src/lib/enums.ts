@@ -20,6 +20,14 @@ export const ROLE_LABELS: Record<string, string> = {
     employee: 'Employee',
 }
 
+export const ROLE_BADGE_STYLE: Record<string, string> = {
+    super_admin: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-800',
+    hr_manager:  'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800',
+    pro_officer: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-800',
+    dept_head:   'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800',
+    employee:    'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+}
+
 // ─── Employee status ────────────────────────────────────────────────────────
 export const EMPLOYEE_STATUS_LABELS: Record<string, string> = {
     active: 'Active',

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { Plus, Plane, CalendarPlus, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -12,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { FormField, EmployeeSelect } from '@/components/shared'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { cn } from '@/lib/utils'
 import { useAdjustLeaveBalance } from '@/hooks/useLeave'
 import {
@@ -119,7 +121,7 @@ function LeaveAdjustmentDialog({ onClose }: { onClose: () => void }) {
                             onValueChange={v => { setForm(f => ({ ...f, employeeId: v })); setErrors(e => ({ ...e, employeeId: '' })) }}
                         />
                     </FormField>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.adjustment.leaveType')} required>
                             <Select value={form.leaveType} onValueChange={v => setForm(f => ({ ...f, leaveType: v }))}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -257,7 +259,7 @@ function AirTicketDialog({ ticket, onClose }: { ticket?: AirTicket; onClose: () 
                             disabled={isEdit}
                         />
                     </FormField>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.adjustment.year')} required error={errors.year}>
                             <NumericInput
                                 value={form.year}
@@ -277,7 +279,7 @@ function AirTicketDialog({ ticket, onClose }: { ticket?: AirTicket; onClose: () 
                             </Select>
                         </FormField>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.airTicket.destination')}>
                             <Input
                                 value={form.destination}
@@ -390,7 +392,7 @@ function OffsetDialog({ offset, onClose }: { offset?: LeaveOffset; onClose: () =
                             disabled={isEdit}
                         />
                     </FormField>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.offset.workDate')} required error={errors.workDate}>
                             <Input
                                 type="date"
@@ -438,6 +440,7 @@ function OffsetDialog({ offset, onClose }: { offset?: LeaveOffset; onClose: () =
 
 function LeaveAdjustmentsTab({ canManage }: { canManage: boolean }) {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const { data, isLoading } = useLeaveAdjustments()
     const deleteMut = useDeleteLeaveAdjustment()
     const [createOpen, setCreateOpen] = useState(false)
@@ -495,8 +498,13 @@ function LeaveAdjustmentsTab({ canManage }: { canManage: boolean }) {
                                     const delta = Number(adj.delta)
                                     const isPos = delta >= 0
                                     return (
-                                        <tr key={adj.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                                            <td className="px-4 py-3 font-medium">{adj.employeeName ?? '—'}</td>
+                                        <tr key={adj.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => adj.employeeId && navigate(`/employees/${adj.employeeId}`)}>
+                                            <td className="px-4 py-3 font-medium">
+                                                {adj.employeeId
+                                                    ? <EmployeeLink id={adj.employeeId} name={adj.employeeName ?? '—'} />
+                                                    : adj.employeeName ?? '—'
+                                                }
+                                            </td>
                                             <td className="px-4 py-3 capitalize">
                                                 {t(`leavePolicies.types.${adj.leaveType}`, { defaultValue: adj.leaveType })}
                                                 <span className="text-xs text-muted-foreground ml-1">({adj.year})</span>
@@ -552,6 +560,7 @@ function LeaveAdjustmentsTab({ canManage }: { canManage: boolean }) {
 
 function AirTicketsTab({ canManage }: { canManage: boolean }) {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const { data, isLoading } = useAirTickets()
     const deleteMut = useDeleteAirTicket()
     const [createOpen, setCreateOpen] = useState(false)
@@ -609,9 +618,12 @@ function AirTicketsTab({ canManage }: { canManage: boolean }) {
                                 </tr>
                             ) : (
                                 tickets.map(ticket => (
-                                    <tr key={ticket.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                                    <tr key={ticket.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => ticket.employeeId && navigate(`/employees/${ticket.employeeId}`)}>
                                         <td className="px-4 py-3 font-medium">
-                                            {ticket.employeeName ?? '—'}
+                                            {ticket.employeeId
+                                                ? <EmployeeLink id={ticket.employeeId} name={ticket.employeeName ?? '—'} />
+                                                : ticket.employeeName ?? '—'
+                                            }
                                             <span className="text-xs text-muted-foreground ml-1">({ticket.year})</span>
                                         </td>
                                         <td className="px-4 py-3 capitalize">
@@ -679,6 +691,7 @@ function AirTicketsTab({ canManage }: { canManage: boolean }) {
 
 function OffsetAdjustmentsTab({ canManage }: { canManage: boolean }) {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const { data, isLoading } = useLeaveOffsets()
     const deleteMut = useDeleteLeaveOffset()
     const [createOpen, setCreateOpen] = useState(false)
@@ -735,8 +748,13 @@ function OffsetAdjustmentsTab({ canManage }: { canManage: boolean }) {
                                 </tr>
                             ) : (
                                 offsets.map(offset => (
-                                    <tr key={offset.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                                        <td className="px-4 py-3 font-medium">{offset.employeeName ?? '—'}</td>
+                                    <tr key={offset.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => offset.employeeId && navigate(`/employees/${offset.employeeId}`)}>
+                                        <td className="px-4 py-3 font-medium">
+                                            {offset.employeeId
+                                                ? <EmployeeLink id={offset.employeeId} name={offset.employeeName ?? '—'} />
+                                                : offset.employeeName ?? '—'
+                                            }
+                                        </td>
                                         <td className="px-4 py-3">{formatDate(offset.workDate)}</td>
                                         <td className="px-4 py-3 text-right">{offset.days}</td>
                                         <td className="px-4 py-3 text-muted-foreground">{offset.reason ?? '—'}</td>

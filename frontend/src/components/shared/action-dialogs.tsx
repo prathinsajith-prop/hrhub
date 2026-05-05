@@ -1758,7 +1758,7 @@ export function AssignAssetToEmployeeDialog({
                             </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <FormField label="Assigned Date" required>
                                 <DatePicker
                                     value={assignedDate}

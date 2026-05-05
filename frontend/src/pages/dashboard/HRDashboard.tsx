@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import type { KpiColor } from '@/components/shared/KpiCard'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'
@@ -144,7 +145,7 @@ export function HRDashboard() {
   type NotifItem = { isRead?: boolean; type?: string; title?: string }
   const urgentAlerts = ((notifications as NotifItem[] | undefined) ?? []).filter(n => !n.isRead && (n.type === 'warning' || n.type === 'error'))
 
-  type VisaItem = { id?: string; employee?: { firstName?: string; lastName?: string }; employeeName?: string; visaType?: string; urgencyLevel?: string; totalSteps?: number; currentStep?: number }
+  type VisaItem = { id?: string; employeeId?: string; employee?: { firstName?: string; lastName?: string }; employeeName?: string; visaType?: string; urgencyLevel?: string; totalSteps?: number; currentStep?: number }
   const visaList = (visaData?.data as VisaItem[] | undefined) ?? []
   const totalNat = nationalityData.reduce((a, d) => a + d.value, 0)
 
@@ -340,7 +341,9 @@ export function HRDashboard() {
                     <div key={v.id} className="space-y-1.5">
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="text-xs font-semibold truncate">{name}</p>
+                          {v.employeeId
+                            ? <EmployeeLink id={v.employeeId} name={name} className="text-xs font-semibold" />
+                            : <p className="text-xs font-semibold truncate">{name}</p>}
                           <p className="text-[10px] text-muted-foreground capitalize">{labelFor(v.visaType ?? '')}</p>
                         </div>
                         <Badge variant={v.urgencyLevel === 'critical' ? 'destructive' : v.urgencyLevel === 'urgent' ? 'warning' : 'info'} className="text-[10px] h-5 capitalize shrink-0">

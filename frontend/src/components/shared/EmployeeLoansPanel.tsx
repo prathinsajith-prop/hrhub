@@ -97,22 +97,22 @@ function LoanRow({ loan, canManage }: { loan: EmployeeLoan; canManage: boolean }
                         {canManage && isPending && (
                             <>
                                 <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                    aria-label="Approve loan"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800"
                                     onClick={() => setApproveConfirm(true)}
                                 >
-                                    <Check className="h-3.5 w-3.5" />
+                                    <Check className="h-3.5 w-3.5 mr-1" />
+                                    Approve
                                 </Button>
                                 <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                    aria-label="Reject loan"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-red-700 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-800"
                                     onClick={() => setRejectOpen(true)}
                                 >
-                                    <X className="h-3.5 w-3.5" />
+                                    <X className="h-3.5 w-3.5 mr-1" />
+                                    Reject
                                 </Button>
                             </>
                         )}

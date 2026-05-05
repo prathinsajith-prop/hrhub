@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -28,6 +29,7 @@ import {
     useDeleteTraining,
 } from '@/hooks/useTraining'
 import { EmployeeSelect } from '@/components/shared'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import type { UserRole } from '@/types'
@@ -114,7 +116,7 @@ function TrainingFormDialog({
                         />
                     </FormField>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('training.provider')}>
                             <Input
                                 value={form.provider}
@@ -135,7 +137,7 @@ function TrainingFormDialog({
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('training.startDate')} required error={errors.startDate}>
                             <Input
                                 type="date"
@@ -153,7 +155,7 @@ function TrainingFormDialog({
                         </FormField>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={`${t('training.cost')} (AED)`}>
                             <NumericInput
                                 maxDecimals={2}
@@ -206,6 +208,7 @@ function TrainingFormDialog({
 
 export function TrainingPage() {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const role = useAuthStore(s => s.user?.role) as UserRole | undefined
     const canManage = hasPermission(role ?? 'employee', 'manage_training')
 
@@ -332,9 +335,14 @@ export function TrainingPage() {
                                 </tr>
                             ) : (
                                 records.map(r => (
-                                    <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                                    <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => r.employeeId && navigate(`/employees/${r.employeeId}`)}>
                                         <td className="px-4 py-3">
-                                            <div className="font-medium">{r.employeeName}</div>
+                                            <div className="font-medium">
+                                                {r.employeeId
+                                                    ? <EmployeeLink id={r.employeeId} name={r.employeeName ?? '—'} />
+                                                    : r.employeeName
+                                                }
+                                            </div>
                                             <div className="text-xs text-muted-foreground">{r.employeeNo}</div>
                                         </td>
                                         <td className="px-4 py-3">

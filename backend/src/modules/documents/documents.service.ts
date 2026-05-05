@@ -2,8 +2,24 @@ import { eq, and, desc, lte, gte, isNull, isNotNull, sql, getTableColumns, or, l
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
-import { documents, employees } from '../../db/schema/index.js'
+import { documents, employees, users } from '../../db/schema/index.js'
 import type { InferInsertModel } from 'drizzle-orm'
+
+// Maps docType strings → which employee expiry/date fields to update on verify.
+// Only doc types that carry meaningful employee-level date data are listed.
+const DOC_EXPIRY_MAP: Record<string, {
+    expiryField: 'passportExpiry' | 'emiratesIdExpiry' | 'visaExpiry' | 'labourCardExpiry'
+    issueDateField?: 'visaIssueDate'
+}> = {
+    'Passport':       { expiryField: 'passportExpiry' },
+    'Emirates ID':    { expiryField: 'emiratesIdExpiry' },
+    'Visa':           { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
+    'Residence Visa': { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
+    'Entry Permit':   { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
+    'Work Permit':    { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
+    'Visit Visa':     { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
+    'Labour Card':    { expiryField: 'labourCardExpiry' },
+}
 
 type NewDocument = InferInsertModel<typeof documents>
 
@@ -35,9 +51,11 @@ export async function listDocuments(tenantId: string, params: { employeeId?: str
         employeeNo: employees.employeeNo,
         employeeAvatarUrl: employees.avatarUrl,
         employeeDepartment: employees.department,
+        uploadedByName: users.name,
     })
         .from(documents)
         .leftJoin(employees, eq(employees.id, documents.employeeId))
+        .leftJoin(users, eq(users.id, documents.uploadedBy))
         .where(and(...conditions))
         .orderBy(desc(documents.createdAt), desc(documents.id))
         .limit(cursor ? pageSize : limit)
@@ -99,11 +117,32 @@ export async function updateDocument(tenantId: string, id: string, data: Partial
 }
 
 export async function verifyDocument(tenantId: string, id: string, verifiedBy: string) {
-    const [row] = await db.update(documents)
-        .set(withTimestamp({ verified: true, verifiedBy, verifiedAt: new Date(), status: 'valid' as const, rejectionReason: null, rejectedAt: null, rejectedBy: null }))
-        .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId), isNull(documents.deletedAt)))
-        .returning()
-    return row ?? null
+    return db.transaction(async (tx) => {
+        const [row] = await tx.update(documents)
+            .set(withTimestamp({ verified: true, verifiedBy, verifiedAt: new Date(), status: 'valid' as const, rejectionReason: null, rejectedAt: null, rejectedBy: null }))
+            .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId), isNull(documents.deletedAt)))
+            .returning()
+
+        if (!row) return null
+
+        // Propagate expiry / issue dates back to the employee record so that
+        // the Visa & ID tab, compliance alerts, and expiry workers stay in sync.
+        if (row.employeeId && row.docType) {
+            const mapping = DOC_EXPIRY_MAP[row.docType]
+            if (mapping) {
+                const patch: Record<string, unknown> = { updatedAt: new Date() }
+                if (row.expiryDate) patch[mapping.expiryField] = row.expiryDate
+                if (mapping.issueDateField && row.issueDate) patch[mapping.issueDateField] = row.issueDate
+                if (Object.keys(patch).length > 1) {
+                    await tx.update(employees)
+                        .set(patch as any)
+                        .where(and(eq(employees.id, row.employeeId), eq(employees.tenantId, tenantId)))
+                }
+            }
+        }
+
+        return row
+    })
 }
 
 export async function rejectDocument(tenantId: string, id: string, rejectedBy: string, reason: string) {

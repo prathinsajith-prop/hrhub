@@ -24,6 +24,7 @@ import {
     useSettlementPreview, type ExitRequest,
 } from '@/hooks/useExit'
 import { EmployeeSelect } from '@/components/shared'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -198,7 +199,10 @@ export function ExitPage() {
                 <div className="flex items-center gap-2.5 min-w-0">
                     <InitialsAvatar name={e.employeeName ?? '—'} src={e.employeeAvatarUrl ?? undefined} size="sm" />
                     <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{e.employeeName ?? '—'}</p>
+                        {e.employeeId
+                            ? <EmployeeLink id={e.employeeId} name={e.employeeName ?? '—'} className="text-sm font-medium truncate block" />
+                            : <p className="text-sm font-medium truncate">{e.employeeName ?? '—'}</p>
+                        }
                         {e.employeeDesignation && (
                             <p className="text-[11px] text-muted-foreground truncate">{e.employeeDesignation}</p>
                         )}

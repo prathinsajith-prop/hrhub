@@ -146,9 +146,14 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Employees'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
+        const { role: requestedRole } = (request.body ?? {}) as { role?: string }
+        // hr_manager cannot assign super_admin role
+        const role = requestedRole === 'super_admin' && request.user.role !== 'super_admin'
+            ? 'employee'
+            : (requestedRole ?? 'employee')
         let result: { name: string }
         try {
-            result = await inviteUser(request.user.tenantId, { employeeId: id, role: 'employee' })
+            result = await inviteUser(request.user.tenantId, { employeeId: id, role })
         } catch (err: any) {
             return reply.code(err.statusCode ?? 500).send({ message: err.message })
         }
@@ -191,6 +196,7 @@ export default async function (fastify: any): Promise<void> {
             .select({
                 id: users.id,
                 email: users.email,
+                role: users.role,
                 isActive: users.isActive,
                 lastLoginAt: users.lastLoginAt,
                 createdAt: users.createdAt,

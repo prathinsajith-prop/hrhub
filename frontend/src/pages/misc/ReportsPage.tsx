@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { CellContext } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { labelFor } from '@/lib/enums'
 import {
     Calendar, Clock, CheckCircle2, XCircle, Download, BarChart3, Users,
@@ -27,6 +28,7 @@ import type { CostReportEmployee } from '@/hooks/useVisaCosts'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { InitialsAvatar } from '@/components/shared/Avatar'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -98,6 +100,7 @@ function EmptyChart({ message = 'No data available' }: { message?: string }) {
 
 export function ReportsPage() {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const { can } = usePermissions()
     const canViewPayroll = can('view_payroll')
     const canViewVisa = can('view_visa')
@@ -496,7 +499,7 @@ export function ReportsPage() {
                                         <div className="flex items-center gap-2.5 min-w-0">
                                             <InitialsAvatar name={e.fullName || '—'} size="sm" />
                                             <div className="min-w-0">
-                                                <p className="text-sm font-medium truncate">{e.fullName}</p>
+                                                <EmployeeLink id={e.id} name={e.fullName || '—'} className="text-sm font-medium truncate block" />
                                                 <p className="text-[11px] text-muted-foreground truncate">{e.designation}</p>
                                             </div>
                                         </div>
@@ -530,6 +533,7 @@ export function ReportsPage() {
                             ]}
                             data={visaReportRows as unknown as VisaExpiryEmployee[]}
                             pageSize={10}
+                            onRowClick={(row) => navigate(`/employees/${row.id}`)}
                             advancedFilter={{
                                 search: visaReportSearch,
                                 filters: VISA_REPORT_FILTERS,

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
@@ -25,6 +26,7 @@ import {
     type StatusTone,
 } from '@/components/shared'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { useAttendance, useUpsertAttendance, useExternalPunch, type AttendanceRecord } from '@/hooks/useAttendance'
 import { useEmployees } from '@/hooks/useEmployees'
@@ -95,6 +97,7 @@ function getMonthRange(offset = 0) {
 
 export function AttendancePage() {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const { can } = usePermissions()
     const canManage = can('manage_attendance')
     const [monthOffset, setMonthOffset] = useState(0)
@@ -308,7 +311,7 @@ export function AttendancePage() {
                     <div className="flex items-center gap-2.5 min-w-0">
                         <InitialsAvatar name={name} src={avatar} size="sm" />
                         <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{name}</p>
+                            <EmployeeLink id={r.employeeId} name={name} className="text-sm font-medium truncate block" />
                             {r.employeeNo && (
                                 <p className="text-[11px] text-muted-foreground truncate">{r.employeeNo}</p>
                             )}
@@ -767,6 +770,7 @@ export function AttendancePage() {
                             }}
                             pageSize={10}
                             emptyMessage={t('attendance.noRecords')}
+                            onRowClick={(row) => navigate(`/employees/${row.employeeId}`)}
                         />
                     )}
                 </CardContent>

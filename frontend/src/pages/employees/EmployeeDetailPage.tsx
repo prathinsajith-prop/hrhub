@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { labelFor, VISA_TYPE_LABELS } from '@/lib/enums'
+import { labelFor, VISA_TYPE_LABELS, ROLE_BADGE_STYLE, ROLE_LABELS } from '@/lib/enums'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, User, Briefcase, Plane, FileText, CreditCard, Star,
@@ -69,6 +69,10 @@ interface DocRecord {
   docType?: string
   category: string
   status: string
+  issueDate?: string | null
+  expiryDate?: string | null
+  fileSize?: number | null
+  notes?: string | null
   createdAt: string
 }
 
@@ -205,10 +209,10 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
 
   const [effectiveDate, setEffectiveDate] = React.useState('')
   const [revisionType, setRevisionType] = React.useState('increment')
-  const [newBasic, setNewBasic] = React.useState('')
-  const [newHousing, setNewHousing] = React.useState('')
-  const [newTransport, setNewTransport] = React.useState('')
-  const [newOther, setNewOther] = React.useState('')
+  const [newBasic, setNewBasic] = React.useState(() => currentBasic != null ? String(currentBasic) : '')
+  const [newHousing, setNewHousing] = React.useState(() => currentHousing != null ? String(currentHousing) : '')
+  const [newTransport, setNewTransport] = React.useState(() => currentTransport != null ? String(currentTransport) : '')
+  const [newOther, setNewOther] = React.useState(() => currentOther != null ? String(currentOther) : '')
   const [remarks, setRemarks] = React.useState('')
 
   // Auto-compute total from components
@@ -221,10 +225,10 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
   function resetForm() {
     setEffectiveDate('')
     setRevisionType('increment')
-    setNewBasic('')
-    setNewHousing('')
-    setNewTransport('')
-    setNewOther('')
+    setNewBasic(currentBasic != null ? String(currentBasic) : '')
+    setNewHousing(currentHousing != null ? String(currentHousing) : '')
+    setNewTransport(currentTransport != null ? String(currentTransport) : '')
+    setNewOther(currentOther != null ? String(currentOther) : '')
     setRemarks('')
   }
 
@@ -245,9 +249,9 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
         effectiveDate,
         revisionType,
         newBasicSalary: parseFloat(newBasic),
-        newHousingAllowance: newHousing ? parseFloat(newHousing) : null,
-        newTransportAllowance: newTransport ? parseFloat(newTransport) : null,
-        newOtherAllowances: newOther ? parseFloat(newOther) : null,
+        newHousingAllowance: parseFloat(newHousing) || 0,
+        newTransportAllowance: parseFloat(newTransport) || 0,
+        newOtherAllowances: parseFloat(newOther) || 0,
         reason: remarks || undefined,
       },
       {
@@ -278,7 +282,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
           <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
 
             {/* Effective date + Revision type */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="cs-date" className="text-sm font-medium">
                   Effective Date <span className="text-destructive">*</span>
@@ -311,7 +315,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
             {(currentBasic != null || currentHousing != null || currentTransport != null || currentOther != null) && (
               <div className="rounded-lg border bg-muted/30 px-4 py-3 space-y-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Current Package</p>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { label: 'Basic', value: currentBasic },
                     { label: 'Housing', value: currentHousing },
@@ -338,7 +342,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
             {/* Allowances — 3 equal columns */}
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-2">Allowances <span className="font-normal">(optional)</span></p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="cs-housing" className="text-xs text-muted-foreground">Housing</Label>
                   <NumericInput id="cs-housing" placeholder="0.00" value={newHousing} onChange={e => setNewHousing(e.target.value)} className="h-9" />
@@ -549,7 +553,7 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium text-muted-foreground">Reason <span className="text-xs font-normal">(optional)</span></Label>
                 <Textarea placeholder="Reason for transfer…" value={reason} onChange={e => setReason(e.target.value)} rows={2} className="resize-none text-sm" />
@@ -1383,54 +1387,84 @@ export function EmployeeDetailPage() {
                   </div>
                 ) : (
                   <div className="divide-y">
-                    {docs.map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between py-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{doc.fileName ?? doc.docType ?? 'Untitled'}</p>
-                            <p className="text-xs text-muted-foreground capitalize">{labelFor(doc.category)} · {formatDate(doc.createdAt)}</p>
+                    {docs.map(doc => {
+                      const statusVariant = doc.status === 'valid' ? 'success' : doc.status === 'expired' ? 'destructive' : doc.status === 'rejected' ? 'destructive' : doc.status === 'expiring_soon' ? 'warning' : 'secondary'
+                      const fileSizeLabel = doc.fileSize ? (doc.fileSize >= 1_048_576 ? `${(doc.fileSize / 1_048_576).toFixed(1)} MB` : `${Math.round(doc.fileSize / 1024)} KB`) : null
+                      const ext = doc.fileName ? doc.fileName.split('.').pop()?.toUpperCase() : null
+                      return (
+                        <div key={doc.id} className="py-3.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className="shrink-0 mt-0.5 h-8 w-8 rounded-lg bg-muted/60 border border-border flex items-center justify-center">
+                                <FileText className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                                  <p className="text-sm font-medium truncate">{doc.docType ?? doc.fileName ?? 'Untitled'}</p>
+                                  <Badge variant={statusVariant} className="text-[10px] shrink-0">
+                                    {labelFor(doc.status)}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground truncate">{doc.fileName ?? '—'}</p>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5">
+                                  <span className="text-[11px] text-muted-foreground capitalize">{labelFor(doc.category)}</span>
+                                  {ext && <span className="text-[11px] text-muted-foreground">{ext}</span>}
+                                  {fileSizeLabel && <span className="text-[11px] text-muted-foreground">{fileSizeLabel}</span>}
+                                  {doc.issueDate && (
+                                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      Issued {formatDate(doc.issueDate)}
+                                    </span>
+                                  )}
+                                  {doc.expiryDate && (
+                                    <span className={cn('text-[11px] flex items-center gap-1', new Date(doc.expiryDate) < new Date() ? 'text-destructive' : 'text-muted-foreground')}>
+                                      <Clock className="h-3 w-3" />
+                                      Expires {formatDate(doc.expiryDate)}
+                                    </span>
+                                  )}
+                                  <span className="text-[11px] text-muted-foreground">Uploaded {formatDate(doc.createdAt)}</span>
+                                </div>
+                                {doc.notes && <p className="text-[11px] text-muted-foreground/70 mt-1 italic truncate">{doc.notes}</p>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {canManageDocuments && (doc.status === 'pending_upload' || doc.status === 'under_review') ? (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800"
+                                    disabled={verifyDocument.isPending}
+                                    onClick={() => verifyDocument.mutate(doc.id, {
+                                      onSuccess: () => toast.success('Document verified'),
+                                      onError: (err: Error) => toast.error('Failed to verify', err?.message),
+                                    })}
+                                  >
+                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                    Approve
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-red-700 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-800"
+                                    onClick={() => { setRejectDocId(doc.id); setRejectDocReason('') }}
+                                  >
+                                    <Ban className="h-3.5 w-3.5 mr-1" />
+                                    Reject
+                                  </Button>
+                                </>
+                              ) : null}
+                              <Button variant="ghost" size="icon-sm" aria-label="View document" onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}>
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon-sm" aria-label="Download document" onClick={() => downloadDoc(doc)}>
+                                <Download className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          <Badge variant={doc.status === 'verified' ? 'success' : doc.status === 'expired' ? 'destructive' : 'secondary'} className="text-[10px]">
-                            {labelFor(doc.status)}
-                          </Badge>
-                          {canManageDocuments && doc.status === 'pending' && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                aria-label="Verify document"
-                                disabled={verifyDocument.isPending}
-                                onClick={() => verifyDocument.mutate(doc.id, {
-                                  onSuccess: () => toast.success('Document verified'),
-                                  onError: (err: Error) => toast.error('Failed to verify', err?.message),
-                                })}
-                              >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                aria-label="Reject document"
-                                onClick={() => { setRejectDocId(doc.id); setRejectDocReason('') }}
-                              >
-                                <Ban className="h-3.5 w-3.5" />
-                              </Button>
-                            </>
-                          )}
-                          <Button variant="ghost" size="icon-sm" aria-label="View document" onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}>
-                            <Eye className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon-sm" aria-label="Download document" onClick={() => downloadDoc(doc)}>
-                            <Download className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -1727,6 +1761,16 @@ export function EmployeeDetailPage() {
                           <Mail className="h-3.5 w-3.5 shrink-0" />
                           {accountData.account?.email && <CopyableEmail email={accountData.account.email} className="text-sm text-muted-foreground" />}
                         </p>
+                        {accountData.account?.role && (
+                          <div className="flex items-center gap-2">
+                            <Shield className="h-3.5 w-3.5 shrink-0" />
+                            <span
+                              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${ROLE_BADGE_STYLE[accountData.account.role] ?? ''}`}
+                            >
+                              {ROLE_LABELS[accountData.account.role] ?? labelFor(accountData.account.role)}
+                            </span>
+                          </div>
+                        )}
                         <p className="flex items-center gap-2">
                           <Clock className="h-3.5 w-3.5 shrink-0" />
                           Last login: {accountData.account?.lastLoginAt ? formatDate(accountData.account.lastLoginAt) : 'Never'}
@@ -2241,8 +2285,8 @@ function DependentFormDialog({
         <DialogHeader>
           <DialogTitle>{dependent ? 'Edit Dependent' : 'Add Dependent'}</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-4 py-2">
-          <div className="col-span-2 space-y-1.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+          <div className="sm:col-span-2 space-y-1.5">
             <Label>Full Name *</Label>
             <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Sarah Johnson" />
           </div>
@@ -2269,7 +2313,7 @@ function DependentFormDialog({
             <Label>Visa Number</Label>
             <Input value={form.visaNumber ?? ''} onChange={e => set('visaNumber', e.target.value)} placeholder="Optional" />
           </div>
-          <div className="col-span-2 space-y-1.5">
+          <div className="sm:col-span-2 space-y-1.5">
             <Label>Medical Insurance</Label>
             <Input value={form.medicalInsurance ?? ''} onChange={e => set('medicalInsurance', e.target.value)} placeholder="Policy number or provider" />
           </div>
@@ -2356,7 +2400,7 @@ function AddWarningDialog({
           <DialogTitle>Add Warning</DialogTitle>
         </DialogHeader>
         <div className="px-6 py-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Issue date <span className="text-destructive">*</span></Label>
               <Input type="date" value={issueDate} onChange={handleIssueDateChange}

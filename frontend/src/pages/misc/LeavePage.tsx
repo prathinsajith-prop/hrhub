@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
 import { Calendar, Clock, CheckCircle2, XCircle, Plus, AlertCircle, RefreshCcw, ArrowRightLeft, Users, Download } from 'lucide-react'
 import { DataTable } from '@/components/ui/data-table'
@@ -18,6 +18,7 @@ import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { ApplyLeaveDialog } from '@/components/shared/action-dialogs'
 import { InitialsAvatar } from '@/components/shared/Avatar'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { LeaveRequest } from '@/types'
 import { LEAVE_TYPE_LABELS, labelFor } from '@/lib/enums'
@@ -128,7 +129,10 @@ function PendingActionsPanel({ leaves, canApprove, onApprove, onReject }: {
                         <InitialsAvatar name={l.employeeName || '—'} src={l.employeeAvatarUrl ?? undefined} size="sm" />
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-medium">{l.employeeName}</p>
+                                {l.employeeId
+                                    ? <EmployeeLink id={l.employeeId} name={l.employeeName || '—'} className="text-sm font-medium" />
+                                    : <p className="text-sm font-medium">{l.employeeName}</p>
+                                }
                                 {l.employeeDepartment && (
                                     <span className="text-[11px] text-muted-foreground">{l.employeeDepartment}</span>
                                 )}
@@ -165,6 +169,7 @@ function PendingActionsPanel({ leaves, canApprove, onApprove, onReject }: {
 
 export function LeavePage() {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const { can, hasRole } = usePermissions()
     const canApprove = can('approve_leave')
     const isDeptHead = hasRole('dept_head')
@@ -206,7 +211,10 @@ export function LeavePage() {
                 <div className="flex items-center gap-2.5 min-w-0">
                     <InitialsAvatar name={l.employeeName || '—'} src={l.employeeAvatarUrl ?? undefined} size="sm" />
                     <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{l.employeeName || '—'}</p>
+                        {l.employeeId
+                            ? <EmployeeLink id={l.employeeId} name={l.employeeName || '—'} className="text-sm font-medium truncate block" />
+                            : <p className="text-sm font-medium truncate">{l.employeeName || '—'}</p>
+                        }
                         {l.employeeDepartment && (
                             <p className="text-[11px] text-muted-foreground truncate">{l.employeeDepartment}</p>
                         )}
@@ -264,18 +272,20 @@ export function LeavePage() {
                     <div className="flex gap-1 justify-end">
                         {l.status === 'pending' && canApprove && (
                             <>
-                                <Button size="icon-sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => setApproveTarget(l)} aria-label="Approve">
-                                    <CheckCircle2 className="h-4 w-4" />
+                                <Button size="sm" variant="outline" className="h-7 text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800" onClick={() => setApproveTarget(l)}>
+                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                    Approve
                                 </Button>
-                                <Button size="icon-sm" variant="ghost" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => setRejectTarget(l)} aria-label="Reject">
-                                    <XCircle className="h-4 w-4" />
+                                <Button size="sm" variant="outline" className="h-7 text-red-700 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-800" onClick={() => setRejectTarget(l)}>
+                                    <XCircle className="h-3.5 w-3.5 mr-1" />
+                                    Reject
                                 </Button>
                             </>
                         )}
                     </div>
                 )
             },
-            size: 80,
+            size: 160,
         },
     ], [canApprove])
 
@@ -381,6 +391,7 @@ export function LeavePage() {
                     pageSize={8}
                     enableSelection
                     getRowId={(row: LeaveRequest) => String(row.id)}
+                    onRowClick={(row: LeaveRequest) => navigate(`/employees/${row.employeeId}`)}
                     bulkActions={(selected) => (
                         <>
                             <Button variant="outline" size="sm" leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}

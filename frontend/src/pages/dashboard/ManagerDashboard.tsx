@@ -12,6 +12,7 @@ import { labelFor } from '@/lib/enums'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useAuthStore } from '@/store/authStore'
 import { useLeaveRequests } from '@/hooks/useLeave'
 import { useAttendanceSummary } from '@/hooks/useAttendance'
@@ -23,6 +24,7 @@ import { QuickAction, SectionHeading, SkeletonRows } from './_shared'
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface LeaveRequest {
   id: string
+  employeeId?: string
   employeeName?: string
   employee?: { firstName?: string; lastName?: string }
   leaveType: string
@@ -161,7 +163,9 @@ export function ManagerDashboard() {
                         {name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{name}</p>
+                        {req.employeeId
+                          ? <EmployeeLink id={req.employeeId} name={name} className="text-sm font-semibold text-foreground truncate" />
+                          : <p className="text-sm font-semibold text-foreground truncate">{name}</p>}
                         <p className="text-xs text-muted-foreground">
                           {labelFor(req.leaveType)} · {req.days} day{req.days !== 1 ? 's' : ''}
                         </p>

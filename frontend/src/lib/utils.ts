@@ -5,8 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatDate(date: string | Date, format: 'short' | 'long' | 'relative' = 'short'): string {
+export function formatDate(date: string | Date | null | undefined, format: 'short' | 'long' | 'relative' = 'short'): string {
+  if (!date) return '—'
   const d = new Date(date)
+  if (isNaN(d.getTime())) return '—'
   if (format === 'relative') {
     const now = new Date()
     const diff = now.getTime() - d.getTime()

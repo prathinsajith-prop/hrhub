@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
 import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus, ShieldCheck, Edit2, RefreshCcw } from 'lucide-react'
@@ -22,6 +22,7 @@ import { applyClientFilters, type FilterConfig } from '@/lib/filters'
 import { DOC_CATEGORY_OPTIONS, DOC_STATUS_OPTIONS } from '@/lib/options'
 import { EditDocumentDialog } from '@/components/shared/action-dialogs'
 import { AddDocumentDialog } from '@/components/shared/AddDocumentDialog'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { VerifyDocumentDialog } from '@/components/shared/VerifyDocumentDialog'
@@ -90,7 +91,10 @@ const columns = (
           <div className="flex items-center gap-2.5 min-w-0">
             <InitialsAvatar name={name} src={d.employeeAvatarUrl} size="sm" />
             <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{name}</p>
+              {d.employeeId
+                ? <EmployeeLink id={d.employeeId} name={name} className="text-sm font-medium truncate block" />
+                : <p className="text-sm font-medium truncate">{name}</p>
+              }
               {(d.employeeNo || d.employeeDepartment) && (
                 <p className="text-[11px] text-muted-foreground truncate">
                   {[d.employeeNo, d.employeeDepartment].filter(Boolean).join(' · ')}
@@ -125,12 +129,14 @@ const columns = (
       size: 80,
     },
     {
-      accessorKey: 'uploadedAt',
+      accessorKey: 'createdAt',
       header: 'Uploaded',
-      cell: ({ getValue, row }) => (
+      cell: ({ row: { original: d } }) => (
         <div>
-          <p className="text-xs">{formatDate(getValue() as string)}</p>
-          <p className="text-[10px] text-muted-foreground">by {row.original.uploadedBy}</p>
+          <p className="text-xs">{formatDate(d.createdAt)}</p>
+          {d.uploadedByName && (
+            <p className="text-[10px] text-muted-foreground truncate max-w-[120px]">by {d.uploadedByName}</p>
+          )}
         </div>
       ),
     },
@@ -195,6 +201,7 @@ const columns = (
 
 export function DocumentsPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_documents')
   const qc = useQueryClient()
@@ -337,6 +344,7 @@ export function DocumentsPage() {
           pageSize={8}
           enableSelection
           getRowId={(row) => String(row.id)}
+          onRowClick={(row) => setViewTarget(row)}
           toolbar={
             <Button
               variant="outline"
