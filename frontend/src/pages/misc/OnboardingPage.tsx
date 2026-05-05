@@ -9,14 +9,12 @@ import { Badge, Card, Progress } from '@/components/ui/primitives'
 import { toast, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, DialogClose } from '@/components/ui/overlays'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { DatePicker } from '@/components/ui/date-picker'
 import { formatDate, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useOnboardingChecklists, useCreateOnboardingChecklist, useOnboardingAnalytics, type OnboardingChecklist } from '@/hooks/useOnboarding'
-import { useEmployees } from '@/hooks/useEmployees'
-import type { Employee } from '@/types'
+import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import {
@@ -33,16 +31,6 @@ export function OnboardingPage() {
     const { data: analyticsData } = useOnboardingAnalytics()
     const analytics = analyticsData
     const createChecklist = useCreateOnboardingChecklist()
-    // Include both active and onboarding employees in the "start checklist" dropdown
-    const { data: empDataActive } = useEmployees({ limit: 100, status: 'active' })
-    const { data: empDataOnboarding } = useEmployees({ limit: 100, status: 'onboarding' })
-    const allEmployees = useMemo<Employee[]>(() => {
-        const active: Employee[] = empDataActive?.data ?? []
-        const onboarding: Employee[] = empDataOnboarding?.data ?? []
-        const seen = new Set(active.map(e => e.id))
-        return [...active, ...onboarding.filter(e => !seen.has(e.id))]
-    }, [empDataActive?.data, empDataOnboarding?.data])
-
     const [newOpen, setNewOpen] = useState(false)
     const [newEmpId, setNewEmpId] = useState('')
     const [newStartDate, setNewStartDate] = useState('')
@@ -256,34 +244,14 @@ export function OnboardingPage() {
                 <DialogContent className="max-w-md">
                     <DialogHeader><DialogTitle>Start Onboarding</DialogTitle></DialogHeader>
                     <DialogBody className="space-y-4">
-                        {!newEmpId ? (
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-muted-foreground">Employee *</label>
-                                <Select value={newEmpId} onValueChange={setNewEmpId}>
-                                    <SelectTrigger className="h-9">
-                                        <SelectValue placeholder="Select employee…" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {allEmployees.filter((e) => !enrolledIds.has(e.id)).map((e) => (
-                                            <SelectItem key={e.id} value={e.id}>
-                                                {e.firstName} {e.lastName}
-                                                {e.designation ? ` — ${e.designation}` : ''}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {allEmployees.filter((e) => !enrolledIds.has(e.id)).length === 0 && (
-                                    <p className="text-xs text-muted-foreground">All active employees already have a checklist.</p>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-2 rounded-lg bg-muted/50 border px-3 py-2">
-                                <span className="text-sm font-medium">
-                                    {(() => { const e = allEmployees.find((e) => e.id === newEmpId); return e ? `${e.firstName} ${e.lastName}` : '' })()}
-                                </span>
-                                {(() => { const e = allEmployees.find((e) => e.id === newEmpId); return e?.designation ? <span className="text-xs text-muted-foreground">— {e.designation}</span> : null })()}
-                            </div>
-                        )}
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium text-muted-foreground">Employee *</label>
+                            <EmployeeSelect
+                                value={newEmpId}
+                                onValueChange={setNewEmpId}
+                                clearable
+                            />
+                        </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-muted-foreground">Start date</label>

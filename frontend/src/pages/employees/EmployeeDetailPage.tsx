@@ -1,12 +1,12 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { labelFor, VISA_TYPE_LABELS } from '@/lib/enums'
+import { labelFor, VISA_TYPE_LABELS, ROLE_BADGE_STYLE, ROLE_LABELS, DOC_STATUS_BADGE } from '@/lib/enums'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, User, Briefcase, Plane, FileText, CreditCard, Star,
   Phone, Mail, MapPin, Calendar, Building2, Hash, Shield, Edit2,
   Clock, Download, Eye, Camera, Loader2, Plus, Package,
-  CalendarDays, ClipboardList, UserCheck, Users, GraduationCap, Landmark,
+  CalendarDays, ClipboardList, UserCheck, Users, GraduationCap, Landmark, DollarSign,
   ArrowRightLeft, Heart, StickyNote, History, Trash2, AlertTriangle, Upload, X as XIcon,
   MoreHorizontal, CheckCircle2, Ban, UserX,
 } from 'lucide-react'
@@ -33,16 +33,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { DatePicker } from '@/components/ui/date-picker'
-import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
+import { cn, formatDate, formatCurrency, formatFileSize, getInitials } from '@/lib/utils'
 import { useEmployee, useUpdateEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision, useUpdateEmployeeStatus, useArchiveEmployee } from '@/hooks/useEmployees'
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { useEmployeeTeams } from '@/hooks/useTeams'
-import { useDocuments } from '@/hooks/useDocuments'
+import { useDocuments, useVerifyDocument, useRejectDocument } from '@/hooks/useDocuments'
 import { usePerformanceReviews } from '@/hooks/usePerformance'
 import { CreatePerformanceReviewDialog } from '@/components/shared/CreatePerformanceReviewDialog'
 import { AddDocumentDialog } from '@/components/shared/AddDocumentDialog'
 import { EmployeeLeavePanel } from '@/components/shared/EmployeeLeavePanel'
+import { EmployeeLoansPanel } from '@/components/shared/EmployeeLoansPanel'
 import { useEmployeeAssets } from '@/hooks/useAssets'
 import { useAttendance } from '@/hooks/useAttendance'
 import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
@@ -68,7 +69,13 @@ interface DocRecord {
   docType?: string
   category: string
   status: string
+  issueDate?: string | null
+  expiryDate?: string | null
+  fileSize?: number | null
+  notes?: string | null
   createdAt: string
+  verifiedAt?: string | null
+  verifiedByName?: string | null
 }
 
 interface AttendanceRecord {
@@ -204,10 +211,10 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
 
   const [effectiveDate, setEffectiveDate] = React.useState('')
   const [revisionType, setRevisionType] = React.useState('increment')
-  const [newBasic, setNewBasic] = React.useState('')
-  const [newHousing, setNewHousing] = React.useState('')
-  const [newTransport, setNewTransport] = React.useState('')
-  const [newOther, setNewOther] = React.useState('')
+  const [newBasic, setNewBasic] = React.useState(() => currentBasic != null ? String(currentBasic) : '')
+  const [newHousing, setNewHousing] = React.useState(() => currentHousing != null ? String(currentHousing) : '')
+  const [newTransport, setNewTransport] = React.useState(() => currentTransport != null ? String(currentTransport) : '')
+  const [newOther, setNewOther] = React.useState(() => currentOther != null ? String(currentOther) : '')
   const [remarks, setRemarks] = React.useState('')
 
   // Auto-compute total from components
@@ -220,10 +227,10 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
   function resetForm() {
     setEffectiveDate('')
     setRevisionType('increment')
-    setNewBasic('')
-    setNewHousing('')
-    setNewTransport('')
-    setNewOther('')
+    setNewBasic(currentBasic != null ? String(currentBasic) : '')
+    setNewHousing(currentHousing != null ? String(currentHousing) : '')
+    setNewTransport(currentTransport != null ? String(currentTransport) : '')
+    setNewOther(currentOther != null ? String(currentOther) : '')
     setRemarks('')
   }
 
@@ -244,9 +251,9 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
         effectiveDate,
         revisionType,
         newBasicSalary: parseFloat(newBasic),
-        newHousingAllowance: newHousing ? parseFloat(newHousing) : null,
-        newTransportAllowance: newTransport ? parseFloat(newTransport) : null,
-        newOtherAllowances: newOther ? parseFloat(newOther) : null,
+        newHousingAllowance: parseFloat(newHousing) || 0,
+        newTransportAllowance: parseFloat(newTransport) || 0,
+        newOtherAllowances: parseFloat(newOther) || 0,
         reason: remarks || undefined,
       },
       {
@@ -277,7 +284,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
           <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
 
             {/* Effective date + Revision type */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="cs-date" className="text-sm font-medium">
                   Effective Date <span className="text-destructive">*</span>
@@ -310,7 +317,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
             {(currentBasic != null || currentHousing != null || currentTransport != null || currentOther != null) && (
               <div className="rounded-lg border bg-muted/30 px-4 py-3 space-y-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Current Package</p>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { label: 'Basic', value: currentBasic },
                     { label: 'Housing', value: currentHousing },
@@ -337,7 +344,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
             {/* Allowances — 3 equal columns */}
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-2">Allowances <span className="font-normal">(optional)</span></p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="cs-housing" className="text-xs text-muted-foreground">Housing</Label>
                   <NumericInput id="cs-housing" placeholder="0.00" value={newHousing} onChange={e => setNewHousing(e.target.value)} className="h-9" />
@@ -548,7 +555,7 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium text-muted-foreground">Reason <span className="text-xs font-normal">(optional)</span></Label>
                 <Textarea placeholder="Reason for transfer…" value={reason} onChange={e => setReason(e.target.value)} rows={2} className="resize-none text-sm" />
@@ -626,6 +633,7 @@ export function EmployeeDetailPage() {
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_employees')
+  const canManageDocuments = can('manage_documents')
 
   const { data: employee, isLoading } = useEmployee(id!)
   const { data: orgUnits = [] } = useOrgUnits()
@@ -689,6 +697,8 @@ export function EmployeeDetailPage() {
   const updateEmployee = useUpdateEmployee(id!)
   const updateStatus = useUpdateEmployeeStatus()
   const archiveEmployee = useArchiveEmployee()
+  const verifyDocument = useVerifyDocument()
+  const rejectDocument = useRejectDocument()
   const [activeTab, setActiveTab] = React.useState('personal')
   const [statusTarget, setStatusTarget] = React.useState<{ status: 'active' | 'suspended' | 'terminated' } | null>(null)
   const [archiveConfirm, setArchiveConfirm] = React.useState(false)
@@ -697,6 +707,8 @@ export function EmployeeDetailPage() {
   const [editPayrollOpen, setEditPayrollOpen] = React.useState(false)
   const [inviteOpen, setInviteOpen] = React.useState(false)
   const [viewDoc, setViewDoc] = React.useState<{ id: string; fileName?: string } | null>(null)
+  const [rejectDocId, setRejectDocId] = React.useState<string | null>(null)
+  const [rejectDocReason, setRejectDocReason] = React.useState('')
   const [visaEditOpen, setVisaEditOpen] = React.useState(false)
   const [visaForm, setVisaForm] = React.useState({
     visaType: '', visaNumber: '', visaIssueDate: '', visaExpiry: '',
@@ -704,6 +716,7 @@ export function EmployeeDetailPage() {
     passportNo: '', passportExpiry: '', labourCardNumber: '', labourCardExpiry: '',
   })
   const [changeSalaryOpen, setChangeSalaryOpen] = React.useState(false)
+  const [viewRevision, setViewRevision] = React.useState<import('@/hooks/useEmployees').SalaryRevision | null>(null)
   const [transferOpen, setTransferOpen] = React.useState(false)
   const [createReviewOpen, setCreateReviewOpen] = React.useState(false)
   const [addDocOpen, setAddDocOpen] = React.useState(false)
@@ -874,7 +887,7 @@ export function EmployeeDetailPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportCSV(e as unknown as Record<string, unknown>)}>
                     Export
                   </Button>
@@ -975,6 +988,7 @@ export function EmployeeDetailPage() {
           { value: 'performance', icon: Star, label: 'Performance' },
           { value: 'assets', icon: Package, label: 'Assets' },
           { value: 'leave', icon: CalendarDays, label: 'Leave' },
+          ...(canManage ? [{ value: 'loans', icon: DollarSign, label: 'Loans' }] : []),
           { value: 'attendance', icon: ClipboardList, label: 'Attendance' },
           ...(canManage ? [{ value: 'warnings', icon: AlertTriangle, label: 'Warnings' }] : []),
           ...(canManage ? [{ value: 'dependents', icon: Heart, label: 'Dependents' }] : []),
@@ -1037,7 +1051,7 @@ export function EmployeeDetailPage() {
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5">
                   {/* Row 1 — Identity */}
                   <EmpField label="Employee No." icon={Hash} value={e.employeeNo} />
                   <EmpField label="Join Date" icon={Calendar} value={formatDate(e.joinDate)} />
@@ -1077,24 +1091,44 @@ export function EmployeeDetailPage() {
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-muted-foreground" />
                   <CardTitle className="text-base">Team Memberships</CardTitle>
+                  {employeeTeams.length > 0 && (
+                    <Badge variant="secondary" className="text-[10px] ml-auto">{employeeTeams.length} {employeeTeams.length === 1 ? 'team' : 'teams'}</Badge>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>
                 {employeeTeams.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-2">Not assigned to any team.</p>
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-8 w-8 mx-auto mb-2 opacity-25" />
+                    <p className="text-sm font-medium">Not assigned to any team</p>
+                    <p className="text-xs mt-0.5">Team assignments are managed from the Teams page.</p>
+                  </div>
                 ) : (
-                  <div className="divide-y divide-border/40">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {employeeTeams.map(team => (
-                      <div key={team.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{team.name}</p>
-                          {team.department && (
-                            <p className="text-xs text-muted-foreground mt-0.5">{team.department}</p>
-                          )}
+                      <div key={team.id} className="group rounded-xl border bg-card hover:bg-muted/30 transition-colors p-3.5">
+                        <div className="flex items-start gap-3">
+                          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                            <Users className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-foreground truncate leading-tight">{team.name}</p>
+                            {team.description && (
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{team.description}</p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                              {team.department && (
+                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4">{team.department}</Badge>
+                              )}
+                              <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Users className="h-2.5 w-2.5" />{team.memberCount} {team.memberCount === 1 ? 'member' : 'members'}
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Calendar className="h-2.5 w-2.5" />Joined {formatDate(team.joinedAt)}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <Badge variant="secondary" className="text-[10px] shrink-0 ml-3">
-                          {team.memberCount} {team.memberCount === 1 ? 'member' : 'members'}
-                        </Badge>
                       </div>
                     ))}
                   </div>
@@ -1376,28 +1410,90 @@ export function EmployeeDetailPage() {
                   </div>
                 ) : (
                   <div className="divide-y">
-                    {docs.map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between py-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{doc.fileName ?? doc.docType ?? 'Untitled'}</p>
-                            <p className="text-xs text-muted-foreground capitalize">{labelFor(doc.category)} · {formatDate(doc.createdAt)}</p>
+                    {docs.map(doc => {
+                      const { variant: statusVariant, label: statusLabel } = DOC_STATUS_BADGE[doc.status] ?? { variant: 'secondary' as const, label: labelFor(doc.status) }
+                      const fileSizeLabel = doc.fileSize ? formatFileSize(doc.fileSize) : null
+                      const ext = doc.fileName ? doc.fileName.split('.').pop()?.toUpperCase() : null
+                      return (
+                        <div key={doc.id} className="py-3.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className="shrink-0 mt-0.5 h-8 w-8 rounded-lg bg-muted/60 border border-border flex items-center justify-center">
+                                <FileText className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                                  <p className="text-sm font-medium truncate">{doc.docType ?? doc.fileName ?? 'Untitled'}</p>
+                                  <Badge variant={statusVariant} className="text-[10px] shrink-0">
+                                    {statusLabel}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground truncate">{doc.fileName ?? '—'}</p>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5">
+                                  <span className="text-[11px] text-muted-foreground capitalize">{labelFor(doc.category)}</span>
+                                  {ext && <span className="text-[11px] text-muted-foreground">{ext}</span>}
+                                  {fileSizeLabel && <span className="text-[11px] text-muted-foreground">{fileSizeLabel}</span>}
+                                  {doc.issueDate && (
+                                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      Issued {formatDate(doc.issueDate)}
+                                    </span>
+                                  )}
+                                  {doc.expiryDate && (
+                                    <span className={cn('text-[11px] flex items-center gap-1', new Date(doc.expiryDate) < new Date() ? 'text-destructive' : 'text-muted-foreground')}>
+                                      <Clock className="h-3 w-3" />
+                                      Expires {formatDate(doc.expiryDate)}
+                                    </span>
+                                  )}
+                                  <span className="text-[11px] text-muted-foreground">Uploaded {formatDate(doc.createdAt)}</span>
+                                  {doc.status === 'valid' && doc.verifiedByName && (
+                                    <span className="text-[11px] text-emerald-600 flex items-center gap-1">
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      Approved by {doc.verifiedByName}{doc.verifiedAt ? ` on ${formatDate(doc.verifiedAt)}` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                                {doc.notes && <p className="text-[11px] text-muted-foreground/70 mt-1 italic truncate">{doc.notes}</p>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {canManageDocuments && (doc.status === 'pending_upload' || doc.status === 'under_review') ? (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800"
+                                    disabled={verifyDocument.isPending}
+                                    onClick={() => verifyDocument.mutate(doc.id, {
+                                      onSuccess: () => toast.success('Document verified'),
+                                      onError: (err: Error) => toast.error('Failed to verify', err?.message),
+                                    })}
+                                  >
+                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                    Approve
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-red-700 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-800"
+                                    onClick={() => { setRejectDocId(doc.id); setRejectDocReason('') }}
+                                  >
+                                    <Ban className="h-3.5 w-3.5 mr-1" />
+                                    Reject
+                                  </Button>
+                                </>
+                              ) : null}
+                              <Button variant="ghost" size="icon-sm" aria-label="View document" onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}>
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon-sm" aria-label="Download document" onClick={() => downloadDoc(doc)}>
+                                <Download className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          <Badge variant={doc.status === 'verified' ? 'success' : doc.status === 'expired' ? 'destructive' : 'secondary'} className="text-[10px]">
-                            {labelFor(doc.status)}
-                          </Badge>
-                          <Button variant="ghost" size="icon-sm" aria-label="View document" onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}>
-                            <Eye className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon-sm" aria-label="Download document" onClick={() => downloadDoc(doc)}>
-                            <Download className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -1406,37 +1502,94 @@ export function EmployeeDetailPage() {
 
           {/* ── Payroll ── */}
           <TabsContent value="payroll" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-base">Payroll Summary</CardTitle>
-                  {canManage && (
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditPayrollOpen(true)}>
-                        Edit
-                      </Button>
-                      <Button size="sm" variant="outline" leftIcon={<CreditCard className="h-3.5 w-3.5" />} onClick={() => setChangeSalaryOpen(true)}>
-                        Change Salary
-                      </Button>
+            {(() => {
+              const today = new Date().toISOString().split('T')[0]
+              const upcoming = salaryHistoryData?.find(r => r.effectiveDate > today)
+              return (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-base">Payroll Summary</CardTitle>
+                        {upcoming && (
+                          <Badge variant="warning" className="text-[10px]">Pending change</Badge>
+                        )}
+                      </div>
+                      {canManage && (
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditPayrollOpen(true)}>
+                            Edit
+                          </Button>
+                          <Button size="sm" variant="outline" leftIcon={<CreditCard className="h-3.5 w-3.5" />} onClick={() => setChangeSalaryOpen(true)}>
+                            Change Salary
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-                  <div>
-                    <InfoRow label="Basic Salary" value={formatCurrency(e.basicSalary ?? 0)} icon={CreditCard} />
-                    <InfoRow label="Housing Allow." value={formatCurrency(e.housingAllowance ?? 0)} icon={CreditCard} />
-                    <InfoRow label="Transport Allow." value={formatCurrency(e.transportAllowance ?? 0)} icon={CreditCard} />
-                    <InfoRow label="Other Allow." value={formatCurrency(e.otherAllowances ?? 0)} icon={CreditCard} />
-                  </div>
-                  <div>
-                    <InfoRow label="Total Salary" value={formatCurrency(e.totalSalary ?? 0)} icon={CreditCard} />
-                    <InfoRow label="Payment Method" value={labelFor(e.paymentMethod)} icon={Landmark} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Current salary */}
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                        {upcoming ? 'Current Salary (Active)' : 'Current Salary'}
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                        <div>
+                          <InfoRow label="Basic Salary" value={formatCurrency(e.basicSalary ?? 0)} icon={CreditCard} />
+                          <InfoRow label="Housing Allow." value={formatCurrency(e.housingAllowance ?? 0)} icon={CreditCard} />
+                          <InfoRow label="Transport Allow." value={formatCurrency(e.transportAllowance ?? 0)} icon={CreditCard} />
+                          <InfoRow label="Other Allow." value={formatCurrency(e.otherAllowances ?? 0)} icon={CreditCard} />
+                        </div>
+                        <div>
+                          <InfoRow label="Total Salary" value={formatCurrency(e.totalSalary ?? 0)} icon={CreditCard} />
+                          <InfoRow label="Payment Method" value={labelFor(e.paymentMethod)} icon={Landmark} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Upcoming change banner */}
+                    {upcoming && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 space-y-2.5">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-amber-600 shrink-0" />
+                          <p className="text-sm font-semibold text-amber-900">
+                            Upcoming Salary Change — effective {formatDate(upcoming.effectiveDate)}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {[
+                            { label: 'New Basic', cur: e.basicSalary, nxt: upcoming.newBasicSalary },
+                            { label: 'Housing', cur: e.housingAllowance, nxt: upcoming.newHousingAllowance },
+                            { label: 'Transport', cur: e.transportAllowance, nxt: upcoming.newTransportAllowance },
+                            { label: 'Other', cur: e.otherAllowances, nxt: upcoming.newOtherAllowances },
+                          ].map(({ label, cur, nxt }) => {
+                            const curVal = cur != null ? parseFloat(String(cur)) : 0
+                            const nxtVal = nxt != null ? parseFloat(String(nxt)) : 0
+                            const diff = nxtVal - curVal
+                            return (
+                              <div key={label} className="bg-white/60 rounded-lg px-3 py-2">
+                                <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>
+                                <p className="text-sm font-bold tabular-nums">{formatCurrency(nxtVal)}</p>
+                                {diff !== 0 && (
+                                  <p className={cn('text-[10px] font-medium tabular-nums', diff > 0 ? 'text-green-600' : 'text-red-600')}>
+                                    {diff > 0 ? '+' : ''}{formatCurrency(diff)}
+                                  </p>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                        {upcoming.newTotalSalary && (
+                          <p className="text-xs text-amber-700">
+                            New total package: <span className="font-semibold">{formatCurrency(parseFloat(upcoming.newTotalSalary))}</span>
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })()}
 
             <Card>
               <CardHeader>
@@ -1462,73 +1615,84 @@ export function EmployeeDetailPage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                  <History className="h-4 w-4 text-muted-foreground" />
                   <CardTitle className="text-base">Salary History</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
                 {salaryHistoryLoading ? (
-                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
                 ) : !salaryHistoryData || salaryHistoryData.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <CreditCard className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <History className="h-8 w-8 mx-auto mb-2 opacity-30" />
                     <p className="text-sm font-medium">No salary revisions recorded</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b bg-muted/40">
-                          <th className="text-left font-medium text-muted-foreground px-3 py-2.5">Effective Date</th>
-                          <th className="text-left font-medium text-muted-foreground px-3 py-2.5">Type</th>
-                          <th className="text-right font-medium text-muted-foreground px-3 py-2.5">Prev. Basic</th>
-                          <th className="text-right font-medium text-muted-foreground px-3 py-2.5">New Basic</th>
-                          <th className="text-right font-medium text-muted-foreground px-3 py-2.5">Change</th>
-                          <th className="text-right font-medium text-muted-foreground px-3 py-2.5 hidden md:table-cell">New Total</th>
-                          <th className="text-left font-medium text-muted-foreground px-3 py-2.5 hidden sm:table-cell">Remarks</th>
-                          <th className="text-left font-medium text-muted-foreground px-3 py-2.5 hidden lg:table-cell">Approved By</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {salaryHistoryData.map(rev => {
-                          const prev = rev.previousBasicSalary ? parseFloat(rev.previousBasicSalary) : null
-                          const next = parseFloat(rev.newBasicSalary)
-                          const delta = prev != null ? next - prev : null
-                          return (
-                            <tr key={rev.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                              <td className="px-3 py-2.5 font-medium">{formatDate(rev.effectiveDate)}</td>
-                              <td className="px-3 py-2.5">
-                                <Badge variant={REVISION_TYPE_VARIANT[rev.revisionType] ?? 'secondary'} className="text-[10px]">
-                                  {REVISION_TYPE_LABELS[rev.revisionType] ?? rev.revisionType}
-                                </Badge>
-                              </td>
-                              <td className="px-3 py-2.5 text-right text-muted-foreground">
-                                {prev != null ? formatCurrency(prev) : '—'}
-                              </td>
-                              <td className="px-3 py-2.5 text-right font-medium">
-                                {formatCurrency(next)}
-                              </td>
-                              <td className="px-3 py-2.5 text-right font-medium">
-                                {delta != null ? (
-                                  <span className={delta >= 0 ? 'text-success' : 'text-destructive'}>
-                                    {delta >= 0 ? '+' : ''}{formatCurrency(delta)}
+                  <div className="space-y-2">
+                    {salaryHistoryData.map(rev => {
+                      const today = new Date().toISOString().split('T')[0]
+                      const isUpcoming = rev.effectiveDate > today
+                      const prev = rev.previousBasicSalary ? parseFloat(rev.previousBasicSalary) : null
+                      const next = parseFloat(rev.newBasicSalary)
+                      const delta = prev != null ? next - prev : null
+                      return (
+                        <div
+                          key={rev.id}
+                          className={cn(
+                            'rounded-xl border p-3.5 transition-colors',
+                            isUpcoming ? 'border-amber-200 bg-amber-50/50' : 'hover:bg-muted/20',
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className={cn(
+                                'h-8 w-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
+                                delta == null || delta >= 0 ? 'bg-green-100' : 'bg-red-100',
+                              )}>
+                                <CreditCard className={cn('h-3.5 w-3.5', delta == null || delta >= 0 ? 'text-green-600' : 'text-red-600')} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-sm font-semibold">{formatCurrency(next)}</span>
+                                  {delta != null && (
+                                    <span className={cn('text-xs font-medium', delta >= 0 ? 'text-green-600' : 'text-red-600')}>
+                                      ({delta >= 0 ? '+' : ''}{formatCurrency(delta)})
+                                    </span>
+                                  )}
+                                  <Badge variant={REVISION_TYPE_VARIANT[rev.revisionType] ?? 'secondary'} className="text-[10px]">
+                                    {REVISION_TYPE_LABELS[rev.revisionType] ?? rev.revisionType}
+                                  </Badge>
+                                  {isUpcoming && <Badge variant="warning" className="text-[10px]">Upcoming</Badge>}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <Calendar className="h-2.5 w-2.5" />{formatDate(rev.effectiveDate)}
                                   </span>
-                                ) : '—'}
-                              </td>
-                              <td className="px-3 py-2.5 text-right text-muted-foreground hidden md:table-cell">
-                                {rev.newTotalSalary ? formatCurrency(parseFloat(rev.newTotalSalary)) : '—'}
-                              </td>
-                              <td className="px-3 py-2.5 text-muted-foreground hidden sm:table-cell max-w-[180px] truncate">
-                                {rev.reason ?? '—'}
-                              </td>
-                              <td className="px-3 py-2.5 text-muted-foreground hidden lg:table-cell text-xs">
-                                {rev.approvedByName ?? '—'}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                                  {rev.newTotalSalary && (
+                                    <span className="text-xs text-muted-foreground">Total: {formatCurrency(parseFloat(rev.newTotalSalary))}</span>
+                                  )}
+                                  {rev.approvedByName && (
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <User className="h-2.5 w-2.5" />{rev.approvedByName}
+                                    </span>
+                                  )}
+                                </div>
+                                {rev.reason && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{rev.reason}</p>}
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 shrink-0"
+                              onClick={() => setViewRevision(rev)}
+                              title="View full details"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -1634,6 +1798,13 @@ export function EmployeeDetailPage() {
             <EmployeeLeavePanel employeeId={id!} canManage={canManage} />
           </TabsContent>
 
+          {/* ── Loans ── */}
+          {canManage && (
+            <TabsContent value="loans" className="mt-4">
+              <EmployeeLoansPanel employeeId={id!} canManage={canManage} />
+            </TabsContent>
+          )}
+
           {/* ── Account ── */}
           {canManage && (
             <TabsContent value="account" className="mt-4">
@@ -1687,6 +1858,16 @@ export function EmployeeDetailPage() {
                           <Mail className="h-3.5 w-3.5 shrink-0" />
                           {accountData.account?.email && <CopyableEmail email={accountData.account.email} className="text-sm text-muted-foreground" />}
                         </p>
+                        {accountData.account?.role && (
+                          <div className="flex items-center gap-2">
+                            <Shield className="h-3.5 w-3.5 shrink-0" />
+                            <span
+                              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${ROLE_BADGE_STYLE[accountData.account.role] ?? ''}`}
+                            >
+                              {ROLE_LABELS[accountData.account.role] ?? labelFor(accountData.account.role)}
+                            </span>
+                          </div>
+                        )}
                         <p className="flex items-center gap-2">
                           <Clock className="h-3.5 w-3.5 shrink-0" />
                           Last login: {accountData.account?.lastLoginAt ? formatDate(accountData.account.lastLoginAt) : 'Never'}
@@ -2056,6 +2237,96 @@ export function EmployeeDetailPage() {
         fileName={viewDoc?.fileName}
       />
 
+      {/* Reject Document Dialog */}
+      {canManageDocuments && (
+        <Dialog open={!!rejectDocId} onOpenChange={o => !o && setRejectDocId(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Reject Document</DialogTitle>
+            </DialogHeader>
+            <Textarea
+              placeholder="Reason for rejection (optional)"
+              value={rejectDocReason}
+              onChange={e => setRejectDocReason(e.target.value)}
+              rows={3}
+            />
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setRejectDocId(null)} disabled={rejectDocument.isPending}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={rejectDocument.isPending}
+                onClick={() => {
+                  if (!rejectDocId) return
+                  rejectDocument.mutate({ id: rejectDocId, reason: rejectDocReason }, {
+                    onSuccess: () => { toast.success('Document rejected'); setRejectDocId(null) },
+                    onError: (err: Error) => { toast.error('Failed to reject', err?.message) },
+                  })
+                }}
+              >
+                Reject
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Salary Revision Detail Dialog */}
+      {viewRevision && (
+        <Dialog open={!!viewRevision} onOpenChange={o => !o && setViewRevision(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <History className="h-4 w-4" />
+                Salary Revision Details
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant={REVISION_TYPE_VARIANT[viewRevision.revisionType] ?? 'secondary'}>
+                  {REVISION_TYPE_LABELS[viewRevision.revisionType] ?? viewRevision.revisionType}
+                </Badge>
+                {viewRevision.effectiveDate > new Date().toISOString().split('T')[0] && (
+                  <Badge variant="warning">Upcoming</Badge>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: 'Effective Date', value: formatDate(viewRevision.effectiveDate) },
+                  { label: 'Approved By', value: viewRevision.approvedByName ?? '—' },
+                  { label: 'Previous Basic', value: viewRevision.previousBasicSalary ? formatCurrency(parseFloat(viewRevision.previousBasicSalary)) : '—' },
+                  { label: 'New Basic', value: formatCurrency(parseFloat(viewRevision.newBasicSalary)) },
+                  { label: 'Previous Housing', value: viewRevision.previousHousingAllowance ? formatCurrency(parseFloat(viewRevision.previousHousingAllowance)) : '—' },
+                  { label: 'New Housing', value: viewRevision.newHousingAllowance ? formatCurrency(parseFloat(viewRevision.newHousingAllowance)) : '—' },
+                  { label: 'Previous Transport', value: viewRevision.previousTransportAllowance ? formatCurrency(parseFloat(viewRevision.previousTransportAllowance)) : '—' },
+                  { label: 'New Transport', value: viewRevision.newTransportAllowance ? formatCurrency(parseFloat(viewRevision.newTransportAllowance)) : '—' },
+                  { label: 'Previous Other', value: viewRevision.previousOtherAllowances ? formatCurrency(parseFloat(viewRevision.previousOtherAllowances)) : '—' },
+                  { label: 'New Other', value: viewRevision.newOtherAllowances ? formatCurrency(parseFloat(viewRevision.newOtherAllowances)) : '—' },
+                  { label: 'Previous Total', value: viewRevision.previousTotalSalary ? formatCurrency(parseFloat(viewRevision.previousTotalSalary)) : '—' },
+                  { label: 'New Total', value: viewRevision.newTotalSalary ? formatCurrency(parseFloat(viewRevision.newTotalSalary)) : '—' },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-muted/40 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground">{label}</p>
+                    <p className="text-sm font-medium mt-0.5 tabular-nums">{value}</p>
+                  </div>
+                ))}
+              </div>
+              {viewRevision.reason && (
+                <div className="bg-muted/40 rounded-lg px-3 py-2">
+                  <p className="text-[10px] text-muted-foreground">Reason / Remarks</p>
+                  <p className="text-sm mt-0.5">{viewRevision.reason}</p>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setViewRevision(null)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Change Salary Dialog */}
       {canManage && id && (
         <ChangeSalaryDialog
@@ -2165,8 +2436,8 @@ function DependentFormDialog({
         <DialogHeader>
           <DialogTitle>{dependent ? 'Edit Dependent' : 'Add Dependent'}</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-4 py-2">
-          <div className="col-span-2 space-y-1.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+          <div className="sm:col-span-2 space-y-1.5">
             <Label>Full Name *</Label>
             <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Sarah Johnson" />
           </div>
@@ -2193,7 +2464,7 @@ function DependentFormDialog({
             <Label>Visa Number</Label>
             <Input value={form.visaNumber ?? ''} onChange={e => set('visaNumber', e.target.value)} placeholder="Optional" />
           </div>
-          <div className="col-span-2 space-y-1.5">
+          <div className="sm:col-span-2 space-y-1.5">
             <Label>Medical Insurance</Label>
             <Input value={form.medicalInsurance ?? ''} onChange={e => set('medicalInsurance', e.target.value)} placeholder="Policy number or provider" />
           </div>
@@ -2280,7 +2551,7 @@ function AddWarningDialog({
           <DialogTitle>Add Warning</DialogTitle>
         </DialogHeader>
         <div className="px-6 py-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Issue date <span className="text-destructive">*</span></Label>
               <Input type="date" value={issueDate} onChange={handleIssueDateChange}

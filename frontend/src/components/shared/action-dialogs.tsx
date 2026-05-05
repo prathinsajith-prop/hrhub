@@ -12,7 +12,8 @@ import { useAssets, useAssignAsset, type Asset } from '@/hooks/useAssets'
 import { useCreateJob, useUpdateJob } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
-import { useCreateEmployee, useUpdateEmployee, useEmployees } from '@/hooks/useEmployees'
+import { useCreateEmployee, useUpdateEmployee, useNextEmployeeNo } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
 import { useGradeLevels } from '@/hooks/useGradeLevels'
@@ -20,7 +21,7 @@ import { useTeams } from '@/hooks/useTeams'
 import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { FormField } from '@/components/shared/FormField'
-import { api, apiErrorToFieldMap } from '@/lib/api'
+import { api, apiErrorToFieldMap, ApiError } from '@/lib/api'
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, jobPostSchema, visaApplicationSchema, leaveRequestSchema, documentMetaSchema, zodToFieldErrors } from '@/lib/schemas'
 import {
@@ -35,7 +36,7 @@ import {
 } from '@/lib/options'
 import type { Employee } from '@/types'
 
-// Searchable reporting-manager picker.
+// Searchable reporting-manager picker — server-side search, limit 20.
 function ManagerPicker({
     value, onChange, excludeId,
 }: {
@@ -43,30 +44,17 @@ function ManagerPicker({
     onChange: (id: string, name: string) => void
     excludeId?: string
 }) {
-    const { data } = useEmployees({ limit: 100 })
-    const employees = (data?.data ?? []) as Employee[]
-    const opts: ComboboxOption[] = [
-        { value: '__none__', label: '— No manager (top-level) —' },
-        ...employees
-            .filter(e => e.id !== excludeId)
-            .map(e => ({
-                value: e.id,
-                label: `${e.firstName} ${e.lastName}`,
-                secondary: e.designation ?? undefined,
-            })),
-    ]
     return (
-        <Combobox
-            value={value || '__none__'}
-            onValueChange={v => {
-                if (!v || v === '__none__') return onChange('', '')
-                const picked = employees.find(e => e.id === v)
-                onChange(v, picked ? `${picked.firstName} ${picked.lastName}` : '')
+        <EmployeeSelect
+            value={value}
+            onValueChange={id => { if (!id) onChange('', '') }}
+            onEmployeeChange={emp => {
+                if (!emp) onChange('', '')
+                else onChange(emp.id, `${emp.firstName} ${emp.lastName}`)
             }}
-            options={opts}
-            placeholder="— No manager (top-level) —"
-            searchPlaceholder="Search employees…"
+            excludeId={excludeId}
             clearable
+            placeholder="— No manager (top-level) —"
         />
     )
 }
@@ -194,8 +182,6 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
     const [urgencyLevel, setUrgencyLevel] = useState('normal')
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
     const today = new Date().toISOString().split('T')[0]
-    const { data: empData } = useEmployees({ limit: 100 })
-    const employees = (empData?.data as Employee[]) ?? []
     const createVisa = useCreateVisa()
 
     useEffect(() => {
@@ -233,14 +219,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
                 <DialogBody className="space-y-3">
                     <div className="space-y-1.5">
                         <Label required>Employee</Label>
-                        <Select value={employeeId} onValueChange={setEmployeeId}>
-                            <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                            <SelectContent>
-                                {employees.map((e) => (
-                                    <SelectItem key={e.id} value={e.id}>{e.fullName ?? `${e.firstName} ${e.lastName}`} · {e.employeeNo}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <EmployeeSelect value={employeeId} onValueChange={setEmployeeId} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
@@ -284,8 +263,6 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
     const [endDate, setEndDate] = useState('')
     const [reason, setReason] = useState('')
     const today = new Date().toISOString().split('T')[0]
-    const { data: empData } = useEmployees({ limit: 100 })
-    const employees = (empData?.data as Employee[]) ?? []
     const createLeave = useCreateLeave()
 
     useEffect(() => {
@@ -322,14 +299,7 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
                 <DialogBody className="space-y-3">
                     <div className="space-y-1.5">
                         <Label required>Employee</Label>
-                        <Select value={employeeId} onValueChange={setEmployeeId}>
-                            <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                            <SelectContent>
-                                {employees.map((e) => (
-                                    <SelectItem key={e.id} value={e.id}>{e.fullName ?? `${e.firstName} ${e.lastName}`}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <EmployeeSelect value={employeeId} onValueChange={setEmployeeId} />
                     </div>
                     <div className="space-y-1.5">
                         <Label>Leave Type</Label>
@@ -581,6 +551,23 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 navigate('/organization-settings', { state: { tab: 'subscription' } })
                 return
             }
+            if (e?.statusCode === 409 && (e?.message ?? '').includes('Employee ID')) {
+                setErrors({ employeeNo: e.message ?? 'This employee ID is already in use' })
+                setStep(2)
+                return
+            }
+            // DB unique constraint — backend returns { field: 'camelCaseFieldName' }
+            const dupField = e instanceof ApiError ? e.field : undefined
+            if (dupField) {
+                setErrors({ [dupField]: e.message ?? 'Already in use' })
+                const step1Fields = ['firstName', 'lastName', 'dateOfBirth', 'gender', 'maritalStatus', 'nationality', 'passportNo', 'mobileNo', 'personalEmail']
+                const step3Fields = ['basicSalary', 'housingAllowance', 'transportAllowance', 'otherAllowances', 'totalSalary', 'paymentMethod', 'bankName', 'iban']
+                if (step1Fields.includes(dupField)) setStep(1)
+                else if (step3Fields.includes(dupField)) setStep(3)
+                else setStep(2)
+                toast.error('Duplicate value', e?.message ?? 'Please use a different value.')
+                return
+            }
             const fieldErrors = apiErrorToFieldMap(e)
             if (Object.keys(fieldErrors).length) {
                 setErrors(fieldErrors)
@@ -683,12 +670,15 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                     {step === 2 && (
                         <div className="space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Employee No</label>
-                                    <div className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm text-muted-foreground select-none">
-                                        Auto-generated on save
-                                    </div>
-                                </div>
+                                <FormField label="Employee No" error={errors.employeeNo}>
+                                    <Input
+                                        value={form.employeeNo ?? ''}
+                                        onChange={set('employeeNo')}
+                                        placeholder="Auto-generated on save"
+                                        aria-invalid={!!errors.employeeNo}
+                                        className={errors.employeeNo ? 'border-destructive' : ''}
+                                    />
+                                </FormField>
                                 <FormField label="Join Date" required error={errors.joinDate}>
                                     <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                                 </FormField>
@@ -938,9 +928,11 @@ export function EditEmployeeDialog({
         emergencyContactName: employee.emergencyContactName ?? '',
         emergencyContactPhone: employee.emergencyContactPhone ?? '',
         homeCountryAddress: employee.homeCountryAddress ?? '',
+        employeeNo: employee.employeeNo ?? '',
     })
     const [errors, setErrors] = useState<Record<string, string>>({})
     const updateEmployee = useUpdateEmployee(employee.id)
+    const nextEmpNo = useNextEmployeeNo(open)
 
     const set = (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
@@ -967,6 +959,7 @@ export function EditEmployeeDialog({
             toast.warning('Fix the highlighted fields', 'Please correct the errors before saving.')
             return
         }
+        const resolvedEmpNo = form.employeeNo.trim() || nextEmpNo.data?.data?.employeeNo || undefined
         updateEmployee.mutate(
             {
                 firstName: form.firstName, lastName: form.lastName,
@@ -980,10 +973,21 @@ export function EditEmployeeDialog({
                 emergencyContactName: form.emergencyContactName || undefined,
                 emergencyContactPhone: form.emergencyContactPhone || undefined,
                 homeCountryAddress: form.homeCountryAddress || undefined,
+                employeeNo: resolvedEmpNo,
             },
             {
                 onSuccess: () => { toast.success('Profile updated', `${form.firstName} ${form.lastName} has been updated.`); close() },
-                onError: (err: Error & { message?: string }) => {
+                onError: (err: Error & { message?: string; statusCode?: number }) => {
+                    if ((err as any)?.statusCode === 409 || (err?.message ?? '').includes('Employee ID')) {
+                        setErrors({ employeeNo: err.message ?? 'This employee ID is already in use' })
+                        return
+                    }
+                    const dupField = err instanceof ApiError ? err.field : undefined
+                    if (dupField) {
+                        setErrors({ [dupField]: err.message ?? 'Already in use' })
+                        toast.error('Duplicate value', err?.message ?? 'Please use a different value.')
+                        return
+                    }
                     const fieldErrors = apiErrorToFieldMap(err)
                     if (Object.keys(fieldErrors).length) setErrors(fieldErrors)
                     toast.error('Failed to update', err?.message ?? 'Please try again.')
@@ -1000,6 +1004,27 @@ export function EditEmployeeDialog({
                 </DialogHeader>
                 <DialogBody>
                     <div className="space-y-3">
+                        <FormField label="Employee No" error={errors.employeeNo}>
+                            <div className="flex gap-2">
+                                <Input
+                                    value={form.employeeNo}
+                                    onChange={set('employeeNo')}
+                                    placeholder={nextEmpNo.data?.data?.employeeNo ?? 'Auto-generated'}
+                                    aria-invalid={!!errors.employeeNo}
+                                    className={errors.employeeNo ? 'border-destructive flex-1' : 'flex-1'}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setForm(f => ({ ...f, employeeNo: nextEmpNo.data?.data?.employeeNo ?? '' }))}
+                                    disabled={!nextEmpNo.data?.data?.employeeNo}
+                                    title="Auto-generate employee number"
+                                >
+                                    Auto
+                                </Button>
+                            </div>
+                        </FormField>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <FormField label="First Name" required error={errors.firstName}>
                                 <Input value={form.firstName} onChange={set('firstName')} aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />
@@ -1723,7 +1748,7 @@ export function AssignAssetToEmployeeDialog({
                             </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <FormField label="Assigned Date" required>
                                 <DatePicker
                                     value={assignedDate}

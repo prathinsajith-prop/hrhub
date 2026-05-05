@@ -14,28 +14,20 @@ import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import { api } from '@/lib/api'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
-import { labelFor } from '@/lib/enums'
+import { labelFor, DOC_STATUS_BADGE } from '@/lib/enums'
 import { useDocuments, useDeleteDocument } from '@/hooks/useDocuments'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
-import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { type FilterConfig } from '@/lib/filters'
 import { DOC_CATEGORY_OPTIONS, DOC_STATUS_OPTIONS } from '@/lib/options'
 import { EditDocumentDialog } from '@/components/shared/action-dialogs'
 import { AddDocumentDialog } from '@/components/shared/AddDocumentDialog'
+import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { VerifyDocumentDialog } from '@/components/shared/VerifyDocumentDialog'
-import type { Document, DocStatus } from '@/types'
+import type { Document } from '@/types'
 
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info'
-const statusBadge: Record<DocStatus, { variant: BadgeVariant; label: string }> = {
-  valid: { variant: 'success', label: 'Valid' },
-  expiring_soon: { variant: 'warning', label: 'Expiring Soon' },
-  expired: { variant: 'destructive', label: 'Expired' },
-  pending_upload: { variant: 'secondary', label: 'Pending Upload' },
-  under_review: { variant: 'info', label: 'Under Review' },
-  rejected: { variant: 'destructive', label: 'Rejected' },
-}
 
 const DOCUMENT_FILTERS: FilterConfig[] = [
   { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
@@ -90,7 +82,10 @@ const columns = (
           <div className="flex items-center gap-2.5 min-w-0">
             <InitialsAvatar name={name} src={d.employeeAvatarUrl} size="sm" />
             <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{name}</p>
+              {d.employeeId
+                ? <EmployeeLink id={d.employeeId} name={name} className="text-sm font-medium truncate block" />
+                : <p className="text-sm font-medium truncate">{name}</p>
+              }
               {(d.employeeNo || d.employeeDepartment) && (
                 <p className="text-[11px] text-muted-foreground truncate">
                   {[d.employeeNo, d.employeeDepartment].filter(Boolean).join(' · ')}
@@ -106,8 +101,8 @@ const columns = (
       accessorKey: 'status',
       header: 'Status',
       cell: ({ getValue }) => {
-        const s = getValue() as DocStatus
-        const { variant, label } = statusBadge[s]
+        const s = getValue() as string
+        const { variant, label } = DOC_STATUS_BADGE[s] ?? { variant: 'secondary' as const, label: labelFor(s) }
         return <Badge variant={variant} className="text-[11px]">{label}</Badge>
       },
     },
@@ -119,18 +114,31 @@ const columns = (
     {
       accessorKey: 'verified',
       header: 'Verified',
-      cell: ({ getValue }) => getValue()
-        ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-        : <Clock className="h-4 w-4 text-amber-400" />,
-      size: 80,
+      cell: ({ row: { original: d } }) => d.verified ? (
+        <div>
+          <div className="flex items-center gap-1">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            {d.verifiedByName && <span className="text-[11px] text-muted-foreground truncate max-w-[100px]">{d.verifiedByName}</span>}
+          </div>
+          {d.verifiedAt && <p className="text-[10px] text-muted-foreground mt-0.5">{formatDate(d.verifiedAt)}</p>}
+        </div>
+      ) : (
+        <div className="flex items-center gap-1">
+          <Clock className="h-3.5 w-3.5 text-amber-400" />
+          <span className="text-[11px] text-muted-foreground">Pending</span>
+        </div>
+      ),
+      size: 140,
     },
     {
-      accessorKey: 'uploadedAt',
+      accessorKey: 'createdAt',
       header: 'Uploaded',
-      cell: ({ getValue, row }) => (
+      cell: ({ row: { original: d } }) => (
         <div>
-          <p className="text-xs">{formatDate(getValue() as string)}</p>
-          <p className="text-[10px] text-muted-foreground">by {row.original.uploadedBy}</p>
+          <p className="text-xs">{formatDate(d.createdAt)}</p>
+          {d.uploadedByName && (
+            <p className="text-[10px] text-muted-foreground truncate max-w-[120px]">by {d.uploadedByName}</p>
+          )}
         </div>
       ),
     },
@@ -208,23 +216,19 @@ export function DocumentsPage() {
   const [bulkArchiveTarget, setBulkArchiveTarget] = useState<Document[] | null>(null)
   const [viewTarget, setViewTarget] = useState<Document | null>(null)
   const [verifyTarget, setVerifyTarget] = useState<Document | null>(null)
-  const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: 100 })
-  const documents = useMemo<Document[]>(() => (docsData?.data as Document[]) ?? [], [docsData?.data])
-  const expiring = documents.filter((d) => d.status === 'expiring_soon').length
-  const expired = documents.filter((d) => d.status === 'expired').length
-  const deleteDoc = useDeleteDocument()
   const search = useSearchFilters({
     storageKey: 'hrhub.documents.searchHistory',
     availableFilters: DOCUMENT_FILTERS,
   })
-  const filteredDocuments = useMemo(
-    () => applyClientFilters(documents as unknown as Record<string, unknown>[], {
-      searchInput: search.searchInput,
-      appliedFilters: search.appliedFilters,
-      searchFields: ['employeeName', 'employeeNo', 'docType', 'fileName', 'category'],
-    }) as unknown as Document[],
-    [documents, search.appliedFilters, search.searchInput],
-  )
+
+  const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: 100, q: search.searchInput || undefined, filters: search.appliedFilters })
+  const documents = useMemo<Document[]>(() => (docsData?.data as Document[]) ?? [], [docsData?.data])
+  const expiring = documents.filter((d) => d.status === 'expiring_soon').length
+  const expired = documents.filter((d) => d.status === 'expired').length
+  const deleteDoc = useDeleteDocument()
+
+  // Server-side filtering via useDocuments({ q, filters }) handles all filter logic.
+  const filteredDocuments = documents
 
   const handleView = (d: Document) => {
     setViewTarget(d)
@@ -337,6 +341,7 @@ export function DocumentsPage() {
           pageSize={8}
           enableSelection
           getRowId={(row) => String(row.id)}
+          onRowClick={(row) => setViewTarget(row)}
           toolbar={
             <Button
               variant="outline"

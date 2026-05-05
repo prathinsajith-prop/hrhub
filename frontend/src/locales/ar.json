@@ -897,6 +897,7 @@
     "monthlyDeduction": "الخصم الشهري",
     "reason": "السبب",
     "reasonPlaceholder": "الغرض من السلفة…",
+    "searchPlaceholder": "ابحث باسم الموظف أو الرقم…",
     "recordPayment": "تسجيل دفعة",
     "installmentCalc": "سيتطلب ذلك {{count}} قسطاً شهرياً.",
     "rejectTitle": "رفض طلب القرض",

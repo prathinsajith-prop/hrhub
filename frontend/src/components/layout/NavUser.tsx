@@ -12,6 +12,7 @@ import {
   CreditCardIcon,
   PlusIcon,
   ArrowRightLeftIcon,
+  CodeIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -39,9 +40,10 @@ import { useTranslation } from "react-i18next"
 import { applyLanguageDirection } from "@/lib/i18n"
 import { useMyTenants, useSwitchTenant } from "@/hooks/useTenants"
 import { useState } from "react"
-import { labelFor } from "@/lib/enums"
+import { labelFor, ROLE_BADGE_STYLE } from "@/lib/enums"
 import { cn } from "@/lib/utils"
 import { NewOrganizationDialog } from "@/components/shared/NewOrganizationDialog"
+import { useApiMeta } from "@/hooks/useMeta"
 
 const ORG_COLORS = [
   'bg-emerald-500', 'bg-blue-500', 'bg-violet-500',
@@ -75,6 +77,7 @@ export function NavUser({
 
   const { data: tenants } = useMyTenants()
   const switchTenant = useSwitchTenant()
+  const { data: apiMeta } = useApiMeta()
 
   const initials = user.name
     .split(" ")
@@ -158,7 +161,10 @@ export function NavUser({
                   <p className="text-sm font-semibold leading-tight truncate">{user.name}</p>
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</p>
                   {currentRole && (
-                    <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    <span className={cn(
+                      "mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                      ROLE_BADGE_STYLE[currentRole] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                    )}>
                       <ShieldIcon className="size-2.5 shrink-0" />
                       {labelFor(currentRole)}
                     </span>
@@ -204,9 +210,12 @@ export function NavUser({
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="truncate text-sm font-medium leading-tight">{org.tenantName}</p>
-                                  <p className="truncate text-[11px] text-muted-foreground capitalize leading-tight">
+                                  <span className={cn(
+                                    "mt-0.5 inline-flex items-center rounded-full border px-1.5 py-px text-[10px] font-semibold",
+                                    ROLE_BADGE_STYLE[org.role] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                                  )}>
                                     {labelFor(org.role)}
-                                  </p>
+                                  </span>
                                 </div>
                                 <span className="ml-auto shrink-0">
                                   {isSwitching ? (
@@ -252,6 +261,15 @@ export function NavUser({
                       <SettingsIcon className="size-4 text-muted-foreground shrink-0" />
                       <span className="text-sm">Settings</span>
                     </DropdownMenuItem>
+                    {currentRole === 'super_admin' && apiMeta?.docsEnabled && apiMeta.docsUrl && (
+                      <DropdownMenuItem
+                        onClick={() => window.open(apiMeta.docsUrl!, '_blank', 'noopener,noreferrer')}
+                        className="gap-2.5 rounded-lg h-9 px-2.5 cursor-pointer"
+                      >
+                        <CodeIcon className="size-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm">API Documentation</span>
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator className="my-1" />
                 </>

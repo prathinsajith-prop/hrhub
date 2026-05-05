@@ -5,11 +5,77 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/primitives'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatDate } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { useEmployeeAccount, useInviteEmployee, useResendInvite } from '@/hooks/useEmployees'
 import { useUpdateUser } from '@/hooks/useSettings'
+import { labelFor, ROLE_BADGE_STYLE } from '@/lib/enums'
+import { useAuthStore } from '@/store/authStore'
 import type { Employee } from '@/types'
+
+const ALL_ROLES = [
+    { id: 'super_admin', label: 'Super Admin' },
+    { id: 'hr_manager', label: 'HR Manager' },
+    { id: 'pro_officer', label: 'PRO Officer' },
+    { id: 'dept_head', label: 'Department Manager' },
+    { id: 'employee', label: 'Employee' },
+]
+
+interface RoleSelectorProps {
+    userId: string
+    currentRole: string
+    selectedRole: string
+    availableRoles: typeof ALL_ROLES
+    onRoleChange: (role: string) => void
+    onSave: (userId: string) => void
+    isSaving: boolean
+}
+
+function RoleSelector({ userId, currentRole, selectedRole, availableRoles, onRoleChange, onSave, isSaving }: RoleSelectorProps) {
+    const isDirty = selectedRole !== currentRole
+    return (
+        <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Role</p>
+            <div className="flex items-center gap-2">
+                <Select value={selectedRole} onValueChange={onRoleChange}>
+                    <SelectTrigger className="h-8 flex-1 text-xs">
+                        <SelectValue>
+                            <span className={cn(
+                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                ROLE_BADGE_STYLE[selectedRole] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                            )}>
+                                {labelFor(selectedRole)}
+                            </span>
+                        </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {availableRoles.map(r => (
+                            <SelectItem key={r.id} value={r.id}>
+                                <span className={cn(
+                                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                    ROLE_BADGE_STYLE[r.id] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                                )}>
+                                    {r.label}
+                                </span>
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {isDirty && (
+                    <Button
+                        size="sm"
+                        className="h-8 text-xs shrink-0"
+                        onClick={() => onSave(userId)}
+                        loading={isSaving}
+                    >
+                        Save
+                    </Button>
+                )}
+            </div>
+        </div>
+    )
+}
 
 interface Props {
     employee: Employee
@@ -24,15 +90,24 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
     const invite = useInviteEmployee()
     const resend = useResendInvite()
     const updateUser = useUpdateUser()
+    const callerRole = useAuthStore(s => s.user?.role)
+    const callerIsSuperAdmin = callerRole === 'super_admin'
 
     // Use || (not ??) so empty strings fall through to the next option
     const derivedEmail = employee.workEmail || employee.email || employee.personalEmail || ''
     const [emailInput, setEmailInput] = useState(derivedEmail)
+    const [selectedRole, setSelectedRole] = useState('employee')
 
-    // Sync when the dialog opens or employee changes
+    // Sync when the dialog opens or account data loads
     useEffect(() => {
         if (open) setEmailInput(employee.workEmail || employee.email || employee.personalEmail || '')
     }, [open, employee])
+
+    useEffect(() => {
+        if (accountData?.account?.role) setSelectedRole(accountData.account.role)
+    }, [accountData])
+
+    const availableRoles = callerIsSuperAdmin ? ALL_ROLES : ALL_ROLES.filter(r => r.id !== 'super_admin')
 
     const close = () => onOpenChange(false)
 
@@ -52,7 +127,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
         const email = emailInput.trim()
         if (!email) { toast.error('Email required', 'Please enter an email address to send the invite.'); return }
         try {
-            await invite.mutateAsync({ employeeId: employee.id, email })
+            await invite.mutateAsync({ employeeId: employee.id, email, role: selectedRole })
             toast.success('Invitation sent', `An invite email has been sent to ${email}.`)
             close()
         } catch (err: unknown) {
@@ -80,6 +155,15 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
             close()
         } catch {
             toast.error('Update failed', 'Could not update the account status.')
+        }
+    }
+
+    async function handleSaveRole(userId: string) {
+        try {
+            await updateUser.mutateAsync({ id: userId, role: selectedRole })
+            toast.success('Role updated', `Role changed to ${labelFor(selectedRole)}.`)
+        } catch {
+            toast.error('Update failed', 'Could not update the role.')
         }
     }
 
@@ -143,58 +227,93 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     </p>
                                 )}
                             </div>
+
+                            {/* Role picker */}
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Role</Label>
+                                <Select value={selectedRole} onValueChange={setSelectedRole}>
+                                    <SelectTrigger className="h-9 text-xs">
+                                        <SelectValue>
+                                            <span className={cn(
+                                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                                ROLE_BADGE_STYLE[selectedRole] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                                            )}>
+                                                {labelFor(selectedRole)}
+                                            </span>
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableRoles.map(r => (
+                                            <SelectItem key={r.id} value={r.id}>
+                                                <span className={cn(
+                                                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                                    ROLE_BADGE_STYLE[r.id] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                                                )}>
+                                                    {r.label}
+                                                </span>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                     ) : state === 'deactivated' ? (
-                        <div className="flex gap-4">
-                            <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
-                                <ShieldOff className="h-5 w-5 text-destructive" />
-                            </div>
-                            <div className="min-w-0 space-y-1.5">
-                                <div className="flex items-center gap-2">
-                                    <p className="text-sm font-semibold">Access revoked</p>
-                                    <Badge variant="destructive" className="text-[10px]">Deactivated</Badge>
+                        <div className="space-y-4">
+                            <div className="flex gap-4">
+                                <div className="h-10 w-10 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                                    <ShieldOff className="h-5 w-5 text-destructive" />
                                 </div>
-                                <p className="text-xs text-muted-foreground leading-relaxed">
-                                    This employee's login access has been revoked. Restore it to allow them to sign in again.
-                                </p>
-                                {account?.email && (
-                                    <div className="flex items-center gap-2 pt-0.5">
-                                        <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                        <span className="text-xs text-muted-foreground truncate">{account.email}</span>
+                                <div className="min-w-0 space-y-1.5">
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm font-semibold">Access revoked</p>
+                                        <Badge variant="destructive" className="text-[10px]">Deactivated</Badge>
                                     </div>
-                                )}
-                                {account?.lastLoginAt && (
-                                    <div className="flex items-center gap-2 pt-0.5">
-                                        <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                        <span className="text-xs text-muted-foreground">Last login: {formatDate(account.lastLoginAt)}</span>
-                                    </div>
-                                )}
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        This employee's login access has been revoked. Restore it to allow them to sign in again.
+                                    </p>
+                                    {account?.email && (
+                                        <div className="flex items-center gap-2 pt-0.5">
+                                            <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                            <span className="text-xs text-muted-foreground truncate">{account.email}</span>
+                                        </div>
+                                    )}
+                                    {account?.lastLoginAt && (
+                                        <div className="flex items-center gap-2 pt-0.5">
+                                            <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                            <span className="text-xs text-muted-foreground">Last login: {formatDate(account.lastLoginAt)}</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
+                            {account && <RoleSelector userId={account.id} currentRole={account.role} selectedRole={selectedRole} availableRoles={availableRoles} onRoleChange={setSelectedRole} onSave={handleSaveRole} isSaving={updateUser.isPending} />}
                         </div>
                     ) : state === 'invite-pending' ? (
-                        <div className="flex gap-4">
-                            <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center shrink-0">
-                                <Send className="h-5 w-5 text-warning" />
-                            </div>
-                            <div className="min-w-0 space-y-1.5">
-                                <div className="flex items-center gap-2">
-                                    <p className="text-sm font-semibold">Invite pending</p>
-                                    <Badge variant="warning" className="text-[10px]">Awaiting setup</Badge>
+                        <div className="space-y-4">
+                            <div className="flex gap-4">
+                                <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center shrink-0">
+                                    <Send className="h-5 w-5 text-warning" />
                                 </div>
-                                <p className="text-xs text-muted-foreground leading-relaxed">
-                                    An invite was sent but the employee hasn't set their password yet. You can resend a fresh link.
-                                </p>
-                                {account?.email && (
-                                    <div className="flex items-center gap-2 pt-0.5">
-                                        <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                        <span className="text-xs text-muted-foreground truncate">{account.email}</span>
+                                <div className="min-w-0 space-y-1.5">
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm font-semibold">Invite pending</p>
+                                        <Badge variant="warning" className="text-[10px]">Awaiting setup</Badge>
                                     </div>
-                                )}
-                                <div className="flex items-center gap-2 pt-0.5">
-                                    <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                    <span className="text-xs text-muted-foreground">Invited {formatDate(account?.createdAt ?? '')}</span>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        An invite was sent but the employee hasn't set their password yet. You can resend a fresh link.
+                                    </p>
+                                    {account?.email && (
+                                        <div className="flex items-center gap-2 pt-0.5">
+                                            <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                            <span className="text-xs text-muted-foreground truncate">{account.email}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex items-center gap-2 pt-0.5">
+                                        <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                        <span className="text-xs text-muted-foreground">Invited {formatDate(account?.createdAt ?? '')}</span>
+                                    </div>
                                 </div>
                             </div>
+                            {account && <RoleSelector userId={account.id} currentRole={account.role} selectedRole={selectedRole} availableRoles={availableRoles} onRoleChange={setSelectedRole} onSave={handleSaveRole} isSaving={updateUser.isPending} />}
                         </div>
                     ) : (
                         <div className="space-y-3.5">
@@ -217,6 +336,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     <span>Created {formatDate(account?.createdAt ?? '')}</span>
                                 </div>
                             </div>
+                            {account && <RoleSelector userId={account.id} currentRole={account.role} selectedRole={selectedRole} availableRoles={availableRoles} onRoleChange={setSelectedRole} onSave={handleSaveRole} isSaving={updateUser.isPending} />}
                         </div>
                     )}
                 </div>

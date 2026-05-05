@@ -20,6 +20,9 @@ export class ApiError extends Error {
         this.data = data
         this.name = 'ApiError'
     }
+    get field(): string | undefined {
+        return (this.data as { field?: string } | undefined)?.field
+    }
 }
 
 /**

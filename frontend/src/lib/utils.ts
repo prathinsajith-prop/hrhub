@@ -5,8 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatDate(date: string | Date, format: 'short' | 'long' | 'relative' = 'short'): string {
+export function formatDate(date: string | Date | null | undefined, format: 'short' | 'long' | 'relative' = 'short'): string {
+  if (!date) return '—'
   const d = new Date(date)
+  if (isNaN(d.getTime())) return '—'
   if (format === 'relative') {
     const now = new Date()
     const diff = now.getTime() - d.getTime()
@@ -59,4 +61,9 @@ export function getInitials(name: string): string {
 
 export function generateId(): string {
   return Math.random().toString(36).substr(2, 9).toUpperCase()
+}
+
+export function formatFileSize(bytes: number): string {
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`
+  return `${Math.round(bytes / 1024)} KB`
 }

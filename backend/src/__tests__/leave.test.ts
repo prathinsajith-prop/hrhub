@@ -15,6 +15,14 @@ function calcLeaveAccruedProRata(monthsOfService: number): number {
     return Math.floor(monthsOfService < 12 ? monthsOfService * 2 : 30)
 }
 
+describe('Leave accrual pro-rata (floor)', () => {
+    it('floors partial months', () => {
+        expect(calcLeaveAccruedProRata(1)).toBe(2)
+        expect(calcLeaveAccruedProRata(5)).toBe(10)
+        expect(calcLeaveAccruedProRata(12)).toBe(30)
+    })
+})
+
 describe('UAE Annual Leave Entitlement', () => {
     it('accrues 2 days per month for the first year', () => {
         expect(calcAnnualEntitlement(1)).toBe(2)

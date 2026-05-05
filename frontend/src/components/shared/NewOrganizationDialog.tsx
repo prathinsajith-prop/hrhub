@@ -89,7 +89,7 @@ export function NewOrganizationDialog({ open, onOpenChange, onSuccess }: Props) 
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Jurisdiction</Label>
               <Select value={form.jurisdiction} onValueChange={(v) => set('jurisdiction', v)}>

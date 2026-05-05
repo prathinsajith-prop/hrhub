@@ -1,34 +1,51 @@
-import { eq, and, desc, isNull, sql, getTableColumns, or, lt, gte, lte } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { visaApplications, employees, visaStepHistory, visaCosts } from '../../db/schema/index.js'
 import { cacheDel } from '../../lib/redis.js'
 import { VISA_STEP_LABELS, visaStepLabel } from './visa.constants.js'
+import { Conditions } from '../../lib/filters.js'
 import type { CreateCostInput } from './visa_costs.service.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
+const VISA_FIELD_MAP = {
+    status: visaApplications.status,
+    urgencyLevel: visaApplications.urgencyLevel,
+    visaType: visaApplications.visaType,
+    expiryDate: visaApplications.expiryDate,
+    currentStep: visaApplications.currentStep,
+}
+const VISA_ALLOWED = new Set(Object.keys(VISA_FIELD_MAP))
+
 type NewVisa = InferInsertModel<typeof visaApplications>
 
-export async function listVisas(tenantId: string, params: { status?: string; urgencyLevel?: string; from?: string; to?: string; limit: number; offset: number; after?: string }) {
-    const { status, urgencyLevel, from, to, limit, offset, after } = params
-    const conditions = [eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)]
-    if (status) conditions.push(eq(visaApplications.status, status as never))
-    if (urgencyLevel) conditions.push(eq(visaApplications.urgencyLevel, urgencyLevel as never))
-    // Calendar uses expiryDate as the event date; filter by [from, to] when provided.
-    if (from) conditions.push(gte(visaApplications.expiryDate, from))
-    if (to) conditions.push(lte(visaApplications.expiryDate, to))
+export async function listVisas(tenantId: string, params: { status?: string; urgencyLevel?: string; from?: string; to?: string; search?: string; filter?: string; limit: number; offset: number; after?: string }) {
+    const { status, urgencyLevel, from, to, search, filter, limit, offset, after } = params
+
+    const baseConds = Conditions.create()
+        .tenant(visaApplications.tenantId, tenantId)
+        .notDeleted(visaApplications.deletedAt)
+        .match(visaApplications.status, status)
+        .match(visaApplications.urgencyLevel, urgencyLevel)
+        // Calendar uses expiryDate as the event date; filter by [from, to] when provided.
+        .dateRange(visaApplications.expiryDate, from, to)
+        .nameSearch(search, employees.firstName, employees.lastName, employees.employeeNo)
+        .filterWithName(filter, VISA_FIELD_MAP, VISA_ALLOWED, employees.firstName, employees.lastName)
 
     const cursor = after ? decodeCursor(after) : null
-    if (cursor) {
-        const cursorDate = new Date(cursor.c)
-        conditions.push(
-            or(
-                lt(visaApplications.createdAt, cursorDate),
-                and(eq(visaApplications.createdAt, cursorDate), lt(visaApplications.id, cursor.i))
-            )!
-        )
+
+    let total = 0
+    if (!cursor) {
+        const [countRow] = await db
+            .select({ count: sql<number>`COUNT(*)`.as('count') })
+            .from(visaApplications)
+            .leftJoin(employees, eq(employees.id, visaApplications.employeeId))
+            .where(baseConds.where())
+        total = Number(countRow?.count ?? 0)
     }
+
+    baseConds.cursor(after, visaApplications.createdAt, visaApplications.id)
 
     const pageSize = limit + 1
     const rows = await db.select({
@@ -40,7 +57,7 @@ export async function listVisas(tenantId: string, params: { status?: string; urg
     })
         .from(visaApplications)
         .leftJoin(employees, eq(employees.id, visaApplications.employeeId))
-        .where(and(...conditions))
+        .where(baseConds.where())
         .orderBy(desc(visaApplications.createdAt), desc(visaApplications.id))
         .limit(cursor ? pageSize : limit)
         .offset(cursor ? 0 : offset)
@@ -51,15 +68,6 @@ export async function listVisas(tenantId: string, params: { status?: string; urg
     const nextCursor = (cursor && hasMore && lastRow)
         ? encodeCursor(lastRow.createdAt, lastRow.id)
         : undefined
-
-    let total = 0
-    if (!cursor) {
-        const [countRow] = await db
-            .select({ count: sql<number>`COUNT(*)`.as('count') })
-            .from(visaApplications)
-            .where(and(...conditions))
-        total = Number(countRow?.count ?? 0)
-    }
 
     const resolvedRows = await Promise.all(pageRows.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
     return {

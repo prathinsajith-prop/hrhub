@@ -47,6 +47,9 @@ const envSchema = z.object({
     // will forward 5xx errors — requires `@sentry/node` package.
     SENTRY_DSN: z.string().default(''),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).optional(),
+    // API documentation — enabled by default in non-production; set to 'true' to
+    // enable in production/staging (e.g. for internal developer portals).
+    ENABLE_API_DOCS: z.coerce.boolean().default(false),
 })
 
 export type Env = z.infer<typeof envSchema>

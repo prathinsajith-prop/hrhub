@@ -21,9 +21,9 @@ export async function auditRoutes(fastify: any): Promise<void> {
 
     // GET /api/v1/audit/activity?entityType=&entityId=&userId=&limit=&offset=
     fastify.get('/activity', { ...adminAuth, schema: { tags: ['Audit'] } }, async (request: any, reply: any) => {
-        const { entityType, entityId, userId, limit = '50', offset = '0' } = request.query as Record<string, string>
+        const { entityType, entityId, userId, action, actorRole, actorName, entityName, from, to, ipAddress, limit = '50', offset = '0' } = request.query as Record<string, string>
         const data = await getActivityLogs(request.user.tenantId, {
-            entityType, entityId, userId, limit: Number(limit), offset: Number(offset),
+            entityType, entityId, userId, action, actorRole, actorName, entityName, from, to, ipAddress, limit: Number(limit), offset: Number(offset),
         })
         return reply.send({ data })
     })

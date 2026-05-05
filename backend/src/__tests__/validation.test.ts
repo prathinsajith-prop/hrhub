@@ -4,6 +4,7 @@
  * the wire format clients see.
  */
 import { describe, it, expect } from 'vitest'
+import { vi } from 'vitest'
 import {
     loginSchema,
     registerSchema,
@@ -12,6 +13,8 @@ import {
     changePasswordSchema,
     paginationSchema,
     uuidSchema,
+    parseUuidParam,
+    listEmployeesSchema,
 } from '../lib/validation.js'
 
 describe('loginSchema', () => {
@@ -104,5 +107,71 @@ describe('uuidSchema', () => {
 
     it('rejects a non-UUID string', () => {
         expect(uuidSchema.safeParse('not-a-uuid').success).toBe(false)
+    })
+})
+
+describe('parseUuidParam', () => {
+    function makeReply() {
+        const send = vi.fn()
+        const code = vi.fn(() => ({ send }))
+        return { code, send, _sent: () => send.mock.calls.length > 0 }
+    }
+
+    it('returns the UUID string when the param is a valid UUID', () => {
+        const reply = makeReply()
+        const result = parseUuidParam({ id: '550e8400-e29b-41d4-a716-446655440000' }, 'id', reply)
+        expect(result).toBe('550e8400-e29b-41d4-a716-446655440000')
+        expect(reply.code).not.toHaveBeenCalled()
+    })
+
+    it('sends a 400 and returns null for a non-UUID value', () => {
+        const reply = makeReply()
+        const result = parseUuidParam({ id: 'not-a-uuid' }, 'id', reply)
+        expect(result).toBeNull()
+        expect(reply.code).toHaveBeenCalledWith(400)
+        expect(reply.send).toHaveBeenCalledWith(
+            expect.objectContaining({ statusCode: 400, error: 'Bad Request' }),
+        )
+    })
+
+    it('sends a 400 and returns null when the param key is missing', () => {
+        const reply = makeReply()
+        const result = parseUuidParam({}, 'id', reply)
+        expect(result).toBeNull()
+        expect(reply.code).toHaveBeenCalledWith(400)
+    })
+
+    it('error message includes the param key name', () => {
+        const reply = makeReply()
+        parseUuidParam({ employeeId: 'bad' }, 'employeeId', reply)
+        const body = reply.send.mock.calls[0][0] as { message: string }
+        expect(body.message).toContain('employeeId')
+    })
+
+    it('accepts a UUID for a custom key name', () => {
+        const reply = makeReply()
+        const result = parseUuidParam(
+            { tenantId: '123e4567-e89b-12d3-a456-426614174000' },
+            'tenantId',
+            reply,
+        )
+        expect(result).toBe('123e4567-e89b-12d3-a456-426614174000')
+    })
+})
+
+describe('listEmployeesSchema', () => {
+    it('allows limit up to 500 (employee-list override)', () => {
+        const r = listEmployeesSchema.safeParse({ limit: '500' })
+        expect(r.success).toBe(true)
+        if (r.success) expect(r.data.limit).toBe(500)
+    })
+
+    it('rejects limit above 500', () => {
+        expect(listEmployeesSchema.safeParse({ limit: '501' }).success).toBe(false)
+    })
+
+    it('applies default limit of 20 when omitted', () => {
+        const r = listEmployeesSchema.parse({})
+        expect(r.limit).toBe(20)
     })
 })

@@ -2,6 +2,14 @@ import { db } from '../../db/index.js'
 import { exitRequests, employees, leaveRequests, leaveBalances } from '../../db/schema/index.js'
 import { eq, and, sql, desc } from 'drizzle-orm'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
+import { Conditions } from '../../lib/filters.js'
+
+const EXIT_FIELD_MAP = {
+    exitType: exitRequests.exitType,
+    exitDate: exitRequests.exitDate,
+    status: exitRequests.status,
+}
+const EXIT_ALLOWED = new Set(Object.keys(EXIT_FIELD_MAP))
 
 /**
  * UAE Gratuity — Federal Decree-Law No. 33 of 2021 (in force Feb 2, 2022).
@@ -131,11 +139,14 @@ export async function initiateExit(tenantId: string, body: {
     return { request: req, settlement }
 }
 
-export async function getExitRequests(tenantId: string, opts: { limit?: number; offset?: number; status?: string } = {}) {
-    const { limit = 50, offset = 0, status } = opts
-    const where = status
-        ? and(eq(exitRequests.tenantId, tenantId), sql`${exitRequests.status} = ${status}`)
-        : eq(exitRequests.tenantId, tenantId)
+export async function getExitRequests(tenantId: string, opts: { limit?: number; offset?: number; status?: string; q?: string; filter?: string } = {}) {
+    const { limit = 50, offset = 0, status, q, filter } = opts
+
+    const conds = Conditions.create()
+        .tenant(exitRequests.tenantId, tenantId)
+        .match(exitRequests.status, status)
+        .nameSearch(q, employees.firstName, employees.lastName, employees.employeeNo)
+        .filter(filter, EXIT_FIELD_MAP, EXIT_ALLOWED)
 
     const rows = await db
         .select({
@@ -168,7 +179,7 @@ export async function getExitRequests(tenantId: string, opts: { limit?: number; 
         })
         .from(exitRequests)
         .leftJoin(employees, eq(employees.id, exitRequests.employeeId))
-        .where(where)
+        .where(conds.where())
         .orderBy(desc(exitRequests.createdAt))
         .limit(limit)
         .offset(offset)
