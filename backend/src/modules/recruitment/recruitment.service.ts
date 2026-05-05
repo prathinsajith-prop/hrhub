@@ -6,7 +6,16 @@ import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { parseFilterString, buildDrizzleFilters } from '../../lib/filters.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
-const JOB_FIELD_MAP = { status: recruitmentJobs.status, department: recruitmentJobs.department }
+const JOB_FIELD_MAP = {
+    status: recruitmentJobs.status,
+    department: recruitmentJobs.department,
+    title: recruitmentJobs.title,
+    location: recruitmentJobs.location,
+    openings: recruitmentJobs.openings,
+    minSalary: recruitmentJobs.minSalary,
+    maxSalary: recruitmentJobs.maxSalary,
+    closingDate: recruitmentJobs.closingDate,
+}
 const JOB_ALLOWED = new Set(Object.keys(JOB_FIELD_MAP))
 
 const APP_FIELD_MAP = { stage: jobApplications.stage, jobId: jobApplications.jobId }

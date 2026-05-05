@@ -11,6 +11,7 @@ const DOCUMENT_FIELD_MAP = {
     status: documents.status,
     docType: documents.docType,
     expiryDate: documents.expiryDate,
+    verified: documents.verified,
 }
 const DOCUMENT_ALLOWED = new Set(Object.keys(DOCUMENT_FIELD_MAP))
 
@@ -53,7 +54,19 @@ export async function listDocuments(tenantId: string, params: { employeeId?: str
     if (from) conditions.push(gte(documents.expiryDate, from))
     if (to) conditions.push(lte(documents.expiryDate, to))
     if (filter) {
-        buildDrizzleFilters(parseFilterString(filter), DOCUMENT_FIELD_MAP, DOCUMENT_ALLOWED).forEach(c => conditions.push(c))
+        const parsed = parseFilterString(filter)
+        // Handle employeeName text filter against the joined employees table
+        for (const f of parsed) {
+            if (f.field === 'employeeName' && typeof f.value === 'string' && f.value) {
+                const term = `%${f.value}%`
+                conditions.push(or(
+                    ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, term),
+                    ilike(employees.firstName, term),
+                    ilike(employees.lastName, term),
+                )!)
+            }
+        }
+        buildDrizzleFilters(parsed.filter(f => f.field !== 'employeeName'), DOCUMENT_FIELD_MAP, DOCUMENT_ALLOWED).forEach(c => conditions.push(c))
     }
 
     const cursor = after ? decodeCursor(after) : null
