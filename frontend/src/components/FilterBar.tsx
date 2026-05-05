@@ -5,7 +5,7 @@
  */
 import { useMemo } from 'react'
 import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
-import type { FilterConfig, QuickFilter, AppliedFiltersMap } from '@/lib/filters'
+import type { FilterConfig, QuickFilter } from '@/lib/filters'
 import type { UseSearchFiltersReturn } from '@/hooks/useSearchFilters'
 
 interface FilterBarProps {
