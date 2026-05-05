@@ -558,6 +558,13 @@ function RunActions({ run, canManage }: { run: PayrollRun; canManage: boolean })
   )
 }
 
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+function firstAvailableMonth(runs: PayrollRun[], maxMonth: number): number {
+  const taken = new Set(runs.map(r => r.month))
+  return Array.from({ length: maxMonth }, (_, i) => i + 1).find(m => !taken.has(m)) ?? 1
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export function PayrollPage() {
@@ -569,14 +576,6 @@ export function PayrollPage() {
   const currentMonth = now.getMonth() + 1
   const currentYear = now.getFullYear()
 
-  const { data: payrollData, isLoading, isFetching, refetch } = usePayrollRuns({ year: currentYear })
-  const { data: prevYearData } = usePayrollRuns({ year: currentYear - 1 })
-  const payrollRuns = useMemo<PayrollRun[]>(() => (payrollData?.data as PayrollRun[]) ?? [], [payrollData?.data])
-  const prevYearRuns = useMemo<PayrollRun[]>(() => (prevYearData?.data as PayrollRun[]) ?? [], [prevYearData?.data])
-
-  const runPayroll = useRunPayroll()
-  const createRun = useCreatePayrollRun()
-
   const [createOpen, setCreateOpen] = useState(false)
   const [runConfirmOpen, setRunConfirmOpen] = useState(false)
   const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null)
@@ -585,10 +584,17 @@ export function PayrollPage() {
   const [createMonth, setCreateMonth] = useState(currentMonth)
   const [createYear, setCreateYear] = useState(currentYear)
 
+  const { data: payrollData, isLoading, isFetching, refetch } = usePayrollRuns({ year: currentYear })
+  const { data: prevYearData } = usePayrollRuns({ year: currentYear - 1, enabled: createOpen })
+  const payrollRuns = useMemo<PayrollRun[]>(() => (payrollData?.data as PayrollRun[]) ?? [], [payrollData?.data])
+  const prevYearRuns = useMemo<PayrollRun[]>(() => (prevYearData?.data as PayrollRun[]) ?? [], [prevYearData?.data])
+
+  const runPayroll = useRunPayroll()
+  const createRun = useCreatePayrollRun()
+
   // Disable months in the future when selected year = current year
   const maxSelectableMonth = createYear === currentYear ? currentMonth : 12
 
-  // Months that already have a payroll run for the selected year
   const existingRunMonths = useMemo(() => {
     const runs = createYear === currentYear ? payrollRuns : prevYearRuns
     return new Set(runs.map(r => r.month))
@@ -843,10 +849,7 @@ export function PayrollPage() {
       <Dialog open={createOpen} onOpenChange={(v) => {
         if (!createRun.isPending) {
           if (v) {
-            // pick first available month for current year when opening
-            const taken = new Set(payrollRuns.map(r => r.month))
-            const first = Array.from({ length: currentMonth }, (_, i) => i + 1).find(m => !taken.has(m))
-            setCreateMonth(first ?? currentMonth)
+            setCreateMonth(firstAvailableMonth(payrollRuns, currentMonth))
             setCreateYear(currentYear)
           }
           setCreateOpen(v)
@@ -866,12 +869,9 @@ export function PayrollPage() {
                   onValueChange={v => {
                     const y = Number(v)
                     setCreateYear(y)
-                    // pick the first available (past, non-existing) month for the new year
                     const max = y === currentYear ? currentMonth : 12
                     const runs = y === currentYear ? payrollRuns : prevYearRuns
-                    const taken = new Set(runs.map(r => r.month))
-                    const first = Array.from({ length: max }, (_, i) => i + 1).find(m => !taken.has(m))
-                    setCreateMonth(first ?? 1)
+                    setCreateMonth(firstAvailableMonth(runs, max))
                   }}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>

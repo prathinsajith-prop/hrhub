@@ -12,7 +12,8 @@ import { useAssets, useAssignAsset, type Asset } from '@/hooks/useAssets'
 import { useCreateJob, useUpdateJob } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
-import { useCreateEmployee, useUpdateEmployee, useEmployees } from '@/hooks/useEmployees'
+import { useCreateEmployee, useUpdateEmployee, useNextEmployeeNo } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
 import { useGradeLevels } from '@/hooks/useGradeLevels'
@@ -35,7 +36,7 @@ import {
 } from '@/lib/options'
 import type { Employee } from '@/types'
 
-// Searchable reporting-manager picker.
+// Searchable reporting-manager picker — server-side search, limit 20.
 function ManagerPicker({
     value, onChange, excludeId,
 }: {
@@ -43,30 +44,17 @@ function ManagerPicker({
     onChange: (id: string, name: string) => void
     excludeId?: string
 }) {
-    const { data } = useEmployees({ limit: 100 })
-    const employees = (data?.data ?? []) as Employee[]
-    const opts: ComboboxOption[] = [
-        { value: '__none__', label: '— No manager (top-level) —' },
-        ...employees
-            .filter(e => e.id !== excludeId)
-            .map(e => ({
-                value: e.id,
-                label: `${e.firstName} ${e.lastName}`,
-                secondary: e.designation ?? undefined,
-            })),
-    ]
     return (
-        <Combobox
-            value={value || '__none__'}
-            onValueChange={v => {
-                if (!v || v === '__none__') return onChange('', '')
-                const picked = employees.find(e => e.id === v)
-                onChange(v, picked ? `${picked.firstName} ${picked.lastName}` : '')
+        <EmployeeSelect
+            value={value}
+            onValueChange={id => { if (!id) onChange('', '') }}
+            onEmployeeChange={emp => {
+                if (!emp) onChange('', '')
+                else onChange(emp.id, `${emp.firstName} ${emp.lastName}`)
             }}
-            options={opts}
-            placeholder="— No manager (top-level) —"
-            searchPlaceholder="Search employees…"
+            excludeId={excludeId}
             clearable
+            placeholder="— No manager (top-level) —"
         />
     )
 }
@@ -194,8 +182,6 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
     const [urgencyLevel, setUrgencyLevel] = useState('normal')
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
     const today = new Date().toISOString().split('T')[0]
-    const { data: empData } = useEmployees({ limit: 100 })
-    const employees = (empData?.data as Employee[]) ?? []
     const createVisa = useCreateVisa()
 
     useEffect(() => {
@@ -233,14 +219,7 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
                 <DialogBody className="space-y-3">
                     <div className="space-y-1.5">
                         <Label required>Employee</Label>
-                        <Select value={employeeId} onValueChange={setEmployeeId}>
-                            <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                            <SelectContent>
-                                {employees.map((e) => (
-                                    <SelectItem key={e.id} value={e.id}>{e.fullName ?? `${e.firstName} ${e.lastName}`} · {e.employeeNo}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <EmployeeSelect value={employeeId} onValueChange={setEmployeeId} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
@@ -284,8 +263,6 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
     const [endDate, setEndDate] = useState('')
     const [reason, setReason] = useState('')
     const today = new Date().toISOString().split('T')[0]
-    const { data: empData } = useEmployees({ limit: 100 })
-    const employees = (empData?.data as Employee[]) ?? []
     const createLeave = useCreateLeave()
 
     useEffect(() => {
@@ -322,14 +299,7 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
                 <DialogBody className="space-y-3">
                     <div className="space-y-1.5">
                         <Label required>Employee</Label>
-                        <Select value={employeeId} onValueChange={setEmployeeId}>
-                            <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                            <SelectContent>
-                                {employees.map((e) => (
-                                    <SelectItem key={e.id} value={e.id}>{e.fullName ?? `${e.firstName} ${e.lastName}`}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <EmployeeSelect value={employeeId} onValueChange={setEmployeeId} />
                     </div>
                     <div className="space-y-1.5">
                         <Label>Leave Type</Label>
@@ -962,6 +932,7 @@ export function EditEmployeeDialog({
     })
     const [errors, setErrors] = useState<Record<string, string>>({})
     const updateEmployee = useUpdateEmployee(employee.id)
+    const nextEmpNo = useNextEmployeeNo(open)
 
     const set = (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
@@ -988,6 +959,7 @@ export function EditEmployeeDialog({
             toast.warning('Fix the highlighted fields', 'Please correct the errors before saving.')
             return
         }
+        const resolvedEmpNo = form.employeeNo.trim() || nextEmpNo.data?.data?.employeeNo || undefined
         updateEmployee.mutate(
             {
                 firstName: form.firstName, lastName: form.lastName,
@@ -1001,7 +973,7 @@ export function EditEmployeeDialog({
                 emergencyContactName: form.emergencyContactName || undefined,
                 emergencyContactPhone: form.emergencyContactPhone || undefined,
                 homeCountryAddress: form.homeCountryAddress || undefined,
-                employeeNo: form.employeeNo || undefined,
+                employeeNo: resolvedEmpNo,
             },
             {
                 onSuccess: () => { toast.success('Profile updated', `${form.firstName} ${form.lastName} has been updated.`); close() },
@@ -1033,7 +1005,25 @@ export function EditEmployeeDialog({
                 <DialogBody>
                     <div className="space-y-3">
                         <FormField label="Employee No" error={errors.employeeNo}>
-                            <Input value={form.employeeNo} onChange={set('employeeNo')} placeholder="e.g. PROP-001-05-2026" aria-invalid={!!errors.employeeNo} className={errors.employeeNo ? 'border-destructive' : ''} />
+                            <div className="flex gap-2">
+                                <Input
+                                    value={form.employeeNo}
+                                    onChange={set('employeeNo')}
+                                    placeholder={nextEmpNo.data?.data?.employeeNo ?? 'Auto-generated'}
+                                    aria-invalid={!!errors.employeeNo}
+                                    className={errors.employeeNo ? 'border-destructive flex-1' : 'flex-1'}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setForm(f => ({ ...f, employeeNo: nextEmpNo.data?.data?.employeeNo ?? '' }))}
+                                    disabled={!nextEmpNo.data?.data?.employeeNo}
+                                    title="Auto-generate employee number"
+                                >
+                                    Auto
+                                </Button>
+                            </div>
                         </FormField>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <FormField label="First Name" required error={errors.firstName}>

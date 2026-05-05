@@ -118,6 +118,15 @@ export const DOC_STATUS_LABELS: Record<string, string> = {
     rejected: 'Rejected',
 }
 
+export const DOC_STATUS_BADGE: Record<string, { variant: 'success' | 'warning' | 'destructive' | 'info' | 'secondary'; label: string }> = {
+    valid:          { variant: 'success',     label: 'Valid' },
+    expiring_soon:  { variant: 'warning',     label: 'Expiring Soon' },
+    expired:        { variant: 'destructive', label: 'Expired' },
+    pending_upload: { variant: 'secondary',   label: 'Pending Upload' },
+    under_review:   { variant: 'info',        label: 'Under Review' },
+    rejected:       { variant: 'destructive', label: 'Rejected' },
+}
+
 // ─── Document lifecycle action ───────────────────────────────────────────────
 export const DOC_ACTION_LABELS: Record<string, string> = {
     uploaded: 'Uploaded',

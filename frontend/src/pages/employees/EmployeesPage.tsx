@@ -185,7 +185,15 @@ export function EmployeesPage() {
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_employees')
-  const { data: empData, isLoading, isFetching, isError, error, refetch } = useEmployees({ limit: 50 })
+  const search = useSearchFilters({
+    storageKey: 'hrhub.employees.searchHistory',
+    availableFilters: EMPLOYEE_FILTERS,
+  })
+
+  const filterStatus = (search.appliedFilters.status?.value as string | undefined) || undefined
+  const filterDept = (search.appliedFilters.department?.value as string | undefined) || undefined
+
+  const { data: empData, isLoading, isFetching, isError, error, refetch } = useEmployees({ limit: 50, search: search.searchInput || undefined, status: filterStatus, department: filterDept })
   const { data: orgUnits = [] } = useOrgUnits()
   const orgUnitName = useMemo(() => {
     const map = new Map(orgUnits.map(u => [u.id, u.name]))
@@ -207,41 +215,31 @@ export function EmployeesPage() {
       status: search.appliedFilters.status?.value as string | undefined,
     })
   }
-  const search = useSearchFilters({
-    storageKey: 'hrhub.employees.searchHistory',
-    availableFilters: EMPLOYEE_FILTERS,
-  })
-
   const filtered = useMemo(() => {
     const f = search.appliedFilters
-    const q = search.searchInput.trim().toLowerCase()
     return employees.filter((e: Employee) => {
-      const emailStr = e.workEmail || e.email || e.personalEmail || ''
-      if (q && !`${e.fullName} ${e.employeeNo} ${emailStr}`.toLowerCase().includes(q)) return false
-      if (f.status?.value && e.status !== f.status.value) return false
-      if (f.department?.value && !String(e.department ?? '').toLowerCase().includes(String(f.department.value).toLowerCase())) return false
       if (f.designation?.value && !String(e.designation ?? '').toLowerCase().includes(String(f.designation.value).toLowerCase())) return false
       if (f.nationality?.value && !String(e.nationality ?? '').toLowerCase().includes(String(f.nationality.value).toLowerCase())) return false
       if (f.salary?.value) {
-        const [min, max] = f.salary.value as [number | null, number | null]
+        const { min, max } = f.salary.value as { min?: number; max?: number }
         const v = Number(e.totalSalary ?? 0)
         if (min != null && v < min) return false
         if (max != null && v > max) return false
       }
       if (f.joinDate?.value) {
-        const [from, to] = f.joinDate.value as [string | null, string | null]
+        const { from, to } = f.joinDate.value as { from?: string; to?: string }
         if (from && e.joinDate && new Date(e.joinDate) < new Date(from)) return false
         if (to && e.joinDate && new Date(e.joinDate) > new Date(to)) return false
       }
       if (f.visaExpiry?.value) {
-        const [from, to] = f.visaExpiry.value as [string | null, string | null]
+        const { from, to } = f.visaExpiry.value as { from?: string; to?: string }
         if (from && e.visaExpiry && new Date(e.visaExpiry) < new Date(from)) return false
         if (to && e.visaExpiry && new Date(e.visaExpiry) > new Date(to)) return false
       }
       if (f.emirati?.value === true && e.emiratisationCategory !== 'emirati') return false
       return true
     })
-  }, [employees, search.appliedFilters, search.searchInput])
+  }, [employees, search.appliedFilters])
 
   const active = employees.filter((e: Employee) => e.status === 'active').length
   const onboarding = employees.filter((e: Employee) => e.status === 'onboarding').length

@@ -1,23 +1,44 @@
-import { eq, and, desc, isNull, sql, getTableColumns, or, lt, gte, lte } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns, or, lt, gte, lte, ilike } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { visaApplications, employees, visaStepHistory, visaCosts } from '../../db/schema/index.js'
 import { cacheDel } from '../../lib/redis.js'
 import { VISA_STEP_LABELS, visaStepLabel } from './visa.constants.js'
+import { parseFilterString, buildDrizzleFilters } from '../../lib/filters.js'
 import type { CreateCostInput } from './visa_costs.service.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
+const VISA_FIELD_MAP = {
+    status: visaApplications.status,
+    urgencyLevel: visaApplications.urgencyLevel,
+    visaType: visaApplications.visaType,
+    expiryDate: visaApplications.expiryDate,
+}
+const VISA_ALLOWED = new Set(Object.keys(VISA_FIELD_MAP))
+
 type NewVisa = InferInsertModel<typeof visaApplications>
 
-export async function listVisas(tenantId: string, params: { status?: string; urgencyLevel?: string; from?: string; to?: string; limit: number; offset: number; after?: string }) {
-    const { status, urgencyLevel, from, to, limit, offset, after } = params
+export async function listVisas(tenantId: string, params: { status?: string; urgencyLevel?: string; from?: string; to?: string; search?: string; filter?: string; limit: number; offset: number; after?: string }) {
+    const { status, urgencyLevel, from, to, search, filter, limit, offset, after } = params
     const conditions = [eq(visaApplications.tenantId, tenantId), isNull(visaApplications.deletedAt)]
     if (status) conditions.push(eq(visaApplications.status, status as never))
     if (urgencyLevel) conditions.push(eq(visaApplications.urgencyLevel, urgencyLevel as never))
+    if (search) {
+        const q = `%${search.trim()}%`
+        conditions.push(or(
+            ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, q),
+            ilike(employees.firstName, q),
+            ilike(employees.lastName, q),
+            ilike(employees.employeeNo, q),
+        )!)
+    }
     // Calendar uses expiryDate as the event date; filter by [from, to] when provided.
     if (from) conditions.push(gte(visaApplications.expiryDate, from))
     if (to) conditions.push(lte(visaApplications.expiryDate, to))
+    if (filter) {
+        buildDrizzleFilters(parseFilterString(filter), VISA_FIELD_MAP, VISA_ALLOWED).forEach(c => conditions.push(c))
+    }
 
     const cursor = after ? decodeCursor(after) : null
     if (cursor) {

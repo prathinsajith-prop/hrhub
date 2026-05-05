@@ -72,7 +72,6 @@ export function PerformancePage() {
     const navigate = useNavigate()
     const [searchParams, setSearchParams] = useSearchParams()
     const lockedEmployeeId = searchParams.get('employeeId') ?? ''
-    const { data: reviews, isLoading, isFetching, refetch } = usePerformanceReviews()
     const { data: employees } = useEmployees({ limit: 100 })
     const updateReview = useUpdateReview()
 
@@ -82,6 +81,8 @@ export function PerformancePage() {
         storageKey: 'hrhub.performance.searchHistory',
         availableFilters: PERFORMANCE_FILTERS,
     })
+
+    const { data: reviews, isLoading, isFetching, refetch } = usePerformanceReviews({ employeeId: lockedEmployeeId || undefined, q: perfSearch.searchInput || undefined, filters: perfSearch.appliedFilters })
 
     function handleDialogChange(open: boolean) {
         setShowDialog(open)
@@ -110,28 +111,17 @@ export function PerformancePage() {
     )
 
     const filtered = useMemo(() => {
-        const q = perfSearch.searchInput.trim().toLowerCase()
         const f = perfSearch.appliedFilters
         return enrichedReviews.filter((r) => {
-            if (q) {
-                const hit = r.employeeName.toLowerCase().includes(q) || (r.period ?? '').toLowerCase().includes(q)
-                if (!hit) return false
-            }
-            if (f.status?.value && r.status !== f.status.value) return false
             if (f.period?.value && !(r.period ?? '').toLowerCase().includes((f.period.value as string).toLowerCase())) return false
             if (f.overallRating?.value && typeof f.overallRating.value === 'object' && !Array.isArray(f.overallRating.value)) {
                 const range = f.overallRating.value as { min?: number; max?: number }
                 if (range.min !== undefined && (r.overallRating ?? 0) < range.min) return false
                 if (range.max !== undefined && (r.overallRating ?? 0) > range.max) return false
             }
-            if (f.reviewDate?.value && typeof f.reviewDate.value === 'object' && !Array.isArray(f.reviewDate.value) && r.reviewDate) {
-                const range = f.reviewDate.value as { from?: string; to?: string }
-                if (range.from && r.reviewDate < range.from) return false
-                if (range.to && r.reviewDate > range.to) return false
-            }
             return true
         })
-    }, [enrichedReviews, perfSearch.searchInput, perfSearch.appliedFilters])
+    }, [enrichedReviews, perfSearch.appliedFilters])
 
     return (
         <PageWrapper>

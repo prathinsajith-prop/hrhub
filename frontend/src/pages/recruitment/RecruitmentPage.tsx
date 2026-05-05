@@ -518,25 +518,29 @@ export function RecruitmentPage() {
   const [addCandidateOpen, setAddCandidateOpen] = useState(false)
   const [convertCandidateId, setConvertCandidateId] = useState<string | null>(null)
   const [editCandidateId, setEditCandidateId] = useState<string | null>(null)
-  const { data: jobsData, isLoading: jobsLoading, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({ limit: 50 })
+  const jobSearch = useSearchFilters({
+    storageKey: 'hrhub.recruitment.jobs.searchHistory',
+    availableFilters: JOB_FILTERS,
+  })
+
+  const jobStatus = (jobSearch.appliedFilters.status?.value as string | undefined) || undefined
+  const jobDept = (jobSearch.appliedFilters.department?.value as string | undefined) || undefined
+
+  const { data: jobsData, isLoading: jobsLoading, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({ limit: 50, status: jobStatus, department: jobDept })
   const { data: appsData, isLoading: appsLoading, refetch: refetchApps } = useApplications({ limit: 100 })
   const isLoading = jobsLoading || appsLoading
   const updateStage = useUpdateApplicationStage()
   const updateJob = useUpdateJob()
   const createJob = useCreateJob()
   const jobs = useMemo<Job[]>(() => (jobsData?.data as Job[]) ?? [], [jobsData?.data])
-  const jobSearch = useSearchFilters({
-    storageKey: 'hrhub.recruitment.jobs.searchHistory',
-    availableFilters: JOB_FILTERS,
-  })
-  const filteredJobs = useMemo(
-    () => applyClientFilters(jobs as unknown as Record<string, unknown>[], {
+  const filteredJobs = useMemo(() => {
+    const { status: _omitStatus, department: _omitDept, ...jobFiltersWithoutServerSide } = jobSearch.appliedFilters
+    return applyClientFilters(jobs as unknown as Record<string, unknown>[], {
       searchInput: jobSearch.searchInput,
-      appliedFilters: jobSearch.appliedFilters,
-      searchFields: ['title', 'department', 'location'],
-    }) as unknown as Job[],
-    [jobs, jobSearch.appliedFilters, jobSearch.searchInput],
-  )
+      appliedFilters: jobFiltersWithoutServerSide,
+      searchFields: ['title', 'location'],
+    }) as unknown as Job[]
+  }, [jobs, jobSearch.appliedFilters, jobSearch.searchInput])
   const candidates: Candidate[] = (appsData?.data as Candidate[]) ?? []
   const jobColumns = useMemo(() => buildJobColumns((j) => setEditJob(j)), [])
 

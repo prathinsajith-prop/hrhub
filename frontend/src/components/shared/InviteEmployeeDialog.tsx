@@ -22,6 +22,61 @@ const ALL_ROLES = [
     { id: 'employee', label: 'Employee' },
 ]
 
+interface RoleSelectorProps {
+    userId: string
+    currentRole: string
+    selectedRole: string
+    availableRoles: typeof ALL_ROLES
+    onRoleChange: (role: string) => void
+    onSave: (userId: string) => void
+    isSaving: boolean
+}
+
+function RoleSelector({ userId, currentRole, selectedRole, availableRoles, onRoleChange, onSave, isSaving }: RoleSelectorProps) {
+    const isDirty = selectedRole !== currentRole
+    return (
+        <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Role</p>
+            <div className="flex items-center gap-2">
+                <Select value={selectedRole} onValueChange={onRoleChange}>
+                    <SelectTrigger className="h-8 flex-1 text-xs">
+                        <SelectValue>
+                            <span className={cn(
+                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                ROLE_BADGE_STYLE[selectedRole] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                            )}>
+                                {labelFor(selectedRole)}
+                            </span>
+                        </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {availableRoles.map(r => (
+                            <SelectItem key={r.id} value={r.id}>
+                                <span className={cn(
+                                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                    ROLE_BADGE_STYLE[r.id] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                                )}>
+                                    {r.label}
+                                </span>
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {isDirty && (
+                    <Button
+                        size="sm"
+                        className="h-8 text-xs shrink-0"
+                        onClick={() => onSave(userId)}
+                        loading={isSaving}
+                    >
+                        Save
+                    </Button>
+                )}
+            </div>
+        </div>
+    )
+}
+
 interface Props {
     employee: Employee
     open: boolean
@@ -110,51 +165,6 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
         } catch {
             toast.error('Update failed', 'Could not update the role.')
         }
-    }
-
-    function RoleSelector({ userId, currentRole }: { userId: string; currentRole: string }) {
-        const isDirty = selectedRole !== currentRole
-        return (
-            <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">Role</p>
-                <div className="flex items-center gap-2">
-                    <Select value={selectedRole} onValueChange={setSelectedRole}>
-                        <SelectTrigger className="h-8 flex-1 text-xs">
-                            <SelectValue>
-                                <span className={cn(
-                                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                    ROLE_BADGE_STYLE[selectedRole] ?? 'bg-slate-100 text-slate-600 border-slate-200',
-                                )}>
-                                    {labelFor(selectedRole)}
-                                </span>
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {availableRoles.map(r => (
-                                <SelectItem key={r.id} value={r.id}>
-                                    <span className={cn(
-                                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                        ROLE_BADGE_STYLE[r.id] ?? 'bg-slate-100 text-slate-600 border-slate-200',
-                                    )}>
-                                        {r.label}
-                                    </span>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    {isDirty && (
-                        <Button
-                            size="sm"
-                            className="h-8 text-xs shrink-0"
-                            onClick={() => handleSaveRole(userId)}
-                            loading={updateUser.isPending}
-                        >
-                            Save
-                        </Button>
-                    )}
-                </div>
-            </div>
-        )
     }
 
     return (
@@ -275,7 +285,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     )}
                                 </div>
                             </div>
-                            {account && <RoleSelector userId={account.id} currentRole={account.role} />}
+                            {account && <RoleSelector userId={account.id} currentRole={account.role} selectedRole={selectedRole} availableRoles={availableRoles} onRoleChange={setSelectedRole} onSave={handleSaveRole} isSaving={updateUser.isPending} />}
                         </div>
                     ) : state === 'invite-pending' ? (
                         <div className="space-y-4">
@@ -303,7 +313,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     </div>
                                 </div>
                             </div>
-                            {account && <RoleSelector userId={account.id} currentRole={account.role} />}
+                            {account && <RoleSelector userId={account.id} currentRole={account.role} selectedRole={selectedRole} availableRoles={availableRoles} onRoleChange={setSelectedRole} onSave={handleSaveRole} isSaving={updateUser.isPending} />}
                         </div>
                     ) : (
                         <div className="space-y-3.5">
@@ -326,7 +336,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     <span>Created {formatDate(account?.createdAt ?? '')}</span>
                                 </div>
                             </div>
-                            {account && <RoleSelector userId={account.id} currentRole={account.role} />}
+                            {account && <RoleSelector userId={account.id} currentRole={account.role} selectedRole={selectedRole} availableRoles={availableRoles} onRoleChange={setSelectedRole} onSave={handleSaveRole} isSaving={updateUser.isPending} />}
                         </div>
                     )}
                 </div>

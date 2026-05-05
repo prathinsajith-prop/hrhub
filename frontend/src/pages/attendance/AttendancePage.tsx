@@ -30,6 +30,7 @@ import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { useAttendance, useUpsertAttendance, useExternalPunch, type AttendanceRecord } from '@/hooks/useAttendance'
 import { useEmployees } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { usePermissions } from '@/hooks/usePermissions'
 import { buildOrgUnitMap, resolveOrgPath } from '@/lib/orgUtils'
@@ -111,10 +112,18 @@ export function AttendancePage() {
 
     const { start, end, label } = useMemo(() => getMonthRange(monthOffset), [monthOffset])
 
+    const search = useSearchFilters({
+        storageKey: 'hrhub.attendance.searchHistory',
+        availableFilters: ATTENDANCE_FILTERS,
+    })
+
+    const advancedStatus = (search.appliedFilters.status?.value as string | undefined) || undefined
+
     const { data: records, isLoading, refetch, isFetching } = useAttendance({
         startDate: start,
         endDate: end,
         employeeId: filterEmployee || undefined,
+        status: advancedStatus || (filterStatus !== 'all' ? filterStatus : undefined),
         limit: 100,
     })
     const { data: employeesData } = useEmployees({ limit: 100 })
@@ -165,23 +174,17 @@ export function AttendancePage() {
         return m
     }, [empList])
 
-    // Filter by status (client-side, since status filter not sent to API here)
-    const filteredList = useMemo(
-        () => (filterStatus === 'all' ? list : list.filter((r) => r.status === filterStatus)),
-        [list, filterStatus],
-    )
-
-    const search = useSearchFilters({
-        storageKey: 'hrhub.attendance.searchHistory',
-        availableFilters: ATTENDANCE_FILTERS,
-    })
+    const attendanceClientFilters = useMemo(() => {
+        const { status: _s, ...rest } = search.appliedFilters
+        return rest
+    }, [search.appliedFilters])
     const filteredAttendance = useMemo(
-        () => applyClientFilters(filteredList as unknown as Record<string, unknown>[], {
+        () => applyClientFilters(list as unknown as Record<string, unknown>[], {
             searchInput: search.searchInput,
-            appliedFilters: search.appliedFilters,
+            appliedFilters: attendanceClientFilters,
             searchFields: ['employeeName', 'employeeNo', 'employeeDepartment', 'status'],
         }) as unknown as AttendanceRecord[],
-        [filteredList, search.appliedFilters, search.searchInput],
+        [list, attendanceClientFilters, search.searchInput],
     )
 
     const summary = useMemo(() => {
@@ -256,12 +259,12 @@ export function AttendancePage() {
     )
 
     const handleExport = useCallback(() => {
-        if (!filteredList.length) {
+        if (!list.length) {
             toast.warning('Nothing to export', 'No records in the current view.')
             return
         }
         const header = ['Date', 'Employee', 'Status', 'Punch In', 'Punch Out', 'Hours', 'Overtime', 'Notes']
-        const rows = filteredList.map((r) => [
+        const rows = list.map((r) => [
             r.date,
             empMap.get(r.employeeId)?.name ?? '—',
             STATUS_LABEL[r.status],
@@ -281,8 +284,8 @@ export function AttendancePage() {
         a.download = `attendance-${start}_to_${end}.csv`
         a.click()
         URL.revokeObjectURL(url)
-        toast.success('Exported', `${filteredList.length} rows exported to CSV.`)
-    }, [filteredList, empMap, start, end])
+        toast.success('Exported', `${list.length} rows exported to CSV.`)
+    }, [list, empMap, start, end])
 
     // ─── Columns ───────────────────────────────────────────────────
     const columns: ColumnDef<AttendanceRecord>[] = useMemo(() => [
@@ -642,19 +645,11 @@ export function AttendancePage() {
                         <div className="flex flex-wrap items-end gap-3">
                             <div className="space-y-1.5 flex-1 min-w-40">
                                 <Label className="text-xs">Employee *</Label>
-                                <Select value={punchEmpId || '__none'} onValueChange={(v) => setPunchEmpId(v === '__none' ? '' : v)}>
-                                    <SelectTrigger className="h-9 text-sm">
-                                        <SelectValue placeholder="Select employee…" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="__none" disabled>Select employee…</SelectItem>
-                                        {empList.map((e) => {
-                                            const name = (e.fullName as string | undefined)
-                                                ?? `${(e.firstName as string | undefined) ?? ''} ${(e.lastName as string | undefined) ?? ''}`.trim()
-                                            return <SelectItem key={e.id} value={e.id}>{name || '—'}</SelectItem>
-                                        })}
-                                    </SelectContent>
-                                </Select>
+                                <EmployeeSelect
+                                    value={punchEmpId}
+                                    onValueChange={setPunchEmpId}
+                                    clearable
+                                />
                             </div>
                             <div className="space-y-1.5 w-32">
                                 <Label className="text-xs">Punch type *</Label>
@@ -716,24 +711,13 @@ export function AttendancePage() {
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2 items-center">
-                        <Select
-                            value={filterEmployee || '__all__'}
-                            onValueChange={(v) => setFilterEmployee(v === '__all__' ? '' : v)}
-                        >
-                            <SelectTrigger className="h-8 text-xs w-48">
-                                <SelectValue placeholder="All employees" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__all__">All employees</SelectItem>
-                                {empList.map((e) => {
-                                    const name = (e.fullName as string | undefined)
-                                        ?? `${(e.firstName as string | undefined) ?? ''} ${(e.lastName as string | undefined) ?? ''}`.trim()
-                                    return (
-                                        <SelectItem key={e.id} value={e.id}>{name || '—'}</SelectItem>
-                                    )
-                                })}
-                            </SelectContent>
-                        </Select>
+                        <EmployeeSelect
+                            value={filterEmployee}
+                            onValueChange={setFilterEmployee}
+                            placeholder="All employees"
+                            clearable
+                            className="h-8 text-xs w-48"
+                        />
                         <Select
                             value={filterStatus}
                             onValueChange={(v) => setFilterStatus(v as 'all' | AttendanceRecord['status'])}

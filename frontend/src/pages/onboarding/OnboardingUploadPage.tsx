@@ -5,7 +5,7 @@ import { CheckCircle2, Clock, Upload, FileText, AlertCircle, ChevronDown, Chevro
 import { useOnboardingUploadInfo, useOnboardingPublicUpload, type UploadInfoStep } from '@/hooks/useOnboarding'
 import { DOC_TYPE_CATALOG, type DocCategory } from '@/lib/docTypes'
 import { DatePicker } from '@/components/ui/date-picker'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, formatFileSize } from '@/lib/utils'
 
 // ── Status pill ──────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -327,7 +327,7 @@ function StepUploadArea({
                                     <div className="flex items-center justify-center gap-2">
                                         <FileText className="h-4 w-4 text-blue-500" />
                                         <span className="text-sm font-medium text-gray-800">{file.name}</span>
-                                        <span className="text-[11px] text-gray-400">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
+                                        <span className="text-[11px] text-gray-400">({formatFileSize(file.size)})</span>
                                     </div>
                                 ) : (
                                     <div>

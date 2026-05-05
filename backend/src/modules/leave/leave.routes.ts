@@ -41,7 +41,7 @@ export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     fastify.get('/', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
-        const { employeeId, department, status, leaveType, from, to, limit = '20', offset = '0' } = request.query as Record<string, string>
+        const { employeeId, department, status, leaveType, from, to, search, q, filter, limit = '20', offset = '0' } = request.query as Record<string, string>
         const user = request.user
         const isElevated = ['hr_manager', 'super_admin', 'dept_head', 'pro_officer'].includes(user.role)
         // Non-elevated users can only see their own leave requests.
@@ -50,7 +50,7 @@ export default async function (fastify: any): Promise<void> {
         const resolvedDepartment = user.role === 'dept_head'
             ? (user.department ?? department)
             : department
-        const result = await listLeaveRequests(request.user.tenantId, { employeeId: effectiveEmployeeId, department: resolvedDepartment, status, leaveType, from, to, limit: Number(limit), offset: Number(offset) })
+        const result = await listLeaveRequests(request.user.tenantId, { employeeId: effectiveEmployeeId, department: resolvedDepartment, status, leaveType, from, to, search: q || search || undefined, filter: filter || undefined, limit: Number(limit), offset: Number(offset) })
         return sendWithETag(reply, request, result)
     })
 

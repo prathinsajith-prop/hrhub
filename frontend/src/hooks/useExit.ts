@@ -48,11 +48,14 @@ export interface SettlementPreview {
     totalSettlement: number
 }
 
-export function useExitRequests() {
+export function useExitRequests(params: { status?: string } = {}) {
     const tenantId = useAuthStore(s => s.tenant?.id)
+    const { status } = params
+    const qs = new URLSearchParams()
+    if (status) qs.set('status', status)
     return useQuery({
-        queryKey: ['exit', tenantId],
-        queryFn: () => api.get<{ data: ExitRequest[]; total: number; hasMore: boolean }>('/exit').then(r => r.data ?? []),
+        queryKey: ['exit', tenantId, status],
+        queryFn: () => api.get<{ data: ExitRequest[]; total: number; hasMore: boolean }>(`/exit?${qs}`).then(r => r.data ?? []),
         enabled: !!tenantId,
     })
 }

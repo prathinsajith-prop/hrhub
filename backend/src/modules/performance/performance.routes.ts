@@ -27,11 +27,11 @@ export async function performanceRoutes(fastify: any) {
     // GET /api/v1/performance
     // Admins see all reviews; employees only see their own (via employeeId JWT claim).
     fastify.get('/performance', { ...auth, schema: { tags: ['Performance'] } }, async (request: any, reply: any) => {
-        const { employeeId, from, to, limit = '20', offset = '0' } = request.query as Record<string, string>
+        const { employeeId, status, from, to, search, q, filter, limit = '20', offset = '0' } = request.query as Record<string, string>
         const role = request.user.role
         const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(role)
         const resolvedEmployeeId = isAdmin ? employeeId : (request.user.employeeId ?? undefined)
-        const result = await getReviews(request.user.tenantId, { employeeId: resolvedEmployeeId, from, to, limit: Number(limit), offset: Number(offset) })
+        const result = await getReviews(request.user.tenantId, { employeeId: resolvedEmployeeId, status, from, to, search: q || search || undefined, filter: filter || undefined, limit: Number(limit), offset: Number(offset) })
         return reply.send(result)
     })
 

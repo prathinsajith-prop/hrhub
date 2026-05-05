@@ -240,7 +240,10 @@ export function DataTable<TData, TValue>({
                       onRowClick && 'cursor-pointer hover:bg-muted/50',
                       row.getIsSelected() && 'bg-primary/5 hover:bg-primary/10',
                     )}
-                    onClick={() => onRowClick?.(row.original)}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('button, a, input, select, textarea, [role="button"], [role="checkbox"], [role="menuitem"], [role="option"]')) return
+                      onRowClick?.(row.original)
+                    }}
                   >
                     {row.getVisibleCells().map(cell => (
                       <td key={cell.id} className="px-4 py-3 align-middle">

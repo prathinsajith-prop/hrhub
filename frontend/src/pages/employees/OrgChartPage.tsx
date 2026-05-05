@@ -594,7 +594,7 @@ function StructureChart() {
                                 <Skeleton className="h-3 w-24" />
                             </div>
                         </div>
-                        <div className="border-t bg-muted/10 px-5 py-5 grid grid-cols-3 gap-3">
+                        <div className="border-t bg-muted/10 px-5 py-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
                             {Array.from({ length: 3 }).map((_, j) => (
                                 <div key={j} className="rounded-xl border bg-card p-4 space-y-2">
                                     <div className="flex items-center gap-2">

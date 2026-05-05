@@ -175,7 +175,12 @@ export function LeavePage() {
     const isDeptHead = hasRole('dept_head')
     const [searchParams] = useSearchParams()
     const urlEmployeeId = searchParams.get('employeeId') ?? undefined
-    const { data: leaveData, isLoading: leaveLoading, isError: leaveError, isFetching, error: leaveErrorObj, refetch } = useLeaveRequests({ limit: 50, employeeId: urlEmployeeId })
+    const leaveSearch = useSearchFilters({
+        storageKey: 'hrhub.leave.searchHistory',
+        availableFilters: LEAVE_FILTERS,
+    })
+
+    const { data: leaveData, isLoading: leaveLoading, isError: leaveError, isFetching, error: leaveErrorObj, refetch } = useLeaveRequests({ limit: 50, employeeId: urlEmployeeId, q: leaveSearch.searchInput || undefined, filters: leaveSearch.appliedFilters })
     const leaves = useMemo<LeaveRequest[]>(() => (leaveData?.data as LeaveRequest[]) ?? [], [leaveData?.data])
     const approveLeave = useApproveLeave()
     const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null)
@@ -190,17 +195,13 @@ export function LeavePage() {
         finally { setExporting(false) }
     }
 
-    const leaveSearch = useSearchFilters({
-        storageKey: 'hrhub.leave.searchHistory',
-        availableFilters: LEAVE_FILTERS,
-    })
     const filteredLeaves = useMemo(
         () => applyClientFilters(leaves as unknown as Record<string, unknown>[], {
-            searchInput: leaveSearch.searchInput,
-            appliedFilters: leaveSearch.appliedFilters,
-            searchFields: ['employeeName', 'leaveType', 'status', 'reason'],
+            searchInput: '',
+            appliedFilters: {},
+            searchFields: [],
         }),
-        [leaves, leaveSearch.appliedFilters, leaveSearch.searchInput],
+        [leaves],
     )
 
     const columns: ColumnDef<LeaveRequest>[] = useMemo(() => [

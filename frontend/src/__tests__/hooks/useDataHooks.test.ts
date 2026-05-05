@@ -41,19 +41,18 @@ describe('useLeaveRequests', () => {
         await waitFor(() => expect(apiMock.get).toHaveBeenCalled())
         const url = apiMock.get.mock.calls[0][0] as string
         expect(url).toMatch(/^\/leave\?/)
-        expect(url).toContain('limit=20')
-        expect(url).toContain('offset=0')
+        expect(url).toContain('pageSize=20')
     })
 
-    it('forwards employeeId, status, leaveType, from, to as query params', async () => {
+    it('forwards employeeId and filters as query params', async () => {
         renderHook(
             () =>
                 useLeaveRequests({
                     employeeId: 'emp-1',
-                    status: 'pending',
-                    leaveType: 'sick',
-                    from: '2026-04-01',
-                    to: '2026-04-30',
+                    filters: {
+                        status: { operator: 'equals', value: 'pending' },
+                        leaveType: { operator: 'equals', value: 'sick' },
+                    },
                     limit: 50,
                 }),
             { wrapper: makeWrapper() },
@@ -61,51 +60,49 @@ describe('useLeaveRequests', () => {
         await waitFor(() => expect(apiMock.get).toHaveBeenCalled())
         const url = apiMock.get.mock.calls[0][0] as string
         expect(url).toContain('employeeId=emp-1')
-        expect(url).toContain('status=pending')
-        expect(url).toContain('leaveType=sick')
-        expect(url).toContain('from=2026-04-01')
-        expect(url).toContain('to=2026-04-30')
-        expect(url).toContain('limit=50')
+        expect(url).toContain('filter=')
+        expect(url).toContain('pageSize=50')
     })
 
     it('omits undefined params from the query string', async () => {
-        renderHook(() => useLeaveRequests({ status: 'approved' }), { wrapper: makeWrapper() })
+        renderHook(() => useLeaveRequests({ filters: { status: { operator: 'equals', value: 'approved' } } }), { wrapper: makeWrapper() })
         await waitFor(() => expect(apiMock.get).toHaveBeenCalled())
         const url = apiMock.get.mock.calls[0][0] as string
         expect(url).not.toContain('employeeId=')
-        expect(url).not.toContain('leaveType=')
-        expect(url).not.toContain('from=')
-        expect(url).not.toContain('to=')
     })
 })
 
 describe('useVisas', () => {
-    it('forwards status, urgencyLevel, from, to params', async () => {
+    it('forwards filters as a filter query param', async () => {
         renderHook(
             () =>
-                useVisas({ status: 'in_progress', urgencyLevel: 'high', from: '2026-04-01', to: '2026-04-30', limit: 100 }),
+                useVisas({
+                    filters: {
+                        status: { operator: 'equals', value: 'in_progress' },
+                        urgencyLevel: { operator: 'equals', value: 'high' },
+                    },
+                    limit: 100,
+                }),
             { wrapper: makeWrapper() },
         )
         await waitFor(() => expect(apiMock.get).toHaveBeenCalled())
         const url = apiMock.get.mock.calls[0][0] as string
         expect(url).toMatch(/^\/visa\?/)
-        expect(url).toContain('status=in_progress')
-        expect(url).toContain('urgencyLevel=high')
-        expect(url).toContain('from=2026-04-01')
-        expect(url).toContain('to=2026-04-30')
+        expect(url).toContain('filter=')
+        expect(url).toContain('pageSize=100')
     })
 })
 
 describe('useDocuments', () => {
-    it('forwards employeeId, category, status, from, to params', async () => {
+    it('forwards employeeId and filters as query params', async () => {
         renderHook(
             () =>
                 useDocuments({
                     employeeId: 'emp-1',
-                    category: 'visa',
-                    status: 'verified',
-                    from: '2026-04-01',
-                    to: '2026-04-30',
+                    filters: {
+                        category: { operator: 'equals', value: 'visa' },
+                        status: { operator: 'equals', value: 'verified' },
+                    },
                 }),
             { wrapper: makeWrapper() },
         )
@@ -113,10 +110,7 @@ describe('useDocuments', () => {
         const url = apiMock.get.mock.calls[0][0] as string
         expect(url).toMatch(/^\/documents\?/)
         expect(url).toContain('employeeId=emp-1')
-        expect(url).toContain('category=visa')
-        expect(url).toContain('status=verified')
-        expect(url).toContain('from=2026-04-01')
-        expect(url).toContain('to=2026-04-30')
+        expect(url).toContain('filter=')
     })
 })
 
@@ -126,22 +120,24 @@ describe('usePerformanceReviews', () => {
         apiMock.get.mockResolvedValue({ data: [] })
     })
 
-    it('hits /performance with no query string when no params provided', async () => {
+    it('hits /performance when no params provided', async () => {
         renderHook(() => usePerformanceReviews(), { wrapper: makeWrapper() })
         await waitFor(() => expect(apiMock.get).toHaveBeenCalled())
-        expect(apiMock.get.mock.calls[0][0]).toBe('/performance')
+        const url = apiMock.get.mock.calls[0][0] as string
+        expect(url).toMatch(/^\/performance/)
+        expect(url).not.toContain('employeeId=')
+        expect(url).not.toContain('filter=')
     })
 
-    it('appends employeeId / from / to as query params when provided', async () => {
+    it('appends employeeId and filter params when provided', async () => {
         renderHook(
-            () => usePerformanceReviews({ employeeId: 'emp-1', from: '2026-04-01', to: '2026-04-30' }),
+            () => usePerformanceReviews({ employeeId: 'emp-1', filters: { status: { operator: 'equals', value: 'completed' } } }),
             { wrapper: makeWrapper() },
         )
         await waitFor(() => expect(apiMock.get).toHaveBeenCalled())
         const url = apiMock.get.mock.calls[0][0] as string
         expect(url).toMatch(/^\/performance\?/)
         expect(url).toContain('employeeId=emp-1')
-        expect(url).toContain('from=2026-04-01')
-        expect(url).toContain('to=2026-04-30')
+        expect(url).toContain('filter=')
     })
 })

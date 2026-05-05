@@ -55,7 +55,7 @@ export function ManagerDashboard() {
   // Scope leave and employee queries to this manager's department.
   // The backend also enforces this for dept_head regardless of what params are sent,
   // but passing it explicitly makes the query key stable and avoids a double-render.
-  const { data: leaveData, isLoading: leaveLoading } = useLeaveRequests({ status: 'pending', department: department || undefined, limit: 10 })
+  const { data: leaveData, isLoading: leaveLoading } = useLeaveRequests({ filters: { status: { operator: 'equals', value: 'pending' } }, department: department || undefined, limit: 10 })
   const { data: attendanceSummary, isLoading: attLoading } = useAttendanceSummary()
   const { data: employeesData, isLoading: empLoading } = useEmployees({ department: department || undefined, status: 'active', limit: 1 })
   const { data: totalEmployeesData } = useEmployees({ department: department || undefined, limit: 1 })

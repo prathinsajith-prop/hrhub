@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
 import { FileText, Upload, AlertTriangle, CheckCircle2, Clock, Eye, Download, Trash2, Plus, ShieldCheck, Edit2, RefreshCcw } from 'lucide-react'
@@ -14,7 +14,7 @@ import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import { api } from '@/lib/api'
 import { formatDate, getDaysUntilExpiry, cn } from '@/lib/utils'
-import { labelFor } from '@/lib/enums'
+import { labelFor, DOC_STATUS_BADGE } from '@/lib/enums'
 import { useDocuments, useDeleteDocument } from '@/hooks/useDocuments'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
@@ -26,17 +26,8 @@ import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { VerifyDocumentDialog } from '@/components/shared/VerifyDocumentDialog'
-import type { Document, DocStatus } from '@/types'
+import type { Document } from '@/types'
 
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info'
-const statusBadge: Record<DocStatus, { variant: BadgeVariant; label: string }> = {
-  valid: { variant: 'success', label: 'Valid' },
-  expiring_soon: { variant: 'warning', label: 'Expiring Soon' },
-  expired: { variant: 'destructive', label: 'Expired' },
-  pending_upload: { variant: 'secondary', label: 'Pending Upload' },
-  under_review: { variant: 'info', label: 'Under Review' },
-  rejected: { variant: 'destructive', label: 'Rejected' },
-}
 
 const DOCUMENT_FILTERS: FilterConfig[] = [
   { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
@@ -110,8 +101,8 @@ const columns = (
       accessorKey: 'status',
       header: 'Status',
       cell: ({ getValue }) => {
-        const s = getValue() as DocStatus
-        const { variant, label } = statusBadge[s]
+        const s = getValue() as string
+        const { variant, label } = DOC_STATUS_BADGE[s] ?? { variant: 'secondary' as const, label: labelFor(s) }
         return <Badge variant={variant} className="text-[11px]">{label}</Badge>
       },
     },
@@ -212,7 +203,6 @@ const columns = (
 
 export function DocumentsPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_documents')
   const qc = useQueryClient()
@@ -226,22 +216,24 @@ export function DocumentsPage() {
   const [bulkArchiveTarget, setBulkArchiveTarget] = useState<Document[] | null>(null)
   const [viewTarget, setViewTarget] = useState<Document | null>(null)
   const [verifyTarget, setVerifyTarget] = useState<Document | null>(null)
-  const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: 100 })
-  const documents = useMemo<Document[]>(() => (docsData?.data as Document[]) ?? [], [docsData?.data])
-  const expiring = documents.filter((d) => d.status === 'expiring_soon').length
-  const expired = documents.filter((d) => d.status === 'expired').length
-  const deleteDoc = useDeleteDocument()
   const search = useSearchFilters({
     storageKey: 'hrhub.documents.searchHistory',
     availableFilters: DOCUMENT_FILTERS,
   })
+
+  const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: 100, q: search.searchInput || undefined, filters: search.appliedFilters })
+  const documents = useMemo<Document[]>(() => (docsData?.data as Document[]) ?? [], [docsData?.data])
+  const expiring = documents.filter((d) => d.status === 'expiring_soon').length
+  const expired = documents.filter((d) => d.status === 'expired').length
+  const deleteDoc = useDeleteDocument()
+
   const filteredDocuments = useMemo(
     () => applyClientFilters(documents as unknown as Record<string, unknown>[], {
-      searchInput: search.searchInput,
-      appliedFilters: search.appliedFilters,
-      searchFields: ['employeeName', 'employeeNo', 'docType', 'fileName', 'category'],
+      searchInput: '',
+      appliedFilters: {},
+      searchFields: [],
     }) as unknown as Document[],
-    [documents, search.appliedFilters, search.searchInput],
+    [documents],
   )
 
   const handleView = (d: Document) => {

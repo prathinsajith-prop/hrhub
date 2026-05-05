@@ -56,7 +56,7 @@ export function ProDashboard() {
   const { data: kpis, isLoading: kpisLoading } = useDashboardKPIs()
   const { data: allVisas, isLoading: visaLoading } = useVisas({ limit: 15 })
   const { data: expiringDocs, isLoading: expDocsLoading } = useExpiringDocuments(90)
-  const { data: pendingDocs, isLoading: pendingDocsLoading } = useDocuments({ status: 'pending_review', limit: 10 })
+  const { data: pendingDocs, isLoading: pendingDocsLoading } = useDocuments({ filters: { status: { operator: 'equals', value: 'pending_review' } }, limit: 10 })
 
   const visaList = (Array.isArray(allVisas?.data) ? allVisas.data : []) as VisaItem[]
   const criticalVisas = visaList.filter(v => v.urgencyLevel === 'critical')

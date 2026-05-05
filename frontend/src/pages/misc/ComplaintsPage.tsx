@@ -119,7 +119,7 @@ function ComplaintDetail({ complaint, onClose }: { complaint: Complaint; onClose
                         </div>
 
                         {/* Meta */}
-                        <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                             <div>
                                 <p className="text-xs text-muted-foreground">{t('complaints.detail.submittedBy')}</p>
                                 <p className="font-medium">{complaint.submittedByName ?? '—'}</p>
