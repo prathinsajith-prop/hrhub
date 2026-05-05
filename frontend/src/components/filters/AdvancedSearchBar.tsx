@@ -112,7 +112,7 @@ export function AdvancedSearchBar({
                     </PopoverTrigger>
                     <PopoverContent
                         align="end"
-                        className="w-[420px] p-0"
+                        className="w-[min(420px,calc(100vw-1rem))] p-0"
                         // Prevent the popover from closing when the user opens a nested
                         // Radix portal (Select dropdown, DatePicker calendar, Tooltip…).
                         onInteractOutside={(e) => {

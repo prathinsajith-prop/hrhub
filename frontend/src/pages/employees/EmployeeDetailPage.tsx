@@ -887,7 +887,7 @@ export function EmployeeDetailPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportCSV(e as unknown as Record<string, unknown>)}>
                     Export
                   </Button>
@@ -1051,7 +1051,7 @@ export function EmployeeDetailPage() {
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5">
                   {/* Row 1 — Identity */}
                   <EmpField label="Employee No." icon={Hash} value={e.employeeNo} />
                   <EmpField label="Join Date" icon={Calendar} value={formatDate(e.joinDate)} />
