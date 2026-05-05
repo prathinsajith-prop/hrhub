@@ -887,6 +887,7 @@
     "requestSubmitted": "تم تقديم طلب قرضك للموافقة.",
     "saveFailed": "فشل حفظ طلب القرض",
     "approved": "تمت الموافقة على القرض",
+    "rejecting": "جارٍ الرفض…",
     "rejected": "تم رفض القرض",
     "paymentRecorded": "تم تسجيل الدفعة",
     "actionFailed": "فشل الإجراء",

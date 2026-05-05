@@ -17,7 +17,8 @@ import { ConfirmDialog } from '@/components/ui/overlays'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
+import { OverflowTabsList, type TabDef } from '@/components/shared/OverflowTabsList'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -688,6 +689,7 @@ export function EmployeeDetailPage() {
   const updateEmployee = useUpdateEmployee(id!)
   const updateStatus = useUpdateEmployeeStatus()
   const archiveEmployee = useArchiveEmployee()
+  const [activeTab, setActiveTab] = React.useState('personal')
   const [statusTarget, setStatusTarget] = React.useState<{ status: 'active' | 'suspended' | 'terminated' } | null>(null)
   const [archiveConfirm, setArchiveConfirm] = React.useState(false)
   const [editOpen, setEditOpen] = React.useState(false)
@@ -963,36 +965,28 @@ export function EmployeeDetailPage() {
       </Card>
 
       {/* Tab bar + content */}
-      <Tabs defaultValue="personal">
+      {(() => {
+        const allTabs: TabDef[] = [
+          { value: 'personal', icon: User, label: 'Personal' },
+          { value: 'employment', icon: Briefcase, label: 'Employment' },
+          { value: 'visa', icon: Plane, label: 'Visa & ID' },
+          { value: 'documents', icon: FileText, label: 'Documents' },
+          { value: 'payroll', icon: CreditCard, label: 'Payroll' },
+          { value: 'performance', icon: Star, label: 'Performance' },
+          { value: 'assets', icon: Package, label: 'Assets' },
+          { value: 'leave', icon: CalendarDays, label: 'Leave' },
+          { value: 'attendance', icon: ClipboardList, label: 'Attendance' },
+          ...(canManage ? [{ value: 'warnings', icon: AlertTriangle, label: 'Warnings' }] : []),
+          ...(canManage ? [{ value: 'dependents', icon: Heart, label: 'Dependents' }] : []),
+          ...(canManage ? [{ value: 'notes', icon: StickyNote, label: 'Notes' }] : []),
+          ...(canManage ? [{ value: 'updates', icon: History, label: 'Updates' }] : []),
+          ...(canManage ? [{ value: 'account', icon: UserCheck, label: 'Account' }] : []),
+        ]
+        return (
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <Card>
           <CardContent className="p-0">
-            <TabsList className="h-auto bg-transparent p-0 w-full justify-start overflow-x-auto rounded-none border-b border-border/60 px-5">
-              {[
-                { value: 'personal', icon: User, label: 'Personal' },
-                { value: 'employment', icon: Briefcase, label: 'Employment' },
-                { value: 'visa', icon: Plane, label: 'Visa & ID' },
-                { value: 'documents', icon: FileText, label: 'Documents' },
-                { value: 'payroll', icon: CreditCard, label: 'Payroll' },
-                { value: 'performance', icon: Star, label: 'Performance' },
-                { value: 'assets', icon: Package, label: 'Assets' },
-                { value: 'leave', icon: CalendarDays, label: 'Leave' },
-                { value: 'attendance', icon: ClipboardList, label: 'Attendance' },
-                ...(canManage ? [{ value: 'warnings', icon: AlertTriangle, label: 'Warnings' }] : []),
-                ...(canManage ? [{ value: 'dependents', icon: Heart, label: 'Dependents' }] : []),
-                ...(canManage ? [{ value: 'notes', icon: StickyNote, label: 'Notes' }] : []),
-                ...(canManage ? [{ value: 'updates', icon: History, label: 'Updates' }] : []),
-                ...(canManage ? [{ value: 'account', icon: UserCheck, label: 'Account' }] : []),
-              ].map(tab => (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  className="gap-1.5 text-xs sm:text-sm font-medium px-4 py-3.5 rounded-none border-b-2 border-transparent shadow-none bg-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary data-[state=active]:border-primary text-muted-foreground hover:text-foreground transition-colors -mb-px"
-                >
-                  <tab.icon className="h-3.5 w-3.5" />
-                  {tab.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <OverflowTabsList tabs={allTabs} activeTab={activeTab} onTabChange={setActiveTab} />
           </CardContent>
         </Card>
 
@@ -1057,7 +1051,7 @@ export function EmployeeDetailPage() {
                   <EmpField label="Grade Level" icon={GraduationCap} value={(e as any).gradeLevelName} />
 
                   {/* Row 3 — Org */}
-                  <EmpField label="Company" icon={Building2} value={((e as any).entityName as string) ?? undefined} />
+                  <EmpField label="Company" icon={Building2} value={e.entityName ?? undefined} />
                   <EmpField label="Branch" icon={Building2} value={orgUnitName(e.branchId) ?? undefined} />
                   <EmpField label="Division" icon={Building2} value={orgUnitName(e.divisionId) ?? undefined} />
 
@@ -2010,6 +2004,8 @@ export function EmployeeDetailPage() {
 
         </div>
       </Tabs>
+        )
+      })()}
 
       {/* Hidden avatar input */}
       <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />

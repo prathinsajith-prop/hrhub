@@ -13,8 +13,8 @@ import {
 
 const createLoanSchema = z.object({
     employeeId: z.string().uuid().optional(),
-    amount: z.string().refine(v => parseFloat(v) > 0, { message: 'Amount must be greater than 0' }),
-    monthlyDeduction: z.string().refine(v => parseFloat(v) > 0, { message: 'Monthly deduction must be greater than 0' }),
+    amount: z.coerce.number().positive({ message: 'Amount must be greater than 0' }),
+    monthlyDeduction: z.coerce.number().positive({ message: 'Monthly deduction must be greater than 0' }),
     reason: z.string().optional(),
     notes: z.string().optional(),
 })
@@ -80,8 +80,8 @@ export default async function loansRoutes(fastify: any): Promise<void> {
 
         const row = await createLoan(user.tenantId, {
             employeeId,
-            amount: parse.data.amount,
-            monthlyDeduction: parse.data.monthlyDeduction,
+            amount: String(parse.data.amount),
+            monthlyDeduction: String(parse.data.monthlyDeduction),
             reason: parse.data.reason,
             notes: parse.data.notes,
         })
