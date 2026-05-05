@@ -68,6 +68,8 @@ export const LOAN_STATUS_STYLE: Record<string, string> = {
 export function useLoans(params?: {
     employeeId?: string
     status?: string
+    q?: string
+    filter?: string
     limit?: number
     offset?: number
 }) {
@@ -75,6 +77,8 @@ export function useLoans(params?: {
     const qs = new URLSearchParams()
     if (params?.employeeId) qs.set('employeeId', params.employeeId)
     if (params?.status) qs.set('status', params.status)
+    if (params?.q) qs.set('q', params.q)
+    if (params?.filter) qs.set('filter', params.filter)
     qs.set('limit', String(params?.limit ?? 25))
     qs.set('offset', String(params?.offset ?? 0))
 
