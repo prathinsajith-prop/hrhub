@@ -179,10 +179,25 @@ async function bootstrap() {
 
         // PostgreSQL / Drizzle constraint violations → return user-friendly 400
         const pgCode: string | undefined = error?.cause?.code ?? error?.code
+        let duplicateField: string | undefined
         if (pgCode && /^(22|23)/.test(pgCode)) {
             statusCode = 400
             name = 'ValidationError'
-            if (pgCode === '23505') message = 'Duplicate value — that record already exists.'
+            if (pgCode === '23505') {
+                // Extract column name from PostgreSQL detail: "Key (work_email)=(foo) already exists."
+                const detail: string = error?.cause?.detail ?? error?.detail ?? ''
+                const colMatch = detail.match(/Key \(([^)]+)\)=\(([^)]*)\)/)
+                if (colMatch) {
+                    const snakeCol = colMatch[1]!
+                    const val = colMatch[2]
+                    const label = snakeCol.replace(/_/g, ' ')
+                    // snake_case → camelCase for frontend field mapping
+                    duplicateField = snakeCol.replace(/_([a-z])/g, (_, c) => c.toUpperCase())
+                    message = `"${val}" is already in use for ${label}. Please use a different value.`
+                } else {
+                    message = 'Duplicate value — that record already exists.'
+                }
+            }
             else if (pgCode === '23503') message = 'Referenced record not found.'
             else if (pgCode === '23514') message = 'One or more fields violate a business rule (e.g. totalSalary must be ≥ basicSalary).'
             else if (pgCode === '23502') message = 'A required field is missing.'
@@ -204,6 +219,7 @@ async function bootstrap() {
             statusCode,
             error: name,
             message,
+            ...(duplicateField ? { field: duplicateField } : {}),
             ...(error.validationErrors ? { validationErrors: error.validationErrors } : {}),
         })
     })

@@ -298,27 +298,28 @@ export function EmployeesPage() {
               {getInitials(e.fullName)}
             </AvatarFallback>
           </Avatar>
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-0.5">
             <p className="font-semibold text-sm text-foreground truncate">{e.fullName}</p>
-            <p className="text-[11px] text-muted-foreground">{e.employeeNo}</p>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p className="text-[11px] text-muted-foreground shrink-0">{e.employeeNo}</p>
+              {e.designation && (
+                <Badge className="text-[10px] font-medium px-1.5 py-0 rounded-md truncate bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800">
+                  {e.designation}
+                </Badge>
+              )}
+            </div>
+            {(() => {
+              const email = e.workEmail || (e as any).email || e.personalEmail || null
+              return email ? (
+                <span onClick={ev => ev.stopPropagation()}>
+                  <CopyableEmail email={email} className="text-[11px] text-muted-foreground/70 truncate" />
+                </span>
+              ) : null
+            })()}
           </div>
         </button>
       ),
-      size: 220,
-    },
-    {
-      accessorKey: 'designation',
-      header: 'Designation',
-      cell: ({ getValue }) => {
-        const val = getValue() as string | null
-        if (!val) return <span className="text-xs text-muted-foreground">—</span>
-        return (
-          <Badge variant="secondary" className="text-[11px] font-medium px-2 py-0.5 rounded-md">
-            {val}
-          </Badge>
-        )
-      },
-      size: 160,
+      size: 260,
     },
     {
       id: 'department',
@@ -348,21 +349,6 @@ export function EmployeesPage() {
         )
       },
       size: 200,
-    },
-    {
-      id: 'email',
-      header: 'Email',
-      cell: ({ row: { original: e } }) => {
-        const email = e.workEmail || e.email || e.personalEmail || null
-        if (!email) return <span className="text-xs text-muted-foreground">—</span>
-        return (
-          <div className="flex items-center gap-1 max-w-[180px]" onClick={ev => ev.stopPropagation()}>
-            <Mail className="h-3 w-3 shrink-0 text-muted-foreground" />
-            <CopyableEmail email={email} className="text-xs text-muted-foreground truncate" />
-          </div>
-        )
-      },
-      size: 190,
     },
     {
       accessorKey: 'nationality',

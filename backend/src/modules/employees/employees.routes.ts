@@ -250,24 +250,29 @@ export default async function (fastify: any): Promise<void> {
             }
         }
 
-        // Auto-generate employeeNo when not supplied. Retry on the rare race
-        // where two concurrent creates land on the same sequence number — the
-        // (tenant_id, employee_no) unique index will reject the loser.
-        let employee
-        let lastErr: unknown = null
-        for (let attempt = 0; attempt < 3; attempt++) {
-            const employeeNo = body.employeeNo ?? (await generateNextEmployeeNo(request.user.tenantId))
-            try {
-                employee = await createEmployee(request.user.tenantId, { ...body, employeeNo, entityId } as never)
-                break
-            } catch (e: any) {
-                // PostgreSQL unique_violation = 23505
-                const code = e?.cause?.code ?? e?.code
-                if (code === '23505' && !body.employeeNo) { lastErr = e; continue }
-                throw e
+        // When the caller provides an explicit employee number, verify it is
+        // not already in use before attempting the insert so we can return a
+        // clear 409 instead of letting the DB constraint bubble as a 500.
+        if (body.employeeNo) {
+            const [dup] = await db
+                .select({ id: employees.id })
+                .from(employees)
+                .where(and(
+                    eq(employees.tenantId, request.user.tenantId),
+                    eq(employees.employeeNo, body.employeeNo),
+                ))
+                .limit(1)
+            if (dup) {
+                return reply.code(409).send({
+                    statusCode: 409,
+                    error: 'Conflict',
+                    message: `Employee ID "${body.employeeNo}" is already in use`,
+                })
             }
         }
-        if (!employee) throw lastErr ?? new Error('Failed to generate employee number')
+
+        const employeeNo = body.employeeNo ?? (await generateNextEmployeeNo(request.user.tenantId))
+        const employee = await createEmployee(request.user.tenantId, { ...body, employeeNo, entityId } as never)
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,
@@ -290,6 +295,23 @@ export default async function (fastify: any): Promise<void> {
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
         const body = validate(updateEmployeeSchema, request.body)
+        if (body.employeeNo) {
+            const [dup] = await db
+                .select({ id: employees.id })
+                .from(employees)
+                .where(and(
+                    eq(employees.tenantId, request.user.tenantId),
+                    eq(employees.employeeNo, body.employeeNo),
+                ))
+                .limit(1)
+            if (dup && dup.id !== id) {
+                return reply.code(409).send({
+                    statusCode: 409,
+                    error: 'Conflict',
+                    message: `Employee ID "${body.employeeNo}" is already in use`,
+                })
+            }
+        }
         const before = await getEmployee(request.user.tenantId, id)
         const updated = await updateEmployee(request.user.tenantId, id, body as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })

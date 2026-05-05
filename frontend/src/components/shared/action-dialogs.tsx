@@ -20,7 +20,7 @@ import { useTeams } from '@/hooks/useTeams'
 import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { FormField } from '@/components/shared/FormField'
-import { api, apiErrorToFieldMap } from '@/lib/api'
+import { api, apiErrorToFieldMap, ApiError } from '@/lib/api'
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, jobPostSchema, visaApplicationSchema, leaveRequestSchema, documentMetaSchema, zodToFieldErrors } from '@/lib/schemas'
 import {
@@ -581,6 +581,23 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 navigate('/organization-settings', { state: { tab: 'subscription' } })
                 return
             }
+            if (e?.statusCode === 409 && (e?.message ?? '').includes('Employee ID')) {
+                setErrors({ employeeNo: e.message ?? 'This employee ID is already in use' })
+                setStep(2)
+                return
+            }
+            // DB unique constraint — backend returns { field: 'camelCaseFieldName' }
+            const dupField = e instanceof ApiError ? e.field : undefined
+            if (dupField) {
+                setErrors({ [dupField]: e.message ?? 'Already in use' })
+                const step1Fields = ['firstName', 'lastName', 'dateOfBirth', 'gender', 'maritalStatus', 'nationality', 'passportNo', 'mobileNo', 'personalEmail']
+                const step3Fields = ['basicSalary', 'housingAllowance', 'transportAllowance', 'otherAllowances', 'totalSalary', 'paymentMethod', 'bankName', 'iban']
+                if (step1Fields.includes(dupField)) setStep(1)
+                else if (step3Fields.includes(dupField)) setStep(3)
+                else setStep(2)
+                toast.error('Duplicate value', e?.message ?? 'Please use a different value.')
+                return
+            }
             const fieldErrors = apiErrorToFieldMap(e)
             if (Object.keys(fieldErrors).length) {
                 setErrors(fieldErrors)
@@ -683,12 +700,15 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                     {step === 2 && (
                         <div className="space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Employee No</label>
-                                    <div className="flex h-9 items-center rounded-md border bg-muted/50 px-3 text-sm text-muted-foreground select-none">
-                                        Auto-generated on save
-                                    </div>
-                                </div>
+                                <FormField label="Employee No" error={errors.employeeNo}>
+                                    <Input
+                                        value={form.employeeNo ?? ''}
+                                        onChange={set('employeeNo')}
+                                        placeholder="Auto-generated on save"
+                                        aria-invalid={!!errors.employeeNo}
+                                        className={errors.employeeNo ? 'border-destructive' : ''}
+                                    />
+                                </FormField>
                                 <FormField label="Join Date" required error={errors.joinDate}>
                                     <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                                 </FormField>
@@ -938,6 +958,7 @@ export function EditEmployeeDialog({
         emergencyContactName: employee.emergencyContactName ?? '',
         emergencyContactPhone: employee.emergencyContactPhone ?? '',
         homeCountryAddress: employee.homeCountryAddress ?? '',
+        employeeNo: employee.employeeNo ?? '',
     })
     const [errors, setErrors] = useState<Record<string, string>>({})
     const updateEmployee = useUpdateEmployee(employee.id)
@@ -980,10 +1001,21 @@ export function EditEmployeeDialog({
                 emergencyContactName: form.emergencyContactName || undefined,
                 emergencyContactPhone: form.emergencyContactPhone || undefined,
                 homeCountryAddress: form.homeCountryAddress || undefined,
+                employeeNo: form.employeeNo || undefined,
             },
             {
                 onSuccess: () => { toast.success('Profile updated', `${form.firstName} ${form.lastName} has been updated.`); close() },
-                onError: (err: Error & { message?: string }) => {
+                onError: (err: Error & { message?: string; statusCode?: number }) => {
+                    if ((err as any)?.statusCode === 409 || (err?.message ?? '').includes('Employee ID')) {
+                        setErrors({ employeeNo: err.message ?? 'This employee ID is already in use' })
+                        return
+                    }
+                    const dupField = err instanceof ApiError ? err.field : undefined
+                    if (dupField) {
+                        setErrors({ [dupField]: err.message ?? 'Already in use' })
+                        toast.error('Duplicate value', err?.message ?? 'Please use a different value.')
+                        return
+                    }
                     const fieldErrors = apiErrorToFieldMap(err)
                     if (Object.keys(fieldErrors).length) setErrors(fieldErrors)
                     toast.error('Failed to update', err?.message ?? 'Please try again.')
@@ -1000,6 +1032,9 @@ export function EditEmployeeDialog({
                 </DialogHeader>
                 <DialogBody>
                     <div className="space-y-3">
+                        <FormField label="Employee No" error={errors.employeeNo}>
+                            <Input value={form.employeeNo} onChange={set('employeeNo')} placeholder="e.g. PROP-001-05-2026" aria-invalid={!!errors.employeeNo} className={errors.employeeNo ? 'border-destructive' : ''} />
+                        </FormField>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <FormField label="First Name" required error={errors.firstName}>
                                 <Input value={form.firstName} onChange={set('firstName')} aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />

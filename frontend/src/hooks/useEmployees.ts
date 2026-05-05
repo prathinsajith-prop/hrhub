@@ -80,6 +80,17 @@ export function useInfiniteEmployees(params: Omit<ListParams, 'offset'> = {}) {
     })
 }
 
+export function useNextEmployeeNo(enabled = true) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
+    return useQuery<{ data: { employeeNo: string } }>({
+        queryKey: ['employees', tenantId, 'next-employee-no'],
+        queryFn: () => api.get('/employees/next-employee-no'),
+        enabled: !!tenantId && enabled,
+        staleTime: 0,
+        gcTime: 0,
+    })
+}
+
 export function useEmployee(id: string) {
     const tenantId = useAuthStore(s => s.tenant?.id)
     return useQuery({
