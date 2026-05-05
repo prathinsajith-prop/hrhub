@@ -263,7 +263,7 @@ export async function getEligibleEmployees(tenantId: string, teamId: string) {
 
     const conds = Conditions.create()
         .tenant(employees.tenantId, tenantId)
-        .notArchived(employees.isArchived as never)  // isArchived = false → active
+        .match(employees.isArchived, false)
         .ne(employees.status, 'terminated')
         .match(employees.departmentId, team.departmentId)
         .notInList(employees.id, existingIds)

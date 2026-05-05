@@ -19,7 +19,7 @@ export interface ParsedFilter {
 // Compiled once at module load — avoids recreating the regex on every segment parse.
 const SEGMENT_RE = /^([^:]+):([A-Z_]+)\(([^)]*)\)$/
 
-// Tiny LRU-style cache for parsed filter strings.
+// Tiny FIFO-eviction cache for parsed filter strings.
 // Pagination re-sends the same filter string on every page flip — avoid re-parsing.
 const PARSE_CACHE_MAX = 256
 const parseCache = new Map<string, ParsedFilter[]>()
@@ -401,6 +401,7 @@ export class Conditions {
 
     /**
      * Keyset cursor: appends (createdAtCol, idCol) < (cursor.c, cursor.i).
+     * Uses a SQL tuple comparison so ordering is correct regardless of id type.
      * No-op when encoded is falsy or fails to decode.
      */
     cursor(encoded: string | undefined, createdAtCol: AnyColumn, idCol: AnyColumn): this {
@@ -408,11 +409,7 @@ export class Conditions {
         const decoded = decodeCursor(encoded)
         if (!decoded) return this
         const cursorDate = new Date(decoded.c)
-        const cond = or(
-            lt(createdAtCol, cursorDate as never),
-            and(eq(createdAtCol, cursorDate as never), lt(idCol, decoded.i))
-        )
-        if (cond) this.conds.push(cond)
+        this.conds.push(sql`(${createdAtCol}, ${idCol}) < (${cursorDate}, ${decoded.i})`)
         return this
     }
 

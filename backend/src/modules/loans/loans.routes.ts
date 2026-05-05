@@ -34,6 +34,7 @@ export default async function loansRoutes(fastify: any): Promise<void> {
         const isElevated = ['hr_manager', 'super_admin'].includes(user.role)
         if (!isElevated) employeeId = user.employeeId ?? undefined
 
+        if (qs.filter && qs.filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
         const result = await listLoans(user.tenantId, {
             employeeId,
             status: qs.status,
