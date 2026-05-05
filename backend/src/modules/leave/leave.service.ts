@@ -1,4 +1,4 @@
-import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns, aliasedTable, ilike, or } from 'drizzle-orm'
+import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns, aliasedTable } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
@@ -7,7 +7,7 @@ import { leaveRequests, leavePolicies, leaveBalances, publicHolidays, attendance
 import { employees } from '../../db/schema/employees.js'
 import { users } from '../../db/schema/users.js'
 import { sendEmail } from '../../plugins/email.js'
-import { parseFilterString, buildDrizzleFilters } from '../../lib/filters.js'
+import { Conditions } from '../../lib/filters.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 const LEAVE_FIELD_MAP = {
@@ -23,37 +23,18 @@ type NewLeaveRequest = InferInsertModel<typeof leaveRequests>
 
 export async function listLeaveRequests(tenantId: string, params: { employeeId?: string; department?: string; status?: string; leaveType?: string; from?: string; to?: string; search?: string; filter?: string; limit: number; offset: number }) {
     const { employeeId, department, status, leaveType, from, to, search, filter, limit, offset } = params
-    const conditions = [eq(leaveRequests.tenantId, tenantId), isNull(leaveRequests.deletedAt)]
-    if (employeeId) conditions.push(eq(leaveRequests.employeeId, employeeId))
-    if (department) conditions.push(eq(employees.department, department))
-    if (status) conditions.push(eq(leaveRequests.status, status as never))
-    if (leaveType) conditions.push(eq(leaveRequests.leaveType, leaveType as never))
-    if (search) {
-        const q = `%${search.trim()}%`
-        conditions.push(or(
-            ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, q),
-            ilike(employees.firstName, q),
-            ilike(employees.lastName, q),
-        )!)
-    }
-    // Date-range overlap: include any request that intersects [from, to].
-    // (startDate <= to) AND (endDate >= from)
-    if (to) conditions.push(lte(leaveRequests.startDate, to))
-    if (from) conditions.push(gte(leaveRequests.endDate, from))
-    if (filter) {
-        const parsed = parseFilterString(filter)
-        for (const f of parsed) {
-            if (f.field === 'employeeName' && typeof f.value === 'string' && f.value) {
-                const term = `%${f.value}%`
-                conditions.push(or(
-                    ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, term),
-                    ilike(employees.firstName, term),
-                    ilike(employees.lastName, term),
-                )!)
-            }
-        }
-        buildDrizzleFilters(parsed.filter(f => f.field !== 'employeeName'), LEAVE_FIELD_MAP, LEAVE_ALLOWED).forEach(c => conditions.push(c))
-    }
+
+    const conds = Conditions.create()
+        .tenant(leaveRequests.tenantId, tenantId)
+        .notDeleted(leaveRequests.deletedAt)
+        .match(leaveRequests.employeeId, employeeId)
+        .match(employees.department, department)
+        .match(leaveRequests.status, status)
+        .match(leaveRequests.leaveType, leaveType)
+        .nameSearch(search, employees.firstName, employees.lastName)
+        // Date-range overlap: include any request that intersects [from, to]
+        .dateOverlap(leaveRequests.startDate, leaveRequests.endDate, from, to)
+        .filterWithName(filter, LEAVE_FIELD_MAP, LEAVE_ALLOWED, employees.firstName, employees.lastName)
 
     const handoverEmployee = aliasedTable(employees, 'handover_emp')
     const rows = await db.select({
@@ -68,7 +49,7 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
         .from(leaveRequests)
         .leftJoin(employees, eq(employees.id, leaveRequests.employeeId))
         .leftJoin(handoverEmployee, eq(handoverEmployee.id, leaveRequests.handoverTo))
-        .where(and(...conditions))
+        .where(conds.where())
         .orderBy(desc(leaveRequests.createdAt))
         .limit(limit).offset(offset)
 

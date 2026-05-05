@@ -897,6 +897,7 @@
     "monthlyDeduction": "Monthly Deduction",
     "reason": "Reason",
     "reasonPlaceholder": "Purpose of the advance…",
+    "searchPlaceholder": "Search by employee name or ID…",
     "recordPayment": "Record Payment",
     "installmentCalc": "This will require {{count}} monthly installments.",
     "rejectTitle": "Reject Loan Request",

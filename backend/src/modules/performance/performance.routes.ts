@@ -28,6 +28,7 @@ export async function performanceRoutes(fastify: any) {
     // Admins see all reviews; employees only see their own (via employeeId JWT claim).
     fastify.get('/performance', { ...auth, schema: { tags: ['Performance'] } }, async (request: any, reply: any) => {
         const { employeeId, status, from, to, search, q, filter, limit = '20', offset = '0' } = request.query as Record<string, string>
+        if (filter && filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
         const role = request.user.role
         const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(role)
         const resolvedEmployeeId = isAdmin ? employeeId : (request.user.employeeId ?? undefined)

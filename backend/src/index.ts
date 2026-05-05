@@ -304,7 +304,8 @@ async function bootstrap() {
     // Meta — returns runtime capability flags so the frontend can adapt without
     // hardcoding env assumptions (e.g. whether to show the API docs link).
     app.get('/api/v1/meta', { schema: { tags: ['Meta'] } }, async (_req: any, reply: any) => {
-        const baseUrl = `${env.APP_URL.replace(/\/$/, '').replace(':5174', ':4000').replace(':5173', ':4000')}`
+        const host = env.HOST === '0.0.0.0' ? 'localhost' : env.HOST
+        const baseUrl = `http://${host}:${env.PORT}`
         return reply.send({
             version: '1.0.0',
             docsEnabled,

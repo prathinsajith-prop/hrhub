@@ -6,7 +6,7 @@ import { employees, entities, tenants, gradeLevels, sponsoringEntities, employee
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
-import { parseFilterString, buildDrizzleFilters } from '../../lib/filters.js'
+import { buildDrizzleFilters, parseFilterString } from '../../lib/filters.js'
 
 const EMPLOYEE_FIELD_MAP = {
     designation: employees.designation,
@@ -102,8 +102,9 @@ export async function listEmployees(params: ListEmployeesParams) {
     }
 
     if (filter) {
-        buildDrizzleFilters(parseFilterString(filter), EMPLOYEE_FIELD_MAP, EMPLOYEE_ALLOWED)
-            .forEach(c => conditions.push(c))
+        for (const c of buildDrizzleFilters(parseFilterString(filter), EMPLOYEE_FIELD_MAP, EMPLOYEE_ALLOWED)) {
+            conditions.push(c)
+        }
     }
 
     // Cursor-based pagination (keyset) — takes priority over offset when 'after' is provided
@@ -226,6 +227,7 @@ export async function generateNextEmployeeNo(tenantId: string, conn: any = db): 
         })
         .returning({ lastSeq: employeeNoSequences.lastSeq })
 
+    if (!row) throw new Error('Failed to generate employee number')
     const seq = String(row.lastSeq).padStart(3, '0')
     return `${companyCode}-${seq}-${mm}-${yyyy}`
 }

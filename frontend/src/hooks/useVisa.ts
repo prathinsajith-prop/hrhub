@@ -7,10 +7,10 @@ interface VisaParams { q?: string; filters?: AppliedFiltersMap; limit?: number; 
 
 export function useVisas(params: VisaParams = {}) {
     const { q, filters, limit = 20, offset = 0 } = params
-    const qs = buildSearchQuery(q, filters, { pageSize: limit })
+    const qs = buildSearchQuery(q, filters, { limit, offset })
     return useQuery({
         queryKey: ['visa', q, filters, limit, offset],
-        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/visa?${qs}&offset=${offset}`),
+        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/visa?${qs}`),
         staleTime: 30_000,
     })
 }

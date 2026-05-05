@@ -1,8 +1,8 @@
-import { eq, and, desc, isNull, sql, getTableColumns, ilike, or } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { employeeLoans, employees, users } from '../../db/schema/index.js'
-import { parseFilterString, buildDrizzleFilters } from '../../lib/filters.js'
+import { Conditions } from '../../lib/filters.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewLoan = InferInsertModel<typeof employeeLoans>
@@ -27,19 +27,16 @@ export async function listLoans(
 ) {
     const { employeeId, status, q, filter, limit, offset } = params
 
-    const conditions = [eq(employeeLoans.tenantId, tenantId), isNull(employeeLoans.deletedAt)]
-    if (employeeId) conditions.push(eq(employeeLoans.employeeId, employeeId))
-    if (status) conditions.push(eq(employeeLoans.status, status as never))
-    if (q) {
-        const term = `%${q.trim()}%`
-        conditions.push(or(
-            ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, term),
-            ilike(employees.employeeNo, term),
-        ))
-    }
-    if (filter) {
-        conditions.push(...buildDrizzleFilters(parseFilterString(filter), LOAN_FIELD_MAP, LOAN_ALLOWED))
-    }
+    // Base: tenant + soft-delete + employee scope — reused as KPI scope via fork().
+    const baseConds = Conditions.create()
+        .tenant(employeeLoans.tenantId, tenantId)
+        .notDeleted(employeeLoans.deletedAt)
+        .match(employeeLoans.employeeId, employeeId)
+
+    const mainConds = baseConds.fork()
+        .match(employeeLoans.status, status)
+        .nameSearch(q, employees.firstName, employees.lastName, employees.employeeNo)
+        .filter(filter, LOAN_FIELD_MAP, LOAN_ALLOWED)
 
     const [rows, [kpi]] = await Promise.all([
         db
@@ -54,10 +51,11 @@ export async function listLoans(
             .from(employeeLoans)
             .leftJoin(employees, eq(employees.id, employeeLoans.employeeId))
             .leftJoin(users, eq(users.id, employeeLoans.approvedBy))
-            .where(and(...conditions))
+            .where(mainConds.where())
             .orderBy(desc(employeeLoans.createdAt))
             .limit(limit)
             .offset(offset),
+        // KPI uses base scope only so aggregate counts aren't filtered by status/search
         db
             .select({
                 total: sql<number>`COUNT(*)`.as('total'),
@@ -67,11 +65,7 @@ export async function listLoans(
                 totalOutstanding: sql<number>`COALESCE(SUM(CAST(remaining_balance AS NUMERIC)) FILTER (WHERE status = 'active'), 0)`.as('totalOutstanding'),
             })
             .from(employeeLoans)
-            .where(and(
-                eq(employeeLoans.tenantId, tenantId),
-                isNull(employeeLoans.deletedAt),
-                ...(employeeId ? [eq(employeeLoans.employeeId, employeeId)] : []),
-            )),
+            .where(baseConds.where()),
     ])
 
     const total = rows.length > 0 ? Number(rows[0]!.total) : 0

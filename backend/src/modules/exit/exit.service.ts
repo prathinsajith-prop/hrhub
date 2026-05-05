@@ -1,8 +1,8 @@
 import { db } from '../../db/index.js'
 import { exitRequests, employees, leaveRequests, leaveBalances } from '../../db/schema/index.js'
-import { eq, and, sql, desc, ilike, or } from 'drizzle-orm'
+import { eq, and, sql, desc } from 'drizzle-orm'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
-import { parseFilterString, buildDrizzleFilters } from '../../lib/filters.js'
+import { Conditions } from '../../lib/filters.js'
 
 const EXIT_FIELD_MAP = {
     exitType: exitRequests.exitType,
@@ -141,20 +141,12 @@ export async function initiateExit(tenantId: string, body: {
 
 export async function getExitRequests(tenantId: string, opts: { limit?: number; offset?: number; status?: string; q?: string; filter?: string } = {}) {
     const { limit = 50, offset = 0, status, q, filter } = opts
-    const conditions = [eq(exitRequests.tenantId, tenantId)]
-    if (status) conditions.push(sql`${exitRequests.status} = ${status}`)
-    if (q) {
-        const term = `%${q.trim()}%`
-        conditions.push(or(
-            ilike(sql`${employees.firstName} || ' ' || ${employees.lastName}`, term),
-            ilike(employees.employeeNo, term),
-        )!)
-    }
-    if (filter) {
-        buildDrizzleFilters(parseFilterString(filter), EXIT_FIELD_MAP, EXIT_ALLOWED)
-            .forEach(c => conditions.push(c))
-    }
-    const where = and(...conditions)
+
+    const conds = Conditions.create()
+        .tenant(exitRequests.tenantId, tenantId)
+        .match(exitRequests.status, status)
+        .nameSearch(q, employees.firstName, employees.lastName, employees.employeeNo)
+        .filter(filter, EXIT_FIELD_MAP, EXIT_ALLOWED)
 
     const rows = await db
         .select({
@@ -187,7 +179,7 @@ export async function getExitRequests(tenantId: string, opts: { limit?: number; 
         })
         .from(exitRequests)
         .leftJoin(employees, eq(employees.id, exitRequests.employeeId))
-        .where(where)
+        .where(conds.where())
         .orderBy(desc(exitRequests.createdAt))
         .limit(limit)
         .offset(offset)

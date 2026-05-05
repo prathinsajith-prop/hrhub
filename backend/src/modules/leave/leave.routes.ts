@@ -42,6 +42,7 @@ export default async function (fastify: any): Promise<void> {
 
     fastify.get('/', { ...auth, schema: { tags: ['Leave'] } }, async (request, reply) => {
         const { employeeId, department, status, leaveType, from, to, search, q, filter, limit = '20', offset = '0' } = request.query as Record<string, string>
+        if (filter && filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
         const user = request.user
         const isElevated = ['hr_manager', 'super_admin', 'dept_head', 'pro_officer'].includes(user.role)
         // Non-elevated users can only see their own leave requests.
