@@ -2,6 +2,7 @@ import { db } from '../../db/index.js'
 import { complaints, employees, users } from '../../db/schema/index.js'
 import { eq, and, desc, isNull, sql, ilike, or, inArray } from 'drizzle-orm'
 import { sendEmail } from '../../plugins/email.js'
+import { extractRows } from '../../lib/db-helpers.js'
 
 // SLA calendar days per severity (approximate working-day equivalent)
 const SLA_DAYS: Record<string, number> = {
@@ -122,8 +123,7 @@ export async function listComplaints(tenantId: string, params: {
         LIMIT ${params.limit} OFFSET ${params.offset}
     `)
 
-    const rowList: any[] = Array.isArray(rows) ? rows : (rows as any).rows ?? []
-    return rowList.map(r => ({
+    return extractRows(rows).map((r: any) => ({
         id: r.id,
         tenantId: r.tenant_id,
         submittedByEmployeeId: r.submitted_by_employee_id,
@@ -165,7 +165,7 @@ export async function getComplaint(tenantId: string, id: string, employeeId?: st
         ${employeeId ? sql`AND c.submitted_by_employee_id = ${employeeId}` : sql``}
         LIMIT 1
     `)
-    const row = (Array.isArray(_rowResult0) ? _rowResult0 : (_rowResult0 as any).rows ?? [])[0]
+    const row = extractRows(_rowResult0)[0]
 
     if (!row) return null
 
@@ -346,7 +346,7 @@ export async function getComplaintStats(tenantId: string) {
         FROM complaints
         WHERE tenant_id = ${tenantId} AND deleted_at IS NULL
     `)
-    const [counts] = (Array.isArray(_statsResult) ? _statsResult : (_statsResult as any).rows ?? []) as any[]
+    const [counts] = extractRows(_statsResult)
 
     return {
         total: Number(counts?.total ?? 0),

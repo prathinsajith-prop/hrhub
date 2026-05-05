@@ -1,5 +1,5 @@
 import { eq, and, ilike, desc, asc, getTableColumns, inArray, sql, or, lt, gte, lte } from 'drizzle-orm'
-import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
+import { withTimestamp, encodeCursor, decodeCursor, extractRows } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
 import { employees, entities, tenants, gradeLevels, sponsoringEntities, employeeNoSequences } from '../../db/schema/index.js'
@@ -48,7 +48,7 @@ export async function getSubtreeEmployeeIds(tenantId: string, rootId: string): P
         )
         SELECT id FROM subtree
     `)
-    return (Array.isArray(rows) ? rows : (rows as any).rows ?? []).map((r: { id: string }) => r.id)
+    return extractRows<{ id: string }>(rows).map(r => r.id)
 }
 
 export async function listEmployees(params: ListEmployeesParams) {
@@ -294,7 +294,7 @@ export async function getAncestorChain(tenantId: string, employeeId: string): Pr
         WHERE id != ${employeeId}::uuid
         ORDER BY depth ASC
     `)
-    return (Array.isArray(rows) ? rows : (rows as any).rows ?? []).map((r: { id: string }) => r.id)
+    return extractRows<{ id: string }>(rows).map(r => r.id)
 }
 
 export async function getOrgChart(tenantId: string, rootEmployeeId?: string) {
