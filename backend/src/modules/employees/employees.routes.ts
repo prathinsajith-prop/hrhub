@@ -34,6 +34,7 @@ export default async function (fastify: any): Promise<void> {
             status: query.status,
             department: managerEmployeeId ? undefined : query.department,
             managerEmployeeId,
+            filter: (query as any).filter,
             limit: query.limit,
             offset: query.offset,
             after: query.after,

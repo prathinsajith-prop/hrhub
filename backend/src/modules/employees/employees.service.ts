@@ -6,6 +6,16 @@ import { employees, entities, tenants, gradeLevels, sponsoringEntities, employee
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
+import { parseFilterString, buildDrizzleFilters } from '../../lib/filters.js'
+
+const EMPLOYEE_FIELD_MAP = {
+    designation: employees.designation,
+    nationality: employees.nationality,
+    salary: employees.totalSalary,
+    joinDate: employees.joinDate,
+    visaExpiry: employees.visaExpiry,
+}
+const EMPLOYEE_ALLOWED = new Set(Object.keys(EMPLOYEE_FIELD_MAP))
 
 type Employee = InferSelectModel<typeof employees>
 type NewEmployee = InferInsertModel<typeof employees>
@@ -21,6 +31,8 @@ export interface ListEmployeesParams {
     department?: string
     /** When set, restricts results to the subtree rooted at this employee (dept_head scoping). */
     managerEmployeeId?: string
+    /** Compact filter string: "field:OP(value);..." (designation, nationality, salary, joinDate, visaExpiry). */
+    filter?: string
     limit: number
     offset: number
     after?: string // cursor: base64url-encoded { c: createdAt, i: id }
@@ -52,7 +64,7 @@ export async function getSubtreeEmployeeIds(tenantId: string, rootId: string): P
 }
 
 export async function listEmployees(params: ListEmployeesParams) {
-    const { tenantId, search, status, department, managerEmployeeId, limit, offset, after } = params
+    const { tenantId, search, status, department, managerEmployeeId, filter, limit, offset, after } = params
 
     const conditions = [eq(employees.tenantId, tenantId), eq(employees.isArchived, false)]
 
@@ -87,6 +99,11 @@ export async function listEmployees(params: ListEmployeesParams) {
             // Fall back to ILIKE for employee number if input is all non-word chars
             conditions.push(ilike(employees.employeeNo, `%${trimmed}%`))
         }
+    }
+
+    if (filter) {
+        buildDrizzleFilters(parseFilterString(filter), EMPLOYEE_FIELD_MAP, EMPLOYEE_ALLOWED)
+            .forEach(c => conditions.push(c))
     }
 
     // Cursor-based pagination (keyset) — takes priority over offset when 'after' is provided

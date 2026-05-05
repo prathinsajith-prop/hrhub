@@ -42,8 +42,10 @@ export async function exitRoutes(fastify: any) {
 
     // GET /api/v1/exit
     fastify.get('/exit', { ...auth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
-        const { limit = '50', offset = '0', status } = request.query as Record<string, string>
-        const result = await getExitRequests(request.user.tenantId, { limit: Number(limit), offset: Number(offset), status })
+        const { limit = '50', offset = '0', status, q, filter } = request.query as Record<string, string>
+        const result = await getExitRequests(request.user.tenantId, {
+            limit: Number(limit), offset: Number(offset), status, q, filter,
+        })
         return reply.send(result)
     })
 

@@ -1,18 +1,32 @@
-import { eq, and, ilike, asc, desc, isNull, sql, getTableColumns, ne } from 'drizzle-orm'
+import { eq, and, ilike, asc, desc, isNull, sql, getTableColumns, ne, or } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { recruitmentJobs, jobApplications } from '../../db/schema/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
+import { parseFilterString, buildDrizzleFilters } from '../../lib/filters.js'
 import type { InferInsertModel } from 'drizzle-orm'
+
+const JOB_FIELD_MAP = { status: recruitmentJobs.status, department: recruitmentJobs.department }
+const JOB_ALLOWED = new Set(Object.keys(JOB_FIELD_MAP))
+
+const APP_FIELD_MAP = { stage: jobApplications.stage, jobId: jobApplications.jobId }
+const APP_ALLOWED = new Set(Object.keys(APP_FIELD_MAP))
 
 type NewJob = InferInsertModel<typeof recruitmentJobs>
 type NewApplication = InferInsertModel<typeof jobApplications>
 
-export async function listJobs(tenantId: string, params: { status?: string; department?: string; limit: number; offset: number }) {
-    const { status, department, limit, offset } = params
+export async function listJobs(tenantId: string, params: { status?: string; department?: string; q?: string; filter?: string; limit: number; offset: number }) {
+    const { status, department, q, filter, limit, offset } = params
     const conditions = [eq(recruitmentJobs.tenantId, tenantId), isNull(recruitmentJobs.deletedAt)]
     if (status) conditions.push(eq(recruitmentJobs.status, status as never))
     if (department) conditions.push(eq(recruitmentJobs.department, department))
+    if (q) {
+        const term = `%${q.trim()}%`
+        conditions.push(or(ilike(recruitmentJobs.title, term), ilike(recruitmentJobs.department, term))!)
+    }
+    if (filter) {
+        buildDrizzleFilters(parseFilterString(filter), JOB_FIELD_MAP, JOB_ALLOWED).forEach(c => conditions.push(c))
+    }
 
     const rows = await db.select({ ...getTableColumns(recruitmentJobs), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
         .from(recruitmentJobs)
@@ -52,11 +66,18 @@ export async function updateJob(tenantId: string, id: string, data: Partial<NewJ
     return row ?? null
 }
 
-export async function listApplications(tenantId: string, params: { jobId?: string; stage?: string; limit: number; offset: number }) {
-    const { jobId, stage, limit, offset } = params
+export async function listApplications(tenantId: string, params: { jobId?: string; stage?: string; q?: string; filter?: string; limit: number; offset: number }) {
+    const { jobId, stage, q, filter, limit, offset } = params
     const conditions = [eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)]
     if (jobId) conditions.push(eq(jobApplications.jobId, jobId))
     if (stage) conditions.push(eq(jobApplications.stage, stage as never))
+    if (q) {
+        const term = `%${q.trim()}%`
+        conditions.push(or(ilike(jobApplications.name, term), ilike(jobApplications.email, term))!)
+    }
+    if (filter) {
+        buildDrizzleFilters(parseFilterString(filter), APP_FIELD_MAP, APP_ALLOWED).forEach(c => conditions.push(c))
+    }
 
     const rows = await db.select({ ...getTableColumns(jobApplications), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
         .from(jobApplications)

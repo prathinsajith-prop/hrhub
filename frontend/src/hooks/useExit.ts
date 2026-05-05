@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
+import { buildFilterQueryString, type AppliedFiltersMap } from '@/lib/filters'
 
 export interface ExitRequest {
     id: string
@@ -48,13 +49,18 @@ export interface SettlementPreview {
     totalSettlement: number
 }
 
-export function useExitRequests(params: { status?: string } = {}) {
+export function useExitRequests(params: { status?: string; q?: string; filters?: AppliedFiltersMap } = {}) {
     const tenantId = useAuthStore(s => s.tenant?.id)
-    const { status } = params
+    const { status, q, filters } = params
     const qs = new URLSearchParams()
     if (status) qs.set('status', status)
+    if (q) qs.set('q', q)
+    if (filters && Object.keys(filters).length > 0) {
+        const filterStr = buildFilterQueryString(filters)
+        if (filterStr) qs.set('filter', filterStr)
+    }
     return useQuery({
-        queryKey: ['exit', tenantId, status],
+        queryKey: ['exit', tenantId, status, q, filters],
         queryFn: () => api.get<{ data: ExitRequest[]; total: number; hasMore: boolean }>(`/exit?${qs}`).then(r => r.data ?? []),
         enabled: !!tenantId,
     })

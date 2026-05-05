@@ -17,7 +17,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatDate, cn } from '@/lib/utils'
 import { useVisas, useAdvanceVisaStep, useCancelVisa, useRecalcVisaUrgency, useUpdateVisa } from '@/hooks/useVisa'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
-import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { type FilterConfig } from '@/lib/filters'
 import type { VisaApplication, VisaStatus } from '@/types'
 import { toast } from '@/components/ui/overlays'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -434,14 +434,9 @@ export function VisaPage() {
       activeTab === 'active' ? visaApplications.filter((v) => v.status === 'active' || v.status === 'expiring_soon') :
         visaApplications
 
-  const filteredVisas = useMemo(
-    () => applyClientFilters(filtered as unknown as Record<string, unknown>[], {
-      searchInput: '',
-      appliedFilters: {},
-      searchFields: [],
-    }) as unknown as VisaApplication[],
-    [filtered],
-  )
+  // Server-side filtering via useVisas({ q, filters }) handles all filter logic.
+  // filtered is only for the tab split (all / critical / active).
+  const filteredVisas = filtered
 
   const activeCount = visaApplications.filter((v) => v.status === 'active').length
   const processingCount = visaApplications.filter((v) => !['active', 'expired', 'cancelled'].includes(v.status)).length

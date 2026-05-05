@@ -15,7 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { useLeaveRequests, useApproveLeave, useLeaveBalance } from '@/hooks/useLeave'
 import { EmployeeSelect } from '@/components/shared'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
-import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { type FilterConfig } from '@/lib/filters'
 import { ApplyLeaveDialog } from '@/components/shared/action-dialogs'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
@@ -195,14 +195,8 @@ export function LeavePage() {
         finally { setExporting(false) }
     }
 
-    const filteredLeaves = useMemo(
-        () => applyClientFilters(leaves as unknown as Record<string, unknown>[], {
-            searchInput: '',
-            appliedFilters: {},
-            searchFields: [],
-        }),
-        [leaves],
-    )
+    // Server-side filtering via useLeaveRequests({ q, filters }) handles all filter logic.
+    const filteredLeaves = leaves
 
     const columns: ColumnDef<LeaveRequest>[] = useMemo(() => [
         {

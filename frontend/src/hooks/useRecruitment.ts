@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { buildFilterQueryString, type AppliedFiltersMap } from '@/lib/filters'
 
-interface JobParams { status?: string; department?: string; limit?: number; offset?: number }
-interface AppParams { jobId?: string; stage?: string; limit?: number; offset?: number }
+interface JobParams { status?: string; department?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number }
+interface AppParams { jobId?: string; stage?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number }
 
 function toQS(params: Record<string, string | number | undefined>) {
     const q = new URLSearchParams()
@@ -11,9 +12,16 @@ function toQS(params: Record<string, string | number | undefined>) {
 }
 
 export function useJobs(params: JobParams = {}) {
+    const { filters, q, ...rest } = params
+    const qs = new URLSearchParams(toQS({ ...rest, limit: rest.limit ?? 20, offset: rest.offset ?? 0 }))
+    if (q) qs.set('q', q)
+    if (filters && Object.keys(filters).length > 0) {
+        const filterStr = buildFilterQueryString(filters)
+        if (filterStr) qs.set('filter', filterStr)
+    }
     return useQuery({
         queryKey: ['jobs', params],
-        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/jobs?${toQS({ ...params, limit: params.limit ?? 20, offset: params.offset ?? 0 })}`),
+        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/jobs?${qs}`),
     })
 }
 
@@ -26,9 +34,16 @@ export function useCreateJob() {
 }
 
 export function useApplications(params: AppParams = {}) {
+    const { filters, q, ...rest } = params
+    const qs = new URLSearchParams(toQS({ ...rest, limit: rest.limit ?? 20, offset: rest.offset ?? 0 }))
+    if (q) qs.set('q', q)
+    if (filters && Object.keys(filters).length > 0) {
+        const filterStr = buildFilterQueryString(filters)
+        if (filterStr) qs.set('filter', filterStr)
+    }
     return useQuery({
         queryKey: ['applications', params],
-        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/applications?${toQS({ ...params, limit: params.limit ?? 20, offset: params.offset ?? 0 })}`),
+        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/applications?${qs}`),
     })
 }
 

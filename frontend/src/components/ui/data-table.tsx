@@ -12,13 +12,14 @@ import {
   type RowSelectionState,
   type Row,
 } from '@tanstack/react-table'
-import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X } from 'lucide-react'
+import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X, Filter } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
 import { Checkbox } from './checkbox'
 import { SearchInput } from '@/components/shared/SearchInput'
 import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
-import type { FilterConfig, QuickFilter } from '@/lib/filters'
+import { QuickColumnFilter } from '@/components/QuickColumnFilter'
+import type { FilterConfig, QuickFilter, AppliedFilter } from '@/lib/filters'
 import type { UseSearchFiltersReturn } from '@/hooks/useSearchFilters'
 
 export interface DataTableAdvancedFilter {
@@ -27,6 +28,13 @@ export interface DataTableAdvancedFilter {
   quickFilters?: QuickFilter[]
   placeholder?: string
   onApply?: () => void
+}
+
+interface DataTableColumnMeta {
+  /** When true, renders a funnel icon in the column header to open a QuickColumnFilter popover. */
+  filterable?: boolean
+  /** Maps to the filter key in the filters record provided via `columnFilters`. */
+  filterKey?: string
 }
 
 interface DataTableProps<TData, TValue> {
@@ -47,6 +55,16 @@ interface DataTableProps<TData, TValue> {
   getRowId?: (row: TData, index: number) => string
   /** When provided, replaces the basic SearchInput with the AdvancedSearchBar (search on left, Filters button on right). */
   advancedFilter?: DataTableAdvancedFilter
+  /**
+   * Available filter configs keyed by filter_key. When a column has
+   * `meta: { filterable: true, filterKey: 'status' }` and this record has a
+   * `status` entry, a funnel icon is rendered in the header.
+   */
+  columnFilterConfigs?: Record<string, FilterConfig>
+  /** Applied column filters (controlled from parent). */
+  appliedColumnFilters?: Record<string, AppliedFilter>
+  /** Called when a column filter is applied or cleared. */
+  onColumnFilterChange?: (filterKey: string, filter: AppliedFilter | null) => void
 }
 
 export function DataTable<TData, TValue>({
@@ -63,6 +81,9 @@ export function DataTable<TData, TValue>({
   bulkActions,
   getRowId,
   advancedFilter,
+  columnFilterConfigs,
+  appliedColumnFilters,
+  onColumnFilterChange,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -197,22 +218,39 @@ export function DataTable<TData, TValue>({
                       style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
                     >
                       {header.isPlaceholder ? null : (
-                        <div
-                          className={cn('flex items-center gap-1', header.column.getCanSort() && 'cursor-pointer select-none hover:text-foreground transition-colors')}
-                          onClick={header.column.getToggleSortingHandler()}
-                        >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                          {header.column.getCanSort() && (
-                            <span className="ml-0.5">
-                              {header.column.getIsSorted() === 'asc' ? (
-                                <ChevronUp className="h-3 w-3" />
-                              ) : header.column.getIsSorted() === 'desc' ? (
-                                <ChevronDown className="h-3 w-3" />
-                              ) : (
-                                <ChevronsUpDown className="h-3 w-3 opacity-40" />
-                              )}
-                            </span>
-                          )}
+                        <div className="flex items-center gap-0.5">
+                          <div
+                            className={cn('flex items-center gap-1', header.column.getCanSort() && 'cursor-pointer select-none hover:text-foreground transition-colors')}
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                            {header.column.getCanSort() && (
+                              <span className="ml-0.5">
+                                {header.column.getIsSorted() === 'asc' ? (
+                                  <ChevronUp className="h-3 w-3" />
+                                ) : header.column.getIsSorted() === 'desc' ? (
+                                  <ChevronDown className="h-3 w-3" />
+                                ) : (
+                                  <ChevronsUpDown className="h-3 w-3 opacity-40" />
+                                )}
+                              </span>
+                            )}
+                          </div>
+                          {(() => {
+                            const meta = header.column.columnDef.meta as DataTableColumnMeta | undefined
+                            if (!meta?.filterable || !meta.filterKey) return null
+                            const cfg = columnFilterConfigs?.[meta.filterKey]
+                            if (!cfg) return null
+                            return (
+                              <QuickColumnFilter
+                                filterConfig={cfg}
+                                currentValue={appliedColumnFilters?.[meta.filterKey]}
+                                onApply={(key, filter) => onColumnFilterChange?.(key, filter)}
+                              >
+                                <Filter className="h-3 w-3" />
+                              </QuickColumnFilter>
+                            )
+                          })()}
                         </div>
                       )}
                     </th>

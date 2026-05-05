@@ -16,8 +16,8 @@ export default async function (fastify: any): Promise<void> {
 
     // GET /api/v1/jobs
     fastify.get('/jobs', { ...auth, schema: { tags: ['Recruitment'] } }, async (request, reply) => {
-        const { status, department, limit = '20', offset = '0' } = request.query as Record<string, string>
-        const result = await listJobs(request.user.tenantId, { status, department, limit: Number(limit), offset: Number(offset) })
+        const { status, department, q, filter, limit = '20', offset = '0' } = request.query as Record<string, string>
+        const result = await listJobs(request.user.tenantId, { status, department, q, filter, limit: Number(limit), offset: Number(offset) })
         return reply.send(result)
     })
 
@@ -131,8 +131,8 @@ export default async function (fastify: any): Promise<void> {
 
     // GET /api/v1/applications
     fastify.get('/applications', { ...auth, schema: { tags: ['Recruitment'] } }, async (request, reply) => {
-        const { jobId, stage, limit = '20', offset = '0' } = request.query as Record<string, string>
-        const result = await listApplications(request.user.tenantId, { jobId, stage, limit: Number(limit), offset: Number(offset) })
+        const { jobId, stage, q, filter, limit = '20', offset = '0' } = request.query as Record<string, string>
+        const result = await listApplications(request.user.tenantId, { jobId, stage, q, filter, limit: Number(limit), offset: Number(offset) })
         return reply.send(result)
     })
 

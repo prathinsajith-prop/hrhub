@@ -26,7 +26,7 @@ import {
 import { EmployeeSelect } from '@/components/shared'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
-import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { type FilterConfig } from '@/lib/filters'
 import { usePermissions } from '@/hooks/usePermissions'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { toast } from '@/components/ui/overlays'
@@ -151,7 +151,16 @@ export function ExitPage() {
     })
 
     const exitStatus = (exitSearch.appliedFilters.status?.value as string | undefined) || undefined
-    const { data: exits, isLoading, isFetching, refetch } = useExitRequests({ status: exitStatus })
+    const serverExitFilters = useMemo(() => {
+        const { status: _s, ...rest } = exitSearch.appliedFilters
+        return rest
+    }, [exitSearch.appliedFilters])
+
+    const { data: exits, isLoading, isFetching, refetch } = useExitRequests({
+        status: exitStatus,
+        q: exitSearch.searchInput || undefined,
+        filters: serverExitFilters,
+    })
 
     const previewEnabled = !!form.employeeId && !!form.exitDate && !!form.exitType
     const { data: preview, isLoading: previewLoading } = useSettlementPreview(
@@ -180,14 +189,8 @@ export function ExitPage() {
         [exits],
     )
 
-    const filteredExits = useMemo(() => {
-        const { status: _omitStatus, ...exitFiltersWithoutStatus } = exitSearch.appliedFilters
-        return applyClientFilters(exitList as unknown as Record<string, unknown>[], {
-            searchInput: exitSearch.searchInput,
-            appliedFilters: exitFiltersWithoutStatus,
-            searchFields: ['employeeName', 'exitType', 'reason'],
-        })
-    }, [exitList, exitSearch.appliedFilters, exitSearch.searchInput])
+    // Server-side filtering now handles q, status, exitType, exitDate via useExitRequests.
+    const filteredExits = exitList
 
     const pending = exitList.filter((e) => e.status === 'pending').length
     const approved = exitList.filter((e) => e.status === 'approved').length
