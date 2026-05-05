@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseUuidParam } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
 import {
     listLoans,
@@ -52,7 +53,8 @@ export default async function loansRoutes(fastify: any): Promise<void> {
 
     // GET /api/v1/loans/:id
     fastify.get('/:id', auth, async (request: any, reply: any) => {
-        const { id } = request.params as { id: string }
+        const id = parseUuidParam(request.params, 'id', reply)
+        if (!id) return
         const row = await getLoan(request.user.tenantId, id)
         if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
 
@@ -102,7 +104,8 @@ export default async function loansRoutes(fastify: any): Promise<void> {
 
     // POST /api/v1/loans/:id/approve
     fastify.post('/:id/approve', hrOnly, async (request: any, reply: any) => {
-        const { id } = request.params as { id: string }
+        const id = parseUuidParam(request.params, 'id', reply)
+        if (!id) return
         const body = request.body as { startDate?: string }
         const updated = await approveLoan(request.user.tenantId, id, request.user.id, body.startDate)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
@@ -123,7 +126,8 @@ export default async function loansRoutes(fastify: any): Promise<void> {
 
     // POST /api/v1/loans/:id/reject
     fastify.post('/:id/reject', hrOnly, async (request: any, reply: any) => {
-        const { id } = request.params as { id: string }
+        const id = parseUuidParam(request.params, 'id', reply)
+        if (!id) return
         const body = request.body as { notes?: string }
         const updated = await rejectLoan(request.user.tenantId, id, body.notes)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
@@ -144,7 +148,8 @@ export default async function loansRoutes(fastify: any): Promise<void> {
 
     // DELETE /api/v1/loans/:id — soft delete (HR only, pending loans only)
     fastify.delete('/:id', hrOnly, async (request: any, reply: any) => {
-        const { id } = request.params as { id: string }
+        const id = parseUuidParam(request.params, 'id', reply)
+        if (!id) return
         const row = await deleteLoan(request.user.tenantId, id)
         if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
         recordActivity({
@@ -164,7 +169,8 @@ export default async function loansRoutes(fastify: any): Promise<void> {
 
     // POST /api/v1/loans/:id/payment — record monthly deduction
     fastify.post('/:id/payment', hrOnly, async (request: any, reply: any) => {
-        const { id } = request.params as { id: string }
+        const id = parseUuidParam(request.params, 'id', reply)
+        if (!id) return
         const updated = await recordLoanPayment(request.user.tenantId, id)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
         recordActivity({

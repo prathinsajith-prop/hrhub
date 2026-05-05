@@ -25,36 +25,38 @@ export async function listTraining(
     if (type) conditions.push(eq(trainingRecords.type, type as never))
     if (search) conditions.push(ilike(trainingRecords.title, `%${search}%`))
 
-    const rows = await db
-        .select({
-            ...getTableColumns(trainingRecords),
-            employeeName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
-            employeeNo: employees.employeeNo,
-            employeeDepartment: employees.department,
-            total: sql<number>`COUNT(*) OVER()`.as('total'),
-        })
-        .from(trainingRecords)
-        .leftJoin(employees, eq(employees.id, trainingRecords.employeeId))
-        .where(and(...conditions))
-        .orderBy(desc(trainingRecords.startDate), desc(trainingRecords.createdAt))
-        .limit(limit)
-        .offset(offset)
-
-    const total = rows.length > 0 ? Number(rows[0]!.total) : 0
-
-    // KPI summary — scoped to the same employee filter so non-HR callers don't see company-wide stats
     const kpiConditions = [eq(trainingRecords.tenantId, tenantId), isNull(trainingRecords.deletedAt)]
     if (employeeId) kpiConditions.push(eq(trainingRecords.employeeId, employeeId))
-    const [kpi] = await db
-        .select({
-            total: sql<number>`COUNT(*)`.as('total'),
-            planned: sql<number>`COUNT(*) FILTER (WHERE status = 'planned')`.as('planned'),
-            in_progress: sql<number>`COUNT(*) FILTER (WHERE status = 'in_progress')`.as('in_progress'),
-            completed: sql<number>`COUNT(*) FILTER (WHERE status = 'completed')`.as('completed'),
-            totalCost: sql<number>`COALESCE(SUM(CAST(cost AS NUMERIC)), 0)`.as('totalCost'),
-        })
-        .from(trainingRecords)
-        .where(and(...kpiConditions))
+
+    const [rows, [kpi]] = await Promise.all([
+        db
+            .select({
+                ...getTableColumns(trainingRecords),
+                employeeName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
+                employeeNo: employees.employeeNo,
+                employeeDepartment: employees.department,
+                total: sql<number>`COUNT(*) OVER()`.as('total'),
+            })
+            .from(trainingRecords)
+            .leftJoin(employees, eq(employees.id, trainingRecords.employeeId))
+            .where(and(...conditions))
+            .orderBy(desc(trainingRecords.startDate), desc(trainingRecords.createdAt))
+            .limit(limit)
+            .offset(offset),
+        // KPI summary — scoped to the same employee filter so non-HR callers don't see company-wide stats
+        db
+            .select({
+                total: sql<number>`COUNT(*)`.as('total'),
+                planned: sql<number>`COUNT(*) FILTER (WHERE status = 'planned')`.as('planned'),
+                in_progress: sql<number>`COUNT(*) FILTER (WHERE status = 'in_progress')`.as('in_progress'),
+                completed: sql<number>`COUNT(*) FILTER (WHERE status = 'completed')`.as('completed'),
+                totalCost: sql<number>`COALESCE(SUM(CAST(cost AS NUMERIC)), 0)`.as('totalCost'),
+            })
+            .from(trainingRecords)
+            .where(and(...kpiConditions)),
+    ])
+
+    const total = rows.length > 0 ? Number(rows[0]!.total) : 0
 
     return {
         data: rows.map(r => { const { total: _, ...rest } = r; return rest }),
