@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useId, useState, useEffect } from 'react'
 import { Check, ChevronDown, X, Loader2 } from 'lucide-react'
 import { useEmployees, useEmployee } from '@/hooks/useEmployees'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -51,6 +51,7 @@ export function EmployeeSelect({
     const [open, setOpen] = useState(false)
     const [search, setSearch] = useState('')
     const [debouncedSearch, setDebouncedSearch] = useState('')
+    const listboxId = useId()
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search), 300)
@@ -86,6 +87,7 @@ export function EmployeeSelect({
                     type="button"
                     role="combobox"
                     aria-expanded={open}
+                    aria-controls={listboxId}
                     disabled={disabled}
                     className={cn(
                         'flex h-9 w-full items-center justify-between rounded-md border bg-background px-3 py-2 text-sm ring-offset-background transition-all duration-150',
@@ -137,7 +139,7 @@ export function EmployeeSelect({
                         onValueChange={setSearch}
                         className="h-9 text-sm"
                     />
-                    <CommandList className="max-h-56 overflow-y-auto">
+                    <CommandList id={listboxId} className="max-h-56 overflow-y-auto">
                         {isFetching ? (
                             <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

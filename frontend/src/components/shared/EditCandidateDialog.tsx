@@ -6,7 +6,7 @@ import { NumericInput } from '@/components/ui/numeric-input'
 import { Label } from '@/components/ui/primitives'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
 import { useUpdateApplication } from '@/hooks/useRecruitment'
-import { CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
+import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import type { Candidate } from '@/types'
 
 /**
@@ -126,7 +126,7 @@ export function EditCandidateDialog({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label>Phone</Label>
-                            <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+                            <PhoneInput value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Nationality</Label>

@@ -4,7 +4,7 @@ const PAGE_SIZE = 10
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
-import { Plus, Briefcase, Users, Clock, TrendingUp, Star, DollarSign, Eye, Edit2, UserCheck, RefreshCcw } from 'lucide-react'
+import { Plus, Briefcase, Users, Clock, TrendingUp, Star, Mail, Phone, Eye, Edit2, UserCheck, RefreshCcw } from 'lucide-react'
 import {
   DndContext,
   PointerSensor,
@@ -39,9 +39,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { NewJobDialog, EditJobDialog } from '@/components/shared/action-dialogs'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
-import { type FilterConfig } from '@/lib/filters'
+import { type FilterConfig, buildFilterQueryString } from '@/lib/filters'
+import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
 import { JOB_STATUS_OPTIONS } from '@/lib/options'
-import { CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
+import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { exportRecruitment } from '@/lib/export'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
 
@@ -54,17 +55,24 @@ const JOB_FILTERS: FilterConfig[] = [
   { name: 'minSalary', label: 'Min salary (AED)', type: 'number_range', field: 'minSalary', min: 0, prefix: 'AED' },
   { name: 'closingDate', label: 'Closing date', type: 'date_range', field: 'closingDate' },
 ]
+
+const CANDIDATE_FILTERS: FilterConfig[] = [
+  { name: 'nationality', label: 'Nationality', type: 'text', field: 'nationality' },
+  { name: 'experience', label: 'Experience (yrs)', type: 'number_range', field: 'experience', min: 0 },
+  { name: 'expectedSalary', label: 'Expected salary (AED)', type: 'number_range', field: 'expectedSalary', min: 0, prefix: 'AED' },
+  { name: 'score', label: 'Score', type: 'number_range', field: 'score', min: 0, max: 100 },
+]
 import type { Candidate, ApplicationStage, Job } from '@/types'
 import type { ColumnDef } from '@tanstack/react-table'
 
-const stages: { id: ApplicationStage; label: string; bgClass: string }[] = [
-  { id: 'received', label: 'Received', bgClass: 'bg-muted/50 border-border' },
-  { id: 'screening', label: 'Screening', bgClass: 'bg-info/5 border-info/20' },
-  { id: 'interview', label: 'Interview', bgClass: 'bg-warning/5 border-warning/20' },
-  { id: 'assessment', label: 'Assessment', bgClass: 'bg-primary/5 border-primary/20' },
-  { id: 'offer', label: 'Offer', bgClass: 'bg-success/5 border-success/20' },
-  { id: 'pre_boarding', label: 'Pre-boarding', bgClass: 'bg-accent/50 border-accent' },
-  { id: 'rejected', label: 'Rejected', bgClass: 'bg-destructive/5 border-destructive/20' },
+const stages: { id: ApplicationStage; label: string; bgClass: string; dotClass: string }[] = [
+  { id: 'received', label: 'Received', bgClass: 'bg-muted/50 border-border', dotClass: 'bg-slate-400' },
+  { id: 'screening', label: 'Screening', bgClass: 'bg-info/5 border-info/20', dotClass: 'bg-info' },
+  { id: 'interview', label: 'Interview', bgClass: 'bg-warning/5 border-warning/20', dotClass: 'bg-warning' },
+  { id: 'assessment', label: 'Assessment', bgClass: 'bg-primary/5 border-primary/20', dotClass: 'bg-primary' },
+  { id: 'offer', label: 'Offer', bgClass: 'bg-success/5 border-success/20', dotClass: 'bg-success' },
+  { id: 'pre_boarding', label: 'Pre-boarding', bgClass: 'bg-accent/50 border-accent', dotClass: 'bg-emerald-500' },
+  { id: 'rejected', label: 'Rejected', bgClass: 'bg-destructive/5 border-destructive/20', dotClass: 'bg-destructive' },
 ]
 
 const CandidateCard = memo(function CandidateCard({
@@ -76,7 +84,7 @@ const CandidateCard = memo(function CandidateCard({
   isDragOverlay = false,
 }: {
   candidate: Candidate
-  onMove: (id: string, stage: ApplicationStage) => void
+  onMove: (candidate: Candidate, stage: ApplicationStage) => void
   onConvert?: (candidate: Candidate) => void
   onEdit?: (candidate: Candidate) => void
   draggable?: boolean
@@ -110,19 +118,22 @@ const CandidateCard = memo(function CandidateCard({
         isDragOverlay && 'ring-2 ring-primary shadow-lg cursor-grabbing rotate-2',
       )}
     >
-      <div className="flex items-start justify-between mb-2">
+      {/* Header: avatar + name + score + edit */}
+      <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Avatar className="h-7 w-7 shrink-0">
-            <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{getInitials(candidate.name)}</AvatarFallback>
+          <Avatar className="h-8 w-8 shrink-0">
+            <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">{getInitials(candidate.name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-foreground truncate">{candidate.name}</p>
-            <p className="text-[10px] text-muted-foreground truncate">{candidate.nationality}</p>
+            <p className="text-xs font-semibold text-foreground leading-tight truncate">{candidate.name}</p>
+            {candidate.nationality && (
+              <p className="text-[10px] text-muted-foreground truncate mt-0.5">{candidate.nationality}</p>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
           <Star className="h-3 w-3 text-warning fill-warning" />
-          <span className="text-[10px] font-medium">{candidate.score}</span>
+          <span className="text-[10px] font-semibold text-foreground">{candidate.score}</span>
           {onEdit && !isDragOverlay && (
             <button
               type="button"
@@ -136,13 +147,32 @@ const CandidateCard = memo(function CandidateCard({
           )}
         </div>
       </div>
-      <div className="space-y-1 mb-3">
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-          <Clock className="h-3 w-3" /> {candidate.experience}y exp
+
+      {/* Job + experience row */}
+      {(candidate.jobTitle || candidate.experience !== undefined) && (
+        <div className="flex items-center gap-1.5 mb-2 px-0.5">
+          <Briefcase className="h-3 w-3 text-muted-foreground shrink-0" />
+          <p className="text-[10px] text-foreground/80 font-medium truncate flex-1">
+            {candidate.jobTitle ?? 'Open Position'}
+          </p>
+          {candidate.experience !== undefined && (
+            <span className="text-[10px] text-muted-foreground shrink-0 flex items-center gap-0.5">
+              <Clock className="h-2.5 w-2.5" />{candidate.experience}y
+            </span>
+          )}
         </div>
-        {candidate.expectedSalary && (
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <DollarSign className="h-3 w-3" /> {formatCurrency(candidate.expectedSalary)}
+      )}
+
+      {/* Contact info */}
+      <div className="space-y-1 mb-3 bg-muted/40 rounded-lg p-2">
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground min-w-0">
+          <Mail className="h-3 w-3 shrink-0" />
+          <span className="truncate">{candidate.email}</span>
+        </div>
+        {candidate.phone && (
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <Phone className="h-3 w-3 shrink-0" />
+            <span>{candidate.phone}</span>
           </div>
         )}
       </div>
@@ -152,7 +182,7 @@ const CandidateCard = memo(function CandidateCard({
           variant="secondary"
           className="w-full text-[10px] h-6"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onMove(candidate.id, nextStage.id) }}
+          onClick={(e) => { e.stopPropagation(); onMove(candidate, nextStage.id) }}
         >
           Move to {nextStage.label} &rarr;
         </Button>
@@ -191,6 +221,7 @@ function StageColumn({
   showAdd,
   onAdd,
   addDisabled,
+  kanbanParams,
 }: {
   stage: typeof stages[number]
   onMove: (candidate: Candidate, targetStage: ApplicationStage) => void
@@ -199,10 +230,11 @@ function StageColumn({
   showAdd: boolean
   onAdd: () => void
   addDisabled: boolean
+  kanbanParams?: { q?: string; filter?: string }
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `stage:${stage.id}` })
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } = useKanbanStage(stage.id)
+  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } = useKanbanStage(stage.id, kanbanParams)
 
   const candidates: Candidate[] = data?.pages.flatMap((p) => p.data) ?? []
   const total = data?.pages[0]?.total ?? 0
@@ -229,7 +261,10 @@ function StageColumn({
       )}
     >
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-foreground">{stage.label}</p>
+        <div className="flex items-center gap-1.5">
+          <div className={cn('h-2 w-2 rounded-full shrink-0', stage.dotClass)} />
+          <p className="text-xs font-semibold text-foreground">{stage.label}</p>
+        </div>
         <div className="flex items-center gap-1">
           {showAdd && (
             <Button
@@ -269,10 +304,7 @@ function StageColumn({
               <CandidateCard
                 key={c.id}
                 candidate={c}
-                onMove={(id, targetStage) => {
-                  const found = candidates.find((x: Candidate) => x.id === id)
-                  if (found) onMove(found, targetStage)
-                }}
+                onMove={onMove}
                 onConvert={onConvert}
                 onEdit={onEdit}
                 draggable
@@ -429,7 +461,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
             </div>
             <div className="space-y-1.5">
               <Label>Phone</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+971 ..." />
+              <PhoneInput value={phone} onChange={setPhone} />
             </div>
             <div className="space-y-1.5">
               <Label>Nationality</Label>
@@ -584,6 +616,10 @@ export function RecruitmentPage() {
     storageKey: 'hrhub.recruitment.jobs.searchHistory',
     availableFilters: JOB_FILTERS,
   })
+  const candidateSearch = useSearchFilters({
+    storageKey: 'hrhub.recruitment.candidates.searchHistory',
+    availableFilters: CANDIDATE_FILTERS,
+  })
 
   const jobDept = (jobSearch.appliedFilters.department?.value as string | undefined) || undefined
 
@@ -594,9 +630,19 @@ export function RecruitmentPage() {
     return rest
   }, [jobSearch.appliedFilters])
 
+  const candidateFilterStr = useMemo(() => buildFilterQueryString(candidateSearch.appliedFilters) || undefined, [candidateSearch.appliedFilters])
+  const candidateParams = useMemo(() => ({
+    q: candidateSearch.searchInput || undefined,
+    filter: candidateFilterStr,
+  }), [candidateSearch.searchInput, candidateFilterStr])
+
   const [jobsOffset, setJobsOffset] = useState(0)
   const jobsFilterKey = (jobSearch.searchInput ?? '') + '||' + JSON.stringify(serverJobFilters)
-  useEffect(() => { setJobsOffset(0) }, [jobsFilterKey])
+  const [prevJobsFilterKey, setPrevJobsFilterKey] = useState(jobsFilterKey)
+  if (jobsFilterKey !== prevJobsFilterKey) {
+    setPrevJobsFilterKey(jobsFilterKey)
+    setJobsOffset(0)
+  }
 
   const { data: jobsData, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({
     limit: PAGE_SIZE,
@@ -609,9 +655,9 @@ export function RecruitmentPage() {
   // Minimal query just to get the grand total for the KPI card.
   const { data: appsTotalData } = useApplications({ limit: 1 })
   // Per-stage queries for KPI cards — TanStack deduplicates with StageColumn's own calls.
-  const { data: interviewData } = useKanbanStage('interview')
-  const { data: offerData } = useKanbanStage('offer')
-  const { data: preBoardingData } = useKanbanStage('pre_boarding')
+  const { data: interviewData } = useKanbanStage('interview', candidateParams)
+  const { data: offerData } = useKanbanStage('offer', candidateParams)
+  const { data: preBoardingData } = useKanbanStage('pre_boarding', candidateParams)
   const qc = useQueryClient()
 
   const updateStage = useUpdateApplicationStage()
@@ -704,6 +750,11 @@ export function RecruitmentPage() {
 
       {activeTab === 'pipeline' && (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <AdvancedSearchBar
+            search={candidateSearch}
+            filters={CANDIDATE_FILTERS}
+            placeholder="Search candidates by name or email…"
+          />
           <div className="overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
             <div className="flex gap-3 min-w-max">
               {stages.map(stage => (
@@ -716,6 +767,7 @@ export function RecruitmentPage() {
                   showAdd={stage.id === 'received'}
                   onAdd={() => setAddCandidateOpen(true)}
                   addDisabled={jobs.filter((j) => j.status === 'open').length === 0}
+                  kanbanParams={candidateParams}
                 />
               ))}
             </div>
@@ -723,7 +775,7 @@ export function RecruitmentPage() {
           <DragOverlay dropAnimation={null}>
             {activeDragCandidate && (
               <div className="w-56">
-                <CandidateCard candidate={activeDragCandidate} onMove={(_id, s) => { if (activeDragCandidate) moveCandidate(activeDragCandidate, s) }} isDragOverlay />
+                <CandidateCard candidate={activeDragCandidate} onMove={moveCandidate} isDragOverlay />
               </div>
             )}
           </DragOverlay>
