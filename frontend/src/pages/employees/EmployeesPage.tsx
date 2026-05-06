@@ -70,7 +70,7 @@ const EMPLOYEE_FILTERS: FilterConfig[] = [
   { name: 'department', label: 'Department', type: 'text', field: 'department', icon: Users },
   { name: 'designation', label: 'Designation', type: 'text', field: 'designation' },
   { name: 'nationality', label: 'Nationality', type: 'text', field: 'nationality' },
-  { name: 'salary', label: 'Salary (AED)', type: 'number_range', field: 'totalSalary', min: 0, step: 500, prefix: 'AED' },
+  { name: 'salary', label: 'Salary (AED)', type: 'number_range', field: 'salary', min: 0, step: 500, prefix: 'AED' },
   { name: 'joinDate', label: 'Join date', type: 'date_range', field: 'joinDate' },
   { name: 'visaExpiry', label: 'Visa expiry', type: 'date_range', field: 'visaExpiry', icon: Clock },
   { name: 'emirati', label: 'Emirati only', type: 'toggle', field: 'emiratisationCategory' },

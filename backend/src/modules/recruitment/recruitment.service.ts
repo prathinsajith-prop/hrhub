@@ -1,4 +1,4 @@
-import { eq, and, asc, desc, isNull, sql, getTableColumns, ne } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns, ne } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { recruitmentJobs, jobApplications } from '../../db/schema/index.js'
@@ -122,6 +122,15 @@ export async function createApplication(tenantId: string, jobId: string, data: O
     return row
 }
 
+export async function getApplication(tenantId: string, id: string) {
+    const [row] = await db.select()
+        .from(jobApplications)
+        .where(and(eq(jobApplications.id, id), eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
+        .limit(1)
+    if (!row) return null
+    return { ...row, resumeUrl: (await resolveAvatarUrl(row.resumeUrl)) ?? row.resumeUrl }
+}
+
 export async function updateApplicationStage(tenantId: string, id: string, stage: string) {
     const [row] = await db.update(jobApplications)
         .set(withTimestamp({ stage } as Record<string, unknown>))
@@ -136,14 +145,6 @@ export async function updateApplication(tenantId: string, id: string, data: Part
         .where(and(eq(jobApplications.id, id), eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
         .returning()
     return row ?? null
-}
-
-export async function getApplication(tenantId: string, id: string) {
-    const [row] = await db.select().from(jobApplications)
-        .where(and(eq(jobApplications.id, id), eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
-        .limit(1)
-    if (!row) return null
-    return { ...row, resumeUrl: (await resolveAvatarUrl(row.resumeUrl)) ?? row.resumeUrl }
 }
 
 export async function softDeleteApplication(tenantId: string, id: string) {
