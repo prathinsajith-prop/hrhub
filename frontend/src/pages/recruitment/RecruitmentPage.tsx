@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, memo } from 'react'
+import { useEffect, useRef, useMemo, useState, memo } from 'react'
 
 const PAGE_SIZE = 10
 import { useNavigate } from 'react-router-dom'
@@ -27,7 +27,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
-import { useJobs, useApplications, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useUpdateApplication, useConvertCandidateToEmployee } from '@/hooks/useRecruitment'
+import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useUpdateApplication, useConvertCandidateToEmployee } from '@/hooks/useRecruitment'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/overlays'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
@@ -40,6 +41,7 @@ import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig } from '@/lib/filters'
 import { JOB_STATUS_OPTIONS } from '@/lib/options'
+import { CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { exportRecruitment } from '@/lib/export'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
 
@@ -75,8 +77,8 @@ const CandidateCard = memo(function CandidateCard({
 }: {
   candidate: Candidate
   onMove: (id: string, stage: ApplicationStage) => void
-  onConvert?: (id: string) => void
-  onEdit?: (id: string) => void
+  onConvert?: (candidate: Candidate) => void
+  onEdit?: (candidate: Candidate) => void
   draggable?: boolean
   isDragOverlay?: boolean
 }) {
@@ -87,13 +89,13 @@ const CandidateCard = memo(function CandidateCard({
     : undefined
   const navigate = useNavigate()
 
-  const drag = useDraggable({ id: candidate.id, disabled: !draggable })
+  // Pass the full candidate through drag data so handleDragStart can capture it
+  // for the DragOverlay and optimistic stage update without a flat-array lookup.
+  const drag = useDraggable({ id: candidate.id, data: { candidate }, disabled: !draggable })
   const style: React.CSSProperties = drag.transform
     ? { transform: `translate3d(${drag.transform.x}px, ${drag.transform.y}px, 0)` }
     : {}
   const isDragging = draggable && drag.isDragging
-  // Spread listeners on the whole card so the user can grab it from anywhere,
-  // but keep the inner action buttons clickable (they stop propagation).
   const cardDragProps = draggable && !isDragOverlay ? { ...drag.attributes, ...drag.listeners } : {}
 
   return (
@@ -127,7 +129,7 @@ const CandidateCard = memo(function CandidateCard({
               aria-label="Edit candidate"
               className="ml-1 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); onEdit(candidate.id) }}
+              onClick={(e) => { e.stopPropagation(); onEdit(candidate) }}
             >
               <Edit2 className="h-3 w-3" />
             </button>
@@ -161,7 +163,7 @@ const CandidateCard = memo(function CandidateCard({
           variant="default"
           className="w-full text-[10px] h-6"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onConvert(candidate.id) }}
+          onClick={(e) => { e.stopPropagation(); onConvert(candidate) }}
         >
           <UserCheck className="h-3 w-3 mr-1" /> Convert to Employee
         </Button>
@@ -179,9 +181,10 @@ const CandidateCard = memo(function CandidateCard({
   )
 })
 
+// Each column fetches its own page of candidates and loads more on scroll.
+// This replaces the old approach of loading 500 candidates upfront and slicing client-side.
 function StageColumn({
   stage,
-  candidates,
   onMove,
   onConvert,
   onEdit,
@@ -190,15 +193,32 @@ function StageColumn({
   addDisabled,
 }: {
   stage: typeof stages[number]
-  candidates: Candidate[]
-  onMove: (id: string, stage: ApplicationStage) => void
-  onConvert?: (id: string) => void
-  onEdit?: (id: string) => void
+  onMove: (candidate: Candidate, targetStage: ApplicationStage) => void
+  onConvert?: (candidate: Candidate) => void
+  onEdit?: (candidate: Candidate) => void
   showAdd: boolean
   onAdd: () => void
   addDisabled: boolean
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: `stage:${stage.id}` })
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } = useKanbanStage(stage.id)
+
+  const candidates: Candidate[] = data?.pages.flatMap((p) => p.data) ?? []
+  const total = data?.pages[0]?.total ?? 0
+
+  // Trigger next page when the sentinel scrolls into view.
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasNextPage) return
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting && !isFetchingNextPage) fetchNextPage() },
+      { threshold: 0.1 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
   return (
     <div
       ref={setNodeRef}
@@ -224,18 +244,54 @@ function StageColumn({
             </Button>
           )}
           <span className="h-5 w-5 rounded-full bg-background text-[10px] font-bold flex items-center justify-center border border-border shadow-sm">
-            {candidates.length}
+            {isLoading ? '…' : total}
           </span>
         </div>
       </div>
       <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-        {candidates.map(c => (
-          <CandidateCard key={c.id} candidate={c} onMove={onMove} onConvert={onConvert} onEdit={onEdit} draggable />
-        ))}
-        {candidates.length === 0 && (
-          <div className="border-2 border-dashed border-border rounded-lg py-6 text-center">
-            <p className="text-[10px] text-muted-foreground">{isOver ? 'Drop here' : 'No candidates'}</p>
-          </div>
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-border p-3 space-y-2 animate-pulse">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-7 w-7 rounded-full shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <Skeleton className="h-2.5 w-3/4" />
+                  <Skeleton className="h-2 w-1/2" />
+                </div>
+              </div>
+              <Skeleton className="h-2 w-full" />
+              <Skeleton className="h-6 w-full rounded-md" />
+            </div>
+          ))
+        ) : (
+          <>
+            {candidates.map((c: Candidate) => (
+              <CandidateCard
+                key={c.id}
+                candidate={c}
+                onMove={(id, targetStage) => {
+                  const found = candidates.find((x: Candidate) => x.id === id)
+                  if (found) onMove(found, targetStage)
+                }}
+                onConvert={onConvert}
+                onEdit={onEdit}
+                draggable
+              />
+            ))}
+            {hasNextPage && (
+              <div ref={sentinelRef} className="py-2 flex justify-center">
+                {isFetchingNextPage
+                  ? <div className="flex gap-1">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-1.5 w-1.5 rounded-full" />)}</div>
+                  : <span className="text-[10px] text-muted-foreground">Scroll for more</span>
+                }
+              </div>
+            )}
+            {candidates.length === 0 && (
+              <div className="border-2 border-dashed border-border rounded-lg py-6 text-center">
+                <p className="text-[10px] text-muted-foreground">{isOver ? 'Drop here' : 'No candidates'}</p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -377,7 +433,11 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
             </div>
             <div className="space-y-1.5">
               <Label>Nationality</Label>
-              <Input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder="UAE" />
+              <CountrySelect
+                value={resolveCountryIso(nationality)}
+                onChange={(iso) => setNationality(countryNameFromIso(iso))}
+                placeholder="Select nationality"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Experience (years)</Label>
@@ -518,8 +578,8 @@ export function RecruitmentPage() {
   const [editJob, setEditJob] = useState<Job | null>(null)
   const [closeConfirm, setCloseConfirm] = useState<string[] | null>(null)
   const [addCandidateOpen, setAddCandidateOpen] = useState(false)
-  const [convertCandidateId, setConvertCandidateId] = useState<string | null>(null)
-  const [editCandidateId, setEditCandidateId] = useState<string | null>(null)
+  const [convertCandidate, setConvertCandidate] = useState<Candidate | null>(null)
+  const [editCandidate, setEditCandidate] = useState<Candidate | null>(null)
   const jobSearch = useSearchFilters({
     storageKey: 'hrhub.recruitment.jobs.searchHistory',
     availableFilters: JOB_FILTERS,
@@ -538,7 +598,7 @@ export function RecruitmentPage() {
   const jobsFilterKey = (jobSearch.searchInput ?? '') + '||' + JSON.stringify(serverJobFilters)
   useEffect(() => { setJobsOffset(0) }, [jobsFilterKey])
 
-  const { data: jobsData, isLoading: jobsLoading, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({
+  const { data: jobsData, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({
     limit: PAGE_SIZE,
     offset: jobsOffset,
     department: jobDept,
@@ -546,63 +606,56 @@ export function RecruitmentPage() {
     filters: serverJobFilters,
   })
   const jobsTotal = jobsData?.total ?? 0
-  const { data: appsData, isLoading: appsLoading, refetch: refetchApps } = useApplications({ limit: 100 })
-  const isLoading = jobsLoading || appsLoading
+  // Minimal query just to get the grand total for the KPI card.
+  const { data: appsTotalData } = useApplications({ limit: 1 })
+  // Per-stage queries for KPI cards — TanStack deduplicates with StageColumn's own calls.
+  const { data: interviewData } = useKanbanStage('interview')
+  const { data: offerData } = useKanbanStage('offer')
+  const { data: preBoardingData } = useKanbanStage('pre_boarding')
+  const qc = useQueryClient()
+
   const updateStage = useUpdateApplicationStage()
   const updateJob = useUpdateJob()
   const createJob = useCreateJob()
   const jobs = useMemo<Job[]>(() => (jobsData?.data as Job[]) ?? [], [jobsData?.data])
-  // Server now handles all filtering — no client-side filtering needed.
   const filteredJobs = jobs
-  const candidates: Candidate[] = (appsData?.data as Candidate[]) ?? []
   const jobColumns = useMemo(() => buildJobColumns((j) => setEditJob(j)), [])
 
-  const moveCandidate = (id: string, newStage: ApplicationStage) => {
-    const c = candidates.find((c) => c.id === id)
-    // Toast immediately — the optimistic cache update already reflects the move,
-    // so the user sees the card jump and the confirmation in the same frame.
-    if (c) toast.success('Candidate moved', `${c.name} moved to ${labelFor(newStage)} stage.`)
+  const moveCandidate = (candidate: Candidate, newStage: ApplicationStage) => {
+    toast.success('Candidate moved', `${candidate.name} moved to ${labelFor(newStage)} stage.`)
     updateStage.mutate(
-      { id, stage: newStage },
-      {
-        onError: () => {
-          if (c) toast.error('Move failed', `Could not move ${c.name}. Reverted.`)
-        },
-      },
+      { id: candidate.id, stage: newStage, fromStage: candidate.stage, candidate },
+      { onError: () => toast.error('Move failed', `Could not move ${candidate.name}. Reverted.`) },
     )
   }
 
-  // Drag and drop wiring for the kanban.
-  // 3px activation distance feels snappier while still letting card buttons receive clicks.
+  // Drag and drop — 3px activation lets buttons still receive clicks.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 3 } }))
-  const [activeDragId, setActiveDragId] = useState<string | null>(null)
-  const activeDragCandidate = activeDragId ? candidates.find((c) => c.id === activeDragId) : null
+  const [activeDragCandidate, setActiveDragCandidate] = useState<Candidate | null>(null)
 
   const handleDragStart = (e: DragStartEvent) => {
-    setActiveDragId(String(e.active.id))
+    const c = (e.active.data?.current as { candidate?: Candidate } | undefined)?.candidate ?? null
+    setActiveDragCandidate(c)
   }
   const handleDragEnd = (e: DragEndEvent) => {
-    setActiveDragId(null)
-    const { active, over } = e
-    if (!over) return
+    const candidate = activeDragCandidate
+    setActiveDragCandidate(null)
+    const { over } = e
+    if (!over || !candidate) return
     const overId = String(over.id)
     if (!overId.startsWith('stage:')) return
     const targetStage = overId.slice('stage:'.length) as ApplicationStage
-    const candidate = candidates.find((c) => c.id === String(active.id))
-    if (!candidate || candidate.stage === targetStage) return
+    if (candidate.stage === targetStage) return
     if (targetStage === 'rejected') {
-      toast.warning(
-        'Open profile to reject',
-        'Rejection requires a reason. Open the candidate profile and use the Reject button.',
-      )
+      toast.warning('Open profile to reject', 'Rejection requires a reason. Open the candidate profile and use the Reject button.')
       return
     }
-    moveCandidate(candidate.id, targetStage)
+    moveCandidate(candidate, targetStage)
   }
 
   const openJobs = jobs.filter((j) => j.status === 'open').length
-  const inInterview = candidates.filter((c) => c.stage === 'interview').length
-  const inOffer = candidates.filter((c) => c.stage === 'offer' || c.stage === 'pre_boarding').length
+  const inInterview = interviewData?.pages[0]?.total ?? 0
+  const inOffer = (offerData?.pages[0]?.total ?? 0) + (preBoardingData?.pages[0]?.total ?? 0)
 
   return (
     <PageWrapper>
@@ -611,7 +664,7 @@ export function RecruitmentPage() {
         description={t('recruitment.description')}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={jobsFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => { void refetchJobs(); void refetchApps() }} disabled={jobsFetching}>
+            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={jobsFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => { void refetchJobs(); qc.invalidateQueries({ queryKey: ['applications-kanban'] }) }} disabled={jobsFetching}>
               Refresh
             </Button>
             <ExportDropdown
@@ -633,24 +686,10 @@ export function RecruitmentPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="rounded-xl border p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <Skeleton className="h-3 w-24" />
-                <Skeleton className="h-7 w-7 rounded-lg" />
-              </div>
-              <Skeleton className="h-7 w-16" />
-            </div>
-          ))
-        ) : (
-          <>
-            <KpiCardCompact label="Open Positions" value={openJobs} icon={Briefcase} color="blue" />
-            <KpiCardCompact label="Total Applicants" value={candidates.length} icon={Users} color="cyan" />
-            <KpiCardCompact label="In Interview" value={inInterview} icon={Clock} color="amber" />
-            <KpiCardCompact label="Offer Stage" value={inOffer} icon={TrendingUp} color="green" />
-          </>
-        )}
+        <KpiCardCompact label="Open Positions" value={openJobs} icon={Briefcase} color="blue" />
+        <KpiCardCompact label="Total Applicants" value={appsTotalData?.total ?? 0} icon={Users} color="cyan" />
+        <KpiCardCompact label="In Interview" value={inInterview} icon={Clock} color="amber" />
+        <KpiCardCompact label="Offer Stage" value={inOffer} icon={TrendingUp} color="green" />
       </div>
 
       <Tabs
@@ -667,28 +706,24 @@ export function RecruitmentPage() {
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
             <div className="flex gap-3 min-w-max">
-              {stages.map(stage => {
-                const stageCandidates = candidates.filter((c) => c.stage === stage.id)
-                return (
-                  <StageColumn
-                    key={stage.id}
-                    stage={stage}
-                    candidates={stageCandidates}
-                    onMove={moveCandidate}
-                    onConvert={(id) => setConvertCandidateId(id)}
-                    onEdit={(id) => setEditCandidateId(id)}
-                    showAdd={stage.id === 'received'}
-                    onAdd={() => setAddCandidateOpen(true)}
-                    addDisabled={jobs.filter((j) => j.status === 'open').length === 0}
-                  />
-                )
-              })}
+              {stages.map(stage => (
+                <StageColumn
+                  key={stage.id}
+                  stage={stage}
+                  onMove={moveCandidate}
+                  onConvert={setConvertCandidate}
+                  onEdit={setEditCandidate}
+                  showAdd={stage.id === 'received'}
+                  onAdd={() => setAddCandidateOpen(true)}
+                  addDisabled={jobs.filter((j) => j.status === 'open').length === 0}
+                />
+              ))}
             </div>
           </div>
           <DragOverlay dropAnimation={null}>
             {activeDragCandidate && (
               <div className="w-56">
-                <CandidateCard candidate={activeDragCandidate} onMove={moveCandidate} isDragOverlay />
+                <CandidateCard candidate={activeDragCandidate} onMove={(_id, s) => { if (activeDragCandidate) moveCandidate(activeDragCandidate, s) }} isDragOverlay />
               </div>
             )}
           </DragOverlay>
@@ -758,18 +793,18 @@ export function RecruitmentPage() {
         jobs={jobs.filter((j) => j.status === 'open')}
       />
       <ConvertCandidateDialog
-        key={convertCandidateId ?? 'none'}
-        candidate={convertCandidateId ? candidates.find((c) => c.id === convertCandidateId) ?? null : null}
-        onOpenChange={(o) => !o && setConvertCandidateId(null)}
+        key={convertCandidate?.id ?? 'none'}
+        candidate={convertCandidate}
+        onOpenChange={(o) => !o && setConvertCandidate(null)}
         onConverted={(empId) => {
-          setConvertCandidateId(null)
+          setConvertCandidate(null)
           if (empId) navigate(`/employees/${empId}`)
         }}
       />
       <EditCandidateDialog
-        candidate={editCandidateId ? candidates.find((c) => c.id === editCandidateId) ?? null : null}
-        open={!!editCandidateId}
-        onOpenChange={(o) => !o && setEditCandidateId(null)}
+        candidate={editCandidate}
+        open={!!editCandidate}
+        onOpenChange={(o) => !o && setEditCandidate(null)}
       />
       {editJob && (
         <EditJobDialog
