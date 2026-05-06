@@ -9,10 +9,14 @@
  * is checked). Since Playwright's storageState only captures localStorage + cookies,
  * we manually copy the auth data from sessionStorage to localStorage after login so
  * the saved state includes the tokens.
+ *
+ * Reuses existing auth state when it's less than 12 hours old to avoid hitting
+ * the login rate limiter during repeated local runs.
  */
 import { test as setup, expect } from '@playwright/test'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import fs from 'fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const AUTH_FILE = path.join(__dirname, '.auth/admin.json')
@@ -24,7 +28,34 @@ const KEEP_SIGNED_IN_KEY = 'hrhub-keep-signed-in'
 const EMAIL = process.env.E2E_EMAIL ?? 'prathin@propcrm.com'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'Admin@123'
 
+const AUTH_MAX_AGE_MS = 12 * 60 * 60 * 1000 // 12 hours
+
+function isAuthFileFresh(): boolean {
+    try {
+        if (!fs.existsSync(AUTH_FILE)) return false
+        const stat = fs.statSync(AUTH_FILE)
+        const ageMs = Date.now() - stat.mtimeMs
+        if (ageMs > AUTH_MAX_AGE_MS) return false
+        // Check the file has non-empty localStorage entries
+        const content = JSON.parse(fs.readFileSync(AUTH_FILE, 'utf-8'))
+        const origins = content?.origins ?? []
+        for (const origin of origins) {
+            const entry = (origin.localStorage ?? []).find((e: any) => e.name === AUTH_KEY)
+            if (entry?.value) return true
+        }
+        return false
+    } catch {
+        return false
+    }
+}
+
 setup('authenticate as admin', async ({ page }) => {
+    // Reuse existing auth file if it's still fresh — avoids hitting the rate limiter
+    if (isAuthFileFresh()) {
+        console.log('[setup:admin] Reusing existing auth state (< 12 h old)')
+        return
+    }
+
     await page.goto('/login')
 
     // Fill credentials and sign in

@@ -61,3 +61,8 @@ temp/
 # ─── Uploads (local dev only) ────────────────────────
 uploads/
 backend/uploads/
+
+# ─── Playwright ──────────────────────────────────────
+frontend/e2e/.auth/
+frontend/playwright-report/
+frontend/test-results/

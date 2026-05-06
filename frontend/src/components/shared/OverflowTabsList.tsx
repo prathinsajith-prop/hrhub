@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -46,15 +46,14 @@ export function OverflowTabsList({ tabs, activeTab, onTabChange }: OverflowTabsL
     // How many tabs are visible (the rest go into More).
     const [visibleCount, setVisibleCount] = useState(tabs.length)
 
-    // Reset order when the tab set identity changes.
+    // State-during-render: reset order when the tab set changes.
+    // (CLAUDE.md pattern — avoids useEffect + extra render cycle)
     const tabKey = tabs.map(t => t.value).join(',')
-    const prevTabKeyRef = useRef(tabKey)
-    useLayoutEffect(() => {
-        if (tabKey !== prevTabKeyRef.current) {
-            prevTabKeyRef.current = tabKey
-            setOrderedValues(tabs.map(t => t.value))
-        }
-    }, [tabKey, tabs])
+    const [lastTabKey, setLastTabKey] = useState(tabKey)
+    if (tabKey !== lastTabKey) {
+        setLastTabKey(tabKey)
+        setOrderedValues(tabs.map(t => t.value))
+    }
 
     // Map from value → TabDef for O(1) lookup.
     const tabMap = useMemo(() => new Map(tabs.map(t => [t.value, t])), [tabs])
@@ -98,7 +97,7 @@ export function OverflowTabsList({ tabs, activeTab, onTabChange }: OverflowTabsL
         setVisibleCount(Math.max(1, count))
     }, [tabs.length])
 
-    useLayoutEffect(() => { recalculate() }, [recalculate, tabKey])
+    useEffect(() => { recalculate() }, [recalculate, tabKey])
 
     useEffect(() => {
         const el = containerRef.current

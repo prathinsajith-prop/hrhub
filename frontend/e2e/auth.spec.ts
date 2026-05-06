@@ -42,3 +42,60 @@ test('protected routes redirect unauthenticated users to login', async ({ page }
     await page.waitForURL('**/login', { timeout: 5_000 })
     await expect(page).toHaveURL(/login/)
 })
+
+test.describe('"Keep me signed in" checkbox', () => {
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/login')
+    })
+
+    test('checkbox is unchecked by default', async ({ page }) => {
+        const checkbox = page.locator('#rememberMe')
+        await expect(checkbox).not.toBeChecked()
+    })
+
+    test('clicking the label text checks the checkbox', async ({ page }) => {
+        const checkbox = page.locator('#rememberMe')
+        const labelText = page.getByText('Keep me signed in')
+
+        await expect(checkbox).not.toBeChecked()
+        await labelText.click()
+        await expect(checkbox).toBeChecked()
+    })
+
+    test('clicking the label text toggles off after being checked', async ({ page }) => {
+        const checkbox = page.locator('#rememberMe')
+        const labelText = page.getByText('Keep me signed in')
+
+        await labelText.click()
+        await expect(checkbox).toBeChecked()
+
+        await labelText.click()
+        await expect(checkbox).not.toBeChecked()
+    })
+
+    test('clicking the label element checks the box', async ({ page }) => {
+        const checkbox = page.locator('#rememberMe')
+        const label = page.locator('label[for="rememberMe"]')
+
+        await expect(checkbox).not.toBeChecked()
+        await label.click()
+        await expect(checkbox).toBeChecked()
+    })
+
+    test('checkmark appears when checked and disappears when unchecked', async ({ page }) => {
+        const checkbox = page.locator('#rememberMe')
+        const labelText = page.getByText('Keep me signed in')
+        const checkmark = page.locator('label[for="rememberMe"] svg')
+
+        await expect(checkbox).not.toBeChecked()
+        await expect(checkmark).not.toBeVisible()
+
+        await labelText.click()
+        await expect(checkbox).toBeChecked()
+        await expect(checkmark).toBeVisible()
+
+        await labelText.click()
+        await expect(checkbox).not.toBeChecked()
+        await expect(checkmark).not.toBeVisible()
+    })
+})

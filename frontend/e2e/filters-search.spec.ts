@@ -2,11 +2,11 @@
  * Filters & search validation — tests that advanced filters work correctly
  * across all major pages that use the filter system.
  */
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
-async function testSearchFilter(page: Parameters<Parameters<typeof test>[1]>[0], url: string, noMatchText: string) {
+async function testSearchFilter(page: Page, url: string, noMatchText: string) {
     await page.goto(url)
     await page.waitForLoadState('networkidle')
     const search = page.getByPlaceholder(/search/i).first()

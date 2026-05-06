@@ -117,7 +117,7 @@ function PaginationBar({ currentPage, totalPages, from, to, total, loading, onPa
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
-            Prev
+            Previous
           </button>
 
           {/* Page numbers */}
