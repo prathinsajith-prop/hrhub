@@ -15,7 +15,7 @@ import {
     Landmark, CalendarDays, CheckCircle2, Clock, IdCard, Camera, Loader2,
 } from 'lucide-react'
 import { toast } from '@/components/ui/overlays'
-import { cn } from '@/lib/utils'
+import { cn, sanitizePhone } from '@/lib/utils'
 import { useMyEmployee, useUpdateMyProfile } from '@/hooks/useMe'
 import { useLeaveBalance } from '@/hooks/useLeave'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
@@ -387,7 +387,7 @@ export function MyProfileContent() {
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label className="text-xs">Phone</Label>
-                                        <Input value={form.phone} onChange={set('phone')} placeholder="+971 4 000 0000" className="h-9 text-sm" />
+                                        <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: sanitizePhone(e.target.value) }))} placeholder="+971 4 000 0000" className="h-9 text-sm" />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label className="text-xs">Mobile</Label>
@@ -406,7 +406,7 @@ export function MyProfileContent() {
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label className="text-xs">Contact Phone</Label>
-                                        <Input value={form.emergencyContactPhone} onChange={set('emergencyContactPhone')} placeholder="+971 50 000 0000" className="h-9 text-sm" />
+                                        <Input value={form.emergencyContactPhone} onChange={(e) => setForm(f => ({ ...f, emergencyContactPhone: sanitizePhone(e.target.value) }))} placeholder="+971 50 000 0000" className="h-9 text-sm" />
                                     </div>
                                 </div>
                             </div>

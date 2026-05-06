@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, memo } from 'react'
+import { useCallback, useMemo, useState, memo } from 'react'
 
 const PAGE_SIZE = 10
 import { type ColumnDef } from '@tanstack/react-table'
@@ -203,7 +203,11 @@ export function EmployeesPage() {
 
   // Reset to page 1 whenever search or filters change.
   const filterKey = (search.searchInput ?? '') + '||' + buildFilterQueryString(serverFilters)
-  useEffect(() => { setOffset(0) }, [filterKey])
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey)
+    setOffset(0)
+  }
 
   const { data: empData, isLoading, isFetching, isError, error, refetch } = useEmployees({
     limit: PAGE_SIZE,
@@ -223,6 +227,7 @@ export function EmployeesPage() {
   const [editTarget, setEditTarget] = useState<Employee | null>(null)
   const [inviteTarget, setInviteTarget] = useState<Employee | null>(null)
   const [statusTarget, setStatusTarget] = useState<{ employee: Employee; status: 'active' | 'suspended' | 'terminated' } | null>(null)
+  const openStatusChange = useCallback((employee: Employee, status: 'active' | 'suspended' | 'terminated') => setStatusTarget({ employee, status }), [])
   const [addOpen, setAddOpen] = useState(false)
   const archiveEmployee = useArchiveEmployee()
   const updateStatus = useUpdateEmployeeStatus()
@@ -419,11 +424,11 @@ export function EmployeesPage() {
       id: 'actions',
       header: '',
       cell: ({ row }) => (
-        <ActionMenu employee={row.original} onDelete={setDeleteTarget} onEdit={setEditTarget} onInvite={setInviteTarget} onStatusChange={(e, s) => setStatusTarget({ employee: e, status: s })} canManage={canManage} />
+        <ActionMenu employee={row.original} onDelete={setDeleteTarget} onEdit={setEditTarget} onInvite={setInviteTarget} onStatusChange={openStatusChange} canManage={canManage} />
       ),
       size: 44,
     },
-  ], [navigate, canManage, orgUnitName])
+  ], [canManage, orgUnitName, openStatusChange])
 
   return (
     <PageWrapper>
