@@ -31,8 +31,17 @@ interface ListParams {
     search?: string
     status?: string
     severity?: string
+    filter?: string
     limit?: number
     offset?: number
+}
+
+export interface ComplaintListResponse {
+    data: Complaint[]
+    total: number
+    limit: number
+    offset: number
+    hasMore: boolean
 }
 
 function toQS(params: Record<string, string | number | undefined>) {
@@ -50,10 +59,10 @@ export function useComplaintStats() {
 }
 
 export function useComplaints(params: ListParams = {}) {
-    const { search, status, severity, limit = 50, offset = 0 } = params
+    const { search, status, severity, filter, limit = 50, offset = 0 } = params
     return useQuery({
-        queryKey: ['complaints', { search, status, severity, limit, offset }],
-        queryFn: () => api.get<{ data: Complaint[] }>(`/complaints?${toQS({ search, status, severity, limit, offset })}`).then(r => r.data ?? []),
+        queryKey: ['complaints', { search, status, severity, filter, limit, offset }],
+        queryFn: () => api.get<ComplaintListResponse>(`/complaints?${toQS({ search, status, severity, filter, limit, offset })}`),
         staleTime: 30_000,
     })
 }

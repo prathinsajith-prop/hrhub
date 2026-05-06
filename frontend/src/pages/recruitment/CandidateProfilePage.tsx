@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, User, Mail, Phone, Globe, Briefcase, DollarSign, Star, XCircle, UserPlus, Save, Edit2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -75,14 +75,8 @@ export function CandidateProfilePage() {
     const candidates = (data?.data ?? []) as Candidate[]
     const candidate = candidates.find((c) => c.id === id)
 
-    // Sync notesDraft when the server-side notes value changes (e.g. after a remote
-    // save / TanStack Query refetch). Using "state during render" avoids the double-
-    // render penalty of setState-inside-useEffect (react-hooks/set-state-in-effect).
-    const [lastSyncedNotes, setLastSyncedNotes] = useState<string | undefined>(undefined)
-    if (candidate?.notes !== lastSyncedNotes) {
-        setLastSyncedNotes(candidate?.notes)
-        setNotesDraft(candidate?.notes ?? '')
-    }
+    // Sync notesDraft when server-side notes change after refetch.
+    useEffect(() => { setNotesDraft(candidate?.notes ?? '') }, [candidate?.notes])
 
     if (isLoading) {
         return (

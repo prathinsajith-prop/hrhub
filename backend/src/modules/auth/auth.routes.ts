@@ -13,7 +13,7 @@ export default async function (fastify: any): Promise<void> {
     fastify.post('/login', {
         config: {
             rateLimit: {
-                max: 10,
+                max: process.env.E2E_MODE === 'true' || process.env.NODE_ENV === 'test' ? 1000 : 10,
                 timeWindow: '15 minutes',
                 // Key on email (account) when provided, fall back to IP
                 keyGenerator: (request: any) => {

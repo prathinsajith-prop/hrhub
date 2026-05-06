@@ -15,6 +15,7 @@ import {
     useMarkAllRead,
     type Notification,
 } from '@/hooks/useNotifications'
+import { TablePagination } from '@/components/shared'
 
 const TYPE_CONFIG: Record<Notification['type'], { icon: typeof InfoIcon; classes: string; badgeClass: string }> = {
     info: { icon: InfoIcon, classes: 'text-blue-600', badgeClass: 'bg-blue-100 text-blue-800 border-blue-200' },
@@ -23,19 +24,19 @@ const TYPE_CONFIG: Record<Notification['type'], { icon: typeof InfoIcon; classes
     success: { icon: CheckCircleIcon, classes: 'text-emerald-600', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
 }
 
+const PAGE_LIMIT = 20
+
 export function NotificationsPage() {
     const { t } = useTranslation()
     const [unreadOnly, setUnreadOnly] = useState(false)
-    const [page, setPage] = useState(0)
-    const limit = 20
+    const [offset, setOffset] = useState(0)
 
-    const { data, isLoading, isFetching, refetch } = useNotificationsList({ limit, offset: page * limit, unreadOnly })
+    const { data, isLoading, isFetching, refetch } = useNotificationsList({ limit: PAGE_LIMIT, offset, unreadOnly })
     const markRead = useMarkNotificationRead()
     const markAll = useMarkAllRead()
 
     const notifications: Notification[] = data?.data ?? []
     const total = data?.total ?? 0
-    const hasMore = data?.hasMore ?? false
 
     const unreadCount = notifications.filter(n => !n.isRead).length
 
@@ -67,7 +68,7 @@ export function NotificationsPage() {
                 <Button
                     variant={unreadOnly ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => { setUnreadOnly(!unreadOnly); setPage(0) }}
+                    onClick={() => { setUnreadOnly(!unreadOnly); setOffset(0) }}
                 >
                     {unreadOnly ? 'Showing unread only' : 'Show unread only'}
                 </Button>
@@ -155,20 +156,13 @@ export function NotificationsPage() {
                 })}
             </Card>
 
-            {/* Pagination */}
-            {(page > 0 || hasMore) && (
-                <div className="flex justify-between items-center mt-4">
-                    <Button variant="outline" size="sm" onClick={() => setPage(p => p - 1)} disabled={page === 0}>
-                        Previous
-                    </Button>
-                    <span className="text-xs text-muted-foreground">
-                        {page * limit + 1}–{Math.min((page + 1) * limit, total)} of {total}
-                    </span>
-                    <Button variant="outline" size="sm" onClick={() => setPage(p => p + 1)} disabled={!hasMore}>
-                        Next
-                    </Button>
-                </div>
-            )}
+            <TablePagination
+                total={total}
+                offset={offset}
+                limit={PAGE_LIMIT}
+                onChange={setOffset}
+                loading={isFetching}
+            />
         </PageWrapper>
     )
 }

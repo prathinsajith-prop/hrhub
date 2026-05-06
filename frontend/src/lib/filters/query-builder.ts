@@ -51,12 +51,27 @@ function serialiseValue(v: unknown): string {
     if (v === true) return '1'
     if (v === false) return '0'
     if (Array.isArray(v)) return v.map((x) => String(x)).join(',')
-    if (v && typeof v === 'object') {
-        const obj = v as Record<string, unknown>
-        if ('from' in obj || 'to' in obj) return [obj.from ?? '', obj.to ?? ''].join(',')
-        if ('min' in obj || 'max' in obj) return [obj.min ?? '', obj.max ?? ''].join(',')
-    }
     return String(v ?? '')
+}
+
+/**
+ * Serialise a range object ({min,max} or {from,to}) using the operator context
+ * so that single-bound operators (gte, lte, before, after, on) don't produce a
+ * trailing comma (e.g. "5000," → "5000").
+ */
+function serialiseRangeValue(v: unknown, op: FilterOperator): string | null {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+    const obj = v as Record<string, unknown>
+    if ('from' in obj || 'to' in obj) {
+        if (op === 'between') return [obj.from ?? '', obj.to ?? ''].join(',')
+        return String(obj.from ?? obj.to ?? '')
+    }
+    if ('min' in obj || 'max' in obj) {
+        if (op === 'between') return [obj.min ?? '', obj.max ?? ''].join(',')
+        if (op === 'lte' || op === 'less_than') return String(obj.max ?? obj.min ?? '')
+        return String(obj.min ?? obj.max ?? '')
+    }
+    return null
 }
 
 /** Build "field:OP(value);field:OP(value)" string. */
@@ -65,14 +80,17 @@ export function buildFilterQueryString(filters: AppliedFiltersMap | null | undef
     const parts: string[] = []
     for (const [name, applied] of Object.entries(filters)) {
         if (!applied) continue
-        const op = applied.operator ?? 'equals'
+        const op = (applied.operator ?? 'equals') as FilterOperator
         if (op === 'is_null' || op === 'is_not_null') {
             parts.push(`${name}:${OPERATOR_TOKENS[op]}()`)
             continue
         }
         if (isEmpty(applied.value)) continue
         const token = OPERATOR_TOKENS[op] ?? 'EQ'
-        parts.push(`${name}:${token}(${serialiseValue(applied.value)})`)
+        const rangeStr = serialiseRangeValue(applied.value, op)
+        const serialised = rangeStr !== null ? rangeStr : serialiseValue(applied.value)
+        if (serialised === '') continue
+        parts.push(`${name}:${token}(${serialised})`)
     }
     return parts.join(';')
 }

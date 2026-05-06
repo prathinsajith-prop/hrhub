@@ -74,6 +74,7 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
             status?: string
             categoryId?: string
             search?: string
+            filter?: string
             limit?: string
             offset?: string
             after?: string
@@ -82,8 +83,9 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
             status: qs.status,
             categoryId: qs.categoryId,
             search: qs.search,
-            limit: Math.min(Number(qs.limit ?? 25), 100),
-            offset: Number(qs.offset ?? 0),
+            filter: qs.filter,
+            limit: Math.min(Math.max(1, Number(qs.limit ?? 25)), 100),
+            offset: Math.max(0, Number(qs.offset ?? 0)),
             after: qs.after,
         })
         return reply.send(result)
@@ -379,9 +381,9 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['Assets'] },
     }, async (request: any, reply: any) => {
-        const { format = 'csv', status, categoryId } = request.query as Record<string, string>
+        const { format = 'csv', status, categoryId, filter } = request.query as Record<string, string>
         if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
-        const { data } = await listAssets(request.user.tenantId, { status, categoryId, limit: 10000, offset: 0 }) as any
+        const { data } = await listAssets(request.user.tenantId, { status, categoryId, filter, limit: 10000, offset: 0 }) as any
         const rows = (data ?? []) as any[]
         const dateStr = new Date().toISOString().slice(0, 10)
 
