@@ -97,6 +97,7 @@ interface AssetParams {
     status?: string
     categoryId?: string
     search?: string
+    filter?: string
     limit?: number
     offset?: number
     after?: string

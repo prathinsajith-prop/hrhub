@@ -31,6 +31,7 @@ export function useAttendance(params: {
     startDate?: string
     endDate?: string
     status?: string
+    filter?: string
     page?: number
     limit?: number
     cursor?: string

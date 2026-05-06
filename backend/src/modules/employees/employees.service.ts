@@ -1,14 +1,18 @@
-import { eq, and, ilike, desc, asc, getTableColumns, inArray, sql, or, lt, gte, lte } from 'drizzle-orm'
+import { eq, and, ilike, desc, asc, getTableColumns, inArray, notInArray, sql, or, lt, gte, lte, aliasedTable } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor, extractRows } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { employees, entities, tenants, gradeLevels, sponsoringEntities, employeeNoSequences } from '../../db/schema/index.js'
+import { employees, entities, tenants, gradeLevels, sponsoringEntities, employeeNoSequences, orgUnits } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { buildDrizzleFilters, parseFilterString } from '../../lib/filters.js'
 
+// Alias for the department org unit join (employees can join orgUnits 3x: branch/division/dept)
+const deptUnit = aliasedTable(orgUnits, 'dept_unit')
+
 const EMPLOYEE_FIELD_MAP = {
+    status: employees.status,
     designation: employees.designation,
     nationality: employees.nationality,
     salary: employees.totalSalary,
@@ -82,27 +86,54 @@ export async function listEmployees(params: ListEmployeesParams) {
     }
     if (search) {
         const trimmed = search.trim()
-        // Sanitise and build a prefix-aware tsquery — each word gets :* for partial match
-        const words = trimmed.split(/\s+/).filter(Boolean).map(w => w.replace(/[^a-zA-Z0-9\u00C0-\u024F\u0600-\u06FF]/g, ''))
-        if (words.length > 0) {
-            const tsQuery = words.join(' & ') + ':*'
-            conditions.push(
-                sql`to_tsvector('simple',
-                    coalesce(${employees.firstName},'') || ' ' ||
-                    coalesce(${employees.lastName},'')  || ' ' ||
-                    coalesce(${employees.email},'')     || ' ' ||
-                    coalesce(${employees.employeeNo},'') || ' ' ||
-                    coalesce(${employees.designation},'')
-                ) @@ to_tsquery('simple', ${tsQuery})`
-            )
+        if (trimmed.includes('@')) {
+            // @ and . are stripped from tsquery tokens — use ILIKE across all three email columns.
+            conditions.push(or(
+                ilike(employees.email, `%${trimmed}%`),
+                ilike(employees.workEmail, `%${trimmed}%`),
+                ilike(employees.personalEmail, `%${trimmed}%`),
+            )!)
         } else {
-            // Fall back to ILIKE for employee number if input is all non-word chars
-            conditions.push(ilike(employees.employeeNo, `%${trimmed}%`))
+            // Sanitise and build a prefix-aware tsquery \u2014 each word gets :* for partial match.
+            const words = trimmed.split(/\s+/).filter(Boolean)
+                .map(w => w.replace(/[^a-zA-Z0-9\u00C0-\u024F\u0600-\u06FF]/g, '')).filter(Boolean)
+            if (words.length > 0) {
+                const tsQuery = words.join(' & ') + ':*'
+                conditions.push(or(
+                    sql`to_tsvector('simple',
+                        coalesce(${employees.firstName},'') || ' ' ||
+                        coalesce(${employees.lastName},'')  || ' ' ||
+                        coalesce(${employees.email},'')     || ' ' ||
+                        coalesce(${employees.workEmail},'') || ' ' ||
+                        coalesce(${employees.employeeNo},'') || ' ' ||
+                        coalesce(${employees.designation},'')
+                    ) @@ to_tsquery('simple', ${tsQuery})`,
+                    ilike(employees.employeeNo, `%${trimmed}%`),
+                )!)
+            }
         }
     }
 
     if (filter) {
-        for (const c of buildDrizzleFilters(parseFilterString(filter), EMPLOYEE_FIELD_MAP, EMPLOYEE_ALLOWED)) {
+        const parsed = parseFilterString(filter)
+        // department filters must OR across the legacy text column AND the joined org unit name
+        // because newer employees use departmentId (FK) while older ones used the text column.
+        const deptFilters = parsed.filter(f => f.field === 'department')
+        const restFilters = parsed.filter(f => f.field !== 'department')
+        for (const df of deptFilters) {
+            if (df.operator === 'LIKE' && typeof df.value === 'string') {
+                conditions.push(or(ilike(employees.department, `%${df.value}%`), ilike(deptUnit.name, `%${df.value}%`))!)
+            } else if (df.operator === 'EQ' && typeof df.value === 'string') {
+                conditions.push(or(eq(employees.department, df.value), eq(deptUnit.name, df.value))!)
+            } else if (df.operator === 'IN' && Array.isArray(df.value)) {
+                const vals = df.value as string[]
+                conditions.push(or(inArray(employees.department, vals), inArray(deptUnit.name, vals))!)
+            } else if (df.operator === 'NOT_IN' && Array.isArray(df.value)) {
+                const vals = df.value as string[]
+                conditions.push(and(notInArray(employees.department, vals), notInArray(deptUnit.name, vals))!)
+            }
+        }
+        for (const c of buildDrizzleFilters(restFilters, EMPLOYEE_FIELD_MAP, EMPLOYEE_ALLOWED)) {
             conditions.push(c)
         }
     }
@@ -129,6 +160,7 @@ export async function listEmployees(params: ListEmployeesParams) {
         .from(employees)
         .leftJoin(gradeLevels, eq(employees.gradeLevelId, gradeLevels.id))
         .leftJoin(sponsoringEntities, eq(employees.sponsoringEntityId, sponsoringEntities.id))
+        .leftJoin(deptUnit, eq(employees.departmentId, deptUnit.id))
         .where(and(...conditions))
         .orderBy(desc(employees.createdAt), desc(employees.id))
         .limit(cursor ? pageSize : limit)
@@ -147,6 +179,7 @@ export async function listEmployees(params: ListEmployeesParams) {
         const [countRow] = await db
             .select({ count: sql<number>`COUNT(*)`.as('count') })
             .from(employees)
+            .leftJoin(deptUnit, eq(employees.departmentId, deptUnit.id))
             .where(and(...conditions))
         total = Number(countRow?.count ?? 0)
     }

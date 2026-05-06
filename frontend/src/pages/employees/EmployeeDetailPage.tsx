@@ -8,7 +8,7 @@ import {
   Clock, Download, Eye, Camera, Loader2, Plus, Package,
   CalendarDays, ClipboardList, UserCheck, Users, GraduationCap, Landmark, DollarSign,
   ArrowRightLeft, Heart, StickyNote, History, Trash2, AlertTriangle, Upload, X as XIcon,
-  MoreHorizontal, CheckCircle2, Ban, UserX,
+  MoreHorizontal, CheckCircle2, Ban, UserX, Search, FolderOpen, Scale,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -625,6 +625,28 @@ async function downloadDoc(doc: DocRecord) {
   }
 }
 
+// ─── Document category/status config (static — outside component) ─────────────
+
+const DOC_CATEGORY_CONFIG: Record<string, { label: string; Icon: React.ComponentType<{ className?: string }>; iconCls: string; bgCls: string }> = {
+  identity:      { label: 'Identity',      Icon: CreditCard,     iconCls: 'text-blue-600',   bgCls: 'bg-blue-50 border-blue-200' },
+  visa:          { label: 'Visa',           Icon: Plane,          iconCls: 'text-violet-600', bgCls: 'bg-violet-50 border-violet-200' },
+  employment:    { label: 'Employment',     Icon: Briefcase,      iconCls: 'text-emerald-600',bgCls: 'bg-emerald-50 border-emerald-200' },
+  company:       { label: 'Company',        Icon: Building2,      iconCls: 'text-orange-600', bgCls: 'bg-orange-50 border-orange-200' },
+  insurance:     { label: 'Insurance',      Icon: Shield,         iconCls: 'text-cyan-600',   bgCls: 'bg-cyan-50 border-cyan-200' },
+  qualification: { label: 'Qualification',  Icon: GraduationCap,  iconCls: 'text-indigo-600', bgCls: 'bg-indigo-50 border-indigo-200' },
+  financial:     { label: 'Financial',      Icon: DollarSign,     iconCls: 'text-amber-600',  bgCls: 'bg-amber-50 border-amber-200' },
+  compliance:    { label: 'Compliance',     Icon: Scale,          iconCls: 'text-teal-600',   bgCls: 'bg-teal-50 border-teal-200' },
+}
+
+const DOC_STATUS_BORDER: Record<string, string> = {
+  valid:          'border-l-emerald-400',
+  expiring_soon:  'border-l-amber-400',
+  expired:        'border-l-red-500',
+  rejected:       'border-l-red-500',
+  under_review:   'border-l-blue-400',
+  pending_upload: 'border-l-border',
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function EmployeeDetailPage() {
@@ -655,7 +677,10 @@ export function EmployeeDetailPage() {
     return Array.isArray(items) ? (items as AttendanceRecord[]) : []
   }, [attendanceData])
 
-  const docs = (docsResult?.data as DocRecord[] | undefined) ?? []
+  const docs = React.useMemo<DocRecord[]>(
+    () => (docsResult?.data as DocRecord[] | undefined) ?? [],
+    [docsResult],
+  )
 
   const { data: accountData, isLoading: accountLoading } = useEmployeeAccount(canManage ? id : undefined)
   const { data: employeeTeams = [] } = useEmployeeTeams(id)
@@ -725,7 +750,39 @@ export function EmployeeDetailPage() {
   const [editingDependent, setEditingDependent] = React.useState<Dependent | null>(null)
   const [noteInput, setNoteInput] = React.useState('')
   const [warningDialogOpen, setWarningDialogOpen] = React.useState(false)
+  const [docSearch, setDocSearch] = React.useState('')
   const avatarInputRef = React.useRef<HTMLInputElement>(null)
+
+  const filteredDocs = React.useMemo(() => {
+    if (!docSearch.trim()) return docs
+    const q = docSearch.toLowerCase()
+    return docs.filter(d =>
+      d.docType?.toLowerCase().includes(q) ||
+      d.fileName?.toLowerCase().includes(q) ||
+      (d.category && DOC_CATEGORY_CONFIG[d.category]?.label.toLowerCase().includes(q)),
+    )
+  }, [docs, docSearch])
+
+  const docsByCategory = React.useMemo(() => {
+    const CATEGORY_ORDER = ['identity', 'visa', 'employment', 'company', 'insurance', 'qualification', 'financial', 'compliance']
+    const groups: Record<string, DocRecord[]> = {}
+    for (const doc of filteredDocs) {
+      const key = doc.category || 'other'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(doc)
+    }
+    const ordered: Array<[string, DocRecord[]]> = CATEGORY_ORDER.filter(k => groups[k]).map(k => [k, groups[k]])
+    const rest = Object.entries(groups).filter(([k]) => !CATEGORY_ORDER.includes(k))
+    return [...ordered, ...rest]
+  }, [filteredDocs])
+
+  const docStats = React.useMemo(() => ({
+    valid:    docs.filter(d => d.status === 'valid').length,
+    expiring: docs.filter(d => d.status === 'expiring_soon').length,
+    expired:  docs.filter(d => d.status === 'expired').length,
+    pending:  docs.filter(d => d.status === 'pending_upload' || d.status === 'under_review').length,
+    rejected: docs.filter(d => d.status === 'rejected').length,
+  }), [docs])
 
   const e = employee
 
@@ -1387,110 +1444,252 @@ export function EmployeeDetailPage() {
           {/* ── Documents ── */}
           <TabsContent value="documents" className="mt-4">
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Employee Documents</CardTitle>
-                  <Button
-                    size="sm"
-                    leftIcon={<Plus className="h-3.5 w-3.5" />}
-                    onClick={() => setAddDocOpen(true)}
-                  >
+              {/* ── Header ── */}
+              <CardHeader className="px-6 py-5 border-b">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <CardTitle className="text-base font-semibold">Documents</CardTitle>
+                      {docs.length > 0 && (
+                        <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">{docs.length}</span>
+                      )}
+                    </div>
+                    {docs.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-0.5">Contracts, IDs, certificates and compliance files</p>
+                    )}
+                  </div>
+                  <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAddDocOpen(true)}>
                     Add Document
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
-                {docsLoading ? (
-                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
-                ) : docs.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">
-                    <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm font-medium">No documents uploaded</p>
-                    <p className="text-xs mt-1">Upload contracts, certificates, and ID documents</p>
+
+              {/* ── Stats + search ── */}
+              {!docsLoading && docs.length > 0 && (
+                <div className="px-6 py-4 border-b bg-muted/20 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {docStats.valid > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium">
+                        <CheckCircle2 className="h-3 w-3" />{docStats.valid} Valid
+                      </span>
+                    )}
+                    {docStats.expiring > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium">
+                        <Clock className="h-3 w-3" />{docStats.expiring} Expiring Soon
+                      </span>
+                    )}
+                    {docStats.expired > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-medium">
+                        <AlertTriangle className="h-3 w-3" />{docStats.expired} Expired
+                      </span>
+                    )}
+                    {docStats.pending > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-medium">
+                        <Clock className="h-3 w-3" />{docStats.pending} Pending Review
+                      </span>
+                    )}
+                    {docStats.rejected > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-medium">
+                        <Ban className="h-3 w-3" />{docStats.rejected} Rejected
+                      </span>
+                    )}
                   </div>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      value={docSearch}
+                      onChange={e => setDocSearch(e.target.value)}
+                      placeholder="Search by name, type or category…"
+                      className="w-full pl-9 pr-8 h-9 text-sm rounded-md border border-input bg-background outline-none focus:ring-2 focus:ring-ring/50 placeholder:text-muted-foreground"
+                    />
+                    {docSearch && (
+                      <button onClick={() => setDocSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        <XIcon className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Content ── */}
+              <CardContent className="p-0">
+                {docsLoading ? (
+                  <div className="px-6 py-6 space-y-4">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="flex gap-4 p-4 rounded-xl border border-border/60">
+                        <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
+                        <div className="flex-1 space-y-2.5 pt-0.5">
+                          <Skeleton className="h-4 w-1/2" />
+                          <Skeleton className="h-3 w-1/3" />
+                          <Skeleton className="h-3 w-2/3" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                ) : docs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+                    <div className="h-14 w-14 rounded-2xl bg-muted/60 border border-border flex items-center justify-center mb-4">
+                      <FolderOpen className="h-7 w-7 text-muted-foreground/40" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">No documents yet</p>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-xs">Upload passports, visas, contracts, qualifications and other compliance files for this employee.</p>
+                    <Button size="sm" variant="outline" className="mt-5" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAddDocOpen(true)}>
+                      Add First Document
+                    </Button>
+                  </div>
+
+                ) : filteredDocs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-14 px-6 text-center">
+                    <Search className="h-9 w-9 text-muted-foreground/25 mb-3" />
+                    <p className="text-sm font-medium text-foreground">No results for "{docSearch}"</p>
+                    <p className="text-xs text-muted-foreground mt-1">Try a different name or category</p>
+                    <button onClick={() => setDocSearch('')} className="text-xs text-primary mt-3 hover:underline font-medium">Clear search</button>
+                  </div>
+
                 ) : (
-                  <div className="divide-y">
-                    {docs.map(doc => {
-                      const { variant: statusVariant, label: statusLabel } = DOC_STATUS_BADGE[doc.status] ?? { variant: 'secondary' as const, label: labelFor(doc.status) }
-                      const fileSizeLabel = doc.fileSize ? formatFileSize(doc.fileSize) : null
-                      const ext = doc.fileName ? doc.fileName.split('.').pop()?.toUpperCase() : null
+                  <div className="px-6 py-6 space-y-8">
+                    {docsByCategory.map(([category, categoryDocs]) => {
+                      const catCfg = DOC_CATEGORY_CONFIG[category] ?? { label: category, Icon: FileText, iconCls: 'text-muted-foreground', bgCls: 'bg-muted border-border' }
+                      const { Icon: CatIcon } = catCfg
                       return (
-                        <div key={doc.id} className="py-3.5">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-start gap-3 min-w-0">
-                              <div className="shrink-0 mt-0.5 h-8 w-8 rounded-lg bg-muted/60 border border-border flex items-center justify-center">
-                                <FileText className="h-4 w-4 text-muted-foreground" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                                  <p className="text-sm font-medium truncate">{doc.docType ?? doc.fileName ?? 'Untitled'}</p>
-                                  <Badge variant={statusVariant} className="text-[10px] shrink-0">
-                                    {statusLabel}
-                                  </Badge>
-                                </div>
-                                <p className="text-xs text-muted-foreground truncate">{doc.fileName ?? '—'}</p>
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5">
-                                  <span className="text-[11px] text-muted-foreground capitalize">{labelFor(doc.category)}</span>
-                                  {ext && <span className="text-[11px] text-muted-foreground">{ext}</span>}
-                                  {fileSizeLabel && <span className="text-[11px] text-muted-foreground">{fileSizeLabel}</span>}
-                                  {doc.issueDate && (
-                                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                                      <Calendar className="h-3 w-3" />
-                                      Issued {formatDate(doc.issueDate)}
-                                    </span>
-                                  )}
-                                  {doc.expiryDate && (
-                                    <span className={cn('text-[11px] flex items-center gap-1', new Date(doc.expiryDate) < new Date() ? 'text-destructive' : 'text-muted-foreground')}>
-                                      <Clock className="h-3 w-3" />
-                                      Expires {formatDate(doc.expiryDate)}
-                                    </span>
-                                  )}
-                                  <span className="text-[11px] text-muted-foreground">Uploaded {formatDate(doc.createdAt)}</span>
-                                  {doc.status === 'valid' && doc.verifiedByName && (
-                                    <span className="text-[11px] text-emerald-600 flex items-center gap-1">
-                                      <CheckCircle2 className="h-3 w-3" />
-                                      Approved by {doc.verifiedByName}{doc.verifiedAt ? ` on ${formatDate(doc.verifiedAt)}` : ''}
-                                    </span>
-                                  )}
-                                </div>
-                                {doc.notes && <p className="text-[11px] text-muted-foreground/70 mt-1 italic truncate">{doc.notes}</p>}
-                              </div>
+                        <div key={category} className="space-y-3">
+
+                          {/* Category label */}
+                          <div className="flex items-center gap-2">
+                            <div className={cn('h-6 w-6 rounded-md flex items-center justify-center border shrink-0', catCfg.bgCls)}>
+                              <CatIcon className={cn('h-3.5 w-3.5', catCfg.iconCls)} />
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {canManageDocuments && (doc.status === 'pending_upload' || doc.status === 'under_review') ? (
-                                <>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800"
-                                    disabled={verifyDocument.isPending}
-                                    onClick={() => verifyDocument.mutate(doc.id, {
-                                      onSuccess: () => toast.success('Document verified'),
-                                      onError: (err: Error) => toast.error('Failed to verify', err?.message),
-                                    })}
-                                  >
-                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                                    Approve
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-red-700 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-800"
-                                    onClick={() => { setRejectDocId(doc.id); setRejectDocReason('') }}
-                                  >
-                                    <Ban className="h-3.5 w-3.5 mr-1" />
-                                    Reject
-                                  </Button>
-                                </>
-                              ) : null}
-                              <Button variant="ghost" size="icon-sm" aria-label="View document" onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}>
-                                <Eye className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button variant="ghost" size="icon-sm" aria-label="Download document" onClick={() => downloadDoc(doc)}>
-                                <Download className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
+                            <span className="text-xs font-semibold text-foreground tracking-wide uppercase">{catCfg.label}</span>
+                            <span className="text-[11px] text-muted-foreground font-normal normal-case">· {categoryDocs.length} {categoryDocs.length === 1 ? 'file' : 'files'}</span>
+                            <div className="flex-1 h-px bg-border/60 ml-1" />
                           </div>
+
+                          {/* Document cards */}
+                          <div className="space-y-3">
+                            {categoryDocs.map(doc => {
+                              const { variant: statusVariant, label: statusLabel } = DOC_STATUS_BADGE[doc.status] ?? { variant: 'secondary' as const, label: labelFor(doc.status) }
+                              const fileSizeLabel = doc.fileSize ? formatFileSize(doc.fileSize) : null
+                              const ext = doc.fileName ? doc.fileName.split('.').pop()?.toUpperCase() : null
+                              const isExpired = doc.expiryDate && new Date(doc.expiryDate) < new Date()
+                              const isExpiring = doc.status === 'expiring_soon'
+                              const accentCls = DOC_STATUS_BORDER[doc.status] ?? 'border-l-border'
+                              const needsReview = canManageDocuments && (doc.status === 'pending_upload' || doc.status === 'under_review')
+
+                              return (
+                                <div
+                                  key={doc.id}
+                                  className={cn(
+                                    'group flex gap-4 p-5 rounded-xl border border-border/70 border-l-2 bg-background hover:bg-muted/20 hover:border-border transition-all',
+                                    accentCls,
+                                  )}
+                                >
+                                  {/* Icon */}
+                                  <div className={cn('shrink-0 h-11 w-11 rounded-xl border flex items-center justify-center', catCfg.bgCls)}>
+                                    <CatIcon className={cn('h-5 w-5', catCfg.iconCls)} />
+                                  </div>
+
+                                  {/* Body */}
+                                  <div className="flex-1 min-w-0 space-y-2.5">
+
+                                    {/* Row 1: title + badge + actions */}
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <p className="text-sm font-semibold text-foreground leading-snug">
+                                            {doc.docType || doc.fileName || 'Untitled'}
+                                          </p>
+                                          <Badge variant={statusVariant} className="text-[10px] px-1.5 py-0 shrink-0">{statusLabel}</Badge>
+                                        </div>
+                                        {doc.fileName && doc.fileName !== doc.docType && (
+                                          <p className="text-xs text-muted-foreground truncate mt-0.5">{doc.fileName}</p>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+                                        {needsReview && (
+                                          <>
+                                            <Button
+                                              variant="outline" size="sm"
+                                              className="h-7 text-xs text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 opacity-100"
+                                              disabled={verifyDocument.isPending}
+                                              onClick={() => verifyDocument.mutate(doc.id, {
+                                                onSuccess: () => toast.success('Document approved'),
+                                                onError: (err: Error) => toast.error('Failed to approve', err?.message),
+                                              })}
+                                            >
+                                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Approve
+                                            </Button>
+                                            <Button
+                                              variant="outline" size="sm"
+                                              className="h-7 text-xs text-red-700 border-red-200 bg-red-50 hover:bg-red-100 opacity-100"
+                                              onClick={() => { setRejectDocId(doc.id); setRejectDocReason('') }}
+                                            >
+                                              <Ban className="h-3.5 w-3.5 mr-1" />Reject
+                                            </Button>
+                                          </>
+                                        )}
+                                        <Button variant="ghost" size="icon-sm" aria-label="View" onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}>
+                                          <Eye className="h-3.5 w-3.5" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon-sm" aria-label="Download" onClick={() => downloadDoc(doc)}>
+                                          <Download className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </div>
+                                    </div>
+
+                                    {/* Row 2: file meta */}
+                                    {(ext || fileSizeLabel) && (
+                                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                        <FileText className="h-3 w-3 shrink-0" />
+                                        <span>{[ext, fileSizeLabel].filter(Boolean).join(' · ')}</span>
+                                      </div>
+                                    )}
+
+                                    {/* Row 3: dates grid */}
+                                    {(doc.issueDate || doc.expiryDate) && (
+                                      <div className="grid grid-cols-2 gap-x-6 gap-y-1 max-w-sm">
+                                        {doc.issueDate && (
+                                          <div className="space-y-0.5">
+                                            <p className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wide">Issue Date</p>
+                                            <p className="text-xs text-foreground font-medium">{formatDate(doc.issueDate)}</p>
+                                          </div>
+                                        )}
+                                        {doc.expiryDate && (
+                                          <div className="space-y-0.5">
+                                            <p className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wide">Expiry Date</p>
+                                            <p className={cn('text-xs font-semibold', isExpired ? 'text-red-600' : isExpiring ? 'text-amber-600' : 'text-foreground')}>
+                                              {formatDate(doc.expiryDate)}
+                                              {isExpired && <span className="ml-1.5 text-[10px] font-medium text-red-500">· Expired</span>}
+                                              {isExpiring && !isExpired && <span className="ml-1.5 text-[10px] font-medium text-amber-500">· Expiring Soon</span>}
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Row 4: footer meta */}
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 border-t border-border/40">
+                                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                                        <Upload className="h-3 w-3" />Uploaded {formatDate(doc.createdAt)}
+                                      </span>
+                                      {doc.status === 'valid' && doc.verifiedByName && (
+                                        <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
+                                          <CheckCircle2 className="h-3 w-3" />
+                                          Approved by {doc.verifiedByName}
+                                          {doc.verifiedAt && <span className="text-emerald-600/60 font-normal">· {formatDate(doc.verifiedAt)}</span>}
+                                        </span>
+                                      )}
+                                      {doc.notes && (
+                                        <span className="text-[11px] text-muted-foreground/70 italic line-clamp-1">{doc.notes}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+
                         </div>
                       )
                     })}
@@ -2192,7 +2391,7 @@ export function EmployeeDetailPage() {
       <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
 
       {editOpen && <EditEmployeeDialog open={editOpen} onOpenChange={setEditOpen} employee={e} />}
-      {editEmploymentOpen && canManage && <EditEmploymentDialog open={editEmploymentOpen} onOpenChange={setEditEmploymentOpen} employee={e} />}
+      {editEmploymentOpen && canManage && <EditEmploymentDialog open={editEmploymentOpen} onOpenChange={setEditEmploymentOpen} employee={e} currentRole={accountData?.account?.role} />}
       {editPayrollOpen && canManage && <EditPayrollDialog open={editPayrollOpen} onOpenChange={setEditPayrollOpen} employee={e} />}
       {assignAssetOpen && canManage && <AssignAssetToEmployeeDialog open={assignAssetOpen} onOpenChange={setAssignAssetOpen} employee={e} />}
       {canManage && (

@@ -1,4 +1,6 @@
-import { memo, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
+
+const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
@@ -31,8 +33,8 @@ import type { Document } from '@/types'
 
 const DOCUMENT_FILTERS: FilterConfig[] = [
   { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
-  { name: 'category', label: 'Category', type: 'select', field: 'category', options: DOC_CATEGORY_OPTIONS },
-  { name: 'status', label: 'Status', type: 'select', field: 'status', options: DOC_STATUS_OPTIONS },
+  { name: 'category', label: 'Category', type: 'multi_select', field: 'category', options: DOC_CATEGORY_OPTIONS },
+  { name: 'status', label: 'Status', type: 'multi_select', field: 'status', options: DOC_STATUS_OPTIONS },
   { name: 'expiryDate', label: 'Expiry date', type: 'date_range', field: 'expiryDate' },
   { name: 'verified', label: 'Verified only', type: 'toggle', field: 'verified' },
 ]
@@ -221,8 +223,13 @@ export function DocumentsPage() {
     availableFilters: DOCUMENT_FILTERS,
   })
 
-  const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: 100, q: search.searchInput || undefined, filters: search.appliedFilters })
+  const [offset, setOffset] = useState(0)
+  const filterKey = (search.searchInput ?? '') + '||' + JSON.stringify(search.appliedFilters)
+  useEffect(() => { setOffset(0) }, [filterKey])
+
+  const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: PAGE_SIZE, offset, q: search.searchInput || undefined, filters: search.appliedFilters })
   const documents = useMemo<Document[]>(() => (docsData?.data as Document[]) ?? [], [docsData?.data])
+  const total = docsData?.total ?? 0
   const expiring = documents.filter((d) => d.status === 'expiring_soon').length
   const expired = documents.filter((d) => d.status === 'expired').length
   const deleteDoc = useDeleteDocument()
@@ -338,7 +345,7 @@ export function DocumentsPage() {
             filters: DOCUMENT_FILTERS,
             placeholder: 'Search documents…',
           }}
-          pageSize={8}
+          pageSize={PAGE_SIZE}
           enableSelection
           getRowId={(row) => String(row.id)}
           onRowClick={(row) => setViewTarget(row)}
@@ -380,6 +387,7 @@ export function DocumentsPage() {
               </Button>
             </>
           )}
+          serverPagination={{ total, offset, limit: PAGE_SIZE, onPageChange: setOffset, loading: isFetching }}
         />
       </Card>
       <AddDocumentDialog

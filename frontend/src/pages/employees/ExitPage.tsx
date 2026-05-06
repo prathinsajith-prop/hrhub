@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+
+const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
@@ -35,9 +37,9 @@ import { EXIT_TYPE_LABELS } from '@/lib/enums'
 import { EXIT_TYPE_OPTIONS } from '@/lib/options'
 
 const EXIT_FILTERS: FilterConfig[] = [
-    { name: 'exitType', label: 'Exit type', type: 'select', field: 'exitType', options: EXIT_TYPE_OPTIONS },
+    { name: 'exitType', label: 'Exit type', type: 'multi_select', field: 'exitType', options: EXIT_TYPE_OPTIONS },
     {
-        name: 'status', label: 'Status', type: 'select', field: 'status',
+        name: 'status', label: 'Status', type: 'multi_select', field: 'status',
         options: [
             { value: 'pending', label: 'Pending' },
             { value: 'approved', label: 'Approved' },
@@ -150,17 +152,18 @@ export function ExitPage() {
         availableFilters: EXIT_FILTERS,
     })
 
-    const exitStatus = (exitSearch.appliedFilters.status?.value as string | undefined) || undefined
-    const serverExitFilters = useMemo(() => {
-        const { status: _s, ...rest } = exitSearch.appliedFilters
-        return rest
-    }, [exitSearch.appliedFilters])
+    // status is multi_select → goes through the filter string so IN() works correctly.
+    const [offset, setOffset] = useState(0)
+    const filterKey = (exitSearch.searchInput ?? '') + '||' + JSON.stringify(exitSearch.appliedFilters)
+    useEffect(() => { setOffset(0) }, [filterKey])
 
-    const { data: exits, isLoading, isFetching, refetch } = useExitRequests({
-        status: exitStatus,
+    const { data: exitsData, isLoading, isFetching, refetch } = useExitRequests({
         q: exitSearch.searchInput || undefined,
-        filters: serverExitFilters,
+        filters: exitSearch.appliedFilters,
+        limit: PAGE_SIZE,
+        offset,
     })
+    const exitTotal = exitsData?.total ?? 0
 
     const previewEnabled = !!form.employeeId && !!form.exitDate && !!form.exitType
     const { data: preview, isLoading: previewLoading } = useSettlementPreview(
@@ -185,8 +188,8 @@ export function ExitPage() {
     }
 
     const exitList: ExitRequest[] = useMemo(
-        () => Array.isArray(exits) ? exits : [],
-        [exits],
+        () => exitsData?.data ?? [],
+        [exitsData],
     )
 
     // Server-side filtering now handles q, status, exitType, exitDate via useExitRequests.
@@ -380,9 +383,10 @@ export function ExitPage() {
                             filters: EXIT_FILTERS,
                             placeholder: 'Search by employee, exit type, reason…',
                         }}
-                        pageSize={10}
+                        pageSize={PAGE_SIZE}
                         emptyMessage={exitList.length === 0 ? 'No exit requests yet.' : 'No results match your filters.'}
                         onRowClick={(row) => setViewingExit(row as ExitRequest)}
+                        serverPagination={{ total: exitTotal, offset, limit: PAGE_SIZE, onPageChange: setOffset, loading: isFetching }}
                     />
                 </CardContent>
             </Card>

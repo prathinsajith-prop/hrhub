@@ -36,13 +36,13 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { buildOrgUnitMap, resolveOrgPath } from '@/lib/orgUtils'
 import { OrgHierarchyPath } from '@/components/shared/OrgHierarchyPath'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
-import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { applyClientFilters, buildFilterQueryString, type FilterConfig } from '@/lib/filters'
 import { ATTENDANCE_STATUS_OPTIONS } from '@/lib/options'
 import { exportAttendance } from '@/lib/export'
 
 const ATTENDANCE_FILTERS: FilterConfig[] = [
     { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
-    { name: 'status', label: 'Status', type: 'select', field: 'status', options: ATTENDANCE_STATUS_OPTIONS },
+    { name: 'status', label: 'Status', type: 'multi_select', field: 'status', options: ATTENDANCE_STATUS_OPTIONS },
     { name: 'date', label: 'Date', type: 'date_range', field: 'date' },
     { name: 'hoursWorked', label: 'Hours worked', type: 'number_range', field: 'hoursWorked', min: 0, max: 24 },
     { name: 'overtimeHours', label: 'Has overtime', type: 'toggle', field: 'overtimeHours' },
@@ -117,14 +117,29 @@ export function AttendancePage() {
         availableFilters: ATTENDANCE_FILTERS,
     })
 
-    const advancedStatus = (search.appliedFilters.status?.value as string | undefined) || undefined
+    const statusApplied = search.appliedFilters.status
+    const advancedStatus = Array.isArray(statusApplied?.value) ? undefined : (statusApplied?.value as string | undefined) || undefined
+
+    // Build the server-side filter string from the advanced filter panel.
+    // Single-value status is already forwarded via the `status` param, so exclude
+    // it here to avoid a duplicate AND condition. Multi-select status (array value)
+    // is NOT sent as the `status` param, so it must stay in the filter string.
+    const filterStr = useMemo(() => {
+        const isMultiStatus = Array.isArray(statusApplied?.value)
+        if (!isMultiStatus) {
+            const { status: _s, ...rest } = search.appliedFilters
+            return buildFilterQueryString(rest) || undefined
+        }
+        return buildFilterQueryString(search.appliedFilters) || undefined
+    }, [search.appliedFilters, statusApplied?.value])
 
     const { data: records, isLoading, refetch, isFetching } = useAttendance({
         startDate: start,
         endDate: end,
         employeeId: filterEmployee || undefined,
         status: advancedStatus || (filterStatus !== 'all' ? filterStatus : undefined),
-        limit: 100,
+        filter: filterStr,
+        limit: 10000,
     })
     const { data: employeesData } = useEmployees({ limit: 100 })
     const { data: orgUnitsRaw = [] } = useOrgUnits()
@@ -175,14 +190,18 @@ export function AttendancePage() {
     }, [empList])
 
     const attendanceClientFilters = useMemo(() => {
+        if (Array.isArray(statusApplied?.value)) return search.appliedFilters
         const { status: _s, ...rest } = search.appliedFilters
         return rest
-    }, [search.appliedFilters])
+    }, [search.appliedFilters, statusApplied?.value])
     const filteredAttendance = useMemo(
         () => applyClientFilters(list as unknown as Record<string, unknown>[], {
             searchInput: search.searchInput,
             appliedFilters: attendanceClientFilters,
             searchFields: ['employeeName', 'employeeNo', 'employeeDepartment', 'status'],
+            fieldAccessors: {
+                overtimeHours: (row) => parseFloat(String(row.overtimeHours ?? '0')) > 0,
+            },
         }) as unknown as AttendanceRecord[],
         [list, attendanceClientFilters, search.searchInput],
     )

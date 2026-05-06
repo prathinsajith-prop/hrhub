@@ -195,7 +195,7 @@ export function ToggleFilter({ config, value, onChange }: PrimitiveProps) {
     return (
         <label className="flex items-center justify-between gap-3">
             <span className="text-sm">{config.label}</span>
-            <Switch checked={v} onCheckedChange={(checked) => onChange(checked ? { value: true, operator: 'equals' } : null)} />
+            <Switch checked={v} onCheckedChange={(checked) => onChange(checked ? { value: true, operator: 'is' } : null)} />
         </label>
     )
 }
