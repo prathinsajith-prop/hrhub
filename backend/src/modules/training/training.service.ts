@@ -7,6 +7,14 @@ import type { InferInsertModel } from 'drizzle-orm'
 
 type NewTraining = InferInsertModel<typeof trainingRecords>
 
+const TRAINING_FIELD_MAP = {
+    status: trainingRecords.status,
+    type: trainingRecords.type,
+    startDate: trainingRecords.startDate,
+    endDate: trainingRecords.endDate,
+}
+const TRAINING_ALLOWED = new Set(Object.keys(TRAINING_FIELD_MAP))
+
 export async function listTraining(
     tenantId: string,
     params: {
@@ -14,11 +22,12 @@ export async function listTraining(
         status?: string
         type?: string
         search?: string
+        filter?: string
         limit: number
         offset: number
     },
 ) {
-    const { employeeId, status, type, search, limit, offset } = params
+    const { employeeId, status, type, search, filter, limit, offset } = params
 
     // Base: tenant + soft-delete + employee scope — shared by the KPI aggregation.
     const baseConds = Conditions.create()
@@ -31,6 +40,7 @@ export async function listTraining(
         .match(trainingRecords.status, status)
         .match(trainingRecords.type, type)
         .search(search, trainingRecords.title)
+        .filter(filter, TRAINING_FIELD_MAP, TRAINING_ALLOWED)
 
     const [rows, [kpi]] = await Promise.all([
         db

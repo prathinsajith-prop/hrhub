@@ -261,10 +261,11 @@ export function MyComplaintsPage() {
     const { t } = useTranslation()
     const [showNew, setShowNew] = useState(false)
 
-    const { data: list = [], isLoading } = useQuery({
+    const { data: myComplaintsRes, isLoading } = useQuery({
         queryKey: ['my-complaints'],
-        queryFn: () => api.get<{ data: Complaint[] }>('/my/complaints').then(r => r.data ?? []),
+        queryFn: () => api.get<{ data: Complaint[]; total: number }>('/my/complaints'),
     })
+    const list = myComplaintsRes?.data ?? []
 
     return (
         <PageWrapper>

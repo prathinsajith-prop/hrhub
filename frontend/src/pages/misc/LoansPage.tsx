@@ -42,7 +42,7 @@ const LOAN_FILTERS: FilterConfig[] = [
     {
         name: 'status',
         label: 'Status',
-        type: 'select',
+        type: 'multi_select',
         options: [
             { value: 'pending', label: 'Pending' },
             { value: 'active', label: 'Active' },

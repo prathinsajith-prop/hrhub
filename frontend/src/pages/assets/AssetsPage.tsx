@@ -34,6 +34,7 @@ import {
 } from '@/hooks/useAssets'
 import { EmployeeSelect } from '@/components/shared'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
+import { TablePagination } from '@/components/shared'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 
@@ -842,33 +843,17 @@ export function AssetsPage() {
                     columns={columns}
                     data={data?.data ?? []}
                     emptyMessage="No assets found"
+                    pageSize={25}
                 />
             )}
 
-            {/* Pagination */}
-            {!isLoading && (data?.total ?? 0) > 25 && (
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <span>Showing {(params.offset) + 1}–{Math.min(params.offset + 25, data!.total!)} of {data!.total}</span>
-                    <div className="flex gap-2">
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={params.offset === 0}
-                            onClick={() => setParams(p => ({ ...p, offset: Math.max(0, p.offset - 25) }))}
-                        >
-                            Previous
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={params.offset + 25 >= (data?.total ?? 0)}
-                            onClick={() => setParams(p => ({ ...p, offset: p.offset + 25 }))}
-                        >
-                            Next
-                        </Button>
-                    </div>
-                </div>
-            )}
+            <TablePagination
+                total={data?.total ?? 0}
+                offset={params.offset}
+                limit={25}
+                onChange={offset => setParams(p => ({ ...p, offset }))}
+                loading={isFetching}
+            />
 
             {/* Dialogs */}
             {canManageAssets && (

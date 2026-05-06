@@ -1,4 +1,6 @@
 import { useMemo, useState, memo } from 'react'
+
+const PAGE_SIZE = 10
 import { type ColumnDef } from '@tanstack/react-table'
 import { labelFor } from '@/lib/enums'
 import {
@@ -46,15 +48,15 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { FlagImg, resolveCountryIso } from '@/components/shared/PhoneInput'
-import { CopyableEmail } from '@/components/shared'
-import type { FilterConfig } from '@/lib/filters'
+import { CopyableEmail, TablePagination } from '@/components/shared'
+import { buildFilterQueryString, type FilterConfig } from '@/lib/filters'
 import type { Employee } from '@/types'
 
 const EMPLOYEE_FILTERS: FilterConfig[] = [
   {
     name: 'status',
     label: 'Status',
-    type: 'select',
+    type: 'multi_select',
     field: 'status',
     icon: Star,
     options: [
@@ -190,23 +192,30 @@ export function EmployeesPage() {
     availableFilters: EMPLOYEE_FILTERS,
   })
 
-  const filterStatus = (search.appliedFilters.status?.value as string | undefined) || undefined
-  const filterDept = (search.appliedFilters.department?.value as string | undefined) || undefined
-
-  // Separate status/department (handled as explicit params) and emirati toggle (client-only)
-  // from the remaining filters that the backend can process via the compact filter string.
+  // Only emirati is client-side; everything else (status, department, designation, etc.)
+  // goes through the compact filter string so IN/LIKE operators work correctly.
   const serverFilters = useMemo(() => {
-    const { status: _s, department: _d, emirati: _e, ...rest } = search.appliedFilters
+    const { emirati: _e, ...rest } = search.appliedFilters
     return rest
   }, [search.appliedFilters])
 
+  const [offset, setOffset] = useState(0)
+
+  // Reset to page 1 whenever search or filters change.
+  const filterKey = (search.searchInput ?? '') + '||' + buildFilterQueryString(serverFilters)
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey)
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey)
+    if (offset !== 0) setOffset(0)
+  }
+
   const { data: empData, isLoading, isFetching, isError, error, refetch } = useEmployees({
-    limit: 200,
+    limit: PAGE_SIZE,
+    offset,
     search: search.searchInput || undefined,
-    status: filterStatus,
-    department: filterDept,
     filters: serverFilters,
   })
+  const total = empData?.total ?? 0
   const { data: orgUnits = [] } = useOrgUnits()
   const orgUnitName = useMemo(() => {
     const map = new Map(orgUnits.map(u => [u.id, u.name]))
@@ -223,10 +232,7 @@ export function EmployeesPage() {
   const updateStatus = useUpdateEmployeeStatus()
 
   async function handleExportCsv() {
-    await exportEmployeesCsv({
-      department: search.appliedFilters.department?.value as string | undefined,
-      status: search.appliedFilters.status?.value as string | undefined,
-    })
+    await exportEmployeesCsv({ filter: buildFilterQueryString(serverFilters) || undefined })
   }
   // Only the emirati toggle remains as client-side since it maps a boolean to a text enum value.
   const filtered = useMemo(() => {
@@ -489,7 +495,7 @@ export function EmployeesPage() {
               filters: EMPLOYEE_FILTERS,
               placeholder: 'Search by name, ID, email…',
             }}
-            pageSize={8}
+            pageSize={PAGE_SIZE}
             emptyMessage="No employees found."
             enableSelection
             onRowClick={(row: Employee) => navigate(`/employees/${row.id}`)}
@@ -522,6 +528,13 @@ export function EmployeesPage() {
                 </Button>
               </>
             )}
+          />
+          <TablePagination
+            total={total}
+            offset={offset}
+            limit={PAGE_SIZE}
+            onChange={setOffset}
+            loading={isFetching}
           />
         </CardContent>
       </Card>

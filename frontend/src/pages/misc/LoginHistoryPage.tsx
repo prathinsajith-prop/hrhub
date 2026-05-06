@@ -1,4 +1,6 @@
 import { useState } from 'react'
+
+const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
 import { format, formatDistanceToNow } from 'date-fns'
 import { arSA } from 'date-fns/locale'
@@ -24,6 +26,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
+import { TablePagination } from '@/components/shared'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -50,6 +53,13 @@ export function LoginHistoryPage() {
 
     const { data: records = [], isLoading, isFetching, refetch } = useLoginHistory({ limit: 100 })
 
+    const [offset, setOffset] = useState(0)
+    const [lastFilter, setLastFilter] = useState(filter)
+    if (filter !== lastFilter) {
+        setLastFilter(filter)
+        if (offset !== 0) setOffset(0)
+    }
+
     const isArabic = i18n.language === 'ar'
     const dateFnsLocale = isArabic ? arSA : undefined
 
@@ -59,6 +69,7 @@ export function LoginHistoryPage() {
 
     const filtered =
         filter === 'all' ? records : records.filter((r) => r.eventType === filter)
+    const pageRecords = filtered.slice(offset, offset + PAGE_SIZE)
 
     const formatTime = (iso: string) => {
         const date = new Date(iso)
@@ -152,7 +163,7 @@ export function LoginHistoryPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filtered.map((record) => {
+                                {pageRecords.map((record) => {
                                     const cfg = eventConfig[record.eventType] ?? eventConfig.login
                                     const Icon = cfg.icon
                                     const { distance, absolute } = formatTime(record.createdAt)
@@ -217,6 +228,9 @@ export function LoginHistoryPage() {
                             </TableBody>
                         </Table>
                     )}
+                    <div className="px-6 py-3">
+                        <TablePagination total={filtered.length} offset={offset} limit={PAGE_SIZE} onChange={setOffset} />
+                    </div>
                 </CardContent>
             </Card>
         </div>

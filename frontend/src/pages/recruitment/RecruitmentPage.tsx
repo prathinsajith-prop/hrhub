@@ -1,4 +1,6 @@
 import { useMemo, useState, memo } from 'react'
+
+const PAGE_SIZE = 10
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
@@ -40,10 +42,11 @@ import { type FilterConfig } from '@/lib/filters'
 import { JOB_STATUS_OPTIONS } from '@/lib/options'
 import { exportRecruitment } from '@/lib/export'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
+import { TablePagination } from '@/components/shared'
 
 const JOB_FILTERS: FilterConfig[] = [
   { name: 'title', label: 'Job title', type: 'text', field: 'title' },
-  { name: 'status', label: 'Status', type: 'select', field: 'status', options: JOB_STATUS_OPTIONS },
+  { name: 'status', label: 'Status', type: 'multi_select', field: 'status', options: JOB_STATUS_OPTIONS },
   { name: 'department', label: 'Department', type: 'text', field: 'department' },
   { name: 'location', label: 'Location', type: 'text', field: 'location' },
   { name: 'openings', label: 'Openings', type: 'number_range', field: 'openings', min: 1 },
@@ -523,22 +526,31 @@ export function RecruitmentPage() {
     availableFilters: JOB_FILTERS,
   })
 
-  const jobStatus = (jobSearch.appliedFilters.status?.value as string | undefined) || undefined
   const jobDept = (jobSearch.appliedFilters.department?.value as string | undefined) || undefined
 
-  // Pass remaining filters (title, location, openings, minSalary, closingDate) to the server
+  // status is multi_select → goes through the filter string so IN() works correctly.
+  // department is text/select → dedicated param for org-unit scoping.
   const serverJobFilters = useMemo(() => {
-    const { status: _s, department: _d, ...rest } = jobSearch.appliedFilters
+    const { department: _d, ...rest } = jobSearch.appliedFilters
     return rest
   }, [jobSearch.appliedFilters])
 
+  const [jobsOffset, setJobsOffset] = useState(0)
+  const jobsFilterKey = (jobSearch.searchInput ?? '') + '||' + JSON.stringify(serverJobFilters)
+  const [lastJobsFilterKey, setLastJobsFilterKey] = useState(jobsFilterKey)
+  if (jobsFilterKey !== lastJobsFilterKey) {
+    setLastJobsFilterKey(jobsFilterKey)
+    if (jobsOffset !== 0) setJobsOffset(0)
+  }
+
   const { data: jobsData, isLoading: jobsLoading, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({
-    limit: 50,
-    status: jobStatus,
+    limit: PAGE_SIZE,
+    offset: jobsOffset,
     department: jobDept,
     q: jobSearch.searchInput || undefined,
     filters: serverJobFilters,
   })
+  const jobsTotal = jobsData?.total ?? 0
   const { data: appsData, isLoading: appsLoading, refetch: refetchApps } = useApplications({ limit: 100 })
   const isLoading = jobsLoading || appsLoading
   const updateStage = useUpdateApplicationStage()
@@ -698,7 +710,7 @@ export function RecruitmentPage() {
               filters: JOB_FILTERS,
               placeholder: 'Search jobs…',
             }}
-            pageSize={8}
+            pageSize={PAGE_SIZE}
             enableSelection
             getRowId={(row) => String(row.id)}
             toolbar={
@@ -740,6 +752,7 @@ export function RecruitmentPage() {
               </>
             )}
           />
+          <TablePagination total={jobsTotal} offset={jobsOffset} limit={PAGE_SIZE} onChange={setJobsOffset} loading={jobsFetching} />
         </Card>
       )}
 

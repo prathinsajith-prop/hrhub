@@ -10,6 +10,13 @@ type NewAsset = InferInsertModel<typeof assets>
 type NewAssignment = InferInsertModel<typeof assetAssignments>
 type NewMaintenance = InferInsertModel<typeof assetMaintenance>
 
+const ASSET_FIELD_MAP = {
+    status: assets.status,
+    condition: assets.condition,
+    categoryId: assets.categoryId,
+}
+const ASSET_ALLOWED = new Set(Object.keys(ASSET_FIELD_MAP))
+
 // ─── Categories ──────────────────────────────────────────────────────────────
 
 export async function listCategories(tenantId: string) {
@@ -63,12 +70,13 @@ export async function listAssets(
         status?: string
         categoryId?: string
         search?: string
+        filter?: string
         limit: number
         offset: number
         after?: string
     },
 ) {
-    const { status, categoryId, search, limit, offset, after } = params
+    const { status, categoryId, search, filter, limit, offset, after } = params
 
     const cursor = after ? decodeCursor(after) : null
 
@@ -78,6 +86,7 @@ export async function listAssets(
         .match(assets.status, status)
         .match(assets.categoryId, categoryId)
         .like(assets.name, search)
+        .filter(filter, ASSET_FIELD_MAP, ASSET_ALLOWED)
         .cursor(after, assets.createdAt, assets.id)
 
     const pageSize = limit + 1
