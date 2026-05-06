@@ -138,6 +138,14 @@ export default async function (fastify: any): Promise<void> {
         return reply.send(result)
     })
 
+    // GET /api/v1/applications/:id
+    fastify.get('/applications/:id', { ...auth, schema: { tags: ['Recruitment'] } }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const result = await getApplication(request.user.tenantId, id)
+        if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Candidate not found' })
+        return reply.send(result)
+    })
+
     // POST /api/v1/jobs/:id/applications
     fastify.post('/jobs/:id/applications', {
         preHandler: [fastify.authenticate],

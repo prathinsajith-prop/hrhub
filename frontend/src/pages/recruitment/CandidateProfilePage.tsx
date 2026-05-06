@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/overlays'
 import { cn } from '@/lib/utils'
-import { useApplications, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume } from '@/hooks/useRecruitment'
+import { useApplication, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume } from '@/hooks/useRecruitment'
 import { toast } from '@/components/ui/overlays'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { CopyableEmail, CopyablePhone } from '@/components/shared'
@@ -52,7 +52,7 @@ export function CandidateProfilePage() {
     const { t } = useTranslation()
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
-    const { data, isLoading } = useApplications({ limit: 100 })
+    const { data: candidateData, isLoading } = useApplication(id)
     const updateStage = useUpdateApplicationStage()
     const updateApplication = useUpdateApplication()
     const convertToEmployee = useConvertCandidateToEmployee()
@@ -72,8 +72,7 @@ export function CandidateProfilePage() {
     const [notesDraft, setNotesDraft] = useState('')
     const [newNote, setNewNote] = useState('')
 
-    const candidates = (data?.data ?? []) as Candidate[]
-    const candidate = candidates.find((c) => c.id === id)
+    const candidate = candidateData as Candidate | undefined
 
     // Sync notesDraft when server-side notes change after refetch.
     useEffect(() => { setNotesDraft(candidate?.notes ?? '') }, [candidate?.notes])
