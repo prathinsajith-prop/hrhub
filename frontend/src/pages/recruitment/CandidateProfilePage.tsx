@@ -24,26 +24,17 @@ import { useApplication, useUpdateApplicationStage, useUpdateApplication, useCon
 import { toast } from '@/components/ui/overlays'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { CopyableEmail, CopyablePhone } from '@/components/shared'
+import { FlagImg, resolveCountryIso } from '@/components/shared/PhoneInput'
 import type { Candidate, ApplicationStage } from '@/types'
 
-const stageLabel: Record<ApplicationStage, string> = {
-    received: 'Received',
-    screening: 'Screening',
-    interview: 'Interview',
-    assessment: 'Assessment',
-    offer: 'Offer',
-    pre_boarding: 'Pre-Boarding',
-    rejected: 'Rejected',
-}
-
-const stageStyles: Record<ApplicationStage, string> = {
-    received: 'bg-muted text-muted-foreground',
-    screening: 'bg-info/10 text-info border-info/20',
-    interview: 'bg-primary/10 text-primary border-primary/20',
-    assessment: 'bg-warning/10 text-warning border-warning/20',
-    offer: 'bg-success/10 text-success border-success/20',
-    pre_boarding: 'bg-success/10 text-success border-success/20',
-    rejected: 'bg-destructive/10 text-destructive border-destructive/20',
+const STAGE_CONFIG: Record<ApplicationStage, { label: string; badgeClass: string; dotClass: string; textClass: string; lineClass: string }> = {
+    received:    { label: 'Received',     badgeClass: 'bg-slate-100 text-slate-600 border-slate-300',              dotClass: 'bg-slate-400 border-slate-400 text-white',                     lineClass: 'bg-slate-200',      textClass: 'text-slate-600' },
+    screening:   { label: 'Screening',    badgeClass: 'bg-info/10 text-info border-info/20',                       dotClass: 'bg-info border-info text-white',                               lineClass: 'bg-info/30',         textClass: 'text-info' },
+    interview:   { label: 'Interview',    badgeClass: 'bg-warning/10 text-warning border-warning/20',              dotClass: 'bg-warning border-warning text-warning-foreground',            lineClass: 'bg-warning/30',      textClass: 'text-warning' },
+    assessment:  { label: 'Assessment',   badgeClass: 'bg-primary/10 text-primary border-primary/20',              dotClass: 'bg-primary border-primary text-primary-foreground',            lineClass: 'bg-primary/30',      textClass: 'text-primary' },
+    offer:       { label: 'Offer',        badgeClass: 'bg-success/10 text-success border-success/20',              dotClass: 'bg-success border-success text-success-foreground',            lineClass: 'bg-success/30',      textClass: 'text-success' },
+    pre_boarding:{ label: 'Pre-Boarding', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',         dotClass: 'bg-emerald-500 border-emerald-500 text-white',                 lineClass: 'bg-emerald-200',     textClass: 'text-emerald-600' },
+    rejected:    { label: 'Rejected',     badgeClass: 'bg-destructive/10 text-destructive border-destructive/20',  dotClass: 'bg-destructive border-destructive text-destructive-foreground', lineClass: 'bg-destructive/30',  textClass: 'text-destructive' },
 }
 
 const stageOrder: ApplicationStage[] = ['received', 'screening', 'interview', 'assessment', 'offer', 'pre_boarding']
@@ -110,7 +101,7 @@ export function CandidateProfilePage() {
             updateStage.mutate(
                 { id: candidate!.id, stage: nextStage },
                 {
-                    onSuccess: () => toast.success(`Moved to ${stageLabel[nextStage]}`),
+                    onSuccess: () => toast.success(`Moved to ${STAGE_CONFIG[nextStage].label}`),
                     onError: () => toast.error('Failed to update stage'),
                 },
             )
@@ -254,8 +245,8 @@ export function CandidateProfilePage() {
                             </div>
                             <div>
                                 <h3 className="font-semibold">{candidate.name}</h3>
-                                <Badge variant="outline" className={cn('text-[11px] mt-1', stageStyles[candidate.stage])}>
-                                    {stageLabel[candidate.stage]}
+                                <Badge variant="outline" className={cn('text-[11px] mt-1', STAGE_CONFIG[candidate.stage].badgeClass)}>
+                                    {STAGE_CONFIG[candidate.stage].label}
                                 </Badge>
                             </div>
                         </div>
@@ -274,7 +265,10 @@ export function CandidateProfilePage() {
                             {candidate.nationality && (
                                 <div className="flex items-center gap-2">
                                     <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                    <span className="text-muted-foreground">{candidate.nationality}</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <FlagImg iso2={resolveCountryIso(candidate.nationality) ?? ''} size={16} className="shrink-0" />
+                                        <span className="text-muted-foreground">{candidate.nationality}</span>
+                                    </div>
                                 </div>
                             )}
                             {candidate.experience !== undefined && (
@@ -364,7 +358,7 @@ export function CandidateProfilePage() {
                                     onClick={handleAdvanceStage}
                                     disabled={updateStage.isPending}
                                 >
-                                    Move to {stageOrder[currentStageIdx + 1] ? stageLabel[stageOrder[currentStageIdx + 1]] : 'Next Stage'}
+                                    Move to {stageOrder[currentStageIdx + 1] ? STAGE_CONFIG[stageOrder[currentStageIdx + 1]].label : 'Next Stage'}
                                 </Button>
                             ) : null}
                             <Button
@@ -394,30 +388,36 @@ export function CandidateProfilePage() {
                                     {stageOrder.map((stage, i) => {
                                         const done = i < currentStageIdx
                                         const current = i === currentStageIdx && !isRejected
+                                        const cfg = STAGE_CONFIG[stage]
                                         return (
                                             <div key={stage} className="flex gap-4">
                                                 <div className="flex flex-col items-center">
                                                     <div className={cn(
                                                         'h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2',
-                                                        done ? 'bg-success border-success text-success-foreground' :
-                                                            current ? 'bg-primary border-primary text-primary-foreground' :
-                                                                'bg-card border-border text-muted-foreground'
+                                                        done || current ? cfg.dotClass : 'bg-card border-border text-muted-foreground'
                                                     )}>
                                                         {done ? '✓' : i + 1}
                                                     </div>
                                                     {i < stageOrder.length - 1 && (
-                                                        <div className={cn('w-0.5 flex-1 min-h-[24px] mt-1', done ? 'bg-success' : 'bg-border')} />
+                                                        <div className={cn('w-0.5 flex-1 min-h-[24px] mt-1', done ? cfg.lineClass : 'bg-border')} />
                                                     )}
                                                 </div>
                                                 <div className="pb-4 flex-1">
-                                                    <p className={cn(
-                                                        'font-medium text-sm',
-                                                        done ? 'text-success' : current ? 'text-primary' : 'text-muted-foreground'
-                                                    )}>
-                                                        {stageLabel[stage]}
-                                                    </p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className={cn(
+                                                            'font-medium text-sm',
+                                                            done || current ? cfg.textClass : 'text-muted-foreground'
+                                                        )}>
+                                                            {cfg.label}
+                                                        </p>
+                                                        {current && (
+                                                            <Badge variant="outline" className={cn('text-[10px] py-0 h-4', cfg.badgeClass)}>
+                                                                Current
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                                        {done ? 'Completed' : current ? 'Current Stage' : 'Upcoming'}
+                                                        {done ? 'Completed' : current ? 'In progress' : 'Upcoming'}
                                                     </p>
                                                 </div>
                                             </div>
@@ -425,11 +425,11 @@ export function CandidateProfilePage() {
                                     })}
                                     {isRejected && (
                                         <div className="flex gap-4">
-                                            <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2 bg-destructive border-destructive text-destructive-foreground">
+                                            <div className={cn('h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2', STAGE_CONFIG.rejected.dotClass)}>
                                                 ✕
                                             </div>
                                             <div className="flex-1">
-                                                <p className="font-medium text-sm text-destructive">Rejected</p>
+                                                <p className={cn('font-medium text-sm', STAGE_CONFIG.rejected.textClass)}>Rejected</p>
                                                 <p className="text-xs text-muted-foreground mt-0.5">Application closed</p>
                                             </div>
                                         </div>

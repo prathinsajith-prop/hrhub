@@ -18,7 +18,14 @@ const JOB_FIELD_MAP = {
 }
 const JOB_ALLOWED = new Set(Object.keys(JOB_FIELD_MAP))
 
-const APP_FIELD_MAP = { stage: jobApplications.stage, jobId: jobApplications.jobId }
+const APP_FIELD_MAP = {
+    stage: jobApplications.stage,
+    jobId: jobApplications.jobId,
+    nationality: jobApplications.nationality,
+    score: jobApplications.score,
+    experience: jobApplications.experience,
+    expectedSalary: jobApplications.expectedSalary,
+}
 const APP_ALLOWED = new Set(Object.keys(APP_FIELD_MAP))
 
 type NewJob = InferInsertModel<typeof recruitmentJobs>
@@ -84,8 +91,13 @@ export async function listApplications(tenantId: string, params: { jobId?: strin
         .search(q, jobApplications.name, jobApplications.email)
         .filter(filter, APP_FIELD_MAP, APP_ALLOWED)
 
-    const rows = await db.select({ ...getTableColumns(jobApplications), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+    const rows = await db.select({
+        ...getTableColumns(jobApplications),
+        totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
+        jobTitle: recruitmentJobs.title,
+    })
         .from(jobApplications)
+        .leftJoin(recruitmentJobs, eq(jobApplications.jobId, recruitmentJobs.id))
         .where(conds.where())
         .orderBy(desc(jobApplications.createdAt))
         .limit(limit).offset(offset)

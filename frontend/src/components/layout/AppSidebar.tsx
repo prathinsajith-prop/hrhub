@@ -88,7 +88,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         { title: t('nav.payroll'), url: "/payroll", icon: BanknoteIcon },
         { title: t('nav.leave'), url: "/leave", icon: CalendarCheckIcon },
         { title: t('nav.leavePolicies'), url: "/leave-policies", icon: CalendarClockIcon },
-        { title: t('nav.leaveAdjustments', { defaultValue: 'Leave Adjustments' }), url: "/leave-adjustments", icon: CalendarPlusIcon },
+        { title: t('nav.leaveAdjustments', { defaultValue: 'Adjustments' }), url: "/leave-adjustments", icon: CalendarPlusIcon },
         { title: t('nav.attendance'), url: "/attendance", icon: ClockIcon },
         { title: t('nav.performance'), url: "/performance", icon: StarIcon },
         { title: t('nav.assets', { defaultValue: 'Asset Management' }), url: "/assets", icon: PackageIcon },
