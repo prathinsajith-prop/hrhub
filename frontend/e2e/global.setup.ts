@@ -28,20 +28,26 @@ const KEEP_SIGNED_IN_KEY = 'hrhub-keep-signed-in'
 const EMAIL = process.env.E2E_EMAIL ?? 'prathin@propcrm.com'
 const PASSWORD = process.env.E2E_PASSWORD ?? 'Admin@123'
 
-const AUTH_MAX_AGE_MS = 12 * 60 * 60 * 1000 // 12 hours
+// Tokens are considered fresh only when the access JWT won't expire before the
+// full test suite finishes. We use a 10-minute buffer so tokens don't expire
+// mid-run even if the suite takes a while.
+const TOKEN_BUFFER_MS = 10 * 60 * 1000
 
 function isAuthFileFresh(): boolean {
     try {
         if (!fs.existsSync(AUTH_FILE)) return false
-        const stat = fs.statSync(AUTH_FILE)
-        const ageMs = Date.now() - stat.mtimeMs
-        if (ageMs > AUTH_MAX_AGE_MS) return false
-        // Check the file has non-empty localStorage entries
         const content = JSON.parse(fs.readFileSync(AUTH_FILE, 'utf-8'))
         const origins = content?.origins ?? []
         for (const origin of origins) {
             const entry = (origin.localStorage ?? []).find((e: any) => e.name === AUTH_KEY)
-            if (entry?.value) return true
+            if (!entry?.value) continue
+            const state = JSON.parse(entry.value)?.state
+            const token: string = state?.accessToken ?? ''
+            if (!token) return false
+            // Decode JWT payload (base64url, second segment)
+            const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
+            const expiresAtMs = (payload.exp ?? 0) * 1000
+            return Date.now() + TOKEN_BUFFER_MS < expiresAtMs
         }
         return false
     } catch {
@@ -52,7 +58,7 @@ function isAuthFileFresh(): boolean {
 setup('authenticate as admin', async ({ page }) => {
     // Reuse existing auth file if it's still fresh — avoids hitting the rate limiter
     if (isAuthFileFresh()) {
-        console.log('[setup:admin] Reusing existing auth state (< 12 h old)')
+        console.log('[setup:admin] Reusing existing auth state (token still valid)')
         return
     }
 
