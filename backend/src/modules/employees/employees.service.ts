@@ -72,6 +72,9 @@ export async function listEmployees(params: ListEmployeesParams) {
 
     const conditions = [eq(employees.tenantId, tenantId), eq(employees.isArchived, false)]
 
+    if (status) {
+        conditions.push(eq(employees.status, status))
+    }
     if (managerEmployeeId) {
         // Subtree scoping for dept_head: only employees who report (directly or
         // indirectly) to this manager, plus the manager themselves.
@@ -82,7 +85,8 @@ export async function listEmployees(params: ListEmployeesParams) {
         }
         conditions.push(inArray(employees.id, subtreeIds))
     } else if (department) {
-        conditions.push(eq(employees.department, department))
+        // Match either the legacy text column or the FK-based org unit name
+        conditions.push(or(eq(employees.department, department), eq(deptUnit.name, department))!)
     }
     if (search) {
         const trimmed = search.trim()
