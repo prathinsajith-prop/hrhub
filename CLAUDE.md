@@ -48,12 +48,37 @@ pnpm test:watch       # vitest interactive
 pnpm preview          # preview production build
 ```
 
+Type-check only (no build):
+```bash
+pnpm exec tsc -p tsconfig.app.json --noEmit
+```
+
 Run a single test file:
 ```bash
 pnpm vitest run src/__tests__/permissions.test.ts
 ```
 
-Coverage is scoped to `src/lib/**` and `src/hooks/**` only — page components are not covered by the test suite.
+Coverage is scoped to `src/lib/**` and `src/hooks/**` only — page components are not covered by the unit test suite.
+
+#### E2E tests (Playwright)
+
+Requires the backend running on `localhost:4000` and the frontend on `localhost:5174`.
+
+```bash
+pnpm e2e           # run all E2E tests headless (starts Vite automatically)
+pnpm e2e:ui        # open Playwright's interactive UI (step through tests visually)
+pnpm e2e:debug     # run with browser visible + DevTools open
+pnpm e2e:report    # open the last HTML report
+```
+
+Test files live in `frontend/e2e/`:
+- `global.setup.ts` — logs in once as super-admin, saves auth state to `e2e/.auth/admin.json`
+- `auth.spec.ts` — login/logout flows (runs without saved auth)
+- `smoke.spec.ts` — every main route loads without JS errors
+- `employees.spec.ts` — table renders, search filters, row click navigates
+- `pagination.spec.ts` — regression tests for server-side pagination (TablePagination + DataTable)
+
+Auth state (`e2e/.auth/`) is gitignored. Delete it to force a fresh login on the next run.
 
 ### Infrastructure
 
@@ -216,7 +241,7 @@ The `visa.routes.ts` uses a local `audit()` wrapper — preferred pattern for co
 
 **Data fetching:** TanStack Query 5. One hook file per module (`hooks/use<Module>.ts`). Query keys: `[module, tenantId, ...params]`. Standard `staleTime: 30_000`.
 
-**API client** (`lib/api.ts`): Thin fetch wrapper. Bearer token from Zustand. 401 → token refresh (singleton promise, no race conditions). Base URL: `VITE_API_URL` env var, defaults to `/api/v1` (Vite proxy in dev — leave blank in `.env.local`).
+**API client** (`lib/api.ts`): Thin fetch wrapper. Bearer token from Zustand. 401 → token refresh (singleton promise, no race conditions). Base URL: `VITE_API_URL` env var, defaults to `/api/v1` (Vite proxy in dev — leave blank in `.env.local`). `api.get<T>(path)` returns `T` directly — the raw JSON body. If the backend wraps its response in `{ data: ... }`, the type must reflect that: `api.get<{ data: Employee[] }>('/employees')`. If the backend sends a flat object like `{ data, total, limit, offset, hasMore }`, use that shape directly. Do not add an extra `.data` unwrap layer on a flat response.
 
 **Auth state** (`store/authStore.ts`): Zustand, persisted to `localStorage` (with "remember me" → `sessionStorage` fallback).
 
@@ -245,6 +270,16 @@ if (externalValue !== lastSynced) {
     setLocalField(externalValue)
 }
 ```
+
+**TanStack Query config** (`lib/queryClient.ts`): Global defaults — `staleTime: 30_000`, `gcTime: 5min`, `refetchOnWindowFocus: false`, retry disabled for 4xx errors. Mutations without an `onError` handler get an automatic generic error toast via `MutationCache`.
+
+**Filter system** (`lib/filters/`): Multi-file module — `types.ts` (FilterConfig, AppliedFilter), `query-builder.ts` (builds URL params or filter DSL strings), `transport.ts` (runSearch — wraps fetch), `apply-client.ts` (client-side filtering on an in-memory array). Pages that filter data use `useSearchFilters(storageKey, availableFilters)` for state management, then either (a) pass the resulting params to a hook for server-side filtering, or (b) call `applyClientFilters(list, searchInput, appliedFilters, searchFields)` for client-side filtering on a pre-fetched array.
+
+**Pagination pattern**: Use `TablePagination` from `components/shared` for server-side offset pagination (renders "Showing X–Y of Z results" + Prev/Next only when multiple pages exist). When pairing with `DataTable`, set `pageSize` on `DataTable` to match the server fetch limit so the two pagination controls don't conflict (e.g., if fetching 25 from server, use `pageSize={25}` on the DataTable).
+
+**Route constants:** Always import from `lib/routes.ts` (`ROUTES.employees`, `ROUTES.dashboard`, etc.) — never hard-code URL strings.
+
+**TypeScript strictness:** `noUnusedLocals` and `noUnusedParameters` are enabled — unused variables cause compile errors, not just warnings.
 
 **Vite bundle splitting:** Manual chunks defined in `vite.config.ts` — vendor, router, query, ui, charts, pdf, dnd, and per-feature chunks for heavy pages.
 

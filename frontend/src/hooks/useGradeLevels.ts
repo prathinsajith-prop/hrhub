@@ -22,6 +22,7 @@ export interface GradeLevel {
     code: string | null
     level: number | null
     hierarchy: GradeHierarchy | null
+    roles: string[]
     salaryMin: number | null
     salaryMax: number | null
     description: string | null
@@ -35,6 +36,7 @@ export interface GradeLevelInput {
     code?: string
     level?: number
     hierarchy?: GradeHierarchy
+    roles?: string[]
     salaryMin?: number
     salaryMax?: number
     description?: string

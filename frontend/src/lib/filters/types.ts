@@ -82,6 +82,7 @@ export interface QuickFilter {
     filter: AppliedFiltersMap
 }
 
+// If you change this shape, bump STORAGE_VERSION in useSearchFilters.ts to invalidate stale localStorage.
 export interface SearchHistoryEntry {
     id: string
     searchText: string | null

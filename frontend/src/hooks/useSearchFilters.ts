@@ -67,13 +67,17 @@ function isEqualEntry(a: { searchText: string | null; filters: AppliedFiltersMap
     return a.searchText === b.searchText && JSON.stringify(a.filters ?? {}) === JSON.stringify(b.filters ?? {})
 }
 
+// Bump this when the SearchHistoryEntry shape changes to avoid restoring stale/corrupt entries.
+const STORAGE_VERSION = 'v2'
+
 export function useSearchFilters(opts: UseSearchFiltersOptions = {}): UseSearchFiltersReturn {
     const { storageKey = 'searchHistory.default', maxHistoryItems = 10, availableFilters, initialSearch = '', initialFilters = {} } = opts
+    const versionedKey = `${STORAGE_VERSION}:${storageKey}`
 
     const [searchInput, setSearchInput] = useState(initialSearch)
     const [appliedFilters, setAppliedFilters] = useState<AppliedFiltersMap>(initialFilters)
     const [history, setHistory] = useState<SearchHistoryEntry[]>(() =>
-        safeParse<SearchHistoryEntry[]>(typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null, []),
+        safeParse<SearchHistoryEntry[]>(typeof window !== 'undefined' ? localStorage.getItem(versionedKey) : null, []),
     )
 
     const searchRef = useRef(searchInput)
@@ -83,8 +87,8 @@ export function useSearchFilters(opts: UseSearchFiltersOptions = {}): UseSearchF
 
     useEffect(() => {
         if (typeof window === 'undefined') return
-        try { localStorage.setItem(storageKey, JSON.stringify(history)) } catch { /* quota */ }
-    }, [history, storageKey])
+        try { localStorage.setItem(versionedKey, JSON.stringify(history)) } catch { /* quota */ }
+    }, [history, versionedKey])
 
     const setOneFilter = useCallback((name: string, value: AppliedFilter | null) => {
         setAppliedFilters((prev) => {

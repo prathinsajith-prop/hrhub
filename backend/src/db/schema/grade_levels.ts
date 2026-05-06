@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, boolean, integer, timestamp, index, unique } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 
 export const gradeLevels = pgTable('grade_levels', {
@@ -12,6 +12,7 @@ export const gradeLevels = pgTable('grade_levels', {
     salaryMin: integer('salary_min'),
     salaryMax: integer('salary_max'),
     description: text('description'),
+    roles: text('roles').array().notNull().default(sql`'{}'::text[]`),
     isActive: boolean('is_active').notNull().default(true),
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

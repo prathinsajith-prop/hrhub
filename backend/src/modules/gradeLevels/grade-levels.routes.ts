@@ -13,11 +13,15 @@ const salaryRefinement = (d: { salaryMin?: number | null; salaryMax?: number | n
     return true
 }
 
+const VALID_ROLES_LIST = ['employee', 'dept_head', 'pro_officer', 'hr_manager', 'super_admin'] as const
+const rolesSchema = z.array(z.enum(VALID_ROLES_LIST)).optional()
+
 const createSchema = z.object({
     name: z.string().min(1).max(80),
     code: z.string().min(1).max(10).optional(),
     level: z.number().int().min(1).max(100).optional(),
     hierarchy: z.enum(HIERARCHIES).optional(),
+    roles: rolesSchema,
     salaryMin: z.number().int().min(0).optional(),
     salaryMax: z.number().int().min(0).optional(),
     description: z.string().max(500).optional(),
@@ -29,6 +33,7 @@ const updateSchema = z.object({
     code: z.string().min(1).max(10).nullable().optional(),
     level: z.number().int().min(1).max(100).nullable().optional(),
     hierarchy: z.enum(HIERARCHIES).nullable().optional(),
+    roles: rolesSchema,
     salaryMin: z.number().int().min(0).nullable().optional(),
     salaryMax: z.number().int().min(0).nullable().optional(),
     description: z.string().max(500).nullable().optional(),
@@ -109,6 +114,7 @@ export async function gradeLevelsRoutes(fastify: any): Promise<void> {
             code: d.code?.trim() ?? null,
             level: d.level ?? null,
             hierarchy: d.hierarchy ?? null,
+            roles: d.roles ?? [],
             salaryMin: d.salaryMin ?? null,
             salaryMax: d.salaryMax ?? null,
             description: d.description?.trim() ?? null,
@@ -130,6 +136,7 @@ export async function gradeLevelsRoutes(fastify: any): Promise<void> {
         if (d.code !== undefined) patch.code = d.code?.trim() ?? null
         if (d.level !== undefined) patch.level = d.level ?? null
         if (d.hierarchy !== undefined) patch.hierarchy = d.hierarchy ?? null
+        if (d.roles !== undefined) patch.roles = d.roles ?? []
         if (d.salaryMin !== undefined) patch.salaryMin = d.salaryMin ?? null
         if (d.salaryMax !== undefined) patch.salaryMax = d.salaryMax ?? null
         if (d.description !== undefined) patch.description = d.description?.trim() ?? null

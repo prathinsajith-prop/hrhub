@@ -199,6 +199,9 @@ export function AttendancePage() {
             searchInput: search.searchInput,
             appliedFilters: attendanceClientFilters,
             searchFields: ['employeeName', 'employeeNo', 'employeeDepartment', 'status'],
+            fieldAccessors: {
+                overtimeHours: (row) => parseFloat(String(row.overtimeHours ?? '0')) > 0,
+            },
         }) as unknown as AttendanceRecord[],
         [list, attendanceClientFilters, search.searchInput],
     )

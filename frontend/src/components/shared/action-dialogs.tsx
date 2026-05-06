@@ -16,7 +16,7 @@ import { useCreateEmployee, useUpdateEmployee, useNextEmployeeNo, useInviteEmplo
 import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
-import { useGradeLevels } from '@/hooks/useGradeLevels'
+import { useGradeLevels, type GradeLevel } from '@/hooks/useGradeLevels'
 import { useTeams } from '@/hooks/useTeams'
 import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
@@ -43,6 +43,37 @@ const EMPLOYEE_ROLE_OPTIONS: SelectOption[] = [
     { value: 'pro_officer', label: 'PRO Officer' },
     { value: 'hr_manager', label: 'HR Manager' },
 ]
+
+const ROLE_LABEL_MAP: Record<string, string> = {
+    employee:    'Employee',
+    dept_head:   'Department Head',
+    pro_officer: 'PRO Officer',
+    hr_manager:  'HR Manager',
+    super_admin: 'Super Admin',
+}
+
+function buildGradeLevelOptions(grades: GradeLevel[], role: string): ComboboxOption[] {
+    const fmt = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
+    const toOption = (g: GradeLevel): ComboboxOption => {
+        const label = g.code ? `${g.code} – ${g.name}` : g.name
+        const parts: string[] = []
+        if (g.salaryMin != null && g.salaryMax != null) parts.push(`AED ${fmt(g.salaryMin)} – ${fmt(g.salaryMax)}`)
+        else if (g.salaryMin != null) parts.push(`AED ${fmt(g.salaryMin)}+`)
+        else if (g.salaryMax != null) parts.push(`Up to AED ${fmt(g.salaryMax)}`)
+        return { value: g.id, label, secondary: parts.join('  ·  ') || undefined }
+    }
+
+    const filtered = role ? grades.filter(g => g.roles?.includes(role)) : grades
+    return [...filtered].sort((a, b) => (a.level ?? 999) - (b.level ?? 999) || a.name.localeCompare(b.name)).map(toOption)
+}
+
+function GradeLevelHint({ grades, role }: { grades: GradeLevel[]; role: string }) {
+    if (!role) return null
+    const count = grades.filter(g => g.roles?.includes(role)).length
+    return count > 0
+        ? <p className="text-xs text-muted-foreground">Showing <span className="font-medium">{count}</span> grade {count === 1 ? 'level' : 'levels'} for <span className="font-medium">{ROLE_LABEL_MAP[role] ?? role}</span>.</p>
+        : <p className="text-xs text-amber-600">No grade levels are tagged for this role. Configure them in Org Settings → Grade Levels.</p>
+}
 
 // Searchable reporting-manager picker — server-side search, limit 20.
 function ManagerPicker({
@@ -825,15 +856,25 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                 </div>
                             )}
                             <div className="space-y-1.5">
-                                <Label>Grade Level</Label>
-                                <Select value={form.gradeLevelId} onValueChange={v => setForm(f => ({ ...f, gradeLevelId: v }))}>
-                                    <SelectTrigger><SelectValue placeholder="Select grade level…" /></SelectTrigger>
-                                    <SelectContent>
-                                        {(Array.isArray(gradeLevelList) ? gradeLevelList : []).map((gl: { id: string; name: string }) => (
-                                            <SelectItem key={gl.id} value={gl.id}>{gl.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Label>Grade Level <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+                                {(() => {
+                                    const grades = Array.isArray(gradeLevelList) ? gradeLevelList as GradeLevel[] : []
+                                    return <>
+                                        <Combobox
+                                            value={form.gradeLevelId}
+                                            onValueChange={v => setForm(f => ({ ...f, gradeLevelId: v }))}
+                                            options={buildGradeLevelOptions(grades, form.role)}
+                                            placeholder="Select grade level…"
+                                            searchPlaceholder="Search by code or name…"
+                                            emptyMessage={form.role
+                                                ? `No grade levels tagged for ${ROLE_LABEL_MAP[form.role] ?? form.role}. Tag roles in Org Settings → Grade Levels.`
+                                                : 'Select a role first to see applicable grade levels.'
+                                            }
+                                            clearable
+                                        />
+                                        <GradeLevelHint grades={grades} role={form.role} />
+                                    </>
+                                })()}
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Status</Label>
@@ -1330,19 +1371,30 @@ export function EditEmploymentDialog({
                                 <DatePicker value={form.contractEndDate} min={form.joinDate || undefined} onChange={v => setForm(f => ({ ...f, contractEndDate: v ?? '' }))} placeholder="Select date" />
                             </div>
                         )}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="space-y-1.5"><Label>Reporting Manager</Label><ManagerPicker value={form.reportingTo} excludeId={employee.id} onChange={(id, name) => setForm(f => ({ ...f, reportingTo: id, managerName: name }))} /></div>
-                            <div className="space-y-1.5">
-                                <Label>Grade Level</Label>
-                                <Select value={form.gradeLevelId} onValueChange={v => setForm(f => ({ ...f, gradeLevelId: v }))}>
-                                    <SelectTrigger><SelectValue placeholder="Select grade level…" /></SelectTrigger>
-                                    <SelectContent>
-                                        {(Array.isArray(gradeLevelList) ? gradeLevelList : []).map((gl: { id: string; name: string }) => (
-                                            <SelectItem key={gl.id} value={gl.id}>{gl.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <div className="space-y-1.5">
+                            <Label>Reporting Manager</Label>
+                            <ManagerPicker value={form.reportingTo} excludeId={employee.id} onChange={(id, name) => setForm(f => ({ ...f, reportingTo: id, managerName: name }))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Grade Level <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+                            {(() => {
+                                const grades = Array.isArray(gradeLevelList) ? gradeLevelList as GradeLevel[] : []
+                                return <>
+                                    <Combobox
+                                        value={form.gradeLevelId}
+                                        onValueChange={v => setForm(f => ({ ...f, gradeLevelId: v }))}
+                                        options={buildGradeLevelOptions(grades, form.role)}
+                                        placeholder="Select grade level…"
+                                        searchPlaceholder="Search by code or name…"
+                                        emptyMessage={form.role
+                                            ? `No grade levels tagged for ${ROLE_LABEL_MAP[form.role] ?? form.role}. Tag roles in Org Settings → Grade Levels.`
+                                            : 'No grade levels found. Add them in Org Settings.'
+                                        }
+                                        clearable
+                                    />
+                                    <GradeLevelHint grades={grades} role={form.role} />
+                                </>
+                            })()}
                         </div>
                         <div className="space-y-1.5">
                             <Label>Status</Label>
