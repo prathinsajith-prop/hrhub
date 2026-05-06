@@ -56,6 +56,7 @@ test.describe('Documents page', () => {
         if (rowsBefore === 0) { test.skip(); return }
 
         await searchInput.fill('ZZZZZ_NO_MATCH_999')
+        await page.waitForTimeout(600)
         await page.waitForLoadState('networkidle')
 
         const rowsAfter = await page.locator('table tbody tr').count()

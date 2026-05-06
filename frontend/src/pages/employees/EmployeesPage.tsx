@@ -1,4 +1,4 @@
-import { useMemo, useState, memo } from 'react'
+import { useEffect, useMemo, useState, memo } from 'react'
 
 const PAGE_SIZE = 10
 import { type ColumnDef } from '@tanstack/react-table'
@@ -48,7 +48,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { FlagImg, resolveCountryIso } from '@/components/shared/PhoneInput'
-import { CopyableEmail, TablePagination } from '@/components/shared'
+import { CopyableEmail } from '@/components/shared'
 import { buildFilterQueryString, type FilterConfig } from '@/lib/filters'
 import type { Employee } from '@/types'
 
@@ -203,11 +203,7 @@ export function EmployeesPage() {
 
   // Reset to page 1 whenever search or filters change.
   const filterKey = (search.searchInput ?? '') + '||' + buildFilterQueryString(serverFilters)
-  const [lastFilterKey, setLastFilterKey] = useState(filterKey)
-  if (filterKey !== lastFilterKey) {
-    setLastFilterKey(filterKey)
-    if (offset !== 0) setOffset(0)
-  }
+  useEffect(() => { setOffset(0) }, [filterKey])
 
   const { data: empData, isLoading, isFetching, isError, error, refetch } = useEmployees({
     limit: PAGE_SIZE,
@@ -287,10 +283,7 @@ export function EmployeesPage() {
       id: 'employee',
       header: 'Employee',
       cell: ({ row: { original: e } }) => (
-        <button
-          onClick={() => navigate(`/employees/${e.id}`)}
-          className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
-        >
+        <div className="flex items-center gap-3 text-left">
           <Avatar className="h-8 w-8 shrink-0">
             {e.avatarUrl && <AvatarImage src={e.avatarUrl} alt={e.fullName} />}
             <AvatarFallback className="text-[10px] font-semibold bg-primary text-primary-foreground">
@@ -316,7 +309,7 @@ export function EmployeesPage() {
               ) : null
             })()}
           </div>
-        </button>
+        </div>
       ),
       size: 260,
     },
@@ -528,13 +521,7 @@ export function EmployeesPage() {
                 </Button>
               </>
             )}
-          />
-          <TablePagination
-            total={total}
-            offset={offset}
-            limit={PAGE_SIZE}
-            onChange={setOffset}
-            loading={isFetching}
+            serverPagination={{ total, offset, limit: PAGE_SIZE, onPageChange: setOffset, loading: isFetching }}
           />
         </CardContent>
       </Card>

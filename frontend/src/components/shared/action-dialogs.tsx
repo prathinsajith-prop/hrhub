@@ -12,7 +12,7 @@ import { useAssets, useAssignAsset, type Asset } from '@/hooks/useAssets'
 import { useCreateJob, useUpdateJob } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
-import { useCreateEmployee, useUpdateEmployee, useNextEmployeeNo } from '@/hooks/useEmployees'
+import { useCreateEmployee, useUpdateEmployee, useNextEmployeeNo, useInviteEmployee } from '@/hooks/useEmployees'
 import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
@@ -22,6 +22,7 @@ import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { FormField } from '@/components/shared/FormField'
 import { api, apiErrorToFieldMap, ApiError } from '@/lib/api'
+import { useAuthStore } from '@/store/authStore'
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, jobPostSchema, visaApplicationSchema, leaveRequestSchema, documentMetaSchema, zodToFieldErrors } from '@/lib/schemas'
 import {
@@ -35,6 +36,13 @@ import {
     type SelectOption,
 } from '@/lib/options'
 import type { Employee } from '@/types'
+
+const EMPLOYEE_ROLE_OPTIONS: SelectOption[] = [
+    { value: 'employee', label: 'Employee' },
+    { value: 'dept_head', label: 'Department Head' },
+    { value: 'pro_officer', label: 'PRO Officer' },
+    { value: 'hr_manager', label: 'HR Manager' },
+]
 
 // Searchable reporting-manager picker — server-side search, limit 20.
 function ManagerPicker({
@@ -370,6 +378,7 @@ interface EmpForm {
     contractEndDate: string
     status: string
     teamId: string
+    role: string
     // Step 3 — Salary
     basicSalary: string
     housingAllowance: string
@@ -390,7 +399,7 @@ const EMPTY_FORM: EmpForm = {
     mobileNo: '', personalEmail: '', maritalStatus: 'single', emergencyContact: '', emergencyContactName: '', emergencyContactPhone: '', homeCountryAddress: '',
     employeeNo: '', workEmail: '', divisionId: '', departmentId: '', branchId: '', department: '', designation: '',
     joinDate: new Date().toISOString().split('T')[0],
-    contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevelId: '', probationEndDate: '', contractEndDate: '', status: 'onboarding', teamId: '',
+    contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevelId: '', probationEndDate: '', contractEndDate: '', status: 'onboarding', teamId: '', role: 'employee',
     basicSalary: '', housingAllowance: '', transportAllowance: '', otherAllowances: '',
     paymentMethod: 'bank_transfer', bankName: '', accountName: '', accountNumber: '', swiftCode: '', bankBranch: '', iban: '', emiratisationCategory: 'expat',
 }
@@ -427,6 +436,9 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     const [form, setForm] = useState<EmpForm>(EMPTY_FORM)
     const [errors, setErrors] = useState<Record<string, string>>({})
     const createEmployee = useCreateEmployee()
+    const inviteEmployee = useInviteEmployee()
+    const viewerRole = useAuthStore(s => s.user?.role)
+    const canAssignRole = viewerRole === 'hr_manager' || viewerRole === 'super_admin'
 
     useEffect(() => {
         if (!open) { setTimeout(() => { setStep(1); setForm(EMPTY_FORM); setErrors({}) }, 300) }
@@ -540,6 +552,15 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
             // Assign to team if selected (best-effort — doesn't fail the whole create)
             if (form.teamId && newEmp?.id) {
                 api.post(`/teams/${form.teamId}/members`, { employeeIds: [newEmp.id] }).catch(() => {})
+            }
+            // Send login invite with role if work email provided and viewer has privilege
+            if (canAssignRole && form.workEmail && newEmp?.id) {
+                inviteEmployee.mutate({
+                    employeeId: newEmp.id,
+                    email: form.workEmail,
+                    name: `${form.firstName} ${form.lastName}`,
+                    role: form.role || 'employee',
+                })
             }
             toast.success('Employee added', `${form.firstName} ${form.lastName} has been onboarded.`)
             close()
@@ -683,9 +704,28 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <DatePicker value={form.joinDate} min="1970-01-01" onChange={setDate('joinDate')} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
-                            <FormField label="Work Email" error={errors.workEmail} hint="Used for login invites and official communications">
-                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
-                            </FormField>
+                            {canAssignRole ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <FormField label="Work Email" error={errors.workEmail} hint="Used for login invites and official communications">
+                                        <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
+                                    </FormField>
+                                    <div className="space-y-1.5">
+                                        <Label>System Role</Label>
+                                        <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
+                                            <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
+                                            <SelectContent>
+                                                {EMPLOYEE_ROLE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                                {viewerRole === 'super_admin' && <SelectItem value="super_admin">Super Admin</SelectItem>}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-xs text-muted-foreground">Sent with login invite when work email is set</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <FormField label="Work Email" error={errors.workEmail} hint="Used for login invites and official communications">
+                                    <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
+                                </FormField>
+                            )}
                             {/* Department picker — Branch and Division auto-assigned */}
                             <div className="space-y-1.5">
                                 <Label>Department</Label>
@@ -1097,11 +1137,15 @@ export function EditEmployeeDialog({
 // ─── Edit Employment Dialog ──────────────────────────────────────────────────
 
 export function EditEmploymentDialog({
-    open, onOpenChange, employee,
-}: { open: boolean; onOpenChange: (o: boolean) => void; employee: Employee }) {
+    open, onOpenChange, employee, currentRole,
+}: { open: boolean; onOpenChange: (o: boolean) => void; employee: Employee; currentRole?: string }) {
+    const viewerRole = useAuthStore(s => s.user?.role)
+    const canAssignRole = viewerRole === 'hr_manager' || viewerRole === 'super_admin'
+    const inviteEmployee = useInviteEmployee()
     const [form, setForm] = useState({
         joinDate: employee.joinDate ?? '',
         workEmail: employee.workEmail ?? '',
+        role: currentRole ?? 'employee',
         departmentId: employee.departmentId ?? '',
         divisionId: employee.divisionId ?? '',
         branchId: employee.branchId ?? '',
@@ -1161,7 +1205,19 @@ export function EditEmploymentDialog({
                 status: form.status as Employee['status'],
             },
             {
-                onSuccess: () => { toast.success('Employment updated', 'Employment details have been saved.'); close() },
+                onSuccess: () => {
+                    // Update role if it changed and viewer has privilege
+                    if (canAssignRole && form.role && form.role !== currentRole && form.workEmail) {
+                        inviteEmployee.mutate({
+                            employeeId: employee.id,
+                            email: form.workEmail,
+                            name: employee.fullName ?? `${employee.firstName} ${employee.lastName}`,
+                            role: form.role,
+                        })
+                    }
+                    toast.success('Employment updated', 'Employment details have been saved.')
+                    close()
+                },
                 onError: (err: Error & { message?: string }) => {
                     const fieldErrors = apiErrorToFieldMap(err)
                     if (Object.keys(fieldErrors).length) setErrors(fieldErrors)
@@ -1187,6 +1243,19 @@ export function EditEmploymentDialog({
                                 <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
                             </FormField>
                         </div>
+                        {canAssignRole && (
+                            <div className="space-y-1.5">
+                                <Label>System Role</Label>
+                                <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
+                                    <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
+                                    <SelectContent>
+                                        {EMPLOYEE_ROLE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                        {viewerRole === 'super_admin' && <SelectItem value="super_admin">Super Admin</SelectItem>}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">Changing role re-sends a login invite to the work email</p>
+                            </div>
+                        )}
                         <div className="space-y-1.5">
                             <Label>Department</Label>
                             <Combobox

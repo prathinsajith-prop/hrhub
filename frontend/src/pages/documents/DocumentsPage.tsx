@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 
 const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
@@ -28,7 +28,6 @@ import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { VerifyDocumentDialog } from '@/components/shared/VerifyDocumentDialog'
-import { TablePagination } from '@/components/shared'
 import type { Document } from '@/types'
 
 
@@ -226,11 +225,7 @@ export function DocumentsPage() {
 
   const [offset, setOffset] = useState(0)
   const filterKey = (search.searchInput ?? '') + '||' + JSON.stringify(search.appliedFilters)
-  const [lastFilterKey, setLastFilterKey] = useState(filterKey)
-  if (filterKey !== lastFilterKey) {
-    setLastFilterKey(filterKey)
-    if (offset !== 0) setOffset(0)
-  }
+  useEffect(() => { setOffset(0) }, [filterKey])
 
   const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: PAGE_SIZE, offset, q: search.searchInput || undefined, filters: search.appliedFilters })
   const documents = useMemo<Document[]>(() => (docsData?.data as Document[]) ?? [], [docsData?.data])
@@ -392,8 +387,8 @@ export function DocumentsPage() {
               </Button>
             </>
           )}
+          serverPagination={{ total, offset, limit: PAGE_SIZE, onPageChange: setOffset, loading: isFetching }}
         />
-        <TablePagination total={total} offset={offset} limit={PAGE_SIZE} onChange={setOffset} loading={isFetching} />
       </Card>
       <AddDocumentDialog
         open={uploadOpen}

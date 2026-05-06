@@ -16,19 +16,53 @@ export default defineConfig({
         video: 'on-first-retry',
     },
     projects: [
-        // 1. Run global setup (login once, save auth state)
+        // ── Setup projects (run once each, save auth state) ──────────────────
         {
-            name: 'setup',
+            name: 'setup:admin',
             testMatch: /global\.setup\.ts/,
         },
-        // 2. All other tests reuse the saved auth state
+        {
+            name: 'setup:hr',
+            testMatch: /hr\.setup\.ts/,
+        },
+        {
+            name: 'setup:employee',
+            testMatch: /employee\.setup\.ts/,
+        },
+
+        // ── Main test projects ────────────────────────────────────────────────
+        // super_admin — runs all tests
         {
             name: 'chromium',
             use: {
                 ...devices['Desktop Chrome'],
                 storageState: 'e2e/.auth/admin.json',
             },
-            dependencies: ['setup'],
+            dependencies: ['setup:admin'],
+            // Exclude role-specific specs (those run under their own projects)
+            testIgnore: /roles\//,
+        },
+
+        // hr_manager — runs role-specific HR tests
+        {
+            name: 'hr-manager',
+            use: {
+                ...devices['Desktop Chrome'],
+                storageState: 'e2e/.auth/hr.json',
+            },
+            dependencies: ['setup:hr'],
+            testMatch: /roles\/hr\..+\.spec\.ts/,
+        },
+
+        // employee — runs role-specific employee tests
+        {
+            name: 'employee',
+            use: {
+                ...devices['Desktop Chrome'],
+                storageState: 'e2e/.auth/employee.json',
+            },
+            dependencies: ['setup:employee'],
+            testMatch: /roles\/employee\..+\.spec\.ts/,
         },
     ],
     webServer: {

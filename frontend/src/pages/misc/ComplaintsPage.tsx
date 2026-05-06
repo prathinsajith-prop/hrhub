@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -288,8 +288,7 @@ export function ComplaintsPage() {
 
     // Reset to page 1 when search or filters change
     const searchKey = compSearch.searchInput + JSON.stringify(compSearch.appliedFilters)
-    const [lastKey, setLastKey] = useState(searchKey)
-    if (searchKey !== lastKey) { setLastKey(searchKey); setOffset(0) }
+    useEffect(() => { setOffset(0) }, [searchKey])
 
     const { data: stats, isLoading: statsLoading } = useComplaintStats()
     const { data: complaintsRes, isLoading, isFetching } = useComplaints({

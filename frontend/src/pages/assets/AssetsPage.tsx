@@ -34,7 +34,6 @@ import {
 } from '@/hooks/useAssets'
 import { EmployeeSelect } from '@/components/shared'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
-import { TablePagination } from '@/components/shared'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 
@@ -844,16 +843,9 @@ export function AssetsPage() {
                     data={data?.data ?? []}
                     emptyMessage="No assets found"
                     pageSize={25}
+                    serverPagination={{ total: data?.total ?? 0, offset: params.offset, limit: 25, onPageChange: offset => setParams(p => ({ ...p, offset })), loading: isFetching }}
                 />
             )}
-
-            <TablePagination
-                total={data?.total ?? 0}
-                offset={params.offset}
-                limit={25}
-                onChange={offset => setParams(p => ({ ...p, offset }))}
-                loading={isFetching}
-            />
 
             {/* Dialogs */}
             {canManageAssets && (

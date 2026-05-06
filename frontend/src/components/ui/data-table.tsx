@@ -12,7 +12,7 @@ import {
   type RowSelectionState,
   type Row,
 } from '@tanstack/react-table'
-import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X, Filter } from 'lucide-react'
+import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, X, Filter } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
 import { Checkbox } from './checkbox'
@@ -30,10 +30,17 @@ export interface DataTableAdvancedFilter {
   onApply?: () => void
 }
 
+/** Wire server-side pagination into DataTable so no external TablePagination is needed. */
+export interface DataTableServerPagination {
+  total: number
+  offset: number
+  limit: number
+  onPageChange: (offset: number) => void
+  loading?: boolean
+}
+
 interface DataTableColumnMeta {
-  /** When true, renders a funnel icon in the column header to open a QuickColumnFilter popover. */
   filterable?: boolean
-  /** Maps to the filter key in the filters record provided via `columnFilters`. */
   filterKey?: string
 }
 
@@ -47,24 +54,110 @@ interface DataTableProps<TData, TValue> {
   emptyMessage?: string
   onRowClick?: (row: TData) => void
   isLoading?: boolean
-  /** Enable per-row checkbox selection */
   enableSelection?: boolean
-  /** Render bulk action buttons. Receives the selected rows. */
   bulkActions?: (selected: TData[]) => React.ReactNode
-  /** Stable identifier for each row (defaults to tanstack-generated id). */
   getRowId?: (row: TData, index: number) => string
-  /** When provided, replaces the basic SearchInput with the AdvancedSearchBar (search on left, Filters button on right). */
   advancedFilter?: DataTableAdvancedFilter
-  /**
-   * Available filter configs keyed by filter_key. When a column has
-   * `meta: { filterable: true, filterKey: 'status' }` and this record has a
-   * `status` entry, a funnel icon is rendered in the header.
-   */
   columnFilterConfigs?: Record<string, FilterConfig>
-  /** Applied column filters (controlled from parent). */
   appliedColumnFilters?: Record<string, AppliedFilter>
-  /** Called when a column filter is applied or cleared. */
   onColumnFilterChange?: (filterKey: string, filter: AppliedFilter | null) => void
+  /** When provided, DataTable renders server-side pagination instead of internal pagination. */
+  serverPagination?: DataTableServerPagination
+}
+
+// ─── Pagination helpers ───────────────────────────────────────────────────────
+
+function getPageNumbers(current: number, total: number): (number | '...')[] {
+  if (total <= 1) return []
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  if (current <= 4) return [1, 2, 3, 4, 5, '...', total]
+  if (current >= total - 3) return [1, '...', total - 4, total - 3, total - 2, total - 1, total]
+  return [1, '...', current - 1, current, current + 1, '...', total]
+}
+
+interface PaginationBarProps {
+  currentPage: number
+  totalPages: number
+  from: number
+  to: number
+  total: number
+  loading?: boolean
+  onPage: (page: number) => void
+  onPrev: () => void
+  onNext: () => void
+  canPrev: boolean
+  canNext: boolean
+}
+
+function PaginationBar({ currentPage, totalPages, from, to, total, loading, onPage, onPrev, onNext, canPrev, canNext }: PaginationBarProps) {
+  if (total <= 0) return null
+  const pages = getPageNumbers(currentPage, totalPages)
+  const multiPage = totalPages > 1
+
+  return (
+    <div className="flex items-center justify-between gap-4 pt-1">
+      {/* Result count */}
+      <p className="text-sm text-muted-foreground shrink-0">
+        Showing{' '}
+        <span className="font-medium text-foreground">{from}</span>
+        –
+        <span className="font-medium text-foreground">{to}</span>
+        {' '}of{' '}
+        <span className="font-medium text-foreground">{total}</span>
+        {' '}results
+      </p>
+
+      {/* Navigation — only when more than one page */}
+      {multiPage && (
+        <div className="flex items-center gap-1">
+          {/* Previous */}
+          <button
+            onClick={onPrev}
+            disabled={!canPrev || loading}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Prev
+          </button>
+
+          {/* Page numbers */}
+          <div className="flex items-center gap-0.5">
+            {pages.map((p, i) =>
+              p === '...' ? (
+                <span key={`ellipsis-${i}`} className="flex h-8 w-8 items-center justify-center text-xs text-muted-foreground">
+                  ···
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => onPage(p as number)}
+                  disabled={loading}
+                  className={cn(
+                    'flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
+                    p === currentPage
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  {p}
+                </button>
+              )
+            )}
+          </div>
+
+          {/* Next */}
+          <button
+            onClick={onNext}
+            disabled={!canNext || loading}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          >
+            Next
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function DataTable<TData, TValue>({
@@ -84,6 +177,7 @@ export function DataTable<TData, TValue>({
   columnFilterConfigs,
   appliedColumnFilters,
   onColumnFilterChange,
+  serverPagination,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -302,37 +396,57 @@ export function DataTable<TData, TValue>({
         </div>
       </div>
 
-      {/* Pagination — only rendered when the table has more than one internal page.
-          When a parent uses server-side TablePagination and sets pageSize to match
-          the fetch limit, getPageCount() returns 1 and this block stays hidden. */}
-      {table.getPageCount() > 1 && (
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>
-            Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
-            {Math.min(
-              (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-              table.getFilteredRowModel().rows.length
-            )}{' '}
-            of {table.getFilteredRowModel().rows.length} results
-          </span>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon-sm" onClick={() => table.setPageIndex(0)} disabled={!table.getCanPreviousPage()}>
-              <ChevronsLeft className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="outline" size="icon-sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </Button>
-            <span className="px-2 font-medium text-foreground">
-              Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-            </span>
-            <Button variant="outline" size="icon-sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="outline" size="icon-sm" onClick={() => table.setPageIndex(table.getPageCount() - 1)} disabled={!table.getCanNextPage()}>
-              <ChevronsRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
+      {/* Pagination */}
+      {serverPagination ? (
+        // Server-side: DataTable holds exactly one internal "page" — pagination is driven
+        // by serverPagination props so the parent doesn't need a separate TablePagination.
+        (() => {
+          const { total, offset, limit, onPageChange, loading } = serverPagination
+          const totalPages = Math.ceil(total / limit)
+          const currentPage = Math.floor(offset / limit) + 1
+          const from = total > 0 ? offset + 1 : 0
+          const to = Math.min(offset + limit, total)
+          return (
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              from={from}
+              to={to}
+              total={total}
+              loading={loading || isLoading}
+              onPage={(p) => onPageChange((p - 1) * limit)}
+              onPrev={() => onPageChange(Math.max(0, offset - limit))}
+              onNext={() => onPageChange(offset + limit)}
+              canPrev={offset > 0}
+              canNext={offset + limit < total}
+            />
+          )
+        })()
+      ) : (
+        // Client-side: use TanStack table's internal pagination state.
+        (() => {
+          const { pageIndex, pageSize: ps } = table.getState().pagination
+          const filteredCount = table.getFilteredRowModel().rows.length
+          const totalPages = table.getPageCount()
+          const currentPage = pageIndex + 1
+          const from = filteredCount > 0 ? pageIndex * ps + 1 : 0
+          const to = Math.min((pageIndex + 1) * ps, filteredCount)
+          return (
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              from={from}
+              to={to}
+              total={filteredCount}
+              loading={isLoading}
+              onPage={(p) => table.setPageIndex(p - 1)}
+              onPrev={() => table.previousPage()}
+              onNext={() => table.nextPage()}
+              canPrev={table.getCanPreviousPage()}
+              canNext={table.getCanNextPage()}
+            />
+          )
+        })()
       )}
     </div>
   )

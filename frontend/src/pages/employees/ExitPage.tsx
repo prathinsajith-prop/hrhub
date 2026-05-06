@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
@@ -25,7 +25,7 @@ import {
     useExitRequests, useInitiateExit, useApproveExit, useRejectExit, useMarkSettlementPaid,
     useSettlementPreview, type ExitRequest,
 } from '@/hooks/useExit'
-import { EmployeeSelect, TablePagination } from '@/components/shared'
+import { EmployeeSelect } from '@/components/shared'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig } from '@/lib/filters'
@@ -155,11 +155,7 @@ export function ExitPage() {
     // status is multi_select → goes through the filter string so IN() works correctly.
     const [offset, setOffset] = useState(0)
     const filterKey = (exitSearch.searchInput ?? '') + '||' + JSON.stringify(exitSearch.appliedFilters)
-    const [lastFilterKey, setLastFilterKey] = useState(filterKey)
-    if (filterKey !== lastFilterKey) {
-        setLastFilterKey(filterKey)
-        if (offset !== 0) setOffset(0)
-    }
+    useEffect(() => { setOffset(0) }, [filterKey])
 
     const { data: exitsData, isLoading, isFetching, refetch } = useExitRequests({
         q: exitSearch.searchInput || undefined,
@@ -390,8 +386,8 @@ export function ExitPage() {
                         pageSize={PAGE_SIZE}
                         emptyMessage={exitList.length === 0 ? 'No exit requests yet.' : 'No results match your filters.'}
                         onRowClick={(row) => setViewingExit(row as ExitRequest)}
+                        serverPagination={{ total: exitTotal, offset, limit: PAGE_SIZE, onPageChange: setOffset, loading: isFetching }}
                     />
-                    <TablePagination total={exitTotal} offset={offset} limit={PAGE_SIZE} onChange={setOffset} loading={isFetching} />
                 </CardContent>
             </Card>
 

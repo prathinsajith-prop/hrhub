@@ -1,4 +1,4 @@
-import { useMemo, useState, memo } from 'react'
+import { useEffect, useMemo, useState, memo } from 'react'
 
 const PAGE_SIZE = 10
 import { useNavigate } from 'react-router-dom'
@@ -42,7 +42,6 @@ import { type FilterConfig } from '@/lib/filters'
 import { JOB_STATUS_OPTIONS } from '@/lib/options'
 import { exportRecruitment } from '@/lib/export'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
-import { TablePagination } from '@/components/shared'
 
 const JOB_FILTERS: FilterConfig[] = [
   { name: 'title', label: 'Job title', type: 'text', field: 'title' },
@@ -537,11 +536,7 @@ export function RecruitmentPage() {
 
   const [jobsOffset, setJobsOffset] = useState(0)
   const jobsFilterKey = (jobSearch.searchInput ?? '') + '||' + JSON.stringify(serverJobFilters)
-  const [lastJobsFilterKey, setLastJobsFilterKey] = useState(jobsFilterKey)
-  if (jobsFilterKey !== lastJobsFilterKey) {
-    setLastJobsFilterKey(jobsFilterKey)
-    if (jobsOffset !== 0) setJobsOffset(0)
-  }
+  useEffect(() => { setJobsOffset(0) }, [jobsFilterKey])
 
   const { data: jobsData, isLoading: jobsLoading, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({
     limit: PAGE_SIZE,
@@ -751,8 +746,8 @@ export function RecruitmentPage() {
                 </Button>
               </>
             )}
+            serverPagination={{ total: jobsTotal, offset: jobsOffset, limit: PAGE_SIZE, onPageChange: setJobsOffset, loading: jobsFetching }}
           />
-          <TablePagination total={jobsTotal} offset={jobsOffset} limit={PAGE_SIZE} onChange={setJobsOffset} loading={jobsFetching} />
         </Card>
       )}
 

@@ -46,14 +46,15 @@ export function OverflowTabsList({ tabs, activeTab, onTabChange }: OverflowTabsL
     // How many tabs are visible (the rest go into More).
     const [visibleCount, setVisibleCount] = useState(tabs.length)
 
-    // ── State-during-render: reset order when the tab set changes ────────────
-    // (CLAUDE.md pattern — avoids useEffect + extra render cycle)
+    // Reset order when the tab set identity changes.
     const tabKey = tabs.map(t => t.value).join(',')
-    const [lastTabKey, setLastTabKey] = useState(tabKey)
-    if (tabKey !== lastTabKey) {
-        setLastTabKey(tabKey)
-        setOrderedValues(tabs.map(t => t.value))
-    }
+    const prevTabKeyRef = useRef(tabKey)
+    useLayoutEffect(() => {
+        if (tabKey !== prevTabKeyRef.current) {
+            prevTabKeyRef.current = tabKey
+            setOrderedValues(tabs.map(t => t.value))
+        }
+    }, [tabKey, tabs])
 
     // Map from value → TabDef for O(1) lookup.
     const tabMap = useMemo(() => new Map(tabs.map(t => [t.value, t])), [tabs])

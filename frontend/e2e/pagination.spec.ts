@@ -65,18 +65,25 @@ test.describe('Employees pagination', () => {
     test('Next navigates to second page when total > 10', async ({ page }) => {
         await page.goto('/employees')
         await page.waitForLoadState('networkidle')
-        const nextBtn = page.getByRole('button', { name: /^next$/i })
+        const nextBtns = page.getByRole('button', { name: /^next$/i })
+        const nextCount = await nextBtns.count()
+        if (nextCount === 0) { test.skip(); return }
+        const nextBtn = nextBtns.first()
         const isEnabled = await nextBtn.isEnabled().catch(() => false)
         if (!isEnabled) { test.skip(); return }
 
         const firstCell = await page.locator('table tbody tr:first-child td').nth(1).textContent()
-        await nextBtn.click()
-        await page.waitForLoadState('networkidle')
+        await Promise.all([
+            page.waitForResponse(res => res.url().includes('/employees') && res.status() === 200),
+            nextBtn.click(),
+        ])
 
-        await expect(page.getByRole('button', { name: /^previous$/i })).toBeEnabled()
+        await expect(page.getByRole('button', { name: /^previous$/i }).first()).toBeEnabled({ timeout: 5_000 })
 
-        await page.getByRole('button', { name: /^previous$/i }).click()
-        await page.waitForLoadState('networkidle')
+        await Promise.all([
+            page.waitForResponse(res => res.url().includes('/employees') && res.status() === 200),
+            page.getByRole('button', { name: /^previous$/i }).first().click(),
+        ])
         const restoredCell = await page.locator('table tbody tr:first-child td').nth(1).textContent()
         expect(restoredCell).toBe(firstCell)
     })
@@ -103,21 +110,24 @@ test.describe('Notifications pagination', () => {
         await page.goto('/notifications')
         await page.waitForLoadState('networkidle')
 
-        const nextBtn = page.getByRole('button', { name: /next/i })
+        const nextBtns = page.getByRole('button', { name: /next/i })
+        const nextCount = await nextBtns.count()
+        if (nextCount === 0) { test.skip(); return }
+        const nextBtn = nextBtns.first()
         const isEnabled = await nextBtn.isEnabled().catch(() => false)
         if (!isEnabled) { test.skip(); return }
 
         const firstTitle = await page.locator('p.text-sm.font-medium, p.font-semibold').first().textContent()
         await nextBtn.click()
-        await page.waitForLoadState('networkidle')
+        await page.waitForTimeout(1000)
 
         const barText = await paginationBar(page).textContent()
         expect(barText).toMatch(/Showing 2[01]/)
 
-        await expect(page.getByRole('button', { name: /previous/i })).toBeEnabled()
+        await expect(page.getByRole('button', { name: /previous/i }).first()).toBeEnabled()
 
-        await page.getByRole('button', { name: /previous/i }).click()
-        await page.waitForLoadState('networkidle')
+        await page.getByRole('button', { name: /previous/i }).first().click()
+        await page.waitForTimeout(1000)
         const restoredTitle = await page.locator('p.text-sm.font-medium, p.font-semibold').first().textContent()
         expect(restoredTitle).toBe(firstTitle)
     })
@@ -151,19 +161,26 @@ test.describe('Complaints pagination', () => {
     test('Next button loads second page when total > 30', async ({ page }) => {
         await page.goto('/complaints')
         await page.waitForLoadState('networkidle')
-        const nextBtn = page.getByRole('button', { name: /next/i })
+        const nextBtns = page.getByRole('button', { name: /next/i })
+        const nextCount = await nextBtns.count()
+        if (nextCount === 0) { test.skip(); return }
+        const nextBtn = nextBtns.first()
         const isEnabled = await nextBtn.isEnabled().catch(() => false)
         if (!isEnabled) { test.skip(); return }
 
         const firstCell = await page.locator('table tbody tr:first-child td:first-child').textContent()
-        await nextBtn.click()
-        await page.waitForLoadState('networkidle')
+        await Promise.all([
+            page.waitForResponse(res => res.url().includes('/complaints') && res.status() === 200),
+            nextBtn.click(),
+        ])
 
         const newFirstCell = await page.locator('table tbody tr:first-child td:first-child').textContent()
         expect(newFirstCell).not.toBe(firstCell)
 
-        await page.getByRole('button', { name: /previous/i }).click()
-        await page.waitForLoadState('networkidle')
+        await Promise.all([
+            page.waitForResponse(res => res.url().includes('/complaints') && res.status() === 200),
+            page.getByRole('button', { name: /previous/i }).first().click(),
+        ])
         const restoredCell = await page.locator('table tbody tr:first-child td:first-child').textContent()
         expect(restoredCell).toBe(firstCell)
     })

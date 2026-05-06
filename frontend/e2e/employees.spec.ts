@@ -23,21 +23,20 @@ test.describe('Employees page', () => {
             return
         }
 
-        // Count rows before search
         const rowsBefore = await page.locator('table tbody tr').count()
         if (rowsBefore === 0) { test.skip(); return }
 
-        // Search for something that definitely won't match
         await searchInput.fill('ZZZZZ_NOBODY_HAS_THIS_NAME')
+        // Allow React state update + debounce to trigger before checking networkidle
+        await page.waitForTimeout(600)
         await page.waitForLoadState('networkidle')
 
         const rowsAfter = await page.locator('table tbody tr').count()
-        // Either 0 rows (no match) or an empty-state message
-        const emptyMsg = await page.getByText(/no.*(employee|result)/i).isVisible().catch(() => false)
+        const emptyMsg = await page.getByText(/no employees|no results/i).isVisible().catch(() => false)
         expect(rowsAfter === 0 || emptyMsg, 'Search did not filter results').toBe(true)
 
-        // Clear search — results should return
         await searchInput.clear()
+        await page.waitForTimeout(600)
         await page.waitForLoadState('networkidle')
         const rowsRestored = await page.locator('table tbody tr').count()
         expect(rowsRestored, 'Results did not restore after clearing search').toBe(rowsBefore)
@@ -46,10 +45,13 @@ test.describe('Employees page', () => {
     test('clicking a row navigates to employee detail', async ({ page }) => {
         await page.goto('/employees')
         await page.waitForLoadState('networkidle')
-        const firstRow = page.locator('table tbody tr').first()
-        if (!await firstRow.isVisible().catch(() => false)) { test.skip(); return }
 
-        await firstRow.click()
+        // Click on the 5th cell (status column) to avoid interactive elements:
+        // col 0=checkbox, 1=employee-button, 2=dept-spans, 3=nationality, 4=status badge
+        const statusCell = page.locator('table tbody tr:first-child td').nth(4)
+        if (!await statusCell.isVisible().catch(() => false)) { test.skip(); return }
+
+        await statusCell.click()
         await page.waitForURL('**/employees/**', { timeout: 8_000 })
         await expect(page).toHaveURL(/employees\/.+/)
     })

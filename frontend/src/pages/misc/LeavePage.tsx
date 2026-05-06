@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
@@ -15,7 +15,7 @@ import { formatDate, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useLeaveRequests, useApproveLeave, useLeaveBalance } from '@/hooks/useLeave'
-import { EmployeeSelect, TablePagination } from '@/components/shared'
+import { EmployeeSelect } from '@/components/shared'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig } from '@/lib/filters'
 import { ApplyLeaveDialog } from '@/components/shared/action-dialogs'
@@ -184,11 +184,7 @@ export function LeavePage() {
 
     const [offset, setOffset] = useState(0)
     const filterKey = (leaveSearch.searchInput ?? '') + '||' + JSON.stringify(leaveSearch.appliedFilters)
-    const [lastFilterKey, setLastFilterKey] = useState(filterKey)
-    if (filterKey !== lastFilterKey) {
-        setLastFilterKey(filterKey)
-        if (offset !== 0) setOffset(0)
-    }
+    useEffect(() => { setOffset(0) }, [filterKey])
 
     const { data: leaveData, isLoading: leaveLoading, isError: leaveError, isFetching, error: leaveErrorObj, refetch } = useLeaveRequests({ limit: PAGE_SIZE, offset, employeeId: urlEmployeeId, q: leaveSearch.searchInput || undefined, filters: leaveSearch.appliedFilters })
     const leaves = useMemo<LeaveRequest[]>(() => (leaveData?.data as LeaveRequest[]) ?? [], [leaveData?.data])
@@ -410,8 +406,8 @@ export function LeavePage() {
                             </Button>
                         </>
                     )}
+                    serverPagination={{ total: leaveTotal, offset, limit: PAGE_SIZE, onPageChange: setOffset, loading: isFetching }}
                 />
-                <TablePagination total={leaveTotal} offset={offset} limit={PAGE_SIZE} onChange={setOffset} loading={isFetching} />
             </Card>
 
             <ConfirmDialog
