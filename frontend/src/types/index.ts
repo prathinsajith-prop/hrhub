@@ -134,6 +134,7 @@ export interface Job {
 export interface Candidate {
   id: string
   jobId: string
+  jobTitle?: string
   name: string
   email: string
   phone: string

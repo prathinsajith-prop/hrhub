@@ -710,7 +710,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     <Input value={form.emergencyContactName} onChange={set('emergencyContactName')} placeholder="Full name" />
                                 </FormField>
                                 <FormField label="Emergency Contact Phone">
-                                    <Input value={form.emergencyContactPhone} onChange={set('emergencyContactPhone')} placeholder="+971 50 000 0000" />
+                                    <PhoneInput value={form.emergencyContactPhone} onChange={(v) => setForm(f => ({ ...f, emergencyContactPhone: v }))} />
                                 </FormField>
                             </div>
                             <FormField label="Home Country Address">
@@ -1158,7 +1158,7 @@ export function EditEmployeeDialog({
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1.5"><Label>Emergency Contact Name</Label><Input value={form.emergencyContactName} onChange={set('emergencyContactName')} placeholder="Full name" /></div>
-                            <div className="space-y-1.5"><Label>Emergency Contact Phone</Label><Input value={form.emergencyContactPhone} onChange={set('emergencyContactPhone')} placeholder="+971 50 000 0000" /></div>
+                            <div className="space-y-1.5"><Label>Emergency Contact Phone</Label><PhoneInput value={form.emergencyContactPhone} onChange={(v) => setForm(f => ({ ...f, emergencyContactPhone: v }))} /></div>
                         </div>
                         <div className="space-y-1.5">
                             <Label>Home Country Address</Label>

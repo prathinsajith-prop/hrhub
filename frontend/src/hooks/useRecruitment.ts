@@ -62,11 +62,17 @@ export function useApplications(params: AppParams = {}) {
 
 // Per-stage infinite query powering the kanban columns.
 // Each column independently fetches and pages its own candidates.
-export function useKanbanStage(stageId: string) {
-    return useInfiniteQuery<KanbanPage, Error, InfiniteData<KanbanPage>, readonly ['applications-kanban', string], number>({
-        queryKey: ['applications-kanban', stageId],
-        queryFn: ({ pageParam }) =>
-            api.get<KanbanPage>(`/applications?stage=${stageId}&limit=${KANBAN_PAGE_SIZE}&offset=${pageParam}`),
+export function useKanbanStage(stageId: string, params: { q?: string; filter?: string; jobId?: string } = {}) {
+    const { q, filter, jobId } = params
+    return useInfiniteQuery<KanbanPage, Error, InfiniteData<KanbanPage>, readonly ['applications-kanban', string, string | undefined, string | undefined, string | undefined], number>({
+        queryKey: ['applications-kanban', stageId, q, filter, jobId],
+        queryFn: ({ pageParam }) => {
+            const qs = new URLSearchParams({ stage: stageId, limit: String(KANBAN_PAGE_SIZE), offset: String(pageParam) })
+            if (q) qs.set('q', q)
+            if (filter) qs.set('filter', filter)
+            if (jobId) qs.set('jobId', jobId)
+            return api.get<KanbanPage>(`/applications?${qs}`)
+        },
         initialPageParam: 0,
         getNextPageParam: (last) => last.hasMore ? last.offset + last.limit : undefined,
         staleTime: 30_000,

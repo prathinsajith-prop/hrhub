@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Eye, EyeOff, ArrowRight, ArrowLeft, Building2, Globe, CheckCircle2, Check, User, Briefcase, Phone } from 'lucide-react'
 import { toast } from '@/components/ui/overlays'
-import { cn } from '@/lib/utils'
+import { cn, sanitizePhone } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -35,7 +35,7 @@ const registerSchema = z
     companySize: z.string().min(1, 'Please select your company size'),
     jurisdiction: z.enum(['mainland', 'freezone'], { message: 'Please select your business type' }),
     tradeLicenseNo: z.string().optional(),
-    phone: z.string().optional(),
+    phone: z.string().refine((v) => !v || /^[\d+\s\-().]+$/.test(v), 'Enter a valid phone number').optional(),
     terms: z.boolean().refine((v) => v === true, 'You must accept the terms'),
   })
   .refine((d) => d.password === d.confirmPassword, {
@@ -466,7 +466,9 @@ export function RegisterPage() {
                   type="tel"
                   autoComplete="tel"
                   placeholder="50 123 4567"
-                  {...register('phone')}
+                  {...register('phone', {
+                    onChange: (e) => { e.target.value = sanitizePhone(e.target.value) },
+                  })}
                   className="pl-11"
                 />
                 <Phone className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />

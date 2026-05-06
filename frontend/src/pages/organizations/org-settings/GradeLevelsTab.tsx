@@ -250,9 +250,11 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
 
 // ─── Grade Levels section ──────────────────────────────────────────────────────
 
+const salaryFormatter = new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 })
+
 function formatSalary(min: number | null, max: number | null): string {
     if (min == null && max == null) return '—'
-    const fmt = (n: number) => new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 }).format(n)
+    const fmt = (n: number) => salaryFormatter.format(n)
     if (min != null && max != null) return `AED ${fmt(min)} – ${fmt(max)}`
     if (min != null) return `AED ${fmt(min)}+`
     return `Up to AED ${fmt(max!)}`

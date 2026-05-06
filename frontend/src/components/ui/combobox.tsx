@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Check, ChevronDown, X, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -37,6 +37,7 @@ export function Combobox({
 }: ComboboxProps) {
     const [open, setOpen] = useState(false)
     const [search, setSearch] = useState('')
+    const listboxId = useId()
 
     const selected = options.find(o => o.value.toLowerCase() === value.toLowerCase())
     const displayLabel = selected?.label ?? value
@@ -68,6 +69,7 @@ export function Combobox({
                     type="button"
                     role="combobox"
                     aria-expanded={open}
+                    aria-controls={listboxId}
                     disabled={disabled}
                     className={cn(
                         'flex h-9 w-full items-center justify-between rounded-md border bg-background px-3 py-2 text-sm ring-offset-background transition-all duration-150',
@@ -115,7 +117,7 @@ export function Combobox({
                         value={search}
                         onValueChange={setSearch}
                     />
-                    <CommandList className="max-h-56 overflow-y-auto">
+                    <CommandList id={listboxId} className="max-h-56 overflow-y-auto">
                         {!showCreate && (
                             <CommandEmpty className="py-5 text-sm text-muted-foreground text-center">
                                 {emptyMessage}
