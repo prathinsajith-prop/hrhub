@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -21,6 +21,7 @@ import {
     useComplaints, useComplaintStats,
     useAcknowledgeComplaint, useEscalateComplaint, useResolveComplaint,
 } from '@/hooks/useComplaints'
+import { TablePagination } from '@/components/shared'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -274,20 +275,31 @@ const COMPLAINT_FILTERS: FilterConfig[] = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 30
+
 export function ComplaintsPage() {
     const { t } = useTranslation()
     const [selected, setSelected] = useState<Complaint | null>(null)
+    const [offset, setOffset] = useState(0)
 
     const compSearch = useSearchFilters({ storageKey: 'complaints.search', availableFilters: COMPLAINT_FILTERS })
     const statusVal = compSearch.appliedFilters.status?.value
     const severityVal = compSearch.appliedFilters.severity?.value
 
+    // Reset to page 1 when search or filters change
+    const searchKey = compSearch.searchInput + JSON.stringify(compSearch.appliedFilters)
+    useEffect(() => { setOffset(0) }, [searchKey])
+
     const { data: stats, isLoading: statsLoading } = useComplaintStats()
-    const { data: list = [], isLoading } = useComplaints({
+    const { data: complaintsRes, isLoading, isFetching } = useComplaints({
         search: compSearch.searchInput || undefined,
         status: typeof statusVal === 'string' ? statusVal : undefined,
         severity: typeof severityVal === 'string' ? severityVal : undefined,
+        limit: PAGE_SIZE,
+        offset,
     })
+    const list = complaintsRes?.data ?? []
+    const total = complaintsRes?.total ?? 0
 
     return (
         <PageWrapper>
@@ -322,7 +334,7 @@ export function ComplaintsPage() {
                 search={compSearch}
                 filters={COMPLAINT_FILTERS}
                 placeholder={t('complaints.filters.search')}
-                resultCount={list.length}
+                resultCount={total}
                 className="mb-4"
             />
 
@@ -365,6 +377,14 @@ export function ComplaintsPage() {
                     </tbody>
                 </table>
             </div>
+
+            <TablePagination
+                total={total}
+                offset={offset}
+                limit={PAGE_SIZE}
+                onChange={setOffset}
+                loading={isFetching}
+            />
 
             {selected && <ComplaintDetail complaint={selected} onClose={() => setSelected(null)} />}
         </PageWrapper>

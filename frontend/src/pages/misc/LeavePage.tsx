@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+
+const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { type ColumnDef } from '@tanstack/react-table'
@@ -27,8 +29,8 @@ import { exportLeave } from '@/lib/export'
 
 const LEAVE_FILTERS: FilterConfig[] = [
     { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
-    { name: 'leaveType', label: 'Leave type', type: 'select', field: 'leaveType', options: LEAVE_TYPE_OPTIONS },
-    { name: 'status', label: 'Status', type: 'select', field: 'status', options: LEAVE_STATUS_OPTIONS },
+    { name: 'leaveType', label: 'Leave type', type: 'multi_select', field: 'leaveType', options: LEAVE_TYPE_OPTIONS },
+    { name: 'status', label: 'Status', type: 'multi_select', field: 'status', options: LEAVE_STATUS_OPTIONS },
     { name: 'startDate', label: 'Start date', type: 'date_range', field: 'startDate' },
     { name: 'days', label: 'Duration (days)', type: 'number_range', field: 'days', min: 1 },
 ]
@@ -180,8 +182,13 @@ export function LeavePage() {
         availableFilters: LEAVE_FILTERS,
     })
 
-    const { data: leaveData, isLoading: leaveLoading, isError: leaveError, isFetching, error: leaveErrorObj, refetch } = useLeaveRequests({ limit: 50, employeeId: urlEmployeeId, q: leaveSearch.searchInput || undefined, filters: leaveSearch.appliedFilters })
+    const [offset, setOffset] = useState(0)
+    const filterKey = (leaveSearch.searchInput ?? '') + '||' + JSON.stringify(leaveSearch.appliedFilters)
+    useEffect(() => { setOffset(0) }, [filterKey])
+
+    const { data: leaveData, isLoading: leaveLoading, isError: leaveError, isFetching, error: leaveErrorObj, refetch } = useLeaveRequests({ limit: PAGE_SIZE, offset, employeeId: urlEmployeeId, q: leaveSearch.searchInput || undefined, filters: leaveSearch.appliedFilters })
     const leaves = useMemo<LeaveRequest[]>(() => (leaveData?.data as LeaveRequest[]) ?? [], [leaveData?.data])
+    const leaveTotal = leaveData?.total ?? 0
     const approveLeave = useApproveLeave()
     const [approveTarget, setApproveTarget] = useState<LeaveRequest | null>(null)
     const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null)
@@ -383,7 +390,7 @@ export function LeavePage() {
                         filters: LEAVE_FILTERS,
                         placeholder: 'Search by employee, type…',
                     }}
-                    pageSize={8}
+                    pageSize={PAGE_SIZE}
                     enableSelection
                     getRowId={(row: LeaveRequest) => String(row.id)}
                     onRowClick={(row: LeaveRequest) => navigate(`/employees/${row.employeeId}`)}
@@ -399,6 +406,7 @@ export function LeavePage() {
                             </Button>
                         </>
                     )}
+                    serverPagination={{ total: leaveTotal, offset, limit: PAGE_SIZE, onPageChange: setOffset, loading: isFetching }}
                 />
             </Card>
 

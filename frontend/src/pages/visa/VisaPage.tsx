@@ -29,7 +29,7 @@ import { EmployeeLink } from '@/components/shared/EmployeeLink'
 const VISA_FILTERS: FilterConfig[] = [
   { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
   {
-    name: 'status', label: 'Status', type: 'select', field: 'status',
+    name: 'status', label: 'Status', type: 'multi_select', field: 'status',
     options: [
       { value: 'active', label: 'Active' },
       { value: 'expiring_soon', label: 'Expiring soon' },
@@ -42,7 +42,7 @@ const VISA_FILTERS: FilterConfig[] = [
     ],
   },
   {
-    name: 'urgencyLevel', label: 'Priority', type: 'select', field: 'urgencyLevel',
+    name: 'urgencyLevel', label: 'Priority', type: 'multi_select', field: 'urgencyLevel',
     options: [
       { value: 'critical', label: 'Critical' },
       { value: 'urgent', label: 'Urgent' },
@@ -50,7 +50,7 @@ const VISA_FILTERS: FilterConfig[] = [
     ],
   },
   {
-    name: 'visaType', label: 'Visa type', type: 'select', field: 'visaType',
+    name: 'visaType', label: 'Visa type', type: 'multi_select', field: 'visaType',
     options: [
       { value: 'employment_new', label: 'Employment (new)' },
       { value: 'employment_renewal', label: 'Employment (renewal)' },

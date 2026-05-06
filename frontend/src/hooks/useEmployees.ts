@@ -4,10 +4,9 @@ import { useAuthStore } from '@/store/authStore'
 import { buildFilterQueryString, type AppliedFiltersMap } from '@/lib/filters'
 import type { Employee } from '@/types'
 
-export async function exportEmployeesCsv(params: { department?: string; status?: string } = {}) {
+export async function exportEmployeesCsv(params: { filter?: string } = {}) {
     const qs = new URLSearchParams()
-    if (params.department) qs.set('department', params.department)
-    if (params.status) qs.set('status', params.status)
+    if (params.filter) qs.set('filter', params.filter)
     const queryStr = qs.toString()
     const path = `/employees/export${queryStr ? '?' + queryStr : ''}`
     const token = useAuthStore.getState().accessToken

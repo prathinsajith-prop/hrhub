@@ -12,14 +12,15 @@ export async function attendanceRoutes(fastify: any) {
 
     // GET /api/v1/attendance
     fastify.get('/attendance', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
-        const { employeeId, startDate, endDate, status, page, limit, cursor } = request.query as Record<string, string>
+        const { employeeId, startDate, endDate, status, filter, page, limit, cursor } = request.query as Record<string, string>
         const result = await getAttendance(request.user.tenantId, {
             employeeId,
             startDate,
             endDate,
             status,
-            page: page ? Number(page) : undefined,
-            limit: limit ? Number(limit) : undefined,
+            filter,
+            page: page ? Math.max(1, Number(page)) : undefined,
+            limit: limit ? Math.min(Math.max(1, Number(limit)), 200) : undefined,
             cursor,
         })
         return reply.send(result)
@@ -120,9 +121,9 @@ export async function attendanceRoutes(fastify: any) {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')],
         schema: { tags: ['Attendance'] },
     }, async (request: any, reply: any) => {
-        const { format = 'csv', employeeId, startDate, endDate, status } = request.query as Record<string, string>
+        const { format = 'csv', employeeId, startDate, endDate, status, filter } = request.query as Record<string, string>
         if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
-        const result = await getAttendance(request.user.tenantId, { employeeId, startDate, endDate, status, limit: 10000 })
+        const result = await getAttendance(request.user.tenantId, { employeeId, startDate, endDate, status, filter, limit: 10000 })
         const rows = (result.items ?? []) as any[]
         const dateStr = new Date().toISOString().slice(0, 10)
 

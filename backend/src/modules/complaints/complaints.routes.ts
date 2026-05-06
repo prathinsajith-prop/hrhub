@@ -33,16 +33,17 @@ export async function complaintsRoutes(fastify: any) {
 
     // GET /api/v1/complaints — all complaints (HR view)
     fastify.get('/complaints', { ...hrAuth, schema: { tags: ['Complaints'] } }, async (req: any, reply: any) => {
-        const { limit = 30, offset = 0, search, status, severity, category } = req.query as Record<string, string>
-        const data = await listComplaints(req.user.tenantId, {
-            limit: Math.min(Number(limit), 100),
-            offset: Number(offset),
+        const { limit = 30, offset = 0, search, status, severity, category, filter } = req.query as Record<string, string>
+        const result = await listComplaints(req.user.tenantId, {
+            limit: Math.min(Math.max(1, Number(limit)), 100),
+            offset: Math.max(0, Number(offset)),
             search,
             status,
             severity,
             category,
+            filter,
         })
-        return reply.send({ data })
+        return reply.send(result)
     })
 
     // GET /api/v1/complaints/stats
@@ -95,14 +96,14 @@ export async function complaintsRoutes(fastify: any) {
     // GET /api/v1/my/complaints
     fastify.get('/my/complaints', { ...auth, schema: { tags: ['Complaints'] } }, async (req: any, reply: any) => {
         const employeeId = req.user.employeeId
-        if (!employeeId) return reply.send({ data: [] })
+        if (!employeeId) return reply.send({ data: [], total: 0, limit: 30, offset: 0, hasMore: false })
         const { limit = 30, offset = 0 } = req.query as Record<string, string>
-        const data = await listComplaints(req.user.tenantId, {
-            limit: Math.min(Number(limit), 100),
-            offset: Number(offset),
+        const result = await listComplaints(req.user.tenantId, {
+            limit: Math.min(Math.max(1, Number(limit)), 100),
+            offset: Math.max(0, Number(offset)),
             employeeId,
         })
-        return reply.send({ data })
+        return reply.send(result)
     })
 
     // POST /api/v1/my/complaints

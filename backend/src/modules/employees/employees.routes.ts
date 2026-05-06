@@ -48,12 +48,12 @@ export default async function (fastify: any): Promise<void> {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['Employees'] },
     }, async (request: any, reply: any) => {
-        const { department, status, format = 'csv' } = request.query as { department?: string; status?: string; format?: string }
+        const { format = 'csv', filter } = request.query as { format?: string; filter?: string }
         if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
+        if (filter && filter.length > 2000) return reply.code(400).send({ message: 'filter too long' })
         const result = await listEmployees({
             tenantId: request.user.tenantId,
-            department,
-            status,
+            filter,
             limit: 10000,
             offset: 0,
         })

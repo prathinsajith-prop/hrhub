@@ -5,6 +5,14 @@ import { encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { Conditions } from '../../lib/filters.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 
+const ATTENDANCE_FIELD_MAP = {
+    status: attendanceRecords.status,
+    employeeId: attendanceRecords.employeeId,
+    date: attendanceRecords.date,
+    hoursWorked: attendanceRecords.hoursWorked,
+}
+const ATTENDANCE_ALLOWED = new Set(Object.keys(ATTENDANCE_FIELD_MAP))
+
 export async function checkIn(tenantId: string, employeeId: string) {
     const today = new Date().toISOString().split('T')[0]
     const [existing] = await db.select().from(attendanceRecords)
@@ -66,6 +74,7 @@ export interface GetAttendanceParams {
     startDate?: string
     endDate?: string
     status?: string
+    filter?: string
     /** 1-based page number; ignored when cursor is provided. */
     page?: number
     /** Page size (default 50, max 200). */
@@ -82,7 +91,7 @@ export interface GetAttendanceResult {
     total?: number
 }
 
-const MAX_ATTENDANCE_PAGE = 200
+const MAX_ATTENDANCE_PAGE = 10000
 const DEFAULT_ATTENDANCE_PAGE = 50
 
 export async function getAttendance(tenantId: string, params: GetAttendanceParams): Promise<GetAttendanceResult> {
@@ -97,6 +106,7 @@ export async function getAttendance(tenantId: string, params: GetAttendanceParam
         .match(attendanceRecords.employeeId, params.employeeId)
         .match(attendanceRecords.status, params.status)
         .dateRange(attendanceRecords.date, params.startDate, params.endDate)
+        .filterWithName(params.filter, ATTENDANCE_FIELD_MAP, ATTENDANCE_ALLOWED, employees.firstName, employees.lastName)
         .when(!!decodedCursor, c => c.add(
             sql`(${attendanceRecords.date}, ${attendanceRecords.id}) < (${decodedCursor!.c}, ${decodedCursor!.i})`
         ))

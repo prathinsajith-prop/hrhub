@@ -17,7 +17,7 @@ import { toast } from '@/components/ui/overlays'
 import { zodToFieldErrors } from '@/lib/schemas'
 import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
-import type { FilterConfig } from '@/lib/filters'
+import { type FilterConfig, buildFilterQueryString } from '@/lib/filters'
 import {
     GraduationCap, BookOpen, CheckCircle2, TrendingUp,
     Plus, Pencil, Trash2, ExternalLink,
@@ -213,7 +213,7 @@ const TRAINING_FILTERS: FilterConfig[] = [
     {
         name: 'status',
         label: 'Status',
-        type: 'select',
+        type: 'multi_select',
         options: [
             { value: 'planned', label: 'Planned' },
             { value: 'in_progress', label: 'In Progress' },
@@ -224,7 +224,7 @@ const TRAINING_FILTERS: FilterConfig[] = [
     {
         name: 'type',
         label: 'Type',
-        type: 'select',
+        type: 'multi_select',
         options: [
             { value: 'internal', label: 'Internal' },
             { value: 'external', label: 'External' },
@@ -245,13 +245,10 @@ export function TrainingPage() {
     const [deleteTarget, setDeleteTarget] = useState<TrainingRecord | null>(null)
 
     const trainSearch = useSearchFilters({ storageKey: 'training.search', availableFilters: TRAINING_FILTERS })
-    const statusVal = trainSearch.appliedFilters.status?.value
-    const typeVal = trainSearch.appliedFilters.type?.value
 
     const { data, isLoading } = useTraining({
-        status: typeof statusVal === 'string' ? statusVal : undefined,
-        type: typeof typeVal === 'string' ? typeVal : undefined,
         search: trainSearch.searchInput || undefined,
+        filter: buildFilterQueryString(trainSearch.appliedFilters) || undefined,
     })
     const deleteTraining = useDeleteTraining()
 

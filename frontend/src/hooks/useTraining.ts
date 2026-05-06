@@ -76,6 +76,7 @@ export function useTraining(params?: {
     status?: string
     type?: string
     search?: string
+    filter?: string
     limit?: number
     offset?: number
 }) {
@@ -85,6 +86,7 @@ export function useTraining(params?: {
     if (params?.status) qs.set('status', params.status)
     if (params?.type) qs.set('type', params.type)
     if (params?.search) qs.set('search', params.search)
+    if (params?.filter) qs.set('filter', params.filter)
     qs.set('limit', String(params?.limit ?? 25))
     qs.set('offset', String(params?.offset ?? 0))
 

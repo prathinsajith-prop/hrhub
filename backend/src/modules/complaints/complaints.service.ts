@@ -1,8 +1,8 @@
 import { db } from '../../db/index.js'
 import { complaints, employees, users } from '../../db/schema/index.js'
-import { eq, and, desc, isNull, sql, ilike, or, inArray } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, ilike, or, inArray, aliasedTable } from 'drizzle-orm'
 import { sendEmail } from '../../plugins/email.js'
-import { extractRows } from '../../lib/db-helpers.js'
+import { Conditions } from '../../lib/filters.js'
 
 // SLA calendar days per severity (approximate working-day equivalent)
 const SLA_DAYS: Record<string, number> = {
@@ -42,27 +42,17 @@ export interface UpdateComplaintInput {
     subjectEmployeeId?: string | null
 }
 
-function withSubmitterNames(row: typeof complaints.$inferSelect & {
-    submitterFirst: string | null
-    submitterLast: string | null
-    subjectFirst: string | null
-    subjectLast: string | null
-    assigneeName: string | null
-}) {
-    const isAnonymous = row.confidentiality === 'anonymous'
-    return {
-        ...row,
-        submitterFirst: undefined,
-        submitterLast: undefined,
-        subjectFirst: undefined,
-        subjectLast: undefined,
-        assigneeName: row.assigneeName,
-        submittedByName: isAnonymous ? 'Anonymous' : [row.submitterFirst, row.submitterLast].filter(Boolean).join(' ') || null,
-        subjectName: [row.subjectFirst, row.subjectLast].filter(Boolean).join(' ') || null,
-    }
-}
+// Aliased table for the subject employee join (avoids ambiguous column references)
+const subjectEmp = aliasedTable(employees, 'subject_emp')
 
-const BASE_SELECT = {
+const COMPLAINT_FIELD_MAP = {
+    status: complaints.status,
+    severity: complaints.severity,
+    category: complaints.category,
+}
+const COMPLAINT_ALLOWED = new Set(Object.keys(COMPLAINT_FIELD_MAP))
+
+const COMPLAINT_SELECT = {
     id: complaints.id,
     tenantId: complaints.tenantId,
     submittedByEmployeeId: complaints.submittedByEmployeeId,
@@ -82,115 +72,109 @@ const BASE_SELECT = {
     updatedAt: complaints.updatedAt,
     submitterFirst: employees.firstName,
     submitterLast: employees.lastName,
-    subjectFirst: sql<string | null>`s_emp.first_name`,
-    subjectLast: sql<string | null>`s_emp.last_name`,
-    assigneeName: sql<string | null>`CASE WHEN ${users.id} IS NOT NULL THEN ${users.name} ELSE NULL END`,
+    subjectFirst: subjectEmp.firstName,
+    subjectLast: subjectEmp.lastName,
+    assigneeName: users.name,
 }
 
-const submitterEmp = employees
-const subjectEmpAlias = 'se_emp'
+function mapRow(row: {
+    id: string; tenantId: string; submittedByEmployeeId: string | null; subjectEmployeeId: string | null
+    title: string; category: string; severity: string; confidentiality: string; description: string; status: string
+    assignedToId: string | null; resolutionNotes: string | null; acknowledgedAt: Date | null; resolvedAt: Date | null
+    slaDueAt: Date | null; createdAt: Date; updatedAt: Date
+    submitterFirst: string | null; submitterLast: string | null
+    subjectFirst: string | null; subjectLast: string | null; assigneeName: string | null
+}) {
+    const isAnon = row.confidentiality === 'anonymous'
+    return {
+        id: row.id,
+        tenantId: row.tenantId,
+        submittedByEmployeeId: row.submittedByEmployeeId,
+        subjectEmployeeId: row.subjectEmployeeId,
+        title: row.title,
+        category: row.category,
+        severity: row.severity,
+        confidentiality: row.confidentiality,
+        description: isAnon ? '[Redacted]' : row.description,
+        status: row.status,
+        assignedToId: row.assignedToId,
+        resolutionNotes: row.resolutionNotes,
+        acknowledgedAt: row.acknowledgedAt,
+        resolvedAt: row.resolvedAt,
+        slaDueAt: row.slaDueAt,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        submittedByName: isAnon ? 'Anonymous' : [row.submitterFirst, row.submitterLast].filter(Boolean).join(' ') || null,
+        subjectName: [row.subjectFirst, row.subjectLast].filter(Boolean).join(' ') || null,
+        assigneeName: row.assigneeName,
+    }
+}
 
 export async function listComplaints(tenantId: string, params: {
     limit: number
     offset: number
     search?: string
+    filter?: string
     status?: string
     severity?: string
     category?: string
-    employeeId?: string  // restrict to own complaints
+    employeeId?: string
 }) {
-    // Build with raw query to support subject employee join alias
-    const rows = await db.execute(sql`
-        SELECT
-            c.id, c.tenant_id, c.submitted_by_employee_id, c.subject_employee_id,
-            c.title, c.category, c.severity, c.confidentiality, c.description, c.status,
-            c.assigned_to_id, c.resolution_notes, c.acknowledged_at, c.resolved_at, c.sla_due_at,
-            c.created_at, c.updated_at,
-            e.first_name AS submitter_first, e.last_name AS submitter_last,
-            se.first_name AS subject_first, se.last_name AS subject_last,
-            u.name AS assignee_name
-        FROM complaints c
-        LEFT JOIN employees e ON c.submitted_by_employee_id = e.id
-        LEFT JOIN employees se ON c.subject_employee_id = se.id
-        LEFT JOIN users u ON c.assigned_to_id = u.id
-        WHERE c.tenant_id = ${tenantId} AND c.deleted_at IS NULL
-        ${params.employeeId ? sql`AND c.submitted_by_employee_id = ${params.employeeId}` : sql``}
-        ${params.status ? sql`AND c.status = ${params.status}` : sql``}
-        ${params.severity ? sql`AND c.severity = ${params.severity}` : sql``}
-        ${params.category ? sql`AND c.category = ${params.category}` : sql``}
-        ${params.search ? sql`AND (c.title ILIKE ${'%' + params.search + '%'} OR c.description ILIKE ${'%' + params.search + '%'})` : sql``}
-        ORDER BY c.created_at DESC
-        LIMIT ${params.limit} OFFSET ${params.offset}
-    `)
+    const conds = Conditions.create()
+        .tenant(complaints.tenantId, tenantId)
+        .notDeleted(complaints.deletedAt)
+        .match(complaints.submittedByEmployeeId, params.employeeId)
+        .match(complaints.status, params.status)
+        .match(complaints.severity, params.severity)
+        .match(complaints.category, params.category)
+        .filter(params.filter, COMPLAINT_FIELD_MAP, COMPLAINT_ALLOWED)
 
-    return extractRows(rows).map((r: any) => ({
-        id: r.id,
-        tenantId: r.tenant_id,
-        submittedByEmployeeId: r.submitted_by_employee_id,
-        subjectEmployeeId: r.subject_employee_id,
-        title: r.title,
-        category: r.category,
-        severity: r.severity,
-        confidentiality: r.confidentiality,
-        description: r.confidentiality === 'anonymous' ? '[Redacted]' : r.description,
-        status: r.status,
-        assignedToId: r.assigned_to_id,
-        resolutionNotes: r.resolution_notes,
-        acknowledgedAt: r.acknowledged_at,
-        resolvedAt: r.resolved_at,
-        slaDueAt: r.sla_due_at,
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-        submittedByName: r.confidentiality === 'anonymous' ? 'Anonymous' : [r.submitter_first, r.submitter_last].filter(Boolean).join(' ') || null,
-        subjectName: [r.subject_first, r.subject_last].filter(Boolean).join(' ') || null,
-        assigneeName: r.assignee_name,
-    }))
+    if (params.search?.trim()) {
+        const q = `%${params.search.trim()}%`
+        conds.add(or(ilike(complaints.title, q), ilike(complaints.description, q)))
+    }
+
+    const [rows, countRows] = await Promise.all([
+        db.select(COMPLAINT_SELECT)
+            .from(complaints)
+            .leftJoin(employees, eq(complaints.submittedByEmployeeId, employees.id))
+            .leftJoin(subjectEmp, eq(complaints.subjectEmployeeId, subjectEmp.id))
+            .leftJoin(users, eq(complaints.assignedToId, users.id))
+            .where(conds.where())
+            .orderBy(desc(complaints.createdAt))
+            .limit(params.limit)
+            .offset(params.offset),
+        db.select({ count: sql<number>`COUNT(*)::int` })
+            .from(complaints)
+            .where(conds.where()),
+    ])
+
+    const total = Number(countRows[0]?.count ?? 0)
+    return {
+        data: rows.map(mapRow),
+        total,
+        limit: params.limit,
+        offset: params.offset,
+        hasMore: params.offset + rows.length < total,
+    }
 }
 
 export async function getComplaint(tenantId: string, id: string, employeeId?: string) {
-    const _rowResult0 = await db.execute(sql`
-        SELECT
-            c.id, c.tenant_id, c.submitted_by_employee_id, c.subject_employee_id,
-            c.title, c.category, c.severity, c.confidentiality, c.description, c.status,
-            c.assigned_to_id, c.resolution_notes, c.acknowledged_at, c.resolved_at, c.sla_due_at,
-            c.created_at, c.updated_at,
-            e.first_name AS submitter_first, e.last_name AS submitter_last,
-            se.first_name AS subject_first, se.last_name AS subject_last,
-            u.name AS assignee_name
-        FROM complaints c
-        LEFT JOIN employees e ON c.submitted_by_employee_id = e.id
-        LEFT JOIN employees se ON c.subject_employee_id = se.id
-        LEFT JOIN users u ON c.assigned_to_id = u.id
-        WHERE c.tenant_id = ${tenantId} AND c.id = ${id} AND c.deleted_at IS NULL
-        ${employeeId ? sql`AND c.submitted_by_employee_id = ${employeeId}` : sql``}
-        LIMIT 1
-    `)
-    const row = extractRows(_rowResult0)[0]
+    const conds = Conditions.create()
+        .tenant(complaints.tenantId, tenantId)
+        .notDeleted(complaints.deletedAt)
+        .match(complaints.id, id)
+        .match(complaints.submittedByEmployeeId, employeeId)
 
-    if (!row) return null
+    const [row] = await db.select(COMPLAINT_SELECT)
+        .from(complaints)
+        .leftJoin(employees, eq(complaints.submittedByEmployeeId, employees.id))
+        .leftJoin(subjectEmp, eq(complaints.subjectEmployeeId, subjectEmp.id))
+        .leftJoin(users, eq(complaints.assignedToId, users.id))
+        .where(conds.where())
+        .limit(1)
 
-    return {
-        id: row.id,
-        tenantId: row.tenant_id,
-        submittedByEmployeeId: row.submitted_by_employee_id,
-        subjectEmployeeId: row.subject_employee_id,
-        title: row.title,
-        category: row.category,
-        severity: row.severity,
-        confidentiality: row.confidentiality,
-        description: row.description,
-        status: row.status,
-        assignedToId: row.assigned_to_id,
-        resolutionNotes: row.resolution_notes,
-        acknowledgedAt: row.acknowledged_at,
-        resolvedAt: row.resolved_at,
-        slaDueAt: row.sla_due_at,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        submittedByName: row.confidentiality === 'anonymous' ? 'Anonymous' : [row.submitter_first, row.submitter_last].filter(Boolean).join(' ') || null,
-        subjectName: [row.subject_first, row.subject_last].filter(Boolean).join(' ') || null,
-        assigneeName: row.assignee_name,
-    }
+    return row ? mapRow(row) : null
 }
 
 export async function createComplaint(tenantId: string, input: CreateComplaintInput) {
@@ -337,16 +321,15 @@ export async function deleteComplaint(tenantId: string, id: string) {
 }
 
 export async function getComplaintStats(tenantId: string) {
-    const _statsResult = await db.execute(sql`
-        SELECT
-            COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE status != 'resolved')::int AS open,
-            COUNT(*) FILTER (WHERE severity = 'critical' AND status != 'resolved')::int AS critical,
-            COUNT(*) FILTER (WHERE sla_due_at < NOW() AND status NOT IN ('resolved'))::int AS overdue
-        FROM complaints
-        WHERE tenant_id = ${tenantId} AND deleted_at IS NULL
-    `)
-    const [counts] = extractRows(_statsResult)
+    const [counts] = await db
+        .select({
+            total: sql<number>`COUNT(*)::int`,
+            open: sql<number>`COUNT(*) FILTER (WHERE ${complaints.status} != 'resolved')::int`,
+            critical: sql<number>`COUNT(*) FILTER (WHERE ${complaints.severity} = 'critical' AND ${complaints.status} != 'resolved')::int`,
+            overdue: sql<number>`COUNT(*) FILTER (WHERE ${complaints.slaDueAt} < NOW() AND ${complaints.status} NOT IN ('resolved'))::int`,
+        })
+        .from(complaints)
+        .where(and(eq(complaints.tenantId, tenantId), isNull(complaints.deletedAt)))
 
     return {
         total: Number(counts?.total ?? 0),

@@ -141,6 +141,20 @@
       "when": 1778544000000,
       "tag": "0019_employee_no_sequences",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1746630400000,
+      "tag": "0020_grade_levels_enhanced",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1746716800000,
+      "tag": "0021_grade_levels_roles",
+      "breakpoints": true
     }
   ]
 }
