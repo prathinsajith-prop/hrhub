@@ -11,13 +11,20 @@ export async function attendanceRoutes(fastify: any) {
     const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')] }
 
     // GET /api/v1/attendance
-    // Elevated roles see all records; employees are scoped to their own.
+    // hr_manager/super_admin see all; dept_head scoped to their department; employees see own only.
     fastify.get('/attendance', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { employeeId, startDate, endDate, status, filter, page, limit, cursor } = request.query as Record<string, string>
-        const isElevated = ['hr_manager', 'super_admin', 'dept_head'].includes(request.user.role)
-        const resolvedEmployeeId = isElevated ? employeeId : request.user.employeeId
+        const role = request.user.role
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isDeptHead = role === 'dept_head'
+        if (isDeptHead && !request.user.department) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Your account has no department assigned. Contact an HR admin.' })
+        }
+        const resolvedEmployeeId = isHrAdmin ? employeeId : isDeptHead ? employeeId : request.user.employeeId
+        const resolvedDepartment = isDeptHead ? request.user.department : undefined
         const result = await getAttendance(request.user.tenantId, {
             employeeId: resolvedEmployeeId,
+            department: resolvedDepartment,
             startDate,
             endDate,
             status,
@@ -52,6 +59,9 @@ export async function attendanceRoutes(fastify: any) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
         }
         if (isDeptHead && employeeId && employeeId !== request.user.employeeId) {
+            if (!request.user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Your account has no department assigned. Contact an HR admin.' })
+            }
             const emp = await findById(request.user.tenantId, resolvedEmployeeId)
             if (!emp || emp.department !== request.user.department) {
                 return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only manage attendance for employees in your department.' })
@@ -73,6 +83,9 @@ export async function attendanceRoutes(fastify: any) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
         }
         if (isDeptHead && employeeId && employeeId !== request.user.employeeId) {
+            if (!request.user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Your account has no department assigned. Contact an HR admin.' })
+            }
             const emp = await findById(request.user.tenantId, resolvedEmployeeId)
             if (!emp || emp.department !== request.user.department) {
                 return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only manage attendance for employees in your department.' })

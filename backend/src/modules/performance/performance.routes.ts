@@ -32,8 +32,11 @@ export async function performanceRoutes(fastify: any) {
         const role = request.user.role
         const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
         const isDeptHead = role === 'dept_head'
+        if (isDeptHead && !request.user.department) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Your account has no department assigned. Contact an HR admin.' })
+        }
         const resolvedEmployeeId = isHrAdmin ? employeeId : isDeptHead ? employeeId : (request.user.employeeId ?? undefined)
-        const resolvedDepartment = isDeptHead ? (request.user.department ?? undefined) : undefined
+        const resolvedDepartment = isDeptHead ? request.user.department : undefined
         const result = await getReviews(request.user.tenantId, { employeeId: resolvedEmployeeId, department: resolvedDepartment, status, from, to, search: q || search || undefined, filter: filter || undefined, limit: Number(limit), offset: Number(offset) })
         return reply.send(result)
     })

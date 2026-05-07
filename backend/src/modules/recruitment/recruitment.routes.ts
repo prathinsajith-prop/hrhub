@@ -129,9 +129,9 @@ export default async function (fastify: any): Promise<void> {
         return reply.code(204).send()
     })
 
-    // GET /api/v1/applications — HR/admin only; candidate PII and salary data must not be exposed to employees
+    // GET /api/v1/applications — HR/admin only; candidate PII and salary data must not be exposed to employees or dept_heads
     fastify.get('/applications', {
-        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin', 'dept_head')],
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['Recruitment'] },
     }, async (request, reply) => {
         const { jobId, stage, q, filter, limit = '20', offset = '0' } = request.query as Record<string, string>
@@ -142,7 +142,7 @@ export default async function (fastify: any): Promise<void> {
 
     // GET /api/v1/applications/:id — HR/admin only
     fastify.get('/applications/:id', {
-        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin', 'dept_head')],
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['Recruitment'] },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }

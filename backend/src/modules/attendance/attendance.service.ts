@@ -71,6 +71,7 @@ export async function checkOut(tenantId: string, employeeId: string) {
 
 export interface GetAttendanceParams {
     employeeId?: string
+    department?: string
     startDate?: string
     endDate?: string
     status?: string
@@ -104,6 +105,7 @@ export async function getAttendance(tenantId: string, params: GetAttendanceParam
     const conds = Conditions.create()
         .tenant(attendanceRecords.tenantId, tenantId)
         .match(attendanceRecords.employeeId, params.employeeId)
+        .match(employees.department, params.department)
         .match(attendanceRecords.status, params.status)
         .dateRange(attendanceRecords.date, params.startDate, params.endDate)
         .filterWithName(params.filter, ATTENDANCE_FIELD_MAP, ATTENDANCE_ALLOWED, employees.firstName, employees.lastName)
