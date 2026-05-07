@@ -8,7 +8,7 @@ import { logDocumentAction, getDocumentAuditLog } from '../onboarding/onboarding
 import { sendEmail, documentVerifiedEmail, documentRejectedEmail } from '../../plugins/email.js'
 import { db } from '../../db/index.js'
 import { employees, tenants } from '../../db/schema/index.js'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -144,7 +144,7 @@ export default async function (fastify: any): Promise<void> {
         if (updated.employeeId) {
             try {
                 const [emp] = await db.select({ email: employees.email, firstName: employees.firstName, lastName: employees.lastName })
-                    .from(employees).where(eq(employees.id, updated.employeeId)).limit(1)
+                    .from(employees).where(and(eq(employees.id, updated.employeeId), eq(employees.tenantId, request.user.tenantId))).limit(1)
                 const [tn] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
                 if (emp?.email) {
                     const opts = documentVerifiedEmail({
@@ -201,7 +201,7 @@ export default async function (fastify: any): Promise<void> {
         if (updated.employeeId) {
             try {
                 const [emp] = await db.select({ email: employees.email, firstName: employees.firstName, lastName: employees.lastName })
-                    .from(employees).where(eq(employees.id, updated.employeeId)).limit(1)
+                    .from(employees).where(and(eq(employees.id, updated.employeeId), eq(employees.tenantId, request.user.tenantId))).limit(1)
                 const [tn] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
                 if (emp?.email) {
                     const opts = documentRejectedEmail({

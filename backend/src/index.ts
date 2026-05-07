@@ -56,6 +56,7 @@ import teamsModuleRoutes from './modules/teams/teams.routes.js'
 import { complaintsRoutes } from './modules/complaints/complaints.routes.js'
 import trainingRoutes from './modules/training/training.routes.js'
 import loansRoutes from './modules/loans/loans.routes.js'
+import { diagnosticsRoutes } from './modules/admin/diagnostics.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -299,6 +300,7 @@ async function bootstrap() {
     await app.register(complaintsRoutes, { prefix: '/api/v1' })
     await app.register(trainingRoutes, { prefix: '/api/v1/training' })
     await app.register(loansRoutes, { prefix: '/api/v1/loans' })
+    await app.register(diagnosticsRoutes, { prefix: '/api/v1/admin/diagnostics' })
 
     // Meta — returns runtime capability flags so the frontend can adapt without
     // hardcoding env assumptions (e.g. whether to show the API docs link).

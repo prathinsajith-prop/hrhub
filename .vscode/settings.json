@@ -1,0 +1,26 @@
+{
+    // ── Playwright ──────────────────────────────────────────────────────────────
+    // Tell the VS Code Playwright extension where the config lives in this monorepo.
+    // Without this the extension runs from the repo root and can't find the config.
+    "playwright.reuseBrowser": false,
+    "playwright.env": {},
+    // Point the extension at the frontend workspace config
+    "playwright.testConfigFile": "frontend/playwright.config.ts",
+
+    // ── TypeScript ──────────────────────────────────────────────────────────────
+    // Use workspace TypeScript version rather than VS Code's bundled one
+    "typescript.tsdk": "frontend/node_modules/typescript/lib",
+
+    // ── File exclusions ─────────────────────────────────────────────────────────
+    "files.exclude": {
+        "**/node_modules": true,
+        "**/dist": true,
+        "**/.turbo": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/dist": true,
+        "frontend/playwright-report": true,
+        "frontend/test-results": true
+    }
+}

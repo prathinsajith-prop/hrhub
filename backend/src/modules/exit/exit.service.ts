@@ -1,7 +1,7 @@
 import { db } from '../../db/index.js'
 import { exitRequests, employees, leaveRequests, leaveBalances } from '../../db/schema/index.js'
 import { eq, and, sql, desc } from 'drizzle-orm'
-import { resolveAvatarUrl } from '../../plugins/s3.js'
+import { resolveAvatarUrl, resolveAvatarUrls } from '../../plugins/s3.js'
 import { Conditions } from '../../lib/filters.js'
 
 const EXIT_FIELD_MAP = {
@@ -185,7 +185,9 @@ export async function getExitRequests(tenantId: string, opts: { limit?: number; 
         .offset(offset)
 
     const total = rows[0]?.total ?? 0
-    const data = await Promise.all(rows.map(async ({ total: _, ...r }) => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
+    const stripped = rows.map(({ total: _, ...r }) => r)
+    const avatarUrls = await resolveAvatarUrls(stripped.map(r => r.employeeAvatarUrl))
+    const data = stripped.map((r, i) => ({ ...r, employeeAvatarUrl: avatarUrls[i] }))
     return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 
@@ -226,17 +228,19 @@ export async function getExitRequest(tenantId: string, id: string) {
 }
 
 export async function approveExit(tenantId: string, id: string, approverId: string) {
-    const [req] = await db.update(exitRequests)
-        .set({ status: 'approved', approvedBy: approverId, updatedAt: new Date() })
-        .where(and(eq(exitRequests.id, id), eq(exitRequests.tenantId, tenantId), eq(exitRequests.status, 'pending')))
-        .returning()
+    return db.transaction(async (tx) => {
+        const [req] = await tx.update(exitRequests)
+            .set({ status: 'approved', approvedBy: approverId, updatedAt: new Date() })
+            .where(and(eq(exitRequests.id, id), eq(exitRequests.tenantId, tenantId), eq(exitRequests.status, 'pending')))
+            .returning()
 
-    if (req) {
-        await db.update(employees)
-            .set({ status: 'terminated' })
-            .where(and(eq(employees.id, req.employeeId), eq(employees.tenantId, tenantId)))
-    }
-    return req ?? null
+        if (req) {
+            await tx.update(employees)
+                .set({ status: 'terminated' })
+                .where(and(eq(employees.id, req.employeeId), eq(employees.tenantId, tenantId)))
+        }
+        return req ?? null
+    })
 }
 
 export async function rejectExit(tenantId: string, id: string, approverId: string, reason?: string) {

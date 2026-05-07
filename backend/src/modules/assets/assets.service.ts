@@ -242,7 +242,7 @@ export async function assignAsset(
     await db
         .update(assets)
         .set(withTimestamp({ status: 'assigned' }))
-        .where(eq(assets.id, assetId))
+        .where(and(eq(assets.id, assetId), eq(assets.tenantId, tenantId)))
 
     await cacheDel(`dashboard:kpis:${tenantId}`)
     return assignment
@@ -405,7 +405,7 @@ export async function updateMaintenanceRecord(
         await db
             .update(assets)
             .set(withTimestamp({ status: 'available' }))
-            .where(and(eq(assets.id, existing.assetId), eq(assets.status, 'maintenance')))
+            .where(and(eq(assets.id, existing.assetId), eq(assets.tenantId, tenantId), eq(assets.status, 'maintenance')))
         await cacheDel(`dashboard:kpis:${tenantId}`)
     }
 

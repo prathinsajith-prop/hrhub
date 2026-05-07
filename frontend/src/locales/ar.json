@@ -905,6 +905,9 @@
     "rejectNotesPlaceholder": "سبب الرفض…",
     "paymentConfirmTitle": "تسجيل الدفعة الشهرية",
     "paymentConfirmDesc": "تسجيل خصم {{amount}} لـ {{name}}؟",
+    "deleted": "تم حذف القرض",
+    "deleteTitle": "حذف طلب القرض",
+    "deleteDesc": "حذف طلب القرض بمبلغ {{amount}} لـ {{name}}؟ لا يمكن التراجع عن هذا الإجراء.",
     "table": {
       "employee": "الموظف",
       "progress": "تقدم السداد",

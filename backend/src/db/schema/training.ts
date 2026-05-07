@@ -26,9 +26,10 @@ export const trainingRecords = pgTable('training_records', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
-    tenantIdx: index('idx_training_records_tenant').on(t.tenantId),
-    employeeIdx: index('idx_training_records_employee').on(t.employeeId),
-    statusIdx: index('idx_training_records_status').on(t.tenantId, t.status),
+    tenantIdx:         index('idx_training_records_tenant').on(t.tenantId),
+    employeeIdx:       index('idx_training_records_employee').on(t.employeeId),
+    statusIdx:         index('idx_training_records_status').on(t.tenantId, t.status),
+    tenantEmployeeIdx: index('idx_training_tenant_employee').on(t.tenantId, t.employeeId),
 }))
 
 export const trainingRecordsRelations = relations(trainingRecords, ({ one }) => ({

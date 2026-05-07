@@ -30,9 +30,10 @@ export const salaryRevisions = pgTable('salary_revisions', {
     approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
-    tenantIdx: index('idx_salary_revisions_tenant').on(t.tenantId),
-    employeeIdx: index('idx_salary_revisions_employee').on(t.employeeId),
-    effectiveDateIdx: index('idx_salary_revisions_effective').on(t.employeeId, t.effectiveDate),
+    tenantIdx:         index('idx_salary_revisions_tenant').on(t.tenantId),
+    employeeIdx:       index('idx_salary_revisions_employee').on(t.employeeId),
+    tenantEmployeeIdx: index('idx_salary_revisions_tenant_employee').on(t.tenantId, t.employeeId),
+    effectiveDateIdx:  index('idx_salary_revisions_effective').on(t.employeeId, t.effectiveDate),
 }))
 
 export const salaryRevisionsRelations = relations(salaryRevisions, ({ one }) => ({

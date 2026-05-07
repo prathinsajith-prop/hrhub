@@ -32,6 +32,7 @@ export const complaints = pgTable('complaints', {
     index('idx_complaints_submitted_by').on(t.submittedByEmployeeId),
     index('idx_complaints_status').on(t.tenantId, t.status),
     index('idx_complaints_severity').on(t.tenantId, t.severity),
+    index('idx_complaints_submitted_tenant').on(t.tenantId, t.submittedByEmployeeId),
 ])
 
 export const complaintsRelations = relations(complaints, ({ one }) => ({

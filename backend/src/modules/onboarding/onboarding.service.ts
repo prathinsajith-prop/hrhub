@@ -98,7 +98,7 @@ export async function addStep(tenantId: string, checklistId: string, data: { tit
     const progress = Math.round((completedCount / allSteps.length) * 100)
     await db.update(onboardingChecklists)
         .set(withTimestamp({ progress }))
-        .where(eq(onboardingChecklists.id, checklistId))
+        .where(and(eq(onboardingChecklists.id, checklistId), eq(onboardingChecklists.tenantId, tenantId)))
 
     return step
 }

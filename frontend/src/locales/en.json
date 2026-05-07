@@ -905,6 +905,9 @@
     "rejectNotesPlaceholder": "Reason for rejection…",
     "paymentConfirmTitle": "Record Monthly Payment",
     "paymentConfirmDesc": "Record a deduction of {{amount}} for {{name}}?",
+    "deleted": "Loan deleted",
+    "deleteTitle": "Delete Loan Request",
+    "deleteDesc": "Delete the loan request of {{amount}} for {{name}}? This cannot be undone.",
     "table": {
       "employee": "Employee",
       "progress": "Repayment Progress",

@@ -14,6 +14,61 @@
  */
 import { cacheGet, cacheSet, cacheDel } from './redis.js'
 
+// ── L1 in-process cache ───────────────────────────────────────────────────────
+// A tiny Map-based cache that sits in front of Redis for hot, read-mostly data
+// (tenant config, leave policies) so the Redis round-trip is only paid on a
+// cache miss. Entries expire based on wall-clock time and are evicted LRU-style
+// when the map grows beyond L1_MAX.
+
+const L1_MAX = 500
+const l1Map = new Map<string, { value: unknown; exp: number }>()
+
+function l1Get<T>(key: string): T | null {
+    const entry = l1Map.get(key)
+    if (!entry) return null
+    if (entry.exp < Date.now()) { l1Map.delete(key); return null }
+    return entry.value as T
+}
+
+function l1Set(key: string, value: unknown, ttlMs: number): void {
+    if (l1Map.size >= L1_MAX) {
+        // Evict the oldest entry (insertion-order first)
+        const first = l1Map.keys().next().value
+        if (first) l1Map.delete(first)
+    }
+    l1Map.set(key, { value, exp: Date.now() + ttlMs })
+}
+
+function l1Del(key: string): void {
+    l1Map.delete(key)
+}
+
+/**
+ * Two-level cache wrapper: L1 in-process → L2 Redis → fetch.
+ * Use for high-read, low-write data like tenant config and leave policies.
+ *
+ * @param key      Unique cache key (usually from a namespace `.key()` call).
+ * @param l1TtlMs  L1 (in-process) TTL in milliseconds. Should be ≤ Redis TTL.
+ * @param fetch    Async function that loads the value from the DB on a full miss.
+ */
+export async function withL1Cache<T>(
+    key: string,
+    l1TtlMs: number,
+    fetch: () => Promise<T>,
+): Promise<T> {
+    const hit = l1Get<T>(key)
+    if (hit !== null) return hit
+    const value = await fetch()
+    l1Set(key, value, l1TtlMs)
+    return value
+}
+
+/** Invalidate a key from both L1 and L2 caches. */
+export async function invalidateL1AndL2(key: string): Promise<void> {
+    l1Del(key)
+    await cacheDel(key)
+}
+
 interface NamespaceConfig {
     /** Short, unique prefix used in Redis. */
     prefix: string
@@ -84,6 +139,12 @@ export const tenantConfigCache = makeNamespace<[tenantId: string]>({
     ttl: 600,
 })
 
+/** Leave balances per employee per year — invalidated on approve/cancel/adjust. */
+export const leaveBalancesCache = makeNamespace<[tenantId: string, employeeId: string, year: string]>({
+    prefix: 'leave:balances',
+    ttl: 120, // 2 minutes — short because approvals change balances
+})
+
 // ── Bulk invalidation helpers ────────────────────────────────────────────────
 
 /**
@@ -92,19 +153,20 @@ export const tenantConfigCache = makeNamespace<[tenantId: string]>({
  */
 export async function invalidateEmployeeCaches(tenantId: string, employeeId?: string): Promise<void> {
     await Promise.all([
-        dashboardCache.invalidate(tenantId),
-        dashboardSummaryCache.invalidate(tenantId),
-        employeeId ? employeeDetailCache.invalidate(tenantId, employeeId) : Promise.resolve(),
+        invalidateL1AndL2(dashboardCache.key(tenantId)),
+        invalidateL1AndL2(dashboardSummaryCache.key(tenantId)),
+        employeeId ? invalidateL1AndL2(employeeDetailCache.key(tenantId, employeeId)) : Promise.resolve(),
     ])
 }
 
 /**
  * Invalidate every cache entry that depends on leave for the given tenant.
+ * Clears both the L1 in-process layer and L2 Redis.
  */
 export async function invalidateLeaveCaches(tenantId: string): Promise<void> {
     await Promise.all([
-        dashboardCache.invalidate(tenantId),
-        dashboardSummaryCache.invalidate(tenantId),
-        leavePoliciesCache.invalidate(tenantId),
+        invalidateL1AndL2(dashboardCache.key(tenantId)),
+        invalidateL1AndL2(dashboardSummaryCache.key(tenantId)),
+        invalidateL1AndL2(leavePoliciesCache.key(tenantId)),
     ])
 }

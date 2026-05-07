@@ -443,7 +443,7 @@ export async function changeMemberRole(opts: {
 
     const [updated] = await db.update(tenantMemberships)
         .set({ role: opts.newRole, updatedAt: new Date() })
-        .where(eq(tenantMemberships.id, opts.membershipId))
+        .where(and(eq(tenantMemberships.id, opts.membershipId), eq(tenantMemberships.tenantId, opts.tenantId)))
         .returning()
     return updated
 }
@@ -477,7 +477,7 @@ export async function removeMember(opts: {
 
     await db.update(tenantMemberships)
         .set({ isActive: false, inviteStatus: 'revoked', updatedAt: new Date() })
-        .where(eq(tenantMemberships.id, opts.membershipId))
+        .where(and(eq(tenantMemberships.id, opts.membershipId), eq(tenantMemberships.tenantId, opts.tenantId)))
     return { ok: true }
 }
 
