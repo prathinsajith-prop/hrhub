@@ -21,8 +21,9 @@ export const employeeDependents = pgTable('employee_dependents', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
     uniqueIndex('idx_emp_dependents_reference').on(t.tenantId, t.reference),
-    index('idx_emp_dependents_employee').on(t.employeeId),
     index('idx_emp_dependents_tenant').on(t.tenantId),
+    index('idx_emp_dependents_employee').on(t.employeeId),
+    index('idx_emp_dependents_tenant_employee').on(t.tenantId, t.employeeId),
 ])
 
 export const employeeDependentsRelations = relations(employeeDependents, ({ one }) => ({

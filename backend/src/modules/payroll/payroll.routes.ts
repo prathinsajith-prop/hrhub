@@ -1,4 +1,4 @@
-import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslips, getPayslipsWithEmployees, getPayslipsByEmployee, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
+import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslipsWithEmployees, getPayslipsByEmployee, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
 import { generatePayslipPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { enqueuePayrollRun, getPayrollQueue, type PayrollJobData } from '../../workers/payroll.worker.js'
@@ -7,13 +7,13 @@ export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
     const hrOnly = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
 
-    fastify.get('/', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+    fastify.get('/', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { year, limit = '12', offset = '0' } = request.query as Record<string, string>
         const result = await listPayrollRuns(request.user.tenantId, { year: year ? Number(year) : undefined, limit: Number(limit), offset: Number(offset) })
         return reply.send(result)
     })
 
-    fastify.get('/:id', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+    fastify.get('/:id', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
         const run = await getPayrollRun(request.user.tenantId, id)
         if (!run) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Payroll run not found' })
@@ -169,9 +169,9 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data: { gratuity, basicSalary: salary, yearsOfService: years } })
     })
 
-    // GET /api/v1/payroll/:id/wps-sif — download WPS Salary Information File
+    // GET /api/v1/payroll/:id/wps-sif — download WPS Salary Information File (HR only)
     fastify.get('/:id/wps-sif', {
-        ...auth,
+        ...hrOnly,
         schema: { tags: ['Payroll'] },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
@@ -212,10 +212,15 @@ export default async function (fastify: any): Promise<void> {
     })
 
     // GET /api/v1/payroll/payslips/:payslipId/download — download payslip PDF
+    // HR roles see any payslip; employees can only download their own.
     fastify.get('/payslips/:payslipId/download', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { payslipId } = request.params as { payslipId: string }
         const payslip = await getPayslipById(request.user.tenantId, payslipId)
         if (!payslip) return reply.code(404).send({ message: 'Payslip not found' })
+        const isElevated = ['hr_manager', 'super_admin'].includes(request.user.role)
+        if (!isElevated && payslip.employeeId !== request.user.employeeId) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only download your own payslip.' })
+        }
         const pdfBuffer = await generatePayslipPdf({
             employee: {
                 name: payslip.employeeName ?? 'Employee',
@@ -249,8 +254,8 @@ export default async function (fastify: any): Promise<void> {
             .send(pdfBuffer)
     })
 
-    // GET /api/v1/payroll/jobs/:jobId — poll async payroll job status
-    fastify.get('/jobs/:jobId', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+    // GET /api/v1/payroll/jobs/:jobId — poll async payroll job status (HR only)
+    fastify.get('/jobs/:jobId', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { jobId } = request.params as { jobId: string }
         const queue = getPayrollQueue()
         if (!queue) {
@@ -260,8 +265,11 @@ export default async function (fastify: any): Promise<void> {
         if (!job) {
             return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found.' })
         }
-        const state = await job.getState()
         const data = job.data as PayrollJobData
+        if (data.tenantId !== request.user.tenantId) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found.' })
+        }
+        const state = await job.getState()
         return reply.send({ data: { jobId: job.id, state, payrollRunId: data.payrollRunId, failedReason: job.failedReason ?? null } })
     })
 }

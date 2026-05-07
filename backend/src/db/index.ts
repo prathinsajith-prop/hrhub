@@ -12,6 +12,11 @@ const queryClient = postgres(env.DATABASE_URL, {
     max: 20,
     idle_timeout: 20,
     connect_timeout: 10,
+    // Kill runaway queries after 30 s — prevents pool exhaustion from slow reports.
+    // Report/export routes override per-transaction with SET LOCAL statement_timeout.
+    connection: {
+        statement_timeout: 30_000,
+    },
 })
 
 export const db = drizzle(queryClient, { schema, logger: env.NODE_ENV === 'development' })
@@ -25,6 +30,19 @@ type DrizzleTx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 export async function withTenantContext<T>(tenantId: string, fn: (tx: DrizzleTx) => Promise<T>): Promise<T> {
     return db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL "app.current_tenant" = ${tenantId}`)
+        return fn(tx)
+    })
+}
+
+/**
+ * Run a long-running query block (reports, exports, payroll) with an extended
+ * 2-minute statement timeout instead of the pool-wide 30-second default.
+ * SET LOCAL scopes the override to this transaction only — other concurrent
+ * requests on the same connection are not affected.
+ */
+export async function withLongTimeout<T>(fn: (tx: DrizzleTx) => Promise<T>): Promise<T> {
+    return db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL statement_timeout = 120000`)
         return fn(tx)
     })
 }

@@ -150,7 +150,7 @@ test.describe('Employee Detail — tabs and content', () => {
         // Resize viewport to force overflow
         await page.setViewportSize({ width: 600, height: 800 })
         await page.waitForTimeout(500)
-        const moreBtn = page.getByRole('button', { name: /more/i })
+        const _moreBtn = page.getByRole('button', { name: /more/i })
         // More button may or may not appear depending on screen width — just ensure no crash
         const errors: string[] = []
         page.on('pageerror', err => errors.push(err.message))

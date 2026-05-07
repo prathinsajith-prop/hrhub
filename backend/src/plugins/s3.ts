@@ -201,6 +201,18 @@ export async function resolveAvatarUrl(stored: string | null | undefined): Promi
     return url
 }
 
+/**
+ * Batch-resolve an array of stored avatar values to presigned URLs in one pass.
+ * Deduplicates unique keys so each unique key is signed at most once, then
+ * maps results back to the original positions. Returns null for null/empty entries.
+ */
+export async function resolveAvatarUrls(stored: (string | null | undefined)[]): Promise<(string | null)[]> {
+    const unique = [...new Set(stored.filter(Boolean))] as string[]
+    const results = await Promise.all(unique.map(k => resolveAvatarUrl(k)))
+    const resolved = new Map(unique.map((k, i) => [k, results[i] ?? null]))
+    return stored.map(k => (k ? resolved.get(k) ?? null : null))
+}
+
 const s3Plugin = fp(async (fastify) => {
     fastify.decorate('s3', {
         generateUploadUrl,

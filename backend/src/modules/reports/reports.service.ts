@@ -1,5 +1,5 @@
-import { eq, and, count, lte, gte, sql, desc, isNotNull } from 'drizzle-orm'
-import { db } from '../../db/index.js'
+import { eq, and, count, lte, sql, desc } from 'drizzle-orm'
+import { db, withLongTimeout } from '../../db/index.js'
 import { employees, payrollRuns } from '../../db/schema/index.js'
 import { getPROCostReport } from '../visa/visa_costs.service.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
@@ -7,36 +7,38 @@ import { resolveAvatarUrl } from '../../plugins/s3.js'
 export { getPROCostReport }
 
 export async function getHeadcountReport(tenantId: string) {
-    // Use SQL GROUP BY instead of loading all rows into JS memory (BUG-03)
-    const baseWhere = and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false))
+    return withLongTimeout(async (tx) => {
+        // Use SQL GROUP BY instead of loading all rows into JS memory (BUG-03)
+        const baseWhere = and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false))
 
-    const [
-        [{ total }],
-        byStatusRows,
-        byDeptRows,
-        byNatRows,
-    ] = await Promise.all([
-        db.select({ total: count() }).from(employees).where(baseWhere),
-        db.select({ label: employees.status, count: count() })
-            .from(employees).where(baseWhere)
-            .groupBy(employees.status),
-        db.select({ label: employees.department, count: count() })
-            .from(employees).where(baseWhere)
-            .groupBy(employees.department)
-            .orderBy(desc(count())),
-        db.select({ label: employees.nationality, count: count() })
-            .from(employees).where(baseWhere)
-            .groupBy(employees.nationality)
-            .orderBy(desc(count()))
-            .limit(15),
-    ])
+        const [
+            [{ total }],
+            byStatusRows,
+            byDeptRows,
+            byNatRows,
+        ] = await Promise.all([
+            tx.select({ total: count() }).from(employees).where(baseWhere),
+            tx.select({ label: employees.status, count: count() })
+                .from(employees).where(baseWhere)
+                .groupBy(employees.status),
+            tx.select({ label: employees.department, count: count() })
+                .from(employees).where(baseWhere)
+                .groupBy(employees.department)
+                .orderBy(desc(count())),
+            tx.select({ label: employees.nationality, count: count() })
+                .from(employees).where(baseWhere)
+                .groupBy(employees.nationality)
+                .orderBy(desc(count()))
+                .limit(15),
+        ])
 
-    return {
-        total: Number(total),
-        byStatus: byStatusRows.map(r => ({ label: r.label ?? 'unknown', count: Number(r.count) })),
-        byDepartment: byDeptRows.map(r => ({ label: r.label ?? 'Unassigned', count: Number(r.count) })),
-        byNationality: byNatRows.map(r => ({ label: r.label ?? 'Unknown', count: Number(r.count) })),
-    }
+        return {
+            total: Number(total),
+            byStatus: byStatusRows.map(r => ({ label: r.label ?? 'unknown', count: Number(r.count) })),
+            byDepartment: byDeptRows.map(r => ({ label: r.label ?? 'Unassigned', count: Number(r.count) })),
+            byNationality: byNatRows.map(r => ({ label: r.label ?? 'Unknown', count: Number(r.count) })),
+        }
+    })
 }
 
 export async function getPayrollSummaryReport(tenantId: string) {

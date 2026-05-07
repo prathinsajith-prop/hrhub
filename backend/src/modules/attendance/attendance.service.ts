@@ -3,7 +3,7 @@ import { attendanceRecords, employees } from '../../db/schema/index.js'
 import { eq, and, gte, lte, sql } from 'drizzle-orm'
 import { encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { Conditions } from '../../lib/filters.js'
-import { resolveAvatarUrl } from '../../plugins/s3.js'
+import { resolveAvatarUrls } from '../../plugins/s3.js'
 
 const ATTENDANCE_FIELD_MAP = {
     status: attendanceRecords.status,
@@ -71,6 +71,7 @@ export async function checkOut(tenantId: string, employeeId: string) {
 
 export interface GetAttendanceParams {
     employeeId?: string
+    department?: string
     startDate?: string
     endDate?: string
     status?: string
@@ -104,6 +105,7 @@ export async function getAttendance(tenantId: string, params: GetAttendanceParam
     const conds = Conditions.create()
         .tenant(attendanceRecords.tenantId, tenantId)
         .match(attendanceRecords.employeeId, params.employeeId)
+        .match(employees.department, params.department)
         .match(attendanceRecords.status, params.status)
         .dateRange(attendanceRecords.date, params.startDate, params.endDate)
         .filterWithName(params.filter, ATTENDANCE_FIELD_MAP, ATTENDANCE_ALLOWED, employees.firstName, employees.lastName)
@@ -167,7 +169,8 @@ export async function getAttendance(tenantId: string, params: GetAttendanceParam
                 .from(attendanceRecords)
                 .where(conds.where()),
         ])
-        const resolvedItems = await Promise.all(items.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
+        const avatarUrls = await resolveAvatarUrls(items.map(r => r.employeeAvatarUrl))
+        const resolvedItems = items.map((r, i) => ({ ...r, employeeAvatarUrl: avatarUrls[i] }))
         return { items: resolvedItems, nextCursor: null, total: totalRow[0]?.count ?? 0 }
     }
 
@@ -178,7 +181,8 @@ export async function getAttendance(tenantId: string, params: GetAttendanceParam
     const nextCursor = hasMore && last
         ? encodeCursor(String((last as { date: string }).date), String((last as { id: string }).id))
         : null
-    const resolvedItems = await Promise.all(items.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
+    const avatarUrls = await resolveAvatarUrls(items.map(r => r.employeeAvatarUrl))
+        const resolvedItems = items.map((r, i) => ({ ...r, employeeAvatarUrl: avatarUrls[i] }))
     return { items: resolvedItems, nextCursor }
 }
 

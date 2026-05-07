@@ -257,13 +257,14 @@ export function AutocompleteFilter({ config, value, onChange }: PrimitiveProps) 
     const isMulti = op === 'in'
     const [draft, setDraft] = useState('')
     const [results, setResults] = useState<{ value: string | number; label: string }[]>(config.options ?? [])
-    const [loading, setLoading] = useState(false)
+    // Start in loading state when an async search function is provided so the
+    // initial fetch doesn't flash an empty list.
+    const [loading, setLoading] = useState(() => !!config.onSearch)
     const arrVal: string[] = Array.isArray(value?.value) ? (value!.value as string[]).map(String) : value?.value ? [String(value.value)] : []
 
     useEffect(() => {
         if (!config.onSearch) return
         let cancelled = false
-        setLoading(true)
         // Call onSearch('') on mount so the dropdown is populated immediately,
         // then re-run whenever the user types. Static options are shown as fallback
         // when onSearch is not provided.

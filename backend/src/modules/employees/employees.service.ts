@@ -1,4 +1,4 @@
-import { eq, and, ilike, desc, asc, getTableColumns, inArray, notInArray, sql, or, lt, gte, lte, aliasedTable } from 'drizzle-orm'
+import { eq, and, ilike, desc, asc, getTableColumns, inArray, notInArray, sql, or, lt, aliasedTable } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor, extractRows } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'

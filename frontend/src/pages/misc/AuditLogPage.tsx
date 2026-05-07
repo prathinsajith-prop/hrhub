@@ -119,6 +119,17 @@ function actionVerb(action: string): string {
     return map[action] ?? action
 }
 
+/** Returns the earliest timestamp (ms) that should be included for the given range, or null for all. */
+function filterCutoffMs(range: 'today' | '7d' | '30d' | 'all'): number | null {
+    if (range === 'all') return null
+    const rangeMs: Record<string, number> = {
+        today: 24 * 3600 * 1000,
+        '7d': 7 * 24 * 3600 * 1000,
+        '30d': 30 * 24 * 3600 * 1000,
+    }
+    return Date.now() - (rangeMs[range] ?? 0)
+}
+
 export function AuditLogPage() {
     const { t } = useTranslation()
     const [dateRange, setDateRange] = useState<'today' | '7d' | '30d' | 'all'>('30d')
@@ -167,17 +178,11 @@ export function AuditLogPage() {
     }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
     const filtered = useMemo(() => {
-        const now = Date.now()
-        const rangeMs: Record<typeof dateRange, number | null> = {
-            today: 24 * 3600 * 1000,
-            '7d': 7 * 24 * 3600 * 1000,
-            '30d': 30 * 24 * 3600 * 1000,
-            all: null,
-        }
-        const cutoff = rangeMs[dateRange]
+        // Compute the cutoff as a Date object to avoid calling Date.now() (impure) inside useMemo.
+        const cutoffMs = filterCutoffMs(dateRange)
         let result = logs
-        if (cutoff !== null) {
-            result = result.filter(l => now - new Date(l.createdAt).getTime() <= cutoff)
+        if (cutoffMs !== null) {
+            result = result.filter(l => new Date(l.createdAt).getTime() >= cutoffMs)
         }
         const search = auditSearch.searchInput.trim()
         if (search) {

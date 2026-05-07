@@ -27,8 +27,9 @@ export const employeeTransfers = pgTable('employee_transfers', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (t) => ({
-    tenantIdx: index('idx_emp_transfers_tenant').on(t.tenantId),
-    employeeIdx: index('idx_emp_transfers_employee').on(t.employeeId),
+    tenantIdx:         index('idx_emp_transfers_tenant').on(t.tenantId),
+    employeeIdx:       index('idx_emp_transfers_employee').on(t.employeeId),
+    tenantEmployeeIdx: index('idx_emp_transfers_tenant_employee').on(t.tenantId, t.employeeId),
 }))
 
 export const employeeTransfersRelations = relations(employeeTransfers, ({ one }) => ({

@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, User, Mail, Phone, Globe, Briefcase, DollarSign, Star, XCircle, UserPlus, Save, Edit2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -66,7 +66,12 @@ export function CandidateProfilePage() {
     const candidate = candidateData as Candidate | undefined
 
     // Sync notesDraft when server-side notes change after refetch.
-    useEffect(() => { setNotesDraft(candidate?.notes ?? '') }, [candidate?.notes])
+    const candidateNotes = candidate?.notes
+    const [prevCandidateNotes, setPrevCandidateNotes] = useState<string | undefined>(undefined)
+    if (candidateNotes !== prevCandidateNotes) {
+        setPrevCandidateNotes(candidateNotes)
+        setNotesDraft(candidateNotes ?? '')
+    }
 
     if (isLoading) {
         return (

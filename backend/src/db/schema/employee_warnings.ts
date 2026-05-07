@@ -18,8 +18,9 @@ export const employeeWarnings = pgTable('employee_warnings', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-    index('idx_emp_warnings_employee').on(t.employeeId),
     index('idx_emp_warnings_tenant').on(t.tenantId),
+    index('idx_emp_warnings_employee').on(t.employeeId),
+    index('idx_emp_warnings_tenant_employee').on(t.tenantId, t.employeeId),
 ])
 
 export const employeeWarningsRelations = relations(employeeWarnings, ({ one }) => ({

@@ -1,4 +1,4 @@
-import { eq, and, inArray, isNull, isNotNull, or, desc } from 'drizzle-orm'
+import { eq, and, inArray, isNotNull, or, desc } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
@@ -98,7 +98,7 @@ export async function addStep(tenantId: string, checklistId: string, data: { tit
     const progress = Math.round((completedCount / allSteps.length) * 100)
     await db.update(onboardingChecklists)
         .set(withTimestamp({ progress }))
-        .where(eq(onboardingChecklists.id, checklistId))
+        .where(and(eq(onboardingChecklists.id, checklistId), eq(onboardingChecklists.tenantId, tenantId)))
 
     return step
 }

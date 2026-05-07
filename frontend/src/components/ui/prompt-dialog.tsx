@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
     Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogBody, DialogDescription,
 } from '@/components/ui/overlays'
@@ -51,12 +51,17 @@ export function PromptDialog({
     const [value, setValue] = useState(defaultValue)
     const [error, setError] = useState<string | null>(null)
 
-    useEffect(() => {
-        if (open) {
-            setValue(defaultValue)
-            setError(null)
-        }
-    }, [open, defaultValue])
+    // Sync value and clear error when dialog opens or defaultValue changes.
+    const [prevOpen, setPrevOpen] = useState(false)
+    const [prevDefault, setPrevDefault] = useState(defaultValue)
+    if ((open && !prevOpen) || (open && defaultValue !== prevDefault)) {
+        setPrevOpen(open)
+        setPrevDefault(defaultValue)
+        setValue(defaultValue)
+        setError(null)
+    } else if (!open && prevOpen) {
+        setPrevOpen(false)
+    }
 
     function validateNumber(s: string): string | null {
         if (s.trim() === '') return allowEmpty ? null : 'A value is required'

@@ -1,4 +1,4 @@
-import { eq, and, count, inArray, desc, lte, gte, isNull } from 'drizzle-orm'
+import { eq, and, count, inArray, desc, lte, gte } from 'drizzle-orm'
 import { log } from '../../lib/logger.js'
 import { db } from '../../db/index.js'
 import { tenants, employees, subscriptionEvents, users } from '../../db/schema/index.js'
@@ -491,17 +491,27 @@ export async function sendSubscriptionExpiryReminders(daysAhead: number): Promis
             lte(tenants.subscriptionExpiresAt, endOfDay),
         ))
 
-    for (const tenant of expiring) {
-        const [owner] = await db
-            .select({ name: users.name, email: users.email })
-            .from(users)
-            .where(and(
-                eq(users.tenantId, tenant.id),
-                eq(users.role, 'super_admin'),
-                eq(users.isActive, true),
-            ))
-            .limit(1)
+    if (expiring.length === 0) {
+        log.info({ count: 0, daysAhead }, 'subscription: expiry reminders sent')
+        return
+    }
 
+    // Batch-load all super_admins for the expiring tenants in one query
+    const tenantIds = expiring.map(t => t.id)
+    const ownerRows = await db
+        .select({ tenantId: users.tenantId, name: users.name, email: users.email })
+        .from(users)
+        .where(and(
+            inArray(users.tenantId, tenantIds),
+            eq(users.role, 'super_admin'),
+            eq(users.isActive, true),
+        ))
+    const ownerByTenantId = new Map(ownerRows.map(o => [o.tenantId, o]))
+
+    const renewUrl = `${env.APP_URL}/settings/organization?tab=subscription`
+
+    for (const tenant of expiring) {
+        const owner = ownerByTenantId.get(tenant.id)
         if (!owner?.email) continue
 
         const expiryDateStr = tenant.subscriptionExpiresAt
@@ -509,7 +519,6 @@ export async function sendSubscriptionExpiryReminders(daysAhead: number): Promis
             : ''
 
         const monthlyCost = calculateProfessionalCost(tenant.employeeQuota ?? FREE_PLAN_QUOTA)
-        const renewUrl = `${env.APP_URL}/settings/organization?tab=subscription`
 
         await sendEmailLogged({
             to: owner.email,
@@ -589,7 +598,7 @@ export async function sendTestSubscriptionEmail(
 
 // ─── Email templates ──────────────────────────────────────────────────────────
 
-function activationConfirmationEmail(p: { tenantName: string; desiredQuota: number; monthlyCost: number }): string {
+function _activationConfirmationEmail(p: { tenantName: string; desiredQuota: number; monthlyCost: number }): string {
     return `
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"/></head>
@@ -612,7 +621,7 @@ function activationConfirmationEmail(p: { tenantName: string; desiredQuota: numb
 </body></html>`
 }
 
-function quotaUpdatedViaStripeEmail(p: { tenantName: string; desiredQuota: number; monthlyCost: number }): string {
+function _quotaUpdatedViaStripeEmail(p: { tenantName: string; desiredQuota: number; monthlyCost: number }): string {
     return `
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"/></head>
@@ -634,7 +643,7 @@ function quotaUpdatedViaStripeEmail(p: { tenantName: string; desiredQuota: numbe
 </body></html>`
 }
 
-function quotaUpdatedEmail(p: QuotaUpdateParams): string {
+function _quotaUpdatedEmail(p: QuotaUpdateParams): string {
     const monthlyCost = calculateProfessionalCost(p.newQuota)
     return `
 <!DOCTYPE html>

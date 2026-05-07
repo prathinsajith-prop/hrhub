@@ -106,7 +106,10 @@ export default async function employeeDependentsRoutes(fastify: any): Promise<vo
         const [row] = await db
             .update(employeeDependents)
             .set(updates)
-            .where(eq(employeeDependents.id, depId))
+            .where(and(
+                eq(employeeDependents.id, depId),
+                eq(employeeDependents.tenantId, request.user.tenantId),
+            ))
             .returning()
 
         recordActivity({

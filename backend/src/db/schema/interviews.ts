@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, boolean, index } from 'drizzle-orm/pg-core'
 import { tenants } from './tenants.js'
 import { jobApplications } from './recruitment.js'
 import { users } from './users.js'
@@ -21,4 +21,8 @@ export const interviews = pgTable('interviews', {
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-})
+}, (t) => ({
+    tenantIdx:       index('idx_interviews_tenant').on(t.tenantId),
+    tenantStatusIdx: index('idx_interviews_tenant_status').on(t.tenantId, t.status),
+    tenantAppIdx:    index('idx_interviews_tenant_application').on(t.tenantId, t.applicationId),
+}))

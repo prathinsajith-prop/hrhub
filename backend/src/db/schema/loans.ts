@@ -24,9 +24,10 @@ export const employeeLoans = pgTable('employee_loans', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
-    tenantIdx: index('idx_employee_loans_tenant').on(t.tenantId),
-    employeeIdx: index('idx_employee_loans_employee').on(t.employeeId),
-    statusIdx: index('idx_employee_loans_status').on(t.tenantId, t.status),
+    tenantIdx:         index('idx_employee_loans_tenant').on(t.tenantId),
+    employeeIdx:       index('idx_employee_loans_employee').on(t.employeeId),
+    statusIdx:         index('idx_employee_loans_status').on(t.tenantId, t.status),
+    tenantEmployeeIdx: index('idx_employee_loans_tenant_employee').on(t.tenantId, t.employeeId),
 }))
 
 export const employeeLoansRelations = relations(employeeLoans, ({ one }) => ({

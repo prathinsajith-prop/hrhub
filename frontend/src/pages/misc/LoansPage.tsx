@@ -19,7 +19,7 @@ import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { buildFilterQueryString } from '@/lib/filters'
 import {
     Banknote, Clock, CheckCircle2, AlertCircle,
-    Plus, Check, X,
+    Plus, Check, X, Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -30,6 +30,7 @@ import {
     useApproveLoan,
     useRejectLoan,
     useRecordLoanPayment,
+    useDeleteLoan,
 } from '@/hooks/useLoans'
 import { EmployeeSelect } from '@/components/shared'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
@@ -180,6 +181,7 @@ export function LoansPage() {
     const [createOpen, setCreateOpen] = useState(false)
     const [rejectTarget, setRejectTarget] = useState<EmployeeLoan | null>(null)
     const [paymentTarget, setPaymentTarget] = useState<EmployeeLoan | null>(null)
+    const [deleteTarget, setDeleteTarget] = useState<EmployeeLoan | null>(null)
 
     const loanSearch = useSearchFilters({ storageKey: 'loans.search', availableFilters: LOAN_FILTERS })
     const filterStr = buildFilterQueryString(loanSearch.appliedFilters)
@@ -189,6 +191,7 @@ export function LoansPage() {
         filter: filterStr || undefined,
     })
     const approve = useApproveLoan()
+    const deleteLoan = useDeleteLoan()
     const recordPayment = useRecordLoanPayment()
 
     const loans = data?.data ?? []
@@ -340,6 +343,9 @@ export function LoansPage() {
                                                                     <X className="h-3.5 w-3.5 mr-1" />
                                                                     Reject
                                                                 </Button>
+                                                                <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(loan)} aria-label="Delete loan">
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </Button>
                                                             </>
                                                         )}
                                                         {loan.status === 'active' && (
@@ -373,6 +379,25 @@ export function LoansPage() {
                 confirmLabel={t('loans.recordPayment')}
                 onConfirm={handlePayment}
                 onOpenChange={(open) => { if (!open) setPaymentTarget(null) }}
+            />
+
+            <ConfirmDialog
+                open={!!deleteTarget}
+                onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}
+                title={t('loans.deleteTitle')}
+                description={t('loans.deleteDesc', {
+                    amount: deleteTarget ? `AED ${Number(deleteTarget.amount).toLocaleString()}` : '',
+                    name: deleteTarget?.employeeName ?? '',
+                })}
+                confirmLabel={t('common.delete')}
+                variant="destructive"
+                onConfirm={() => {
+                    if (!deleteTarget) return
+                    deleteLoan.mutate(deleteTarget.id, {
+                        onSuccess: () => { toast.success(t('loans.deleted')); setDeleteTarget(null) },
+                        onError: (err: Error) => { toast.error(t('common.error'), err?.message); setDeleteTarget(null) },
+                    })
+                }}
             />
         </PageWrapper>
     )

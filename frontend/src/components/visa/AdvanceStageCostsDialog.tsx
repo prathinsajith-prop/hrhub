@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Plus, Trash2, Receipt, ArrowRight, CheckCircle2 } from 'lucide-react'
 import {
     Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogBody, toast,
@@ -76,9 +76,16 @@ export function AdvanceStageCostsDialog({
     const advanceWithCosts = useAdvanceVisaWithCosts()
     const [rows, setRows] = useState<CostRow[]>([emptyRow()])
 
-    useEffect(() => {
-        if (open) setRows([emptyRow()])
-    }, [open, stageLabel])
+    // Reset rows when dialog opens (for a new stage).
+    const [prevOpen, setPrevOpen] = useState(false)
+    const [prevStageLabel, setPrevStageLabel] = useState(stageLabel)
+    if ((open && !prevOpen) || (open && stageLabel !== prevStageLabel)) {
+        setPrevOpen(open)
+        setPrevStageLabel(stageLabel)
+        setRows([emptyRow()])
+    } else if (!open && prevOpen) {
+        setPrevOpen(false)
+    }
 
     const patch = (idx: number, p: Partial<CostRow>) =>
         setRows(rs => rs.map((r, i) => (i === idx ? { ...r, ...p } : r)))

@@ -60,7 +60,6 @@ export async function recordAudit(input: RecordAuditInput): Promise<void> {
             userAgent: input.userAgent ?? null,
         })
     } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('[audit] failed to record activity', { entityType: input.entityType, action: input.action, err })
     }
 }

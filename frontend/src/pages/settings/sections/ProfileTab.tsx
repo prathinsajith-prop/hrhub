@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { Save, CheckCircle2, UserCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,13 +25,17 @@ export function ProfileTab() {
     const [uploading, setUploading] = useState(false)
     const fileRef = useRef<HTMLInputElement>(null)
 
-    // Sync form fields when the stored identity/name/department changes — but NOT on
-    // every setUser call (e.g. avatar-only patches would reset in-progress edits).
-    useEffect(() => {
+    // Sync form fields when the stored identity/name changes — but NOT on every setUser
+    // call (e.g. avatar-only patches would reset in-progress edits). Track the
+    // composite key in state so we only re-sync when id or name actually changes.
+    const userKey = `${user?.id ?? ''}:${user?.name ?? ''}`
+    const [prevUserKey, setPrevUserKey] = useState(userKey)
+    if (userKey !== prevUserKey) {
+        setPrevUserKey(userKey)
         const { firstName: fn, lastName: ln } = splitName(user?.name ?? '')
         setFirstName(fn)
         setLastName(ln)
-    }, [user?.id, user?.name])
+    }
 
     const initials = (user?.name ?? 'U')
         .split(' ').filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase()
