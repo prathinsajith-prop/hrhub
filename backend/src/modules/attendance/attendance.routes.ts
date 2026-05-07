@@ -154,7 +154,14 @@ export async function attendanceRoutes(fastify: any) {
     }, async (request: any, reply: any) => {
         const { format = 'csv', employeeId, startDate, endDate, status, filter } = request.query as Record<string, string>
         if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
-        const result = await getAttendance(request.user.tenantId, { employeeId, startDate, endDate, status, filter, limit: 10000 })
+        const isDeptHead = request.user.role === 'dept_head'
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(request.user.role)
+        if (isDeptHead && !request.user.department) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Your account has no department assigned. Contact an HR admin.' })
+        }
+        const resolvedEmployeeId = isHrAdmin ? employeeId : isDeptHead ? employeeId : request.user.employeeId
+        const resolvedDepartment = isDeptHead ? request.user.department : undefined
+        const result = await getAttendance(request.user.tenantId, { employeeId: resolvedEmployeeId, department: resolvedDepartment, startDate, endDate, status, filter, limit: 10000 })
         const rows = (result.items ?? []) as any[]
         const dateStr = new Date().toISOString().slice(0, 10)
 
