@@ -18,10 +18,9 @@ import {
     type InvitableEmployee,
 } from '@/hooks/useSettings'
 import { usePermissions } from '@/hooks/usePermissions'
-import { labelFor } from '@/lib/enums'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { CopyableEmail } from '@/components/shared'
+import { CopyableEmail, MultiRoleToggle, MULTI_ROLE_OPTIONS } from '@/components/shared'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 function formatLastLogin(lastLoginAt: string | null): string {
@@ -39,11 +38,11 @@ function initials(name: string) {
     return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
 }
 
-const ROLES = [
+const ROLES_INFO = [
     { id: 'super_admin', label: 'Super Admin', desc: 'Full access to all modules and settings', color: 'text-red-600 bg-red-50' },
     { id: 'hr_manager', label: 'HR Manager', desc: 'Employees, leave, recruitment, onboarding', color: 'text-blue-600 bg-blue-50' },
-    { id: 'payroll_officer', label: 'Payroll Officer', desc: 'Payroll runs and WPS submission', color: 'text-emerald-600 bg-emerald-50' },
     { id: 'pro_officer', label: 'PRO Officer', desc: 'Visa, documents, and compliance', color: 'text-primary bg-primary/10' },
+    { id: 'dept_head', label: 'Department Manager', desc: 'Team attendance, leave approval, performance', color: 'text-orange-600 bg-orange-50' },
     { id: 'employee', label: 'Employee', desc: 'Self-service: leaves, payslips, profile', color: 'text-gray-600 bg-gray-50' },
 ]
 
@@ -55,20 +54,13 @@ const ROLE_ACCESS_MAP: Record<string, string[]> = {
     employee: ['Own leave', 'Own attendance', 'Own performance'],
 }
 
-const INVITE_ROLES = [
-    { id: 'hr_manager', label: 'HR Manager' },
-    { id: 'pro_officer', label: 'PRO Officer' },
-    { id: 'dept_head', label: 'Department Manager' },
-    { id: 'employee', label: 'Employee' },
-]
-
 // ─── Grant Access Modal ───────────────────────────────────────────────────────
 function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const { data: invitableEmployees = [], isLoading } = useInvitableEmployees({ enabled: open })
     const inviteBulk = useInviteUserBulk()
     const [search, setSearch] = useState('')
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-    const [role, setRole] = useState('employee')
+    const [roles, setRoles] = useState<string[]>(['employee'])
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase()
@@ -110,7 +102,7 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
     function handleClose() {
         setSearch('')
         setSelectedIds(new Set())
-        setRole('employee')
+        setRoles(['employee'])
         onClose()
     }
 
@@ -118,7 +110,7 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
         const employeeIds = Array.from(selectedIds)
         if (employeeIds.length === 0) return
         try {
-            const result = await inviteBulk.mutateAsync({ employeeIds, role })
+            const result = await inviteBulk.mutateAsync({ employeeIds, role: roles[0], roles })
             const { succeeded, failed } = result
             if (succeeded.length > 0) {
                 toast.success(
@@ -157,17 +149,9 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                     </p>
                 </DialogHeader>
 
-                <div className="px-5 pt-4 pb-3 border-b bg-muted/30 flex items-center gap-3">
-                    <p className="text-xs font-medium text-muted-foreground shrink-0">Assign role</p>
-                    <select
-                        value={role}
-                        onChange={(e) => setRole(e.target.value)}
-                        className="flex-1 border border-input rounded-md px-3 py-1.5 text-sm bg-background"
-                    >
-                        {INVITE_ROLES.map((r) => (
-                            <option key={r.id} value={r.id}>{r.label}</option>
-                        ))}
-                    </select>
+                <div className="px-5 pt-4 pb-3 border-b bg-muted/30 flex items-center gap-3 flex-wrap">
+                    <p className="text-xs font-medium text-muted-foreground shrink-0">Assign roles</p>
+                    <MultiRoleToggle roles={roles} onChange={setRoles} availableRoles={MULTI_ROLE_OPTIONS} />
                 </div>
 
                 <div className="px-5 pt-3 pb-2 space-y-2">
@@ -302,15 +286,12 @@ export function UsersPage() {
     const [showInvite, setShowInvite] = useState(false)
     const [deactivateTarget, setDeactivateTarget] = useState<{ id: string; name: string; active: boolean } | null>(null)
 
-    const getRoleStyle = (role: string) => ROLES.find((r) => r.id === role)?.color ?? 'bg-gray-50 text-gray-600'
-    const getRoleLabel = (role: string) => ROLES.find((r) => r.id === role)?.label ?? labelFor(role)
-
-    async function handleRoleChange(userId: string, newRole: string) {
+    async function handleRolesChange(userId: string, newRoles: string[]) {
         try {
-            await updateUser.mutateAsync({ id: userId, role: newRole })
-            toast.success('Role updated successfully')
+            await updateUser.mutateAsync({ id: userId, roles: newRoles, role: newRoles[0] })
+            toast.success('Roles updated')
         } catch {
-            toast.error('Failed to update role')
+            toast.error('Failed to update roles')
         }
     }
 
@@ -411,24 +392,11 @@ export function UsersPage() {
                                                 {formatLastLogin(u.lastLoginAt)}
                                             </span>
 
-                                            {canManageUsers && !isSelf ? (
-                                                <select
-                                                    value={u.role}
-                                                    onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                                                    className="h-7 rounded-md border border-input bg-background px-2 py-0 text-xs font-medium"
-                                                    disabled={updateUser.isPending}
-                                                >
-                                                    <option value="super_admin">Super Admin</option>
-                                                    <option value="hr_manager">HR Manager</option>
-                                                    <option value="pro_officer">PRO Officer</option>
-                                                    <option value="dept_head">Department Manager</option>
-                                                    <option value="employee">Employee</option>
-                                                </select>
-                                            ) : (
-                                                <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full capitalize', getRoleStyle(u.role))}>
-                                                    {getRoleLabel(u.role)}
-                                                </span>
-                                            )}
+                                            <MultiRoleToggle
+                                                roles={u.roles?.length ? u.roles : [u.role]}
+                                                onChange={canManageUsers && !isSelf ? (newRoles) => handleRolesChange(u.id, newRoles) : () => {}}
+                                                disabled={!canManageUsers || isSelf || updateUser.isPending}
+                                            />
 
                                             <span className={cn(
                                                 'text-[10px] font-medium px-2 py-0.5 rounded-full',
@@ -483,7 +451,7 @@ export function UsersPage() {
                         </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                        {ROLES.map((role) => (
+                        {ROLES_INFO.map((role) => (
                             <div key={role.id} className="rounded-lg border p-4 hover:border-primary/30 hover:bg-muted/20 transition-colors">
                                 <div className="flex items-center gap-2.5 mb-3">
                                     <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', role.color)}>

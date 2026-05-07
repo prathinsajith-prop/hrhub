@@ -369,6 +369,15 @@ export function canAccessRoute(role: UserRole, routeKey: RouteKey): boolean {
   return ROUTE_ACCESS[routeKey]?.includes(role) ?? false
 }
 
+/** Multi-role variants — union of permissions across all assigned roles. */
+export function hasPermissionForRoles(roles: UserRole[], permission: Permission): boolean {
+  return roles.some(r => ROLE_PERMISSIONS[r]?.includes(permission) ?? false)
+}
+
+export function canAccessRouteForRoles(roles: UserRole[], routeKey: RouteKey): boolean {
+  return roles.some(r => ROUTE_ACCESS[routeKey]?.includes(r) ?? false)
+}
+
 /** Returns the first route a role is allowed to see after login. */
 export function getDefaultRoute(): string {
   return '/dashboard'
