@@ -364,7 +364,7 @@ export function DocumentsPage() {
             <>
               <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}
                 onClick={async () => {
-                  for (const row of selected as Document[]) {
+                  await Promise.all((selected as Document[]).map(async (row) => {
                     try {
                       const res = await api.get<{ data: { downloadUrl: string } }>(`/documents/${row.id}/download-url`)
                       const a = document.createElement('a')
@@ -376,9 +376,9 @@ export function DocumentsPage() {
                       a.click()
                       a.remove()
                     } catch {
-                      // skip failures silently to avoid blocking the loop
+                      // skip failures silently
                     }
-                  }
+                  }))
                 }}>
                 Download
               </Button>

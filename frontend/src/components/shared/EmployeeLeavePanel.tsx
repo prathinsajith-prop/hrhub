@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -367,10 +368,9 @@ function OffsetDialog({ employeeId, offset, onClose }: { employeeId: string; off
                 <div className="grid gap-4 py-2">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('leaveAdjustments.offset.workDate')} required error={errors.workDate}>
-                            <Input
-                                type="date"
+                            <DatePicker
                                 value={form.workDate}
-                                onChange={e => { setForm(f => ({ ...f, workDate: e.target.value })); setErrors(er => ({ ...er, workDate: '' })) }}
+                                onChange={v => { setForm(f => ({ ...f, workDate: v ?? '' })); setErrors(er => ({ ...er, workDate: '' })) }}
                                 aria-invalid={!!errors.workDate}
                             />
                         </FormField>

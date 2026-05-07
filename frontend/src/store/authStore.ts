@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { User, Tenant } from '@/types'
+import { socket } from '@/lib/socket'
 
 // Key used to decide which storage to use across page loads
 const KEEP_SIGNED_IN_KEY = 'hrhub-keep-signed-in'
@@ -62,6 +63,7 @@ export const useAuthStore = create<AuthState>()(
         // Write preference BEFORE set() so dynamicStorage.setItem uses the updated value
         try { localStorage.setItem(KEEP_SIGNED_IN_KEY, String(keepSignedIn)) } catch { /* ignore */ }
         set({ user, tenant, isAuthenticated: true, accessToken, refreshToken, keepSignedIn })
+        socket.connect(accessToken)
       },
       setUser: (patch) => {
         const current = get().user
@@ -76,6 +78,7 @@ export const useAuthStore = create<AuthState>()(
             headers: { Authorization: `Bearer ${token}` },
           }).catch(() => { })
         }
+        socket.disconnect()
         try { localStorage.removeItem(KEEP_SIGNED_IN_KEY) } catch { /* ignore */ }
         // Clear auth from both storages before set() so dynamicStorage.removeItem cleans up
         try { localStorage.removeItem(AUTH_KEY) } catch { /* ignore */ }
@@ -101,6 +104,8 @@ export const useAuthStore = create<AuthState>()(
           } else {
             set({ accessToken: data.accessToken, refreshToken: data.refreshToken })
           }
+          // Reconnect WebSocket with the new access token
+          socket.connect(data.accessToken)
           return true
         } catch {
           return false

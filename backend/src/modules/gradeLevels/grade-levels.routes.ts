@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { eq, and, asc } from 'drizzle-orm'
+import { eq, and, asc, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { gradeLevels } from '../../db/schema/index.js'
 import { recordActivity } from '../audit/audit.service.js'
@@ -13,7 +13,9 @@ const salaryRefinement = (d: { salaryMin?: number | null; salaryMax?: number | n
     return true
 }
 
-const VALID_ROLES_LIST = ['employee', 'dept_head', 'pro_officer', 'hr_manager', 'super_admin'] as const
+// These are organisational role categories (what type of position a grade applies to),
+// not system user roles — kept intentionally separate from the auth role enum.
+const VALID_ROLES_LIST = ['employee', 'manager', 'director'] as const
 const rolesSchema = z.array(z.enum(VALID_ROLES_LIST)).optional()
 
 const createSchema = z.object({
@@ -73,7 +75,7 @@ export async function gradeLevelsRoutes(fastify: any): Promise<void> {
             .select()
             .from(gradeLevels)
             .where(and(eq(gradeLevels.tenantId, req.user.tenantId), eq(gradeLevels.isActive, true)))
-            .orderBy(asc(gradeLevels.sortOrder), asc(gradeLevels.name))
+            .orderBy(sql`${gradeLevels.level} ASC NULLS LAST`, asc(gradeLevels.sortOrder), asc(gradeLevels.name))
         return reply.send({ data: rows })
     })
 
@@ -83,7 +85,7 @@ export async function gradeLevelsRoutes(fastify: any): Promise<void> {
             .select()
             .from(gradeLevels)
             .where(eq(gradeLevels.tenantId, req.user.tenantId))
-            .orderBy(asc(gradeLevels.sortOrder), asc(gradeLevels.name))
+            .orderBy(sql`${gradeLevels.level} ASC NULLS LAST`, asc(gradeLevels.sortOrder), asc(gradeLevels.name))
         return reply.send({ data: rows })
     })
 

@@ -1,6 +1,8 @@
+import { useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
+import { useSocketEvent } from '@/hooks/useSocket'
 
 export function usePayrollRuns(params: { year?: number; limit?: number; offset?: number; enabled?: boolean } = {}) {
     const { year, limit = 12, offset = 0, enabled = true } = params
@@ -18,10 +20,23 @@ export function usePayrollRuns(params: { year?: number; limit?: number; offset?:
 }
 
 export function usePayrollRun(id: string | undefined) {
+    const qc = useQueryClient()
+
+    // Invalidate immediately when the worker emits payroll:completed or payroll:failed
+    const onPayrollComplete = useCallback((payload: Record<string, unknown>) => {
+        if (!id || payload.payrollRunId !== id) return
+        qc.invalidateQueries({ queryKey: ['payroll-run', id] })
+        qc.invalidateQueries({ queryKey: ['payroll'] })
+    }, [qc, id])
+
+    useSocketEvent('payroll:completed', onPayrollComplete)
+    useSocketEvent('payroll:failed', onPayrollComplete)
+
     return useQuery({
         queryKey: ['payroll-run', id],
         queryFn: () => api.get<{ data: unknown }>(`/payroll/${id}`).then(r => r.data),
         enabled: !!id,
+        // Keep 3s poll as fallback in case the WebSocket is down while processing
         refetchInterval: (query) => {
             const run = query.state.data as { status?: string }
             return run?.status === 'processing' ? 3000 : false
