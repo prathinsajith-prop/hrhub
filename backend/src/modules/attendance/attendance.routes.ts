@@ -14,6 +14,7 @@ export async function attendanceRoutes(fastify: any) {
     // hr_manager/super_admin see all; dept_head scoped to their department; employees see own only.
     fastify.get('/attendance', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { employeeId, startDate, endDate, status, filter, page, limit, cursor } = request.query as Record<string, string>
+        if (filter && filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
         const role = request.user.role
         const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
         const isDeptHead = role === 'dept_head'
