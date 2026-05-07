@@ -23,6 +23,9 @@ test.describe('Employees page', () => {
             return
         }
 
+        // Wait for at least one real data row (skeleton rows are replaced by real rows after fetch)
+        await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 10_000 })
+        await page.waitForTimeout(300)
         const rowsBefore = await page.locator('table tbody tr').count()
         if (rowsBefore === 0) { test.skip(); return }
 
