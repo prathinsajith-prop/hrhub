@@ -27,6 +27,7 @@ import { COST_CATEGORY_LABELS } from '@/hooks/useVisaCosts'
 import type { CostReportEmployee } from '@/hooks/useVisaCosts'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
+import { searchDepartments, searchNationalities } from '@/lib/filters/filter-loaders'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 
@@ -56,8 +57,8 @@ const PAYROLL_REPORT_FILTERS: FilterConfig[] = [
 
 const VISA_REPORT_FILTERS: FilterConfig[] = [
     { name: 'fullName', label: 'Employee name', type: 'text', field: 'fullName' },
-    { name: 'department', label: 'Department', type: 'text', field: 'department' },
-    { name: 'nationality', label: 'Nationality', type: 'text', field: 'nationality' },
+    { name: 'department', label: 'Department', type: 'autocomplete', field: 'department', onSearch: searchDepartments, placeholder: 'Search departments…' },
+    { name: 'nationality', label: 'Nationality', type: 'autocomplete', field: 'nationality', onSearch: searchNationalities, placeholder: 'Search nationalities…' },
     {
         name: 'urgency', label: 'Urgency', type: 'select', field: 'urgency',
         options: [

@@ -168,10 +168,19 @@ export interface SalaryRevision {
     createdAt: string
 }
 
-export function useSalaryHistory(employeeId: string) {
+export interface SalaryHistoryFilters {
+    type?: string
+    from?: string
+    to?: string
+}
+
+export function useSalaryHistory(employeeId: string, filters?: SalaryHistoryFilters) {
+    const qs = filters
+        ? new URLSearchParams(Object.entries(filters).filter(([, v]) => !!v) as [string, string][]).toString()
+        : ''
     return useQuery({
-        queryKey: ['salary-history', employeeId],
-        queryFn: () => api.get<{ data: SalaryRevision[] }>(`/employees/${employeeId}/salary-history`).then(r => r.data),
+        queryKey: ['salary-history', employeeId, filters ?? {}],
+        queryFn: () => api.get<{ data: SalaryRevision[] }>(`/employees/${employeeId}/salary-history${qs ? `?${qs}` : ''}`).then(r => r.data),
         enabled: !!employeeId,
     })
 }
