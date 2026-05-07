@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { CalendarClock, Save, CheckCircle2, LockKeyhole, UnlockKeyhole } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -15,9 +15,14 @@ export function LeaveSettingsTab() {
     const [rolloverEnabledFrom, setRolloverEnabledFrom] = useState<string>('')
     const [saved, setSaved] = useState(false)
 
-    useEffect(() => {
-        setRolloverEnabledFrom(data?.rolloverEnabledFrom ?? '')
-    }, [data])
+    // Sync local state when settings load from server. Track previous value in state
+    // to avoid re-setting on every render.
+    const [prevRollover, setPrevRollover] = useState<string | undefined>(undefined)
+    const loadedRollover = data?.rolloverEnabledFrom
+    if (loadedRollover !== prevRollover) {
+        setPrevRollover(loadedRollover ?? undefined)
+        setRolloverEnabledFrom(loadedRollover ?? '')
+    }
 
     const isLocked = (() => {
         if (!data?.rolloverEnabledFrom) return false

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Globe, Save, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -28,13 +28,21 @@ export function ProfileTab() {
     const [regionalForm, setRegionalForm] = useState({ timezone: 'Asia/Dubai', currency: 'AED', dateFormat: 'DD/MM/YYYY' })
     const [saved, setSaved] = useState(false)
 
-    useEffect(() => {
+    // Sync form when company settings load — track a stable property in state to avoid
+    // resetting in-progress edits on every re-render.
+    const companyId = company?.id as string | undefined
+    const [prevCompanyId, setPrevCompanyId] = useState<string | undefined>(undefined)
+    if (companyId !== undefined && companyId !== prevCompanyId) {
+        setPrevCompanyId(companyId)
         setForm({ name: company?.name ?? '', companyCode: company?.companyCode ?? '', tradeLicenseNo: company?.tradeLicenseNo ?? '', jurisdiction: company?.jurisdiction ?? '', industryType: company?.industryType ?? '' })
-    }, [company])
+    }
 
-    useEffect(() => {
+    const loadedTz = regional?.timezone
+    const [prevRegionalTz, setPrevRegionalTz] = useState<string | undefined>(undefined)
+    if (loadedTz !== undefined && loadedTz !== prevRegionalTz) {
+        setPrevRegionalTz(loadedTz)
         setRegionalForm({ timezone: regional?.timezone ?? 'Asia/Dubai', currency: regional?.currency ?? 'AED', dateFormat: regional?.dateFormat ?? 'DD/MM/YYYY' })
-    }, [regional])
+    }
 
     const set = (field: keyof CompanySettings, value: string) => setForm(p => ({ ...p, [field]: value }))
 

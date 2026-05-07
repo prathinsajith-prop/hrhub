@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
@@ -184,7 +184,11 @@ export function LeavePage() {
 
     const [offset, setOffset] = useState(0)
     const filterKey = (leaveSearch.searchInput ?? '') + '||' + JSON.stringify(leaveSearch.appliedFilters)
-    useEffect(() => { setOffset(0) }, [filterKey])
+    const [prevLeaveFilterKey, setPrevLeaveFilterKey] = useState(filterKey)
+    if (filterKey !== prevLeaveFilterKey) {
+        setPrevLeaveFilterKey(filterKey)
+        setOffset(0)
+    }
 
     const { data: leaveData, isLoading: leaveLoading, isError: leaveError, isFetching, error: leaveErrorObj, refetch } = useLeaveRequests({ limit: PAGE_SIZE, offset, employeeId: urlEmployeeId, q: leaveSearch.searchInput || undefined, filters: leaveSearch.appliedFilters })
     const leaves = useMemo<LeaveRequest[]>(() => (leaveData?.data as LeaveRequest[]) ?? [], [leaveData?.data])

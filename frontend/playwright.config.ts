@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
     testDir: './e2e',
@@ -70,5 +74,8 @@ export default defineConfig({
         url: 'http://localhost:5174',
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
+        // Explicit cwd so the VS Code Playwright extension can start the dev
+        // server correctly when the workspace is opened at the monorepo root.
+        cwd: __dirname,
     },
 })

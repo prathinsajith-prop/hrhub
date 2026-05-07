@@ -1,4 +1,4 @@
-import { eq, and, inArray, isNull, isNotNull, or, desc } from 'drizzle-orm'
+import { eq, and, inArray, isNotNull, or, desc } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'

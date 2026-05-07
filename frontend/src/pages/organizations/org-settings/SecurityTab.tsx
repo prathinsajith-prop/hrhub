@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Shield, Globe, AlertCircle, Plus, Trash2, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,7 +26,13 @@ export function SecurityTab() {
     const [list, setList] = useState<string[]>([])
     const [newEntry, setNewEntry] = useState('')
 
-    useEffect(() => { if (ipList?.ipAllowlist) setList(ipList.ipAllowlist) }, [ipList])
+    // Sync IP list when data loads from server — track previous value in state to avoid
+    // overwriting user edits on every re-render.
+    const [prevIpList, setPrevIpList] = useState<string[] | undefined>(undefined)
+    if (ipList?.ipAllowlist && ipList.ipAllowlist !== prevIpList) {
+        setPrevIpList(ipList.ipAllowlist)
+        setList(ipList.ipAllowlist)
+    }
 
     const handleSessionToggle = async (checked: boolean) => {
         try {

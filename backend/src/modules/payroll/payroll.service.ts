@@ -350,9 +350,6 @@ export async function generateWpsSif(tenantId: string, payrollRunId: string): Pr
 
     const empMap = new Map(empRows.map(e => [e.id, e]))
 
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December']
-
     // Payment date: last day of payroll month
     const lastDay = new Date(run.year, run.month, 0)
     const payDateStr = `${String(lastDay.getDate()).padStart(2, '0')}/${String(run.month).padStart(2, '0')}/${run.year}`

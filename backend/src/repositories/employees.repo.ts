@@ -10,7 +10,6 @@ import {
     applyKeyset,
     buildKeysetResult,
     conjunction,
-    notDeleted,
     pageOffset,
     type KeysetParams,
     type KeysetResult,

@@ -109,7 +109,6 @@ export async function verifyAndConsumeBackupCode(userId: string, code: string): 
     let matchIndex = -1
     for (let i = 0; i < hashes.length; i++) {
         // bcrypt.compare is constant-time relative to a single hash; iterating is acceptable for ≤10 codes
-        // eslint-disable-next-line no-await-in-loop
         if (await bcrypt.compare(normalised, hashes[i])) { matchIndex = i; break }
     }
     if (matchIndex === -1) return false

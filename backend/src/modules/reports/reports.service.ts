@@ -1,4 +1,4 @@
-import { eq, and, count, lte, gte, sql, desc, isNotNull } from 'drizzle-orm'
+import { eq, and, count, lte, sql, desc } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, payrollRuns } from '../../db/schema/index.js'
 import { getPROCostReport } from '../visa/visa_costs.service.js'

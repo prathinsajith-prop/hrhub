@@ -1,4 +1,4 @@
-import { eq, and, count, inArray, desc, lte, gte, isNull } from 'drizzle-orm'
+import { eq, and, count, inArray, desc, lte, gte } from 'drizzle-orm'
 import { log } from '../../lib/logger.js'
 import { db } from '../../db/index.js'
 import { tenants, employees, subscriptionEvents, users } from '../../db/schema/index.js'
@@ -589,7 +589,7 @@ export async function sendTestSubscriptionEmail(
 
 // ─── Email templates ──────────────────────────────────────────────────────────
 
-function activationConfirmationEmail(p: { tenantName: string; desiredQuota: number; monthlyCost: number }): string {
+function _activationConfirmationEmail(p: { tenantName: string; desiredQuota: number; monthlyCost: number }): string {
     return `
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"/></head>
@@ -612,7 +612,7 @@ function activationConfirmationEmail(p: { tenantName: string; desiredQuota: numb
 </body></html>`
 }
 
-function quotaUpdatedViaStripeEmail(p: { tenantName: string; desiredQuota: number; monthlyCost: number }): string {
+function _quotaUpdatedViaStripeEmail(p: { tenantName: string; desiredQuota: number; monthlyCost: number }): string {
     return `
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"/></head>
@@ -634,7 +634,7 @@ function quotaUpdatedViaStripeEmail(p: { tenantName: string; desiredQuota: numbe
 </body></html>`
 }
 
-function quotaUpdatedEmail(p: QuotaUpdateParams): string {
+function _quotaUpdatedEmail(p: QuotaUpdateParams): string {
     const monthlyCost = calculateProfessionalCost(p.newQuota)
     return `
 <!DOCTYPE html>

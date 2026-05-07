@@ -66,19 +66,25 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
     const reject = useRejectDocument()
     const { data: auditEntries, refetch: refetchAudit } = useDocumentAuditLog(open ? (document?.id ?? null) : null)
 
+    // Reset state in render when dialog opens/closes (avoids synchronous setState in effect body).
+    const [prevOpen, setPrevOpen] = useState(true)
+    const [prevDocId, setPrevDocId] = useState<string | undefined>(document?.id)
+    if (!open && prevOpen) {
+        setPrevOpen(false)
+        setPreviewUrl(null)
+        setPreviewLoading(false)
+        setRejectMode(false)
+        setReason('')
+    } else if (open && (!prevOpen || document?.id !== prevDocId)) {
+        setPrevOpen(true)
+        setPrevDocId(document?.id)
+        setPreviewLoading(true)
+    }
+
     useEffect(() => {
-        if (!open) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setPreviewUrl(null)
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setRejectMode(false)
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setReason('')
-            return
-        }
+        if (!open) return
         if (!document) return
         let cancelled = false
-        setPreviewLoading(true)
         api.get<{ data: { downloadUrl: string } }>(`/documents/${document.id}/download-url`)
             .then(r => { if (!cancelled) setPreviewUrl(r.data.downloadUrl) })
             .catch(() => { /* ignore — preview is optional */ })

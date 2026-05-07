@@ -1,5 +1,4 @@
 import Fastify from 'fastify'
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 import type { } from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'

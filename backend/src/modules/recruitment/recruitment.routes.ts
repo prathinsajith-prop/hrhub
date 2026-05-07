@@ -9,7 +9,6 @@ import { entities, tenants } from '../../db/schema/index.js'
 import { and, eq } from 'drizzle-orm'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { fileTypeFromBuffer } from 'file-type'
-import { extname } from 'node:path'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }

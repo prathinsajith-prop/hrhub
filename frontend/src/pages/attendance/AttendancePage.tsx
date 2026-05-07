@@ -441,7 +441,7 @@ export function AttendancePage() {
             ),
             size: 80,
         },
-    ], [empMap, handleEdit])
+    ], [empMap, orgMap, handleEdit])
 
     return (
         <PageWrapper>

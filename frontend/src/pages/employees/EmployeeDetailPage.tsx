@@ -653,6 +653,8 @@ const DOC_STATUS_BORDER: Record<string, string> = {
 export function EmployeeDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
+  // Capture current time once per render to avoid calling Date.now() in render expressions.
+  const nowMs = Date.now()
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_employees')
@@ -829,7 +831,7 @@ export function EmployeeDetailPage() {
     })
   }
 
-  const visaDays = e?.visaExpiry ? Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000) : null
+  const visaDays = e?.visaExpiry ? Math.ceil((new Date(e.visaExpiry).getTime() - nowMs) / 86400000) : null
   const visaLabel = visaDays === null ? 'N/A' : visaDays < 0 ? 'Expired' : `${visaDays}d left`
   const visaClass = visaDays === null ? '' : visaDays < 0 ? 'text-destructive' : visaDays < 90 ? 'text-warning' : 'text-success'
 
@@ -2659,8 +2661,10 @@ function DependentFormDialog({
   const blank: DependentFormData = { name: '', birthDate: null, relation: 'spouse', nationality: null, visaNumber: null, medicalInsurance: null }
   const [form, setForm] = React.useState<DependentFormData>(blank)
 
-  React.useEffect(() => {
-    if (open) setForm(dependent ? {
+  const [prevDepOpen, setPrevDepOpen] = React.useState(false)
+  if (open && !prevDepOpen) {
+    setPrevDepOpen(true)
+    setForm(dependent ? {
       name: dependent.name,
       birthDate: dependent.birthDate,
       relation: dependent.relation,
@@ -2668,8 +2672,9 @@ function DependentFormDialog({
       visaNumber: dependent.visaNumber,
       medicalInsurance: dependent.medicalInsurance,
     } : blank)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  } else if (!open && prevDepOpen) {
+    setPrevDepOpen(false)
+  }
 
   const set = (k: keyof DependentFormData, v: string | null) => setForm(f => ({ ...f, [k]: v || null }))
 
@@ -2742,9 +2747,15 @@ function AddWarningDialog({
   const fileRef = React.useRef<HTMLInputElement>(null)
   const autoExpiryRef = React.useRef<string>('')
 
-  React.useEffect(() => {
-    if (!open) { setIssueDate(''); setExpiryDate(''); setReason(''); setFile(null); setDragging(false); autoExpiryRef.current = '' }
-  }, [open])
+  const [prevWarnOpen, setPrevWarnOpen] = React.useState(true)
+  if (!open && prevWarnOpen) {
+    setPrevWarnOpen(false)
+    setIssueDate(''); setExpiryDate(''); setReason(''); setFile(null); setDragging(false)
+  } else if (open && !prevWarnOpen) {
+    setPrevWarnOpen(true)
+  }
+  // Reset the ref in a cleanup effect — ref mutation during render is not allowed.
+  React.useEffect(() => { if (!open) autoExpiryRef.current = '' }, [open])
 
   function handleIssueDateChange(e: React.ChangeEvent<HTMLInputElement>) {
     const date = e.target.value

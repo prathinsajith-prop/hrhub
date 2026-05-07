@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { UserCheck, Mail, ShieldOff, ShieldCheck, RefreshCw, Shield, Clock, Calendar, Send } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle, toast } from '@/components/ui/overlays'
 import { Button } from '@/components/ui/button'
@@ -98,14 +98,24 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
     const [emailInput, setEmailInput] = useState(derivedEmail)
     const [selectedRole, setSelectedRole] = useState('employee')
 
-    // Sync when the dialog opens or account data loads
-    useEffect(() => {
-        if (open) setEmailInput(employee.workEmail || employee.email || employee.personalEmail || '')
-    }, [open, employee])
+    // Sync email when the dialog opens or employee changes.
+    const [prevOpen, setPrevOpen] = useState(false)
+    const [prevEmployeeId, setPrevEmployeeId] = useState(employee.id)
+    if ((open && !prevOpen) || (open && employee.id !== prevEmployeeId)) {
+        setPrevOpen(open)
+        setPrevEmployeeId(employee.id)
+        setEmailInput(employee.workEmail || employee.email || employee.personalEmail || '')
+    } else if (!open && prevOpen) {
+        setPrevOpen(false)
+    }
 
-    useEffect(() => {
-        if (accountData?.account?.role) setSelectedRole(accountData.account.role)
-    }, [accountData])
+    // Sync role when account data loads.
+    const loadedRole = accountData?.account?.role
+    const [prevLoadedRole, setPrevLoadedRole] = useState<string | undefined>(undefined)
+    if (loadedRole !== undefined && loadedRole !== prevLoadedRole) {
+        setPrevLoadedRole(loadedRole)
+        setSelectedRole(loadedRole)
+    }
 
     const availableRoles = callerIsSuperAdmin ? ALL_ROLES : ALL_ROLES.filter(r => r.id !== 'super_admin')
 

@@ -1,4 +1,4 @@
-import { eq, and, desc, isNull, sql, getTableColumns, count } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { Conditions } from '../../lib/filters.js'
 import { db } from '../../db/index.js'
@@ -7,8 +7,6 @@ import { cacheDel } from '../../lib/redis.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 type NewAsset = InferInsertModel<typeof assets>
-type NewAssignment = InferInsertModel<typeof assetAssignments>
-type NewMaintenance = InferInsertModel<typeof assetMaintenance>
 
 const ASSET_FIELD_MAP = {
     status: assets.status,
