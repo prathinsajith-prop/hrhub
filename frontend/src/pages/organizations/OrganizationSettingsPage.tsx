@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 import {
@@ -13,10 +14,12 @@ import {
     CalendarClock,
     GraduationCap,
 } from 'lucide-react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { usePermissions } from '@/hooks/usePermissions'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { OverflowTabsList } from '@/components/shared/OverflowTabsList'
+import { cn } from '@/lib/utils'
 import type { Permission } from '@/lib/permissions'
 
 import { ProfileTab } from './org-settings/ProfileTab'
@@ -31,30 +34,34 @@ import { GradeLevelsTab } from './org-settings/GradeLevelsTab'
 import { SubscriptionTab } from './org-settings/SubscriptionTab'
 import { LeaveSettingsTab } from './org-settings/LeaveSettingsTab'
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Tab definitions ──────────────────────────────────────────────────────────
 const tabs = [
-    { value: 'profile', label: 'Organization Profile', desc: 'Company details & regional settings', icon: Building2, requires: 'manage_settings' as Permission | null },
-    { value: 'structure', label: 'Org Structure', desc: 'Divisions, departments & branches', icon: GitBranch, requires: 'manage_settings' as Permission | null },
-    { value: 'designations', label: 'Designations', desc: 'Job titles & designations', icon: Briefcase, requires: 'manage_settings' as Permission | null },
-    { value: 'grade-levels', label: 'Grade Levels', desc: 'Employee grade & band configuration', icon: GraduationCap, requires: 'manage_settings' as Permission | null },
-    { value: 'members', label: 'Users', desc: 'Users, roles & access', icon: Users, requires: 'manage_users' as Permission | null },
-    { value: 'roles', label: 'Roles & Permissions', desc: 'View built-in role permissions', icon: KeyRound, requires: 'manage_users' as Permission | null },
-    { value: 'holidays', label: 'Public Holidays', desc: 'Manage company-wide holidays by year', icon: CalendarDays, requires: 'manage_settings' as Permission | null },
-    { value: 'leave', label: 'Leave Settings', desc: 'Rollover gate & leave policies', icon: CalendarClock, requires: 'manage_settings' as Permission | null },
-    { value: 'subscription', label: 'Subscription', desc: 'Plan, usage & billing', icon: CreditCard, requires: 'manage_settings' as Permission | null },
-    { value: 'security', label: 'Security', desc: 'Policies, IP allowlist & data', icon: Shield, requires: 'manage_settings' as Permission | null },
-    { value: 'switch', label: 'Switch Organization', desc: 'Change active workspace', icon: ArrowRightLeft, requires: null as Permission | null },
+    { value: 'profile',       label: 'Organization Profile', desc: 'Company details & regional settings',    icon: Building2,     requires: 'manage_settings' as Permission | null },
+    { value: 'structure',     label: 'Org Structure',        desc: 'Divisions, departments & branches',       icon: GitBranch,     requires: 'manage_settings' as Permission | null },
+    { value: 'designations',  label: 'Designations',         desc: 'Job titles & designations',               icon: Briefcase,     requires: 'manage_settings' as Permission | null },
+    { value: 'grade-levels',  label: 'Grade Levels',         desc: 'Employee grade & band configuration',     icon: GraduationCap, requires: 'manage_settings' as Permission | null },
+    { value: 'members',       label: 'Users',                desc: 'Users, roles & access',                   icon: Users,         requires: 'manage_users'    as Permission | null },
+    { value: 'roles',         label: 'Roles & Permissions',  desc: 'View built-in role permissions',          icon: KeyRound,      requires: 'manage_users'    as Permission | null },
+    { value: 'holidays',      label: 'Public Holidays',      desc: 'Manage company-wide holidays by year',    icon: CalendarDays,  requires: 'manage_settings' as Permission | null },
+    { value: 'leave',         label: 'Leave Settings',       desc: 'Rollover gate & leave policies',          icon: CalendarClock, requires: 'manage_settings' as Permission | null },
+    { value: 'subscription',  label: 'Subscription',         desc: 'Plan, usage & billing',                   icon: CreditCard,    requires: 'manage_settings' as Permission | null },
+    { value: 'security',      label: 'Security',             desc: 'Policies, IP allowlist & data',           icon: Shield,        requires: 'manage_settings' as Permission | null },
+    { value: 'switch',        label: 'Switch Organization',  desc: 'Change active workspace',                 icon: ArrowRightLeft, requires: null              as Permission | null },
 ]
 
 export function OrganizationSettingsPage() {
     const { t } = useTranslation()
     const { can } = usePermissions()
     const location = useLocation()
-    const visibleTabs = tabs.filter((tab) => tab.requires === null || can(tab.requires))
+
+    const visibleTabs = tabs.filter(tab => tab.requires === null || can(tab.requires))
+
     const locationTab = (location.state as { tab?: string } | null)?.tab
     const defaultTab = (locationTab && visibleTabs.some(t => t.value === locationTab))
         ? locationTab
         : (visibleTabs[0]?.value ?? 'switch')
+
+    const [activeTab, setActiveTab] = useState(defaultTab)
 
     return (
         <PageWrapper width="default">
@@ -65,60 +72,72 @@ export function OrganizationSettingsPage() {
             />
 
             <Tabs
-                defaultValue={defaultTab}
+                value={activeTab}
+                onValueChange={setActiveTab}
                 orientation="vertical"
                 className="xl:grid xl:grid-cols-[240px_minmax(0,1fr)] xl:gap-8 xl:items-start"
             >
-                {/* Mobile/Tablet: horizontal tabs */}
-                <TabsList className="xl:hidden w-full justify-start border-b rounded-none bg-transparent p-0 h-auto gap-0 overflow-x-auto">
-                    {visibleTabs.map(tab => (
-                        <TabsTrigger
-                            key={tab.value}
-                            value={tab.value}
-                            className="flex items-center gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-3 px-4 text-muted-foreground data-[state=active]:text-foreground"
-                        >
-                            <tab.icon className="h-4 w-4" />
-                            {tab.label}
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
+                {/* Mobile / Tablet: OverflowTabsList — same pattern as EmployeeDetailPage */}
+                <div className="xl:hidden">
+                    <OverflowTabsList
+                        tabs={visibleTabs}
+                        activeTab={activeTab}
+                        onTabChange={setActiveTab}
+                    />
+                </div>
 
-                {/* Desktop: sticky vertical nav rail */}
+                {/* Desktop (xl+): sticky vertical nav rail with hover-to-switch */}
                 <aside className="hidden xl:block sticky top-20 self-start">
                     <div className="rounded-xl border bg-card shadow-sm p-3">
-                        <TabsList className="flex flex-col items-stretch h-auto bg-transparent p-0 gap-0.5 w-full">
-                            {visibleTabs.map(tab => (
-                                <TabsTrigger
-                                    key={tab.value}
-                                    value={tab.value}
-                                    className="group justify-start gap-3 px-3 py-2.5 h-auto rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none transition-colors"
-                                >
-                                    <tab.icon className="h-4 w-4 shrink-0 text-muted-foreground group-data-[state=active]:text-primary" />
-                                    <div className="flex flex-col items-start min-w-0 text-start">
-                                        <span className="text-sm leading-tight">{tab.label}</span>
-                                        <span className="text-[11px] text-muted-foreground/80 group-data-[state=active]:text-muted-foreground leading-tight mt-0.5 truncate max-w-[180px]">
-                                            {tab.desc}
-                                        </span>
-                                    </div>
-                                </TabsTrigger>
-                            ))}
-                        </TabsList>
+                        <nav className="flex flex-col gap-0.5">
+                            {visibleTabs.map(tab => {
+                                const isActive = activeTab === tab.value
+                                return (
+                                    <button
+                                        key={tab.value}
+                                        type="button"
+                                        onMouseEnter={() => setActiveTab(tab.value)}
+                                        onClick={() => setActiveTab(tab.value)}
+                                        className={cn(
+                                            'group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-start w-full',
+                                            isActive
+                                                ? 'bg-muted text-foreground'
+                                                : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                                        )}
+                                    >
+                                        <tab.icon className={cn(
+                                            'h-4 w-4 shrink-0 transition-colors',
+                                            isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
+                                        )} />
+                                        <div className="flex flex-col items-start min-w-0">
+                                            <span className="text-sm leading-tight">{tab.label}</span>
+                                            <span className="text-[11px] text-muted-foreground/80 leading-tight mt-0.5 truncate max-w-[180px]">
+                                                {tab.desc}
+                                            </span>
+                                        </div>
+                                        {isActive && (
+                                            <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                                        )}
+                                    </button>
+                                )
+                            })}
+                        </nav>
                     </div>
                 </aside>
 
                 {/* Content */}
                 <div className="pt-6 xl:pt-0 min-w-0">
-                    <TabsContent value="profile" className="mt-0"><ProfileTab /></TabsContent>
-                    <TabsContent value="structure" className="mt-0"><OrgStructureTab /></TabsContent>
+                    <TabsContent value="profile"      className="mt-0"><ProfileTab /></TabsContent>
+                    <TabsContent value="structure"    className="mt-0"><OrgStructureTab /></TabsContent>
                     <TabsContent value="designations" className="mt-0"><DesignationsTab /></TabsContent>
                     <TabsContent value="grade-levels" className="mt-0"><GradeLevelsTab /></TabsContent>
-                    <TabsContent value="members" className="mt-0"><MembersTab /></TabsContent>
-                    <TabsContent value="roles" className="mt-0"><RolesPermissionsTab /></TabsContent>
-                    <TabsContent value="holidays" className="mt-0"><HolidaysTab /></TabsContent>
-                    <TabsContent value="leave" className="mt-0"><LeaveSettingsTab /></TabsContent>
+                    <TabsContent value="members"      className="mt-0"><MembersTab /></TabsContent>
+                    <TabsContent value="roles"        className="mt-0"><RolesPermissionsTab /></TabsContent>
+                    <TabsContent value="holidays"     className="mt-0"><HolidaysTab /></TabsContent>
+                    <TabsContent value="leave"        className="mt-0"><LeaveSettingsTab /></TabsContent>
                     <TabsContent value="subscription" className="mt-0"><SubscriptionTab /></TabsContent>
-                    <TabsContent value="security" className="mt-0"><SecurityTab /></TabsContent>
-                    <TabsContent value="switch" className="mt-0"><SwitchTab /></TabsContent>
+                    <TabsContent value="security"     className="mt-0"><SecurityTab /></TabsContent>
+                    <TabsContent value="switch"       className="mt-0"><SwitchTab /></TabsContent>
                 </div>
             </Tabs>
         </PageWrapper>

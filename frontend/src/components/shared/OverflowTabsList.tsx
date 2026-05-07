@@ -150,7 +150,12 @@ export function OverflowTabsList({ tabs, activeTab, onTabChange }: OverflowTabsL
                     const tab = tabMap.get(value)
                     if (!tab) return null
                     return (
-                        <TabsTrigger key={tab.value} value={tab.value} className={TRIGGER_CLS}>
+                        <TabsTrigger
+                            key={tab.value}
+                            value={tab.value}
+                            className={TRIGGER_CLS}
+                            onMouseEnter={() => onTabChange(tab.value)}
+                        >
                             <tab.icon className="h-3.5 w-3.5" />
                             {tab.label}
                         </TabsTrigger>

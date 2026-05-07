@@ -90,13 +90,14 @@ export function useUpdateApplicationStage() {
 
             if (fromStage) {
                 await qc.cancelQueries({ queryKey: ['applications-kanban', fromStage] })
-                const fromKey = ['applications-kanban', fromStage] as const
-                const prev = qc.getQueryData<InfiniteData<KanbanPage>>(fromKey)
-                if (prev) {
-                    snapshots.push({ key: fromKey, data: prev })
-                    qc.setQueryData<InfiniteData<KanbanPage>>(fromKey, {
-                        ...prev,
-                        pages: prev.pages.map((page, i) => ({
+                // getQueriesData uses prefix/filter matching so it correctly finds the 5-element keys
+                const fromEntries = qc.getQueriesData<InfiniteData<KanbanPage>>({ queryKey: ['applications-kanban', fromStage] })
+                for (const [key, data] of fromEntries) {
+                    if (!data) continue
+                    snapshots.push({ key, data })
+                    qc.setQueryData<InfiniteData<KanbanPage>>(key, {
+                        ...data,
+                        pages: data.pages.map((page, i) => ({
                             ...page,
                             data: page.data.filter((c) => c.id !== id),
                             total: i === 0 ? Math.max(0, page.total - 1) : page.total,
@@ -106,14 +107,14 @@ export function useUpdateApplicationStage() {
             }
 
             await qc.cancelQueries({ queryKey: ['applications-kanban', toStage] })
-            const toKey = ['applications-kanban', toStage] as const
-            const prevTo = qc.getQueryData<InfiniteData<KanbanPage>>(toKey)
-            if (prevTo) {
-                snapshots.push({ key: toKey, data: prevTo })
+            const toEntries = qc.getQueriesData<InfiniteData<KanbanPage>>({ queryKey: ['applications-kanban', toStage] })
+            for (const [key, data] of toEntries) {
+                if (!data) continue
+                snapshots.push({ key, data })
                 if (candidate) {
-                    qc.setQueryData<InfiniteData<KanbanPage>>(toKey, {
-                        ...prevTo,
-                        pages: prevTo.pages.map((page, i) => ({
+                    qc.setQueryData<InfiniteData<KanbanPage>>(key, {
+                        ...data,
+                        pages: data.pages.map((page, i) => ({
                             ...page,
                             data: i === 0 ? [{ ...candidate, stage: toStage as Candidate['stage'] }, ...page.data] : page.data,
                             total: i === 0 ? page.total + 1 : page.total,

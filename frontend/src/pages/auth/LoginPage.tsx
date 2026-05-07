@@ -16,7 +16,7 @@ import type { User, Tenant } from '@/types'
 const OTP_LENGTH = 6
 
 function OtpInput({ onComplete }: { onComplete: (code: string) => void }) {
-  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''))
+  const [digits, setDigits] = useState<string[]>(() => Array(OTP_LENGTH).fill(''))
   const refs = useRef<(HTMLInputElement | null)[]>([])
   // Guard against double-fire (React 19 StrictMode runs setState updaters twice in dev)
   const submittedRef = useRef<string | null>(null)

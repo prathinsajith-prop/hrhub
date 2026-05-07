@@ -133,10 +133,10 @@ export const createEmployeeSchema = employeeBaseSchema
     .refine(
         d => {
             if (!d.dateOfBirth) return true
-            const min = new Date(); min.setFullYear(min.getFullYear() - 10)
+            const min = new Date(); min.setFullYear(min.getFullYear() - 15)
             return d.dateOfBirth <= min.toISOString().split('T')[0]
         },
-        { message: 'Employee must be at least 10 years old', path: ['dateOfBirth'] }
+        { message: 'Employee must be at least 15 years old', path: ['dateOfBirth'] }
     )
     .refine(
         d => !d.contractEndDate || !d.joinDate || d.contractEndDate >= d.joinDate,
@@ -158,10 +158,10 @@ export const updateEmployeeSchema = employeeBaseSchema
     .refine(
         d => {
             if (!d.dateOfBirth) return true
-            const min = new Date(); min.setFullYear(min.getFullYear() - 10)
+            const min = new Date(); min.setFullYear(min.getFullYear() - 15)
             return d.dateOfBirth <= min.toISOString().split('T')[0]
         },
-        { message: 'Employee must be at least 10 years old', path: ['dateOfBirth'] }
+        { message: 'Employee must be at least 15 years old', path: ['dateOfBirth'] }
     )
     .refine(
         d => !d.contractEndDate || !d.joinDate || d.contractEndDate >= d.joinDate,

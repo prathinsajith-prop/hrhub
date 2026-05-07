@@ -9,6 +9,7 @@ import { entities, tenants } from '../../db/schema/index.js'
 import { and, eq } from 'drizzle-orm'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { fileTypeFromBuffer } from 'file-type'
+import { broadcastToTenant } from '../../lib/ws-registry.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -67,6 +68,10 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        broadcastToTenant(request.user.tenantId, {
+            type: 'recruitment:job-changed',
+            payload: { jobId: job.id, action: 'create', actorId: request.user.id, actorSocketId: request.headers['x-socket-id'] ?? null },
+        })
         return reply.code(201).send({ data: job })
     })
 
@@ -104,6 +109,10 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        broadcastToTenant(request.user.tenantId, {
+            type: 'recruitment:job-changed',
+            payload: { jobId: id, action: 'update', actorId: request.user.id, actorSocketId: request.headers['x-socket-id'] ?? null },
+        })
         return reply.send({ data: updated })
     })
 
@@ -126,6 +135,10 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        broadcastToTenant(request.user.tenantId, {
+            type: 'recruitment:job-changed',
+            payload: { jobId: id, action: 'delete', actorId: request.user.id, actorSocketId: request.headers['x-socket-id'] ?? null },
+        })
         return reply.code(204).send()
     })
 
@@ -198,6 +211,10 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        broadcastToTenant(tenantId, {
+            type: 'recruitment:candidate-added',
+            payload: { applicationId: application.id, candidate: application, actorId: request.user.id, actorSocketId: request.headers['x-socket-id'] ?? null },
+        })
         return reply.code(201).send({ data: application })
     })
 
@@ -214,8 +231,12 @@ export default async function (fastify: any): Promise<void> {
         },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        const { stage } = request.body as { stage: string }
-        const updated = await updateApplicationStage(request.user.tenantId, id, stage)
+        const { stage: toStage } = request.body as { stage: string }
+        // Fetch current stage before overwriting so we can include fromStage in the WS payload
+        const before = await getApplication(request.user.tenantId, id)
+        if (!before) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
+        const fromStage = before.stage
+        const updated = await updateApplicationStage(request.user.tenantId, id, toStage)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
         recordActivity({
             tenantId: request.user.tenantId,
@@ -224,12 +245,16 @@ export default async function (fastify: any): Promise<void> {
             actorRole: request.user.role,
             entityType: 'application',
             entityId: id,
-            entityName: `${(updated as any).candidateName ?? updated.name ?? 'Candidate'} → ${stage}`,
+            entityName: `${updated.name ?? 'Candidate'} → ${toStage}`,
             action: 'update',
-            metadata: { stage },
+            metadata: { fromStage, toStage },
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        broadcastToTenant(request.user.tenantId, {
+            type: 'recruitment:stage-changed',
+            payload: { applicationId: id, fromStage, toStage, candidate: updated, actorId: request.user.id, actorSocketId: request.headers['x-socket-id'] ?? null },
+        })
         return reply.send({ data: updated })
     })
 
@@ -242,6 +267,10 @@ export default async function (fastify: any): Promise<void> {
         const deleted = await softDeleteApplication(request.user.tenantId, id)
         if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'application', entityId: id, entityName: (deleted as any).name ?? 'Candidate', action: 'delete', ipAddress: (request as any).ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        broadcastToTenant(request.user.tenantId, {
+            type: 'recruitment:candidate-removed',
+            payload: { applicationId: id, stage: (deleted as any).stage ?? 'received', actorId: request.user.id, actorSocketId: request.headers['x-socket-id'] ?? null },
+        })
         return reply.code(204).send()
     })
 
@@ -281,6 +310,10 @@ export default async function (fastify: any): Promise<void> {
         } as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'application', entityId: id, entityName: (updated as any).name ?? 'Candidate', action: 'update', ipAddress: (request as any).ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        broadcastToTenant(request.user.tenantId, {
+            type: 'recruitment:candidate-updated',
+            payload: { applicationId: id, stage: (updated as any).stage, candidate: updated, actorId: request.user.id, actorSocketId: request.headers['x-socket-id'] ?? null },
+        })
         return reply.send({ data: updated })
     })
 
@@ -424,6 +457,15 @@ export default async function (fastify: any): Promise<void> {
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
 
+        const actorSocketId = request.headers['x-socket-id'] ?? null
+        broadcastToTenant(tenantId, {
+            type: 'recruitment:candidate-removed',
+            payload: { applicationId: id, stage: 'pre_boarding', actorId: request.user.id, actorSocketId },
+        })
+        broadcastToTenant(tenantId, {
+            type: 'recruitment:job-changed',
+            payload: { jobId: app.jobId, action: 'update', actorId: request.user.id, actorSocketId },
+        })
         return reply.code(201).send({ data: { employee, application: await getApplication(tenantId, id) } })
     })
 

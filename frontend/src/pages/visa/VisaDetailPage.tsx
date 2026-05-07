@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
 import { ArrowLeft, CheckCircle2, Clock, AlertTriangle, XCircle, FileText, Hash, Plus, Trash2, Receipt, DollarSign } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -454,18 +456,15 @@ export function VisaDetailPage() {
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-xs text-muted-foreground">Paid Date</label>
-                                    <input
-                                        type="date"
-                                        className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                                    <DatePicker
                                         value={costForm.paidDate}
-                                        onChange={e => setCostForm(f => ({ ...f, paidDate: e.target.value }))}
+                                        onChange={v => setCostForm(f => ({ ...f, paidDate: v ?? '' }))}
+                                        className="h-9 text-sm"
                                     />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-xs text-muted-foreground">Receipt Ref (optional)</label>
-                                    <input
-                                        type="text"
-                                        className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                                    <Input
                                         value={costForm.receiptRef ?? ''}
                                         onChange={e => setCostForm(f => ({ ...f, receiptRef: e.target.value || undefined }))}
                                         placeholder="INV-001"

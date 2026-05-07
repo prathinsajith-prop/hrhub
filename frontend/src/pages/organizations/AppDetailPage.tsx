@@ -372,7 +372,7 @@ export function AppDetailPage() {
                 patch: {
                     name: editForm.name,
                     description: editForm.description || undefined,
-                    ipAllowlist: editForm.ipAllowlist.split(',').map(s => s.trim()).filter(Boolean),
+                    ipAllowlist: editForm.ipAllowlist.split(',').flatMap(s => s.trim() ? [s.trim()] : []),
                 },
             })
             toast.success('App updated')

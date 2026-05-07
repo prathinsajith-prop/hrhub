@@ -2,6 +2,7 @@
  * Typed API client — attaches JWT, handles 401 token refresh, consistent error shape.
  */
 import { useAuthStore } from '@/store/authStore'
+import { socket } from '@/lib/socket'
 
 // API base URL.
 //   • In local dev → defaults to '/api/v1' (proxied by Vite to the backend).
@@ -82,6 +83,10 @@ async function request<T>(
     if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`
     }
+
+    // Identify the browser tab so the server can echo it back in WS broadcasts.
+    // The receiving tab skips its own events (optimistic update already applied).
+    headers['X-Socket-Id'] = socket.socketId
 
     // Triple-belt cache bypass:
     //   1. fetch cache: 'no-store' — browser HTTP cache is skipped entirely

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { CalendarDays, Plus, Trash2, ChevronLeft, ChevronRight, Repeat2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -29,7 +30,7 @@ export function HolidaysTab() {
     const deleteHoliday = useDeletePublicHoliday()
     const seedUae = useSeedUaeHolidays()
 
-    const sorted = [...(holidays ?? [])].sort((a, b) => a.date.localeCompare(b.date))
+    const sorted = (holidays ?? []).toSorted((a, b) => a.date.localeCompare(b.date))
 
     const handleAdd = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -156,12 +157,10 @@ export function HolidaysTab() {
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="h_date">Date *</Label>
-                                <Input
+                                <DatePicker
                                     id="h_date"
-                                    type="date"
                                     value={form.date}
-                                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                                    required
+                                    onChange={v => setForm(f => ({ ...f, date: v ?? '' }))}
                                 />
                             </div>
                             <div className="space-y-1.5">
