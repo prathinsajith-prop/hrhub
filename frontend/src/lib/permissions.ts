@@ -115,6 +115,7 @@ export type RouteKey =
   | 'apps'
   | 'leave-policies'
   | 'organization-settings'
+  | 'org-structure'
   | 'subscription'
   | 'complaints'
   | 'my/complaints'
@@ -297,6 +298,7 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   apps: ['super_admin', 'hr_manager'],
   'leave-policies': ['super_admin', 'hr_manager'],
   'organization-settings': ['super_admin', 'hr_manager'],
+  'org-structure': ['super_admin', 'hr_manager'],
   subscription: ['super_admin', 'hr_manager'],
   complaints: ['super_admin', 'hr_manager'],
   training: ['super_admin', 'hr_manager'],
@@ -416,6 +418,7 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/apps': 'apps',
     '/leave-policies': 'leave-policies',
     '/organization-settings': 'organization-settings',
+    '/org-structure': 'org-structure',
     '/subscription': 'subscription',
     '/complaints': 'complaints',
     '/my/complaints': 'my/complaints',

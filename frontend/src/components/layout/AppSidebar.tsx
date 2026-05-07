@@ -24,6 +24,8 @@ import {
   CalendarPlusIcon,
   Users2Icon,
   KeyRoundIcon,
+  Settings2Icon,
+  NetworkIcon,
 } from "lucide-react"
 import { NavUser } from "@/components/layout/NavUser"
 import {
@@ -40,7 +42,7 @@ import {
 import { useAuthStore } from "@/store/authStore"
 import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
-import { canAccessRoute, getNavRouteKey } from "@/lib/permissions"
+import { canAccessRouteForRoles, getNavRouteKey } from "@/lib/permissions"
 import type { UserRole } from "@/types"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -48,6 +50,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { t } = useTranslation()
   const role = user?.role as UserRole | undefined
+  const roles: UserRole[] = (user?.roles?.length ? user.roles : role ? [role] : []) as UserRole[]
 
   // The sidebar re-renders on every route change because of useLocation().
   // Memoize the static-shape nav config so we don't rebuild dozens of objects
@@ -65,7 +68,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       label: t('nav.people'),
       items: [
         { title: t('nav.employees'), url: "/employees", icon: UsersIcon },
-        { title: t('nav.team', { defaultValue: 'Teams' }), url: "/team", icon: Users2Icon },
+        { title: t('nav.orgChart', { defaultValue: 'Org Chart' }), url: "/org-chart", icon: NetworkIcon },
+        { title: t('nav.team', { defaultValue: 'Organization' }), url: "/team", icon: Users2Icon },
         { title: t('nav.recruitment'), url: "/recruitment", icon: BriefcaseIcon },
         { title: t('nav.onboarding'), url: "/onboarding", icon: UserPlusIcon },
         { title: t('nav.exit', { defaultValue: 'Exit & Offboarding' }), url: "/exit", icon: UserMinusIcon },
@@ -100,23 +104,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         { title: t('nav.auditLog'), url: "/audit", icon: ClipboardListIcon },
         { title: t('nav.complaints', { defaultValue: 'Complaints' }), url: "/complaints", icon: MessageSquareWarningIcon },
         { title: t('nav.users', { defaultValue: 'Users & Roles' }), url: "/users", icon: KeyRoundIcon },
+        { title: t('nav.orgSettings', { defaultValue: 'Org Settings' }), url: "/organization-settings", icon: Settings2Icon },
       ],
     },
   ], [t])
 
-  // Filter groups + items by role. Groups with no visible items are hidden.
+  // Filter groups + items by all user roles (union). Groups with no visible items are hidden.
   const navGroups = React.useMemo(() => {
-    if (!role) return []
+    if (roles.length === 0) return []
     return allNavGroups
       .map((group) => ({
         ...group,
         items: group.items.filter((item) => {
           const routeKey = getNavRouteKey(item.url)
-          return routeKey ? canAccessRoute(role, routeKey) : true
+          return routeKey ? canAccessRouteForRoles(roles, routeKey) : true
         }),
       }))
       .filter((group) => group.items.length > 0)
-  }, [allNavGroups, role])
+  }, [allNavGroups, roles])
 
 
   const userData = React.useMemo(() => ({

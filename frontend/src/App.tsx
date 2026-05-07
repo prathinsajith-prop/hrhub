@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/overlays'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary'
 import { useAuthStore } from '@/store/authStore'
-import { canAccessRoute, type RouteKey } from '@/lib/permissions'
+import { canAccessRouteForRoles, type RouteKey } from '@/lib/permissions'
 import type { UserRole } from '@/types'
 import { socket } from '@/lib/socket'
 
@@ -49,6 +49,7 @@ const AppDetailPage = lazy(() => import('@/pages/organizations/AppDetailPage').t
 const LeavePoliciesPage = lazy(() => import('@/pages/leave/LeavePoliciesPage').then(m => ({ default: m.LeavePoliciesPage })))
 const OnboardingUploadPage = lazy(() => import('@/pages/onboarding/OnboardingUploadPage').then(m => ({ default: m.OnboardingUploadPage })))
 const OrganizationSettingsPage = lazy(() => import('@/pages/organizations/OrganizationSettingsPage').then(m => ({ default: m.OrganizationSettingsPage })))
+const OrgStructurePage = lazy(() => import('@/pages/organizations/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })))
 const SubscriptionPage = lazy(() => import('@/pages/organizations/SubscriptionPage').then(m => ({ default: m.SubscriptionPage })))
 const MyLeavePage = lazy(() => import('@/pages/my/MyLeavePage').then(m => ({ default: m.MyLeavePage })))
 const MyPayslipsPage = lazy(() => import('@/pages/my/MyPayslipsPage').then(m => ({ default: m.MyPayslipsPage })))
@@ -144,10 +145,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-/** Guards a single route by role. Renders 403 inline if the role lacks access. */
+/** Guards a single route by role. Renders 403 inline if none of the user's roles have access. */
 function RoleRoute({ routeKey, children }: { routeKey: RouteKey; children: React.ReactNode }) {
   const role = useAuthStore((s) => s.user?.role) as UserRole | undefined
-  if (!role || !canAccessRoute(role, routeKey)) {
+  const rawRoles = useAuthStore((s) => s.user?.roles)
+  const roles: UserRole[] = (rawRoles?.length ? rawRoles : role ? [role] : []) as UserRole[]
+  if (roles.length === 0 || !canAccessRouteForRoles(roles, routeKey)) {
     return <ForbiddenPage />
   }
   return <>{children}</>
@@ -202,6 +205,7 @@ export default function App() {
               <Route path="apps/:id" element={<RoleRoute routeKey="apps"><AppDetailPage /></RoleRoute>} />
               <Route path="leave-policies" element={<RoleRoute routeKey="leave-policies"><LeavePoliciesPage /></RoleRoute>} />
               <Route path="organization-settings" element={<RoleRoute routeKey="organization-settings"><OrganizationSettingsPage /></RoleRoute>} />
+              <Route path="org-structure" element={<RoleRoute routeKey="org-structure"><OrgStructurePage /></RoleRoute>} />
               <Route path="subscription" element={<RoleRoute routeKey="subscription"><SubscriptionPage /></RoleRoute>} />
               <Route path="complaints" element={<RoleRoute routeKey="complaints"><ComplaintsPage /></RoleRoute>} />
               <Route path="my/complaints" element={<RoleRoute routeKey="my/complaints"><MyComplaintsPage /></RoleRoute>} />
