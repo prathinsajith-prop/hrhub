@@ -401,9 +401,9 @@ export default async function (fastify: any): Promise<void> {
                 await db.transaction(async (tx) => {
                     for (let i = 0; i < rows.length; i++) {
                         try {
-                            const row = rows[i]
+                            const row = validate(createEmployeeSchema, rows[i])
                             const employeeNo = row.employeeNo || await generateNextEmployeeNo(request.user.tenantId, tx)
-                            await tx.insert(employees).values({ ...row, employeeNo, tenantId: request.user.tenantId } as never)
+                            await tx.insert(employees).values({ ...row, employeeNo, tenantId: request.user.tenantId })
                             created++
                         } catch (e: any) {
                             results.push({ row: i + 1, error: e.message ?? 'Unknown error' })

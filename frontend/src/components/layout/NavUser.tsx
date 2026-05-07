@@ -12,7 +12,6 @@ import {
   CreditCardIcon,
   PlusIcon,
   ArrowRightLeftIcon,
-  CodeIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -43,7 +42,6 @@ import { useState } from "react"
 import { labelFor, ROLE_BADGE_STYLE } from "@/lib/enums"
 import { cn } from "@/lib/utils"
 import { NewOrganizationDialog } from "@/components/shared/NewOrganizationDialog"
-import { useApiMeta } from "@/hooks/useMeta"
 
 const ORG_COLORS = [
   'bg-emerald-500', 'bg-blue-500', 'bg-violet-500',
@@ -77,8 +75,6 @@ export function NavUser({
 
   const { data: tenants } = useMyTenants()
   const switchTenant = useSwitchTenant()
-  const { data: apiMeta } = useApiMeta()
-
   const initials = user.name
     .split(" ")
     .map((n) => n[0])
@@ -261,15 +257,6 @@ export function NavUser({
                       <SettingsIcon className="size-4 text-muted-foreground shrink-0" />
                       <span className="text-sm">Settings</span>
                     </DropdownMenuItem>
-                    {currentRole === 'super_admin' && apiMeta?.docsEnabled && apiMeta.docsUrl && (
-                      <DropdownMenuItem
-                        onClick={() => window.open(apiMeta.docsUrl!, '_blank', 'noopener,noreferrer')}
-                        className="gap-2.5 rounded-lg h-9 px-2.5 cursor-pointer"
-                      >
-                        <CodeIcon className="size-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm">API Documentation</span>
-                      </DropdownMenuItem>
-                    )}
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator className="my-1" />
                 </>

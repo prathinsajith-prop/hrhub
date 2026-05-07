@@ -169,9 +169,9 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data: { gratuity, basicSalary: salary, yearsOfService: years } })
     })
 
-    // GET /api/v1/payroll/:id/wps-sif — download WPS Salary Information File
+    // GET /api/v1/payroll/:id/wps-sif — download WPS Salary Information File (HR only)
     fastify.get('/:id/wps-sif', {
-        ...auth,
+        ...hrOnly,
         schema: { tags: ['Payroll'] },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
@@ -249,8 +249,8 @@ export default async function (fastify: any): Promise<void> {
             .send(pdfBuffer)
     })
 
-    // GET /api/v1/payroll/jobs/:jobId — poll async payroll job status
-    fastify.get('/jobs/:jobId', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+    // GET /api/v1/payroll/jobs/:jobId — poll async payroll job status (HR only)
+    fastify.get('/jobs/:jobId', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { jobId } = request.params as { jobId: string }
         const queue = getPayrollQueue()
         if (!queue) {
@@ -260,8 +260,11 @@ export default async function (fastify: any): Promise<void> {
         if (!job) {
             return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found.' })
         }
-        const state = await job.getState()
         const data = job.data as PayrollJobData
+        if (data.tenantId !== request.user.tenantId) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found.' })
+        }
+        const state = await job.getState()
         return reply.send({ data: { jobId: job.id, state, payrollRunId: data.payrollRunId, failedReason: job.failedReason ?? null } })
     })
 }
