@@ -307,7 +307,7 @@ export function EmployeesPage() {
               )}
             </div>
             {(() => {
-              const email = e.workEmail || (e as any).email || e.personalEmail || null
+              const email = e.workEmail || e.email || e.personalEmail || null
               return email ? (
                 <span onClick={ev => ev.stopPropagation()}>
                   <CopyableEmail email={email} className="text-[11px] text-muted-foreground/70 truncate" />

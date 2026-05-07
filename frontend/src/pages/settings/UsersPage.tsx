@@ -310,8 +310,8 @@ export function UsersPage() {
         try {
             await resendInvite.mutateAsync(employeeId)
             toast.success(`Invite resent to ${name}`)
-        } catch (err: any) {
-            toast.error(err?.message ?? 'Failed to resend invite')
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to resend invite')
         }
     }
 
