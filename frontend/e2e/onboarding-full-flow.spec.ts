@@ -62,6 +62,8 @@ async function openNewOnboardingDialog(page: Page) {
 // ─── suite ────────────────────────────────────────────────────────────────────
 
 test.describe('Onboarding — full workflow', () => {
+    test.describe.configure({ mode: 'serial' })
+    test.slow()
     test.beforeEach(async ({ page }) => {
         await gotoOnboarding(page)
     })
