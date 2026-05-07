@@ -38,6 +38,9 @@ function roleCategoryColor(value: string): string {
     return ROLE_CATEGORY_COLORS[value as RoleCategory] ?? 'bg-muted text-muted-foreground'
 }
 
+// Values accepted by the current backend Zod schema — filter out legacy system-role strings
+const VALID_ROLE_VALUES = new Set(ROLE_CATEGORY_OPTIONS.map(o => o.value))
+
 // ─── Sort helpers ─────────────────────────────────────────────────────────────
 
 function sortByLevel(levels: GradeLevel[]): GradeLevel[] {
@@ -68,7 +71,8 @@ function gradeLevelToModal(g: GradeLevel): ModalState {
         code: g.code ?? '',
         name: g.name,
         level: g.level != null ? String(g.level) : '',
-        roles: g.roles ?? [],
+        // Filter out any legacy system-role strings stored before the role-categories refactor
+        roles: (g.roles ?? []).filter(r => VALID_ROLE_VALUES.has(r as RoleCategory)),
         salaryMin: g.salaryMin != null ? String(g.salaryMin) : '',
         salaryMax: g.salaryMax != null ? String(g.salaryMax) : '',
         description: g.description ?? '',
@@ -87,6 +91,16 @@ interface GradeLevelModalProps {
 function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPending }: GradeLevelModalProps) {
     const [form, setForm] = useState<ModalState>(() => editing ? gradeLevelToModal(editing) : EMPTY_MODAL)
     const [salaryError, setSalaryError] = useState('')
+
+    // Sync form every time the modal opens — handles reopening on the same grade after edits
+    const [prevOpen, setPrevOpen] = useState(open)
+    if (open !== prevOpen) {
+        setPrevOpen(open)
+        if (open) {
+            setForm(editing ? gradeLevelToModal(editing) : EMPTY_MODAL)
+            setSalaryError('')
+        }
+    }
 
     function handleCodeChange(val: string) {
         const match = val.trim().match(/^[Gg](\d{1,3})$/)
@@ -110,8 +124,9 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
     function buildInput(): { ok: true; data: GradeLevelInput } | { ok: false; salaryError?: string } {
         const name = form.name.trim()
         if (!name) return { ok: false }
-        const salaryMin = form.salaryMin ? Number(form.salaryMin) : undefined
-        const salaryMax = form.salaryMax ? Number(form.salaryMax) : undefined
+        // For edit: send null to explicitly clear a salary; for create: omit undefined fields
+        const salaryMin = form.salaryMin !== '' ? Number(form.salaryMin) : (editing ? null : undefined)
+        const salaryMax = form.salaryMax !== '' ? Number(form.salaryMax) : (editing ? null : undefined)
         if (salaryMin != null && salaryMax != null && salaryMin >= salaryMax) {
             return { ok: false, salaryError: 'Minimum must be less than maximum' }
         }
