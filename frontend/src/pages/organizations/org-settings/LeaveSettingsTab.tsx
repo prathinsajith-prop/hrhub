@@ -16,11 +16,12 @@ export function LeaveSettingsTab() {
     const [saved, setSaved] = useState(false)
 
     // Sync local state when settings load from server. Track previous value in state
-    // to avoid re-setting on every render.
-    const [prevRollover, setPrevRollover] = useState<string | undefined>(undefined)
-    const loadedRollover = data?.rolloverEnabledFrom
+    // to avoid re-setting on every render. prevRollover must hold null (not undefined)
+    // so the comparison correctly detects that rolloverEnabledFrom: null is already synced.
+    const [prevRollover, setPrevRollover] = useState<string | null | undefined>(undefined)
+    const loadedRollover = data?.rolloverEnabledFrom ?? null
     if (loadedRollover !== prevRollover) {
-        setPrevRollover(loadedRollover ?? undefined)
+        setPrevRollover(loadedRollover)
         setRolloverEnabledFrom(loadedRollover ?? '')
     }
 
