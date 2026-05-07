@@ -2160,8 +2160,8 @@ export function EmployeeDetailPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {[...attendanceRecords]
-                          .sort((a, b) => b.date.localeCompare(a.date))
+                        {attendanceRecords
+                          .toSorted((a, b) => b.date.localeCompare(a.date))
                           .map(r => (
                             <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                               <td className="px-4 py-2.5 font-medium">{formatDate(r.date)}</td>
@@ -2529,7 +2529,7 @@ export function EmployeeDetailPage() {
       <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
 
       {editOpen && <EditEmployeeDialog open={editOpen} onOpenChange={setEditOpen} employee={e} />}
-      {editEmploymentOpen && canManage && <EditEmploymentDialog open={editEmploymentOpen} onOpenChange={setEditEmploymentOpen} employee={e} currentRole={accountData?.account?.role} />}
+      {editEmploymentOpen && canManage && <EditEmploymentDialog open={editEmploymentOpen} onOpenChange={setEditEmploymentOpen} employee={e} />}
       {editPayrollOpen && canManage && <EditPayrollDialog open={editPayrollOpen} onOpenChange={setEditPayrollOpen} employee={e} />}
       {assignAssetOpen && canManage && <AssignAssetToEmployeeDialog open={assignAssetOpen} onOpenChange={setAssignAssetOpen} employee={e} />}
       {canManage && (
@@ -2804,7 +2804,7 @@ function DependentFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Date of Birth</Label>
-            <Input type="date" value={form.birthDate ?? ''} onChange={e => set('birthDate', e.target.value)} />
+            <DatePicker value={form.birthDate ?? ''} onChange={v => set('birthDate', v ?? '')} />
           </div>
           <div className="space-y-1.5">
             <Label>Nationality</Label>
@@ -2859,8 +2859,7 @@ function AddWarningDialog({
   // Reset the ref in a cleanup effect — ref mutation during render is not allowed.
   React.useEffect(() => { if (!open) autoExpiryRef.current = '' }, [open])
 
-  function handleIssueDateChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const date = e.target.value
+  function handleIssueDateChange(date: string) {
     setIssueDate(date)
     if (date) {
       const d = new Date(date)
@@ -2873,9 +2872,9 @@ function AddWarningDialog({
     }
   }
 
-  function handleExpiryDateChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setExpiryDate(e.target.value)
-    autoExpiryRef.current = e.target.value
+  function handleExpiryDateChange(date: string) {
+    setExpiryDate(date)
+    autoExpiryRef.current = date
   }
 
   function pickFile(f: File | null | undefined) {
@@ -2910,12 +2909,11 @@ function AddWarningDialog({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Issue date <span className="text-destructive">*</span></Label>
-              <Input type="date" value={issueDate} onChange={handleIssueDateChange}
-                className={cn(!issueDate && 'border-destructive focus-visible:ring-destructive')} />
+              <DatePicker value={issueDate} onChange={v => handleIssueDateChange(v ?? '')} aria-invalid={!issueDate} />
             </div>
             <div className="space-y-1.5">
               <Label>Expiry date</Label>
-              <Input type="date" value={expiryDate} onChange={handleExpiryDateChange} />
+              <DatePicker value={expiryDate} onChange={v => handleExpiryDateChange(v ?? '')} />
             </div>
           </div>
           <div className="space-y-1.5">

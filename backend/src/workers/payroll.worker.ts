@@ -7,6 +7,7 @@ import { Queue, Worker } from 'bullmq'
 import { log } from '../lib/logger.js'
 import { loadEnv } from '../config/env.js'
 import { runPayroll } from '../modules/payroll/payroll.service.js'
+import { broadcastToTenant } from '../lib/ws-registry.js'
 
 export interface PayrollJobData {
     tenantId: string
@@ -95,8 +96,22 @@ export async function startPayrollWorker(): Promise<void> {
         }
     )
 
+    worker.on('completed', (job) => {
+        const { tenantId, payrollRunId } = job.data
+        broadcastToTenant(tenantId, {
+            type: 'payroll:completed',
+            payload: { payrollRunId },
+        })
+    })
+
     worker.on('failed', (job, err) => {
         log.error({ jobId: job?.id, err: err?.message }, 'payroll-worker: job failed')
+        if (job) {
+            broadcastToTenant(job.data.tenantId, {
+                type: 'payroll:failed',
+                payload: { payrollRunId: job.data.payrollRunId, error: err?.message ?? 'Unknown error' },
+            })
+        }
     })
 
     worker.on('error', (err) => {

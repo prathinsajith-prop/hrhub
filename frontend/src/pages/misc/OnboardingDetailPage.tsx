@@ -331,7 +331,7 @@ function RequiredDocsDialog({ step, open, onClose }: { step: OnboardingStep; ope
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     <div className="space-y-1">
                                         <label className="text-[11px] font-medium text-muted-foreground">Category *</label>
-                                        <Select value={category} onValueChange={(v) => { setCategory(v as DocCategory); setDocType('') }}>
+                                        <Select value={category || undefined} onValueChange={(v) => { setCategory(v as DocCategory); setDocType('') }}>
                                             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
                                             <SelectContent>
                                                 {(Object.entries(CATEGORY_LABELS) as [DocCategory, string][]).map(([k, l]) => (
@@ -342,7 +342,7 @@ function RequiredDocsDialog({ step, open, onClose }: { step: OnboardingStep; ope
                                     </div>
                                     <div className="space-y-1">
                                         <label className="text-[11px] font-medium text-muted-foreground">Document type *</label>
-                                        <Select value={docType} onValueChange={setDocType} disabled={!category}>
+                                        <Select value={docType || undefined} onValueChange={setDocType} disabled={!category}>
                                             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
                                             <SelectContent>
                                                 {categoryDocs.map(d => (
@@ -878,7 +878,7 @@ function StepDocPanel({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-medium text-muted-foreground">Category *</label>
-                                    <Select value={selectedCategory} onValueChange={(v) => { setSelectedCategory(v as DocCategory); setSelectedDocType('') }}>
+                                    <Select value={selectedCategory || undefined} onValueChange={(v) => { setSelectedCategory(v as DocCategory); setSelectedDocType('') }}>
                                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
                                         <SelectContent>
                                             {(Object.entries(CATEGORY_LABELS) as [DocCategory, string][]).map(([key, label]) => (
@@ -889,7 +889,7 @@ function StepDocPanel({
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-medium text-muted-foreground">Document type *</label>
-                                    <Select value={selectedDocType} onValueChange={setSelectedDocType} disabled={!selectedCategory}>
+                                    <Select value={selectedDocType || undefined} onValueChange={setSelectedDocType} disabled={!selectedCategory}>
                                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
                                         <SelectContent>
                                             {categoryDocs.map(d => (

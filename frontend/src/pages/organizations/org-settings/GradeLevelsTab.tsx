@@ -14,22 +14,42 @@ import {
 import { useSponsoringEntities, useCreateSponsoringEntity, useUpdateSponsoringEntity, type SponsoringEntity } from '@/hooks/useSponsoringEntities'
 import { Section } from './_shared'
 
-const GRADE_ROLE_OPTIONS = [
-    { value: 'employee',    label: 'Employee' },
-    { value: 'dept_head',   label: 'Department Head' },
-    { value: 'pro_officer', label: 'PRO Officer' },
-    { value: 'hr_manager',  label: 'HR Manager' },
-    { value: 'super_admin', label: 'Super Admin' },
+// ─── Role categories ──────────────────────────────────────────────────────────
+
+const ROLE_CATEGORY_OPTIONS = [
+    { value: 'employee',  label: 'Employee' },
+    { value: 'manager',   label: 'Manager' },
+    { value: 'director',  label: 'Director' },
 ] as const
 
-type GradeRole = (typeof GRADE_ROLE_OPTIONS)[number]['value']
+type RoleCategory = (typeof ROLE_CATEGORY_OPTIONS)[number]['value']
 
-const ROLE_COLORS: Record<GradeRole, string> = {
-    employee:    'bg-blue-100 text-blue-700',
-    dept_head:   'bg-violet-100 text-violet-700',
-    pro_officer: 'bg-cyan-100 text-cyan-700',
-    hr_manager:  'bg-emerald-100 text-emerald-700',
-    super_admin: 'bg-rose-100 text-rose-700',
+const ROLE_CATEGORY_COLORS: Record<RoleCategory, string> = {
+    employee:  'bg-blue-100 text-blue-700',
+    manager:   'bg-violet-100 text-violet-700',
+    director:  'bg-amber-100 text-amber-700',
+}
+
+function roleCategoryLabel(value: string): string {
+    return ROLE_CATEGORY_OPTIONS.find(o => o.value === value)?.label ?? value
+}
+
+function roleCategoryColor(value: string): string {
+    return ROLE_CATEGORY_COLORS[value as RoleCategory] ?? 'bg-muted text-muted-foreground'
+}
+
+// Values accepted by the current backend Zod schema — filter out legacy system-role strings
+const VALID_ROLE_VALUES = new Set(ROLE_CATEGORY_OPTIONS.map(o => o.value))
+
+// ─── Sort helpers ─────────────────────────────────────────────────────────────
+
+function sortByLevel(levels: GradeLevel[]): GradeLevel[] {
+    return levels.toSorted((a, b) => {
+        if (a.level == null && b.level == null) return a.name.localeCompare(b.name)
+        if (a.level == null) return 1
+        if (b.level == null) return -1
+        return a.level - b.level
+    })
 }
 
 // ─── Grade Level Modal ────────────────────────────────────────────────────────
@@ -51,7 +71,8 @@ function gradeLevelToModal(g: GradeLevel): ModalState {
         code: g.code ?? '',
         name: g.name,
         level: g.level != null ? String(g.level) : '',
-        roles: g.roles ?? [],
+        // Filter out any legacy system-role strings stored before the role-categories refactor
+        roles: (g.roles ?? []).filter(r => VALID_ROLE_VALUES.has(r as RoleCategory)),
         salaryMin: g.salaryMin != null ? String(g.salaryMin) : '',
         salaryMax: g.salaryMax != null ? String(g.salaryMax) : '',
         description: g.description ?? '',
@@ -71,7 +92,16 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
     const [form, setForm] = useState<ModalState>(() => editing ? gradeLevelToModal(editing) : EMPTY_MODAL)
     const [salaryError, setSalaryError] = useState('')
 
-    // Code ↔ Level auto-sync: G6 ↔ 6
+    // Sync form every time the modal opens — handles reopening on the same grade after edits
+    const [prevOpen, setPrevOpen] = useState(open)
+    if (open !== prevOpen) {
+        setPrevOpen(open)
+        if (open) {
+            setForm(editing ? gradeLevelToModal(editing) : EMPTY_MODAL)
+            setSalaryError('')
+        }
+    }
+
     function handleCodeChange(val: string) {
         const match = val.trim().match(/^[Gg](\d{1,3})$/)
         setForm(f => ({ ...f, code: val, level: match ? match[1]! : f.level }))
@@ -84,10 +114,6 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
         })
     }
 
-    function setField(field: 'name' | 'description', value: string) {
-        setForm(f => ({ ...f, [field]: value }))
-    }
-
     function toggleRole(role: string) {
         setForm(f => ({
             ...f,
@@ -98,8 +124,9 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
     function buildInput(): { ok: true; data: GradeLevelInput } | { ok: false; salaryError?: string } {
         const name = form.name.trim()
         if (!name) return { ok: false }
-        const salaryMin = form.salaryMin ? Number(form.salaryMin) : undefined
-        const salaryMax = form.salaryMax ? Number(form.salaryMax) : undefined
+        // For edit: send null to explicitly clear a salary; for create: omit undefined fields
+        const salaryMin = form.salaryMin !== '' ? Number(form.salaryMin) : (editing ? null : undefined)
+        const salaryMax = form.salaryMax !== '' ? Number(form.salaryMax) : (editing ? null : undefined)
         if (salaryMin != null && salaryMax != null && salaryMin >= salaryMax) {
             return { ok: false, salaryError: 'Minimum must be less than maximum' }
         }
@@ -168,7 +195,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                             autoFocus={!editing}
                             placeholder="e.g. Mid Level 1"
                             value={form.name}
-                            onChange={e => setField('name', e.target.value)}
+                            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                             maxLength={80}
                             onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                         />
@@ -176,10 +203,10 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
 
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">
-                            Applicable Roles <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+                            Role Category <span className="text-muted-foreground font-normal text-xs">(optional)</span>
                         </label>
                         <div className="flex flex-wrap gap-2">
-                            {GRADE_ROLE_OPTIONS.map(opt => {
+                            {ROLE_CATEGORY_OPTIONS.map(opt => {
                                 const selected = form.roles.includes(opt.value)
                                 return (
                                     <button
@@ -187,9 +214,9 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                                         type="button"
                                         onClick={() => toggleRole(opt.value)}
                                         className={cn(
-                                            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                                            'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
                                             selected
-                                                ? cn(ROLE_COLORS[opt.value], 'border-transparent')
+                                                ? cn(ROLE_CATEGORY_COLORS[opt.value], 'border-transparent')
                                                 : 'bg-background text-muted-foreground border-border hover:border-primary/40',
                                         )}
                                     >
@@ -200,7 +227,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                             })}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Tag which employee roles this level applies to — used to surface the right grades in employee forms.
+                            Tag which category of staff this grade applies to — used to filter grades in employee forms.
                         </p>
                     </div>
 
@@ -230,7 +257,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                         <Textarea
                             placeholder="Brief description of this grade level…"
                             value={form.description}
-                            onChange={e => setField('description', e.target.value)}
+                            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                             maxLength={500}
                             rows={2}
                             className="resize-none"
@@ -248,7 +275,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
     )
 }
 
-// ─── Grade Levels section ──────────────────────────────────────────────────────
+// ─── Grade Levels section ─────────────────────────────────────────────────────
 
 const salaryFormatter = new Intl.NumberFormat('en-AE', { maximumFractionDigits: 0 })
 
@@ -262,7 +289,7 @@ function formatSalary(min: number | null, max: number | null): string {
 
 function GradeLevelsSection() {
     const { data: items = [], isLoading } = useAllGradeLevels()
-    const levels = Array.isArray(items) ? items as GradeLevel[] : []
+    const levels = sortByLevel(Array.isArray(items) ? items as GradeLevel[] : [])
     const create = useCreateGradeLevel()
     const update = useUpdateGradeLevel()
     const remove = useDeleteGradeLevel()
@@ -318,7 +345,16 @@ function GradeLevelsSection() {
 
     return (
         <>
-            <div className="space-y-4">
+            <Section
+                icon={GraduationCap}
+                title="Grade Levels"
+                description="Define grades or bands that can be assigned to employees (e.g. G1, G6, Senior Level 2)."
+                action={
+                    <Button size="sm" className="gap-1.5" onClick={openAdd} disabled={isLoading}>
+                        <Plus className="h-3.5 w-3.5" /> Add Grade Level
+                    </Button>
+                }
+            >
                 {isLoading ? (
                     <div className="space-y-2">
                         {[1, 2, 3].map(i => <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />)}
@@ -340,104 +376,98 @@ function GradeLevelsSection() {
                         </div>
                     </div>
                 ) : (
-                    <>
-                        <div className="rounded-xl border bg-card overflow-hidden">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b bg-muted/40">
-                                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-16">Code</th>
-                                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8">Lvl</th>
-                                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
-                                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Roles</th>
-                                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-44">Salary Range</th>
-                                        <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">Status</th>
-                                        <th className="w-28 px-4 py-2.5" />
+                    <div className="rounded-xl border bg-card overflow-hidden">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b bg-muted/40">
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-16">Code</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8">Lvl</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Role Category</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-44">Salary Range</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">Status</th>
+                                    <th className="w-28 px-4 py-2.5" />
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border/50">
+                                {levels.map(g => (
+                                    <tr key={g.id} className="group hover:bg-muted/30 transition-colors">
+                                        <td className="px-4 py-2.5">
+                                            {g.code
+                                                ? <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{g.code}</span>
+                                                : <span className="text-muted-foreground">—</span>
+                                            }
+                                        </td>
+                                        <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                                            {g.level ?? '—'}
+                                        </td>
+                                        <td className="px-4 py-2.5">
+                                            <div className={cn('font-medium', !g.isActive && 'line-through text-muted-foreground')}>
+                                                {g.name}
+                                            </div>
+                                            {g.description && (
+                                                <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{g.description}</div>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-2.5">
+                                            {g.roles && g.roles.length > 0 ? (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {g.roles.map(r => (
+                                                        <span key={r} className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', roleCategoryColor(r))}>
+                                                            {roleCategoryLabel(r)}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="text-muted-foreground text-xs">—</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                                            {formatSalary(g.salaryMin, g.salaryMax)}
+                                        </td>
+                                        <td className="px-4 py-2.5">
+                                            <Badge variant={g.isActive ? 'success' : 'secondary'} className="text-[11px]">
+                                                {g.isActive ? 'Active' : 'Inactive'}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-4 py-2.5">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <Button
+                                                    size="sm" variant="ghost"
+                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                                    title="Edit"
+                                                    onClick={() => openEdit(g)}
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                </Button>
+                                                <Button
+                                                    size="sm" variant="ghost"
+                                                    className={cn('h-7 px-2 text-[11px] font-medium rounded-full',
+                                                        g.isActive
+                                                            ? 'text-amber-600 hover:bg-amber-50 hover:text-amber-700'
+                                                            : 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700'
+                                                    )}
+                                                    onClick={() => setToggleTarget(g)}
+                                                >
+                                                    {g.isActive ? 'Deactivate' : 'Activate'}
+                                                </Button>
+                                                <Button
+                                                    size="sm" variant="ghost"
+                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                                    title="Delete"
+                                                    onClick={() => setDeleteTarget(g)}
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border/50">
-                                    {levels.map(g => (
-                                        <tr key={g.id} className="group hover:bg-muted/30 transition-colors">
-                                            <td className="px-4 py-2.5">
-                                                {g.code
-                                                    ? <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{g.code}</span>
-                                                    : <span className="text-muted-foreground">—</span>
-                                                }
-                                            </td>
-                                            <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                                                {g.level ?? '—'}
-                                            </td>
-                                            <td className="px-4 py-2.5">
-                                                <div className={cn('font-medium', !g.isActive && 'line-through text-muted-foreground')}>
-                                                    {g.name}
-                                                </div>
-                                                {g.description && (
-                                                    <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{g.description}</div>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-2.5">
-                                                {g.roles && g.roles.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {g.roles.map(r => (
-                                                            <span key={r} className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', ROLE_COLORS[r as GradeRole] ?? 'bg-muted text-muted-foreground')}>
-                                                                {GRADE_ROLE_OPTIONS.find(o => o.value === r)?.label ?? r}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-muted-foreground text-xs">—</span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                                                {formatSalary(g.salaryMin, g.salaryMax)}
-                                            </td>
-                                            <td className="px-4 py-2.5">
-                                                <Badge variant={g.isActive ? 'success' : 'secondary'} className="text-[11px]">
-                                                    {g.isActive ? 'Active' : 'Inactive'}
-                                                </Badge>
-                                            </td>
-                                            <td className="px-4 py-2.5">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <Button
-                                                        size="sm" variant="ghost"
-                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                                                        title="Edit"
-                                                        onClick={() => openEdit(g)}
-                                                    >
-                                                        <Pencil className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        size="sm" variant="ghost"
-                                                        className={cn('h-7 px-2 text-[11px] font-medium rounded-full',
-                                                            g.isActive
-                                                                ? 'text-amber-600 hover:bg-amber-50 hover:text-amber-700'
-                                                                : 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700'
-                                                        )}
-                                                        onClick={() => setToggleTarget(g)}
-                                                    >
-                                                        {g.isActive ? 'Deactivate' : 'Activate'}
-                                                    </Button>
-                                                    <Button
-                                                        size="sm" variant="ghost"
-                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                                        title="Delete"
-                                                        onClick={() => setDeleteTarget(g)}
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <Button variant="ghost" size="sm" className="gap-1.5 text-primary font-medium" onClick={openAdd}>
-                            <Plus className="h-3.5 w-3.5" /> Add grade level
-                        </Button>
-                    </>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
-            </div>
+            </Section>
 
             <GradeLevelModal
                 key={editingGrade?.id ?? '__new__'}
@@ -474,7 +504,7 @@ function GradeLevelsSection() {
     )
 }
 
-// ─── Sponsoring Entities section ───────────────────────────────────────────────
+// ─── Sponsoring Entities section ──────────────────────────────────────────────
 
 interface MasterItem { id: string; name: string; isActive: boolean }
 
@@ -592,33 +622,38 @@ function MasterList({
                                         </td>
                                     </tr>
                                 ))}
+                                {addingNew && (
+                                    <tr>
+                                        <td className="px-4 py-2.5" colSpan={3}>
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    autoFocus
+                                                    className="h-8 max-w-xs"
+                                                    placeholder="Enter name…"
+                                                    value={newName}
+                                                    onChange={e => onNewNameChange(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') onAdd()
+                                                        if (e.key === 'Escape') onCancelAdd()
+                                                    }}
+                                                />
+                                                <Button size="sm" onClick={onAdd} disabled={!newName.trim() || addPending}>
+                                                    {addPending ? '…' : 'Add'}
+                                                </Button>
+                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground" onClick={onCancelAdd}>
+                                                    <XCircle className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     )}
                 </div>
             )}
 
-            {addingNew ? (
-                <div className="flex items-center gap-2">
-                    <Input
-                        autoFocus
-                        className="flex-1 max-w-xs"
-                        placeholder="Enter name…"
-                        value={newName}
-                        onChange={e => onNewNameChange(e.target.value)}
-                        onKeyDown={e => {
-                            if (e.key === 'Enter') onAdd()
-                            if (e.key === 'Escape') onCancelAdd()
-                        }}
-                    />
-                    <Button size="sm" onClick={onAdd} disabled={!newName.trim() || addPending}>
-                        {addPending ? '…' : 'Add'}
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-muted-foreground" onClick={onCancelAdd}>
-                        <XCircle className="h-4 w-4" />
-                    </Button>
-                </div>
-            ) : (
+            {!addingNew && (
                 <Button variant="ghost" size="sm" className="gap-1.5 text-primary font-medium" onClick={onStartAdd}>
                     <Plus className="h-3.5 w-3.5" /> {addLabel}
                 </Button>
@@ -670,26 +705,32 @@ function SponsoringEntitiesSection() {
 
     return (
         <>
-            <MasterList
-                items={entities}
-                isLoading={isLoading}
-                addingNew={addingNew}
-                newName={newName}
-                editingId={editingId}
-                editName={editName}
-                addPending={create.isPending}
-                onNewNameChange={setNewName}
-                onStartAdd={() => setAddingNew(true)}
-                onCancelAdd={() => { setAddingNew(false); setNewName('') }}
-                onAdd={handleAdd}
-                onStartEdit={(item) => { setEditingId(item.id); setEditName(item.name) }}
-                onEditNameChange={setEditName}
-                onCancelEdit={() => setEditingId(null)}
-                onSaveEdit={handleUpdate}
-                onToggle={(item) => setToggleTarget(item as SponsoringEntity)}
-                addLabel="Add sponsoring entity"
-                emptyMessage="No sponsoring entities yet. Add one to get started."
-            />
+            <Section
+                icon={Building2}
+                title="Sponsoring Entities"
+                description="Companies or entities that sponsor employee visas. Used in the Visa & ID section of employee profiles."
+            >
+                <MasterList
+                    items={entities}
+                    isLoading={isLoading}
+                    addingNew={addingNew}
+                    newName={newName}
+                    editingId={editingId}
+                    editName={editName}
+                    addPending={create.isPending}
+                    onNewNameChange={setNewName}
+                    onStartAdd={() => setAddingNew(true)}
+                    onCancelAdd={() => { setAddingNew(false); setNewName('') }}
+                    onAdd={handleAdd}
+                    onStartEdit={(item) => { setEditingId(item.id); setEditName(item.name) }}
+                    onEditNameChange={setEditName}
+                    onCancelEdit={() => setEditingId(null)}
+                    onSaveEdit={handleUpdate}
+                    onToggle={(item) => setToggleTarget(item as SponsoringEntity)}
+                    addLabel="Add sponsoring entity"
+                    emptyMessage="No sponsoring entities yet. Add one to get started."
+                />
+            </Section>
             <ConfirmDialog
                 open={!!toggleTarget}
                 onOpenChange={o => !o && setToggleTarget(null)}
@@ -717,21 +758,8 @@ export function GradeLevelsTab() {
                 </p>
             </div>
 
-            <Section
-                icon={GraduationCap}
-                title="Grade Levels"
-                description="Define grades or bands that can be assigned to employees (e.g. G1, G6, Senior Level 2)."
-            >
-                <GradeLevelsSection />
-            </Section>
-
-            <Section
-                icon={Building2}
-                title="Sponsoring Entities"
-                description="Companies or entities that sponsor employee visas. Used in the Visa & ID section of employee profiles."
-            >
-                <SponsoringEntitiesSection />
-            </Section>
+            <GradeLevelsSection />
+            <SponsoringEntitiesSection />
         </div>
     )
 }

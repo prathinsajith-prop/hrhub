@@ -245,7 +245,7 @@ export function AttendancePage() {
             row.hours += parseFloat(r.hoursWorked ?? '0')
         }
         return [...map.values()]
-            .sort((a, b) => a.date.localeCompare(b.date))
+            .toSorted((a, b) => a.date.localeCompare(b.date))
             .map((d) => ({ ...d, date: d.date.slice(5) }))
     }, [list])
 
@@ -267,7 +267,7 @@ export function AttendancePage() {
             row.hours += parseFloat(r.hoursWorked ?? '0')
             row.ot += parseFloat(r.overtimeHours ?? '0')
         }
-        return [...map.values()].sort((a, b) => b.hours - a.hours)
+        return [...map.values()].toSorted((a, b) => b.hours - a.hours)
     }, [list, empMap])
 
     const handleEdit = useCallback(

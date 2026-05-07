@@ -42,6 +42,24 @@ describe('employeeStep1Schema', () => {
         })
         expect(r.success).toBe(false)
     })
+
+    it('rejects a date of birth that is less than 15 years ago', () => {
+        const underAge = new Date()
+        underAge.setFullYear(underAge.getFullYear() - 14)
+        const r = employeeStep1Schema.safeParse({
+            firstName: 'A', lastName: 'B', dateOfBirth: underAge.toISOString().slice(0, 10),
+        })
+        expect(r.success).toBe(false)
+    })
+
+    it('accepts a date of birth that is exactly 15 years ago', () => {
+        const exactly15 = new Date()
+        exactly15.setFullYear(exactly15.getFullYear() - 15)
+        const r = employeeStep1Schema.safeParse({
+            firstName: 'A', lastName: 'B', dateOfBirth: exactly15.toISOString().slice(0, 10),
+        })
+        expect(r.success).toBe(true)
+    })
 })
 
 describe('employeeStep2Schema', () => {

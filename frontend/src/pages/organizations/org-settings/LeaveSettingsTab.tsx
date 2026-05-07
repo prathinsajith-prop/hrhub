@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { CalendarClock, Save, CheckCircle2, LockKeyhole, UnlockKeyhole } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/overlays'
@@ -88,11 +88,10 @@ export function LeaveSettingsTab() {
                     <div className="space-y-1.5">
                         <Label htmlFor="rolloverDate">Rollover enabled from</Label>
                         <div className="flex items-center gap-2">
-                            <Input
+                            <DatePicker
                                 id="rolloverDate"
-                                type="date"
                                 value={rolloverEnabledFrom}
-                                onChange={(e) => setRolloverEnabledFrom(e.target.value)}
+                                onChange={v => setRolloverEnabledFrom(v ?? '')}
                                 className="max-w-xs"
                             />
                             {rolloverEnabledFrom && (

@@ -9,11 +9,16 @@ import compress from '@fastify/compress'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import rawBody from 'fastify-raw-body'
+import websocket from '@fastify/websocket'
 
 import { loadEnv } from './config/env.js'
 import { db } from './db/index.js'
 import { sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
+import { users } from './db/schema/index.js'
 import authenticatePlugin from './plugins/authenticate.js'
+import { cacheGet, cacheSet } from './lib/redis.js'
+import { registerConnection, removeConnection } from './lib/ws-registry.js'
 import { cleanupExpiredTokens } from './modules/auth/auth.service.js'
 import { startExpiryWorkers } from './workers/expiry.worker.js'
 import { startPayrollWorker } from './workers/payroll.worker.js'
@@ -100,7 +105,8 @@ async function bootstrap() {
                 objectSrc: ["'none'"],
                 frameAncestors: ["'none'"],
                 imgSrc: ["'self'", 'data:', env.S3_PUBLIC_URL],
-                connectSrc: ["'self'"],
+                // 'self' covers http/https; ws: and wss: are needed for WebSocket upgrades
+                connectSrc: ["'self'", 'ws:', 'wss:'],
             },
         },
     })
@@ -143,7 +149,7 @@ async function bootstrap() {
         origin: env.CORS_ORIGINS === '*' ? true : env.CORS_ORIGINS.split(',').map(o => o.trim()),
         credentials: true,
         methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'X-Socket-Id'],
     })
 
     // JWT
@@ -175,6 +181,81 @@ async function bootstrap() {
 
     // Auth plugin (adds fastify.authenticate + fastify.requireRole)
     await app.register(authenticatePlugin)
+
+    // ── WebSocket ────────────────────────────────────────────────────────────
+    // Register @fastify/websocket BEFORE any routes so the { websocket: true }
+    // route option is available. Must be in the same (root) Fastify scope.
+    await app.register(websocket)
+
+    const STALE_THRESHOLD_MS = 60_000
+    const STALE_CHECK_INTERVAL_MS = 30_000
+
+    app.get('/api/v1/ws', { websocket: true }, async (socket: any, request: any) => {
+        // ── Auth ─────────────────────────────────────────────────────────────
+        const token = (request.query as Record<string, string>)?.token
+        if (!token) { socket.close(4001, 'missing token'); return }
+
+        let payload: any
+        try { payload = app.jwt.verify(token) as any }
+        catch { socket.close(4001, 'invalid or expired token'); return }
+
+        if (!payload?.sub || !payload?.tenantId || !payload?.employeeId) {
+            socket.close(4001, 'invalid token payload')
+            return
+        }
+
+        const cacheKey = `user:active:${payload.sub}`
+        let isActive = await cacheGet<boolean>(cacheKey)
+        if (isActive === null) {
+            const [row] = await db.select({ isActive: users.isActive }).from(users)
+                .where(eq(users.id, payload.sub)).limit(1)
+            isActive = row?.isActive ?? false
+            await cacheSet(cacheKey, isActive, 300)
+        }
+        if (!isActive) { socket.close(4003, 'account deactivated'); return }
+
+        const userId: string = payload.sub
+        const tenantId: string = payload.tenantId
+
+        // ── Register ─────────────────────────────────────────────────────────
+        registerConnection(userId, tenantId, socket)
+        app.log.debug({ userId, tenantId }, 'ws: connected')
+
+        try { socket.send(JSON.stringify({ type: 'connected', payload: { userId } })) }
+        catch { /* ignore */ }
+
+        // ── Application-level ping/pong ───────────────────────────────────────
+        let lastPingAt = Date.now()
+        const staleCheck = setInterval(() => {
+            if (Date.now() - lastPingAt > STALE_THRESHOLD_MS) {
+                app.log.debug({ userId }, 'ws: stale socket — terminating')
+                clearInterval(staleCheck)
+                try { if (socket.terminate) socket.terminate(); else socket.close() } catch { /* ignore */ }
+            }
+        }, STALE_CHECK_INTERVAL_MS)
+
+        socket.on('message', (raw: Buffer | string) => {
+            try {
+                const msg = JSON.parse(raw.toString()) as { type?: string }
+                if (msg.type === 'ping') {
+                    lastPingAt = Date.now()
+                    socket.send(JSON.stringify({ type: 'pong' }))
+                }
+            } catch { /* ignore non-JSON */ }
+        })
+
+        // ── Cleanup ───────────────────────────────────────────────────────────
+        let cleaned = false
+        const cleanup = () => {
+            if (cleaned) return
+            cleaned = true
+            clearInterval(staleCheck)
+            removeConnection(userId, tenantId, socket)
+            app.log.debug({ userId }, 'ws: disconnected')
+        }
+        socket.on('close', cleanup)
+        socket.on('error', (err: Error) => { app.log.debug({ userId, err: err?.message }, 'ws: error'); cleanup() })
+    })
 
     // Global error handler — must be registered BEFORE routes so all plugin scopes inherit it
     app.setErrorHandler((error: any, _request: any, reply: any) => {
