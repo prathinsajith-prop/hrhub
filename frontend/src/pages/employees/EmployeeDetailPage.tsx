@@ -35,6 +35,7 @@ import { NumericInput } from '@/components/ui/numeric-input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { cn, formatDate, formatCurrency, formatFileSize, getInitials } from '@/lib/utils'
 import { useEmployee, useUpdateEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision, useUpdateEmployeeStatus, useArchiveEmployee } from '@/hooks/useEmployees'
+import type { SalaryHistoryFilters } from '@/hooks/useEmployees'
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { useEmployeeTeams } from '@/hooks/useTeams'
@@ -685,8 +686,12 @@ export function EmployeeDetailPage() {
   const { data: accountData, isLoading: accountLoading } = useEmployeeAccount(canManage ? id : undefined)
   const { data: employeeTeams = [] } = useEmployeeTeams(id)
 
-  // Salary history — only fetch when canManage (same guard as the route)
-  const { data: salaryHistoryData, isLoading: salaryHistoryLoading } = useSalaryHistory(canManage ? (id ?? '') : '')
+  // Salary history — filter state must be declared before the hook call to avoid TDZ
+  const [salaryHistoryFilters, setSalaryHistoryFilters] = React.useState<SalaryHistoryFilters>({})
+  const { data: salaryHistoryData, isLoading: salaryHistoryLoading } = useSalaryHistory(
+    canManage ? (id ?? '') : '',
+    salaryHistoryFilters,
+  )
 
   // Transfer history
   const { data: transfersData, isLoading: transfersLoading } = useEmployeeTransfers(id)
@@ -1763,7 +1768,8 @@ export function EmployeeDetailPage() {
                             { label: 'Other', cur: e.otherAllowances, nxt: upcoming.newOtherAllowances },
                           ].map(({ label, cur, nxt }) => {
                             const curVal = cur != null ? parseFloat(String(cur)) : 0
-                            const nxtVal = nxt != null ? parseFloat(String(nxt)) : 0
+                            // null nxt means the field wasn't touched in the revision — treat as same as cur
+                            const nxtVal = nxt != null ? parseFloat(String(nxt)) : curVal
                             const diff = nxtVal - curVal
                             return (
                               <div key={label} className="bg-white/60 rounded-lg px-3 py-2">
@@ -1813,9 +1819,37 @@ export function EmployeeDetailPage() {
             {/* Salary History */}
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2">
-                  <History className="h-4 w-4 text-muted-foreground" />
-                  <CardTitle className="text-base">Salary History</CardTitle>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <History className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle className="text-base">Salary History</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={salaryHistoryFilters.type ?? ''}
+                      onValueChange={v => setSalaryHistoryFilters(prev => ({ ...prev, type: v || undefined }))}
+                    >
+                      <SelectTrigger className="h-8 text-xs w-40">
+                        <SelectValue placeholder="All types" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">All types</SelectItem>
+                        {Object.entries(REVISION_TYPE_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {salaryHistoryFilters.type && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-xs text-muted-foreground"
+                        onClick={() => setSalaryHistoryFilters({})}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -2491,27 +2525,37 @@ export function EmployeeDetailPage() {
                   <Badge variant="warning">Upcoming</Badge>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Effective Date', value: formatDate(viewRevision.effectiveDate) },
-                  { label: 'Approved By', value: viewRevision.approvedByName ?? '—' },
-                  { label: 'Previous Basic', value: viewRevision.previousBasicSalary ? formatCurrency(parseFloat(viewRevision.previousBasicSalary)) : '—' },
-                  { label: 'New Basic', value: formatCurrency(parseFloat(viewRevision.newBasicSalary)) },
-                  { label: 'Previous Housing', value: viewRevision.previousHousingAllowance ? formatCurrency(parseFloat(viewRevision.previousHousingAllowance)) : '—' },
-                  { label: 'New Housing', value: viewRevision.newHousingAllowance ? formatCurrency(parseFloat(viewRevision.newHousingAllowance)) : '—' },
-                  { label: 'Previous Transport', value: viewRevision.previousTransportAllowance ? formatCurrency(parseFloat(viewRevision.previousTransportAllowance)) : '—' },
-                  { label: 'New Transport', value: viewRevision.newTransportAllowance ? formatCurrency(parseFloat(viewRevision.newTransportAllowance)) : '—' },
-                  { label: 'Previous Other', value: viewRevision.previousOtherAllowances ? formatCurrency(parseFloat(viewRevision.previousOtherAllowances)) : '—' },
-                  { label: 'New Other', value: viewRevision.newOtherAllowances ? formatCurrency(parseFloat(viewRevision.newOtherAllowances)) : '—' },
-                  { label: 'Previous Total', value: viewRevision.previousTotalSalary ? formatCurrency(parseFloat(viewRevision.previousTotalSalary)) : '—' },
-                  { label: 'New Total', value: viewRevision.newTotalSalary ? formatCurrency(parseFloat(viewRevision.newTotalSalary)) : '—' },
-                ].map(({ label, value }) => (
-                  <div key={label} className="bg-muted/40 rounded-lg px-3 py-2">
-                    <p className="text-[10px] text-muted-foreground">{label}</p>
-                    <p className="text-sm font-medium mt-0.5 tabular-nums">{value}</p>
+              {(() => {
+                // Allowances always have a value after the backend fix; for older records
+                // that have null, fall back to '0' so the display is always meaningful.
+                const fmtSalary = (v: string | null) =>
+                  v != null ? formatCurrency(parseFloat(v)) : '—'
+                const fmtAllowance = (v: string | null) =>
+                  formatCurrency(parseFloat(v ?? '0'))
+                return (
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: 'Effective Date', value: formatDate(viewRevision.effectiveDate) },
+                      { label: 'Approved By', value: viewRevision.approvedByName ?? '—' },
+                      { label: 'Previous Basic', value: fmtSalary(viewRevision.previousBasicSalary) },
+                      { label: 'New Basic', value: formatCurrency(parseFloat(viewRevision.newBasicSalary)) },
+                      { label: 'Previous Housing', value: fmtAllowance(viewRevision.previousHousingAllowance) },
+                      { label: 'New Housing', value: fmtAllowance(viewRevision.newHousingAllowance) },
+                      { label: 'Previous Transport', value: fmtAllowance(viewRevision.previousTransportAllowance) },
+                      { label: 'New Transport', value: fmtAllowance(viewRevision.newTransportAllowance) },
+                      { label: 'Previous Other', value: fmtAllowance(viewRevision.previousOtherAllowances) },
+                      { label: 'New Other', value: fmtAllowance(viewRevision.newOtherAllowances) },
+                      { label: 'Previous Total', value: fmtSalary(viewRevision.previousTotalSalary) },
+                      { label: 'New Total', value: fmtSalary(viewRevision.newTotalSalary) },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="bg-muted/40 rounded-lg px-3 py-2">
+                        <p className="text-[10px] text-muted-foreground">{label}</p>
+                        <p className="text-sm font-medium mt-0.5 tabular-nums">{value}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )
+              })()}
               {viewRevision.reason && (
                 <div className="bg-muted/40 rounded-lg px-3 py-2">
                   <p className="text-[10px] text-muted-foreground">Reason / Remarks</p>

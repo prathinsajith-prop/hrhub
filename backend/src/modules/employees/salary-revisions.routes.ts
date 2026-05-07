@@ -1,12 +1,14 @@
 import { db } from '../../db/index.js'
 import { salaryRevisions, employees, users } from '../../db/schema/index.js'
-import { eq, and, desc, sql } from 'drizzle-orm'
+import { eq, and, desc, sql, gte, lte } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
 import { z } from 'zod'
 
+const VALID_REVISION_TYPES = ['increment', 'decrement', 'promotion', 'annual_review', 'probation_completion', 'correction'] as const
+
 const createRevisionSchema = z.object({
     effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'effectiveDate must be YYYY-MM-DD'),
-    revisionType: z.enum(['increment', 'decrement', 'promotion', 'annual_review', 'probation_completion', 'correction']).default('increment'),
+    revisionType: z.enum(VALID_REVISION_TYPES).default('increment'),
     newBasicSalary: z.number().positive(),
     newHousingAllowance: z.number().min(0).optional().nullable(),
     newTransportAllowance: z.number().min(0).optional().nullable(),
@@ -15,12 +17,36 @@ const createRevisionSchema = z.object({
     reason: z.string().max(500).optional().nullable(),
 })
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
 export default async function salaryRevisionsRoutes(fastify: any): Promise<void> {
     const hrAdmin = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
 
     // GET /employees/:id/salary-history
+    // Optional query params: type (revision type), from (YYYY-MM-DD), to (YYYY-MM-DD)
     fastify.get('/:id/salary-history', { ...hrAdmin, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
+        const { type, from, to } = request.query as { type?: string; from?: string; to?: string }
+
+        // Build WHERE conditions — always scope by employee + tenant first
+        const conditions = [
+            eq(salaryRevisions.employeeId, id),
+            eq(salaryRevisions.tenantId, request.user.tenantId),
+        ]
+
+        // Optional: filter by revision type (validated against known values)
+        if (type && (VALID_REVISION_TYPES as readonly string[]).includes(type)) {
+            conditions.push(eq(salaryRevisions.revisionType, type as typeof VALID_REVISION_TYPES[number]))
+        }
+
+        // Optional: filter by effective date range (both bounds are inclusive)
+        if (from && DATE_RE.test(from)) {
+            conditions.push(gte(salaryRevisions.effectiveDate, from))
+        }
+        if (to && DATE_RE.test(to)) {
+            conditions.push(lte(salaryRevisions.effectiveDate, to))
+        }
+
         const rows = await db
             .select({
                 id: salaryRevisions.id,
@@ -39,15 +65,12 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
                 newOtherAllowances: salaryRevisions.newOtherAllowances,
                 reason: salaryRevisions.reason,
                 approvedBy: salaryRevisions.approvedBy,
-                approvedByName: sql<string | null>`${users.name}`,
+                approvedByName: sql<string | null>`${users.name}`.as('approved_by_name'),
                 createdAt: salaryRevisions.createdAt,
             })
             .from(salaryRevisions)
             .leftJoin(users, eq(users.id, salaryRevisions.approvedBy))
-            .where(and(
-                eq(salaryRevisions.employeeId, id),
-                eq(salaryRevisions.tenantId, request.user.tenantId),
-            ))
+            .where(and(...conditions))
             .orderBy(desc(salaryRevisions.effectiveDate))
         return reply.send({ data: rows })
     })
@@ -77,26 +100,39 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
 
         if (!emp) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
 
+        // Allowances default to 0 when not previously set on the employee — ensures
+        // the revision record is always fully populated so the detail view has complete data.
+        const prevBasic = emp.basicSalary ?? null
+        const prevTotal = emp.totalSalary ?? null
+        const prevHousing = String(emp.housingAllowance != null ? emp.housingAllowance : '0')
+        const prevTransport = String(emp.transportAllowance != null ? emp.transportAllowance : '0')
+        const prevOther = String(emp.otherAllowances != null ? emp.otherAllowances : '0')
+
+        // Effective new values: use explicit input if provided, otherwise carry the previous value forward
+        const effHousing = newHousingAllowance ?? (emp.housingAllowance != null ? parseFloat(emp.housingAllowance) : 0)
+        const effTransport = newTransportAllowance ?? (emp.transportAllowance != null ? parseFloat(emp.transportAllowance) : 0)
+        const effOther = newOtherAllowances ?? (emp.otherAllowances != null ? parseFloat(emp.otherAllowances) : 0)
+
         // Auto-calculate total if not provided: basic + housing + transport + other
         const effectiveTotal = newTotalSalary != null
             ? newTotalSalary
-            : newBasicSalary + (newHousingAllowance ?? 0) + (newTransportAllowance ?? 0) + (newOtherAllowances ?? 0)
+            : newBasicSalary + effHousing + effTransport + effOther
 
         const [revision] = await db.insert(salaryRevisions).values({
             tenantId: request.user.tenantId,
             employeeId: id,
             effectiveDate,
             revisionType,
-            previousBasicSalary: emp.basicSalary ?? null,
+            previousBasicSalary: prevBasic,
             newBasicSalary: String(newBasicSalary),
-            previousTotalSalary: emp.totalSalary ?? null,
+            previousTotalSalary: prevTotal,
             newTotalSalary: String(effectiveTotal),
-            previousHousingAllowance: emp.housingAllowance ?? null,
-            newHousingAllowance: newHousingAllowance != null ? String(newHousingAllowance) : null,
-            previousTransportAllowance: emp.transportAllowance ?? null,
-            newTransportAllowance: newTransportAllowance != null ? String(newTransportAllowance) : null,
-            previousOtherAllowances: emp.otherAllowances ?? null,
-            newOtherAllowances: newOtherAllowances != null ? String(newOtherAllowances) : null,
+            previousHousingAllowance: prevHousing,
+            newHousingAllowance: String(effHousing),
+            previousTransportAllowance: prevTransport,
+            newTransportAllowance: String(effTransport),
+            previousOtherAllowances: prevOther,
+            newOtherAllowances: String(effOther),
             reason: reason ?? null,
             approvedBy: request.user.id,
         }).returning()
@@ -107,9 +143,9 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
             await db.update(employees).set({
                 basicSalary: String(newBasicSalary),
                 totalSalary: String(effectiveTotal),
-                ...(newHousingAllowance != null ? { housingAllowance: String(newHousingAllowance) } : {}),
-                ...(newTransportAllowance != null ? { transportAllowance: String(newTransportAllowance) } : {}),
-                ...(newOtherAllowances != null ? { otherAllowances: String(newOtherAllowances) } : {}),
+                housingAllowance: String(effHousing),
+                transportAllowance: String(effTransport),
+                otherAllowances: String(effOther),
                 updatedAt: new Date(),
             }).where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
         }

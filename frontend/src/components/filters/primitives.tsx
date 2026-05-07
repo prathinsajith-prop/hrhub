@@ -262,10 +262,11 @@ export function AutocompleteFilter({ config, value, onChange }: PrimitiveProps) 
 
     useEffect(() => {
         if (!config.onSearch) return
-        if (!draft.trim()) { setResults(config.options ?? []); return }
         let cancelled = false
         setLoading(true)
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+        // Call onSearch('') on mount so the dropdown is populated immediately,
+        // then re-run whenever the user types. Static options are shown as fallback
+        // when onSearch is not provided.
         config.onSearch(draft.trim()).then((r) => { if (!cancelled) setResults(r) }).finally(() => { if (!cancelled) setLoading(false) })
         return () => { cancelled = true }
     }, [draft, config])

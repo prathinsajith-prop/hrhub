@@ -40,6 +40,7 @@ import { NewJobDialog, EditJobDialog } from '@/components/shared/action-dialogs'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig, buildFilterQueryString } from '@/lib/filters'
+import { searchDepartments, searchNationalities } from '@/lib/filters/filter-loaders'
 import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
 import { JOB_STATUS_OPTIONS } from '@/lib/options'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
@@ -49,7 +50,7 @@ import { ExportDropdown } from '@/components/shared/ExportDropdown'
 const JOB_FILTERS: FilterConfig[] = [
   { name: 'title', label: 'Job title', type: 'text', field: 'title' },
   { name: 'status', label: 'Status', type: 'multi_select', field: 'status', options: JOB_STATUS_OPTIONS },
-  { name: 'department', label: 'Department', type: 'text', field: 'department' },
+  { name: 'department', label: 'Department', type: 'autocomplete', field: 'department', onSearch: searchDepartments, placeholder: 'Search departments…' },
   { name: 'location', label: 'Location', type: 'text', field: 'location' },
   { name: 'openings', label: 'Openings', type: 'number_range', field: 'openings', min: 1 },
   { name: 'minSalary', label: 'Min salary (AED)', type: 'number_range', field: 'minSalary', min: 0, prefix: 'AED' },
@@ -57,7 +58,7 @@ const JOB_FILTERS: FilterConfig[] = [
 ]
 
 const CANDIDATE_FILTERS: FilterConfig[] = [
-  { name: 'nationality', label: 'Nationality', type: 'text', field: 'nationality' },
+  { name: 'nationality', label: 'Nationality', type: 'autocomplete', field: 'nationality', onSearch: searchNationalities, placeholder: 'Search nationalities…' },
   { name: 'experience', label: 'Experience (yrs)', type: 'number_range', field: 'experience', min: 0 },
   { name: 'expectedSalary', label: 'Expected salary (AED)', type: 'number_range', field: 'expectedSalary', min: 0, prefix: 'AED' },
   { name: 'score', label: 'Score', type: 'number_range', field: 'score', min: 0, max: 100 },
@@ -621,14 +622,7 @@ export function RecruitmentPage() {
     availableFilters: CANDIDATE_FILTERS,
   })
 
-  const jobDept = (jobSearch.appliedFilters.department?.value as string | undefined) || undefined
-
-  // status is multi_select → goes through the filter string so IN() works correctly.
-  // department is text/select → dedicated param for org-unit scoping.
-  const serverJobFilters = useMemo(() => {
-    const { department: _d, ...rest } = jobSearch.appliedFilters
-    return rest
-  }, [jobSearch.appliedFilters])
+  const serverJobFilters = useMemo(() => jobSearch.appliedFilters, [jobSearch.appliedFilters])
 
   const candidateFilterStr = useMemo(() => buildFilterQueryString(candidateSearch.appliedFilters) || undefined, [candidateSearch.appliedFilters])
   const candidateParams = useMemo(() => ({
@@ -647,7 +641,6 @@ export function RecruitmentPage() {
   const { data: jobsData, isFetching: jobsFetching, refetch: refetchJobs } = useJobs({
     limit: PAGE_SIZE,
     offset: jobsOffset,
-    department: jobDept,
     q: jobSearch.searchInput || undefined,
     filters: serverJobFilters,
   })
