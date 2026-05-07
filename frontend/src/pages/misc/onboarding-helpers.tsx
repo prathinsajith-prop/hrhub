@@ -2,6 +2,7 @@
 import { Badge } from '@/components/ui/primitives'
 import type { OnboardingStep, OnboardingStepStatus } from '@/hooks/useOnboarding'
 import type { FilterConfig, QuickFilter } from '@/lib/filters'
+import { searchDepartments, searchDesignations } from '@/lib/filters/filter-loaders'
 import { Activity, AlertTriangle, BarChart3, Calendar, CheckCircle2, Clock, PauseCircle, UserPlus } from 'lucide-react'
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -89,8 +90,8 @@ export const ONBOARDING_FILTERS: FilterConfig[] = [
             { value: 'completed', label: 'Completed' },
         ],
     },
-    { name: 'department', label: 'Department', type: 'text', icon: UserPlus, placeholder: 'e.g. Finance' },
-    { name: 'designation', label: 'Role', type: 'text', icon: UserPlus, placeholder: 'e.g. Accountant' },
+    { name: 'department', label: 'Department', type: 'autocomplete', icon: UserPlus, onSearch: searchDepartments, placeholder: 'Search departments…' },
+    { name: 'designation', label: 'Role', type: 'autocomplete', icon: UserPlus, onSearch: searchDesignations, placeholder: 'Search designations…' },
     {
         name: 'progress', label: 'Progress %', type: 'number_range', icon: BarChart3,
         min: 0, max: 100, step: 5, suffix: '%',
