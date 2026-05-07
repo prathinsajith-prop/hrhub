@@ -50,6 +50,7 @@ import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { FlagImg, resolveCountryIso } from '@/components/shared/PhoneInput'
 import { CopyableEmail } from '@/components/shared'
 import { buildFilterQueryString, type FilterConfig } from '@/lib/filters'
+import { searchDepartments, searchDesignations, searchNationalities } from '@/lib/filters/filter-loaders'
 import type { Employee } from '@/types'
 
 const EMPLOYEE_FILTERS: FilterConfig[] = [
@@ -67,9 +68,9 @@ const EMPLOYEE_FILTERS: FilterConfig[] = [
       { value: 'visa_expired', label: 'Visa expired' },
     ],
   },
-  { name: 'department', label: 'Department', type: 'text', field: 'department', icon: Users },
-  { name: 'designation', label: 'Designation', type: 'text', field: 'designation' },
-  { name: 'nationality', label: 'Nationality', type: 'text', field: 'nationality' },
+  { name: 'department', label: 'Department', type: 'autocomplete', field: 'department', icon: Users, onSearch: searchDepartments, placeholder: 'Search departments…' },
+  { name: 'designation', label: 'Designation', type: 'autocomplete', field: 'designation', onSearch: searchDesignations, placeholder: 'Search designations…' },
+  { name: 'nationality', label: 'Nationality', type: 'autocomplete', field: 'nationality', onSearch: searchNationalities, placeholder: 'Search nationalities…' },
   { name: 'salary', label: 'Salary (AED)', type: 'number_range', field: 'salary', min: 0, step: 500, prefix: 'AED' },
   { name: 'joinDate', label: 'Join date', type: 'date_range', field: 'joinDate' },
   { name: 'visaExpiry', label: 'Visa expiry', type: 'date_range', field: 'visaExpiry', icon: Clock },

@@ -74,21 +74,41 @@ function serialiseRangeValue(v: unknown, op: FilterOperator): string | null {
     return null
 }
 
+/**
+ * When a `between` filter has only one bound set, degrade it to GTE or LTE so
+ * the backend receives a correct single-bound operator instead of `BETWEEN(value,)`.
+ * Returns the effective [op, value] pair to use when serialising the segment.
+ */
+function degradeBetween(op: FilterOperator, value: unknown): [FilterOperator, unknown] {
+    if (op !== 'between') return [op, value]
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return [op, value]
+    const obj = value as Record<string, unknown>
+    const hasFrom = ('from' in obj) && obj.from != null && obj.from !== ''
+    const hasTo = ('to' in obj) && obj.to != null && obj.to !== ''
+    const hasMin = ('min' in obj) && obj.min != null && obj.min !== ''
+    const hasMax = ('max' in obj) && obj.max != null && obj.max !== ''
+    if ((hasFrom || hasMin) && !(hasTo || hasMax)) return ['gte', value]
+    if (!(hasFrom || hasMin) && (hasTo || hasMax)) return ['lte', value]
+    return [op, value]
+}
+
 /** Build "field:OP(value);field:OP(value)" string. */
 export function buildFilterQueryString(filters: AppliedFiltersMap | null | undefined): string {
     if (!filters) return ''
     const parts: string[] = []
     for (const [name, applied] of Object.entries(filters)) {
         if (!applied) continue
-        const op = (applied.operator ?? 'equals') as FilterOperator
-        if (op === 'is_null' || op === 'is_not_null') {
-            parts.push(`${name}:${OPERATOR_TOKENS[op]}()`)
+        const rawOp = (applied.operator ?? 'equals') as FilterOperator
+        if (rawOp === 'is_null' || rawOp === 'is_not_null') {
+            parts.push(`${name}:${OPERATOR_TOKENS[rawOp]}()`)
             continue
         }
         if (isEmpty(applied.value)) continue
+        // Degrade single-bound between → GTE or LTE so the token and value stay consistent
+        const [op, value] = degradeBetween(rawOp, applied.value)
         const token = OPERATOR_TOKENS[op] ?? 'EQ'
-        const rangeStr = serialiseRangeValue(applied.value, op)
-        const serialised = rangeStr !== null ? rangeStr : serialiseValue(applied.value)
+        const rangeStr = serialiseRangeValue(value, op)
+        const serialised = rangeStr !== null ? rangeStr : serialiseValue(value)
         if (serialised === '') continue
         parts.push(`${name}:${token}(${serialised})`)
     }

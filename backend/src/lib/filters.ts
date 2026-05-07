@@ -13,7 +13,7 @@ export interface ParsedFilter {
     field: string
     operator: string
     rawValue: string
-    value: string | string[] | number | number[] | null
+    value: string | string[] | number | (number | string | null)[] | null
 }
 
 // Compiled once at module load — avoids recreating the regex on every segment parse.
@@ -49,8 +49,13 @@ function coerceValue(operator: string, raw: string): ParsedFilter['value'] {
     if (operator === 'IN' || operator === 'NOT_IN') return raw.split(',').map(v => v.trim())
     if (operator === 'BETWEEN') {
         const parts = raw.split(',').map(v => v.trim())
-        const nums = parts.map(Number)
-        return nums.every(n => !isNaN(n)) ? nums : parts
+        // Preserve empty strings as null so toSQL can degrade to GTE/LTE for single-bound ranges.
+        // Number('') === 0 which is indistinguishable from a real zero, so we must check emptiness first.
+        return parts.map(p => {
+            if (p === '') return null
+            const n = Number(p)
+            return isNaN(n) ? p : n
+        })
     }
     const trimmed = raw.trim()
     const num = Number(trimmed)
@@ -123,9 +128,13 @@ function toSQL(op: string, col: AnyColumn, value: ParsedFilter['value']): SQL | 
         case 'IN':          return inArray(col, value as string[])
         case 'NOT_IN':      return notInArray(col, value as string[])
         case 'BETWEEN': {
-            const arr = value as (string | number)[]
+            const arr = value as (string | number | null)[]
             if (!arr || arr.length < 2) return null
-            return drizzleBetween(col, arr[0] as never, arr[1] as never)
+            const [lo, hi] = arr
+            if (lo == null && hi == null) return null
+            if (lo == null) return lte(col, hi as never)
+            if (hi == null) return gte(col, lo as never)
+            return drizzleBetween(col, lo as never, hi as never)
         }
         case 'DATE_EQ':     return eq(col, value as never)
         case 'DATE_LT':     return lt(col, value as never)

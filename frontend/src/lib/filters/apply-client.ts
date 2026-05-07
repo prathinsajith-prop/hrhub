@@ -65,9 +65,16 @@ function matchOperator(rowValue: unknown, applied: AppliedFilter): boolean {
         case 'less_than':
         case 'gte':
         case 'lte': {
-            const numVal = (value !== null && typeof value === 'object' && !Array.isArray(value))
-                ? Number((value as { min?: unknown }).min ?? 0)
-                : Number(value ?? 0)
+            let numVal: number
+            if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+                const obj = value as { min?: unknown; max?: unknown }
+                // lte/less_than bound is the upper limit (max); gte/greater_than is the lower limit (min)
+                numVal = (operator === 'lte' || operator === 'less_than')
+                    ? Number(obj.max ?? obj.min ?? 0)
+                    : Number(obj.min ?? obj.max ?? 0)
+            } else {
+                numVal = Number(value ?? 0)
+            }
             const n = Number(rowValue ?? 0)
             if (operator === 'greater_than') return n > numVal
             if (operator === 'less_than') return n < numVal
