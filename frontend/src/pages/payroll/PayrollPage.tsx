@@ -268,7 +268,8 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
   const { data, isLoading } = usePayslips(run?.id ?? '')
   const [downloading, setDownloading] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
-  const payslips = (data ?? []) as Payslip[]
+  const rawData = data
+  const payslips = useMemo(() => (rawData ?? []) as Payslip[], [rawData])
 
   const chartData = useMemo(() => payslips.slice(0, 10).map(ps => ({
     name: (ps.employeeName ?? '').split(' ')[0],

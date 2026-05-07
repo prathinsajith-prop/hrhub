@@ -100,8 +100,9 @@ export const leaveAdjustments = pgTable('leave_adjustments', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (t) => ({
-    tenantIdx: index('idx_leave_adj_tenant').on(t.tenantId),
-    empIdx: index('idx_leave_adj_emp').on(t.employeeId),
+    tenantIdx:         index('idx_leave_adj_tenant').on(t.tenantId),
+    empIdx:            index('idx_leave_adj_emp').on(t.employeeId),
+    tenantEmployeeIdx: index('idx_leave_adj_tenant_employee').on(t.tenantId, t.employeeId),
 }))
 
 export const leaveAdjustmentsRelations = relations(leaveAdjustments, ({ one }) => ({
@@ -128,8 +129,10 @@ export const airTickets = pgTable('air_tickets', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (t) => ({
-    tenantIdx: index('idx_air_tickets_tenant').on(t.tenantId),
-    empIdx: index('idx_air_tickets_emp').on(t.employeeId),
+    tenantIdx:         index('idx_air_tickets_tenant').on(t.tenantId),
+    empIdx:            index('idx_air_tickets_emp').on(t.employeeId),
+    tenantEmployeeIdx: index('idx_air_tickets_tenant_employee').on(t.tenantId, t.employeeId),
+    tenantStatusIdx:   index('idx_air_tickets_tenant_status').on(t.tenantId, t.status),
 }))
 
 export const airTicketsRelations = relations(airTickets, ({ one }) => ({
@@ -152,8 +155,10 @@ export const leaveOffsets = pgTable('leave_offsets', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (t) => ({
-    tenantIdx: index('idx_leave_offsets_tenant').on(t.tenantId),
-    empIdx: index('idx_leave_offsets_emp').on(t.employeeId),
+    tenantIdx:         index('idx_leave_offsets_tenant').on(t.tenantId),
+    empIdx:            index('idx_leave_offsets_emp').on(t.employeeId),
+    tenantEmployeeIdx: index('idx_leave_offsets_tenant_employee').on(t.tenantId, t.employeeId),
+    tenantStatusIdx:   index('idx_leave_offsets_tenant_status').on(t.tenantId, t.status),
 }))
 
 export const leaveOffsetsRelations = relations(leaveOffsets, ({ one }) => ({

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
@@ -155,7 +155,11 @@ export function ExitPage() {
     // status is multi_select → goes through the filter string so IN() works correctly.
     const [offset, setOffset] = useState(0)
     const filterKey = (exitSearch.searchInput ?? '') + '||' + JSON.stringify(exitSearch.appliedFilters)
-    useEffect(() => { setOffset(0) }, [filterKey])
+    const [prevExitFilterKey, setPrevExitFilterKey] = useState(filterKey)
+    if (filterKey !== prevExitFilterKey) {
+        setPrevExitFilterKey(filterKey)
+        setOffset(0)
+    }
 
     const { data: exitsData, isLoading, isFetching, refetch } = useExitRequests({
         q: exitSearch.searchInput || undefined,

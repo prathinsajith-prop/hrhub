@@ -73,7 +73,7 @@ export async function createTeam(tenantId: string, input: CreateTeamInput) {
     let departmentName: string | null = null
     if (input.departmentId) {
         const [unit] = await db.select({ name: orgUnits.name }).from(orgUnits)
-            .where(eq(orgUnits.id, input.departmentId)).limit(1)
+            .where(and(eq(orgUnits.id, input.departmentId), eq(orgUnits.tenantId, tenantId))).limit(1)
         departmentName = unit?.name ?? null
     }
 

@@ -1,7 +1,7 @@
-import { eq, and, desc, isNull, sql, getTableColumns } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns, inArray } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
-import { resolveAvatarUrl } from '../../plugins/s3.js'
+import { resolveAvatarUrl, resolveAvatarUrls } from '../../plugins/s3.js'
 import { visaApplications, employees, visaStepHistory, visaCosts } from '../../db/schema/index.js'
 import { cacheDel } from '../../lib/redis.js'
 import { VISA_STEP_LABELS, visaStepLabel } from './visa.constants.js'
@@ -69,7 +69,8 @@ export async function listVisas(tenantId: string, params: { status?: string; urg
         ? encodeCursor(lastRow.createdAt, lastRow.id)
         : undefined
 
-    const resolvedRows = await Promise.all(pageRows.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
+    const avatarUrls = await resolveAvatarUrls(pageRows.map(r => r.employeeAvatarUrl))
+    const resolvedRows = pageRows.map((r, i) => ({ ...r, employeeAvatarUrl: avatarUrls[i] }))
     return {
         data: resolvedRows,
         total: cursor ? undefined : total,
@@ -442,25 +443,34 @@ export async function recalcVisaUrgency(tenantId: string): Promise<{ updated: nu
             isNull(visaApplications.deletedAt),
         ))
 
-    let updated = 0
+    // Group visas needing an update by their new (urgencyLevel, status) so we can
+    // do one UPDATE per unique combination instead of one UPDATE per visa.
+    type VisaStatus = typeof visaApplications.$inferSelect['status']
+    type VisaUrgency = typeof visaApplications.$inferSelect['urgencyLevel']
+    type GroupKey = string
+    const groups = new Map<GroupKey, { urgencyLevel: VisaUrgency; status?: VisaStatus; ids: string[] }>()
+    const now = new Date()
+
     for (const visa of active) {
-        // Don't touch cancelled / expired applications
         if (visa.status === 'cancelled' || visa.status === 'expired') continue
-
         const newUrgency = calcUrgencyLevel(visa.expiryDate)
-        const newStatus = newUrgency === 'critical' && visa.expiryDate
-            ? (new Date(visa.expiryDate) < new Date() ? 'expired' : 'expiring_soon')
+        const newStatus: VisaStatus | undefined = newUrgency === 'critical' && visa.expiryDate
+            ? (new Date(visa.expiryDate) < now ? 'expired' : 'expiring_soon')
             : undefined
+        if (newUrgency === visa.currentUrgency && !newStatus) continue
 
-        if (newUrgency !== visa.currentUrgency || newStatus) {
-            await db.update(visaApplications)
-                .set(withTimestamp({
-                    urgencyLevel: newUrgency,
-                    ...(newStatus ? { status: newStatus } : {}),
-                }))
-                .where(eq(visaApplications.id, visa.id))
-            updated++
-        }
+        const key: GroupKey = `${newUrgency}:${newStatus ?? ''}`
+        const g = groups.get(key) ?? { urgencyLevel: newUrgency, status: newStatus, ids: [] }
+        g.ids.push(visa.id)
+        groups.set(key, g)
+    }
+
+    let updated = 0
+    for (const { urgencyLevel, status, ids } of groups.values()) {
+        await db.update(visaApplications)
+            .set(withTimestamp({ urgencyLevel, ...(status ? { status } : {}) }))
+            .where(inArray(visaApplications.id, ids))
+        updated += ids.length
     }
 
     return { updated }

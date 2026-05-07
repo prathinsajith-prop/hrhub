@@ -396,7 +396,7 @@ function GradeLevelsSection() {
                                                 </Badge>
                                             </td>
                                             <td className="px-4 py-2.5">
-                                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <div className="flex items-center justify-end gap-1">
                                                     <Button
                                                         size="sm" variant="ghost"
                                                         className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
@@ -569,7 +569,7 @@ function MasterList({
                                                     <>
                                                         <Button
                                                             size="sm" variant="ghost"
-                                                            className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
+                                                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
                                                             title="Rename"
                                                             onClick={() => onStartEdit(item)}
                                                         >
@@ -577,7 +577,7 @@ function MasterList({
                                                         </Button>
                                                         <Button
                                                             size="sm" variant="ghost"
-                                                            className={cn('h-7 px-2.5 text-[11px] font-medium rounded-full opacity-0 group-hover:opacity-100 transition-opacity',
+                                                            className={cn('h-7 px-2.5 text-[11px] font-medium rounded-full',
                                                                 item.isActive
                                                                     ? 'text-amber-600 hover:bg-amber-50 hover:text-amber-700'
                                                                     : 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700'

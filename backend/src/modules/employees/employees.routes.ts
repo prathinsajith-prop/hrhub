@@ -10,12 +10,12 @@ import { db } from '../../db/index.js'
 import { entities, employees, tenants, users } from '../../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
 import { inviteUser, resendInvite } from '../settings/settings.service.js'
-import { extname } from 'node:path'
 import { fileTypeFromBuffer } from 'file-type'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
+    const hrOnly = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
 
     // GET /api/v1/employees
     fastify.get('/', { ...auth, schema: { tags: ['Employees'] } }, async (request, reply) => {
@@ -128,8 +128,8 @@ export default async function (fastify: any): Promise<void> {
         return reply.send(await getOrgChart(request.user.tenantId, rootEmployeeId))
     })
 
-    // GET /api/v1/employees/expiring-visas
-    fastify.get('/expiring-visas', { ...auth, schema: { tags: ['Employees'] } }, async (request, reply) => {
+    // GET /api/v1/employees/expiring-visas — HR/PRO only; contains visa numbers and expiry dates
+    fastify.get('/expiring-visas', { ...hrOnly, schema: { tags: ['Employees'] } }, async (request, reply) => {
         const { days = '90' } = request.query as { days?: string }
         const data = await getExpiringVisas(request.user.tenantId, Number(days))
         return reply.send({ data })
@@ -402,9 +402,9 @@ export default async function (fastify: any): Promise<void> {
                 await db.transaction(async (tx) => {
                     for (let i = 0; i < rows.length; i++) {
                         try {
-                            const row = rows[i]
+                            const row = validate(createEmployeeSchema, rows[i])
                             const employeeNo = row.employeeNo || await generateNextEmployeeNo(request.user.tenantId, tx)
-                            await tx.insert(employees).values({ ...row, employeeNo, tenantId: request.user.tenantId } as never)
+                            await tx.insert(employees).values({ ...row, employeeNo, tenantId: request.user.tenantId })
                             created++
                         } catch (e: any) {
                             results.push({ row: i + 1, error: e.message ?? 'Unknown error' })

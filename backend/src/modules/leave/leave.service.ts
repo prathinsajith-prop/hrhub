@@ -1,6 +1,7 @@
 import { eq, and, desc, isNull, gte, lte, inArray, sql, getTableColumns, aliasedTable } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
+import { leaveBalancesCache } from '../../lib/cache.js'
 import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { leaveRequests, leavePolicies, leaveBalances, publicHolidays, attendanceRecords, leaveAdjustments, airTickets, leaveOffsets } from '../../db/schema/index.js'
@@ -192,14 +193,17 @@ export async function approveLeave(tenantId: string, id: string, approvedBy: str
     // Keep leave_balances.taken in sync when approving so year-end rollover has accurate snapshots.
     if (approved && row.days) {
         const year = new Date(row.startDate).getFullYear()
-        await db.update(leaveBalances)
-            .set({ taken: sql`taken + ${row.days}`, updatedAt: new Date() })
-            .where(and(
-                eq(leaveBalances.tenantId, tenantId),
-                eq(leaveBalances.employeeId, row.employeeId),
-                eq(leaveBalances.leaveType, row.leaveType),
-                eq(leaveBalances.year, year),
-            ))
+        await Promise.all([
+            db.update(leaveBalances)
+                .set({ taken: sql`taken + ${row.days}`, updatedAt: new Date() })
+                .where(and(
+                    eq(leaveBalances.tenantId, tenantId),
+                    eq(leaveBalances.employeeId, row.employeeId),
+                    eq(leaveBalances.leaveType, row.leaveType),
+                    eq(leaveBalances.year, year),
+                )),
+            leaveBalancesCache.invalidate(tenantId, row.employeeId, String(year)),
+        ])
 
         // Auto-mark attendance records as on_leave for each day in the approved period.
         // Fire-and-forget — does not block the approval response.
@@ -285,14 +289,17 @@ export async function cancelLeave(tenantId: string, id: string, requesterEmail: 
     // If the leave was already approved, restore the taken count in the balance snapshot
     if (req.status === 'approved' && req.days) {
         const year = new Date(req.startDate).getFullYear()
-        await db.update(leaveBalances)
-            .set({ taken: sql`GREATEST(taken - ${req.days}, 0)`, updatedAt: new Date() })
-            .where(and(
-                eq(leaveBalances.tenantId, tenantId),
-                eq(leaveBalances.employeeId, req.employeeId),
-                eq(leaveBalances.leaveType, req.leaveType),
-                eq(leaveBalances.year, year),
-            ))
+        await Promise.all([
+            db.update(leaveBalances)
+                .set({ taken: sql`GREATEST(taken - ${req.days}, 0)`, updatedAt: new Date() })
+                .where(and(
+                    eq(leaveBalances.tenantId, tenantId),
+                    eq(leaveBalances.employeeId, req.employeeId),
+                    eq(leaveBalances.leaveType, req.leaveType),
+                    eq(leaveBalances.year, year),
+                )),
+            leaveBalancesCache.invalidate(tenantId, req.employeeId, String(year)),
+        ])
     }
 
     return row
@@ -381,6 +388,9 @@ function computeAccrued(policy: LeavePolicy, monthsOfService: number, year: numb
 }
 
 export async function getLeaveBalance(tenantId: string, employeeId: string, year: number) {
+    const cached = await leaveBalancesCache.get(tenantId, employeeId, String(year))
+    if (cached) return cached as Awaited<ReturnType<typeof getLeaveBalance>>
+
     const [emp] = await db.select({ joinDate: employees.joinDate }).from(employees)
         .where(and(eq(employees.id, employeeId), eq(employees.tenantId, tenantId)))
     if (!emp) return null
@@ -465,7 +475,9 @@ export async function getLeaveBalance(tenantId: string, employeeId: string, year
         }
     }
 
-    return { employeeId, year, monthsOfService, balance }
+    const result = { employeeId, year, monthsOfService, balance }
+    leaveBalancesCache.set([tenantId, employeeId, String(year)], result).catch(() => {})
+    return result
 }
 
 // ─── Year-end rollover ─────────────────────────────────────────────────────
@@ -618,6 +630,7 @@ export async function adjustLeaveBalance(tenantId: string, employeeId: string, l
         reason: reason ?? null,
         createdBy: createdBy ?? null,
     })
+    leaveBalancesCache.invalidate(tenantId, employeeId, String(year)).catch(() => {})
     return getLeaveBalance(tenantId, employeeId, year)
 }
 

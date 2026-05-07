@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, jsonb } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
 import { tenants } from './tenants.js'
 import { users } from './users.js'
 
@@ -17,4 +17,7 @@ export const subscriptionEvents = pgTable('subscription_events', {
     contactEmail: text('contact_email'),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (t) => ({
+    tenantIdx:     index('idx_subscription_events_tenant').on(t.tenantId),
+    tenantTimeIdx: index('idx_subscription_events_tenant_time').on(t.tenantId, t.createdAt),
+}))

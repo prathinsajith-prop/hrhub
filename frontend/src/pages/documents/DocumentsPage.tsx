@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 
 const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
@@ -225,7 +225,11 @@ export function DocumentsPage() {
 
   const [offset, setOffset] = useState(0)
   const filterKey = (search.searchInput ?? '') + '||' + JSON.stringify(search.appliedFilters)
-  useEffect(() => { setOffset(0) }, [filterKey])
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
+  if (filterKey !== prevFilterKey) {
+      setPrevFilterKey(filterKey)
+      setOffset(0)
+  }
 
   const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: PAGE_SIZE, offset, q: search.searchInput || undefined, filters: search.appliedFilters })
   const documents = useMemo<Document[]>(() => (docsData?.data as Document[]) ?? [], [docsData?.data])
@@ -237,11 +241,11 @@ export function DocumentsPage() {
   // Server-side filtering via useDocuments({ q, filters }) handles all filter logic.
   const filteredDocuments = documents
 
-  const handleView = (d: Document) => {
+  const handleView = useCallback((d: Document) => {
     setViewTarget(d)
-  }
+  }, [])
 
-  const handleDownload = async (d: Document) => {
+  const handleDownload = useCallback(async (d: Document) => {
     try {
       const res = await api.get<{ data: { downloadUrl: string } }>(`/documents/${d.id}/download-url`)
       const a = document.createElement('a')
@@ -255,11 +259,11 @@ export function DocumentsPage() {
     } catch {
       toast.error('Download failed', 'Could not download this document.')
     }
-  }
+  }, [])
 
-  const handleVerify = (d: Document) => {
+  const handleVerify = useCallback((d: Document) => {
     setVerifyTarget(d)
-  }
+  }, [])
 
   const handleDelete = () => {
     if (!deleteTarget) return
@@ -275,13 +279,10 @@ export function DocumentsPage() {
     })
   }
 
-  // Build the table column definitions once per page mount. The handlers below
-  // capture stable setState/mutation references, so we use an empty dep array
-  // and silence the lint rule explicitly.
+  // Build the table column definitions. The handlers below capture stable references.
   const cols = useMemo(
     () => columns(handleView, (d) => setDeleteTarget(d), handleVerify, (d) => setEditTarget(d), handleDownload, canManage),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canManage],
+    [canManage, handleView, handleVerify, handleDownload],
   )
 
   return (

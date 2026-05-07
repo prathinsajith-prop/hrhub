@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, integer, timestamp, date } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, timestamp, date, index } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
 import { users } from './users.js'
@@ -27,4 +28,9 @@ export const performanceReviews = pgTable('performance_reviews', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
-})
+}, (t) => ({
+    tenantIdx:         index('idx_perf_reviews_tenant').on(t.tenantId),
+    tenantStatusIdx:   index('idx_perf_reviews_tenant_status').on(t.tenantId, t.status),
+    tenantEmployeeIdx: index('idx_perf_reviews_tenant_employee').on(t.tenantId, t.employeeId),
+    activeIdx:         index('idx_perf_reviews_tenant_active').on(t.tenantId, t.employeeId).where(sql`deleted_at IS NULL`),
+}))

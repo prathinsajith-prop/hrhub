@@ -47,11 +47,12 @@ import { EmployeeLeavePanel } from '@/components/shared/EmployeeLeavePanel'
 import { EmployeeLoansPanel } from '@/components/shared/EmployeeLoansPanel'
 import { useEmployeeAssets } from '@/hooks/useAssets'
 import { useAttendance } from '@/hooks/useAttendance'
-import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
+import { useEmployeeTransfers, useCreateTransfer, type EmployeeTransfer } from '@/hooks/useTransfers'
 import { useDependents, useCreateDependent, useUpdateDependent, useDeleteDependent, useEmployeeNotes, useAddEmployeeNote, useDeleteEmployeeNote, type Dependent } from '@/hooks/useEmployeeDependents'
 import { useActivityLogs, type ActivityLog } from '@/hooks/useAudit'
 import { useEmployeeWarnings, useCreateEmployeeWarning, useDeleteEmployeeWarning, useWarningDocumentUrl, type CreateWarningInput } from '@/hooks/useEmployeeWarnings'
 import { useSponsoringEntities, useCreateSponsoringEntity, type SponsoringEntity } from '@/hooks/useSponsoringEntities'
+import { useEmployeeTraining, TRAINING_STATUS_STYLE, type TrainingRecord } from '@/hooks/useTraining'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { EditEmployeeDialog, EditEmploymentDialog, EditPayrollDialog, AssignAssetToEmployeeDialog } from '@/components/shared/action-dialogs'
 import { InviteEmployeeDialog } from '@/components/shared/InviteEmployeeDialog'
@@ -653,6 +654,8 @@ const DOC_STATUS_BORDER: Record<string, string> = {
 export function EmployeeDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
+  // Capture current time once per render to avoid calling Date.now() in render expressions.
+  const nowMs = Date.now()
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_employees')
@@ -695,6 +698,9 @@ export function EmployeeDetailPage() {
 
   // Transfer history
   const { data: transfersData, isLoading: transfersLoading } = useEmployeeTransfers(id)
+
+  // Training history
+  const { data: trainingData, isLoading: trainingLoading } = useEmployeeTraining(canManage ? id : undefined)
 
   // Dependents
   const { data: dependentsData, isLoading: dependentsLoading } = useDependents(canManage ? (id ?? '') : '')
@@ -829,7 +835,7 @@ export function EmployeeDetailPage() {
     })
   }
 
-  const visaDays = e?.visaExpiry ? Math.ceil((new Date(e.visaExpiry).getTime() - Date.now()) / 86400000) : null
+  const visaDays = e?.visaExpiry ? Math.ceil((new Date(e.visaExpiry).getTime() - nowMs) / 86400000) : null
   const visaLabel = visaDays === null ? 'N/A' : visaDays < 0 ? 'Expired' : `${visaDays}d left`
   const visaClass = visaDays === null ? '' : visaDays < 0 ? 'text-destructive' : visaDays < 90 ? 'text-warning' : 'text-success'
 
@@ -1052,6 +1058,8 @@ export function EmployeeDetailPage() {
           { value: 'leave', icon: CalendarDays, label: 'Leave' },
           ...(canManage ? [{ value: 'loans', icon: DollarSign, label: 'Loans' }] : []),
           { value: 'attendance', icon: ClipboardList, label: 'Attendance' },
+          ...(canManage ? [{ value: 'training', icon: GraduationCap, label: 'Training' }] : []),
+          ...(canManage ? [{ value: 'transfers', icon: ArrowRightLeft, label: 'Transfers' }] : []),
           ...(canManage ? [{ value: 'warnings', icon: AlertTriangle, label: 'Warnings' }] : []),
           ...(canManage ? [{ value: 'dependents', icon: Heart, label: 'Dependents' }] : []),
           ...(canManage ? [{ value: 'notes', icon: StickyNote, label: 'Notes' }] : []),
@@ -2181,6 +2189,102 @@ export function EmployeeDetailPage() {
             </Card>
           </TabsContent>
 
+          {/* ── Training ──────────────────────────────────────────────────── */}
+          {canManage && (
+            <TabsContent value="training" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle className="text-base">Training & Development</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {trainingLoading ? (
+                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
+                  ) : !trainingData?.data?.length ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <GraduationCap className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No training records</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-muted/40">
+                            {['Title', 'Type', 'Provider', 'Start Date', 'End Date', 'Cost (AED)', 'Status'].map(h => (
+                              <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(trainingData.data as TrainingRecord[]).map(tr => (
+                            <tr key={tr.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                              <td className="px-4 py-2.5 font-medium">{tr.title}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground capitalize">{tr.type?.replace('_', ' ') ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{tr.provider ?? '—'}</td>
+                              <td className="px-4 py-2.5 whitespace-nowrap">{formatDate(tr.startDate)}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{tr.endDate ? formatDate(tr.endDate) : '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{tr.cost ? formatCurrency(Number(tr.cost)) : '—'}</td>
+                              <td className="px-4 py-2.5">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${TRAINING_STATUS_STYLE[tr.status] ?? ''}`}>
+                                  {tr.status.replace('_', ' ')}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {/* ── Transfers ─────────────────────────────────────────────────── */}
+          {canManage && (
+            <TabsContent value="transfers" className="mt-4">
+              <Card>
+                <CardHeader><CardTitle className="text-base">Transfer History</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                  {transfersLoading ? (
+                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
+                  ) : !transfersData?.length ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <ArrowRightLeft className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No transfers recorded</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-muted/40">
+                            {['Date', 'From Designation', 'To Designation', 'From Department', 'To Department', 'New Salary', 'Reason'].map(h => (
+                              <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(transfersData as EmployeeTransfer[]).map(t => (
+                            <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                              <td className="px-4 py-2.5 whitespace-nowrap">{formatDate(t.transferDate)}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{t.fromDesignation ?? '—'}</td>
+                              <td className="px-4 py-2.5 font-medium">{t.toDesignation ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{t.fromDepartment ?? '—'}</td>
+                              <td className="px-4 py-2.5">{t.toDepartment ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{t.newSalary ? formatCurrency(Number(t.newSalary)) : '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{t.reason ?? '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
           {/* ── Warnings ──────────────────────────────────────────────────── */}
           {canManage && (
             <TabsContent value="warnings" className="mt-4">
@@ -2659,8 +2763,10 @@ function DependentFormDialog({
   const blank: DependentFormData = { name: '', birthDate: null, relation: 'spouse', nationality: null, visaNumber: null, medicalInsurance: null }
   const [form, setForm] = React.useState<DependentFormData>(blank)
 
-  React.useEffect(() => {
-    if (open) setForm(dependent ? {
+  const [prevDepOpen, setPrevDepOpen] = React.useState(false)
+  if (open && !prevDepOpen) {
+    setPrevDepOpen(true)
+    setForm(dependent ? {
       name: dependent.name,
       birthDate: dependent.birthDate,
       relation: dependent.relation,
@@ -2668,8 +2774,9 @@ function DependentFormDialog({
       visaNumber: dependent.visaNumber,
       medicalInsurance: dependent.medicalInsurance,
     } : blank)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  } else if (!open && prevDepOpen) {
+    setPrevDepOpen(false)
+  }
 
   const set = (k: keyof DependentFormData, v: string | null) => setForm(f => ({ ...f, [k]: v || null }))
 
@@ -2742,9 +2849,15 @@ function AddWarningDialog({
   const fileRef = React.useRef<HTMLInputElement>(null)
   const autoExpiryRef = React.useRef<string>('')
 
-  React.useEffect(() => {
-    if (!open) { setIssueDate(''); setExpiryDate(''); setReason(''); setFile(null); setDragging(false); autoExpiryRef.current = '' }
-  }, [open])
+  const [prevWarnOpen, setPrevWarnOpen] = React.useState(true)
+  if (!open && prevWarnOpen) {
+    setPrevWarnOpen(false)
+    setIssueDate(''); setExpiryDate(''); setReason(''); setFile(null); setDragging(false)
+  } else if (open && !prevWarnOpen) {
+    setPrevWarnOpen(true)
+  }
+  // Reset the ref in a cleanup effect — ref mutation during render is not allowed.
+  React.useEffect(() => { if (!open) autoExpiryRef.current = '' }, [open])
 
   function handleIssueDateChange(e: React.ChangeEvent<HTMLInputElement>) {
     const date = e.target.value

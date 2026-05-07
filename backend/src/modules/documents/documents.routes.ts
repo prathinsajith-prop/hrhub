@@ -8,7 +8,7 @@ import { logDocumentAction, getDocumentAuditLog } from '../onboarding/onboarding
 import { sendEmail, documentVerifiedEmail, documentRejectedEmail } from '../../plugins/email.js'
 import { db } from '../../db/index.js'
 import { employees, tenants } from '../../db/schema/index.js'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -88,13 +88,20 @@ export default async function (fastify: any): Promise<void> {
     fastify.patch('/:id', { ...auth, schema: { tags: ['Documents'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
         const b = request.body as Record<string, unknown>
+        const isElevated = ['hr_manager', 'pro_officer', 'super_admin'].includes(request.user.role)
+
+        // Only HR roles may transition document status — employees cannot self-approve
+        if (b.status !== undefined && !isElevated) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Insufficient permissions to change document status.' })
+        }
+
         const updated = await updateDocument(request.user.tenantId, id, {
             ...(b.category !== undefined && { category: b.category as never }),
             ...(b.docType !== undefined && { docType: b.docType as string }),
             ...(b.fileName !== undefined && { fileName: b.fileName as string }),
             ...(b.expiryDate !== undefined && { expiryDate: b.expiryDate ? (b.expiryDate as string) : null }),
             ...(b.notes !== undefined && { notes: b.notes as string }),
-            ...(b.status !== undefined && { status: b.status as never }),
+            ...(isElevated && b.status !== undefined && { status: b.status as never }),
         })
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Document not found' })
         recordActivity({
@@ -144,7 +151,7 @@ export default async function (fastify: any): Promise<void> {
         if (updated.employeeId) {
             try {
                 const [emp] = await db.select({ email: employees.email, firstName: employees.firstName, lastName: employees.lastName })
-                    .from(employees).where(eq(employees.id, updated.employeeId)).limit(1)
+                    .from(employees).where(and(eq(employees.id, updated.employeeId), eq(employees.tenantId, request.user.tenantId))).limit(1)
                 const [tn] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
                 if (emp?.email) {
                     const opts = documentVerifiedEmail({
@@ -201,7 +208,7 @@ export default async function (fastify: any): Promise<void> {
         if (updated.employeeId) {
             try {
                 const [emp] = await db.select({ email: employees.email, firstName: employees.firstName, lastName: employees.lastName })
-                    .from(employees).where(eq(employees.id, updated.employeeId)).limit(1)
+                    .from(employees).where(and(eq(employees.id, updated.employeeId), eq(employees.tenantId, request.user.tenantId))).limit(1)
                 const [tn] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
                 if (emp?.email) {
                     const opts = documentRejectedEmail({
@@ -314,6 +321,16 @@ export default async function (fastify: any): Promise<void> {
 
         const { employeeId, category, expiryDate, issueDate, notes, docType } = fields
         if (!category) return reply.code(400).send({ message: 'category is required' })
+
+        // Verify the supplied employeeId belongs to this tenant
+        if (employeeId) {
+            const [emp] = await db
+                .select({ id: employees.id })
+                .from(employees)
+                .where(and(eq(employees.id, employeeId), eq(employees.tenantId, request.user.tenantId)))
+                .limit(1)
+            if (!emp) return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Employee does not belong to your organization.' })
+        }
 
         const folder = employeeId ? `employees/${employeeId}/documents` : 'documents'
         const s3Key = buildS3Key(request.user.tenantId, folder, pendingFile.originalName)
@@ -432,6 +449,16 @@ export default async function (fastify: any): Promise<void> {
         if (!ALLOWED_UPLOAD_TYPES.has(contentType)) {
             return reply.code(415).send({ statusCode: 415, error: 'Unsupported Media Type', message: `File type '${contentType}' is not permitted.` })
         }
+        // Verify the supplied employeeId belongs to this tenant
+        if (employeeId) {
+            const [emp] = await db
+                .select({ id: employees.id })
+                .from(employees)
+                .where(and(eq(employees.id, employeeId), eq(employees.tenantId, request.user.tenantId)))
+                .limit(1)
+            if (!emp) return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Employee does not belong to your organization.' })
+        }
+
         const folder = employeeId ? `employees/${employeeId}/documents` : 'documents'
         const s3Key = buildS3Key(request.user.tenantId, folder, fileName)
         if (!s3Key.startsWith(`tenants/${request.user.tenantId}/`)) {

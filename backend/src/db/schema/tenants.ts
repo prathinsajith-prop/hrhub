@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, timestamp, jsonb, integer } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, boolean, timestamp, jsonb, integer, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { users } from './users.js'
 import { employees } from './employees.js'
@@ -45,7 +45,9 @@ export const entities = pgTable('entities', {
     freeZoneId: text('free_zone_id'),
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (t) => ({
+    tenantIdx: index('idx_entities_tenant').on(t.tenantId),
+}))
 
 export const tenantsRelations = relations(tenants, ({ many }) => ({
     entities: many(entities),

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
@@ -107,8 +107,12 @@ export function MyProfileContent() {
         homeCountryAddress: '',
     })
 
-    useEffect(() => {
-        if (employee) setForm({
+    // Sync form when employee data first loads — track previous id to avoid re-
+    // setting in-progress edits on every re-render.
+    const [prevEmpId, setPrevEmpId] = useState<string | undefined>(undefined)
+    if (employee && employee.id !== prevEmpId) {
+        setPrevEmpId(employee.id)
+        setForm({
             phone: employee.phone ?? '',
             mobileNo: employee.mobileNo ?? '',
             personalEmail: employee.personalEmail ?? '',
@@ -116,7 +120,7 @@ export function MyProfileContent() {
             emergencyContactPhone: employee.emergencyContactPhone ?? '',
             homeCountryAddress: employee.homeCountryAddress ?? '',
         })
-    }, [employee])
+    }
 
     const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
         setForm(f => ({ ...f, [k]: e.target.value }))

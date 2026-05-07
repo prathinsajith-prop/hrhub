@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, date, numeric, timestamp, boolean } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, date, numeric, timestamp, boolean, index } from 'drizzle-orm/pg-core'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
 
@@ -25,4 +25,8 @@ export const exitRequests = pgTable('exit_requests', {
     notes: text('notes'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
-})
+}, (t) => ({
+    tenantIdx:         index('idx_exit_requests_tenant').on(t.tenantId),
+    tenantStatusIdx:   index('idx_exit_requests_tenant_status').on(t.tenantId, t.status),
+    tenantEmployeeIdx: index('idx_exit_requests_tenant_employee').on(t.tenantId, t.employeeId),
+}))

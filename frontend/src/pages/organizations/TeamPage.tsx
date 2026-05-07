@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { z } from 'zod'
 import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X, Building2, Calendar, UserMinus } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
@@ -83,14 +83,18 @@ function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDep
     const isPending = createMut.isPending || updateMut.isPending
 
     // Sync form state whenever the dialog opens (handles both create and edit transitions)
-    useEffect(() => {
-        if (open) {
-            setName(editTeam?.name ?? '')
-            setDescription(editTeam?.description ?? '')
-            setDepartmentId(editTeam?.departmentId ?? lockedDepartmentId ?? '')
-            setErrors({})
-        }
-    }, [open, editTeam, lockedDepartmentId])
+    const [prevTeamFormOpen, setPrevTeamFormOpen] = useState(false)
+    const [prevEditTeamId, setPrevEditTeamId] = useState<string | undefined>(undefined)
+    if ((open && !prevTeamFormOpen) || (open && editTeam?.id !== prevEditTeamId)) {
+        setPrevTeamFormOpen(true)
+        setPrevEditTeamId(editTeam?.id)
+        setName(editTeam?.name ?? '')
+        setDescription(editTeam?.description ?? '')
+        setDepartmentId(editTeam?.departmentId ?? lockedDepartmentId ?? '')
+        setErrors({})
+    } else if (!open && prevTeamFormOpen) {
+        setPrevTeamFormOpen(false)
+    }
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault()

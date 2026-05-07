@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import FullCalendar from '@fullcalendar/react'
@@ -68,7 +68,11 @@ export function CalendarPage() {
     // Show skeleton overlay only until the first successful data fetch.
     // Never conditionally unmount FullCalendar — that resets initialView.
     const [calReady, setCalReady] = useState(false)
-    useEffect(() => { if (calendarData && !calReady) setCalReady(true) }, [calendarData, calReady])
+    // Flip calReady to true once the first data arrives — use setState during render
+    // (React 18+ supported pattern, avoids setState-in-effect).
+    if (calendarData && !calReady) {
+        setCalReady(true)
+    }
 
     // ─── Build calendar events ─────────────────────────────────────────────────
 

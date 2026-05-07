@@ -127,7 +127,7 @@ export async function getActivityLogs(tenantId: string, params: {
         .match(activityLogs.ipAddress, ipAddress)
         .like(activityLogs.actorName, actorName)
         .like(activityLogs.entityName, entityName)
-        .dateRange(activityLogs.createdAt, from ? new Date(from) : null, to ? new Date(to) : null)
+        .dateRange(activityLogs.createdAt, from || null, to || null)
 
     return db.select().from(activityLogs)
         .where(conds.where())

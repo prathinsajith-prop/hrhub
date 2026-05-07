@@ -21,7 +21,6 @@ export class ErrorBoundary extends Component<Props, State> {
         // Always surface to the console — in production this feeds into any
         // browser-side monitoring (DataDog RUM, Sentry, etc.) that reads
         // console.error. In dev it gives the full component stack inline.
-        // eslint-disable-next-line no-console
         console.error('[ErrorBoundary]', error.message, {
             stack: error.stack,
             componentStack: info.componentStack,

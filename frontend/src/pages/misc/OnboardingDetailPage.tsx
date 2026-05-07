@@ -947,11 +947,13 @@ function StepDocPanel({
 
 function DocumentsTab({ checklist }: { checklist: OnboardingChecklist }) {
     const { data, isLoading } = useDocuments({ employeeId: checklist.employeeId, limit: 100 })
-    const allDocs = (data?.data ?? []) as Array<{ id: string; docType: string; fileName?: string; category?: string; status?: string; expiryDate?: string | null; stepId?: string | null }>
+    type DocEntry = { id: string; docType: string; fileName?: string; category?: string; status?: string; expiryDate?: string | null; stepId?: string | null }
+    const rawDocs = data?.data
+    const allDocs = useMemo(() => (rawDocs ?? []) as DocEntry[], [rawDocs])
 
     // Group docs by stepId
     const docsByStep = useMemo(() => {
-        const map = new Map<string, typeof allDocs>()
+        const map = new Map<string, DocEntry[]>()
         for (const d of allDocs) {
             const key = d.stepId ?? '__none'
             const arr = map.get(key) ?? []

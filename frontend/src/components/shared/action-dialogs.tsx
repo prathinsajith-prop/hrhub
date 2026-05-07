@@ -130,12 +130,16 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const [description, setDescription] = useState('')
     const createJob = useCreateJob()
 
-    useEffect(() => {
-        if (!open) {
-            setTitle(''); setDepartment(''); setLocation(''); setType('full_time')
-            setOpenings(1); setMinSalary(0); setMaxSalary(0); setDescription('')
-        }
-    }, [open])
+    // Reset form when dialog closes. Track previous `open` value in state so we can
+    // call setState during render without useEffect (React 18+ supported pattern).
+    const [prevOpen, setPrevOpen] = useState(true)
+    if (!open && prevOpen) {
+        setPrevOpen(false)
+        setTitle(''); setDepartment(''); setLocation(''); setType('full_time')
+        setOpenings(1); setMinSalary(0); setMaxSalary(0); setDescription('')
+    } else if (open && !prevOpen) {
+        setPrevOpen(true)
+    }
 
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
@@ -223,12 +227,14 @@ export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean
     const today = new Date().toISOString().split('T')[0]
     const createVisa = useCreateVisa()
 
-    useEffect(() => {
-        if (!open) {
-            setEmployeeId(''); setVisaType('employment_new'); setUrgencyLevel('normal')
-            setStartDate(new Date().toISOString().split('T')[0])
-        }
-    }, [open])
+    const [prevVisaOpen, setPrevVisaOpen] = useState(true)
+    if (!open && prevVisaOpen) {
+        setPrevVisaOpen(false)
+        setEmployeeId(''); setVisaType('employment_new'); setUrgencyLevel('normal')
+        setStartDate(new Date().toISOString().split('T')[0])
+    } else if (open && !prevVisaOpen) {
+        setPrevVisaOpen(true)
+    }
 
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(visaApplicationSchema, { employeeId })
@@ -304,11 +310,13 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
     const today = new Date().toISOString().split('T')[0]
     const createLeave = useCreateLeave()
 
-    useEffect(() => {
-        if (!open) {
-            setEmployeeId(''); setLeaveType('annual'); setStartDate(''); setEndDate(''); setReason('')
-        }
-    }, [open])
+    const [prevLeaveOpen, setPrevLeaveOpen] = useState(true)
+    if (!open && prevLeaveOpen) {
+        setPrevLeaveOpen(false)
+        setEmployeeId(''); setLeaveType('annual'); setStartDate(''); setEndDate(''); setReason('')
+    } else if (open && !prevLeaveOpen) {
+        setPrevLeaveOpen(true)
+    }
 
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(leaveRequestSchema, { employeeId, startDate, endDate })
@@ -1576,15 +1584,17 @@ export function EditJobDialog({
     const [status, setStatus] = useState(job.status ?? 'open')
     const updateJob = useUpdateJob()
 
-    useEffect(() => {
-        if (open) {
-            setTitle(job.title ?? ''); setDepartment(job.department ?? ''); setLocation(job.location ?? '')
-            setType(job.type ?? 'full_time'); setOpenings(job.openings ?? 1)
-            setMinSalary(Number(job.minSalary ?? 0)); setMaxSalary(Number(job.maxSalary ?? 0))
-            setDescription(job.description ?? ''); setStatus(job.status ?? 'open')
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open])
+    // Sync form from job prop when dialog opens.
+    const [prevEditJobOpen, setPrevEditJobOpen] = useState(false)
+    if (open && !prevEditJobOpen) {
+        setPrevEditJobOpen(true)
+        setTitle(job.title ?? ''); setDepartment(job.department ?? ''); setLocation(job.location ?? '')
+        setType(job.type ?? 'full_time'); setOpenings(job.openings ?? 1)
+        setMinSalary(Number(job.minSalary ?? 0)); setMaxSalary(Number(job.maxSalary ?? 0))
+        setDescription(job.description ?? ''); setStatus(job.status ?? 'open')
+    } else if (!open && prevEditJobOpen) {
+        setPrevEditJobOpen(false)
+    }
 
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
@@ -1689,13 +1699,14 @@ export function EditDocumentDialog({
     const [expiryDate, setExpiryDate] = useState(doc.expiryDate ? String(doc.expiryDate).slice(0, 10) : '')
     const updateDoc = useUpdateDocument(doc.id)
 
-    useEffect(() => {
-        if (open) {
-            setFileName(doc.fileName ?? ''); setCategory(doc.category ?? '')
-            setDocType(doc.docType ?? ''); setExpiryDate(doc.expiryDate ? String(doc.expiryDate).slice(0, 10) : '')
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open])
+    const [prevEditDocOpen, setPrevEditDocOpen] = useState(false)
+    if (open && !prevEditDocOpen) {
+        setPrevEditDocOpen(true)
+        setFileName(doc.fileName ?? ''); setCategory(doc.category ?? '')
+        setDocType(doc.docType ?? ''); setExpiryDate(doc.expiryDate ? String(doc.expiryDate).slice(0, 10) : '')
+    } else if (!open && prevEditDocOpen) {
+        setPrevEditDocOpen(false)
+    }
 
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(documentMetaSchema, { category, type: docType })
@@ -1772,7 +1783,7 @@ export function AssignAssetToEmployeeDialog({
     onOpenChange: (open: boolean) => void
 }) {
     const { data: assetsResult, isLoading: assetsLoading } = useAssets({ status: 'available', limit: 100 })
-    const availableAssets: Asset[] = assetsResult?.data ?? []
+    const availableAssets: Asset[] = useMemo(() => (assetsResult?.data ?? []) as Asset[], [assetsResult?.data])
     const assignAsset = useAssignAsset()
 
     const [assetId, setAssetId] = useState('')
@@ -1781,15 +1792,17 @@ export function AssignAssetToEmployeeDialog({
     const [notes, setNotes] = useState('')
     const [assetError, setAssetError] = useState('')
 
-    useEffect(() => {
-        if (!open) {
-            setAssetId('')
-            setAssignedDate(new Date().toISOString().slice(0, 10))
-            setExpectedReturnDate('')
-            setNotes('')
-            setAssetError('')
-        }
-    }, [open])
+    const [prevAssignOpen, setPrevAssignOpen] = useState(true)
+    if (!open && prevAssignOpen) {
+        setPrevAssignOpen(false)
+        setAssetId('')
+        setAssignedDate(new Date().toISOString().slice(0, 10))
+        setExpectedReturnDate('')
+        setNotes('')
+        setAssetError('')
+    } else if (open && !prevAssignOpen) {
+        setPrevAssignOpen(true)
+    }
 
     const assetOptions: ComboboxOption[] = useMemo(() =>
         availableAssets.map(a => ({

@@ -8,7 +8,7 @@
  * Only fields explicitly allow-listed by the caller are translated into SQL.
  * Anything else is silently dropped to prevent injection / mass assignment.
  */
-import { sql, and, or, eq, ne, gt, lt, gte, lte, like, ilike, isNull, isNotNull, inArray, notInArray, between, type SQL, type AnyColumn } from 'drizzle-orm'
+import { sql, and, or, eq, ne, gt, lt, gte, lte, ilike, isNull, isNotNull, inArray, notInArray, between, type SQL, type AnyColumn } from 'drizzle-orm'
 
 // Frontend → backend operator tokens (mirrors frontend/lib/filters/query-builder.ts).
 const TOKEN_BY_NAME: Record<string, string> = {

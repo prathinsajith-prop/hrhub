@@ -137,3 +137,12 @@ export function useRecordLoanPayment() {
         onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans', tenantId] }) },
     })
 }
+
+export function useDeleteLoan() {
+    const qc = useQueryClient()
+    const tenantId = useAuthStore(s => s.tenant?.id)
+    return useMutation({
+        mutationFn: (id: string) => api.delete(`/loans/${id}`),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans', tenantId] }) },
+    })
+}
