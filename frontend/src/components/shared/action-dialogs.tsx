@@ -22,7 +22,6 @@ import { useUpdateDocument } from '@/hooks/useDocuments'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { FormField } from '@/components/shared/FormField'
 import { api, apiErrorToFieldMap, ApiError } from '@/lib/api'
-import { useAuthStore } from '@/store/authStore'
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, jobPostSchema, visaApplicationSchema, leaveRequestSchema, documentMetaSchema, zodToFieldErrors } from '@/lib/schemas'
 import {
@@ -37,24 +36,21 @@ import {
 } from '@/lib/options'
 import type { Employee } from '@/types'
 
-const EMPLOYEE_ROLE_OPTIONS: SelectOption[] = [
-    { value: 'employee', label: 'Employee' },
-    { value: 'dept_head', label: 'Department Head' },
-    { value: 'pro_officer', label: 'PRO Officer' },
-    { value: 'hr_manager', label: 'HR Manager' },
-]
 
 function buildGradeLevelOptions(grades: GradeLevel[]): ComboboxOption[] {
-    const fmt = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
-    const toOption = (g: GradeLevel): ComboboxOption => {
-        const label = g.code ? `${g.code} – ${g.name}` : g.name
-        const parts: string[] = []
-        if (g.salaryMin != null && g.salaryMax != null) parts.push(`AED ${fmt(g.salaryMin)} – ${fmt(g.salaryMax)}`)
-        else if (g.salaryMin != null) parts.push(`AED ${fmt(g.salaryMin)}+`)
-        else if (g.salaryMax != null) parts.push(`Up to AED ${fmt(g.salaryMax)}`)
-        return { value: g.id, label, secondary: parts.join('  ·  ') || undefined }
-    }
-    return [...grades].sort((a, b) => (a.level ?? 999) - (b.level ?? 999) || a.name.localeCompare(b.name)).map(toOption)
+    const toOption = (g: GradeLevel): ComboboxOption => ({
+        value: g.id,
+        label: g.code ? `${g.code} – ${g.name}` : g.name,
+        secondary: g.hierarchy ?? undefined,
+    })
+    return grades
+        .toSorted((a, b) => {
+            if (a.level == null && b.level == null) return a.name.localeCompare(b.name)
+            if (a.level == null) return 1
+            if (b.level == null) return -1
+            return a.level - b.level
+        })
+        .map(toOption)
 }
 
 // Searchable reporting-manager picker — server-side search, limit 20.
@@ -399,7 +395,6 @@ interface EmpForm {
     contractEndDate: string
     status: string
     teamId: string
-    role: string
     // Step 3 — Salary
     basicSalary: string
     housingAllowance: string
@@ -420,7 +415,7 @@ const EMPTY_FORM: EmpForm = {
     mobileNo: '', personalEmail: '', maritalStatus: 'single', emergencyContact: '', emergencyContactName: '', emergencyContactPhone: '', homeCountryAddress: '',
     employeeNo: '', workEmail: '', divisionId: '', departmentId: '', branchId: '', department: '', designation: '',
     joinDate: new Date().toISOString().split('T')[0],
-    contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevelId: '', probationEndDate: '', contractEndDate: '', status: 'onboarding', teamId: '', role: 'employee',
+    contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevelId: '', probationEndDate: '', contractEndDate: '', status: 'onboarding', teamId: '',
     basicSalary: '', housingAllowance: '', transportAllowance: '', otherAllowances: '',
     paymentMethod: 'bank_transfer', bankName: '', accountName: '', accountNumber: '', swiftCode: '', bankBranch: '', iban: '', emiratisationCategory: 'expat',
 }
@@ -1128,14 +1123,11 @@ export function EditEmployeeDialog({
 // ─── Edit Employment Dialog ──────────────────────────────────────────────────
 
 export function EditEmploymentDialog({
-    open, onOpenChange, employee, currentRole,
-}: { open: boolean; onOpenChange: (o: boolean) => void; employee: Employee; currentRole?: string }) {
-    const viewerRole = useAuthStore(s => s.user?.role)
-    const canAssignRole = viewerRole === 'hr_manager' || viewerRole === 'super_admin'
+    open, onOpenChange, employee,
+}: { open: boolean; onOpenChange: (o: boolean) => void; employee: Employee }) {
     const [form, setForm] = useState({
         joinDate: employee.joinDate ?? '',
         workEmail: employee.workEmail ?? '',
-        role: currentRole ?? 'employee',
         departmentId: employee.departmentId ?? '',
         divisionId: employee.divisionId ?? '',
         branchId: employee.branchId ?? '',
@@ -1224,19 +1216,6 @@ export function EditEmploymentDialog({
                                 <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
                             </FormField>
                         </div>
-                        {canAssignRole && (
-                            <div className="space-y-1.5">
-                                <Label>System Role</Label>
-                                <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
-                                    <SelectTrigger><SelectValue placeholder="Select role…" /></SelectTrigger>
-                                    <SelectContent>
-                                        {EMPLOYEE_ROLE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                                        {viewerRole === 'super_admin' && <SelectItem value="super_admin">Super Admin</SelectItem>}
-                                    </SelectContent>
-                                </Select>
-                                <p className="text-xs text-muted-foreground">Use &quot;Grant Access&quot; on the employee profile to send login invites</p>
-                            </div>
-                        )}
                         <div className="space-y-1.5">
                             <Label>Department</Label>
                             <Combobox
@@ -1710,7 +1689,7 @@ export function AssignAssetToEmployeeDialog({
     const assignAsset = useAssignAsset()
 
     const [assetId, setAssetId] = useState('')
-    const [assignedDate, setAssignedDate] = useState(new Date().toISOString().slice(0, 10))
+    const [assignedDate, setAssignedDate] = useState(() => new Date().toISOString().slice(0, 10))
     const [expectedReturnDate, setExpectedReturnDate] = useState('')
     const [notes, setNotes] = useState('')
     const [assetError, setAssetError] = useState('')

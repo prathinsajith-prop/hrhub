@@ -230,7 +230,7 @@ async function bootstrap() {
             if (Date.now() - lastPingAt > STALE_THRESHOLD_MS) {
                 app.log.debug({ userId }, 'ws: stale socket — terminating')
                 clearInterval(staleCheck)
-                try { socket.terminate ? socket.terminate() : socket.close() } catch { /* ignore */ }
+                try { if (socket.terminate) socket.terminate(); else socket.close() } catch { /* ignore */ }
             }
         }, STALE_CHECK_INTERVAL_MS)
 

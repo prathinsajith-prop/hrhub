@@ -2160,8 +2160,8 @@ export function EmployeeDetailPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {[...attendanceRecords]
-                          .sort((a, b) => b.date.localeCompare(a.date))
+                        {attendanceRecords
+                          .toSorted((a, b) => b.date.localeCompare(a.date))
                           .map(r => (
                             <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                               <td className="px-4 py-2.5 font-medium">{formatDate(r.date)}</td>
@@ -2529,7 +2529,7 @@ export function EmployeeDetailPage() {
       <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
 
       {editOpen && <EditEmployeeDialog open={editOpen} onOpenChange={setEditOpen} employee={e} />}
-      {editEmploymentOpen && canManage && <EditEmploymentDialog open={editEmploymentOpen} onOpenChange={setEditEmploymentOpen} employee={e} currentRole={accountData?.account?.role} />}
+      {editEmploymentOpen && canManage && <EditEmploymentDialog open={editEmploymentOpen} onOpenChange={setEditEmploymentOpen} employee={e} />}
       {editPayrollOpen && canManage && <EditPayrollDialog open={editPayrollOpen} onOpenChange={setEditPayrollOpen} employee={e} />}
       {assignAssetOpen && canManage && <AssignAssetToEmployeeDialog open={assignAssetOpen} onOpenChange={setAssignAssetOpen} employee={e} />}
       {canManage && (

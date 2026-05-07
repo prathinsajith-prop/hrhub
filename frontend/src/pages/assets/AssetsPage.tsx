@@ -334,7 +334,7 @@ function AssignAssetDialog({
     const assignAsset = useAssignAsset()
 
     const [employeeId, setEmployeeId] = useState('')
-    const [assignedDate, setAssignedDate] = useState(new Date().toISOString().slice(0, 10))
+    const [assignedDate, setAssignedDate] = useState(() => new Date().toISOString().slice(0, 10))
     const [expectedReturnDate, setExpectedReturnDate] = useState<string | undefined>()
     const [notes, setNotes] = useState('')
     const [errors, setErrors] = useState<Record<string, string>>({})

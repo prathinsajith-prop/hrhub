@@ -306,7 +306,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
                     </Button>
                     <Button onClick={handleSubmit} disabled={isPending}>
                         {isPending
-                            ? <><Upload className="h-3.5 w-3.5 mr-1.5 animate-bounce" />Uploading…</>
+                            ? <><Upload className="h-3.5 w-3.5 mr-1.5 animate-pulse" />Uploading…</>
                             : <><Upload className="h-3.5 w-3.5 mr-1.5" />Submit</>}
                     </Button>
                 </DialogFooter>

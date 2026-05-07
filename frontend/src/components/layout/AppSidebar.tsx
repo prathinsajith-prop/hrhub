@@ -18,9 +18,6 @@ import {
   PackageIcon,
   UserMinusIcon,
   CalendarClockIcon,
-  UsersRoundIcon,
-  ShieldIcon,
-  KeyRoundIcon,
   MessageSquareWarningIcon,
   GraduationCapIcon,
   HandCoinsIcon,
@@ -99,14 +96,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         { title: t('nav.reports'), url: "/reports", icon: BarChart3Icon },
         { title: t('nav.auditLog'), url: "/audit", icon: ClipboardListIcon },
         { title: t('nav.complaints', { defaultValue: 'Complaints' }), url: "/complaints", icon: MessageSquareWarningIcon },
-      ],
-    },
-    {
-      label: t('nav.workspace'),
-      items: [
-        { title: t('nav.team'), url: "/team", icon: UsersRoundIcon },
-        { title: t('nav.users', { defaultValue: 'Users & Roles' }), url: "/users", icon: ShieldIcon },
-        { title: t('nav.apps'), url: "/apps", icon: KeyRoundIcon },
       ],
     },
   ], [t])

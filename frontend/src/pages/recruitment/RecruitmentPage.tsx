@@ -509,7 +509,7 @@ function ConvertCandidateDialog({
 }) {
   const updateApplication = useUpdateApplication()
   const convertToEmployee = useConvertCandidateToEmployee()
-  const [joinDate, setJoinDate] = useState(new Date().toISOString().slice(0, 10))
+  const [joinDate, setJoinDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [designation, setDesignation] = useState('')
   const [department, setDepartment] = useState('')
   const [basicSalary, setBasicSalary] = useState('')

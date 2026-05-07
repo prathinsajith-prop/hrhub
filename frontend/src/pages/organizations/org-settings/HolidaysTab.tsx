@@ -30,7 +30,7 @@ export function HolidaysTab() {
     const deleteHoliday = useDeletePublicHoliday()
     const seedUae = useSeedUaeHolidays()
 
-    const sorted = [...(holidays ?? [])].sort((a, b) => a.date.localeCompare(b.date))
+    const sorted = (holidays ?? []).toSorted((a, b) => a.date.localeCompare(b.date))
 
     const handleAdd = async (e: React.FormEvent) => {
         e.preventDefault()

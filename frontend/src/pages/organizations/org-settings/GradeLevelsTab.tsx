@@ -41,13 +41,8 @@ function roleCategoryColor(value: string): string {
 // ─── Sort helpers ─────────────────────────────────────────────────────────────
 
 function sortByLevel(levels: GradeLevel[]): GradeLevel[] {
-    return [...levels].sort((a, b) => {
-        // Grades with a level number come first, in ascending order.
-        // Grades with no level fall to the end, sorted by sortOrder then name.
-        if (a.level == null && b.level == null) {
-            const soDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
-            return soDiff !== 0 ? soDiff : a.name.localeCompare(b.name)
-        }
+    return levels.toSorted((a, b) => {
+        if (a.level == null && b.level == null) return a.name.localeCompare(b.name)
         if (a.level == null) return 1
         if (b.level == null) return -1
         return a.level - b.level
