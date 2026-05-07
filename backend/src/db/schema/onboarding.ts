@@ -14,7 +14,8 @@ export const onboardingChecklists = pgTable('onboarding_checklists', {
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
     employeeUniq: unique('onboarding_employee_unique').on(t.employeeId),
-    employeeIdx: index('idx_checklist_employee').on(t.employeeId),
+    tenantIdx:    index('idx_onboarding_checklist_tenant').on(t.tenantId),
+    employeeIdx:  index('idx_checklist_employee').on(t.employeeId),
 }))
 
 export const onboardingSteps = pgTable('onboarding_steps', {

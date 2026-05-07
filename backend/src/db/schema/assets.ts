@@ -71,10 +71,12 @@ export const assetAssignments = pgTable('asset_assignments', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
-    tenantIdx: index('idx_asset_assignments_tenant').on(t.tenantId),
-    assetIdx: index('idx_asset_assignments_asset').on(t.assetId),
-    employeeIdx: index('idx_asset_assignments_employee').on(t.employeeId),
-    statusIdx: index('idx_asset_assignments_status').on(t.status),
+    tenantIdx:         index('idx_asset_assignments_tenant').on(t.tenantId),
+    assetIdx:          index('idx_asset_assignments_asset').on(t.assetId),
+    employeeIdx:       index('idx_asset_assignments_employee').on(t.employeeId),
+    statusIdx:         index('idx_asset_assignments_status').on(t.status),
+    tenantEmployeeIdx: index('idx_asset_assign_tenant_employee').on(t.tenantId, t.employeeId),
+    tenantStatusIdx:   index('idx_asset_assign_tenant_status').on(t.tenantId, t.status),
 }))
 
 export const assetAssignmentsRelations = relations(assetAssignments, ({ one }) => ({
@@ -99,8 +101,9 @@ export const assetMaintenance = pgTable('asset_maintenance', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
-    tenantIdx: index('idx_asset_maintenance_tenant').on(t.tenantId),
-    assetIdx: index('idx_asset_maintenance_asset').on(t.assetId),
+    tenantIdx:      index('idx_asset_maintenance_tenant').on(t.tenantId),
+    assetIdx:       index('idx_asset_maintenance_asset').on(t.assetId),
+    tenantAssetIdx: index('idx_asset_maintenance_tenant_asset').on(t.tenantId, t.assetId),
 }))
 
 export const assetMaintenanceRelations = relations(assetMaintenance, ({ one }) => ({

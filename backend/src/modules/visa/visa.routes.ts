@@ -16,8 +16,8 @@ import { parseUuidParam } from '../../lib/validation.js'
 import { cacheDel } from '../../lib/redis.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
-import { tenants } from '../../db/schema/index.js'
-import { eq } from 'drizzle-orm'
+import { tenants, employees } from '../../db/schema/index.js'
+import { eq, and } from 'drizzle-orm'
 
 /**
  * Audit helper — every mutating route in this module funnels through this so
@@ -352,6 +352,16 @@ export default async function (fastify: any): Promise<void> {
 
         const stepNumber = (body.stepNumber as number | undefined) ?? visa.currentStep
         const stepLabel = (body.stepLabel as string | undefined) ?? visaStepLabel(stepNumber)
+
+        // Verify the supplied employeeId belongs to this tenant
+        if (body.employeeId) {
+            const [emp] = await db
+                .select({ id: employees.id })
+                .from(employees)
+                .where(and(eq(employees.id, body.employeeId as string), eq(employees.tenantId, request.user.tenantId)))
+                .limit(1)
+            if (!emp) return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Employee does not belong to your organization.' })
+        }
 
         const cost = await addVisaCost(request.user.tenantId, {
             visaApplicationId: id,

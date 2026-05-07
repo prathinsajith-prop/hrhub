@@ -94,7 +94,7 @@ export async function updateApp(opts: {
 
     const [row] = await db.update(connectedApps)
         .set(update)
-        .where(eq(connectedApps.id, opts.appId))
+        .where(and(eq(connectedApps.id, opts.appId), eq(connectedApps.tenantId, opts.tenantId)))
         .returning()
     return publicShape(row)
 }
@@ -109,7 +109,7 @@ export async function regenerateAppSecret(tenantId: string, appId: string) {
     const secretHash = await bcrypt.hash(secret, BCRYPT_ROUNDS)
     const [row] = await db.update(connectedApps)
         .set({ secretHash, updatedAt: new Date() })
-        .where(eq(connectedApps.id, appId))
+        .where(and(eq(connectedApps.id, appId), eq(connectedApps.tenantId, tenantId)))
         .returning()
     return { app: publicShape(row), appSecret: secret }
 }
@@ -130,6 +130,6 @@ export async function deleteApp(tenantId: string, appId: string) {
         .where(and(eq(connectedApps.id, appId), eq(connectedApps.tenantId, tenantId)))
         .limit(1)
     if (!existing) throw http('App not found', 404)
-    await db.delete(connectedApps).where(eq(connectedApps.id, appId))
+    await db.delete(connectedApps).where(and(eq(connectedApps.id, appId), eq(connectedApps.tenantId, tenantId)))
     return { ok: true }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
 import { labelFor } from '@/lib/enums'
 import {
@@ -182,9 +182,13 @@ function AssetFormDialog({
 
     const [form, setForm] = useState<Partial<Asset>>(() => asset ?? { status: 'available', condition: 'good' })
 
-    useEffect(() => {
-        if (!open && !asset) setForm({ status: 'available', condition: 'good' })
-    }, [open, asset])
+    const [prevAssetFormOpen, setPrevAssetFormOpen] = useState(true)
+    if (!open && prevAssetFormOpen && !asset) {
+        setPrevAssetFormOpen(false)
+        setForm({ status: 'available', condition: 'good' })
+    } else if (open && !prevAssetFormOpen) {
+        setPrevAssetFormOpen(true)
+    }
 
     const isEdit = !!asset
     const pending = createAsset.isPending || updateAsset.isPending
@@ -335,15 +339,17 @@ function AssignAssetDialog({
     const [notes, setNotes] = useState('')
     const [errors, setErrors] = useState<Record<string, string>>({})
 
-    useEffect(() => {
-        if (!open) {
-            setEmployeeId('')
-            setAssignedDate(new Date().toISOString().slice(0, 10))
-            setExpectedReturnDate(undefined)
-            setNotes('')
-            setErrors({})
-        }
-    }, [open])
+    const [prevAssignAssetOpen, setPrevAssignAssetOpen] = useState(true)
+    if (!open && prevAssignAssetOpen) {
+        setPrevAssignAssetOpen(false)
+        setEmployeeId('')
+        setAssignedDate(new Date().toISOString().slice(0, 10))
+        setExpectedReturnDate(undefined)
+        setNotes('')
+        setErrors({})
+    } else if (open && !prevAssignAssetOpen) {
+        setPrevAssignAssetOpen(true)
+    }
 
     async function handleSubmit(e: { preventDefault(): void }) {
         e.preventDefault()

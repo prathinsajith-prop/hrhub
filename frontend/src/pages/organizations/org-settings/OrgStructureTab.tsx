@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type ChangeEvent } from 'react'
+import { useState, useMemo, type ChangeEvent } from 'react'
 import { Plus, Trash2, Pencil, GitBranch, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -63,18 +63,22 @@ function OrgUnitDialog({
     const [form, setForm] = useState<OrgUnitFormState>(EMPTY_FORM)
     const [cascadePrompt, setCascadePrompt] = useState<{ departmentId: string; newManagerName: string } | null>(null)
 
-    useEffect(() => {
-        if (open) {
-            setForm(editing ? {
-                name: editing.name,
-                type: editing.type,
-                parentId: editing.parentId ?? '',
-                headEmployeeId: editing.headEmployeeId ?? '',
-                description: editing.description ?? '',
-                isActive: editing.isActive,
-            } : { ...EMPTY_FORM, type: defaultType })
-        }
-    }, [open, editing, defaultType])
+    const [prevOrgFormOpen, setPrevOrgFormOpen] = useState(false)
+    const [prevEditingId, setPrevEditingId] = useState<string | undefined>(undefined)
+    if ((open && !prevOrgFormOpen) || (open && editing?.id !== prevEditingId)) {
+        setPrevOrgFormOpen(open)
+        setPrevEditingId(editing?.id)
+        setForm(editing ? {
+            name: editing.name,
+            type: editing.type,
+            parentId: editing.parentId ?? '',
+            headEmployeeId: editing.headEmployeeId ?? '',
+            description: editing.description ?? '',
+            isActive: editing.isActive,
+        } : { ...EMPTY_FORM, type: defaultType })
+    } else if (!open && prevOrgFormOpen) {
+        setPrevOrgFormOpen(false)
+    }
 
     const field = (k: keyof OrgUnitFormState) =>
         (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>

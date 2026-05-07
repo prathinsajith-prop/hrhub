@@ -78,19 +78,6 @@ export async function getOrgUnitTree(tenantId: string): Promise<OrgUnitNode[]> {
 }
 
 /**
- * Strips branch nodes from a tree — used for dept_head view where branches
- * are an employee-level concept and shouldn't clutter the manager's chart.
- */
-function stripBranches(node: OrgUnitNode): OrgUnitNode {
-    return {
-        ...node,
-        children: node.children
-            .filter((c) => c.type !== 'branch')
-            .map(stripBranches),
-    }
-}
-
-/**
  * Returns the org unit tree scoped by role:
  *
  * - dept_head  → their division with all departments inside it; branches are hidden

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
@@ -54,7 +54,11 @@ export function LoginHistoryPage() {
     const { data: records = [], isLoading, isFetching, refetch } = useLoginHistory({ limit: 100 })
 
     const [offset, setOffset] = useState(0)
-    useEffect(() => { setOffset(0) }, [filter])
+    const [prevLoginFilter, setPrevLoginFilter] = useState(filter)
+    if (filter !== prevLoginFilter) {
+        setPrevLoginFilter(filter)
+        setOffset(0)
+    }
 
     const isArabic = i18n.language === 'ar'
     const dateFnsLocale = isArabic ? arSA : undefined

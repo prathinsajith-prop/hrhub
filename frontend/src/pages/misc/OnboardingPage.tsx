@@ -47,9 +47,6 @@ export function OnboardingPage() {
         return checklists.map((c) => ({ ...c, steps: deriveSteps(c.steps) }))
     }, [onboardingList])
 
-    // IDs of employees who already have a checklist
-    const enrolledIds = useMemo(() => new Set(enriched.map((c) => c.employeeId)), [enriched])
-
     const filtered = useMemo(() => {
         const q = search.searchInput.trim().toLowerCase()
         const f = search.appliedFilters
@@ -180,7 +177,7 @@ export function OnboardingPage() {
                 </div>
             ),
         },
-    ], [enrolledIds])
+    ], [])
 
     return (
         <PageWrapper>

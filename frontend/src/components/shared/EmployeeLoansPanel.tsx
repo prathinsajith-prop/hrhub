@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { DollarSign, Check, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { DollarSign, Check, X, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { formatDate, formatCurrency, cn } from '@/lib/utils'
-import { useLoans, useApproveLoan, useRejectLoan, LOAN_STATUS_STYLE, type EmployeeLoan } from '@/hooks/useLoans'
+import { useLoans, useApproveLoan, useRejectLoan, useDeleteLoan, LOAN_STATUS_STYLE, type EmployeeLoan } from '@/hooks/useLoans'
 import { labelFor } from '@/lib/enums'
 
 interface Props {
@@ -50,10 +50,19 @@ function LoanRow({ loan, canManage }: { loan: EmployeeLoan; canManage: boolean }
     const [expanded, setExpanded] = useState(false)
     const [approveConfirm, setApproveConfirm] = useState(false)
     const [rejectOpen, setRejectOpen] = useState(false)
+    const [deleteConfirm, setDeleteConfirm] = useState(false)
     const approve = useApproveLoan()
     const reject = useRejectLoan()
+    const deleteLoan = useDeleteLoan()
 
     const isPending = loan.status === 'pending'
+
+    const handleDelete = () => {
+        deleteLoan.mutate(loan.id, {
+            onSuccess: () => { toast.success('Loan deleted'); setDeleteConfirm(false) },
+            onError: (err: Error) => { toast.error('Failed to delete', err?.message); setDeleteConfirm(false) },
+        })
+    }
 
     const handleApprove = () => {
         approve.mutate({ id: loan.id }, {
@@ -116,6 +125,17 @@ function LoanRow({ loan, canManage }: { loan: EmployeeLoan; canManage: boolean }
                                 </Button>
                             </>
                         )}
+                        {canManage && isPending && (
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-muted-foreground hover:text-destructive"
+                                onClick={() => setDeleteConfirm(true)}
+                                aria-label="Delete loan"
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                        )}
                         {(loan.reason || loan.notes) && (
                             <Button variant="ghost" size="icon-sm" onClick={() => setExpanded(v => !v)} aria-label="Toggle details">
                                 {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -148,6 +168,16 @@ function LoanRow({ loan, canManage }: { loan: EmployeeLoan; canManage: boolean }
                 onClose={() => setRejectOpen(false)}
                 onConfirm={handleReject}
                 isPending={reject.isPending}
+            />
+
+            <ConfirmDialog
+                open={deleteConfirm}
+                onOpenChange={setDeleteConfirm}
+                title="Delete Loan"
+                description={`Delete this loan request of ${formatCurrency(Number(loan.amount))}? This cannot be undone.`}
+                confirmLabel="Delete"
+                variant="destructive"
+                onConfirm={handleDelete}
             />
         </>
     )

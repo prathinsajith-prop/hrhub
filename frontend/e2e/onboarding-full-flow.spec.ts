@@ -46,7 +46,7 @@ function collectErrors(page: Page): string[] {
 }
 
 /** Try to find an employee name in the table, return null if table is empty */
-async function firstEmployeeName(page: Page): Promise<string | null> {
+async function _firstEmployeeName(page: Page): Promise<string | null> {
     const rows = page.locator('table tbody tr')
     const count = await rows.count()
     if (count === 0) return null

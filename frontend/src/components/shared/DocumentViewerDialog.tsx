@@ -20,19 +20,30 @@ interface DocumentViewerDialogProps {
  */
 export function DocumentViewerDialog({ open, onOpenChange, documentId, fileName }: DocumentViewerDialogProps) {
     const [url, setUrl] = useState<string | null>(null)
-    const [loading, setLoading] = useState(false)
+    // Initialize loading true when dialog opens with a document so we don't flash an empty state.
+    const [loading, setLoading] = useState(() => !!(open && documentId))
+
+    // Reset url/loading state in render when open/documentId changes (avoids setState in effect body).
+    const dialogKey = `${open ? '1' : '0'}:${documentId ?? ''}`
+    const [prevDialogKey, setPrevDialogKey] = useState(dialogKey)
+    if (dialogKey !== prevDialogKey) {
+        setPrevDialogKey(dialogKey)
+        if (!open || !documentId) {
+            setUrl(null)
+            setLoading(false)
+        } else {
+            setLoading(true)
+        }
+    }
 
     useEffect(() => {
         if (!open || !documentId) {
-            setUrl(null)
             return
         }
         let cancelled = false
-        setLoading(true)
         api
             .get<{ data: { downloadUrl: string } }>(`/documents/${documentId}/download-url`)
             .then((res) => {
-                // eslint-disable-next-line react-hooks/set-state-in-effect
                 if (!cancelled) setUrl(res.data.downloadUrl)
             })
             .catch(() => {

@@ -10,13 +10,14 @@ const PERF_FIELD_MAP = {
 }
 const PERF_ALLOWED = new Set(Object.keys(PERF_FIELD_MAP))
 
-export async function getReviews(tenantId: string, params: { employeeId?: string; status?: string; from?: string; to?: string; search?: string; filter?: string; limit?: number; offset?: number }) {
-    const { employeeId, status, from, to, search, filter, limit = 20, offset = 0 } = params
+export async function getReviews(tenantId: string, params: { employeeId?: string; department?: string; status?: string; from?: string; to?: string; search?: string; filter?: string; limit?: number; offset?: number }) {
+    const { employeeId, department, status, from, to, search, filter, limit = 20, offset = 0 } = params
 
     const conds = Conditions.create()
         .tenant(performanceReviews.tenantId, tenantId)
         .notDeleted(performanceReviews.deletedAt)
         .match(performanceReviews.employeeId, employeeId)
+        .match(employees.department, department)
         .match(performanceReviews.status, status)
         .dateRange(performanceReviews.reviewDate, from, to)
         .nameSearch(search, employees.firstName, employees.lastName)

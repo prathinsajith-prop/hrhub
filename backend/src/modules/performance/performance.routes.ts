@@ -25,14 +25,19 @@ export async function performanceRoutes(fastify: any) {
     const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')] }
 
     // GET /api/v1/performance
-    // Admins see all reviews; employees only see their own (via employeeId JWT claim).
+    // hr_manager/super_admin see all; dept_head scoped to their department; employees see own only.
     fastify.get('/performance', { ...auth, schema: { tags: ['Performance'] } }, async (request: any, reply: any) => {
         const { employeeId, status, from, to, search, q, filter, limit = '20', offset = '0' } = request.query as Record<string, string>
         if (filter && filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
         const role = request.user.role
-        const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(role)
-        const resolvedEmployeeId = isAdmin ? employeeId : (request.user.employeeId ?? undefined)
-        const result = await getReviews(request.user.tenantId, { employeeId: resolvedEmployeeId, status, from, to, search: q || search || undefined, filter: filter || undefined, limit: Number(limit), offset: Number(offset) })
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isDeptHead = role === 'dept_head'
+        if (isDeptHead && !request.user.department) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Your account has no department assigned. Contact an HR admin.' })
+        }
+        const resolvedEmployeeId = isHrAdmin ? employeeId : isDeptHead ? employeeId : (request.user.employeeId ?? undefined)
+        const resolvedDepartment = isDeptHead ? request.user.department : undefined
+        const result = await getReviews(request.user.tenantId, { employeeId: resolvedEmployeeId, department: resolvedDepartment, status, from, to, search: q || search || undefined, filter: filter || undefined, limit: Number(limit), offset: Number(offset) })
         return reply.send(result)
     })
 

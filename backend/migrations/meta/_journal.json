@@ -155,6 +155,27 @@
       "when": 1746716800000,
       "tag": "0021_grade_levels_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1746803200000,
+      "tag": "0022_missing_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1746889600000,
+      "tag": "0023_composite_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1746976000000,
+      "tag": "0024_autovacuum_tuning",
+      "breakpoints": true
     }
   ]
 }

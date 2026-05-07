@@ -10,7 +10,7 @@ import { runWithTenant } from '../lib/tenantContext.js'
  * Must be registered AFTER the authenticate plugin so request.user is available.
  */
 async function tenantGuardPlugin(fastify: any): Promise<void> {
-    fastify.addHook('onRequest', async (request: any, _reply: any) => {
+    fastify.addHook('onRequest', async (_request: any, _reply: any) => {
         // request.user is populated by authenticate preHandler — not yet set here.
         // We use preValidation instead (after auth but before handler).
     })

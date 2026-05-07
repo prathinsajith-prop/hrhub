@@ -11,10 +11,21 @@ export async function attendanceRoutes(fastify: any) {
     const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')] }
 
     // GET /api/v1/attendance
+    // hr_manager/super_admin see all; dept_head scoped to their department; employees see own only.
     fastify.get('/attendance', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { employeeId, startDate, endDate, status, filter, page, limit, cursor } = request.query as Record<string, string>
+        if (filter && filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
+        const role = request.user.role
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isDeptHead = role === 'dept_head'
+        if (isDeptHead && !request.user.department) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Your account has no department assigned. Contact an HR admin.' })
+        }
+        const resolvedEmployeeId = isHrAdmin ? employeeId : isDeptHead ? employeeId : request.user.employeeId
+        const resolvedDepartment = isDeptHead ? request.user.department : undefined
         const result = await getAttendance(request.user.tenantId, {
-            employeeId,
+            employeeId: resolvedEmployeeId,
+            department: resolvedDepartment,
             startDate,
             endDate,
             status,
@@ -26,8 +37,8 @@ export async function attendanceRoutes(fastify: any) {
         return reply.send(result)
     })
 
-    // GET /api/v1/attendance/summary
-    fastify.get('/attendance/summary', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
+    // GET /api/v1/attendance/summary — admin/dept_head only; returns company-wide aggregated data
+    fastify.get('/attendance/summary', { ...adminAuth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { month, year } = request.query as { month: string; year: string }
         const data = await getAttendanceSummary(
             request.user.tenantId,
@@ -38,27 +49,48 @@ export async function attendanceRoutes(fastify: any) {
     })
 
     // POST /api/v1/attendance/check-in
-    // Non-admins may only check in for themselves; admins may supply any employeeId.
+    // Non-admins may only check in for themselves. dept_head is limited to their own department.
     fastify.post('/attendance/check-in', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { employeeId } = request.body as { employeeId?: string }
         const role = request.user.role
-        const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(role)
-        const resolvedEmployeeId = isAdmin && employeeId ? employeeId : (request.user.employeeId ?? employeeId)
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isDeptHead = role === 'dept_head'
+        const resolvedEmployeeId = (isHrAdmin || isDeptHead) && employeeId ? employeeId : (request.user.employeeId ?? employeeId)
         if (!resolvedEmployeeId) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
+        }
+        if (isDeptHead && employeeId && employeeId !== request.user.employeeId) {
+            if (!request.user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Your account has no department assigned. Contact an HR admin.' })
+            }
+            const emp = await findById(request.user.tenantId, resolvedEmployeeId)
+            if (!emp || emp.department !== request.user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only manage attendance for employees in your department.' })
+            }
         }
         const data = await checkIn(request.user.tenantId, resolvedEmployeeId)
         return reply.code(201).send({ data })
     })
 
     // POST /api/v1/attendance/check-out
+    // Non-admins may only check out for themselves. dept_head is limited to their own department.
     fastify.post('/attendance/check-out', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { employeeId } = request.body as { employeeId?: string }
         const role = request.user.role
-        const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(role)
-        const resolvedEmployeeId = isAdmin && employeeId ? employeeId : (request.user.employeeId ?? employeeId)
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isDeptHead = role === 'dept_head'
+        const resolvedEmployeeId = (isHrAdmin || isDeptHead) && employeeId ? employeeId : (request.user.employeeId ?? employeeId)
         if (!resolvedEmployeeId) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
+        }
+        if (isDeptHead && employeeId && employeeId !== request.user.employeeId) {
+            if (!request.user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Your account has no department assigned. Contact an HR admin.' })
+            }
+            const emp = await findById(request.user.tenantId, resolvedEmployeeId)
+            if (!emp || emp.department !== request.user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only manage attendance for employees in your department.' })
+            }
         }
         const data = await checkOut(request.user.tenantId, resolvedEmployeeId)
         return reply.send({ data })
@@ -123,7 +155,14 @@ export async function attendanceRoutes(fastify: any) {
     }, async (request: any, reply: any) => {
         const { format = 'csv', employeeId, startDate, endDate, status, filter } = request.query as Record<string, string>
         if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
-        const result = await getAttendance(request.user.tenantId, { employeeId, startDate, endDate, status, filter, limit: 10000 })
+        const isDeptHead = request.user.role === 'dept_head'
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(request.user.role)
+        if (isDeptHead && !request.user.department) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Your account has no department assigned. Contact an HR admin.' })
+        }
+        const resolvedEmployeeId = isHrAdmin ? employeeId : isDeptHead ? employeeId : request.user.employeeId
+        const resolvedDepartment = isDeptHead ? request.user.department : undefined
+        const result = await getAttendance(request.user.tenantId, { employeeId: resolvedEmployeeId, department: resolvedDepartment, startDate, endDate, status, filter, limit: 10000 })
         const rows = (result.items ?? []) as any[]
         const dateStr = new Date().toISOString().slice(0, 10)
 

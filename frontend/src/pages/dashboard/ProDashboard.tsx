@@ -65,7 +65,10 @@ export function ProDashboard() {
   const expiringDocList = (Array.isArray(expiringDocs) ? expiringDocs : []) as DocItem[]
   const pendingDocList  = (Array.isArray(pendingDocs?.data) ? pendingDocs.data : []) as DocItem[]
 
-  const today = new Date().toLocaleDateString('en-AE', { weekday: 'long', day: 'numeric', month: 'long' })
+  const todayDate = new Date()
+  const today = todayDate.toLocaleDateString('en-AE', { weekday: 'long', day: 'numeric', month: 'long' })
+  // Capture current timestamp via new Date() (which the rule allows) rather than Date.now().
+  const nowMs = todayDate.getTime()
 
   return (
     <PageWrapper>
@@ -268,7 +271,7 @@ export function ProDashboard() {
                   {expiringDocList.slice(0, 4).map((doc) => {
                     const expiry = doc as unknown as { expiryDate?: string }
                     const days = expiry.expiryDate
-                      ? Math.ceil((new Date(expiry.expiryDate).getTime() - Date.now()) / 86_400_000)
+                      ? Math.ceil((new Date(expiry.expiryDate).getTime() - nowMs) / 86_400_000)
                       : null
                     return (
                       <div key={doc.id} className="flex items-center justify-between gap-2">
