@@ -11,10 +11,13 @@ export async function attendanceRoutes(fastify: any) {
     const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')] }
 
     // GET /api/v1/attendance
+    // Elevated roles see all records; employees are scoped to their own.
     fastify.get('/attendance', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { employeeId, startDate, endDate, status, filter, page, limit, cursor } = request.query as Record<string, string>
+        const isElevated = ['hr_manager', 'super_admin', 'dept_head'].includes(request.user.role)
+        const resolvedEmployeeId = isElevated ? employeeId : request.user.employeeId
         const result = await getAttendance(request.user.tenantId, {
-            employeeId,
+            employeeId: resolvedEmployeeId,
             startDate,
             endDate,
             status,
@@ -26,8 +29,8 @@ export async function attendanceRoutes(fastify: any) {
         return reply.send(result)
     })
 
-    // GET /api/v1/attendance/summary
-    fastify.get('/attendance/summary', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
+    // GET /api/v1/attendance/summary — admin/dept_head only; returns company-wide aggregated data
+    fastify.get('/attendance/summary', { ...adminAuth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { month, year } = request.query as { month: string; year: string }
         const data = await getAttendanceSummary(
             request.user.tenantId,
@@ -38,27 +41,42 @@ export async function attendanceRoutes(fastify: any) {
     })
 
     // POST /api/v1/attendance/check-in
-    // Non-admins may only check in for themselves; admins may supply any employeeId.
+    // Non-admins may only check in for themselves. dept_head is limited to their own department.
     fastify.post('/attendance/check-in', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { employeeId } = request.body as { employeeId?: string }
         const role = request.user.role
-        const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(role)
-        const resolvedEmployeeId = isAdmin && employeeId ? employeeId : (request.user.employeeId ?? employeeId)
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isDeptHead = role === 'dept_head'
+        const resolvedEmployeeId = (isHrAdmin || isDeptHead) && employeeId ? employeeId : (request.user.employeeId ?? employeeId)
         if (!resolvedEmployeeId) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
+        }
+        if (isDeptHead && employeeId && employeeId !== request.user.employeeId) {
+            const emp = await findById(request.user.tenantId, resolvedEmployeeId)
+            if (!emp || emp.department !== request.user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only manage attendance for employees in your department.' })
+            }
         }
         const data = await checkIn(request.user.tenantId, resolvedEmployeeId)
         return reply.code(201).send({ data })
     })
 
     // POST /api/v1/attendance/check-out
+    // Non-admins may only check out for themselves. dept_head is limited to their own department.
     fastify.post('/attendance/check-out', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { employeeId } = request.body as { employeeId?: string }
         const role = request.user.role
-        const isAdmin = ['hr_manager', 'super_admin', 'dept_head'].includes(role)
-        const resolvedEmployeeId = isAdmin && employeeId ? employeeId : (request.user.employeeId ?? employeeId)
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isDeptHead = role === 'dept_head'
+        const resolvedEmployeeId = (isHrAdmin || isDeptHead) && employeeId ? employeeId : (request.user.employeeId ?? employeeId)
         if (!resolvedEmployeeId) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
+        }
+        if (isDeptHead && employeeId && employeeId !== request.user.employeeId) {
+            const emp = await findById(request.user.tenantId, resolvedEmployeeId)
+            if (!emp || emp.department !== request.user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only manage attendance for employees in your department.' })
+            }
         }
         const data = await checkOut(request.user.tenantId, resolvedEmployeeId)
         return reply.send({ data })

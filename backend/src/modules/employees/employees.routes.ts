@@ -15,6 +15,7 @@ import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
+    const hrOnly = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
 
     // GET /api/v1/employees
     fastify.get('/', { ...auth, schema: { tags: ['Employees'] } }, async (request, reply) => {
@@ -127,8 +128,8 @@ export default async function (fastify: any): Promise<void> {
         return reply.send(await getOrgChart(request.user.tenantId, rootEmployeeId))
     })
 
-    // GET /api/v1/employees/expiring-visas
-    fastify.get('/expiring-visas', { ...auth, schema: { tags: ['Employees'] } }, async (request, reply) => {
+    // GET /api/v1/employees/expiring-visas — HR/PRO only; contains visa numbers and expiry dates
+    fastify.get('/expiring-visas', { ...hrOnly, schema: { tags: ['Employees'] } }, async (request, reply) => {
         const { days = '90' } = request.query as { days?: string }
         const data = await getExpiringVisas(request.user.tenantId, Number(days))
         return reply.send({ data })

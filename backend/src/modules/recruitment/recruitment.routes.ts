@@ -129,16 +129,22 @@ export default async function (fastify: any): Promise<void> {
         return reply.code(204).send()
     })
 
-    // GET /api/v1/applications
-    fastify.get('/applications', { ...auth, schema: { tags: ['Recruitment'] } }, async (request, reply) => {
+    // GET /api/v1/applications — HR/admin only; candidate PII and salary data must not be exposed to employees
+    fastify.get('/applications', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin', 'dept_head')],
+        schema: { tags: ['Recruitment'] },
+    }, async (request, reply) => {
         const { jobId, stage, q, filter, limit = '20', offset = '0' } = request.query as Record<string, string>
         if (filter && filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
         const result = await listApplications(request.user.tenantId, { jobId, stage, q, filter, limit: Number(limit), offset: Number(offset) })
         return reply.send(result)
     })
 
-    // GET /api/v1/applications/:id
-    fastify.get('/applications/:id', { ...auth, schema: { tags: ['Recruitment'] } }, async (request, reply) => {
+    // GET /api/v1/applications/:id — HR/admin only
+    fastify.get('/applications/:id', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin', 'dept_head')],
+        schema: { tags: ['Recruitment'] },
+    }, async (request, reply) => {
         const { id } = request.params as { id: string }
         const result = await getApplication(request.user.tenantId, id)
         if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Candidate not found' })

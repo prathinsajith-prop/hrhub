@@ -22,10 +22,15 @@ export async function exitRoutes(fastify: any) {
     const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
 
     // GET /api/v1/exit/settlement-preview?employeeId=&exitDate=&exitType=&deductions=
+    // Employees may only preview their own settlement; HR roles can preview any employee's.
     fastify.get('/exit/settlement-preview', { ...auth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
         const { employeeId, exitDate, exitType, deductions } = request.query as Record<string, string>
         if (!employeeId || !exitDate || !exitType) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId, exitDate and exitType are required' })
+        }
+        const isElevated = ['hr_manager', 'super_admin'].includes(request.user.role)
+        if (!isElevated && employeeId !== request.user.employeeId) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only preview your own settlement.' })
         }
         const data = await calculateSettlement(request.user.tenantId, employeeId, exitDate, exitType, Number(deductions ?? 0))
         return reply.send({ data })
@@ -40,8 +45,8 @@ export async function exitRoutes(fastify: any) {
         return reply.code(201).send({ data })
     })
 
-    // GET /api/v1/exit
-    fastify.get('/exit', { ...auth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
+    // GET /api/v1/exit — HR only; exit records contain confidential settlement and financial data
+    fastify.get('/exit', { ...adminAuth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
         const { limit = '50', offset = '0', status, q, filter } = request.query as Record<string, string>
         if (filter && filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
         const result = await getExitRequests(request.user.tenantId, {
@@ -50,8 +55,8 @@ export async function exitRoutes(fastify: any) {
         return reply.send(result)
     })
 
-    // GET /api/v1/exit/:id
-    fastify.get('/exit/:id', { ...auth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
+    // GET /api/v1/exit/:id — HR only
+    fastify.get('/exit/:id', { ...adminAuth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         const data = await getExitRequest(request.user.tenantId, id)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found' })

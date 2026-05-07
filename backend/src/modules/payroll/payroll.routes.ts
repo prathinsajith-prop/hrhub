@@ -7,13 +7,13 @@ export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
     const hrOnly = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
 
-    fastify.get('/', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+    fastify.get('/', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { year, limit = '12', offset = '0' } = request.query as Record<string, string>
         const result = await listPayrollRuns(request.user.tenantId, { year: year ? Number(year) : undefined, limit: Number(limit), offset: Number(offset) })
         return reply.send(result)
     })
 
-    fastify.get('/:id', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+    fastify.get('/:id', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
         const run = await getPayrollRun(request.user.tenantId, id)
         if (!run) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Payroll run not found' })
@@ -212,10 +212,15 @@ export default async function (fastify: any): Promise<void> {
     })
 
     // GET /api/v1/payroll/payslips/:payslipId/download — download payslip PDF
+    // HR roles see any payslip; employees can only download their own.
     fastify.get('/payslips/:payslipId/download', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { payslipId } = request.params as { payslipId: string }
         const payslip = await getPayslipById(request.user.tenantId, payslipId)
         if (!payslip) return reply.code(404).send({ message: 'Payslip not found' })
+        const isElevated = ['hr_manager', 'super_admin'].includes(request.user.role)
+        if (!isElevated && payslip.employeeId !== request.user.employeeId) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only download your own payslip.' })
+        }
         const pdfBuffer = await generatePayslipPdf({
             employee: {
                 name: payslip.employeeName ?? 'Employee',
