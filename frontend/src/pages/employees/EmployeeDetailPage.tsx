@@ -1834,14 +1834,14 @@ export function EmployeeDetailPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Select
-                      value={salaryHistoryFilters.type ?? ''}
-                      onValueChange={v => setSalaryHistoryFilters(prev => ({ ...prev, type: v || undefined }))}
+                      value={salaryHistoryFilters.type ?? '__all'}
+                      onValueChange={v => setSalaryHistoryFilters(prev => ({ ...prev, type: v === '__all' ? undefined : v }))}
                     >
                       <SelectTrigger className="h-8 text-xs w-40">
                         <SelectValue placeholder="All types" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All types</SelectItem>
+                        <SelectItem value="__all">All types</SelectItem>
                         {Object.entries(REVISION_TYPE_LABELS).map(([value, label]) => (
                           <SelectItem key={value} value={value}>{label}</SelectItem>
                         ))}

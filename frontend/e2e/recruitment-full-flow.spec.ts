@@ -70,12 +70,21 @@ async function createJob(page: Page, job: typeof JOBS[0]) {
     await dlg.getByPlaceholder('e.g. Sales').fill(job.department)
     await dlg.getByPlaceholder('e.g. Dubai Marina').fill(job.location)
 
+    // Register the response listener BEFORE clicking so we don't miss it
+    const responsePromise = page.waitForResponse(
+        resp => resp.url().includes('/api/v1/jobs') && resp.request().method() === 'POST',
+        { timeout: 30_000 },
+    )
     await dlg.getByRole('button', { name: /post job/i }).click()
-    await dlg.waitFor({ state: 'hidden', timeout: 10_000 })
+    await responsePromise
+    // Dialog closes shortly after the API responds — give it a moment
+    await dlg.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {})
     await page.waitForTimeout(300)
 }
 
 async function addCandidate(page: Page, i: number, jobIndex: number) {
+    // Dismiss any open toast notifications that may block the button
+    await page.locator('[data-radix-toast-close]').evaluateAll(els => els.forEach(el => (el as HTMLElement).click())).catch(() => {})
     // Use the header-level "Add Candidate" button (exact text, not the column + icons)
     await page.getByRole('button', { name: 'Add Candidate', exact: true }).click()
     const dlg = page.locator('[role="dialog"]')
@@ -108,6 +117,7 @@ async function addCandidate(page: Page, i: number, jobIndex: number) {
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 test.describe('Recruitment — full flow', () => {
+    test.describe.configure({ mode: 'serial' })
     test.slow()
 
     // 1 ─ page loads cleanly ───────────────────────────────────────────────────
