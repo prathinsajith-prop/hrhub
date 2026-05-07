@@ -15,6 +15,11 @@ export default defineConfig({
       '/api/v1': {
         target: 'http://localhost:4000',
         changeOrigin: true,
+        ws: true,   // forward WebSocket upgrade requests to the backend
+      },
+      '/api/ext': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
       },
     },
   },

@@ -8,6 +8,7 @@ import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { FormField } from '@/components/shared/FormField'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -142,18 +143,16 @@ function TrainingFormDialog({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <FormField label={t('training.startDate')} required error={errors.startDate}>
-                            <Input
-                                type="date"
+                            <DatePicker
                                 aria-invalid={!!errors.startDate}
                                 value={form.startDate}
-                                onChange={e => { setForm(f => ({ ...f, startDate: e.target.value })); setErrors(er => ({ ...er, startDate: '' })) }}
+                                onChange={v => { setForm(f => ({ ...f, startDate: v ?? '' })); setErrors(er => ({ ...er, startDate: '' })) }}
                             />
                         </FormField>
                         <FormField label={t('training.endDate')}>
-                            <Input
-                                type="date"
+                            <DatePicker
                                 value={form.endDate}
-                                onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+                                onChange={v => setForm(f => ({ ...f, endDate: v ?? '' }))}
                             />
                         </FormField>
                     </div>
@@ -181,10 +180,9 @@ function TrainingFormDialog({
                     </div>
 
                     <FormField label={t('training.certExpiry')}>
-                        <Input
-                            type="date"
+                        <DatePicker
                             value={form.certificateExpiry}
-                            onChange={e => setForm(f => ({ ...f, certificateExpiry: e.target.value }))}
+                            onChange={v => setForm(f => ({ ...f, certificateExpiry: v ?? '' }))}
                         />
                     </FormField>
 

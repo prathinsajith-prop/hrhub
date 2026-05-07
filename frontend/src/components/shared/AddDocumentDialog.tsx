@@ -172,7 +172,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
                         <Label className="text-sm font-medium">
                             Document Type <span className="text-destructive">*</span>
                         </Label>
-                        <Select value={docType} onValueChange={v => { setDocType(v); setErrors(e => ({ ...e, docType: undefined })) }}>
+                        <Select value={docType || undefined} onValueChange={v => { setDocType(v); setErrors(e => ({ ...e, docType: undefined })) }}>
                             <SelectTrigger className={cn('h-9', errors.docType && 'border-destructive ring-destructive/20')}>
                                 <SelectValue placeholder="Select document type…" />
                             </SelectTrigger>

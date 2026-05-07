@@ -28,6 +28,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
 import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useUpdateApplication, useConvertCandidateToEmployee } from '@/hooks/useRecruitment'
+import { useRecruitmentSocket } from '@/hooks/useRecruitmentSocket'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/overlays'
 import { Input } from '@/components/ui/input'
@@ -438,7 +439,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
         <DialogBody className="space-y-4">
           <div className="space-y-1.5">
             <Label required>Job</Label>
-            <Select value={jobId} onValueChange={setJobId}>
+            <Select value={jobId || undefined} onValueChange={setJobId}>
               <SelectTrigger><SelectValue placeholder="Select an open job" /></SelectTrigger>
               <SelectContent>
                 {jobs.length === 0 ? (
@@ -606,6 +607,9 @@ function ConvertCandidateDialog({
 export function RecruitmentPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+
+  // Real-time: subscribe to all recruitment WS events for this tenant
+  useRecruitmentSocket()
   const [activeTab, setActiveTab] = useState('pipeline')
   const [jobDialogOpen, setJobDialogOpen] = useState(false)
   const [editJob, setEditJob] = useState<Job | null>(null)

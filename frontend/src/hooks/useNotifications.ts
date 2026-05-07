@@ -1,6 +1,8 @@
+import { useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
+import { useSocketEvent } from '@/hooks/useSocket'
 
 export interface Notification {
     id: string
@@ -39,11 +41,21 @@ export function useNotificationsList(params?: { limit?: number; offset?: number;
 }
 
 export function useUnreadCount() {
+    const qc = useQueryClient()
+
+    // Invalidate immediately when the server pushes a new notification via WebSocket
+    const onNotificationNew = useCallback(() => {
+        qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] })
+        qc.invalidateQueries({ queryKey: ['notifications'] })
+    }, [qc])
+    useSocketEvent('notification:new', onNotificationNew)
+
     return useQuery({
         queryKey: ['notifications', 'unread-count'],
         queryFn: () => api.get<UnreadCountResponse>('/notifications/unread-count').then(r => r.data.count),
-        refetchInterval: 60_000, // poll every 60s
         staleTime: 30_000,
+        // Keep a 5-minute fallback poll in case the WebSocket is temporarily down
+        refetchInterval: 5 * 60_000,
     })
 }
 

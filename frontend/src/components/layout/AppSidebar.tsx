@@ -13,13 +13,11 @@ import {
   BarChart3Icon,
   BuildingIcon,
   ClipboardListIcon,
-  GitBranchIcon,
   ClockIcon,
   StarIcon,
   PackageIcon,
   UserMinusIcon,
   CalendarClockIcon,
-  Building2Icon,
   UsersRoundIcon,
   ShieldIcon,
   KeyRoundIcon,
@@ -68,7 +66,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       label: t('nav.people'),
       items: [
         { title: t('nav.employees'), url: "/employees", icon: UsersIcon },
-        { title: t('nav.orgChart'), url: "/org-chart", icon: GitBranchIcon },
         { title: t('nav.recruitment'), url: "/recruitment", icon: BriefcaseIcon },
         { title: t('nav.onboarding'), url: "/onboarding", icon: UserPlusIcon },
         { title: t('nav.exit', { defaultValue: 'Exit & Offboarding' }), url: "/exit", icon: UserMinusIcon },
@@ -107,7 +104,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     {
       label: t('nav.workspace'),
       items: [
-        { title: t('nav.organizations'), url: "/organizations", icon: Building2Icon },
         { title: t('nav.team'), url: "/team", icon: UsersRoundIcon },
         { title: t('nav.users', { defaultValue: 'Users & Roles' }), url: "/users", icon: ShieldIcon },
         { title: t('nav.apps'), url: "/apps", icon: KeyRoundIcon },

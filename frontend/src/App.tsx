@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@/components/layout/ErrorBoundary'
 import { useAuthStore } from '@/store/authStore'
 import { canAccessRoute, type RouteKey } from '@/lib/permissions'
 import type { UserRole } from '@/types'
+import { socket } from '@/lib/socket'
 
 // Code-split all pages — only loaded when navigated to
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage').then(m => ({ default: m.LoginPage })))
@@ -123,9 +124,22 @@ function TitleManager() {
   return null
 }
 
-/** Redirects to /login if not authenticated. */
+/**
+ * Redirects to /login if not authenticated.
+ * Connects the WebSocket on mount (covers page-refresh with persisted token)
+ * and whenever the access token rotates after a silent refresh.
+ * Disconnect is handled by authStore.logout() — not here — so navigation
+ * between protected pages never tears down the connection.
+ */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const accessToken = useAuthStore((s) => s.accessToken)
+
+  useEffect(() => {
+    // accessToken is null when logged out, so this is implicitly guarded
+    if (accessToken) socket.connect(accessToken)
+  }, [accessToken])
+
   if (!isAuthenticated) return <Navigate to="/login" replace />
   return <>{children}</>
 }

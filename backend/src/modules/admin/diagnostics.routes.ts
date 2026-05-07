@@ -9,9 +9,18 @@
 import { sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { extractRows } from '../../lib/db-helpers.js'
+import { getConnectionStats } from '../../lib/ws-registry.js'
 
 export async function diagnosticsRoutes(fastify: any) {
     const superAdmin = { preHandler: [fastify.authenticate, fastify.requireRole('super_admin')] }
+
+    /**
+     * GET /api/v1/admin/diagnostics/ws-stats
+     * Live WebSocket connection counts — useful for capacity planning.
+     */
+    fastify.get('/ws-stats', superAdmin, async (_req, reply) => {
+        return reply.send(getConnectionStats())
+    })
 
     /**
      * GET /api/v1/admin/diagnostics/slow-queries
