@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -19,6 +20,8 @@ interface Props {
     onOpenChange: (open: boolean) => void
     /** Pre-set and lock the employee (e.g. from employee detail page) */
     employeeId?: string
+    /** Fires after a successful upload — useful to reset list pagination so the new doc shows on page 1. */
+    onUploaded?: () => void
 }
 
 function addOneYear(dateStr: string): string {
@@ -27,11 +30,12 @@ function addOneYear(dateStr: string): string {
     return d.toISOString().split('T')[0]!
 }
 
-export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmployeeId }: Props) {
+export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmployeeId, onUploaded }: Props) {
     const { mutateAsync, isPending } = useUploadDocument()
 
     const [selectedEmpId, setSelectedEmpId] = useState('')
     const [docType, setDocType] = useState('')
+    const [docNumber, setDocNumber] = useState('')
     const [issueDate, setIssueDate] = useState('')
     const [expiryDate, setExpiryDate] = useState('')
     const [notes, setNotes] = useState('')
@@ -68,6 +72,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
     function reset() {
         setSelectedEmpId('')
         setDocType('')
+        setDocNumber('')
         setIssueDate('')
         setExpiryDate('')
         setNotes('')
@@ -125,11 +130,13 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
                 employeeId: effectiveEmployeeId,
                 category: selectedDef?.category ?? 'identity',
                 docType,
+                docNumber: docNumber.trim() || undefined,
                 issueDate: issueDate || undefined,
                 expiryDate: expiryDate || undefined,
                 notes: notes.trim() || undefined,
             })
             toast.success('Document uploaded', `${docType} has been submitted for review.`)
+            onUploaded?.()
             handleClose(false)
         } catch {
             // error handled by hook
@@ -197,6 +204,50 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
                         </Select>
                         {errors.docType && <p className="text-xs text-destructive">{errors.docType}</p>}
                     </div>
+
+                    {/* ── Document number — label adapts to selected doc type ── */}
+                    {docType && (() => {
+                        const numberLabelMap: Record<string, string> = {
+                            'Passport':       'Passport No.',
+                            'Emirates ID':    'Emirates ID No.',
+                            'National ID':    'National ID No.',
+                            'Driving License':'Driving License No.',
+                            'Visa':           'Visa No.',
+                            'Residence Visa': 'Residence Visa No.',
+                            'Entry Permit':   'Entry Permit No.',
+                            'Work Permit':    'Work Permit No.',
+                            'Visit Visa':     'Visit Visa No.',
+                            'Labour Card':    'Labour Card No.',
+                            'Trade License':  'License No.',
+                            'Establishment Card': 'Establishment Card No.',
+                            'Health Insurance Card': 'Policy No.',
+                            'Medical Insurance Card': 'Policy No.',
+                        }
+                        const label = numberLabelMap[docType] ?? 'Document Number'
+                        const placeholder = docType === 'Emirates ID'
+                            ? '784-XXXX-XXXXXXX-X'
+                            : `Enter ${label.toLowerCase()}`
+                        // Doc types whose number propagates to the employee record on approve
+                        const linksToEmployee = ['Passport', 'Emirates ID', 'Visa', 'Residence Visa', 'Entry Permit', 'Work Permit', 'Visit Visa', 'Labour Card'].includes(docType)
+                        return (
+                            <div className="space-y-1.5">
+                                <Label className="text-sm font-medium">
+                                    {label} <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                                </Label>
+                                <Input
+                                    value={docNumber}
+                                    onChange={e => setDocNumber(e.target.value)}
+                                    placeholder={placeholder}
+                                    className="h-9"
+                                />
+                                {linksToEmployee && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                        On approval, this number will populate the employee&apos;s {label.replace(/\.$/, '').toLowerCase()} field.
+                                    </p>
+                                )}
+                            </div>
+                        )
+                    })()}
 
                     {/* ── Issue + Expiry dates ── */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -1,5 +1,5 @@
 import { useState, useMemo, type ChangeEvent } from 'react'
-import { Plus, Trash2, Pencil, GitBranch, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
+import { Plus, Trash2, Pencil, GitBranch, ChevronDown, ChevronRight as ChevronRightIcon, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,10 @@ import {
     useOrgUnits, useCreateOrgUnit, useUpdateOrgUnit, useDeleteOrgUnit, useCascadeManager,
     type OrgUnit, type OrgUnitInput,
 } from '@/hooks/useOrgUnits'
+import { useTeams, useTeamMembers, type TeamRow } from '@/hooks/useTeams'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { getInitials } from '@/lib/utils'
 import { useEmployees } from '@/hooks/useEmployees'
 import { Select as UiSelect, SelectContent as UiSelectContent, SelectItem as UiSelectItem, SelectTrigger as UiSelectTrigger, SelectValue as UiSelectValue } from '@/components/ui/select'
 import { Textarea as UiTextarea } from '@/components/ui/textarea'
@@ -265,31 +269,132 @@ function OrgUnitDialog({
     )
 }
 
+// ─── Team subrow shown under an expanded department ──────────────────────────
+
+const TEAM_ROLE_COLOR: Record<string, string> = {
+    viewer:        'bg-slate-100 text-slate-700',
+    member:        'bg-blue-100 text-blue-800',
+    manager:       'bg-amber-100 text-amber-800',
+    administrator: 'bg-violet-100 text-violet-800',
+}
+
+function TeamSubRow({ team }: { team: TeamRow }) {
+    const { data: members = [] } = useTeamMembers(team.id)
+    const total = members.length || team.memberCount
+    const previewMembers = members.slice(0, 5)
+    const placeholderCount = Math.min(total, 5)
+    const overflow = total > 5 ? total - 5 : 0
+
+    return (
+        <div className="group flex items-center gap-3 rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors px-3 py-2.5 shadow-sm">
+            {/* Team identity */}
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/10 text-primary shrink-0">
+                    <Users className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground leading-tight truncate">{team.name}</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                        {total} {total === 1 ? 'member' : 'members'}
+                    </p>
+                </div>
+            </div>
+
+            {/* Avatar stack with member popovers */}
+            {total > 0 && (
+                <TooltipProvider delayDuration={150}>
+                    <div className="flex -space-x-2 shrink-0">
+                        {members.length === 0
+                            ? [...Array(placeholderCount)].map((_, i) => (
+                                <div key={i} className="h-7 w-7 rounded-full border-2 border-card bg-muted shrink-0" />
+                            ))
+                            : previewMembers.map(m => (
+                                <Tooltip key={m.id}>
+                                    <TooltipTrigger asChild>
+                                        <Avatar className="h-7 w-7 border-2 border-card shrink-0 cursor-pointer hover:z-10 hover:scale-110 transition-transform">
+                                            {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
+                                            <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">
+                                                {getInitials(`${m.firstName} ${m.lastName}`)}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" sideOffset={8} className="px-3 py-2.5 max-w-[260px]">
+                                        <div className="flex items-start gap-3">
+                                            <Avatar className="h-10 w-10 shrink-0 border border-border">
+                                                {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
+                                                <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                                                    {getInitials(`${m.firstName} ${m.lastName}`)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div className="min-w-0 space-y-1">
+                                                <p className="text-sm font-semibold leading-tight truncate">
+                                                    {m.firstName} {m.lastName}
+                                                </p>
+                                                {m.designation && (
+                                                    <p className="text-[11px] text-muted-foreground leading-tight truncate">
+                                                        {m.designation}
+                                                    </p>
+                                                )}
+                                                <span className={cn(
+                                                    'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium leading-none mt-0.5',
+                                                    TEAM_ROLE_COLOR[m.role ?? 'member'] ?? TEAM_ROLE_COLOR.member,
+                                                )}>
+                                                    {(m.role ?? 'member').replace(/^./, c => c.toUpperCase())}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            ))
+                        }
+                        {overflow > 0 && (
+                            <div className="h-7 w-7 rounded-full border-2 border-card bg-muted flex items-center justify-center shrink-0">
+                                <span className="text-[9px] font-semibold text-muted-foreground tabular-nums">+{overflow}</span>
+                            </div>
+                        )}
+                    </div>
+                </TooltipProvider>
+            )}
+        </div>
+    )
+}
+
 // ─── Org Unit Tree Row ────────────────────────────────────────────────────────
 
-function OrgUnitRow({ unit, units, empList }: {
+function OrgUnitRow({ unit, units, empList, teamsByDept }: {
     unit: OrgUnit
     units: OrgUnit[]
     empList: Array<{ id: string; firstName: string; lastName: string }>
+    teamsByDept: Map<string, TeamRow[]>
 }) {
     const deleteMut = useDeleteOrgUnit()
     const [editing, setEditing] = useState(false)
-    const [expanded, setExpanded] = useState(true)
+    const isDept = unit.type === 'department'
+    // Departments stay collapsed by default — open on explicit click.
+    const [expanded, setExpanded] = useState(!isDept)
     const [confirmDelete, setConfirmDelete] = useState(false)
     const meta = ORG_TYPE_META[unit.type]
     const Icon = meta.icon
     const children = units.filter(u => u.parentId === unit.id)
+    const deptTeams = isDept ? teamsByDept.get(unit.id) ?? [] : []
+    const hasContent = children.length > 0 || deptTeams.length > 0
 
     return (
         <div>
-            <div className={cn(
-                'flex items-center gap-3 rounded-lg border px-3 py-2.5 mb-1.5 bg-card hover:bg-muted/30 transition-colors',
-                meta.treeIndent,
-            )}>
-                {children.length > 0 ? (
-                    <button onClick={() => setExpanded(e => !e)} className="shrink-0 text-muted-foreground hover:text-foreground">
+            <div
+                className={cn(
+                    'flex items-center gap-3 rounded-lg border px-3 py-2.5 mb-1.5 bg-card transition-colors',
+                    meta.treeIndent,
+                    hasContent ? 'cursor-pointer hover:bg-muted/40' : 'hover:bg-muted/20',
+                )}
+                onClick={hasContent ? () => setExpanded(e => !e) : undefined}
+                role={hasContent ? 'button' : undefined}
+                aria-expanded={hasContent ? expanded : undefined}
+            >
+                {hasContent ? (
+                    <span className="shrink-0 text-muted-foreground">
                         {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRightIcon className="h-3.5 w-3.5" />}
-                    </button>
+                    </span>
                 ) : <div className="w-3.5 shrink-0" />}
 
                 <div className={cn('flex items-center gap-1.5 shrink-0 px-2 py-0.5 rounded-md border text-xs font-medium', meta.badge)}>
@@ -305,9 +410,17 @@ function OrgUnitRow({ unit, units, empList }: {
                     )}
                 </div>
 
+                {/* Team count chip — department only */}
+                {isDept && deptTeams.length > 0 && (
+                    <span className="inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary border border-primary/20">
+                        <Users className="h-3 w-3" />
+                        {deptTeams.length} {deptTeams.length === 1 ? 'team' : 'teams'}
+                    </span>
+                )}
+
                 {!unit.isActive && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
 
-                <div className="flex gap-1 shrink-0">
+                <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                     <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditing(true)}>
                         <Pencil className="h-3.5 w-3.5" />
                     </Button>
@@ -322,14 +435,22 @@ function OrgUnitRow({ unit, units, empList }: {
                 </div>
             </div>
 
-            {expanded && children.length > 0 && (
+            {expanded && hasContent && (
                 <div className="relative">
                     <div className="absolute left-[11px] top-0 bottom-1 w-px bg-border" />
                     {children
                         .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
                         .map(child => (
-                            <OrgUnitRow key={child.id} unit={child} units={units} empList={empList} />
+                            <OrgUnitRow key={child.id} unit={child} units={units} empList={empList} teamsByDept={teamsByDept} />
                         ))}
+                    {/* Team rows under a department */}
+                    {isDept && deptTeams.length > 0 && (
+                        <div className="ml-6 space-y-1.5 mt-1">
+                            {deptTeams.map(team => (
+                                <TeamSubRow key={team.id} team={team} />
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -362,12 +483,26 @@ function OrgUnitRow({ unit, units, empList }: {
 export function OrgStructureTab() {
     const { data: units = [], isLoading } = useOrgUnits()
     const { data: employees } = useEmployees({ limit: 100 })
+    const { data: teams = [] } = useTeams()
     const [adding, setAdding] = useState<OrgUnitType | null>(null)
 
     const empList = useMemo(
         () => Array.isArray(employees) ? employees : (employees as { data?: Array<{ id: string; firstName: string; lastName: string }> } | undefined)?.data ?? [],
         [employees],
     )
+
+    // Group teams by department once → O(1) lookup per row
+    const teamsByDept = useMemo(() => {
+        const map = new Map<string, TeamRow[]>()
+        for (const t of teams) {
+            if (!t.departmentId) continue
+            const arr = map.get(t.departmentId) ?? []
+            arr.push(t)
+            map.set(t.departmentId, arr)
+        }
+        for (const arr of map.values()) arr.sort((a, b) => a.name.localeCompare(b.name))
+        return map
+    }, [teams])
 
     const roots = units.filter(u => !u.parentId)
     const counts: Record<OrgUnitType, number> = {
@@ -434,7 +569,7 @@ export function OrgStructureTab() {
                     {roots
                         .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
                         .map(unit => (
-                            <OrgUnitRow key={unit.id} unit={unit} units={units} empList={empList} />
+                            <OrgUnitRow key={unit.id} unit={unit} units={units} empList={empList} teamsByDept={teamsByDept} />
                         ))}
                 </div>
             )}

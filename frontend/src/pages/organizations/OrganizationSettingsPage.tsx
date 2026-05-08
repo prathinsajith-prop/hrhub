@@ -3,13 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 import {
     Building2,
-    Users,
     Shield,
-    ArrowRightLeft,
     KeyRound,
     CalendarDays,
     CreditCard,
-    GitBranch,
     Briefcase,
     CalendarClock,
     GraduationCap,
@@ -23,12 +20,9 @@ import { cn } from '@/lib/utils'
 import type { Permission } from '@/lib/permissions'
 
 import { ProfileTab } from './org-settings/ProfileTab'
-import { MembersTab } from './org-settings/MembersTab'
 import { SecurityTab } from './org-settings/SecurityTab'
-import { SwitchTab } from './org-settings/SwitchTab'
 import { RolesPermissionsTab } from './org-settings/RolesPermissionsTab'
 import { HolidaysTab } from './org-settings/HolidaysTab'
-import { OrgStructureTab } from './org-settings/OrgStructureTab'
 import { DesignationsTab } from './org-settings/DesignationsTab'
 import { GradeLevelsTab } from './org-settings/GradeLevelsTab'
 import { SubscriptionTab } from './org-settings/SubscriptionTab'
@@ -37,16 +31,13 @@ import { LeaveSettingsTab } from './org-settings/LeaveSettingsTab'
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 const tabs = [
     { value: 'profile',       label: 'Organization Profile', desc: 'Company details & regional settings',    icon: Building2,     requires: 'manage_settings' as Permission | null },
-    { value: 'structure',     label: 'Org Structure',        desc: 'Divisions, departments & branches',       icon: GitBranch,     requires: 'manage_settings' as Permission | null },
     { value: 'designations',  label: 'Designations',         desc: 'Job titles & designations',               icon: Briefcase,     requires: 'manage_settings' as Permission | null },
     { value: 'grade-levels',  label: 'Grade Levels',         desc: 'Employee grade & band configuration',     icon: GraduationCap, requires: 'manage_settings' as Permission | null },
-    { value: 'members',       label: 'Users',                desc: 'Users, roles & access',                   icon: Users,         requires: 'manage_users'    as Permission | null },
     { value: 'roles',         label: 'Roles & Permissions',  desc: 'View built-in role permissions',          icon: KeyRound,      requires: 'manage_users'    as Permission | null },
     { value: 'holidays',      label: 'Public Holidays',      desc: 'Manage company-wide holidays by year',    icon: CalendarDays,  requires: 'manage_settings' as Permission | null },
     { value: 'leave',         label: 'Leave Settings',       desc: 'Rollover gate & leave policies',          icon: CalendarClock, requires: 'manage_settings' as Permission | null },
     { value: 'subscription',  label: 'Subscription',         desc: 'Plan, usage & billing',                   icon: CreditCard,    requires: 'manage_settings' as Permission | null },
     { value: 'security',      label: 'Security',             desc: 'Policies, IP allowlist & data',           icon: Shield,        requires: 'manage_settings' as Permission | null },
-    { value: 'switch',        label: 'Switch Organization',  desc: 'Change active workspace',                 icon: ArrowRightLeft, requires: null              as Permission | null },
 ]
 
 export function OrganizationSettingsPage() {
@@ -86,7 +77,7 @@ export function OrganizationSettingsPage() {
                     />
                 </div>
 
-                {/* Desktop (xl+): sticky vertical nav rail with hover-to-switch */}
+                {/* Desktop (xl+): sticky vertical nav rail */}
                 <aside className="hidden xl:block sticky top-20 self-start">
                     <div className="rounded-xl border bg-card shadow-sm p-3">
                         <nav className="flex flex-col gap-0.5">
@@ -96,7 +87,6 @@ export function OrganizationSettingsPage() {
                                     <button
                                         key={tab.value}
                                         type="button"
-                                        onMouseEnter={() => setActiveTab(tab.value)}
                                         onClick={() => setActiveTab(tab.value)}
                                         className={cn(
                                             'group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-start w-full',
@@ -128,16 +118,13 @@ export function OrganizationSettingsPage() {
                 {/* Content */}
                 <div className="pt-6 xl:pt-0 min-w-0">
                     <TabsContent value="profile"      className="mt-0"><ProfileTab /></TabsContent>
-                    <TabsContent value="structure"    className="mt-0"><OrgStructureTab /></TabsContent>
                     <TabsContent value="designations" className="mt-0"><DesignationsTab /></TabsContent>
                     <TabsContent value="grade-levels" className="mt-0"><GradeLevelsTab /></TabsContent>
-                    <TabsContent value="members"      className="mt-0"><MembersTab /></TabsContent>
                     <TabsContent value="roles"        className="mt-0"><RolesPermissionsTab /></TabsContent>
                     <TabsContent value="holidays"     className="mt-0"><HolidaysTab /></TabsContent>
                     <TabsContent value="leave"        className="mt-0"><LeaveSettingsTab /></TabsContent>
                     <TabsContent value="subscription" className="mt-0"><SubscriptionTab /></TabsContent>
                     <TabsContent value="security"     className="mt-0"><SecurityTab /></TabsContent>
-                    <TabsContent value="switch"       className="mt-0"><SwitchTab /></TabsContent>
                 </div>
             </Tabs>
         </PageWrapper>

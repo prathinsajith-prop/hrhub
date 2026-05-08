@@ -69,7 +69,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       items: [
         { title: t('nav.employees'), url: "/employees", icon: UsersIcon },
         { title: t('nav.orgChart', { defaultValue: 'Org Chart' }), url: "/org-chart", icon: NetworkIcon },
-        { title: t('nav.team', { defaultValue: 'Organization' }), url: "/team", icon: Users2Icon },
         { title: t('nav.recruitment'), url: "/recruitment", icon: BriefcaseIcon },
         { title: t('nav.onboarding'), url: "/onboarding", icon: UserPlusIcon },
         { title: t('nav.exit', { defaultValue: 'Exit & Offboarding' }), url: "/exit", icon: UserMinusIcon },
@@ -103,8 +102,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         { title: t('nav.reports'), url: "/reports", icon: BarChart3Icon },
         { title: t('nav.auditLog'), url: "/audit", icon: ClipboardListIcon },
         { title: t('nav.complaints', { defaultValue: 'Complaints' }), url: "/complaints", icon: MessageSquareWarningIcon },
-        { title: t('nav.users', { defaultValue: 'Users & Roles' }), url: "/users", icon: KeyRoundIcon },
-        { title: t('nav.orgSettings', { defaultValue: 'Org Settings' }), url: "/organization-settings", icon: Settings2Icon },
+      ],
+    },
+    {
+      label: t('nav.workspace', { defaultValue: 'Workspace' }),
+      items: [
+        { title: t('nav.team', { defaultValue: 'Org and Teams' }),          url: "/team",                  icon: Users2Icon },
+        { title: t('nav.users', { defaultValue: 'Users & Roles' }),         url: "/users",                 icon: KeyRoundIcon },
+        { title: t('nav.orgSettings', { defaultValue: 'Org Settings' }),    url: "/organization-settings", icon: Settings2Icon },
       ],
     },
   ], [t])

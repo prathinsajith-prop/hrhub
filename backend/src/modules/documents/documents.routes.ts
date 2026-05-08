@@ -52,7 +52,10 @@ export default async function (fastify: any): Promise<void> {
                     fileName: { type: 'string' },
                     s3Key: { type: 'string' },
                     fileSize: { type: 'number' },
+                    docNumber: { type: 'string' },
+                    issueDate: { type: 'string' },
                     expiryDate: { type: 'string' },
+                    notes: { type: 'string' },
                 },
             },
         },
@@ -99,7 +102,9 @@ export default async function (fastify: any): Promise<void> {
             ...(b.category !== undefined && { category: b.category as never }),
             ...(b.docType !== undefined && { docType: b.docType as string }),
             ...(b.fileName !== undefined && { fileName: b.fileName as string }),
+            ...(b.docNumber !== undefined && { docNumber: b.docNumber ? (b.docNumber as string).trim() : null }),
             ...(b.expiryDate !== undefined && { expiryDate: b.expiryDate ? (b.expiryDate as string) : null }),
+            ...(b.issueDate !== undefined && { issueDate: b.issueDate ? (b.issueDate as string) : null }),
             ...(b.notes !== undefined && { notes: b.notes as string }),
             ...(isElevated && b.status !== undefined && { status: b.status as never }),
         })
@@ -319,7 +324,7 @@ export default async function (fastify: any): Promise<void> {
             return reply.code(415).send({ message: `File type not permitted. Please upload a PDF, image, Word, or Excel document.` })
         }
 
-        const { employeeId, category, expiryDate, issueDate, notes, docType } = fields
+        const { employeeId, category, expiryDate, issueDate, notes, docType, docNumber } = fields
         if (!category) return reply.code(400).send({ message: 'category is required' })
 
         // Verify the supplied employeeId belongs to this tenant
@@ -351,6 +356,7 @@ export default async function (fastify: any): Promise<void> {
             fileName: fileMeta.fileName,
             s3Key: fileMeta.s3Key,
             fileSize: fileMeta.size,
+            docNumber: docNumber?.trim() || null,
             issueDate: issueDate || null,
             expiryDate: expiryDate || null,
             notes: notes || null,

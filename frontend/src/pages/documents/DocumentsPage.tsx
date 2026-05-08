@@ -62,17 +62,30 @@ const columns = (
     {
       accessorKey: 'docType',
       header: 'Document',
-      cell: ({ row: { original: d } }) => (
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-            <FileText className="h-4 w-4 text-blue-600" />
+      cell: ({ row: { original: d } }) => {
+        const expired = !!d.expiryDate && new Date(d.expiryDate) < new Date()
+        return (
+          <div className="flex items-center gap-2.5">
+            <div className={cn(
+              'h-8 w-8 rounded-lg flex items-center justify-center shrink-0',
+              expired ? 'bg-red-50' : 'bg-blue-50',
+            )}>
+              <FileText className={cn('h-4 w-4', expired ? 'text-red-600' : 'text-blue-600')} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium truncate">{d.docType}</p>
+                {expired && (
+                  <span className="inline-flex items-center rounded-full border border-red-200 bg-red-100 px-1.5 py-0 text-[10px] font-semibold text-red-800 shrink-0">
+                    Expired
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">{labelFor(d.category)}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium">{d.docType}</p>
-            <p className="text-[10px] text-muted-foreground">{labelFor(d.category)}</p>
-          </div>
-        </div>
-      ),
+        )
+      },
       size: 200,
     },
     {
@@ -176,7 +189,10 @@ const columns = (
               <Edit2 className="h-3.5 w-3.5" />
             </Button>
           )}
-          {canManage && (d.status === 'under_review' || d.status === 'pending_upload' || d.status === 'rejected') && (
+          {canManage
+            && (d.status === 'under_review' || d.status === 'pending_upload' || d.status === 'rejected')
+            // Hide Approve when the document is already expired — only Reject is appropriate.
+            && !(d.expiryDate && new Date(d.expiryDate) < new Date()) && (
             <Button
               size="icon-sm"
               variant="ghost"
@@ -232,7 +248,15 @@ export function DocumentsPage() {
   }
 
   const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: PAGE_SIZE, offset, q: search.searchInput || undefined, filters: search.appliedFilters })
-  const documents = useMemo<Document[]>(() => (docsData?.data as Document[]) ?? [], [docsData?.data])
+  // LIFO — newest upload first. Use timestamp comparison for robustness.
+  const documents = useMemo<Document[]>(() => {
+    const arr = (docsData?.data as Document[]) ?? []
+    return [...arr].sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return tb - ta
+    })
+  }, [docsData?.data])
   const total = docsData?.total ?? 0
   const expiring = documents.filter((d) => d.status === 'expiring_soon').length
   const expired = documents.filter((d) => d.status === 'expired').length
@@ -393,6 +417,7 @@ export function DocumentsPage() {
       </Card>
       <AddDocumentDialog
         open={uploadOpen}
+        onUploaded={() => setOffset(0)}
         onOpenChange={(o) => {
           setUploadOpen(o)
           if (!o && (qpEmployee || qpCategory || searchParams.get('upload'))) {

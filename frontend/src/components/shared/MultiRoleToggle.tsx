@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { ROLE_BADGE_STYLE } from '@/lib/enums'
+import { ROLE_BADGE_STYLE, ROLE_BADGE_BORDER_ACTIVE } from '@/lib/enums'
 
 export const MULTI_ROLE_OPTIONS = [
     { id: 'hr_manager', label: 'HR Manager' },
@@ -61,10 +61,14 @@ export function MultiRoleToggle({
                         }}
                         title={isLastActive ? 'At least one role required' : undefined}
                         className={cn(
-                            'text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors',
+                            'text-xs font-medium px-2.5 py-1 rounded-full border-2 transition-colors',
                             isActive
-                                ? cn(ROLE_BADGE_STYLE[r.id] ?? 'bg-slate-100 text-slate-600 border-slate-200', 'border-transparent')
-                                : 'bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground',
+                                ? cn(
+                                    ROLE_BADGE_STYLE[r.id] ?? 'bg-slate-100 text-slate-600',
+                                    ROLE_BADGE_BORDER_ACTIVE[r.id] ?? 'border-slate-500',
+                                    'shadow-sm',
+                                )
+                                : 'bg-muted/40 text-muted-foreground border-border hover:border-foreground/40 hover:bg-muted/70 hover:text-foreground',
                             (disabled || isLastActive) && 'opacity-60 cursor-not-allowed',
                         )}
                     >

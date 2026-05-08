@@ -5,7 +5,7 @@ import { db } from '../../db/index.js'
 import { employees, entities, tenants, gradeLevels, sponsoringEntities, employeeNoSequences, orgUnits } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
-import { resolveAvatarUrl } from '../../plugins/s3.js'
+import { resolveAvatarUrl, resolveAvatarUrls } from '../../plugins/s3.js'
 import { buildDrizzleFilters, parseFilterString } from '../../lib/filters.js'
 
 // Alias for the department org unit join (employees can join orgUnits 3x: branch/division/dept)
@@ -188,10 +188,9 @@ export async function listEmployees(params: ListEmployeesParams) {
         total = Number(countRow?.count ?? 0)
     }
 
-    const data = await Promise.all(pageRows.map(async r => {
-        const base = withFullName(r as any)
-        return { ...base, avatarUrl: await resolveAvatarUrl((r as any).avatarUrl) }
-    }))
+    // Batch resolve — one round of S3 signing for all unique avatar keys.
+    const avatarUrls = await resolveAvatarUrls(pageRows.map(r => (r as any).avatarUrl))
+    const data = pageRows.map((r, i) => ({ ...withFullName(r as any), avatarUrl: avatarUrls[i] }))
 
     return {
         data,
@@ -382,11 +381,9 @@ export async function getOrgChart(tenantId: string, rootEmployeeId?: string) {
         const subtreeSet = new Set(subtreeIds)
         const ancestorSet = new Set(ancestorIds)
 
-        // Resolve avatarUrls to presigned download URLs
-        const resolvedRows = await Promise.all(rows.map(async r => ({
-            ...r,
-            avatarUrl: await resolveAvatarUrl(r.avatarUrl),
-        })))
+        // Batch-resolve presigned avatar URLs (deduped per unique key).
+        const avatarUrls = await resolveAvatarUrls(rows.map(r => r.avatarUrl))
+        const resolvedRows = rows.map((r, i) => ({ ...r, avatarUrl: avatarUrls[i] }))
 
         // 4. Build node map — ancestors are flagged so the frontend can style them
         const map = new Map(resolvedRows.map(r => [r.id, {
@@ -442,10 +439,8 @@ export async function getOrgChart(tenantId: string, rootEmployeeId?: string) {
         status: employees.status,
     }).from(employees).where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false)))
 
-    const resolvedRows = await Promise.all(rows.map(async r => ({
-        ...r,
-        avatarUrl: await resolveAvatarUrl(r.avatarUrl),
-    })))
+    const avatarUrls = await resolveAvatarUrls(rows.map(r => r.avatarUrl))
+    const resolvedRows = rows.map((r, i) => ({ ...r, avatarUrl: avatarUrls[i] }))
 
     const map = new Map(resolvedRows.map(r => [r.id, {
         ...r, fullName: `${r.firstName} ${r.lastName}`, isAncestor: false, children: [] as any[],

@@ -161,7 +161,9 @@ export function SubscriptionTab() {
     const isOnProfessional = sub?.current.plan === 'growth'
     const stripeEnabled = sub?.stripeEnabled ?? false
     const pricing = sub?.pricing
-    const monthlyCost = pricing ? Math.ceil(desiredQuota / 5) * pricing.pricePerFiveEmployees : 0
+    // Per-user pricing model — AED 15 / user / month (server is source of truth).
+    const pricePerUser = pricing?.pricePerUser ?? Math.round((pricing?.pricePerFiveEmployees ?? 75) / 5)
+    const monthlyCost = desiredQuota * pricePerUser
 
     const handlePay = async () => {
         const action: 'upgrade' | 'quota_update' = isOnProfessional ? 'quota_update' : 'upgrade'
@@ -433,23 +435,23 @@ export function SubscriptionTab() {
                         <DialogDescription>
                             {isOnProfessional
                                 ? stripeEnabled ? 'Choose your new capacity. A payment will be processed for the updated monthly amount.' : 'Adjust your employee capacity. Changes take effect immediately.'
-                                : `AED ${pricing?.pricePerFiveEmployees ?? 10} per 5 employees / month. ${stripeEnabled ? 'Pay by card — plan activates instantly.' : 'Our team will confirm payment before activating.'}`}
+                                : `AED ${pricePerUser} per user per month. ${stripeEnabled ? 'Pay by card — plan activates instantly.' : 'Our team will confirm payment before activating.'}`}
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-3">
-                        <Label>Number of employees</Label>
+                        <Label>Number of users</Label>
                         <div className="flex items-center gap-3">
-                            <Button type="button" variant="outline" size="icon-sm" onClick={() => setDesiredQuota(q => Math.max(5, q - 5))}>
+                            <Button type="button" variant="outline" size="icon-sm" onClick={() => setDesiredQuota(q => Math.max(1, q - 1))}>
                                 <Minus className="h-4 w-4" />
                             </Button>
                             <NumericInput
                                 decimal={false}
                                 value={String(desiredQuota)}
-                                onChange={e => setDesiredQuota(Math.max(5, Number(e.target.value)))}
+                                onChange={e => setDesiredQuota(Math.max(1, Number(e.target.value) || 1))}
                                 className="text-center font-semibold w-24"
                             />
-                            <Button type="button" variant="outline" size="icon-sm" onClick={() => setDesiredQuota(q => q + 5)}>
+                            <Button type="button" variant="outline" size="icon-sm" onClick={() => setDesiredQuota(q => q + 1)}>
                                 <Plus className="h-4 w-4" />
                             </Button>
                         </div>
@@ -457,11 +459,11 @@ export function SubscriptionTab() {
                         <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 flex items-center justify-between">
                             <div>
                                 <p className="text-xs text-blue-600 font-medium">Monthly cost</p>
-                                <p className="text-2xl font-bold text-blue-700">AED {monthlyCost}</p>
+                                <p className="text-2xl font-bold text-blue-700">AED {monthlyCost.toLocaleString()}</p>
                             </div>
                             <div className="text-right text-xs text-blue-600">
-                                <p>{desiredQuota} employees</p>
-                                <p>AED {pricing?.pricePerFiveEmployees ?? 10} × {Math.ceil(desiredQuota / 5)} blocks</p>
+                                <p>{desiredQuota} {desiredQuota === 1 ? 'user' : 'users'}</p>
+                                <p>AED {pricePerUser} × {desiredQuota} per month</p>
                             </div>
                         </div>
                     </div>

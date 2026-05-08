@@ -16,8 +16,15 @@ export const PLAN_DISPLAY: Record<PlanKey, { name: string; description: string; 
     enterprise: { name: 'Enterprise',   description: 'Unlimited employees, dedicated support.',        color: '#7c3aed' },
 }
 
-export const PROFESSIONAL_PRICE_PER_5 = 10
+/** Per-user-per-month pricing for the Professional plan (in AED). */
+export const PROFESSIONAL_PRICE_PER_USER = 15
 export const FREE_PLAN_QUOTA = 5
+
+/**
+ * @deprecated kept for backwards compatibility — equals 5× the per-user price.
+ * Will be removed once all call sites switch to the per-user model.
+ */
+export const PROFESSIONAL_PRICE_PER_5 = PROFESSIONAL_PRICE_PER_USER * 5
 
 // ─── Event logging ────────────────────────────────────────────────────────────
 
@@ -144,8 +151,9 @@ export async function enforceEmployeeQuota(tenantId: string): Promise<void> {
 
 // ─── Pricing helpers ──────────────────────────────────────────────────────────
 
+/** Per-user × headcount. e.g. 12 employees × AED 15 = AED 180 / month. */
 export function calculateProfessionalCost(employeeCount: number): number {
-    return Math.ceil(employeeCount / 5) * PROFESSIONAL_PRICE_PER_5
+    return Math.max(0, Math.ceil(employeeCount)) * PROFESSIONAL_PRICE_PER_USER
 }
 
 // ─── Stripe Checkout ──────────────────────────────────────────────────────────

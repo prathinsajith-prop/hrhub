@@ -126,9 +126,9 @@ describe('useRecordLoanPayment', () => {
             React.createElement(QueryClientProvider, { client }, children)
 
         const { result } = renderHook(() => useRecordLoanPayment(), { wrapper })
-        await act(() => result.current.mutateAsync('loan-789'))
+        await act(() => result.current.mutateAsync({ id: 'loan-789' }))
 
-        expect(apiMock.post).toHaveBeenCalledWith('/loans/loan-789/payment')
+        expect(apiMock.post).toHaveBeenCalledWith('/loans/loan-789/payment', { periodMonth: undefined, notes: undefined })
     })
 })
 
