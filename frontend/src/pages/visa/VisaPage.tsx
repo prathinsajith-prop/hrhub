@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress'
 import { Tabs } from '@/components/ui/form-controls'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { InitialsAvatar } from '@/components/shared/Avatar'
+import { ExpiryStatus } from '@/components/shared/ExpiryStatus'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatDate, cn } from '@/lib/utils'
@@ -210,8 +211,14 @@ const columns: ColumnDef<VisaApplication>[] = [
     accessorKey: 'expiryDate',
     header: 'Expiry',
     cell: ({ getValue }) => {
-      const d = getValue() as string
-      return d ? <span className="text-xs text-muted-foreground">{formatDate(d)}</span> : <span className="text-xs text-muted-foreground">&mdash;</span>
+      const d = getValue() as string | null
+      if (!d) return <span className="text-xs text-muted-foreground">&mdash;</span>
+      return (
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs">{formatDate(d)}</span>
+          <ExpiryStatus date={d} />
+        </div>
+      )
     },
   },
   {

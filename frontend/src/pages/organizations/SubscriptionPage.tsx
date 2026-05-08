@@ -51,23 +51,23 @@ const EVENT_BADGE: Record<string, string> = {
 
 // ─── Upgrade Dialog ───────────────────────────────────────────────────────────
 
-function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerFive, currency }: {
+function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUser, currency }: {
     open: boolean
     onClose: () => void
     currentQuota: number | null
     stripeEnabled: boolean
-    pricePerFive: number
+    pricePerUser: number
     currency: string
 }) {
-    const [quota, setQuota] = useState(Math.max(10, (currentQuota ?? 0) + 5))
+    const [quota, setQuota] = useState(Math.max(1, (currentQuota ?? 0) + 1))
     const checkoutMut = useCheckoutSession()
     const upgradeMut = useUpgradeRequest()
 
-    const monthlyCost = Math.ceil(quota / 5) * pricePerFive
-    const step = 5
+    const monthlyCost = quota * pricePerUser
+    const step = 1
 
     function adjust(delta: number) {
-        setQuota(q => Math.max(5, Math.min(10000, q + delta)))
+        setQuota(q => Math.max(1, Math.min(10000, q + delta)))
     }
 
     function handleSubmit() {
@@ -97,7 +97,7 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerFiv
                 <DialogHeader>
                     <DialogTitle>Book an Upgrade</DialogTitle>
                     <DialogDescription>
-                        Choose your desired employee capacity. You'll be charged {currency} {pricePerFive} per 5 employees per month.
+                        Choose your desired user count. You'll be charged {currency} {pricePerUser} per user per month.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -548,7 +548,7 @@ export function SubscriptionPage() {
                 onClose={() => setUpgradeOpen(false)}
                 currentQuota={sub?.current.quota ?? null}
                 stripeEnabled={sub?.stripeEnabled ?? false}
-                pricePerFive={sub?.pricing.pricePerFiveEmployees ?? 0}
+                pricePerUser={sub?.pricing.pricePerUser ?? 15}
                 currency={sub?.pricing.currency ?? 'AED'}
             />
             <EnterpriseDialog open={enterpriseOpen} onClose={() => setEnterpriseOpen(false)} />

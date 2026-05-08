@@ -25,9 +25,15 @@ const ROLE_CATEGORY_OPTIONS = [
 type RoleCategory = (typeof ROLE_CATEGORY_OPTIONS)[number]['value']
 
 const ROLE_CATEGORY_COLORS: Record<RoleCategory, string> = {
-    employee:  'bg-blue-100 text-blue-700',
-    manager:   'bg-violet-100 text-violet-700',
-    director:  'bg-amber-100 text-amber-700',
+    employee:  'bg-blue-100 text-blue-800 border-blue-200',
+    manager:   'bg-violet-100 text-violet-800 border-violet-200',
+    director:  'bg-amber-100 text-amber-800 border-amber-200',
+}
+
+const ROLE_CATEGORY_BORDER_ACTIVE: Record<RoleCategory, string> = {
+    employee:  'border-blue-500',
+    manager:   'border-violet-500',
+    director:  'border-amber-500',
 }
 
 function roleCategoryLabel(value: string): string {
@@ -203,7 +209,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
 
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">
-                            Role Category <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+                            Grade Category <span className="text-muted-foreground font-normal text-xs">(optional)</span>
                         </label>
                         <div className="flex flex-wrap gap-2">
                             {ROLE_CATEGORY_OPTIONS.map(opt => {
@@ -214,10 +220,10 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                                         type="button"
                                         onClick={() => toggleRole(opt.value)}
                                         className={cn(
-                                            'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                                            'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-colors',
                                             selected
-                                                ? cn(ROLE_CATEGORY_COLORS[opt.value], 'border-transparent')
-                                                : 'bg-background text-muted-foreground border-border hover:border-primary/40',
+                                                ? cn(ROLE_CATEGORY_COLORS[opt.value], ROLE_CATEGORY_BORDER_ACTIVE[opt.value], 'shadow-sm')
+                                                : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70 hover:border-foreground/40',
                                         )}
                                     >
                                         {selected && <Check className="h-3 w-3" />}
@@ -383,7 +389,7 @@ function GradeLevelsSection() {
                                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-16">Code</th>
                                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8">Lvl</th>
                                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
-                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Role Category</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Grade Category</th>
                                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-44">Salary Range</th>
                                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">Status</th>
                                     <th className="w-28 px-4 py-2.5" />
@@ -413,7 +419,7 @@ function GradeLevelsSection() {
                                             {g.roles && g.roles.length > 0 ? (
                                                 <div className="flex flex-wrap gap-1">
                                                     {g.roles.map(r => (
-                                                        <span key={r} className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', roleCategoryColor(r))}>
+                                                        <span key={r} className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium', roleCategoryColor(r))}>
                                                             {roleCategoryLabel(r)}
                                                         </span>
                                                     ))}

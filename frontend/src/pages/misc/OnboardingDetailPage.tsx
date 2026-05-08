@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
 import { ConfirmDialog, toast, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, DialogClose } from '@/components/ui/overlays'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
+import { ActionBadge } from '@/components/shared'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
@@ -1056,11 +1057,11 @@ function ActivityTab({ employeeId }: { employeeId: string }) {
                         <div key={log.id} className="flex items-start gap-3 p-2.5 rounded-lg border bg-card">
                             <Activity className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm">
-                                    <span className="font-medium">{log.actorName ?? 'System'}</span>
-                                    <span className="text-muted-foreground"> · {log.action}</span>
-                                </p>
-                                <p className="text-[11px] text-muted-foreground">{formatDate(log.createdAt)}</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-medium">{log.actorName ?? 'System'}</span>
+                                    <ActionBadge action={log.action} />
+                                </div>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">{formatDate(log.createdAt)}</p>
                             </div>
                         </div>
                     ))}

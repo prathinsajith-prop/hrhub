@@ -207,6 +207,8 @@ export interface Document {
   docType: string
   fileName: string
   fileSize?: number | null
+  /** The number printed on the document — visa number, Emirates ID, passport, etc. */
+  docNumber?: string | null
   issueDate?: string | null
   expiryDate?: string | null
   notes?: string | null

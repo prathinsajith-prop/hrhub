@@ -17,6 +17,8 @@ export const documents = pgTable('documents', {
     fileName: text('file_name').notNull(),
     s3Key: text('s3_key'),
     fileSize: bigint('file_size', { mode: 'number' }),
+    /** Identifier on the document itself — e.g. visa number, Emirates ID, passport no. */
+    docNumber: text('doc_number'),
     issueDate: date('issue_date'),
     expiryDate: date('expiry_date'),
     notes: text('notes'),

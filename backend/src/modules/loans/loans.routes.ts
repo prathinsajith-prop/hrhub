@@ -8,6 +8,7 @@ import {
     approveLoan,
     rejectLoan,
     recordLoanPayment,
+    getLoanSchedule,
     deleteLoan,
     getEmployeeAllLoans,
 } from './loans.service.js'
@@ -170,24 +171,44 @@ export default async function loansRoutes(fastify: any): Promise<void> {
         return reply.code(204).send()
     })
 
-    // POST /api/v1/loans/:id/payment — record monthly deduction
+    // POST /api/v1/loans/:id/payment — record monthly deduction.
+    // Body (all optional): { periodMonth?: 'YYYY-MM' | 'YYYY-MM-DD', notes?: string }
     fastify.post('/:id/payment', hrOnly, async (request: any, reply: any) => {
         const id = parseUuidParam(request.params, 'id', reply)
         if (!id) return
-        const updated = await recordLoanPayment(request.user.tenantId, id)
-        if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
-        recordActivity({
-            tenantId: request.user.tenantId,
-            userId: request.user.id,
-            actorName: request.user.name,
-            actorRole: request.user.role,
-            entityType: 'employee_loan',
-            entityId: updated.id,
-            entityName: `Loan AED ${updated.amount}`,
-            action: 'update',
-            ipAddress: request.ip,
-            userAgent: request.headers['user-agent'],
-        }).catch(() => { })
-        return reply.send({ data: updated })
+        const { periodMonth, notes } = (request.body ?? {}) as { periodMonth?: string; notes?: string }
+        try {
+            const updated = await recordLoanPayment(request.user.tenantId, id, {
+                periodMonth,
+                recordedBy: request.user.id,
+                notes,
+            })
+            if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Loan not found' })
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee_loan',
+                entityId: updated.id,
+                entityName: `Loan AED ${updated.amount}`,
+                action: 'update',
+                metadata: { periodMonth: periodMonth ?? null },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+            return reply.send({ data: updated })
+        } catch (err: any) {
+            return reply.code(err.statusCode ?? 500)
+                .send({ statusCode: err.statusCode ?? 500, error: 'Error', message: err.message ?? 'Failed to record payment' })
+        }
+    })
+
+    // GET /api/v1/loans/:id/schedule — full installment schedule with status per month.
+    fastify.get('/:id/schedule', hrOnly, async (request: any, reply: any) => {
+        const id = parseUuidParam(request.params, 'id', reply)
+        if (!id) return
+        const entries = await getLoanSchedule(request.user.tenantId, id)
+        return reply.send({ data: entries })
     })
 }

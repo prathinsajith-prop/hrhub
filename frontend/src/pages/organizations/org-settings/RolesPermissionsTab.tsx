@@ -1,5 +1,5 @@
 import React from 'react'
-import { KeyRound, AlertCircle, UserCircle, Check, Minus } from 'lucide-react'
+import { KeyRound, AlertCircle, UserCircle, CheckCircle2, MinusCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { labelFor } from '@/lib/enums'
 import { ALL_ROLES, ALL_PERMISSIONS, getRolePermissionMatrix, type Permission } from '@/lib/permissions'
@@ -74,9 +74,12 @@ export function RolesPermissionsTab() {
                                                 return (
                                                     <td key={r} className="px-2 py-2 text-center">
                                                         {granted ? (
-                                                            <Check className="h-4 w-4 text-emerald-600 inline" aria-label="granted" />
+                                                            <CheckCircle2
+                                                                className="h-4 w-4 text-emerald-600 inline"
+                                                                aria-label="granted"
+                                                            />
                                                         ) : (
-                                                            <Minus className="h-4 w-4 text-muted-foreground/40 inline" aria-label="denied" />
+                                                            <MinusCircle className="h-4 w-4 text-muted-foreground/40 inline" aria-label="denied" />
                                                         )}
                                                     </td>
                                                 )
