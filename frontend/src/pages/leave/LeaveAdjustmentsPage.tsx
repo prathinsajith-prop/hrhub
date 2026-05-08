@@ -34,9 +34,7 @@ import {
     useUpdateLeaveOffset,
     useDeleteLeaveOffset,
 } from '@/hooks/useLeaveAdjustments'
-import { useAuthStore } from '@/store/authStore'
-import { hasPermission } from '@/lib/permissions'
-import type { UserRole } from '@/types'
+import { usePermissions } from '@/hooks/usePermissions'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -815,8 +813,8 @@ function OffsetAdjustmentsTab({ canManage }: { canManage: boolean }) {
 
 export function LeaveAdjustmentsPage() {
     const { t } = useTranslation()
-    const role = useAuthStore(s => s.user?.role) as UserRole | undefined
-    const canManage = hasPermission(role ?? 'employee', 'manage_leave')
+    const { can } = usePermissions()
+    const canManage = can('manage_leave')
 
     return (
         <PageWrapper>

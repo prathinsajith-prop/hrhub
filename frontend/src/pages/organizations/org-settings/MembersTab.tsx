@@ -3,7 +3,6 @@ import { Users, Plus, XCircle, CheckCircle2, UserCircle, Search, Send, MailCheck
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -12,8 +11,8 @@ import { useAuthStore } from '@/store/authStore'
 import { useTenantUsers, useUpdateUser, useInvitableEmployees, useInviteUser, useResendInvite, type InvitableEmployee } from '@/hooks/useSettings'
 import { usePermissions } from '@/hooks/usePermissions'
 import { labelFor, ROLE_BADGE_STYLE } from '@/lib/enums'
+import { MultiRoleToggle, MULTI_ROLE_OPTIONS, MULTI_ROLE_OPTIONS_WITH_SUPER, CopyableEmail } from '@/components/shared'
 import { Card, Section } from './_shared'
-import { CopyableEmail } from '@/components/shared'
 
 // ─── Role access map ──────────────────────────────────────────────────────────
 const ROLE_ACCESS_MAP: Record<string, string[]> = {
@@ -23,16 +22,6 @@ const ROLE_ACCESS_MAP: Record<string, string[]> = {
     dept_head: ['Onboarding', 'Leave approval', 'Attendance', 'Performance'],
     employee: ['Own leave', 'Own attendance', 'Own performance'],
 }
-
-const ALL_ROLES = [
-    { id: 'super_admin', label: 'Super Admin' },
-    { id: 'hr_manager', label: 'HR Manager' },
-    { id: 'pro_officer', label: 'PRO Officer' },
-    { id: 'dept_head', label: 'Department Manager' },
-    { id: 'employee', label: 'Employee' },
-]
-
-const INVITE_ROLES = ALL_ROLES.filter(r => r.id !== 'super_admin')
 
 // ─── Employee Picker ──────────────────────────────────────────────────────────
 function EmployeePicker({
@@ -141,8 +130,10 @@ function EmployeePicker({
 function InvitePanel({ onClose }: { onClose: () => void }) {
     const { data: invitableEmployees = [], isLoading: loadingEmployees } = useInvitableEmployees()
     const inviteUser = useInviteUser()
+    const callerIsSuperAdmin = useAuthStore(s => s.user?.role) === 'super_admin'
     const [selected, setSelected] = useState<InvitableEmployee | null>(null)
-    const [role, setRole] = useState('hr_manager')
+    const [roles, setRoles] = useState<string[]>(['hr_manager'])
+    const availableOptions = callerIsSuperAdmin ? MULTI_ROLE_OPTIONS_WITH_SUPER : MULTI_ROLE_OPTIONS
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
@@ -152,7 +143,7 @@ function InvitePanel({ onClose }: { onClose: () => void }) {
             return
         }
         try {
-            await inviteUser.mutateAsync({ employeeId: selected.id, role })
+            await inviteUser.mutateAsync({ employeeId: selected.id, role: roles[0], roles })
             toast.success(`Invitation sent to ${selected.inviteEmail}`)
             onClose()
         } catch (err) {
@@ -178,16 +169,12 @@ function InvitePanel({ onClose }: { onClose: () => void }) {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">Role</p>
-                        <select
-                            value={role}
-                            onChange={(e) => setRole(e.target.value)}
-                            className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-                        >
-                            {INVITE_ROLES.map((r) => (
-                                <option key={r.id} value={r.id}>{r.label}</option>
-                            ))}
-                        </select>
+                        <p className="text-xs font-medium text-muted-foreground">Roles</p>
+                        <MultiRoleToggle
+                            roles={roles}
+                            onChange={setRoles}
+                            availableRoles={availableOptions}
+                        />
                     </div>
                     <div className="flex justify-end">
                         <Button
@@ -215,12 +202,12 @@ export function MembersTab() {
     const [showInvite, setShowInvite] = useState(false)
     const [deactivateTarget, setDeactivateTarget] = useState<{ id: string; name: string; active: boolean } | null>(null)
 
-    async function handleRoleChange(userId: string, newRole: string) {
+    async function handleRolesChange(userId: string, newRoles: string[]) {
         try {
-            await updateUser.mutateAsync({ id: userId, role: newRole })
-            toast.success('Role updated')
+            await updateUser.mutateAsync({ id: userId, roles: newRoles, role: newRoles[0] })
+            toast.success('Roles updated')
         } catch {
-            toast.error('Failed to update role')
+            toast.error('Failed to update roles')
         }
     }
 
@@ -286,7 +273,8 @@ export function MembersTab() {
                             // hr_manager cannot edit super_admin users at all
                             const canEditThisUser = canManageUsers && !isSelf && (callerIsSuperAdmin || !isSuperAdmin)
                             // roles available depend on caller's own role
-                            const availableRoles = callerIsSuperAdmin ? ALL_ROLES : INVITE_ROLES
+                            const availableOptions = callerIsSuperAdmin ? MULTI_ROLE_OPTIONS_WITH_SUPER : MULTI_ROLE_OPTIONS
+                            const userRoles = u.roles?.length ? u.roles : [u.role]
                             // true pending invite = has account but never logged in; deactivated = had access, now revoked
                             const isPendingInvite = !u.isActive && !u.lastLoginAt
                             const isDeactivated = !u.isActive && !!u.lastLoginAt
@@ -319,41 +307,23 @@ export function MembersTab() {
                                     </div>
                                     <div className="flex items-center gap-2.5 shrink-0">
                                         {canEditThisUser ? (
-                                            <Select
-                                                value={u.role}
-                                                onValueChange={role => handleRoleChange(u.id, role)}
+                                            <MultiRoleToggle
+                                                roles={userRoles}
+                                                onChange={newRoles => handleRolesChange(u.id, newRoles)}
+                                                availableRoles={availableOptions}
                                                 disabled={updateUser.isPending}
-                                            >
-                                                <SelectTrigger className="h-7 w-40 text-xs px-2">
-                                                    <SelectValue>
-                                                        <span className={cn(
-                                                            "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                                            ROLE_BADGE_STYLE[u.role] ?? 'bg-slate-100 text-slate-600 border-slate-200',
-                                                        )}>
-                                                            {labelFor(u.role)}
-                                                        </span>
-                                                    </SelectValue>
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {availableRoles.map(r => (
-                                                        <SelectItem key={r.id} value={r.id}>
-                                                            <span className={cn(
-                                                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                                                ROLE_BADGE_STYLE[r.id] ?? 'bg-slate-100 text-slate-600 border-slate-200',
-                                                            )}>
-                                                                {r.label}
-                                                            </span>
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
+                                            />
                                         ) : (
-                                            <span className={cn(
-                                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                                ROLE_BADGE_STYLE[u.role] ?? 'bg-slate-100 text-slate-600 border-slate-200',
-                                            )}>
-                                                {labelFor(u.role)}
-                                            </span>
+                                            <div className="flex flex-wrap gap-1">
+                                                {userRoles.map(r => (
+                                                    <span key={r} className={cn(
+                                                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                                        ROLE_BADGE_STYLE[r] ?? 'bg-slate-100 text-slate-600 border-slate-200',
+                                                    )}>
+                                                        {labelFor(r)}
+                                                    </span>
+                                                ))}
+                                            </div>
                                         )}
 
                                         {canEditThisUser && isPendingInvite && (

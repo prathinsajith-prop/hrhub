@@ -654,8 +654,8 @@ const DOC_STATUS_BORDER: Record<string, string> = {
 export function EmployeeDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
-  // Capture current time once per render to avoid calling Date.now() in render expressions.
-  const nowMs = Date.now()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const nowMs = React.useMemo(() => Date.now(), [])
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_employees')
@@ -1132,7 +1132,7 @@ export function EmployeeDetailPage() {
                   {/* Row 2 — Role */}
                   <EmpField label="Designation" icon={Briefcase} value={e.designation} />
                   <EmpField label="Employment Type" icon={Briefcase} value={labelFor(e.contractType)} />
-                  <EmpField label="Grade Level" icon={GraduationCap} value={(e as any).gradeLevelName} />
+                  <EmpField label="Grade Level" icon={GraduationCap} value={e.gradeLevelName} />
 
                   {/* Row 3 — Org */}
                   <EmpField label="Company" icon={Building2} value={e.entityName ?? undefined} />
@@ -1142,7 +1142,7 @@ export function EmployeeDetailPage() {
                   {/* Row 4 — Location / Manager */}
                   <EmpField label="Department" icon={Building2} value={orgUnitName(e.departmentId) ?? undefined} />
                   <EmpField label="Work Location" icon={MapPin} value={e.workLocation ?? undefined} />
-                  <EmpField label="Direct Manager" icon={User} value={(e as any).managerName ?? undefined} />
+                  <EmpField label="Direct Manager" icon={User} value={e.managerName ?? undefined} />
 
                   {/* Conditional dates */}
                   {(e.contractType === 'probation' || e.probationEndDate) && (
