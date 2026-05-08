@@ -108,6 +108,13 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/loans': 'loans.pageTitle',
   '/my/loans': 'loans.myPageTitle',
   '/leave-adjustments': 'leaveAdjustments.title',
+  '/assets': 'assets.title',
+  '/calendar': 'calendar.title',
+  '/complaints': 'complaints.pageTitle',
+  '/my/complaints': 'complaints.pageTitle',
+  '/users': 'users.title',
+  '/organization-settings': 'organizations.settings',
+  '/org-structure': 'orgStructure.title',
 }
 
 function TitleManager() {
