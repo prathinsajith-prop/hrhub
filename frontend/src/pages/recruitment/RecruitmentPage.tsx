@@ -136,11 +136,22 @@ const CandidateCard = memo(function CandidateCard({
         <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
           <Star className="h-3 w-3 text-warning fill-warning" />
           <span className="text-[10px] font-semibold text-foreground">{candidate.score}</span>
+          {!isDragOverlay && (
+            <button
+              type="button"
+              aria-label="View profile"
+              className="ml-1 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); navigate(`/recruitment/candidates/${candidate.id}`) }}
+            >
+              <Eye className="h-3 w-3" />
+            </button>
+          )}
           {onEdit && !isDragOverlay && (
             <button
               type="button"
               aria-label="Edit candidate"
-              className="ml-1 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onEdit(candidate) }}
             >
@@ -200,15 +211,6 @@ const CandidateCard = memo(function CandidateCard({
           <UserCheck className="h-3 w-3 mr-1" /> Convert to Employee
         </Button>
       )}
-      <Button
-        size="sm"
-        variant="ghost"
-        className="w-full text-[10px] h-6 mt-1"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); navigate(`/recruitment/candidates/${candidate.id}`) }}
-      >
-        <Eye className="h-3 w-3 mr-1" /> View Profile
-      </Button>
     </div>
   )
 })

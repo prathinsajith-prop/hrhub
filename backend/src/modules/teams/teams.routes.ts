@@ -1,7 +1,8 @@
 import {
     listTeams, getTeam, createTeam, updateTeam, deleteTeam,
-    getTeamMembers, addTeamMembers, removeTeamMember, getMyTeams,
+    getTeamMembers, addTeamMembers, updateTeamMemberRole, removeTeamMember, getMyTeams,
     getEligibleEmployees,
+    type TeamMemberRole,
 } from './teams.service.js'
 import { recordActivity } from '../audit/audit.service.js'
 
@@ -99,13 +100,31 @@ export default async function teamsRoutes(fastify: any) {
 
     // Add members
     fastify.post('/teams/:id/members', { ...canManage, schema: { tags: ['Teams'] } }, async (request: any, reply: any) => {
-        const { employeeIds } = request.body as { employeeIds: string[] }
+        const { employeeIds, role } = request.body as { employeeIds: string[]; role?: TeamMemberRole }
         if (!Array.isArray(employeeIds) || employeeIds.length === 0) {
             return reply.code(400).send({ message: 'employeeIds array is required' })
         }
-        const added = await addTeamMembers(request.user.tenantId, request.params.id, employeeIds)
-        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'team', entityId: request.params.id, action: 'update', metadata: { addedMembers: employeeIds.length }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
-        return reply.code(201).send({ data: added })
+        try {
+            const added = await addTeamMembers(request.user.tenantId, request.params.id, employeeIds, role ?? 'member')
+            recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'team', entityId: request.params.id, action: 'update', metadata: { addedMembers: employeeIds.length, role: role ?? 'member' }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+            return reply.code(201).send({ data: added })
+        } catch (err: any) {
+            return reply.code(err.statusCode ?? 500).send({ message: err.message ?? 'Failed to add members' })
+        }
+    })
+
+    // Update a member's role (viewer | member | manager | administrator)
+    fastify.patch('/teams/:id/members/:employeeId', { ...canManage, schema: { tags: ['Teams'] } }, async (request: any, reply: any) => {
+        const { role } = request.body as { role?: TeamMemberRole }
+        if (!role) return reply.code(400).send({ message: 'role is required' })
+        try {
+            const updated = await updateTeamMemberRole(request.user.tenantId, request.params.id, request.params.employeeId, role)
+            if (!updated) return reply.code(404).send({ message: 'Member not found' })
+            recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'team', entityId: request.params.id, action: 'update', metadata: { memberId: request.params.employeeId, role }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+            return { data: updated }
+        } catch (err: any) {
+            return reply.code(err.statusCode ?? 500).send({ message: err.message ?? 'Failed to update role' })
+        }
     })
 
     // Remove a member

@@ -29,6 +29,7 @@ export const teamMembers = pgTable('team_members', {
     teamId: uuid('team_id').notNull().references(() => teams.id, { onDelete: 'cascade' }),
     employeeId: uuid('employee_id').notNull().references(() => employees.id, { onDelete: 'cascade' }),
     tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    role: text('role').notNull().default('member'),
     joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
     // UNIQUE on (team_id, employee_id): dedup + implicit index on team_id as leading column
