@@ -118,6 +118,10 @@ export async function deleteTeam(tenantId: string, teamId: string) {
     return row ?? null
 }
 
+export type TeamMemberRole = 'viewer' | 'member' | 'manager' | 'administrator'
+
+const VALID_ROLES: TeamMemberRole[] = ['viewer', 'member', 'manager', 'administrator']
+
 export interface TeamMemberRow {
     id: string
     employeeId: string
@@ -127,6 +131,7 @@ export interface TeamMemberRow {
     designation: string | null
     avatarUrl: string | null
     email: string | null
+    role: TeamMemberRole
     joinedAt: Date
 }
 
@@ -141,16 +146,29 @@ export async function getTeamMembers(tenantId: string, teamId: string): Promise<
             designation: employees.designation,
             avatarUrl: employees.avatarUrl,
             email: employees.email,
+            role: teamMembers.role,
             joinedAt: teamMembers.joinedAt,
         })
         .from(teamMembers)
         .innerJoin(employees, eq(teamMembers.employeeId, employees.id))
         .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.tenantId, tenantId)))
         .orderBy(employees.firstName, employees.lastName)
-    return Promise.all(rows.map(async r => ({ ...r, avatarUrl: await resolveAvatarUrl(r.avatarUrl) })))
+    return Promise.all(rows.map(async r => ({
+        ...r,
+        role: r.role as TeamMemberRole,
+        avatarUrl: await resolveAvatarUrl(r.avatarUrl),
+    })))
 }
 
-export async function addTeamMembers(tenantId: string, teamId: string, employeeIds: string[]) {
+export async function addTeamMembers(
+    tenantId: string,
+    teamId: string,
+    employeeIds: string[],
+    role: TeamMemberRole = 'member',
+) {
+    if (!VALID_ROLES.includes(role)) {
+        throw Object.assign(new Error('Invalid role'), { statusCode: 400 })
+    }
     const team = await getTeam(tenantId, teamId)
     if (!team) throw Object.assign(new Error('Team not found'), { statusCode: 404 })
 
@@ -176,9 +194,29 @@ export async function addTeamMembers(tenantId: string, teamId: string, employeeI
     }
 
     // Insert, ignoring duplicates
-    const values = employeeIds.map(employeeId => ({ teamId, employeeId, tenantId }))
+    const values = employeeIds.map(employeeId => ({ teamId, employeeId, tenantId, role }))
     const inserted = await db.insert(teamMembers).values(values).onConflictDoNothing().returning()
     return inserted
+}
+
+export async function updateTeamMemberRole(
+    tenantId: string,
+    teamId: string,
+    employeeId: string,
+    role: TeamMemberRole,
+) {
+    if (!VALID_ROLES.includes(role)) {
+        throw Object.assign(new Error('Invalid role'), { statusCode: 400 })
+    }
+    const [row] = await db.update(teamMembers)
+        .set({ role })
+        .where(and(
+            eq(teamMembers.teamId, teamId),
+            eq(teamMembers.employeeId, employeeId),
+            eq(teamMembers.tenantId, tenantId),
+        ))
+        .returning()
+    return row ?? null
 }
 
 export async function removeTeamMember(tenantId: string, teamId: string, employeeId: string) {

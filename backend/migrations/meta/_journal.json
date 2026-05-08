@@ -183,6 +183,13 @@
       "when": 1778630400000,
       "tag": "0025_multi_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1778716800000,
+      "tag": "0026_team_member_role",
+      "breakpoints": true
     }
   ]
 }

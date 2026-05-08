@@ -26,6 +26,8 @@ export interface MyTeamRow {
     joinedAt: string
 }
 
+export type TeamMemberRole = 'viewer' | 'member' | 'manager' | 'administrator'
+
 export interface TeamMemberRow {
     id: string
     employeeId: string
@@ -36,6 +38,7 @@ export interface TeamMemberRow {
     avatarUrl: string | null
     email: string | null
     joinedAt: string
+    role: TeamMemberRole
 }
 
 export interface EligibleEmployee {
@@ -117,12 +120,23 @@ export function useDeleteTeam() {
 export function useAddTeamMembers(teamId: string) {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (employeeIds: string[]) =>
-            api.post(`/teams/${teamId}/members`, { employeeIds }),
+        mutationFn: ({ employeeIds, role }: { employeeIds: string[]; role: TeamMemberRole }) =>
+            api.post(`/teams/${teamId}/members`, { employeeIds, role }),
         onSuccess: () => {
             void qc.invalidateQueries({ queryKey: ['teams', teamId, 'members'] })
             void qc.invalidateQueries({ queryKey: ['teams', teamId, 'eligible'] })
             void qc.invalidateQueries({ queryKey: ['teams'] })
+        },
+    })
+}
+
+export function useUpdateTeamMemberRole(teamId: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ employeeId, role }: { employeeId: string; role: TeamMemberRole }) =>
+            api.patch(`/teams/${teamId}/members/${employeeId}`, { role }),
+        onSuccess: () => {
+            void qc.invalidateQueries({ queryKey: ['teams', teamId, 'members'] })
         },
     })
 }

@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react'
 import { z } from 'zod'
-import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X, Building2, Calendar, UserMinus, GitBranch } from 'lucide-react'
+import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X, Building2, UserMinus, GitBranch, ChevronDown } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
     useTeams, useMyTeams, useTeamMembers, useEligibleEmployees,
-    useCreateTeam, useUpdateTeam, useDeleteTeam, useAddTeamMembers, useRemoveTeamMember,
-    type TeamRow, type MyTeamRow,
+    useCreateTeam, useUpdateTeam, useDeleteTeam, useAddTeamMembers, useRemoveTeamMember, useUpdateTeamMemberRole,
+    type TeamRow, type MyTeamRow, type TeamMemberRole,
 } from '@/hooks/useTeams'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { buildOrgUnitMap, resolveOrgPathFromDeptId } from '@/lib/orgUtils'
@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -23,33 +23,38 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { FormField } from '@/components/shared/FormField'
 import { zodToFieldErrors } from '@/lib/schemas'
-import { getInitials } from '@/lib/utils'
+import { getInitials, cn } from '@/lib/utils'
 import { ApiError } from '@/lib/api'
 import { OrgStructureTab } from './org-settings/OrgStructureTab'
 
-/** Deterministic pastel background colour from a string — for team avatar. */
-function teamColor(name: string) {
-    const palette = [
-        'bg-blue-100 text-blue-700',
-        'bg-violet-100 text-violet-700',
-        'bg-emerald-100 text-emerald-700',
-        'bg-amber-100 text-amber-700',
-        'bg-rose-100 text-rose-700',
-        'bg-cyan-100 text-cyan-700',
-        'bg-indigo-100 text-indigo-700',
-        'bg-pink-100 text-pink-700',
-    ]
-    let hash = 0
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
-    return palette[Math.abs(hash) % palette.length]
+// ── Team role helpers ─────────────────────────────────────────────────────────
+
+const TEAM_ROLES: { value: TeamMemberRole; label: string; color: string }[] = [
+    { value: 'viewer',        label: 'Viewer',        color: 'bg-slate-100 text-slate-600' },
+    { value: 'member',        label: 'Member',        color: 'bg-blue-100 text-blue-700' },
+    { value: 'manager',       label: 'Manager',       color: 'bg-amber-100 text-amber-700' },
+    { value: 'administrator', label: 'Administrator', color: 'bg-violet-100 text-violet-700' },
+]
+
+function roleMeta(role: TeamMemberRole) {
+    return TEAM_ROLES.find(r => r.value === role) ?? TEAM_ROLES[1]
 }
+
+function RoleBadge({ role }: { role: TeamMemberRole }) {
+    const m = roleMeta(role)
+    return (
+        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium leading-none', m.color)}>
+            {m.label}
+        </span>
+    )
+}
+
 
 // ── Create / Edit Team Dialog ─────────────────────────────────────────────────
 
@@ -183,6 +188,7 @@ function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDep
 function AddMembersDialog({ teamId, open, onClose }: { teamId: string; open: boolean; onClose: () => void }) {
     const [search, setSearch] = useState('')
     const [selected, setSelected] = useState<Set<string>>(new Set())
+    const [role, setRole] = useState<TeamMemberRole>('member')
     const { data: eligible = [], isLoading } = useEligibleEmployees(open ? teamId : null)
     const addMut = useAddTeamMembers(teamId)
 
@@ -212,14 +218,15 @@ function AddMembersDialog({ teamId, open, onClose }: { teamId: string; open: boo
     const handleClose = () => {
         setSearch('')
         setSelected(new Set())
+        setRole('member')
         onClose()
     }
 
     const submit = async () => {
         if (selected.size === 0) return
         try {
-            await addMut.mutateAsync([...selected])
-            toast.success(`${selected.size} member${selected.size === 1 ? '' : 's'} added`)
+            await addMut.mutateAsync({ employeeIds: [...selected], role })
+            toast.success(`${selected.size} member${selected.size === 1 ? '' : 's'} added as ${roleMeta(role).label}`)
             handleClose()
         } catch (err) {
             toast.error(err instanceof ApiError ? err.message : 'Failed to add members')
@@ -233,6 +240,28 @@ function AddMembersDialog({ teamId, open, onClose }: { teamId: string; open: boo
                     <DialogTitle>Add Members</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
+                    {/* Role selector */}
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40 border">
+                        <div className="flex-1">
+                            <p className="text-xs font-medium text-foreground">Assign role</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">All selected members will receive this role</p>
+                        </div>
+                        <Select value={role} onValueChange={v => setRole(v as TeamMemberRole)}>
+                            <SelectTrigger className="w-36 h-8 text-xs">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {TEAM_ROLES.map(r => (
+                                    <SelectItem key={r.value} value={r.value} className="text-xs">
+                                        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium', r.color)}>
+                                            {r.label}
+                                        </span>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
@@ -261,7 +290,7 @@ function AddMembersDialog({ teamId, open, onClose }: { teamId: string; open: boo
                         </div>
                     )}
 
-                    <ScrollArea className="h-64 rounded-md border">
+                    <ScrollArea className="h-56 rounded-md border">
                         {isLoading ? (
                             <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">Loading...</div>
                         ) : filtered.length === 0 ? (
@@ -306,22 +335,26 @@ function AddMembersDialog({ teamId, open, onClose }: { teamId: string; open: boo
     )
 }
 
-// ── Team Detail Dialog ────────────────────────────────────────────────────────
+// ── Team Card (collapsible member list, modern design) ────────────────────────
 
-interface TeamDetailDialogProps {
-    team: TeamRow | MyTeamRow | null
-    open: boolean
-    onClose: () => void
+interface TeamCardProps {
+    team: TeamRow | MyTeamRow
     canManage: boolean
     orgMap: Map<string, OrgUnit>
+    onEdit?: () => void
+    onDelete?: () => void
 }
 
-function TeamDetailDialog({ team, open, onClose, canManage, orgMap }: TeamDetailDialogProps) {
-    const { data: members = [], isLoading } = useTeamMembers(open && team ? team.id : null)
-    const removeMut = useRemoveTeamMember(team?.id ?? '')
+function TeamCard({ team, canManage, orgMap, onEdit, onDelete }: TeamCardProps) {
+    const [expanded, setExpanded] = useState(false)
     const [addOpen, setAddOpen] = useState(false)
     const [removeTarget, setRemoveTarget] = useState<string | null>(null)
     const [search, setSearch] = useState('')
+
+    const { data: members = [], isLoading } = useTeamMembers(team.id)
+    const removeMut = useRemoveTeamMember(team.id)
+    const updateRoleMut = useUpdateTeamMemberRole(team.id)
+    const orgParts = resolveOrgPathFromDeptId(orgMap, team.departmentId)
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase()
@@ -344,70 +377,145 @@ function TeamDetailDialog({ team, open, onClose, canManage, orgMap }: TeamDetail
         }
     }
 
-    const handleClose = () => {
-        setSearch('')
-        onClose()
+    const toggleExpand = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (!expanded) setSearch('')
+        setExpanded(v => !v)
     }
 
-    if (!team) return null
-
-    const colorClass = teamColor(team.name)
     const initials = team.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    const previewCount = Math.min(team.memberCount, 4)
+    const previewMembers = members.slice(0, 4)
+    const membersLoaded = !isLoading && members.length > 0
+    const overflow = team.memberCount > 4 ? team.memberCount - 4 : 0
 
     return (
         <>
-            <Dialog open={open} onOpenChange={v => !v && handleClose()}>
-                <DialogContent className="sm:max-w-xl p-0 overflow-hidden gap-0">
+            <Card className="group relative overflow-hidden border border-border/60 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col">
 
-                    {/* ── Header banner ── */}
-                    <div className="px-6 pt-6 pb-5 border-b bg-muted/30">
-                        <div className="flex items-start gap-4">
-                            <div className={`flex items-center justify-center h-12 w-12 rounded-xl text-lg font-bold shrink-0 ${colorClass}`}>
-                                {initials}
-                            </div>
-                            <div className="flex-1 min-w-0 pt-0.5">
-                                <DialogTitle className="text-base font-semibold leading-snug truncate pr-6">
-                                    {team.name}
-                                </DialogTitle>
-                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                    {(team.departmentId || team.department) && (() => {
-                                        const parts = resolveOrgPathFromDeptId(orgMap, team.departmentId)
-                                        return (
-                                            <div className="flex items-center gap-1">
-                                                <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
-                                                <OrgHierarchyPath parts={parts.some(Boolean) ? parts : [null, null, team.department]} />
-                                            </div>
-                                        )
-                                    })()}
-                                    {(team.departmentId || team.department) && <span className="text-muted-foreground/40 text-xs">·</span>}
-                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                        <Users className="h-3 w-3" />
-                                        {members.length} {members.length === 1 ? 'member' : 'members'}
-                                    </div>
-                                </div>
-                                {team.description && (
-                                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed line-clamp-2">
-                                        {team.description}
-                                    </p>
-                                )}
-                            </div>
+                {/* ── Card body ── */}
+                <div className="p-4 flex-1 space-y-3">
+
+                    {/* Row 1: avatar + name + department + menu */}
+                    <div className="flex items-start gap-3">
+                        <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary/10 text-primary text-sm font-semibold shrink-0 select-none">
+                            {initials}
                         </div>
+                        <div className="flex-1 min-w-0 pt-0.5">
+                            <h3 className="text-sm font-semibold leading-snug truncate text-foreground">
+                                {team.name}
+                            </h3>
+                            {(team.departmentId || team.department) && (
+                                <div className="flex items-center gap-1 mt-0.5">
+                                    <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    <OrgHierarchyPath parts={orgParts.some(Boolean) ? orgParts : [null, null, team.department]} />
+                                </div>
+                            )}
+                        </div>
+                        {canManage && onEdit && onDelete && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 -mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={onEdit}>
+                                        <Pencil className="h-3.5 w-3.5 mr-2" /> Edit team
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+                                        <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete team
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
                     </div>
 
-                    {/* ── Members section ── */}
-                    <div className="px-6 pt-4 pb-2">
-                        <div className="flex items-center justify-between gap-3">
+                    {/* Row 2: description */}
+                    {team.description && (
+                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
+                            {team.description}
+                        </p>
+                    )}
+
+                    {/* Row 3: member avatar stack — always visible */}
+                    <div className="flex items-center justify-between pt-3 border-t border-border/50">
+                        <div className="flex items-center gap-2">
+                            {team.memberCount === 0 ? (
+                                <span className="text-xs text-muted-foreground">No members</span>
+                            ) : (
+                                <>
+                                    <TooltipProvider delayDuration={200}>
+                                        <div className="flex -space-x-2">
+                                            {membersLoaded
+                                                ? previewMembers.map(m => (
+                                                    <Tooltip key={m.id}>
+                                                        <TooltipTrigger asChild>
+                                                            <Avatar className="h-7 w-7 border-2 border-background shrink-0 cursor-default">
+                                                                {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
+                                                                <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">
+                                                                    {getInitials(`${m.firstName} ${m.lastName}`)}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top" className="text-xs">
+                                                            <p className="font-medium">{m.firstName} {m.lastName}</p>
+                                                            {m.designation && <p className="text-muted-foreground text-[11px]">{m.designation}</p>}
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                ))
+                                                : [...Array(previewCount)].map((_, i) => (
+                                                    <div key={i} className="h-7 w-7 rounded-full border-2 border-background bg-muted shrink-0" />
+                                                ))
+                                            }
+                                            {overflow > 0 && (
+                                                <div className="h-7 w-7 rounded-full border-2 border-background bg-muted flex items-center justify-center shrink-0">
+                                                    <span className="text-[9px] font-semibold text-muted-foreground">+{overflow}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </TooltipProvider>
+                                    <span className="text-[11px] text-muted-foreground">
+                                        {team.memberCount} {team.memberCount === 1 ? 'member' : 'members'}
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── Expand / collapse toggle ── */}
+                <button
+                    onClick={toggleExpand}
+                    className={cn(
+                        'w-full flex items-center justify-center gap-1.5 py-2 border-t text-xs font-medium transition-colors',
+                        expanded
+                            ? 'bg-muted/50 text-foreground hover:bg-muted'
+                            : 'text-muted-foreground hover:bg-muted/30 hover:text-foreground'
+                    )}
+                >
+                    {expanded ? 'Hide members' : 'Members'}
+                    <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', expanded && 'rotate-180')} />
+                </button>
+
+                {/* ── Collapsible members panel ── */}
+                {expanded && (
+                    <div className="border-t bg-muted/20">
+                        {/* Search + Add button */}
+                        <div className="flex items-center gap-2 p-3 pb-2">
                             <div className="relative flex-1">
                                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                                 <Input
-                                    className="pl-8 h-8 text-sm"
+                                    className="pl-8 h-8 text-xs bg-background"
                                     placeholder="Search members…"
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
+                                    onClick={e => e.stopPropagation()}
                                 />
                                 {search && (
                                     <button
-                                        onClick={() => setSearch('')}
+                                        onClick={e => { e.stopPropagation(); setSearch('') }}
                                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                     >
                                         <X className="h-3.5 w-3.5" />
@@ -417,106 +525,131 @@ function TeamDetailDialog({ team, open, onClose, canManage, orgMap }: TeamDetail
                             {canManage && (
                                 <Button
                                     size="sm"
+                                    className="h-8 shrink-0 text-xs"
                                     leftIcon={<UserPlus className="h-3.5 w-3.5" />}
-                                    onClick={() => setAddOpen(true)}
+                                    onClick={e => { e.stopPropagation(); setAddOpen(true) }}
                                 >
-                                    Add Members
+                                    Add
                                 </Button>
                             )}
                         </div>
-                    </div>
 
-                    <ScrollArea className="h-72 px-2">
+                        {/* Member list */}
                         {isLoading ? (
-                            <div className="space-y-1 px-4 py-2">
-                                {[...Array(4)].map((_, i) => (
+                            <div className="px-3 pb-3 space-y-0.5">
+                                {[...Array(3)].map((_, i) => (
                                     <div key={i} className="flex items-center gap-3 py-2.5 px-2 animate-pulse">
-                                        <div className="h-9 w-9 rounded-full bg-muted shrink-0" />
+                                        <div className="h-8 w-8 rounded-full bg-muted shrink-0" />
                                         <div className="flex-1 space-y-1.5">
-                                            <div className="h-3 bg-muted rounded w-32" />
-                                            <div className="h-2.5 bg-muted rounded w-20" />
+                                            <div className="h-2.5 bg-muted rounded w-32" />
+                                            <div className="h-2 bg-muted rounded w-20" />
                                         </div>
+                                        <div className="h-5 w-16 bg-muted rounded-full shrink-0" />
                                     </div>
                                 ))}
                             </div>
                         ) : filtered.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-48 gap-2 text-center">
-                                <Users className="h-8 w-8 text-muted-foreground/30" />
-                                <p className="text-sm text-muted-foreground">
-                                    {search ? 'No members match your search.' : 'No members yet.'}
+                            <div className="flex flex-col items-center justify-center py-8 gap-2 text-center px-4 pb-4">
+                                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                                    <Users className="h-5 w-5 text-muted-foreground/40" />
+                                </div>
+                                <p className="text-xs text-muted-foreground font-medium">
+                                    {search ? 'No members match' : 'No members yet'}
                                 </p>
                                 {canManage && !search && (
-                                    <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs mt-1"
+                                        leftIcon={<UserPlus className="h-3 w-3" />}
+                                        onClick={e => { e.stopPropagation(); setAddOpen(true) }}
+                                    >
                                         Add Members
                                     </Button>
                                 )}
                             </div>
                         ) : (
-                            <TooltipProvider delayDuration={300}>
-                                <div className="px-2 py-1">
-                                    {filtered.map((m, idx) => (
-                                        <div key={m.id}>
-                                            <div className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-muted/50 transition-colors group">
-                                                <Avatar className="h-9 w-9 shrink-0">
+                            <ScrollArea className={filtered.length > 5 ? 'h-[220px]' : undefined}>
+                                <TooltipProvider delayDuration={300}>
+                                    <div className="px-3 pb-3 space-y-0.5">
+                                        {filtered.map(m => (
+                                            <div
+                                                key={m.id}
+                                                className="flex items-center gap-2.5 py-2 px-2 rounded-lg hover:bg-background transition-colors group/row cursor-default"
+                                            >
+                                                <Avatar className="h-8 w-8 shrink-0">
                                                     {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
-                                                    <AvatarFallback className="text-xs font-medium">
+                                                    <AvatarFallback className="text-[10px] font-semibold bg-muted">
                                                         {getInitials(`${m.firstName} ${m.lastName}`)}
                                                     </AvatarFallback>
                                                 </Avatar>
+
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium leading-tight truncate">
+                                                    <p className="text-xs font-medium leading-tight truncate text-foreground">
                                                         {m.firstName} {m.lastName}
                                                     </p>
-                                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                                        {m.designation && (
-                                                            <span className="text-xs text-muted-foreground truncate">{m.designation}</span>
-                                                        )}
-                                                        {m.designation && m.department && (
-                                                            <span className="text-muted-foreground/40 text-xs">·</span>
-                                                        )}
-                                                        {m.department && (
-                                                            <span className="text-xs text-muted-foreground/70 truncate">{m.department}</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <Calendar className="h-3 w-3" />
-                                                        {new Date(m.joinedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                    </div>
-                                                    {canManage && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                    onClick={() => setRemoveTarget(m.employeeId)}
-                                                                >
-                                                                    <UserMinus className="h-3.5 w-3.5" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent side="left">Remove from team</TooltipContent>
-                                                        </Tooltip>
+                                                    {(m.designation || m.department) && (
+                                                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                                            {[m.designation, m.department].filter(Boolean).join(' · ')}
+                                                        </p>
                                                     )}
                                                 </div>
-                                            </div>
-                                            {idx < filtered.length - 1 && (
-                                                <Separator className="mx-2 opacity-50" />
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </TooltipProvider>
-                        )}
-                    </ScrollArea>
 
-                    {/* ── Footer ── */}
-                    <div className="px-6 py-4 border-t bg-muted/20 flex justify-end">
-                        <Button variant="outline" size="sm" onClick={handleClose}>Close</Button>
+                                                {/* Role badge — clickable dropdown for managers */}
+                                                {canManage ? (
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                                                            <button className="flex items-center gap-0.5 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0">
+                                                                <RoleBadge role={m.role ?? 'member'} />
+                                                                <ChevronDown className="h-2.5 w-2.5 text-muted-foreground opacity-0 group-hover/row:opacity-100 transition-opacity" />
+                                                            </button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-44" onClick={e => e.stopPropagation()}>
+                                                            <p className="px-2 pt-1.5 pb-1 text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                                                                Change role
+                                                            </p>
+                                                            {TEAM_ROLES.map(r => (
+                                                                <DropdownMenuItem
+                                                                    key={r.value}
+                                                                    className="gap-2 text-xs"
+                                                                    disabled={updateRoleMut.isPending}
+                                                                    onClick={() => updateRoleMut.mutate(
+                                                                        { employeeId: m.employeeId, role: r.value },
+                                                                        {
+                                                                            onSuccess: () => toast.success(`Role changed to ${r.label}`),
+                                                                            onError: () => toast.error('Failed to update role'),
+                                                                        }
+                                                                    )}
+                                                                >
+                                                                    <span className={cn('inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium', r.color)}>
+                                                                        {r.label}
+                                                                    </span>
+                                                                    {(m.role ?? 'member') === r.value && (
+                                                                        <span className="ml-auto text-[10px] text-primary font-medium">✓</span>
+                                                                    )}
+                                                                </DropdownMenuItem>
+                                                            ))}
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                className="text-destructive focus:text-destructive text-xs gap-2"
+                                                                onClick={e => { e.stopPropagation(); setRemoveTarget(m.employeeId) }}
+                                                            >
+                                                                <UserMinus className="h-3 w-3" /> Remove from team
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                ) : (
+                                                    <RoleBadge role={m.role ?? 'member'} />
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </TooltipProvider>
+                            </ScrollArea>
+                        )}
                     </div>
-                </DialogContent>
-            </Dialog>
+                )}
+            </Card>
 
             {canManage && (
                 <AddMembersDialog teamId={team.id} open={addOpen} onClose={() => setAddOpen(false)} />
@@ -532,67 +665,6 @@ function TeamDetailDialog({ team, open, onClose, canManage, orgMap }: TeamDetail
                 onConfirm={handleRemove}
             />
         </>
-    )
-}
-
-// ── Team Card ─────────────────────────────────────────────────────────────────
-
-interface TeamCardProps {
-    team: TeamRow | MyTeamRow
-    canManage: boolean
-    orgMap: Map<string, OrgUnit>
-    onView: () => void
-    onEdit?: () => void
-    onDelete?: () => void
-}
-
-function TeamCard({ team, canManage, orgMap, onView, onEdit, onDelete }: TeamCardProps) {
-    const orgParts = resolveOrgPathFromDeptId(orgMap, team.departmentId)
-    return (
-        <Card
-            className="cursor-pointer hover:shadow-md transition-shadow group relative"
-            onClick={onView}
-        >
-            <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                        <CardTitle className="text-sm font-semibold truncate">{team.name}</CardTitle>
-                        {(team.departmentId || team.department) && (
-                            <div className="mt-1">
-                                <OrgHierarchyPath parts={orgParts.some(Boolean) ? orgParts : [null, null, team.department]} />
-                            </div>
-                        )}
-                    </div>
-                    {canManage && onEdit && onDelete && (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
-                                <DropdownMenuItem onClick={onEdit}>
-                                    <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive" onClick={onDelete}>
-                                    <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
-                </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-                {team.description && (
-                    <CardDescription className="text-xs line-clamp-2 mb-2">{team.description}</CardDescription>
-                )}
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Users className="h-3.5 w-3.5" />
-                    {team.memberCount} {team.memberCount === 1 ? 'member' : 'members'}
-                </div>
-            </CardContent>
-        </Card>
     )
 }
 
@@ -615,7 +687,6 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
     const [formOpen, setFormOpen] = useState(false)
     const [editTarget, setEditTarget] = useState<TeamRow | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<TeamRow | null>(null)
-    const [detailTeam, setDetailTeam] = useState<TeamRow | MyTeamRow | null>(null)
     const deleteMut = useDeleteTeam()
 
     const handleDelete = async () => {
@@ -642,7 +713,6 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
                         team={team}
                         canManage={canManage && (canViewAll || isOwner)}
                         orgMap={orgMap}
-                        onView={() => setDetailTeam(team)}
                         onEdit={canManage && (canViewAll || isOwner) ? () => openEdit(team as TeamRow) : undefined}
                         onDelete={canManage && (canViewAll || isOwner) ? () => setDeleteTarget(team as TeamRow) : undefined}
                     />
@@ -707,13 +777,6 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
             )}
 
             <TeamFormDialog open={formOpen} onClose={closeForm} editTeam={editTarget} />
-            <TeamDetailDialog
-                team={detailTeam}
-                open={!!detailTeam}
-                onClose={() => setDetailTeam(null)}
-                canManage={canManage}
-                orgMap={orgMap}
-            />
             <ConfirmDialog
                 open={!!deleteTarget}
                 onOpenChange={o => !o && setDeleteTarget(null)}
