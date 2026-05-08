@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import { eq, and, desc, isNull, sql } from 'drizzle-orm'
 import { log } from '../../lib/logger.js'
 import { db } from '../../db/index.js'
-import { tenants, users, tenantMemberships, entities, employees, gradeLevels } from '../../db/schema/index.js'
+import { tenants, users, tenantMemberships, entities, employees, gradeLevels, sponsoringEntities, orgUnits } from '../../db/schema/index.js'
 import {
     type MemberRole,
     buildPermissionMap,
@@ -154,30 +154,51 @@ export async function createTenant(actorUserId: string, input: {
         })
 
         // 2b. Seed default grade levels so the tenant can assign grades on day 1.
-        // C-Level is the executive grade (tagged 'employee' per product spec);
-        // Director Level is tagged 'director'. Admins can edit / extend later.
-        await tx.insert(gradeLevels).values([
+        // Categories map to the `roles` array — Director, Manager, Employee.
+        // Admins can edit / extend later.
+        const insertedGradeLevels = await tx.insert(gradeLevels).values([
             {
                 tenantId: tenant.id,
                 name: 'C-Level',
                 code: 'CL',
                 level: 1,
                 hierarchy: 'Leadership',
-                roles: ['employee'],
+                roles: ['director'],
                 description: 'Executive / C-Suite leadership.',
                 sortOrder: 1,
             },
             {
                 tenantId: tenant.id,
-                name: 'Director Level',
-                code: 'DL',
+                name: 'Director',
+                code: 'DR',
                 level: 2,
                 hierarchy: 'Leadership',
                 roles: ['director'],
-                description: 'Director-level leadership reporting into C-Suite.',
+                description: 'Director-level leadership reporting into the C-Suite.',
                 sortOrder: 2,
             },
-        ])
+            {
+                tenantId: tenant.id,
+                name: 'Manager',
+                code: 'MG',
+                level: 3,
+                hierarchy: 'Management',
+                roles: ['manager'],
+                description: 'People managers leading teams or departments.',
+                sortOrder: 3,
+            },
+            {
+                tenantId: tenant.id,
+                name: 'Employee',
+                code: 'EM',
+                level: 4,
+                hierarchy: 'Individual Contributor',
+                roles: ['employee'],
+                description: 'Individual contributors and team members.',
+                sortOrder: 4,
+            },
+        ]).returning()
+        const cLevelId = insertedGradeLevels.find(g => g.code === 'CL')?.id ?? null
 
         // 3. Create a default entity for the tenant
         const [entity] = await tx.insert(entities).values({
@@ -188,13 +209,66 @@ export async function createTenant(actorUserId: string, input: {
             isActive: true,
         }).returning()
 
+        // 3b. Seed a default sponsoring entity named after the organization.
+        const [sponsoringEntity] = await tx.insert(sponsoringEntities).values({
+            tenantId: tenant.id,
+            name: input.name,
+            isActive: true,
+            sortOrder: 1,
+        }).returning()
+
+        // 3c. Seed a default org structure: Branch → Divisions → Departments.
+        // Admins can rename / extend this on day 1.
+        const [mainBranch] = await tx.insert(orgUnits).values({
+            tenantId: tenant.id,
+            name: 'Main',
+            type: 'branch',
+            sortOrder: 1,
+            isActive: true,
+        }).returning()
+
+        const divisionsSeed = [
+            { name: 'Sales and Marketing', sortOrder: 1, departments: ['Sales', 'Marketing'] },
+            { name: 'Technology',          sortOrder: 2, departments: ['Engineering', 'IT'] },
+            { name: 'Admin',               sortOrder: 3, departments: ['HR', 'Accounts'] },
+        ] as const
+
+        const insertedDivisions = await tx.insert(orgUnits).values(
+            divisionsSeed.map(d => ({
+                tenantId: tenant.id,
+                name: d.name,
+                type: 'division' as const,
+                parentId: mainBranch.id,
+                sortOrder: d.sortOrder,
+                isActive: true,
+            })),
+        ).returning()
+
+        const deptRows = divisionsSeed.flatMap((d, i) =>
+            d.departments.map((dept, j) => ({
+                tenantId: tenant.id,
+                name: dept,
+                type: 'department' as const,
+                parentId: insertedDivisions[i].id,
+                sortOrder: j + 1,
+                isActive: true,
+            })),
+        )
+        const insertedDepts = deptRows.length ? await tx.insert(orgUnits).values(deptRows).returning() : []
+
+        // Look up the Admin division and its HR department to assign the org creator
+        const adminDivision = insertedDivisions.find(d => d.name === 'Admin')
+        const hrDepartment = insertedDepts.find(d => d.name === 'HR' && d.parentId === adminDivision?.id)
+
         // 4. Generate employee number: ORG-001-MM-YYYY
         const now = new Date()
         const mm = String(now.getMonth() + 1).padStart(2, '0')
         const yyyy = String(now.getFullYear())
         const employeeNo = `ORG-001-${mm}-${yyyy}`
 
-        // 5. Create an employee record for the creator in this tenant
+        // 5. Create the founder employee record fully populated so they show up
+        // in Employees with proper org context (branch / division / department,
+        // grade, designation, work email, contract type) on day one.
         const [employee] = await tx.insert(employees).values({
             tenantId: tenant.id,
             entityId: entity.id,
@@ -202,17 +276,38 @@ export async function createTenant(actorUserId: string, input: {
             firstName: actor.firstName,
             lastName: actor.lastName,
             email: actor.email,
+            workEmail: actor.email,
             joinDate: now.toISOString().slice(0, 10),
             status: 'active',
+            branchId: mainBranch.id,
+            divisionId: adminDivision?.id ?? null,
+            departmentId: hrDepartment?.id ?? null,
+            department: hrDepartment?.name ?? null,
+            gradeLevelId: cLevelId,
+            sponsoringEntityId: sponsoringEntity?.id ?? null,
+            designation: 'Founder',
+            contractType: 'permanent',
         } as any).returning()
 
-        // 6. Link the user's employeeId to this new employee record
-        // (only if user doesn't have one yet — otherwise this is a secondary org)
-        if (!actor.employeeId) {
-            await tx.update(users)
-                .set({ employeeId: employee.id })
-                .where(eq(users.id, actorUserId))
+        // 5b. Make the founder the head of the seeded Admin/HR org units so the
+        // hierarchy isn't blank on day one.
+        if (mainBranch?.id) {
+            await tx.update(orgUnits).set({ headEmployeeId: employee.id }).where(eq(orgUnits.id, mainBranch.id))
         }
+        if (adminDivision?.id) {
+            await tx.update(orgUnits).set({ headEmployeeId: employee.id }).where(eq(orgUnits.id, adminDivision.id))
+        }
+        if (hrDepartment?.id) {
+            await tx.update(orgUnits).set({ headEmployeeId: employee.id }).where(eq(orgUnits.id, hrDepartment.id))
+        }
+
+        // 6. Link the user row to this employee. We always update for the active
+        // tenant so the Employees list, my-account, and the JWT all resolve to
+        // the right per-tenant employee. Users with a prior tenant keep working
+        // because tenant-switch resolves the per-tenant employee by email anyway.
+        await tx.update(users)
+            .set({ employeeId: employee.id })
+            .where(eq(users.id, actorUserId))
 
         return tenant
     })
@@ -506,6 +601,42 @@ export async function removeMember(opts: {
         .set({ isActive: false, inviteStatus: 'revoked', updatedAt: new Date() })
         .where(and(eq(tenantMemberships.id, opts.membershipId), eq(tenantMemberships.tenantId, opts.tenantId)))
     return { ok: true }
+}
+
+/* ───────────────────────── delete tenant ───────────────────────────────── */
+
+/**
+ * Permanently delete a tenant and all its data. Requires super_admin role on
+ * the target tenant. Foreign keys on every dependent table use ON DELETE
+ * CASCADE so the row delete cleans up employees, payroll, leave, audit, etc.
+ *
+ * Safety: caller must pass `confirmName` matching the tenant's name (case-
+ * insensitive, trimmed) so an accidental delete is unlikely.
+ */
+export async function deleteTenant(opts: {
+    tenantId: string
+    actorUserId: string
+    confirmName: string
+}) {
+    const role = await loadActorRole(opts.actorUserId, opts.tenantId)
+    if (role !== 'super_admin') {
+        throw http('Only a super admin can delete this organization', 403)
+    }
+
+    const [tenant] = await db.select({ id: tenants.id, name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.id, opts.tenantId))
+        .limit(1)
+    if (!tenant) throw http('Tenant not found', 404)
+
+    const expected = tenant.name.trim().toLowerCase()
+    const provided = (opts.confirmName ?? '').trim().toLowerCase()
+    if (!provided || provided !== expected) {
+        throw http('Confirmation does not match the organization name', 400)
+    }
+
+    await db.delete(tenants).where(eq(tenants.id, opts.tenantId))
+    return { ok: true, name: tenant.name }
 }
 
 // silence unused-import warnings if any

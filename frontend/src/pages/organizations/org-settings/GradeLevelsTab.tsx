@@ -198,7 +198,6 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                             Name <span className="text-destructive">*</span>
                         </label>
                         <Input
-                            autoFocus={!editing}
                             placeholder="e.g. Mid Level 1"
                             value={form.name}
                             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -568,7 +567,6 @@ function MasterList({
                                         <td className="px-4 py-2.5">
                                             {editingId === item.id ? (
                                                 <Input
-                                                    autoFocus
                                                     className="h-8 max-w-xs"
                                                     value={editName}
                                                     onChange={e => onEditNameChange(e.target.value)}
@@ -633,7 +631,6 @@ function MasterList({
                                         <td className="px-4 py-2.5" colSpan={3}>
                                             <div className="flex items-center gap-2">
                                                 <Input
-                                                    autoFocus
                                                     className="h-8 max-w-xs"
                                                     placeholder="Enter name…"
                                                     value={newName}

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight, Check, SunIcon, MoonIcon, MonitorIcon, Loader2Icon, PlusIcon, ArrowRightLeftIcon } from 'lucide-react'
+import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight, Check, SunIcon, MoonIcon, MonitorIcon, Loader2Icon, PlusIcon } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { labelFor, ROLE_BADGE_STYLE, ROLE_LABELS } from '@/lib/enums'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -210,7 +210,7 @@ export function SiteHeader() {
               variant="outline"
               size="icon"
               className={iconBtn}
-              aria-label="Toggle theme"
+              aria-label={t('common.toggleTheme')}
             >
               <SunIcon className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
               <MoonIcon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -219,17 +219,17 @@ export function SiteHeader() {
           <DropdownMenuContent align="end" sideOffset={8} className="w-36">
             <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setTheme('light')}>
               <SunIcon className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">Light</span>
+              <span className="text-sm">{t('common.themeLight')}</span>
               {theme === 'light' && <Check className="ms-auto h-3.5 w-3.5 text-primary" />}
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setTheme('dark')}>
               <MoonIcon className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">Dark</span>
+              <span className="text-sm">{t('common.themeDark')}</span>
               {theme === 'dark' && <Check className="ms-auto h-3.5 w-3.5 text-primary" />}
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setTheme('system')}>
               <MonitorIcon className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">System</span>
+              <span className="text-sm">{t('common.themeSystem')}</span>
               {theme === 'system' && <Check className="ms-auto h-3.5 w-3.5 text-primary" />}
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -249,12 +249,12 @@ export function SiteHeader() {
           )}
         </Button>
 
-        {/* Profile */}
+        {/* Profile — hidden for now; user menu lives in the sidebar */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ms-1"
+              className="hidden flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ms-1"
               aria-label={t('common.userMenu', { defaultValue: 'User menu' })}
             >
               <Avatar className="h-9 w-9 border border-border">
@@ -279,7 +279,7 @@ export function SiteHeader() {
                 <div className="min-w-0 flex-1">
                   {/* Row 1: Name + role badge */}
                   <div className="flex items-center gap-2 min-w-0">
-                    <p className="text-sm font-bold leading-tight truncate text-foreground">{user?.name ?? 'User'}</p>
+                    <p className="text-sm font-bold leading-tight truncate text-foreground">{user?.name ?? t('common.user', { defaultValue: 'User' })}</p>
                     {user?.role && (
                       <span className={cn(
                         'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none shrink-0',
@@ -292,72 +292,74 @@ export function SiteHeader() {
                   {/* Row 2: Email */}
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{user?.email}</p>
 
-                  {/* Row 3: Company name + switch icon — clean, no border */}
+                  {/* Row 3: Company name — hover to switch (sub-menu opens automatically) */}
                   {tenant && (
-                    <div className="mt-2 flex items-center gap-1.5 min-w-0">
-                      <Building2 className="h-3.5 w-3.5 shrink-0 text-blue-600" />
-                      <span className="text-xs font-bold text-foreground truncate flex-1">{tenant.name}</span>
-                      {hasMultipleOrgs && (
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger
-                            className={cn(
-                              'h-5 w-5 aspect-square shrink-0 rounded inline-flex items-center justify-center text-blue-700',
-                              'hover:bg-blue-100',
-                              'focus:bg-blue-100 data-[state=open]:bg-blue-100',
-                              'transition-colors [&>svg:last-child]:hidden',
-                            )}
-                            aria-label="Switch organization"
-                            title="Switch organization"
-                          >
-                            {switchingId
-                              ? <Loader2Icon className="h-3 w-3 animate-spin" strokeWidth={2.5} />
-                              : <ArrowRightLeftIcon className="h-3 w-3" strokeWidth={2.5} />}
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuPortal>
-                            <DropdownMenuSubContent className="min-w-56 rounded-xl p-1.5 shadow-lg">
-                              {myTenants?.map(m => (
-                                <DropdownMenuItem
-                                  key={m.tenantId}
-                                  className={cn('gap-2.5 cursor-pointer px-2 py-2 rounded-md', m.tenantId === tenant?.id && 'bg-primary/8 cursor-default')}
-                                  onClick={() => handleSwitchTenant(m.tenantId)}
-                                  disabled={m.tenantId === tenant?.id || !!switchingId}
-                                >
-                                  <div className={cn(
-                                    'h-7 w-7 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 overflow-hidden',
-                                    m.logoUrl ? 'bg-muted text-muted-foreground' : cn(orgColor(m.tenantName ?? '?'), 'text-white'),
-                                  )}>
-                                    {m.logoUrl
-                                      ? <img src={m.logoUrl} alt="" className="h-full w-full object-cover" />
-                                      : (m.tenantName ?? '?').slice(0, 2).toUpperCase()}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium truncate leading-tight">{m.tenantName}</p>
-                                    <p className="text-[11px] text-muted-foreground capitalize truncate leading-tight">
-                                      {labelFor(m.role)}
-                                    </p>
-                                  </div>
-                                  <span className="ml-auto shrink-0">
-                                    {switchingId === m.tenantId
-                                      ? <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
-                                      : m.tenantId === tenant?.id
-                                        ? <Check className="size-3.5 text-primary" />
-                                        : null}
-                                  </span>
-                                </DropdownMenuItem>
-                              ))}
-                              <DropdownMenuSeparator className="my-1" />
+                    hasMultipleOrgs ? (
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger
+                          className={cn(
+                            'mt-2 flex items-center gap-1.5 min-w-0 w-full rounded-md px-1.5 py-1 -mx-1.5 cursor-pointer',
+                            'hover:bg-blue-100/60 focus:bg-blue-100/60 data-[state=open]:bg-blue-100/70',
+                            'transition-colors [&>svg:last-child]:hidden',
+                          )}
+                          aria-label={t('common.switchOrganization')}
+                          title={t('common.switchOrganization')}
+                        >
+                          <Building2 className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                          <span className="text-xs font-bold text-foreground truncate flex-1 text-start">{tenant.name}</span>
+                          {switchingId
+                            ? <Loader2Icon className="h-3 w-3 shrink-0 animate-spin text-blue-700" strokeWidth={2.5} />
+                            : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-blue-700" strokeWidth={2.5} data-rtl-flip />}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuPortal>
+                          <DropdownMenuSubContent className="min-w-56 rounded-xl p-1.5 shadow-lg">
+                            {myTenants?.map(m => (
                               <DropdownMenuItem
-                                className="gap-2 rounded-md px-2.5 py-2 cursor-pointer"
-                                onClick={() => setNewOrgOpen(true)}
+                                key={m.tenantId}
+                                className={cn('gap-2.5 cursor-pointer px-2 py-2 rounded-md', m.tenantId === tenant?.id && 'bg-primary/8 cursor-default')}
+                                onClick={() => handleSwitchTenant(m.tenantId)}
+                                disabled={m.tenantId === tenant?.id || !!switchingId}
                               >
-                                <PlusIcon className="size-3.5 text-muted-foreground" />
-                                <span className="text-sm">New organization</span>
+                                <div className={cn(
+                                  'h-7 w-7 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 overflow-hidden',
+                                  m.logoUrl ? 'bg-muted text-muted-foreground' : cn(orgColor(m.tenantName ?? '?'), 'text-white'),
+                                )}>
+                                  {m.logoUrl
+                                    ? <img src={m.logoUrl} alt="" className="h-full w-full object-cover" />
+                                    : (m.tenantName ?? '?').slice(0, 2).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate leading-tight">{m.tenantName}</p>
+                                  <p className="text-[11px] text-muted-foreground capitalize truncate leading-tight">
+                                    {labelFor(m.role)}
+                                  </p>
+                                </div>
+                                <span className="ml-auto shrink-0">
+                                  {switchingId === m.tenantId
+                                    ? <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+                                    : m.tenantId === tenant?.id
+                                      ? <Check className="size-3.5 text-primary" />
+                                      : null}
+                                </span>
                               </DropdownMenuItem>
-                            </DropdownMenuSubContent>
-                          </DropdownMenuPortal>
-                        </DropdownMenuSub>
-                      )}
-                    </div>
+                            ))}
+                            <DropdownMenuSeparator className="my-1" />
+                            <DropdownMenuItem
+                              className="gap-2 rounded-md px-2.5 py-2 cursor-pointer"
+                              onClick={() => setNewOrgOpen(true)}
+                            >
+                              <PlusIcon className="size-3.5 text-muted-foreground" />
+                              <span className="text-sm">{t('common.newOrganization')}</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuSubContent>
+                        </DropdownMenuPortal>
+                      </DropdownMenuSub>
+                    ) : (
+                      <div className="mt-2 flex items-center gap-1.5 min-w-0">
+                        <Building2 className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                        <span className="text-xs font-bold text-foreground truncate flex-1">{tenant.name}</span>
+                      </div>
+                    )
                   )}
                 </div>
               </div>

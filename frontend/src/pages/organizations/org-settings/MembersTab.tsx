@@ -76,7 +76,6 @@ function EmployeePicker({
                     placeholder="Search by name, department…"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    autoFocus
                 />
             </div>
             <div className="max-h-52 overflow-y-auto rounded-lg border divide-y">

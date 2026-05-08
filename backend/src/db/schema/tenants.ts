@@ -31,7 +31,9 @@ export const tenants = pgTable('tenants', {
     }>().notNull().default({ sessionTimeoutMinutes: 480, auditLoggingEnabled: true }),
     leaveSettings: jsonb('leave_settings').$type<{
         rolloverEnabledFrom: string | null
-    }>().notNull().default({ rolloverEnabledFrom: null }),
+        weekOffDays?: string[]
+        workingWeekStart?: string
+    }>().notNull().default({ rolloverEnabledFrom: null, weekOffDays: ['saturday', 'sunday'], workingWeekStart: 'monday' }),
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

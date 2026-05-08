@@ -6,7 +6,6 @@ import {
     Shield,
     KeyRound,
     CalendarDays,
-    CreditCard,
     Briefcase,
     CalendarClock,
     GraduationCap,
@@ -25,7 +24,6 @@ import { RolesPermissionsTab } from './org-settings/RolesPermissionsTab'
 import { HolidaysTab } from './org-settings/HolidaysTab'
 import { DesignationsTab } from './org-settings/DesignationsTab'
 import { GradeLevelsTab } from './org-settings/GradeLevelsTab'
-import { SubscriptionTab } from './org-settings/SubscriptionTab'
 import { LeaveSettingsTab } from './org-settings/LeaveSettingsTab'
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
@@ -36,7 +34,6 @@ const tabs = [
     { value: 'roles',         label: 'Roles & Permissions',  desc: 'View built-in role permissions',          icon: KeyRound,      requires: 'manage_users'    as Permission | null },
     { value: 'holidays',      label: 'Public Holidays',      desc: 'Manage company-wide holidays by year',    icon: CalendarDays,  requires: 'manage_settings' as Permission | null },
     { value: 'leave',         label: 'Leave Settings',       desc: 'Rollover gate & leave policies',          icon: CalendarClock, requires: 'manage_settings' as Permission | null },
-    { value: 'subscription',  label: 'Subscription',         desc: 'Plan, usage & billing',                   icon: CreditCard,    requires: 'manage_settings' as Permission | null },
     { value: 'security',      label: 'Security',             desc: 'Policies, IP allowlist & data',           icon: Shield,        requires: 'manage_settings' as Permission | null },
 ]
 
@@ -123,7 +120,6 @@ export function OrganizationSettingsPage() {
                     <TabsContent value="roles"        className="mt-0"><RolesPermissionsTab /></TabsContent>
                     <TabsContent value="holidays"     className="mt-0"><HolidaysTab /></TabsContent>
                     <TabsContent value="leave"        className="mt-0"><LeaveSettingsTab /></TabsContent>
-                    <TabsContent value="subscription" className="mt-0"><SubscriptionTab /></TabsContent>
                     <TabsContent value="security"     className="mt-0"><SecurityTab /></TabsContent>
                 </div>
             </Tabs>

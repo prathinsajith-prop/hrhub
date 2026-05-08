@@ -4,13 +4,13 @@ import {
   ChevronsUpDown,
   SettingsIcon,
   UserCircleIcon,
-  ShieldIcon,
   GlobeIcon,
   Building2Icon,
   CheckIcon,
   Loader2Icon,
   PlusIcon,
-  ArrowRightLeftIcon,
+  ChevronRightIcon,
+  CreditCardIcon,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -122,7 +122,7 @@ export function NavUser({
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{user.name}</span>
                 <span className="truncate text-xs text-sidebar-foreground/60">
-                  {currentRole ? labelFor(currentRole) : user.email}
+                  {tenant?.name ?? user.email}
                 </span>
               </div>
               <ChevronsUpDown className="ml-auto size-4 text-sidebar-foreground/50" />
@@ -162,77 +162,79 @@ export function NavUser({
                   {/* Row 2: Email */}
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</p>
 
-                  {/* Row 3: Company name + switch icon — clean, no border */}
+                  {/* Row 3: Company name — hover to switch (sub-menu opens automatically) */}
                   {tenant && (
-                    <div className="mt-2 flex items-center gap-1.5 min-w-0">
-                      <Building2Icon className="h-3.5 w-3.5 shrink-0 text-blue-600" />
-                      <span className="text-xs font-bold text-foreground truncate flex-1">{tenant.name}</span>
-                      {myTenants.length > 1 && (
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger
-                            className={cn(
-                              'h-5 w-5 aspect-square shrink-0 rounded inline-flex items-center justify-center text-blue-700',
-                              'hover:bg-blue-100',
-                              'focus:bg-blue-100 data-[state=open]:bg-blue-100',
-                              'transition-colors [&>svg:last-child]:hidden',
-                            )}
-                            aria-label={t('organizations.switch')}
-                            title={t('organizations.switch')}
-                          >
-                            {switchingId
-                              ? <Loader2Icon className="h-3 w-3 animate-spin" strokeWidth={2.5} />
-                              : <ArrowRightLeftIcon className="h-3 w-3" strokeWidth={2.5} />}
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuPortal>
-                            <DropdownMenuSubContent className="min-w-56 rounded-xl p-1.5 shadow-lg">
-                              {myTenants.map((org) => {
-                                const isCurrent = org.tenantId === tenant?.id
-                                const isSwitching = switchingId === org.tenantId
-                                return (
-                                  <DropdownMenuItem
-                                    key={org.tenantId}
-                                    onClick={() => handleSwitchOrg(org.tenantId)}
-                                    disabled={isCurrent || !!switchingId}
-                                    className={cn(
-                                      "gap-2.5 rounded-md px-2 py-2 cursor-pointer",
-                                      isCurrent && "bg-primary/8 cursor-default",
-                                    )}
-                                  >
-                                    <div className={cn(
-                                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white text-xs font-bold',
-                                      orgColor(org.tenantName ?? 'X'),
+                    myTenants.length > 1 ? (
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger
+                          className={cn(
+                            'mt-2 flex items-center gap-1.5 min-w-0 w-full rounded-md px-1.5 py-1 -mx-1.5 cursor-pointer',
+                            'hover:bg-blue-100/60 focus:bg-blue-100/60 data-[state=open]:bg-blue-100/70',
+                            'transition-colors [&>svg:last-child]:hidden',
+                          )}
+                          aria-label={t('organizations.switch')}
+                          title={t('organizations.switch')}
+                        >
+                          <Building2Icon className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                          <span className="text-xs font-bold text-foreground truncate flex-1 text-start">{tenant.name}</span>
+                          {switchingId
+                            ? <Loader2Icon className="h-3 w-3 shrink-0 animate-spin text-blue-700" strokeWidth={2.5} />
+                            : <ChevronRightIcon className="h-3.5 w-3.5 shrink-0 text-blue-700" strokeWidth={2.5} data-rtl-flip />}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuPortal>
+                          <DropdownMenuSubContent className="min-w-56 rounded-xl p-1.5 shadow-lg">
+                            {myTenants.map((org) => {
+                              const isCurrent = org.tenantId === tenant?.id
+                              const isSwitching = switchingId === org.tenantId
+                              return (
+                                <DropdownMenuItem
+                                  key={org.tenantId}
+                                  onClick={() => handleSwitchOrg(org.tenantId)}
+                                  disabled={isCurrent || !!switchingId}
+                                  className={cn(
+                                    "gap-2.5 rounded-md px-2 py-2 cursor-pointer",
+                                    isCurrent && "bg-primary/8 cursor-default",
+                                  )}
+                                >
+                                  <div className={cn(
+                                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white text-xs font-bold',
+                                    orgColor(org.tenantName ?? 'X'),
+                                  )}>
+                                    {(org.tenantName ?? '?')[0].toUpperCase()}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="truncate text-sm font-medium leading-tight">{org.tenantName}</p>
+                                    <span className={cn(
+                                      "mt-0.5 inline-flex items-center rounded-full border px-1.5 py-px text-[10px] font-semibold",
+                                      ROLE_BADGE_STYLE[org.role] ?? 'bg-slate-100 text-slate-600 border-slate-200',
                                     )}>
-                                      {(org.tenantName ?? '?')[0].toUpperCase()}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="truncate text-sm font-medium leading-tight">{org.tenantName}</p>
-                                      <span className={cn(
-                                        "mt-0.5 inline-flex items-center rounded-full border px-1.5 py-px text-[10px] font-semibold",
-                                        ROLE_BADGE_STYLE[org.role] ?? 'bg-slate-100 text-slate-600 border-slate-200',
-                                      )}>
-                                        {labelFor(org.role)}
-                                      </span>
-                                    </div>
-                                    <span className="ml-auto shrink-0">
-                                      {isSwitching ? (
-                                        <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
-                                      ) : isCurrent ? (
-                                        <CheckIcon className="size-3.5 text-primary" />
-                                      ) : null}
+                                      {labelFor(org.role)}
                                     </span>
-                                  </DropdownMenuItem>
-                                )
-                              })}
-                              <DropdownMenuSeparator className="my-1" />
-                              <DropdownMenuItem onClick={() => setNewOrgOpen(true)} className="gap-2 rounded-md px-2.5 py-2 cursor-pointer">
-                                <PlusIcon className="size-3.5 text-muted-foreground" />
-                                <span className="text-sm">{t('organizations.new')}</span>
-                              </DropdownMenuItem>
-                            </DropdownMenuSubContent>
-                          </DropdownMenuPortal>
-                        </DropdownMenuSub>
-                      )}
-                    </div>
+                                  </div>
+                                  <span className="ml-auto shrink-0">
+                                    {isSwitching ? (
+                                      <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+                                    ) : isCurrent ? (
+                                      <CheckIcon className="size-3.5 text-primary" />
+                                    ) : null}
+                                  </span>
+                                </DropdownMenuItem>
+                              )
+                            })}
+                            <DropdownMenuSeparator className="my-1" />
+                            <DropdownMenuItem onClick={() => setNewOrgOpen(true)} className="gap-2 rounded-md px-2.5 py-2 cursor-pointer">
+                              <PlusIcon className="size-3.5 text-muted-foreground" />
+                              <span className="text-sm">{t('organizations.new')}</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuSubContent>
+                        </DropdownMenuPortal>
+                      </DropdownMenuSub>
+                    ) : (
+                      <div className="mt-2 flex items-center gap-1.5 min-w-0">
+                        <Building2Icon className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                        <span className="text-xs font-bold text-foreground truncate flex-1">{tenant.name}</span>
+                      </div>
+                    )
                   )}
                 </div>
               </div>
@@ -255,10 +257,12 @@ export function NavUser({
                   <SettingsIcon className="size-4 text-muted-foreground shrink-0" />
                   <span className="text-sm">{t('nav.settings')}</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/my/login-history')} className="gap-2.5 rounded-lg h-9 px-2.5 cursor-pointer">
-                  <ShieldIcon className="size-4 text-muted-foreground shrink-0" />
-                  <span className="text-sm">{t('auth.myLoginHistory')}</span>
-                </DropdownMenuItem>
+                {(currentRole === 'super_admin' || currentRole === 'hr_manager') && (
+                  <DropdownMenuItem onClick={() => navigate('/subscription')} className="gap-2.5 rounded-lg h-9 px-2.5 cursor-pointer">
+                    <CreditCardIcon className="size-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm">{t('common.billingPayments')}</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={toggleLanguage} className="gap-2.5 rounded-lg h-9 px-2.5 cursor-pointer">
                   <GlobeIcon className="size-4 text-muted-foreground shrink-0" />
                   <span className="text-sm">{t('common.switchLanguage')}</span>

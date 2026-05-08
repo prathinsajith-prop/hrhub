@@ -2,7 +2,7 @@ import { eq, and, ilike, desc, asc, getTableColumns, inArray, notInArray, sql, o
 import { withTimestamp, encodeCursor, decodeCursor, extractRows } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { employees, entities, tenants, gradeLevels, sponsoringEntities, employeeNoSequences, orgUnits } from '../../db/schema/index.js'
+import { employees, entities, tenants, gradeLevels, sponsoringEntities, employeeNoSequences, orgUnits, users } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
 import { resolveAvatarUrl, resolveAvatarUrls } from '../../plugins/s3.js'
@@ -353,13 +353,23 @@ export async function getAncestorChain(tenantId: string, employeeId: string): Pr
 }
 
 export async function getOrgChart(tenantId: string, rootEmployeeId?: string) {
+    // Only employees linked to an active user account appear in the org chart.
+    // Unlinked employee records (HR-only, contractors, archived) are filtered out.
+    const linkedRows = await db
+        .select({ id: users.employeeId })
+        .from(users)
+        .where(and(eq(users.tenantId, tenantId), eq(users.isActive, true)))
+    const linkedEmployeeIds = new Set(linkedRows.map(r => r.id))
+
     if (rootEmployeeId) {
         // 1. Subtree: dept_head + all direct/indirect reports
-        const subtreeIds = await getSubtreeEmployeeIds(tenantId, rootEmployeeId)
+        const subtreeIdsAll = await getSubtreeEmployeeIds(tenantId, rootEmployeeId)
+        const subtreeIds = subtreeIdsAll.filter(id => linkedEmployeeIds.has(id))
         if (subtreeIds.length === 0) return []
 
         // 2. Ancestor chain: managers above the dept_head up to the org root
-        const ancestorIds = await getAncestorChain(tenantId, rootEmployeeId)
+        const ancestorIdsAll = await getAncestorChain(tenantId, rootEmployeeId)
+        const ancestorIds = ancestorIdsAll.filter(id => linkedEmployeeIds.has(id))
 
         // 3. Fetch all needed rows in one query
         const allIds = [...new Set([...ancestorIds, ...subtreeIds])]
@@ -427,7 +437,8 @@ export async function getOrgChart(tenantId: string, rootEmployeeId?: string) {
         return root ? [root] : []
     }
 
-    // Full chart for hr_manager / super_admin
+    // Full chart for hr_manager / super_admin — only employees with linked user accounts
+    if (linkedEmployeeIds.size === 0) return []
     const rows = await db.select({
         id: employees.id,
         firstName: employees.firstName,
@@ -437,7 +448,11 @@ export async function getOrgChart(tenantId: string, rootEmployeeId?: string) {
         reportingTo: employees.reportingTo,
         avatarUrl: employees.avatarUrl,
         status: employees.status,
-    }).from(employees).where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false)))
+    }).from(employees).where(and(
+        eq(employees.tenantId, tenantId),
+        eq(employees.isArchived, false),
+        inArray(employees.id, Array.from(linkedEmployeeIds)),
+    ))
 
     const avatarUrls = await resolveAvatarUrls(rows.map(r => r.avatarUrl))
     const resolvedRows = rows.map((r, i) => ({ ...r, avatarUrl: avatarUrls[i] }))

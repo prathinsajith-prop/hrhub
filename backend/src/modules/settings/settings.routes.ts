@@ -281,24 +281,45 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             .from(tenants)
             .where(eq(tenants.id, request.user.tenantId))
             .limit(1)
-        return reply.send({ data: row?.leaveSettings ?? { rolloverEnabledFrom: null } })
+        const defaults = { rolloverEnabledFrom: null, weekOffDays: ['saturday', 'sunday'], workingWeekStart: 'monday' }
+        return reply.send({ data: { ...defaults, ...(row?.leaveSettings ?? {}) } })
     })
 
     // PATCH /settings/leave
     fastify.patch('/leave', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
-        const { rolloverEnabledFrom } = (request.body ?? {}) as { rolloverEnabledFrom?: string | null }
-        // Validate date format if provided
+        const { rolloverEnabledFrom, weekOffDays, workingWeekStart } = (request.body ?? {}) as {
+            rolloverEnabledFrom?: string | null
+            weekOffDays?: string[]
+            workingWeekStart?: string
+        }
+
+        const VALID_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+
         if (rolloverEnabledFrom !== undefined && rolloverEnabledFrom !== null) {
             if (!/^\d{4}-\d{2}-\d{2}$/.test(rolloverEnabledFrom) || isNaN(Date.parse(rolloverEnabledFrom))) {
                 return reply.code(400).send({ message: 'rolloverEnabledFrom must be a valid ISO date (YYYY-MM-DD) or null' })
             }
         }
+        if (weekOffDays !== undefined) {
+            if (!Array.isArray(weekOffDays) || weekOffDays.some(d => !VALID_DAYS.includes(d))) {
+                return reply.code(400).send({ message: 'weekOffDays must be an array of weekday names' })
+            }
+        }
+        if (workingWeekStart !== undefined && !VALID_DAYS.includes(workingWeekStart)) {
+            return reply.code(400).send({ message: 'workingWeekStart must be a weekday name' })
+        }
+
         const [row] = await db
             .select({ leaveSettings: tenants.leaveSettings })
             .from(tenants)
             .where(eq(tenants.id, request.user.tenantId))
             .limit(1)
-        const merged = { ...row?.leaveSettings, rolloverEnabledFrom: rolloverEnabledFrom ?? null }
+        const merged = {
+            ...row?.leaveSettings,
+            ...(rolloverEnabledFrom !== undefined ? { rolloverEnabledFrom: rolloverEnabledFrom ?? null } : {}),
+            ...(weekOffDays !== undefined ? { weekOffDays } : {}),
+            ...(workingWeekStart !== undefined ? { workingWeekStart } : {}),
+        }
         const [updated] = await db
             .update(tenants)
             .set({ leaveSettings: merged, updatedAt: new Date() })

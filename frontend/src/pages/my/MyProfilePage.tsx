@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
@@ -222,7 +223,7 @@ export function MyProfileContent() {
 
                         <div className="flex-1 min-w-0">
                             {sc && <Badge variant={sc.variant} className="mb-1.5 text-[10px]">{labelFor(e.status)}</Badge>}
-                            <h1 className="text-xl sm:text-2xl font-bold tracking-tight font-display">
+                            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight font-display">
                                 {e.fullName ?? `${e.firstName} ${e.lastName}`}
                             </h1>
                             <p className="text-sm text-muted-foreground mt-0.5">
@@ -498,9 +499,10 @@ export function MyProfileContent() {
 }
 
 export function MyProfilePage() {
+    const { t } = useTranslation()
     return (
         <PageWrapper>
-            <PageHeader title="My Profile" description="Your employment record, documents, and personal details." />
+            <PageHeader title={t('myProfile.title')} description={t('myProfile.description')} />
             <MyProfileContent />
         </PageWrapper>
     )

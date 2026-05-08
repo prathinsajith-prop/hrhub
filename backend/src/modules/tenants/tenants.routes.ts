@@ -9,6 +9,7 @@ import {
     acceptInvite,
     changeMemberRole,
     removeMember,
+    deleteTenant,
 } from './tenants.service.js'
 import type { MemberRole } from '../../lib/permissions.js'
 
@@ -142,5 +143,19 @@ export default async function tenantsRoutes(fastify: any): Promise<void> {
             membershipId: id,
         })
         return reply.code(204).send()
+    })
+
+    /* ───── delete current tenant (super_admin only) ───── */
+    fastify.delete('/current', {
+        preHandler: [fastify.authenticate, fastify.requireRole('super_admin')],
+        schema: { tags: ['Tenants'] },
+    }, async (request: any, reply: any) => {
+        const body = (request.body ?? {}) as { confirmName?: string }
+        const result = await deleteTenant({
+            tenantId: request.user.tenantId,
+            actorUserId: request.user.id,
+            confirmName: body.confirmName ?? '',
+        })
+        return reply.send({ data: result })
     })
 }

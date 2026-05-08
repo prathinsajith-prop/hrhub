@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -317,9 +318,10 @@ export function MyLeaveContent() {
 }
 
 export function MyLeavePage() {
+    const { t } = useTranslation()
     return (
         <PageWrapper>
-            <PageHeader title="My Leave" description="View your leave balance and manage your requests." />
+            <PageHeader title={t('myLeave.title')} description={t('myLeave.description')} />
             <MyLeaveContent />
         </PageWrapper>
     )

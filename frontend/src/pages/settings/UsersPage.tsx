@@ -162,7 +162,6 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                             placeholder="Search by name, department…"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            autoFocus
                         />
                     </div>
                     {!isLoading && invitableEmployees.length > 0 && (
