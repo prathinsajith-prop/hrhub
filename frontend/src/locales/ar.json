@@ -609,7 +609,7 @@
     "settingsDescription": "إدارة ملف مؤسستك والأعضاء والأمان."
   },
   "team": {
-    "title": "الفريق",
+    "title": "المنظمة",
     "description": "إدارة من يمكنه الوصول إلى هذه المؤسسة.",
     "inviteMember": "دعوة عضو",
     "sendInvite": "إرسال الدعوة",
@@ -1017,5 +1017,26 @@
         "rejected": "مرفوض"
       }
     }
+  },
+  "calendar": {
+    "title": "التقويم"
+  },
+  "users": {
+    "title": "المستخدمون والأدوار"
+  },
+  "orgStructure": {
+    "title": "الهيكل التنظيمي"
+  },
+  "myLeave": {
+    "title": "إجازتي"
+  },
+  "myPayslips": {
+    "title": "كشوف راتبي"
+  },
+  "myAccount": {
+    "title": "حسابي"
+  },
+  "myProfile": {
+    "title": "ملفي الشخصي"
   }
 }

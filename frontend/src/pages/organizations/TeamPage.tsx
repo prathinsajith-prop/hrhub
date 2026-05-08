@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { z } from 'zod'
-import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X, Building2, Calendar, UserMinus } from 'lucide-react'
+import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X, Building2, Calendar, UserMinus, GitBranch } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
@@ -32,6 +32,7 @@ import { FormField } from '@/components/shared/FormField'
 import { zodToFieldErrors } from '@/lib/schemas'
 import { getInitials } from '@/lib/utils'
 import { ApiError } from '@/lib/api'
+import { OrgStructureTab } from './org-settings/OrgStructureTab'
 
 /** Deterministic pastel background colour from a string — for team avatar. */
 function teamColor(name: string) {
@@ -597,12 +598,15 @@ function TeamCard({ team, canManage, orgMap, onView, onEdit, onDelete }: TeamCar
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export function TeamPage() {
-    const me = useAuthStore(s => s.user)
-    const { can } = usePermissions()
-    const canManage = can('manage_team')
-    const canViewAll = me?.role === 'super_admin' || me?.role === 'hr_manager'
+// ── Teams Panel ───────────────────────────────────────────────────────────────
 
+interface TeamsPanelProps {
+    canManage: boolean
+    canViewAll: boolean
+    userId: string | undefined
+}
+
+function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
     const { data: allTeams = [], isLoading: teamsLoading } = useTeams()
     const { data: myTeams = [], isLoading: myTeamsLoading } = useMyTeams()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
@@ -612,7 +616,6 @@ export function TeamPage() {
     const [editTarget, setEditTarget] = useState<TeamRow | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<TeamRow | null>(null)
     const [detailTeam, setDetailTeam] = useState<TeamRow | MyTeamRow | null>(null)
-
     const deleteMut = useDeleteTeam()
 
     const handleDelete = async () => {
@@ -626,134 +629,84 @@ export function TeamPage() {
         }
     }
 
-    const openEdit = (team: TeamRow) => {
-        setEditTarget(team)
-        setFormOpen(true)
-    }
+    const openEdit = (team: TeamRow) => { setEditTarget(team); setFormOpen(true) }
+    const closeForm = () => { setFormOpen(false); setEditTarget(null) }
 
-    const closeForm = () => {
-        setFormOpen(false)
-        setEditTarget(null)
-    }
+    const teamGrid = (teams: (TeamRow | MyTeamRow)[], showControls: boolean) => (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {teams.map(team => {
+                const isOwner = showControls && (team as TeamRow).createdById === userId
+                return (
+                    <TeamCard
+                        key={team.id}
+                        team={team}
+                        canManage={canManage && (canViewAll || isOwner)}
+                        orgMap={orgMap}
+                        onView={() => setDetailTeam(team)}
+                        onEdit={canManage && (canViewAll || isOwner) ? () => openEdit(team as TeamRow) : undefined}
+                        onDelete={canManage && (canViewAll || isOwner) ? () => setDeleteTarget(team as TeamRow) : undefined}
+                    />
+                )
+            })}
+        </div>
+    )
 
     return (
-        <PageWrapper>
-            <PageHeader
-                title="Teams"
-                description="Department-scoped work groups"
-                actions={canManage && (
+        <>
+            {canManage && (
+                <div className="flex justify-end mb-4">
                     <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => { setEditTarget(null); setFormOpen(true) }}>
                         Create Team
                     </Button>
-                )}
-            />
+                </div>
+            )}
 
             {canViewAll ? (
-                // hr_manager / super_admin: tabs for All Teams and My Teams
                 <Tabs defaultValue="all">
                     <TabsList className="mb-4">
                         <TabsTrigger value="all">All Teams</TabsTrigger>
                         <TabsTrigger value="mine">My Teams</TabsTrigger>
                     </TabsList>
-
                     <TabsContent value="all">
                         {teamsLoading ? (
                             <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>
                         ) : allTeams.length === 0 ? (
-                            <Card>
-                                <CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                                    <Users className="h-8 w-8 text-muted-foreground/40" />
-                                    <p className="text-sm text-muted-foreground">No teams yet. Create one to get started.</p>
-                                    <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>Create Team</Button>
-                                </CardContent>
-                            </Card>
-                        ) : (
-                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                {allTeams.map(team => (
-                                    <TeamCard
-                                        key={team.id}
-                                        team={team}
-                                        canManage={canManage}
-                                        orgMap={orgMap}
-                                        onView={() => setDetailTeam(team)}
-                                        onEdit={() => openEdit(team)}
-                                        onDelete={() => setDeleteTarget(team)}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                            <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
+                                <Users className="h-8 w-8 text-muted-foreground/40" />
+                                <p className="text-sm text-muted-foreground">No teams yet. Create one to get started.</p>
+                                {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>Create Team</Button>}
+                            </CardContent></Card>
+                        ) : teamGrid(allTeams, true)}
                     </TabsContent>
-
                     <TabsContent value="mine">
                         {myTeamsLoading ? (
                             <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>
                         ) : myTeams.length === 0 ? (
-                            <Card>
-                                <CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                                    <Users className="h-8 w-8 text-muted-foreground/40" />
-                                    <p className="text-sm text-muted-foreground">You haven't been assigned to any teams yet.</p>
-                                </CardContent>
-                            </Card>
-                        ) : (
-                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                {myTeams.map(team => (
-                                    <TeamCard
-                                        key={team.id}
-                                        team={team}
-                                        canManage={false}
-                                        orgMap={orgMap}
-                                        onView={() => setDetailTeam(team)}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                            <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
+                                <Users className="h-8 w-8 text-muted-foreground/40" />
+                                <p className="text-sm text-muted-foreground">You haven't been assigned to any teams yet.</p>
+                            </CardContent></Card>
+                        ) : teamGrid(myTeams, false)}
                     </TabsContent>
                 </Tabs>
             ) : (
-                // dept_head / employee: only teams they belong to
                 <div className="space-y-4">
                     <h2 className="text-sm font-medium text-muted-foreground">Teams you belong to</h2>
                     {myTeamsLoading ? (
                         <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>
                     ) : myTeams.length === 0 ? (
-                        <Card>
-                            <CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                                <Users className="h-8 w-8 text-muted-foreground/40" />
-                                <p className="text-sm text-muted-foreground">
-                                    {canManage ? 'Create a team to get started.' : "You haven't been assigned to any teams yet."}
-                                </p>
-                                {canManage && (
-                                    <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>Create Team</Button>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            {myTeams.map(team => {
-                                const isOwner = team.createdById === me?.id
-                                return (
-                                    <TeamCard
-                                        key={team.id}
-                                        team={team}
-                                        canManage={canManage}
-                                        orgMap={orgMap}
-                                        onView={() => setDetailTeam(team)}
-                                        onEdit={canManage && isOwner ? () => openEdit(team as unknown as TeamRow) : undefined}
-                                        onDelete={canManage && isOwner ? () => setDeleteTarget(team as unknown as TeamRow) : undefined}
-                                    />
-                                )
-                            })}
-                        </div>
-                    )}
+                        <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
+                            <Users className="h-8 w-8 text-muted-foreground/40" />
+                            <p className="text-sm text-muted-foreground">
+                                {canManage ? 'Create a team to get started.' : "You haven't been assigned to any teams yet."}
+                            </p>
+                            {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>Create Team</Button>}
+                        </CardContent></Card>
+                    ) : teamGrid(myTeams, true)}
                 </div>
             )}
 
-            <TeamFormDialog
-                open={formOpen}
-                onClose={closeForm}
-                editTeam={editTarget}
-            />
-
+            <TeamFormDialog open={formOpen} onClose={closeForm} editTeam={editTarget} />
             <TeamDetailDialog
                 team={detailTeam}
                 open={!!detailTeam}
@@ -761,7 +714,6 @@ export function TeamPage() {
                 canManage={canManage}
                 orgMap={orgMap}
             />
-
             <ConfirmDialog
                 open={!!deleteTarget}
                 onOpenChange={o => !o && setDeleteTarget(null)}
@@ -771,6 +723,51 @@ export function TeamPage() {
                 variant="destructive"
                 onConfirm={handleDelete}
             />
+        </>
+    )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
+export function TeamPage() {
+    const { can, hasRole } = usePermissions()
+    const userId = useAuthStore(s => s.user?.id)
+    const canManage = can('manage_team')
+    const canManageOrg = can('manage_org') || can('manage_settings')
+    // hr_manager and above can view all teams; dept_head and below see only their own
+    const canViewAll = hasRole('super_admin', 'hr_manager')
+
+    return (
+        <PageWrapper>
+            <PageHeader
+                title="Organization"
+                description="Teams, departments, and org structure"
+            />
+
+            <Tabs defaultValue="teams" className="space-y-4">
+                <TabsList>
+                    <TabsTrigger value="teams">
+                        <Users className="h-3.5 w-3.5 mr-1.5" />
+                        Teams
+                    </TabsTrigger>
+                    {canManageOrg && (
+                        <TabsTrigger value="structure">
+                            <GitBranch className="h-3.5 w-3.5 mr-1.5" />
+                            Org Structure
+                        </TabsTrigger>
+                    )}
+                </TabsList>
+
+                <TabsContent value="teams" className="mt-0">
+                    <TeamsPanel canManage={canManage} canViewAll={canViewAll} userId={userId} />
+                </TabsContent>
+
+                {canManageOrg && (
+                    <TabsContent value="structure" className="mt-0">
+                        <OrgStructureTab />
+                    </TabsContent>
+                )}
+            </Tabs>
         </PageWrapper>
     )
 }

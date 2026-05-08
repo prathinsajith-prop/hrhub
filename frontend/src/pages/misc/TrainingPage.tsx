@@ -34,9 +34,7 @@ import {
 } from '@/hooks/useTraining'
 import { EmployeeSelect } from '@/components/shared'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
-import { useAuthStore } from '@/store/authStore'
-import { hasPermission } from '@/lib/permissions'
-import type { UserRole } from '@/types'
+import { usePermissions } from '@/hooks/usePermissions'
 
 const trainingFormSchema = z.object({
     employeeId: z.string().min(1, 'Employee is required'),
@@ -235,8 +233,8 @@ const TRAINING_FILTERS: FilterConfig[] = [
 export function TrainingPage() {
     const { t } = useTranslation()
     const navigate = useNavigate()
-    const role = useAuthStore(s => s.user?.role) as UserRole | undefined
-    const canManage = hasPermission(role ?? 'employee', 'manage_training')
+    const { can } = usePermissions()
+    const canManage = can('manage_training')
 
     const [formOpen, setFormOpen] = useState(false)
     const [editRecord, setEditRecord] = useState<TrainingRecord | null>(null)

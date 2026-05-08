@@ -5,67 +5,40 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/primitives'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn, formatDate } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import { useEmployeeAccount, useInviteEmployee, useResendInvite } from '@/hooks/useEmployees'
 import { useUpdateUser } from '@/hooks/useSettings'
-import { labelFor, ROLE_BADGE_STYLE } from '@/lib/enums'
 import { useAuthStore } from '@/store/authStore'
+import { MultiRoleToggle, MULTI_ROLE_OPTIONS, MULTI_ROLE_OPTIONS_WITH_SUPER } from '@/components/shared/MultiRoleToggle'
 import type { Employee } from '@/types'
-
-const ALL_ROLES = [
-    { id: 'super_admin', label: 'Super Admin' },
-    { id: 'hr_manager', label: 'HR Manager' },
-    { id: 'pro_officer', label: 'PRO Officer' },
-    { id: 'dept_head', label: 'Department Manager' },
-    { id: 'employee', label: 'Employee' },
-]
 
 interface RoleSelectorProps {
     userId: string
-    currentRole: string
-    selectedRole: string
-    availableRoles: typeof ALL_ROLES
-    onRoleChange: (role: string) => void
+    currentRoles: string[]
+    selectedRoles: string[]
+    availableOptions: readonly { id: string; label: string }[]
+    onRolesChange: (roles: string[]) => void
     onSave: (userId: string) => void
     isSaving: boolean
 }
 
-function RoleSelector({ userId, currentRole, selectedRole, availableRoles, onRoleChange, onSave, isSaving }: RoleSelectorProps) {
-    const isDirty = selectedRole !== currentRole
+function RoleSelector({ userId, currentRoles, selectedRoles, availableOptions, onRolesChange, onSave, isSaving }: RoleSelectorProps) {
+    const isDirty = JSON.stringify([...selectedRoles].sort()) !== JSON.stringify([...currentRoles].sort())
     return (
         <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">Role</p>
-            <div className="flex items-center gap-2">
-                <Select value={selectedRole} onValueChange={onRoleChange}>
-                    <SelectTrigger className="h-8 flex-1 text-xs">
-                        <SelectValue>
-                            <span className={cn(
-                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                ROLE_BADGE_STYLE[selectedRole] ?? 'bg-slate-100 text-slate-600 border-slate-200',
-                            )}>
-                                {labelFor(selectedRole)}
-                            </span>
-                        </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                        {availableRoles.map(r => (
-                            <SelectItem key={r.id} value={r.id}>
-                                <span className={cn(
-                                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                    ROLE_BADGE_STYLE[r.id] ?? 'bg-slate-100 text-slate-600 border-slate-200',
-                                )}>
-                                    {r.label}
-                                </span>
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+            <p className="text-xs font-medium text-muted-foreground">Roles</p>
+            <div className="flex items-center gap-2 flex-wrap">
+                <MultiRoleToggle
+                    roles={selectedRoles}
+                    onChange={onRolesChange}
+                    availableRoles={availableOptions}
+                    disabled={isSaving}
+                />
                 {isDirty && (
                     <Button
                         size="sm"
-                        className="h-8 text-xs shrink-0"
+                        className="h-6 text-xs shrink-0"
                         onClick={() => onSave(userId)}
                         loading={isSaving}
                     >
@@ -96,7 +69,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
     // Use || (not ??) so empty strings fall through to the next option
     const derivedEmail = employee.workEmail || employee.email || employee.personalEmail || ''
     const [emailInput, setEmailInput] = useState(derivedEmail)
-    const [selectedRole, setSelectedRole] = useState('employee')
+    const [selectedRoles, setSelectedRoles] = useState<string[]>(['employee'])
 
     // Sync email when the dialog opens or employee changes.
     const [prevOpen, setPrevOpen] = useState(false)
@@ -109,15 +82,16 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
         setPrevOpen(false)
     }
 
-    // Sync role when account data loads.
+    // Sync roles when account data loads.
     const loadedRole = accountData?.account?.role
+    const loadedRoles = accountData?.account?.roles
     const [prevLoadedRole, setPrevLoadedRole] = useState<string | undefined>(undefined)
     if (loadedRole !== undefined && loadedRole !== prevLoadedRole) {
         setPrevLoadedRole(loadedRole)
-        setSelectedRole(loadedRole)
+        setSelectedRoles(loadedRoles?.length ? loadedRoles : [loadedRole])
     }
 
-    const availableRoles = callerIsSuperAdmin ? ALL_ROLES : ALL_ROLES.filter(r => r.id !== 'super_admin')
+    const availableOptions = callerIsSuperAdmin ? MULTI_ROLE_OPTIONS_WITH_SUPER : MULTI_ROLE_OPTIONS
 
     const close = () => onOpenChange(false)
 
@@ -137,7 +111,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
         const email = emailInput.trim()
         if (!email) { toast.error('Email required', 'Please enter an email address to send the invite.'); return }
         try {
-            await invite.mutateAsync({ employeeId: employee.id, email, role: selectedRole })
+            await invite.mutateAsync({ employeeId: employee.id, email, role: selectedRoles[0], roles: selectedRoles })
             toast.success('Invitation sent', `An invite email has been sent to ${email}.`)
             close()
         } catch (err: unknown) {
@@ -168,12 +142,12 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
         }
     }
 
-    async function handleSaveRole(userId: string) {
+    async function handleSaveRoles(userId: string) {
         try {
-            await updateUser.mutateAsync({ id: userId, role: selectedRole })
-            toast.success('Role updated', `Role changed to ${labelFor(selectedRole)}.`)
+            await updateUser.mutateAsync({ id: userId, roles: selectedRoles, role: selectedRoles[0] })
+            toast.success('Roles updated')
         } catch {
-            toast.error('Update failed', 'Could not update the role.')
+            toast.error('Update failed', 'Could not update the roles.')
         }
     }
 
@@ -240,31 +214,12 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
 
                             {/* Role picker */}
                             <div className="space-y-1.5">
-                                <Label className="text-xs">Role</Label>
-                                <Select value={selectedRole} onValueChange={setSelectedRole}>
-                                    <SelectTrigger className="h-9 text-xs">
-                                        <SelectValue>
-                                            <span className={cn(
-                                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                                ROLE_BADGE_STYLE[selectedRole] ?? 'bg-slate-100 text-slate-600 border-slate-200',
-                                            )}>
-                                                {labelFor(selectedRole)}
-                                            </span>
-                                        </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {availableRoles.map(r => (
-                                            <SelectItem key={r.id} value={r.id}>
-                                                <span className={cn(
-                                                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                                    ROLE_BADGE_STYLE[r.id] ?? 'bg-slate-100 text-slate-600 border-slate-200',
-                                                )}>
-                                                    {r.label}
-                                                </span>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Label className="text-xs">Roles</Label>
+                                <MultiRoleToggle
+                                    roles={selectedRoles}
+                                    onChange={setSelectedRoles}
+                                    availableRoles={availableOptions}
+                                />
                             </div>
                         </div>
                     ) : state === 'deactivated' ? (
@@ -295,7 +250,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     )}
                                 </div>
                             </div>
-                            {account && <RoleSelector userId={account.id} currentRole={account.role} selectedRole={selectedRole} availableRoles={availableRoles} onRoleChange={setSelectedRole} onSave={handleSaveRole} isSaving={updateUser.isPending} />}
+                            {account && <RoleSelector userId={account.id} currentRoles={account.roles?.length ? account.roles : [account.role]} selectedRoles={selectedRoles} availableOptions={availableOptions} onRolesChange={setSelectedRoles} onSave={handleSaveRoles} isSaving={updateUser.isPending} />}
                         </div>
                     ) : state === 'invite-pending' ? (
                         <div className="space-y-4">
@@ -323,7 +278,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     </div>
                                 </div>
                             </div>
-                            {account && <RoleSelector userId={account.id} currentRole={account.role} selectedRole={selectedRole} availableRoles={availableRoles} onRoleChange={setSelectedRole} onSave={handleSaveRole} isSaving={updateUser.isPending} />}
+                            {account && <RoleSelector userId={account.id} currentRoles={account.roles?.length ? account.roles : [account.role]} selectedRoles={selectedRoles} availableOptions={availableOptions} onRolesChange={setSelectedRoles} onSave={handleSaveRoles} isSaving={updateUser.isPending} />}
                         </div>
                     ) : (
                         <div className="space-y-3.5">
@@ -346,7 +301,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     <span>Created {formatDate(account?.createdAt ?? '')}</span>
                                 </div>
                             </div>
-                            {account && <RoleSelector userId={account.id} currentRole={account.role} selectedRole={selectedRole} availableRoles={availableRoles} onRoleChange={setSelectedRole} onSave={handleSaveRole} isSaving={updateUser.isPending} />}
+                            {account && <RoleSelector userId={account.id} currentRoles={account.roles?.length ? account.roles : [account.role]} selectedRoles={selectedRoles} availableOptions={availableOptions} onRolesChange={setSelectedRoles} onSave={handleSaveRoles} isSaving={updateUser.isPending} />}
                         </div>
                     )}
                 </div>

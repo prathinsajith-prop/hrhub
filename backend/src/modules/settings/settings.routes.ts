@@ -64,14 +64,20 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
 
     // POST /settings/users/invite — create a user account for an existing employee
     fastify.post('/users/invite', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
-        const { employeeId, role } = request.body as { employeeId: string; role: string }
+        const { employeeId, role, roles } = request.body as { employeeId: string; role: string; roles?: string[] }
         if (!employeeId || !role) {
             return reply.code(400).send({ message: 'employeeId and role are required' })
         }
         const roleError = validateRoleAssignment(request.user.role, role)
         if (roleError) return reply.code(403).send({ message: roleError })
+        if (roles) {
+            for (const r of roles) {
+                const err = validateRoleAssignment(request.user.role, r)
+                if (err) return reply.code(403).send({ message: err })
+            }
+        }
         try {
-            const result = await inviteUser(request.user.tenantId, { employeeId, role })
+            const result = await inviteUser(request.user.tenantId, { employeeId, role, roles })
             return reply.code(201).send({ data: result })
         } catch (err: any) {
             return reply.code(err.statusCode ?? 500).send({ message: err.message })
@@ -80,13 +86,19 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
 
     // POST /settings/users/invite-bulk — grant access to multiple employees at once
     fastify.post('/users/invite-bulk', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
-        const { employeeIds, role } = request.body as { employeeIds: string[]; role: string }
+        const { employeeIds, role, roles } = request.body as { employeeIds: string[]; role: string; roles?: string[] }
         if (!Array.isArray(employeeIds) || employeeIds.length === 0 || !role) {
             return reply.code(400).send({ message: 'employeeIds (array) and role are required' })
         }
         const roleError = validateRoleAssignment(request.user.role, role)
         if (roleError) return reply.code(403).send({ message: roleError })
-        const results = await inviteUserBulk(request.user.tenantId, employeeIds, role)
+        if (roles) {
+            for (const r of roles) {
+                const err = validateRoleAssignment(request.user.role, r)
+                if (err) return reply.code(403).send({ message: err })
+            }
+        }
+        const results = await inviteUserBulk(request.user.tenantId, employeeIds, role, roles)
         return reply.code(207).send({ data: results })
     })
 
@@ -104,7 +116,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     // PATCH /settings/users/:id — deactivate/reactivate a user or change their role
     fastify.patch('/users/:id', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const { isActive, role } = request.body as { isActive?: boolean; role?: string }
+        const { isActive, role, roles } = request.body as { isActive?: boolean; role?: string; roles?: string[] }
 
         // Prevent anyone from deactivating themselves
         if (id === request.user.id && isActive === false) {
@@ -114,6 +126,13 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         if (role) {
             const roleError = validateRoleAssignment(request.user.role, role)
             if (roleError) return reply.code(403).send({ message: roleError })
+        }
+
+        if (roles) {
+            for (const r of roles) {
+                const err = validateRoleAssignment(request.user.role, r)
+                if (err) return reply.code(403).send({ message: err })
+            }
         }
 
         // hr_manager cannot modify super_admin users (role change or deactivation)
@@ -128,7 +147,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             }
         }
 
-        const updated = await updateUserStatus(request.user.tenantId, id, { isActive, role })
+        const updated = await updateUserStatus(request.user.tenantId, id, { isActive, role, roles })
         if (!updated) return reply.code(404).send({ message: 'User not found' })
 
         // Invalidate the isActive cache for this user so the change is effective immediately

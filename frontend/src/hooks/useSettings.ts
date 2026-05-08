@@ -17,6 +17,7 @@ export interface TenantUser {
     name: string
     email: string
     role: string
+    roles: string[]
     isActive: boolean
     lastLoginAt: string | null
     createdAt: string
@@ -71,7 +72,7 @@ export function useTenantUsers() {
 export function useUpdateUser() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: ({ id, ...data }: { id: string; isActive?: boolean; role?: string }) =>
+        mutationFn: ({ id, ...data }: { id: string; isActive?: boolean; role?: string; roles?: string[] }) =>
             api.patch<{ data: TenantUser }>(`/settings/users/${id}`, data).then((r) => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'users'] }),
     })
@@ -90,7 +91,7 @@ export function useInvitableEmployees(options?: { enabled?: boolean }) {
 export function useInviteUser() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (data: { employeeId: string; role: string }) =>
+        mutationFn: (data: { employeeId: string; role: string; roles?: string[] }) =>
             api.post<{ data: TenantUser }>('/settings/users/invite', data).then((r) => r.data),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['settings', 'users'] })
@@ -107,7 +108,7 @@ export interface BulkInviteResult {
 export function useInviteUserBulk() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (data: { employeeIds: string[]; role: string }) =>
+        mutationFn: (data: { employeeIds: string[]; role: string; roles?: string[] }) =>
             api.post<{ data: BulkInviteResult }>('/settings/users/invite-bulk', data).then((r) => r.data),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['settings', 'users'] })

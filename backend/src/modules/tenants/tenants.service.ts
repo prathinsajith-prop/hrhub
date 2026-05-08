@@ -269,6 +269,7 @@ export async function prepareTenantSwitch(actorUserId: string, targetTenantId: s
             name: u.name,
             email: u.email,
             role,
+            roles: u.roles?.length ? u.roles : [role],
             tenantId: targetTenantId,
             entityId: u.entityId,
             employeeId: emp.id,

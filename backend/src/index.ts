@@ -158,8 +158,8 @@ async function bootstrap() {
         sign: { expiresIn: env.JWT_EXPIRES_IN as never },
     })
 
-    // API documentation — enabled in dev always; in staging/production only when ENABLE_API_DOCS=true.
-    const docsEnabled = env.NODE_ENV !== 'production' || env.ENABLE_API_DOCS
+    // API documentation — only enabled when ENABLE_API_DOCS=true.
+    const docsEnabled = env.ENABLE_API_DOCS
     if (docsEnabled) {
         await app.register(swagger, {
             openapi: {

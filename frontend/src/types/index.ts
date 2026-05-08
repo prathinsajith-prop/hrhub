@@ -8,6 +8,7 @@ export interface User {
   name: string
   email: string
   role: UserRole
+  roles?: string[]
   avatar?: string
   avatarUrl?: string
   tenantId: string
