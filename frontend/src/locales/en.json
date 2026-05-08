@@ -609,7 +609,7 @@
     "settingsDescription": "Manage your organization profile, members, and security."
   },
   "team": {
-    "title": "Users",
+    "title": "Organization",
     "description": "Manage who has access to this organization.",
     "inviteMember": "Invite user",
     "sendInvite": "Send invitation",
@@ -1017,5 +1017,26 @@
         "rejected": "Rejected"
       }
     }
+  },
+  "calendar": {
+    "title": "Calendar"
+  },
+  "users": {
+    "title": "Users & Roles"
+  },
+  "orgStructure": {
+    "title": "Org Structure"
+  },
+  "myLeave": {
+    "title": "My Leave"
+  },
+  "myPayslips": {
+    "title": "My Payslips"
+  },
+  "myAccount": {
+    "title": "My Account"
+  },
+  "myProfile": {
+    "title": "My Profile"
   }
 }

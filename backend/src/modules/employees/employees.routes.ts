@@ -147,14 +147,15 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Employees'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const { role: requestedRole } = (request.body ?? {}) as { role?: string }
+        const { role: requestedRole, roles: requestedRoles } = (request.body ?? {}) as { role?: string; roles?: string[] }
         // hr_manager cannot assign super_admin role
         const role = requestedRole === 'super_admin' && request.user.role !== 'super_admin'
             ? 'employee'
             : (requestedRole ?? 'employee')
+        const roles = requestedRoles?.filter(r => !(r === 'super_admin' && request.user.role !== 'super_admin'))
         let result: { name: string }
         try {
-            result = await inviteUser(request.user.tenantId, { employeeId: id, role })
+            result = await inviteUser(request.user.tenantId, { employeeId: id, role, roles })
         } catch (err: any) {
             return reply.code(err.statusCode ?? 500).send({ message: err.message })
         }
@@ -198,6 +199,7 @@ export default async function (fastify: any): Promise<void> {
                 id: users.id,
                 email: users.email,
                 role: users.role,
+                roles: users.roles,
                 isActive: users.isActive,
                 lastLoginAt: users.lastLoginAt,
                 createdAt: users.createdAt,

@@ -80,6 +80,7 @@ export async function listTenantUsers(tenantId: string) {
             name: users.name,
             email: users.email,
             role: users.role,
+            roles: users.roles,
             isActive: users.isActive,
             lastLoginAt: users.lastLoginAt,
             createdAt: users.createdAt,
@@ -104,16 +105,24 @@ export async function listTenantUsers(tenantId: string) {
     return Promise.all(rows.map(async r => ({ ...r, avatarUrl: await resolveAvatarUrl(r.avatarUrl) })))
 }
 
-export async function updateUserStatus(tenantId: string, userId: string, data: { isActive?: boolean; role?: string }) {
+const ROLE_HIERARCHY: Record<string, number> = { super_admin: 5, hr_manager: 4, pro_officer: 3, dept_head: 2, employee: 1 }
+
+export async function updateUserStatus(tenantId: string, userId: string, data: { isActive?: boolean; role?: string; roles?: string[] }) {
+    const patch: Record<string, unknown> = { updatedAt: new Date() }
+    if (data.isActive !== undefined) patch.isActive = data.isActive
+    if (data.roles && data.roles.length > 0) {
+        const effectiveRole = data.roles.reduce((best, r) => (ROLE_HIERARCHY[r] ?? 0) > (ROLE_HIERARCHY[best] ?? 0) ? r : best, data.roles[0])
+        patch.role = effectiveRole as UserRole
+        patch.roles = data.roles
+    } else if (data.role) {
+        patch.role = data.role as UserRole
+        patch.roles = [data.role]
+    }
     const [updated] = await db
         .update(users)
-        .set({
-            ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
-            ...(data.role ? { role: data.role as UserRole } : {}),
-            updatedAt: new Date(),
-        })
+        .set(patch as Parameters<ReturnType<typeof db.update>['set']>[0])
         .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
-        .returning({ id: users.id, name: users.name, email: users.email, role: users.role, isActive: users.isActive })
+        .returning({ id: users.id, name: users.name, email: users.email, role: users.role, roles: users.roles, isActive: users.isActive })
     return updated ?? null
 }
 
@@ -167,7 +176,7 @@ export async function listInvitableEmployees(tenantId: string) {
  */
 export async function inviteUser(
     tenantId: string,
-    data: { employeeId: string; role: string },
+    data: { employeeId: string; role: string; roles?: string[] },
 ) {
     const env = loadEnv()
 
@@ -234,6 +243,7 @@ export async function inviteUser(
         name,
         passwordHash,
         role: data.role as UserRole,
+        roles: data.roles ?? [data.role],
         isActive: false,
         employeeId: data.employeeId,
     }).returning({ id: users.id })
@@ -259,6 +269,7 @@ export async function inviteUserBulk(
     tenantId: string,
     employeeIds: string[],
     role: string,
+    roles?: string[],
 ): Promise<{
     succeeded: Array<{ employeeId: string; name: string; email: string }>
     failed: Array<{ employeeId: string; reason: string }>
@@ -268,7 +279,7 @@ export async function inviteUserBulk(
 
     for (const employeeId of employeeIds) {
         try {
-            const result = await inviteUser(tenantId, { employeeId, role })
+            const result = await inviteUser(tenantId, { employeeId, role, roles })
             succeeded.push({ employeeId: result.employeeId, name: result.name, email: result.email })
         } catch (err: any) {
             failed.push({ employeeId, reason: err.message ?? 'Unknown error' })

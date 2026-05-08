@@ -23,6 +23,7 @@ export const users = pgTable('users', {
     name: text('name').notNull(),
     role: text('role').notNull().default('employee')
         .$type<'super_admin' | 'hr_manager' | 'pro_officer' | 'dept_head' | 'employee'>(),
+    roles: text('roles').array().notNull().default(sql`'{employee}'::text[]`),
     department: text('department'),
     avatarUrl: text('avatar_url'),
     isActive: boolean('is_active').notNull().default(true),

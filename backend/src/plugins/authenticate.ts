@@ -46,6 +46,7 @@ async function authenticatePlugin(fastify: any): Promise<void> {
                 id: payload.sub,
                 tenantId: payload.tenantId,
                 role: payload.role as RequestUser['role'],
+                roles: (payload.roles as string[]) ?? [payload.role],
                 email: payload.email,
                 name: payload.name,
                 employeeId: payload.employeeId ?? null,
@@ -65,7 +66,8 @@ async function authenticatePlugin(fastify: any): Promise<void> {
             if (!request.user) {
                 return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Authentication required' })
             }
-            if (!roles.includes(request.user.role)) {
+            const userRoles: string[] = request.user.roles ?? [request.user.role]
+            if (!roles.some((r: string) => userRoles.includes(r))) {
                 return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: `Required role: ${roles.join(' or ')}` })
             }
         }

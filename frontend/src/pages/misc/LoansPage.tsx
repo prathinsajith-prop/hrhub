@@ -34,9 +34,7 @@ import {
 } from '@/hooks/useLoans'
 import { EmployeeSelect } from '@/components/shared'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
-import { useAuthStore } from '@/store/authStore'
-import { hasPermission } from '@/lib/permissions'
-import type { UserRole } from '@/types'
+import { usePermissions } from '@/hooks/usePermissions'
 import type { FilterConfig } from '@/lib/filters'
 
 const LOAN_FILTERS: FilterConfig[] = [
@@ -175,8 +173,8 @@ function RejectDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () => vo
 export function LoansPage() {
     const { t } = useTranslation()
     const navigate = useNavigate()
-    const role = useAuthStore(s => s.user?.role) as UserRole | undefined
-    const canManage = hasPermission(role ?? 'employee', 'manage_loans')
+    const { can } = usePermissions()
+    const canManage = can('manage_loans')
 
     const [createOpen, setCreateOpen] = useState(false)
     const [rejectTarget, setRejectTarget] = useState<EmployeeLoan | null>(null)

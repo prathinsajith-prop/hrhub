@@ -5,6 +5,7 @@ export interface JwtPayload {
     sub: string       // user id
     tenantId: string
     role: UserRole
+    roles: string[]
     name: string      // embedded at login — avoids DB lookup in authenticate plugin
     email: string     // embedded at login
     employeeId?: string | null  // linked HR record (null for non-employee accounts)
@@ -17,6 +18,7 @@ export interface RequestUser {
     id: string
     tenantId: string
     role: UserRole
+    roles: string[]
     email: string
     name: string
     employeeId?: string | null

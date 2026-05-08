@@ -34,8 +34,7 @@ import {
 } from '@/hooks/useAssets'
 import { EmployeeSelect } from '@/components/shared'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
-import { useAuthStore } from '@/store/authStore'
-import { hasPermission } from '@/lib/permissions'
+import { usePermissions } from '@/hooks/usePermissions'
 
 // ─── Status badges ────────────────────────────────────────────────────────────
 
@@ -609,8 +608,8 @@ function HistoryDialog({ asset, open, onOpenChange }: { asset: Asset; open: bool
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function AssetsPage() {
-    const user = useAuthStore(s => s.user)
-    const canManageAssets = !!user?.role && hasPermission(user.role, 'manage_assets')
+    const { can } = usePermissions()
+    const canManageAssets = can('manage_assets')
 
     const [params, setParams] = useState<{
         status?: string

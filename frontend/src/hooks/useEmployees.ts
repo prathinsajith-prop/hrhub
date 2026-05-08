@@ -228,6 +228,7 @@ export interface EmployeeAccount {
         id: string
         email: string
         role: string
+        roles: string[]
         isActive: boolean
         lastLoginAt: string | null
         createdAt: string
@@ -247,8 +248,8 @@ export function useEmployeeAccount(employeeId: string | undefined) {
 export function useInviteEmployee() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: ({ employeeId, email, name, role }: { employeeId: string; email?: string; name?: string; role?: string }) =>
-            api.post<{ message: string }>(`/employees/${employeeId}/invite`, { email, name, role }),
+        mutationFn: ({ employeeId, email, name, role, roles }: { employeeId: string; email?: string; name?: string; role?: string; roles?: string[] }) =>
+            api.post<{ message: string }>(`/employees/${employeeId}/invite`, { email, name, role, roles }),
         onSuccess: (_data, variables) => {
             qc.invalidateQueries({ queryKey: ['employees', variables.employeeId, 'account'] })
         },
