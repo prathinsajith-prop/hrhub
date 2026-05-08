@@ -62,7 +62,7 @@ import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { toast } from '@/components/ui/overlays'
 import { api } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
-import { CopyableEmail, CopyablePhone, ActionBadge } from '@/components/shared'
+import { CopyableEmail, CopyablePhone, ActionBadge, MetaItem } from '@/components/shared'
 import { resolveCountryIso } from '@/components/shared/PhoneInput'
 
 /** Convert an ISO-2 country code into its regional-indicator flag emoji. */
@@ -187,6 +187,10 @@ const STAT_ICON_TONE: Record<StatTone, string> = {
 
 /** Number of documents shown per category before "Show more" appears. */
 const DOC_PAGE_SIZE = 5
+
+/** Inline loading indicator used across the page (Account timeline cells, etc.). */
+const INLINE_SPINNER = <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+
 
 /** Compact stat tile — flat background, colour signal lives only on the icon. */
 const StatTile = React.memo(function StatTile({
@@ -1329,43 +1333,39 @@ export function EmployeeDetailPage() {
             )
           })()}
 
-          {/* ── Zone 3: Account timeline (managers — always visible, with fallbacks) ── */}
+          {/* Account timeline. Falls back to the employee record's createdAt
+              when no user account exists yet, so managers always see a date. */}
           {canManage && (() => {
-            const hasAccount = !!accountData?.hasAccount
-            const Spinner = <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-            const lastLogin = accountLoading
-              ? Spinner
-              : !hasAccount
-                ? <button
-                    type="button"
+            const account = accountData?.account
+
+            const renderLastLogin = () => {
+              if (accountLoading) return INLINE_SPINNER
+              if (!accountData?.hasAccount) {
+                return (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-[11px] font-medium"
                     onClick={() => setInviteOpen(true)}
-                    className="text-primary hover:underline cursor-pointer font-medium"
                   >
                     No account · Invite
-                  </button>
-                : accountData?.account?.lastLoginAt
-                  ? formatDateTime(accountData.account.lastLoginAt)
-                  : 'Never'
-            const accountCreated = accountLoading
-              ? Spinner
-              : accountData?.account?.createdAt
-                ? formatDateTime(accountData.account.createdAt)
-                : e.createdAt
-                  ? formatDateTime(e.createdAt)
-                  : '—'
+                  </Button>
+                )
+              }
+              return account?.lastLoginAt ? formatDateTime(account.lastLoginAt) : 'Never'
+            }
+
+            const renderAccountCreated = () => {
+              if (accountLoading) return INLINE_SPINNER
+              if (account?.createdAt) return formatDateTime(account.createdAt)
+              if (e.createdAt) return formatDateTime(e.createdAt)
+              return '—'
+            }
 
             return (
               <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 sm:px-5 py-2.5 border-t border-border/60 bg-muted/30">
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5 shrink-0" />
-                  <span className="uppercase tracking-wider font-semibold">Last login</span>
-                  <span className="text-foreground/90 font-medium tabular-nums">{lastLogin}</span>
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <Calendar className="h-3.5 w-3.5 shrink-0" />
-                  <span className="uppercase tracking-wider font-semibold">Account created</span>
-                  <span className="text-foreground/90 font-medium tabular-nums">{accountCreated}</span>
-                </div>
+                <MetaItem icon={Clock}    label="Last login"       value={renderLastLogin()} />
+                <MetaItem icon={Calendar} label="Account created"  value={renderAccountCreated()} />
               </div>
             )
           })()}
