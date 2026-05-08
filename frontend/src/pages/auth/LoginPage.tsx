@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
 import { Eye, EyeOff, ArrowRight, Users, FileCheck, Shield, Zap, ShieldCheck, Mail, Lock, Building2 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { toast } from '@/components/ui/overlays'
@@ -85,7 +86,6 @@ function OtpInput({ onComplete }: { onComplete: (code: string) => void }) {
           pattern="[0-9]*"
           maxLength={1}
           autoComplete={i === 0 ? 'one-time-code' : 'off'}
-          autoFocus={i === 0}
           value={d}
           onChange={e => handleChange(i, e.target.value)}
           onKeyDown={e => handleKeyDown(i, e)}
@@ -107,22 +107,21 @@ const loginSchema = z.object({
 })
 type LoginForm = z.infer<typeof loginSchema>
 
-const stats = [
-  { icon: Users, value: '12,000+', label: 'Active Employees' },
-  { icon: Shield, value: '98%', label: 'WPS Compliance' },
-  { icon: Zap, value: '60%', label: 'Faster PRO' },
-]
-
-const features = [
-  { icon: Users, title: 'Complete HR Lifecycle', desc: 'From recruitment to exit, fully automated' },
-  { icon: FileCheck, title: 'UAE Labour Law Ready', desc: 'Federal Decree-Law No. 33 of 2021 compliant' },
-  { icon: Shield, title: 'Multi-Entity Management', desc: 'Mainland + Free Zone in one account' },
-  { icon: Zap, title: 'Instant WPS Generation', desc: 'MOHRE-compliant SIF files in one click' },
-]
-
 export function LoginPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { login } = useAuthStore()
+  const stats = [
+    { icon: Users, value: t('auth.loginStat1Value'), label: t('auth.loginStat1Label') },
+    { icon: Shield, value: t('auth.loginStat2Value'), label: t('auth.loginStat2Label') },
+    { icon: Zap, value: t('auth.loginStat3Value'), label: t('auth.loginStat3Label') },
+  ]
+  const features = [
+    { icon: Users, title: t('auth.loginFeature1Title'), desc: t('auth.loginFeature1Desc') },
+    { icon: FileCheck, title: t('auth.loginFeature2Title'), desc: t('auth.loginFeature2Desc') },
+    { icon: Shield, title: t('auth.loginFeature3Title'), desc: t('auth.loginFeature3Desc') },
+    { icon: Zap, title: t('auth.loginFeature4Title'), desc: t('auth.loginFeature4Desc') },
+  ]
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
@@ -140,9 +139,9 @@ export function LoginPage() {
 
   const completeLogin = useCallback((data: { user: User; tenant: Tenant | null; accessToken: string; refreshToken: string }) => {
     login(data.user, data.tenant as Tenant, data.accessToken, data.refreshToken, rememberMe)
-    toast.success(`Welcome back, ${data.user.name}!`, 'Redirecting to your dashboard.')
+    toast.success(t('auth.welcomeBackUser', { name: data.user.name }), t('auth.redirecting'))
     navigate('/dashboard')
-  }, [login, navigate, rememberMe])
+  }, [login, navigate, rememberMe, t])
 
   const onSubmit = async (data: LoginForm) => {
     setLoading(true)
@@ -155,11 +154,11 @@ export function LoginPage() {
       const json = await res.json()
       if (!res.ok) {
         if (res.status === 423) {
-          toast.error('Account locked', json?.message ?? 'Too many failed attempts. Try again later.')
+          toast.error(t('auth.accountLocked'), json?.message ?? t('auth.accountLockedMsg'))
         } else if (res.status === 429) {
-          toast.error('Too many attempts', json?.message ?? 'Please wait before trying again.')
+          toast.error(t('auth.tooManyAttempts'), json?.message ?? t('auth.tooManyAttemptsMsg'))
         } else {
-          toast.error('Login failed', json?.message ?? 'Invalid email or password.')
+          toast.error(t('auth.loginFailed'), json?.message ?? t('auth.loginFailedDefault'))
         }
         return
       }
@@ -171,7 +170,7 @@ export function LoginPage() {
       }
       completeLogin(json.data)
     } catch {
-      toast.error('Login failed', 'Network error. Please check your connection.')
+      toast.error(t('auth.loginFailed'), t('auth.loginFailedNetwork'))
     } finally {
       setLoading(false)
     }
@@ -190,22 +189,22 @@ export function LoginPage() {
       })
       const json = await res.json()
       if (!res.ok) {
-        toast.error('Invalid code', json?.message ?? 'The code is incorrect or expired. Try again.')
+        toast.error(t('auth.invalidCode'), json?.message ?? t('auth.invalidCodeMsg'))
         return
       }
       completeLogin(json.data)
     } catch {
-      toast.error('Verification failed', 'Network error. Please try again.')
+      toast.error(t('auth.verificationFailed'), t('auth.verificationFailedNetwork'))
     } finally {
       setMfaLoading(false)
       mfaInFlightRef.current = false
     }
-  }, [mfaToken, completeLogin])
+  }, [mfaToken, completeLogin, t])
 
   const onBackupCodeSubmit = useCallback(async () => {
     const code = backupCodeInput.trim()
     if (code.length < 8) {
-      toast.warning('Invalid code', 'Backup codes are 10 characters (e.g. ABCDE-12345).')
+      toast.warning(t('auth.backupCodeFormatTitle'), t('auth.backupCodeFormatHint'))
       return
     }
     if (mfaInFlightRef.current) return
@@ -219,29 +218,29 @@ export function LoginPage() {
       })
       const json = await res.json()
       if (!res.ok) {
-        toast.error('Invalid backup code', json?.message ?? 'The code is incorrect or already used.')
+        toast.error(t('auth.invalidBackupCode'), json?.message ?? t('auth.invalidBackupCodeMsg'))
         return
       }
       completeLogin(json.data)
     } catch {
-      toast.error('Verification failed', 'Network error. Please try again.')
+      toast.error(t('auth.verificationFailed'), t('auth.verificationFailedNetwork'))
     } finally {
       setMfaLoading(false)
       mfaInFlightRef.current = false
     }
-  }, [backupCodeInput, mfaToken, completeLogin])
+  }, [backupCodeInput, mfaToken, completeLogin, t])
 
   return (
     <AuthLayout
-      heroEyebrow="Built for UAE Businesses"
+      heroEyebrow={t('auth.loginHeroEyebrow')}
       heroTitle={
         <>
-          The smartest way
+          {t('auth.loginHeroTitle1')}
           <br />
-          to manage people.
+          {t('auth.loginHeroTitle2')}
         </>
       }
-      heroSubtitle="Automate visa processing, payroll, and compliance — purpose-built for UAE mainland and free zone companies."
+      heroSubtitle={t('auth.loginHeroSubtitle')}
       heroContent={
         <div className="space-y-6">
           {/* Stats */}
@@ -289,15 +288,15 @@ export function LoginPage() {
         <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4 ring-1 ring-primary/15 shadow-inner">
           {mfaStep ? <ShieldCheck className="h-8 w-8" /> : <Lock className="h-8 w-8" />}
         </div>
-        <h2 className="text-2xl font-bold text-foreground tracking-tight font-display">
-          {mfaStep ? 'Verify your identity' : 'Welcome back'}
+        <h2 className="text-2xl font-semibold text-foreground tracking-tight font-display">
+          {mfaStep ? t('auth.verifyIdentity') : t('auth.welcomeBack')}
         </h2>
         <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
           {mfaStep
             ? (useBackupCode
-              ? 'Enter one of your saved single-use backup codes to continue.'
-              : 'Enter the 6-digit code from your authenticator app to continue.')
-            : 'Sign in to your workspace to continue.'}
+              ? t('auth.mfaSubtitleBackup')
+              : t('auth.mfaSubtitleAuthenticator'))
+            : t('auth.signInWorkspace')}
         </p>
       </div>
 
@@ -315,9 +314,7 @@ export function LoginPage() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground text-center max-w-[220px] leading-relaxed">
-              {useBackupCode
-                ? <>Each code can only be used <span className="font-medium text-foreground">once</span>.</>
-                : <>Open your <span className="font-medium text-foreground">authenticator app</span> and enter the current code</>}
+              {useBackupCode ? t('auth.mfaInstructionBackup') : t('auth.mfaInstructionAuthenticator')}
             </p>
           </div>
 
@@ -325,7 +322,6 @@ export function LoginPage() {
           {useBackupCode ? (
             <div className="space-y-3">
               <Input
-                autoFocus
                 inputMode="text"
                 autoComplete="one-time-code"
                 placeholder="ABCDE-12345"
@@ -341,7 +337,7 @@ export function LoginPage() {
                 loading={mfaLoading}
                 disabled={backupCodeInput.trim().length < 8}
               >
-                Verify backup code
+                {t('auth.verifyBackupCode')}
               </Button>
             </div>
           ) : (
@@ -352,14 +348,14 @@ export function LoginPage() {
           {!useBackupCode && mfaLoading && (
             <div className="flex items-center justify-center gap-2 text-sm text-primary">
               <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-              Verifying…
+              {t('auth.verifying')}
             </div>
           )}
 
           {/* Info text */}
           {!useBackupCode && (
             <p className="text-center text-xs text-muted-foreground">
-              Codes refresh every 30 seconds. Make sure your device clock is accurate.
+              {t('auth.mfaCodesRefresh')}
             </p>
           )}
 
@@ -369,7 +365,7 @@ export function LoginPage() {
             onClick={() => { setUseBackupCode(v => !v); setBackupCodeInput('') }}
             className="w-full text-sm text-primary hover:text-primary/80 font-medium transition-colors text-center"
           >
-            {useBackupCode ? '← Use authenticator code instead' : 'Lost your device? Use a backup code →'}
+            {useBackupCode ? t('auth.useAuthenticator') : t('auth.useBackupCode')}
           </button>
 
           <button
@@ -377,14 +373,14 @@ export function LoginPage() {
             onClick={() => { setMfaStep(false); setMfaToken(''); setUseBackupCode(false); setBackupCodeInput('') }}
             className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center"
           >
-            ← Back to login
+            ← {t('auth.backToLogin')}
           </button>
         </div>
       ) : (
         /* Login form */
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="email">Work Email</Label>
+            <Label htmlFor="email">{t('auth.workEmail')}</Label>
             <div className="relative">
               <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -404,12 +400,12 @@ export function LoginPage() {
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('auth.password')}</Label>
               <Link
                 to="/forgot-password"
                 className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
               >
-                Forgot password?
+                {t('auth.forgotPassword')}
               </Link>
             </div>
             <div className="relative">
@@ -431,7 +427,7 @@ export function LoginPage() {
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 tabIndex={-1}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -467,7 +463,7 @@ export function LoginPage() {
               </div>
             </div>
             <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
-              Keep me signed in
+              {t('auth.keepMeSignedIn')}
             </span>
           </label>
 
@@ -477,7 +473,7 @@ export function LoginPage() {
             loading={loading}
             rightIcon={!loading ? <ArrowRight className="h-4 w-4" /> : undefined}
           >
-            Sign In
+            {t('auth.signIn')}
           </Button>
         </form>
       )} {/* end mfaStep conditional */}
@@ -486,7 +482,7 @@ export function LoginPage() {
         <>
           <div className="my-5 flex items-center gap-3">
             <span className="h-px flex-1 bg-border" />
-            <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">or</span>
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{t('auth.or')}</span>
             <span className="h-px flex-1 bg-border" />
           </div>
 
@@ -494,16 +490,16 @@ export function LoginPage() {
             type="button"
             variant="outline"
             className="w-full font-medium gap-2"
-            onClick={() => toast.info('SSO login', 'Contact your administrator to configure SSO for your organization.')}
+            onClick={() => toast.info(t('auth.ssoLogin'), t('auth.ssoInfo'))}
           >
             <Building2 className="h-4 w-4" />
-            Sign in with SSO
+            {t('auth.signInWithSso')}
           </Button>
 
           <p className="mt-5 text-center text-sm text-muted-foreground">
-            {"New to HRHub? "}
+            {t('auth.newToHRHub')}{' '}
             <Link to="/register" className="text-primary font-semibold hover:underline">
-              Create an account
+              {t('auth.createAccount')}
             </Link>
           </p>
         </>

@@ -107,7 +107,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     {
       label: t('nav.workspace', { defaultValue: 'Workspace' }),
       items: [
-        { title: t('nav.team', { defaultValue: 'Org and Teams' }),          url: "/team",                  icon: Users2Icon },
+        { title: t('nav.team', { defaultValue: 'Org & Team' }),             url: "/team",                  icon: Users2Icon },
         { title: t('nav.users', { defaultValue: 'Users & Roles' }),         url: "/users",                 icon: KeyRoundIcon },
         { title: t('nav.orgSettings', { defaultValue: 'Org Settings' }),    url: "/organization-settings", icon: Settings2Icon },
       ],

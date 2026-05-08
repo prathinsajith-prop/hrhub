@@ -454,7 +454,7 @@ export function AppDetailPage() {
                     </Button>
                     <div className="min-w-0">
                         <div className="flex items-center gap-2.5 flex-wrap">
-                            <h1 className="text-xl font-bold leading-tight truncate">{app.name}</h1>
+                            <h1 className="text-xl font-semibold leading-tight truncate">{app.name}</h1>
                             <Badge variant={isActive ? 'default' : 'destructive'} className="text-[10px] uppercase tracking-wide">
                                 {app.status}
                             </Badge>
@@ -981,15 +981,15 @@ export function AppDetailPage() {
                     <form id="edit-app-form" onSubmit={submitEdit} className="space-y-4">
                         <div className="space-y-1.5">
                             <Label htmlFor="edit-name">{t('apps.name')} *</Label>
-                            <Input id="edit-name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+                            <Input id="edit-name" value={editForm.name} onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))} required />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="edit-desc">{t('apps.descriptionField')}</Label>
-                            <Textarea id="edit-desc" rows={2} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+                            <Textarea id="edit-desc" rows={2} value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="edit-ip">{t('apps.ipAllowlist')}</Label>
-                            <Input id="edit-ip" placeholder={t('apps.ipAllowlistPlaceholder')} value={editForm.ipAllowlist} onChange={(e) => setEditForm({ ...editForm, ipAllowlist: e.target.value })} />
+                            <Input id="edit-ip" placeholder={t('apps.ipAllowlistPlaceholder')} value={editForm.ipAllowlist} onChange={(e) => setEditForm((p) => ({ ...p, ipAllowlist: e.target.value }))} />
                         </div>
                     </form>
                     <DialogFooter>

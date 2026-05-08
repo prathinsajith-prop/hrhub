@@ -160,3 +160,14 @@ export function useRemoveMember() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['tenant-members'] }),
     })
 }
+
+/**
+ * Permanently delete the current tenant. Caller must be super_admin and pass
+ * the tenant name as `confirmName` to guard against accidental deletes.
+ */
+export function useDeleteTenant() {
+    return useMutation({
+        mutationFn: (confirmName: string) =>
+            api.delete<{ data: { ok: boolean; name: string } }>('/tenants/current', { confirmName }).then(r => r.data),
+    })
+}

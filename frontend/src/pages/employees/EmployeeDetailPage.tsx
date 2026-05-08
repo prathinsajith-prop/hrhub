@@ -199,23 +199,26 @@ const StatTile = React.memo(function StatTile({
   valueClass?: string
   tone?: StatTone
 }) {
-  // Hide tiles with no meaningful value — avoids "—" placeholders cluttering the grid.
+  // Always render the tile so the label remains visible even when no value is set;
+  // empty values fall back to a muted "—" placeholder.
   const isEmpty =
     value === null
     || value === undefined
     || value === ''
-    || value === '—'
     || (typeof value === 'number' && Number.isNaN(value))
-  if (isEmpty && !trailing) return null
   return (
-    <div className="bg-card hover:bg-muted/30 px-3.5 py-2.5 min-w-0 transition-colors">
+    <div className="px-3.5 py-2.5 min-w-0">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
         {Icon && <Icon className={cn('h-3 w-3 shrink-0', STAT_ICON_TONE[tone])} />}
         <span className="truncate">{label}</span>
       </div>
       <div className="flex items-center justify-between gap-2 mt-1">
-        <span className={cn('text-sm font-semibold text-foreground truncate', valueClass)}>
-          {value}
+        <span className={cn(
+          'text-sm font-semibold truncate',
+          isEmpty ? 'text-muted-foreground/60' : 'text-foreground',
+          valueClass,
+        )}>
+          {isEmpty ? '—' : value}
         </span>
         {trailing && <span className="shrink-0">{trailing}</span>}
       </div>
@@ -1071,7 +1074,7 @@ export function EmployeeDetailPage() {
               <div className="min-w-0">
                 {/* Row 1: name + status badge (right of name) */}
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight font-display truncate">{e.fullName}</h1>
+                  <h1 className="text-xl sm:text-2xl font-semibold tracking-tight font-display truncate">{e.fullName}</h1>
                   <Badge variant={STATUS_VARIANT[e.status] ?? 'secondary'} className="capitalize text-[10px] shrink-0">
                     {labelFor(e.status)}
                   </Badge>
@@ -1217,12 +1220,10 @@ export function EmployeeDetailPage() {
             const accountRole = accountData?.account?.role
             const accountIsActive = !!accountData?.account?.isActive
             return (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-px bg-border/40 border-y border-border/50">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
                 <StatTile tone="indigo"  icon={Calendar}   label="Join Date"    value={formatDate(e.joinDate) || '—'} />
-                {tenureLabel && (
-                  <StatTile tone="teal"    icon={Clock}      label="Tenure"       value={tenureLabel} />
-                )}
-                <StatTile tone="emerald" icon={DollarSign} label="Total Salary" value={formatCurrency(e.totalSalary ?? 0)} />
+                <StatTile tone="teal"    icon={Clock}      label="Tenure"       value={tenureLabel ?? '—'} />
+                <StatTile tone="emerald" icon={DollarSign} label="Total Salary" value={e.totalSalary != null ? formatCurrency(e.totalSalary) : '—'} />
 
                 {/* User role — colour-coded badge (only when an account exists) */}
                 {canManage && accountRole && (
@@ -1251,18 +1252,20 @@ export function EmployeeDetailPage() {
                   />
                 )}
 
-                {e.nationality && (() => {
-                  const flag = isoToFlag(resolveCountryIso(e.nationality))
+                {(() => {
+                  const flag = e.nationality ? isoToFlag(resolveCountryIso(e.nationality)) : null
                   return (
                     <StatTile
                       tone="blue"
                       icon={MapPin}
                       label="Nationality"
                       value={
-                        <span className="flex items-center gap-1.5">
-                          {flag && <span className="text-base leading-none">{flag}</span>}
-                          <span className="truncate">{e.nationality}</span>
-                        </span>
+                        e.nationality ? (
+                          <span className="flex items-center gap-1.5">
+                            {flag && <span className="text-base leading-none">{flag}</span>}
+                            <span className="truncate">{e.nationality}</span>
+                          </span>
+                        ) : '—'
                       }
                     />
                   )
@@ -1289,18 +1292,10 @@ export function EmployeeDetailPage() {
                   value={e.passportExpiry ? formatDate(e.passportExpiry) : '—'}
                   trailing={e.passportExpiry ? <ExpiryStatus date={e.passportExpiry} /> : null}
                 />
-                {e.contractType && (
-                  <StatTile tone="slate" icon={Briefcase} label="Employment" value={labelFor(e.contractType)} />
-                )}
-                {e.workLocation && (
-                  <StatTile tone="teal" icon={MapPin} label="Location" value={e.workLocation} />
-                )}
-                {e.managerName && (
-                  <StatTile tone="indigo" icon={UserCheck} label="Manager" value={e.managerName} />
-                )}
-                {e.gradeLevelName && (
-                  <StatTile tone="violet" icon={Star} label="Grade" value={e.gradeLevelName} />
-                )}
+                <StatTile tone="slate"  icon={Briefcase} label="Employment" value={e.contractType ? labelFor(e.contractType) : '—'} />
+                <StatTile tone="teal"   icon={MapPin}    label="Location"   value={e.workLocation ?? '—'} />
+                <StatTile tone="indigo" icon={UserCheck} label="Manager"    value={e.managerName ?? '—'} />
+                <StatTile tone="violet" icon={Star}      label="Grade"      value={e.gradeLevelName ?? '—'} />
 
                 {/* Active loans — only shown when there's an outstanding balance */}
                 {employeeLoanSummary && (
@@ -1369,9 +1364,6 @@ export function EmployeeDetailPage() {
           { value: 'leave', icon: CalendarDays, label: 'Leave' },
           { value: 'attendance', icon: ClipboardList, label: 'Attendance' },
           ...(canManage ? [{ value: 'training', icon: GraduationCap, label: 'Training' }] : []),
-          ...(canManage ? [{ value: 'warnings', icon: AlertTriangle, label: 'Warnings' }] : []),
-          ...(canManage ? [{ value: 'dependents', icon: Heart, label: 'Dependents' }] : []),
-          ...(canManage ? [{ value: 'notes', icon: StickyNote, label: 'Notes' }] : []),
           ...(canManage ? [{ value: 'updates', icon: History, label: 'Updates' }] : []),
         ]
         return (
@@ -1385,7 +1377,7 @@ export function EmployeeDetailPage() {
         <div className="space-y-4">
 
           {/* ── Personal ── */}
-          <TabsContent value="personal" className="mt-4">
+          <TabsContent value="personal" className="mt-4 space-y-4">
             <Card>
               <CardHeader><CardTitle className="text-base">Personal Information</CardTitle></CardHeader>
               <CardContent>
@@ -1408,6 +1400,78 @@ export function EmployeeDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* ── Dependents — nested under Personal ─────────────────────── */}
+            {canManage && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Heart className="h-4 w-4 text-rose-500" />
+                      <CardTitle className="text-base">Dependents</CardTitle>
+                      {dependentsData?.length ? (
+                        <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
+                          {dependentsData.length}
+                        </span>
+                      ) : null}
+                    </div>
+                    <Button size="sm" onClick={() => { setEditingDependent(null); setDependentDialogOpen(true) }}>
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />Add Dependent
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {dependentsLoading ? (
+                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
+                  ) : !dependentsData?.length ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Heart className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No dependents on file</p>
+                      <p className="text-xs mt-1">Add a spouse, child, or other family member.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-muted/40">
+                            {['Reference', 'Name', 'Birth Date', 'Relation', 'Nationality', 'Visa No.', 'Medical Ins.', 'Created By', 'Created', ''].map(h => (
+                              <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dependentsData.map(dep => (
+                            <tr key={dep.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                              <td className="px-4 py-2.5 font-mono text-[11px]">{dep.reference}</td>
+                              <td className="px-4 py-2.5 font-medium">{dep.name}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{dep.birthDate ? formatDate(dep.birthDate) : '—'}</td>
+                              <td className="px-4 py-2.5 capitalize">{dep.relation}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{dep.nationality ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{dep.visaNumber ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{dep.medicalInsurance ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground">{dep.createdByName ?? '—'}</td>
+                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(dep.createdAt)}</td>
+                              <td className="px-4 py-2.5">
+                                <div className="flex gap-1">
+                                  <Button size="icon" variant="ghost" className="h-6 w-6"
+                                    onClick={() => { setEditingDependent(dep); setDependentDialogOpen(true) }}>
+                                    <Edit2 className="h-3 w-3" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive"
+                                    onClick={() => deleteDependent.mutate(dep.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* ── Employment ── */}
@@ -2263,49 +2327,188 @@ export function EmployeeDetailPage() {
             )}
           </TabsContent>
 
-          {/* ── Performance ── */}
-          <TabsContent value="performance" className="mt-4">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Performance &amp; Notes</CardTitle>
-                  {canManage && (
-                    <Button size="sm" variant="outline" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setCreateReviewOpen(true)}>
-                      New review
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {reviewsLoading ? (
-                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
-                ) : !reviews || reviews.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">
-                    <Star className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm font-medium">No performance records yet</p>
-                    <p className="text-xs mt-1">Reviews and performance data will appear here</p>
+          {/* ── Performance (with Warnings & Notes) ── */}
+          <TabsContent value="performance" className="mt-4 space-y-4">
+            {/* Performance + Warnings — 6/6 grid on desktop, stacked on mobile */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Performance Reviews */}
+              <Card className="flex flex-col">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Star className="h-4 w-4 text-amber-500" />
+                      <CardTitle className="text-base">Performance Reviews</CardTitle>
+                      {reviews?.length ? (
+                        <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
+                          {reviews.length}
+                        </span>
+                      ) : null}
+                    </div>
+                    {canManage && (
+                      <Button size="sm" variant="outline" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setCreateReviewOpen(true)}>
+                        New
+                      </Button>
+                    )}
                   </div>
-                ) : (
-                  <div className="divide-y">
-                    {reviews.map(r => (
-                      <div key={r.id} className="py-3 flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium">{r.period}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {r.reviewDate ? formatDate(r.reviewDate) : '—'}
-                            {r.overallRating != null && ` · ${r.overallRating}/5`}
-                          </p>
-                          {r.managerComments && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.managerComments}</p>}
+                </CardHeader>
+                <CardContent className="flex-1">
+                  {reviewsLoading ? (
+                    <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
+                  ) : !reviews || reviews.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Star className="h-9 w-9 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No performance records yet</p>
+                      <p className="text-xs mt-1">Reviews will appear here</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {reviews.map(r => (
+                        <div key={r.id} className="py-3 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">{r.period}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {r.reviewDate ? formatDate(r.reviewDate) : '—'}
+                              {r.overallRating != null && ` · ${r.overallRating}/5`}
+                            </p>
+                            {r.managerComments && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.managerComments}</p>}
+                          </div>
+                          <Badge variant={r.status === 'completed' ? 'success' : r.status === 'submitted' ? 'info' : 'secondary'} className="text-[10px] shrink-0">
+                            {labelFor(r.status)}
+                          </Badge>
                         </div>
-                        <Badge variant={r.status === 'completed' ? 'success' : r.status === 'submitted' ? 'info' : 'secondary'} className="text-[10px] shrink-0">
-                          {labelFor(r.status)}
-                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Warnings */}
+              {canManage && (
+                <Card className="flex flex-col">
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-rose-500" />
+                        <CardTitle className="text-base">Warnings</CardTitle>
+                        {warningsData?.length ? (
+                          <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
+                            {warningsData.length}
+                          </span>
+                        ) : null}
                       </div>
-                    ))}
+                      <Button size="sm" variant="outline" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setWarningDialogOpen(true)}>
+                        New
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex-1">
+                    {warningsLoading ? (
+                      <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
+                    ) : !warningsData?.length ? (
+                      <div className="text-center py-10 text-muted-foreground">
+                        <AlertTriangle className="h-9 w-9 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm font-medium">No warnings on record</p>
+                        <p className="text-xs mt-1">Disciplinary actions will appear here</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y">
+                        {warningsData.map(w => (
+                          <div key={w.id} className="py-3 flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-medium">{formatDate(w.issueDate)}</p>
+                                {w.expiryDate && (
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    Expires {formatDate(w.expiryDate)}
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {w.createdByName ?? 'Unknown'} · {formatDate(w.createdAt)}
+                              </p>
+                              {w.documentFileName && (
+                                <button
+                                  className="text-primary hover:underline inline-flex items-center gap-1 text-xs mt-1"
+                                  onClick={() => downloadWarningDoc.mutate(w.id, {
+                                    onSuccess: (res) => window.open(res.url, '_blank'),
+                                    onError: (err: Error) => toast.error('Download failed', err.message),
+                                  })}
+                                >
+                                  <Download className="h-3 w-3" />{w.documentFileName}
+                                </button>
+                              )}
+                            </div>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive shrink-0"
+                              onClick={() => deleteWarning.mutate(w.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* ── HR Notes — nested ──────────────────────────────────────── */}
+            {canManage && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <StickyNote className="h-4 w-4 text-blue-500" />
+                    <CardTitle className="text-base">HR Notes</CardTitle>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-2 items-start">
+                    <Textarea
+                      placeholder="Add a confidential note about this employee…"
+                      value={noteInput}
+                      onChange={ev => setNoteInput(ev.target.value)}
+                      rows={2}
+                      className="flex-1 resize-none"
+                    />
+                    <Button size="sm" className="shrink-0"
+                      disabled={!noteInput.trim() || addNote.isPending}
+                      onClick={() => {
+                        if (!noteInput.trim()) return
+                        addNote.mutate(noteInput.trim(), {
+                          onSuccess: () => { setNoteInput(''); toast.success('Note added') },
+                          onError: (err: Error) => toast.error('Failed', err.message),
+                        })
+                      }}>
+                      {addNote.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add'}
+                    </Button>
+                  </div>
+                  {notesLoading ? (
+                    <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-16 rounded bg-muted animate-pulse" />)}</div>
+                  ) : !notesData?.length ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <StickyNote className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No notes yet</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border/40">
+                      {notesData.map(note => (
+                        <div key={note.id} className="py-3 flex gap-3 first:pt-0">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-foreground whitespace-pre-wrap">{note.content}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {note.createdByName ?? 'Unknown'} · {formatDate(note.createdAt)}
+                            </p>
+                          </div>
+                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive shrink-0"
+                            onClick={() => deleteNote.mutate(note.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* ── Assets ── */}
@@ -2471,195 +2674,6 @@ export function EmployeeDetailPage() {
                           ))}
                         </tbody>
                       </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
-
-          {/* ── Warnings ──────────────────────────────────────────────────── */}
-          {canManage && (
-            <TabsContent value="warnings" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="text-base">Warnings</CardTitle>
-                    <Button size="sm" onClick={() => setWarningDialogOpen(true)}>
-                      <Plus className="h-3.5 w-3.5 mr-1.5" />Warning
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {warningsLoading ? (
-                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
-                  ) : !warningsData?.length ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm font-medium">No warnings on record</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b bg-muted/40">
-                            {['Issue Date', 'Expiry Date', 'Documents', 'Created By', 'Created', 'Actions'].map(h => (
-                              <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {warningsData.map(w => (
-                            <tr key={w.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                              <td className="px-4 py-2.5 whitespace-nowrap">{formatDate(w.issueDate)}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{w.expiryDate ? formatDate(w.expiryDate) : '—'}</td>
-                              <td className="px-4 py-2.5">
-                                {w.documentFileName ? (
-                                  <button
-                                    className="text-primary hover:underline flex items-center gap-1 text-xs"
-                                    onClick={() => downloadWarningDoc.mutate(w.id, {
-                                      onSuccess: (res) => window.open(res.url, '_blank'),
-                                      onError: (e: Error) => toast.error('Download failed', e.message),
-                                    })}
-                                  >
-                                    <Download className="h-3 w-3" />{w.documentFileName}
-                                  </button>
-                                ) : '—'}
-                              </td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{w.createdByName ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(w.createdAt)}</td>
-                              <td className="px-4 py-2.5">
-                                <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive"
-                                  onClick={() => deleteWarning.mutate(w.id, { onError: (e: Error) => toast.error('Failed', e.message) })}>
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
-
-          {/* ── Dependents ────────────────────────────────────────────────── */}
-          {canManage && (
-            <TabsContent value="dependents" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="text-base">Dependents</CardTitle>
-                    <Button size="sm" onClick={() => { setEditingDependent(null); setDependentDialogOpen(true) }}>
-                      <Plus className="h-3.5 w-3.5 mr-1.5" />Add Dependent
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {dependentsLoading ? (
-                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
-                  ) : !dependentsData?.length ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Heart className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm font-medium">No dependents on file</p>
-                      <p className="text-xs mt-1">Add a spouse, child, or other family member.</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b bg-muted/40">
-                            {['Reference', 'Name', 'Birth Date', 'Relation', 'Nationality', 'Visa No.', 'Medical Ins.', 'Created By', 'Created', ''].map(h => (
-                              <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dependentsData.map(dep => (
-                            <tr key={dep.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                              <td className="px-4 py-2.5 font-mono text-[11px]">{dep.reference}</td>
-                              <td className="px-4 py-2.5 font-medium">{dep.name}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.birthDate ? formatDate(dep.birthDate) : '—'}</td>
-                              <td className="px-4 py-2.5 capitalize">{dep.relation}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.nationality ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.visaNumber ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.medicalInsurance ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.createdByName ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(dep.createdAt)}</td>
-                              <td className="px-4 py-2.5">
-                                <div className="flex gap-1">
-                                  <Button size="icon" variant="ghost" className="h-6 w-6"
-                                    onClick={() => { setEditingDependent(dep); setDependentDialogOpen(true) }}>
-                                    <Edit2 className="h-3 w-3" />
-                                  </Button>
-                                  <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive"
-                                    onClick={() => deleteDependent.mutate(dep.id, { onError: (e: Error) => toast.error('Failed', e.message) })}>
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
-
-          {/* ── Notes ─────────────────────────────────────────────────────── */}
-          {canManage && (
-            <TabsContent value="notes" className="mt-4">
-              <Card>
-                <CardHeader><CardTitle className="text-base">HR Notes</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex gap-2 items-start">
-                    <Textarea
-                      placeholder="Add a confidential note about this employee…"
-                      value={noteInput}
-                      onChange={e => setNoteInput(e.target.value)}
-                      rows={2}
-                      className="flex-1 resize-none"
-                    />
-                    <Button size="sm" className="shrink-0"
-                      disabled={!noteInput.trim() || addNote.isPending}
-                      onClick={() => {
-                        if (!noteInput.trim()) return
-                        addNote.mutate(noteInput.trim(), {
-                          onSuccess: () => { setNoteInput(''); toast.success('Note added') },
-                          onError: (e: Error) => toast.error('Failed', e.message),
-                        })
-                      }}>
-                      {addNote.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add'}
-                    </Button>
-                  </div>
-                  {notesLoading ? (
-                    <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-16 rounded bg-muted animate-pulse" />)}</div>
-                  ) : !notesData?.length ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <StickyNote className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm font-medium">No notes yet</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-border/40">
-                      {notesData.map(note => (
-                        <div key={note.id} className="py-3 flex gap-3 first:pt-0">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-foreground whitespace-pre-wrap">{note.content}</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {note.createdByName ?? 'Unknown'} · {formatDate(note.createdAt)}
-                            </p>
-                          </div>
-                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive shrink-0"
-                            onClick={() => deleteNote.mutate(note.id, { onError: (e: Error) => toast.error('Failed', e.message) })}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
                     </div>
                   )}
                 </CardContent>

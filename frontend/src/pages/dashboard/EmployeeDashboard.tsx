@@ -33,8 +33,8 @@ export function EmployeeDashboard() {
   return (
     <PageWrapper>
       <PageHeader
-        title={empLoading ? t('dashboard.title') : `Welcome back, ${myEmployee?.firstName ?? ''}!`}
-        description="Your self-service portal"
+        title={empLoading ? t('dashboard.title') : t('dashboard.welcomeBackName', { name: myEmployee?.firstName ?? '' })}
+        description={t('dashboard.selfServicePortal')}
       />
 
       {/* Profile completeness banner */}
@@ -42,29 +42,29 @@ export function EmployeeDashboard() {
         <div className="flex items-start gap-4 rounded-xl border border-info/20 bg-info/5 px-5 py-4">
           <Info className="h-5 w-5 text-info shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium">Complete your profile ({completeness}%)</p>
+            <p className="text-sm font-medium">{t('dashboard.completeProfile', { percent: completeness })}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Some details are missing. Keeping your record up to date helps HR manage your employment accurately.
+              {t('dashboard.completeProfileDesc')}
             </p>
             <div className="mt-2 h-1.5 w-full bg-muted rounded-full overflow-hidden">
               <div className="h-full bg-info rounded-full transition-all" style={{ width: `${completeness}%` }} />
             </div>
           </div>
           <Button size="sm" variant="outline" onClick={() => navigate('/my/profile')} className="shrink-0">
-            Update
+            {t('dashboard.update')}
           </Button>
         </div>
       )}
 
       {/* Leave balance */}
       <div className="space-y-3">
-        <SectionHeading title={`Leave Balance — ${new Date().getFullYear()}`} />
+        <SectionHeading title={t('dashboard.leaveBalanceYear', { year: new Date().getFullYear() })} />
         {leaveLoading || empLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
           </div>
         ) : leaveEntries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No leave balance data available.</p>
+          <p className="text-sm text-muted-foreground">{t('dashboard.noLeaveBalance')}</p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {leaveEntries.map(([type, b]) => {
@@ -79,7 +79,7 @@ export function EmployeeDashboard() {
                       <span className={cn('text-2xl font-bold font-display', isLow ? 'text-destructive' : 'text-foreground')}>
                         {isUnlimited ? '∞' : b.available}
                       </span>
-                      <span className="text-[11px] text-muted-foreground">/ {isUnlimited ? '∞' : b.entitled} days</span>
+                      <span className="text-[11px] text-muted-foreground">/ {isUnlimited ? '∞' : b.entitled} {t('dashboard.days')}</span>
                     </div>
                     {!isUnlimited && (
                       <div className="w-full bg-muted rounded-full h-1.5">
@@ -90,8 +90,8 @@ export function EmployeeDashboard() {
                       </div>
                     )}
                     <div className="text-[10px] text-muted-foreground">
-                      Used: <strong className="text-foreground">{b.taken}</strong>
-                      {b.pending > 0 && <span> · Pending: <strong className="text-warning">{b.pending}</strong></span>}
+                      {t('dashboard.used')}: <strong className="text-foreground">{b.taken}</strong>
+                      {b.pending > 0 && <span> · {t('dashboard.pendingShort')}: <strong className="text-warning">{b.pending}</strong></span>}
                     </div>
                   </CardContent>
                 </Card>
@@ -103,12 +103,12 @@ export function EmployeeDashboard() {
 
       {/* Quick actions */}
       <div className="space-y-3">
-        <SectionHeading title="Quick Actions" />
+        <SectionHeading title={t('dashboard.quickActions')} />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <QuickAction icon={CalendarDays} label="Request Leave" onClick={() => navigate('/my/leave')} />
-          <QuickAction icon={User} label="My Profile" onClick={() => navigate('/my/profile')} />
-          <QuickAction icon={CreditCard} label="Payslips" onClick={() => navigate('/my/payslips')} />
-          <QuickAction icon={FileText} label="Documents" onClick={() => navigate('/documents')} />
+          <QuickAction icon={CalendarDays} label={t('dashboard.requestLeave')} onClick={() => navigate('/my/leave')} />
+          <QuickAction icon={User} label={t('dashboard.myProfileShort')} onClick={() => navigate('/my/profile')} />
+          <QuickAction icon={CreditCard} label={t('dashboard.payslips')} onClick={() => navigate('/my/payslips')} />
+          <QuickAction icon={FileText} label={t('dashboard.documents')} onClick={() => navigate('/documents')} />
         </div>
       </div>
 
@@ -117,8 +117,8 @@ export function EmployeeDashboard() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Recent Payslips</CardTitle>
-              <Button size="sm" variant="outline" onClick={() => navigate('/my/payslips')}>View all</Button>
+              <CardTitle className="text-base">{t('dashboard.recentPayslips')}</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => navigate('/my/payslips')}>{t('dashboard.viewAll')}</Button>
             </div>
           </CardHeader>
           <CardContent>
