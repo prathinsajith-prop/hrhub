@@ -454,7 +454,10 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
     const createEmployee = useCreateEmployee()
 
     useEffect(() => {
-        if (!open) { setTimeout(() => { setStep(1); setForm(EMPTY_FORM); setErrors({}) }, 300) }
+        if (!open) {
+            const id = setTimeout(() => { setStep(1); setForm(EMPTY_FORM); setErrors({}) }, 300)
+            return () => clearTimeout(id)
+        }
     }, [open])
     const navigate = useNavigate()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
@@ -483,7 +486,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
         if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
     }
 
-    const close = () => { onOpenChange(false); setTimeout(() => { setStep(1); setForm(EMPTY_FORM); setErrors({}) }, 300) }
+    const close = () => onOpenChange(false)
 
     const validateStep1 = () => {
         const { ok, errors: errs } = zodToFieldErrors(employeeStep1Schema, {
@@ -969,7 +972,7 @@ export function EditEmployeeDialog({
         if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
     }
 
-    const close = () => { onOpenChange(false); setTimeout(() => setErrors({}), 300) }
+    const close = () => { onOpenChange(false); setErrors({}) }
 
     const submit = () => {
         const result = zodToFieldErrors(employeeStep1Schema, {
@@ -1155,7 +1158,7 @@ export function EditEmploymentDialog({
         if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
     }
 
-    const close = () => { onOpenChange(false); setTimeout(() => setErrors({}), 300) }
+    const close = () => { onOpenChange(false); setErrors({}) }
 
     const submit = async () => {
         const result = zodToFieldErrors(employeeStep2Schema, { joinDate: form.joinDate })
@@ -1353,7 +1356,7 @@ export function EditPayrollDialog({
         if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
     }
 
-    const close = () => { onOpenChange(false); setTimeout(() => setErrors({}), 300) }
+    const close = () => { onOpenChange(false); setErrors({}) }
 
     const submit = () => {
         const basic = parseFloat(form.basicSalary) || 0
