@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
 import { Eye, EyeOff, ArrowRight, ArrowLeft, Building2, Globe, CheckCircle2, Check, User, Briefcase, Phone } from 'lucide-react'
 import { toast } from '@/components/ui/overlays'
 import { cn, sanitizePhone } from '@/lib/utils'
@@ -46,32 +47,13 @@ const registerSchema = z
 type RegisterForm = z.infer<typeof registerSchema>
 const STEP_1_FIELDS: (keyof RegisterForm)[] = ['firstName', 'lastName', 'email', 'password', 'confirmPassword']
 
-// ─── Static data ─────────────────────────────────────────────────────────────
-
-const perks = [
-  {
-    icon: Building2,
-    title: 'Multi-entity support',
-    desc: 'Manage mainland + free zone entities under one account',
-  },
-  {
-    icon: Globe,
-    title: 'WPS ready from day one',
-    desc: 'MOHRE-compliant SIF files generated automatically',
-  },
-  {
-    icon: CheckCircle2,
-    title: '14-day free trial',
-    desc: 'Full access, no credit card required',
-  },
-]
-
 // ─── Step indicator ──────────────────────────────────────────────────────────
 
 function StepIndicator({ step }: { step: 1 | 2 }) {
+  const { t } = useTranslation()
   const steps = [
-    { num: 1, label: 'Your account' },
-    { num: 2, label: 'Organization' },
+    { num: 1, label: t('auth.stepYourAccount') },
+    { num: 2, label: t('auth.stepOrganization') },
   ]
   return (
     <div className="flex items-center mb-7">
@@ -115,11 +97,17 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export function RegisterPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [step, setStep] = useState<1 | 2>(1)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
+  const perks = [
+    { icon: Building2, title: t('auth.registerPerk1Title'), desc: t('auth.registerPerk1Desc') },
+    { icon: Globe, title: t('auth.registerPerk2Title'), desc: t('auth.registerPerk2Desc') },
+    { icon: CheckCircle2, title: t('auth.registerPerk3Title'), desc: t('auth.registerPerk3Desc') },
+  ]
 
   const {
     register,
@@ -171,13 +159,13 @@ export function RegisterPage() {
       })
       const json = await res.json()
       if (!res.ok) {
-        toast.error('Registration failed', json?.message ?? 'Could not create account')
+        toast.error(t('auth.registrationFailed'), json?.message ?? t('auth.registrationFailedDefault'))
         return
       }
-      toast.success('Account created!', 'Please sign in to get started.')
+      toast.success(t('auth.accountCreated'), t('auth.accountCreatedSubtitle'))
       navigate('/login')
     } catch {
-      toast.error('Registration failed', 'Network error. Please check your connection.')
+      toast.error(t('auth.registrationFailed'), t('auth.registrationFailedNetwork'))
     } finally {
       setLoading(false)
     }
@@ -185,15 +173,15 @@ export function RegisterPage() {
 
   return (
     <AuthLayout
-      heroEyebrow="Start your journey"
+      heroEyebrow={t('auth.registerHeroEyebrow')}
       heroTitle={
         <>
-          HR operations,
+          {t('auth.registerHeroTitle1')}
           <br />
-          simplified.
+          {t('auth.registerHeroTitle2')}
         </>
       }
-      heroSubtitle="Join 500+ UAE companies using HRHub to manage employees, visas, payroll, and compliance in one place."
+      heroSubtitle={t('auth.registerHeroSubtitle')}
       heroContent={
         <div className="space-y-3">
           {perks.map((p) => (
@@ -223,9 +211,9 @@ export function RegisterPage() {
               <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
                 <User className="h-3.5 w-3.5 text-primary" />
               </div>
-              <h2 className="text-xl font-bold text-foreground font-display">Your account</h2>
+              <h2 className="text-xl font-semibold text-foreground font-display">{t('auth.yourAccount')}</h2>
             </div>
-            <p className="text-sm text-muted-foreground">Create your personal login credentials.</p>
+            <p className="text-sm text-muted-foreground">{t('auth.yourAccountSubtitle')}</p>
           </>
         ) : (
           <>
@@ -233,9 +221,9 @@ export function RegisterPage() {
               <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Briefcase className="h-3.5 w-3.5 text-primary" />
               </div>
-              <h2 className="text-xl font-bold text-foreground font-display">Your organization</h2>
+              <h2 className="text-xl font-semibold text-foreground font-display">{t('auth.yourOrganization')}</h2>
             </div>
-            <p className="text-sm text-muted-foreground">Tell us about your company so we can set up your workspace correctly.</p>
+            <p className="text-sm text-muted-foreground">{t('auth.yourOrganizationSubtitle')}</p>
           </>
         )}
       </div>
@@ -245,12 +233,11 @@ export function RegisterPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="firstName">First Name</Label>
+              <Label htmlFor="firstName">{t('auth.firstName')}</Label>
               <Input
                 id="firstName"
                 type="text"
                 autoComplete="given-name"
-                autoFocus
                 placeholder="Mohammed"
                 {...register('firstName')}
                 aria-invalid={!!errors.firstName}
@@ -259,7 +246,7 @@ export function RegisterPage() {
               {errors.firstName && <p className="text-xs text-destructive">{errors.firstName.message}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="lastName">Last Name</Label>
+              <Label htmlFor="lastName">{t('auth.lastName')}</Label>
               <Input
                 id="lastName"
                 type="text"
@@ -274,7 +261,7 @@ export function RegisterPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="email">Work Email</Label>
+            <Label htmlFor="email">{t('auth.workEmail')}</Label>
             <Input
               id="email"
               type="email"
@@ -288,13 +275,13 @@ export function RegisterPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t('auth.password')}</Label>
             <div className="relative">
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="new-password"
-                placeholder="Min 8 characters"
+                placeholder={t('auth.minPasswordChars')}
                 {...register('password')}
                 aria-invalid={!!errors.password}
                 className={cn('pr-10', errors.password && 'border-destructive focus-visible:ring-destructive')}
@@ -304,7 +291,7 @@ export function RegisterPage() {
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 tabIndex={-1}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -313,13 +300,13 @@ export function RegisterPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Label htmlFor="confirmPassword">{t('auth.confirmPassword')}</Label>
             <div className="relative">
               <Input
                 id="confirmPassword"
                 type={showConfirm ? 'text' : 'password'}
                 autoComplete="new-password"
-                placeholder="Re-enter password"
+                placeholder={t('auth.reEnterPassword')}
                 {...register('confirmPassword')}
                 aria-invalid={!!errors.confirmPassword}
                 className={cn('pr-10', errors.confirmPassword && 'border-destructive focus-visible:ring-destructive')}
@@ -329,7 +316,7 @@ export function RegisterPage() {
                 onClick={() => setShowConfirm((v) => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 tabIndex={-1}
-                aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                aria-label={showConfirm ? t('auth.hidePassword') : t('auth.showPassword')}
               >
                 {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -343,7 +330,7 @@ export function RegisterPage() {
             onClick={goToStep2}
             rightIcon={<ArrowRight className="h-4 w-4" />}
           >
-            Continue
+            {t('auth.continue')}
           </Button>
         </div>
       )}
@@ -354,12 +341,11 @@ export function RegisterPage() {
 
           {/* Company name */}
           <div className="space-y-1.5">
-            <Label htmlFor="company">Company Name</Label>
+            <Label htmlFor="company">{t('auth.companyName')}</Label>
             <Input
               id="company"
               type="text"
               autoComplete="organization"
-              autoFocus
               placeholder="Al Futtaim Group LLC"
               {...register('company')}
               aria-invalid={!!errors.company}
@@ -371,13 +357,13 @@ export function RegisterPage() {
           {/* Industry + Company size — 2-col grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Industry</Label>
+              <Label>{t('auth.industry')}</Label>
               <Select
                 value={industry}
                 onValueChange={(v) => setValue('industry', v, { shouldValidate: true })}
               >
                 <SelectTrigger className={cn(errors.industry && 'border-destructive focus:ring-destructive')}>
-                  <SelectValue placeholder="Select industry" />
+                  <SelectValue placeholder={t('auth.selectIndustry')} />
                 </SelectTrigger>
                 <SelectContent>
                   {INDUSTRY_OPTIONS.map((i) => (
@@ -389,13 +375,13 @@ export function RegisterPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Company Size</Label>
+              <Label>{t('auth.companySize')}</Label>
               <Select
                 value={companySize}
                 onValueChange={(v) => setValue('companySize', v, { shouldValidate: true })}
               >
                 <SelectTrigger className={cn(errors.companySize && 'border-destructive focus:ring-destructive')}>
-                  <SelectValue placeholder="Team size" />
+                  <SelectValue placeholder={t('auth.teamSize')} />
                 </SelectTrigger>
                 <SelectContent>
                   {COMPANY_SIZE_OPTIONS.map((s) => (
@@ -409,11 +395,11 @@ export function RegisterPage() {
 
           {/* Business type / jurisdiction */}
           <div className="space-y-1.5">
-            <Label>Business Type</Label>
+            <Label>{t('auth.businessType')}</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {([
-                { value: 'mainland', label: 'Mainland (LLC)', desc: 'DED / Federal licence' },
-                { value: 'freezone', label: 'Free Zone', desc: 'JAFZA, DIFC, ADGM & others' },
+                { value: 'mainland', label: t('auth.mainland'), desc: t('auth.mainlandDesc') },
+                { value: 'freezone', label: t('auth.freezone'), desc: t('auth.freezoneDesc') },
               ] as const).map((opt) => (
                 <button
                   key={opt.value}
@@ -441,8 +427,8 @@ export function RegisterPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="tradeLicenseNo">
-                Trade License No
-                <span className="ml-1 text-[10px] font-normal text-muted-foreground">(optional)</span>
+                {t('auth.tradeLicenseNo')}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">({t('common.optional')})</span>
               </Label>
               <Input
                 id="tradeLicenseNo"
@@ -454,8 +440,8 @@ export function RegisterPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="phone">
-                Company Phone
-                <span className="ml-1 text-[10px] font-normal text-muted-foreground">(optional)</span>
+                {t('auth.companyPhone')}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">({t('common.optional')})</span>
               </Label>
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground select-none">
@@ -478,7 +464,7 @@ export function RegisterPage() {
 
           {/* Account summary */}
           <div className="rounded-lg border border-border bg-muted/30 px-3.5 py-3 space-y-0.5">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Account owner</p>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{t('auth.accountOwner')}</p>
             <p className="text-sm font-medium text-foreground">{[watch('firstName'), watch('lastName')].filter(Boolean).join(' ') || '—'}</p>
             <p className="text-xs text-muted-foreground">{watch('email') || '—'}</p>
           </div>
@@ -493,10 +479,10 @@ export function RegisterPage() {
             />
             <div>
               <label htmlFor="terms" className="text-sm text-muted-foreground leading-snug cursor-pointer">
-                I agree to the{' '}
-                <a href="#" className="text-primary font-medium hover:underline">Terms of Service</a>
-                {' '}and{' '}
-                <a href="#" className="text-primary font-medium hover:underline">Privacy Policy</a>
+                {t('auth.iAgreeTo')}{' '}
+                <button type="button" className="text-primary font-medium hover:underline">{t('auth.termsOfService')}</button>
+                {' '}{t('auth.and')}{' '}
+                <button type="button" className="text-primary font-medium hover:underline">{t('auth.privacyPolicy')}</button>
               </label>
               {errors.terms && <p className="text-xs text-destructive mt-1">{errors.terms.message}</p>}
             </div>
@@ -511,7 +497,7 @@ export function RegisterPage() {
               onClick={() => setStep(1)}
               leftIcon={<ArrowLeft className="h-4 w-4" />}
             >
-              Back
+              {t('common.back')}
             </Button>
             <Button
               type="submit"
@@ -519,7 +505,7 @@ export function RegisterPage() {
               loading={loading}
               rightIcon={!loading ? <ArrowRight className="h-4 w-4" /> : undefined}
             >
-              Create Account
+              {t('auth.createAccountAction')}
             </Button>
           </div>
         </form>
@@ -528,13 +514,13 @@ export function RegisterPage() {
       <Separator className="my-5" />
 
       <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{' '}
-        <Link to="/login" className="text-primary font-medium hover:underline">Sign in</Link>
+        {t('auth.alreadyHaveAccount')}{' '}
+        <Link to="/login" className="text-primary font-medium hover:underline">{t('auth.signIn')}</Link>
       </p>
 
       <p className="mt-3 text-center text-[11px] text-muted-foreground/70">
-        Protected by enterprise-grade encryption.{' '}
-        <a href="#" className="text-primary/80 hover:underline">Learn more</a>
+        {t('auth.encryptedNote')}{' '}
+        <button type="button" className="text-primary/80 hover:underline">{t('auth.learnMore')}</button>
       </p>
     </AuthLayout>
   )

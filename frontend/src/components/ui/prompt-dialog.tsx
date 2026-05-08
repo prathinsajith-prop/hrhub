@@ -114,7 +114,6 @@ export function PromptDialog({
                             placeholder={placeholder}
                             rows={3}
                             disabled={submitting}
-                            autoFocus
                         />
                     ) : inputType === 'number' ? (
                         <NumericInput
@@ -125,7 +124,6 @@ export function PromptDialog({
                             onChange={e => handleNumberChange(e.target.value)}
                             placeholder={placeholder}
                             disabled={submitting}
-                            autoFocus
                             aria-invalid={!!error || undefined}
                             onKeyDown={e => {
                                 if (e.key === 'Enter') {
@@ -142,7 +140,6 @@ export function PromptDialog({
                             onChange={e => setValue(e.target.value)}
                             placeholder={placeholder}
                             disabled={submitting}
-                            autoFocus
                             onKeyDown={e => {
                                 if (e.key === 'Enter') {
                                     e.preventDefault()

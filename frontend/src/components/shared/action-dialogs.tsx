@@ -752,11 +752,22 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                                     </div>
                                 </div>
                             </div>
-                            {form.managerName && (
-                                <p className="text-[11px] text-muted-foreground">
-                                    Reporting to <span className="font-medium">{form.managerName}</span>.
-                                </p>
-                            )}
+                            {/* Reporting Manager — auto-fills from department head, can be overridden */}
+                            <div className="space-y-1.5">
+                                <Label>
+                                    Reporting Manager
+                                    <span className="text-muted-foreground font-normal text-xs ms-1">(auto from department head)</span>
+                                </Label>
+                                <ManagerPicker
+                                    value={form.reportingTo}
+                                    onChange={(id, name) => setForm(f => ({ ...f, reportingTo: id, managerName: name }))}
+                                />
+                                {form.managerName && form.departmentId && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Auto-selected from <span className="font-medium">{orgUnits.find(u => u.id === form.departmentId)?.name}</span>'s head.
+                                    </p>
+                                )}
+                            </div>
                             {/* Team — filtered to the selected department */}
                             {teamOptions.length > 0 && (
                                 <div className="space-y-1.5">

@@ -558,7 +558,6 @@ export function CandidateProfilePage() {
                             onChange={(e) => setRejectNote(e.target.value)}
                             placeholder="e.g. Salary expectation outside range; weak technical screen; withdrew application…"
                             rows={4}
-                            autoFocus
                         />
                     </div>
                     <AlertDialogFooter>

@@ -96,7 +96,7 @@ export function OnboardingDetailPage() {
                     <div className="flex items-center gap-4 min-w-0">
                         <InitialsAvatar name={checklist.employeeName} src={checklist.avatarUrl ?? undefined} size="lg" />
                         <div className="min-w-0">
-                            <h1 className="text-lg font-bold truncate">{checklist.employeeName}</h1>
+                            <h1 className="text-lg font-semibold truncate">{checklist.employeeName}</h1>
                             <p className="text-sm text-muted-foreground truncate">
                                 {checklist.designation ?? '—'}{checklist.department ? ` · ${checklist.department}` : ''}
                             </p>

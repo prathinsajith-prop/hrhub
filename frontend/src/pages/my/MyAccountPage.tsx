@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router-dom'
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'
@@ -10,18 +11,18 @@ import { MyProfileContent } from './MyProfilePage'
 import { MyLeaveContent } from './MyLeavePage'
 import { MyPayslipsContent } from './MyPayslipsPage'
 
-const TABS = [
-    { id: 'profile',  label: 'Profile',     icon: UserCircle  },
-    { id: 'leave',    label: 'Leave',        icon: CalendarDays },
-    { id: 'payslips', label: 'Payslips',     icon: Receipt     },
-] as const
-
-type TabId = typeof TABS[number]['id']
+type TabId = 'profile' | 'leave' | 'payslips'
 
 export function MyAccountPage() {
+    const { t } = useTranslation()
+    const TABS = [
+        { id: 'profile' as const,  label: t('myAccount.tabProfile'),  icon: UserCircle  },
+        { id: 'leave' as const,    label: t('myAccount.tabLeave'),    icon: CalendarDays },
+        { id: 'payslips' as const, label: t('myAccount.tabPayslips'), icon: Receipt     },
+    ]
     const [params, setParams] = useSearchParams()
     const active = (params.get('tab') ?? 'profile') as TabId
-    const validTab = TABS.some(t => t.id === active) ? active : 'profile'
+    const validTab = TABS.some(tab => tab.id === active) ? active : 'profile'
 
     // Correct invalid tab values in the URL silently
     useEffect(() => {
@@ -35,8 +36,8 @@ export function MyAccountPage() {
     return (
         <PageWrapper>
             <PageHeader
-                title="My Account"
-                description="Your personal workspace — profile, leave, and payslips in one place."
+                title={t('myAccount.title')}
+                description={t('myAccount.description')}
             />
 
             {/* Tab bar */}

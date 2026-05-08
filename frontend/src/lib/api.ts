@@ -168,7 +168,10 @@ export const api = {
         request<T>(path, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
     put: <T>(path: string, body?: unknown) =>
         request<T>(path, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
-    delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+    delete: <T>(path: string, body?: unknown) =>
+        request<T>(path, body !== undefined
+            ? { method: 'DELETE', body: JSON.stringify(body) }
+            : { method: 'DELETE' }),
     upload: async <T>(path: string, formData: FormData, retry = true): Promise<T> => {
         // Do NOT set Content-Type — browser must set it with the multipart boundary
         const { accessToken, refreshTokens } = useAuthStore.getState() as {

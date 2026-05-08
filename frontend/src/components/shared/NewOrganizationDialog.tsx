@@ -84,7 +84,6 @@ export function NewOrganizationDialog({ open, onOpenChange, onSuccess }: Props) 
               value={form.name}
               onChange={(e) => set('name', e.target.value)}
               placeholder="Acme HR LLC"
-              autoFocus
               required
             />
           </div>

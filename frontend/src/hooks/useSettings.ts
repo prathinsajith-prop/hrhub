@@ -252,8 +252,12 @@ export function useUpdateIpAllowlist() {
 }
 
 // ── Leave Settings hooks ──────────────────────────────────────────────────────
+export type Weekday = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
+
 export interface LeaveSettings {
     rolloverEnabledFrom: string | null
+    weekOffDays: Weekday[]
+    workingWeekStart: Weekday
 }
 
 export function useLeaveSettings() {
