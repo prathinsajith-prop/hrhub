@@ -36,6 +36,9 @@ import {
 } from '@/hooks/usePayroll'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/store/authStore'
+import { useLoans, LOAN_STATUS_STYLE, type EmployeeLoan } from '@/hooks/useLoans'
+import { labelFor } from '@/lib/enums'
+import { Link } from 'react-router-dom'
 import type { PayrollRun, Payslip } from '@/types'
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -566,6 +569,160 @@ function firstAvailableMonth(runs: PayrollRun[], maxMonth: number): number {
   return Array.from({ length: maxMonth }, (_, i) => i + 1).find(m => !taken.has(m)) ?? 1
 }
 
+// ─── Loans tab — organisation-wide loan visibility for payroll managers ───────
+
+function LoansSection() {
+  const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'completed'>('all')
+  const status = filter === 'all' ? undefined : filter
+  const { data, isLoading } = useLoans({ status, limit: 25 })
+
+  const loans = data?.data ?? []
+  const summary = data?.summary
+
+  const columns = useMemo<ColumnDef<EmployeeLoan>[]>(() => [
+    {
+      accessorKey: 'employeeName',
+      header: 'Employee',
+      cell: ({ row }) => (
+        <div className="min-w-0">
+          <p className="text-sm font-medium truncate">{row.original.employeeName ?? '—'}</p>
+          <p className="text-[11px] text-muted-foreground truncate">
+            {row.original.employeeNo ?? ''}
+            {row.original.employeeDepartment ? ` · ${row.original.employeeDepartment}` : ''}
+          </p>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'amount',
+      header: 'Amount',
+      cell: ({ row }) => (
+        <span className="text-sm font-semibold tabular-nums">{formatCurrency(Number(row.original.amount))}</span>
+      ),
+    },
+    {
+      accessorKey: 'monthlyDeduction',
+      header: 'Monthly',
+      cell: ({ row }) => (
+        <span className="text-sm tabular-nums text-muted-foreground">{formatCurrency(Number(row.original.monthlyDeduction))}</span>
+      ),
+    },
+    {
+      id: 'progress',
+      header: 'Progress',
+      cell: ({ row }) => {
+        const total = row.original.totalInstallments ?? 0
+        const paid = row.original.paidInstallments ?? 0
+        const pct = total > 0 ? Math.round((paid / total) * 100) : 0
+        return (
+          <div className="min-w-[110px]">
+            <div className="flex items-center justify-between text-[10px] mb-1 tabular-nums">
+              <span className="text-muted-foreground">{paid}/{total}</span>
+              <span className="font-medium">{pct}%</span>
+            </div>
+            <div className="h-1 rounded-full bg-muted overflow-hidden">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: 'remainingBalance',
+      header: 'Outstanding',
+      cell: ({ row }) => {
+        const v = row.original.remainingBalance
+        return v != null ? (
+          <span className="text-sm tabular-nums">{formatCurrency(Number(v))}</span>
+        ) : <span className="text-xs text-muted-foreground">—</span>
+      },
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => (
+        <Badge className={cn('text-[10px] font-medium', LOAN_STATUS_STYLE[row.original.status])}>
+          {labelFor(row.original.status)}
+        </Badge>
+      ),
+    },
+    {
+      id: 'view',
+      header: '',
+      cell: ({ row }) => (
+        <Link
+          to={`/employees/${row.original.employeeId}`}
+          className="text-xs text-primary hover:underline"
+          onClick={e => e.stopPropagation()}
+        >
+          View
+        </Link>
+      ),
+    },
+  ], [])
+
+  const FILTERS: { key: typeof filter; label: string }[] = [
+    { key: 'all',       label: 'All' },
+    { key: 'pending',   label: 'Pending' },
+    { key: 'active',    label: 'Active' },
+    { key: 'completed', label: 'Completed' },
+  ]
+
+  return (
+    <div className="space-y-4">
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <KpiCardCompact label="Pending"     value={summary?.pending ?? '—'}                                      icon={Clock}       color="amber" loading={isLoading} />
+        <KpiCardCompact label="Active"      value={summary?.active ?? '—'}                                       icon={DollarSign}  color="purple" loading={isLoading} />
+        <KpiCardCompact label="Disbursed"   value={summary ? formatCurrency(summary.totalDisbursed) : '—'}        icon={TrendingUp}  color="green" loading={isLoading} />
+        <KpiCardCompact label="Outstanding" value={summary ? formatCurrency(summary.totalOutstanding) : '—'}      icon={Banknote}    color="blue"  loading={isLoading} />
+      </div>
+
+      {/* Filter pills */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {FILTERS.map(f => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => setFilter(f.key)}
+            className={cn(
+              'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
+              filter === f.key
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground border-border hover:bg-muted hover:text-foreground',
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold">Employee loans</CardTitle>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/loans">Manage all loans</Link>
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Active loans are auto-deducted from monthly payroll. Click any row to open the employee profile.
+          </p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <DataTable
+            columns={columns}
+            data={loans}
+            isLoading={isLoading}
+            emptyMessage={filter === 'all' ? 'No loan records yet.' : `No ${filter} loans.`}
+            getRowId={(row) => String(row.id)}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export function PayrollPage() {
@@ -789,6 +946,10 @@ export function PayrollPage() {
             <BarChart3 className="h-3.5 w-3.5" />
             History
           </TabsTrigger>
+          <TabsTrigger value="loans" className="gap-1.5 text-sm">
+            <DollarSign className="h-3.5 w-3.5" />
+            Loans
+          </TabsTrigger>
           <TabsTrigger value="tools" className="gap-1.5 text-sm">
             <Calculator className="h-3.5 w-3.5" />
             Gratuity Calculator
@@ -834,6 +995,10 @@ export function PayrollPage() {
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="loans" className="mt-4">
+          <LoansSection />
         </TabsContent>
 
         <TabsContent value="tools" className="mt-4">

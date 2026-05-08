@@ -14,6 +14,7 @@ import {
     PLAN_DISPLAY,
     FREE_PLAN_QUOTA,
     PROFESSIONAL_PRICE_PER_5,
+    PROFESSIONAL_PRICE_PER_USER,
 } from './subscription.service.js'
 import { db } from '../../db/index.js'
 import { tenants } from '../../db/schema/index.js'
@@ -44,7 +45,7 @@ export default async function subscriptionRoutes(fastify: any): Promise<void> {
                 description: 'Scale your team with full HR capabilities.',
                 quota: null as number | null,
                 priceMonthly: null,
-                priceLabel: `AED ${PROFESSIONAL_PRICE_PER_5} / 5 employees / month`,
+                priceLabel: `AED ${PROFESSIONAL_PRICE_PER_USER} / user / month`,
                 features: ['Custom employee capacity', 'All Free features', 'Payroll & WPS', 'Performance reviews', 'Asset management', 'Priority email support'],
                 isCurrent: info.plan === 'growth',
             },
@@ -72,6 +73,8 @@ export default async function subscriptionRoutes(fastify: any): Promise<void> {
                 },
                 plans,
                 pricing: {
+                    pricePerUser: PROFESSIONAL_PRICE_PER_USER,
+                    /** @deprecated kept for old clients */
                     pricePerFiveEmployees: PROFESSIONAL_PRICE_PER_5,
                     currency: 'AED',
                 },
@@ -346,6 +349,8 @@ export default async function subscriptionRoutes(fastify: any): Promise<void> {
                 employeeCount: n,
                 monthlyCost: calculateProfessionalCost(n),
                 currency: 'AED',
+                pricePerUser: PROFESSIONAL_PRICE_PER_USER,
+                /** @deprecated kept for backwards compat */
                 pricePerFiveEmployees: PROFESSIONAL_PRICE_PER_5,
             },
         })

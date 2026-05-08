@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react'
 import { z } from 'zod'
 import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X, Building2, UserMinus, GitBranch, ChevronDown } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
@@ -345,7 +345,7 @@ interface TeamCardProps {
     onDelete?: () => void
 }
 
-function TeamCard({ team, canManage, orgMap, onEdit, onDelete }: TeamCardProps) {
+const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDelete }: TeamCardProps) {
     const [expanded, setExpanded] = useState(false)
     const [addOpen, setAddOpen] = useState(false)
     const [removeTarget, setRemoveTarget] = useState<string | null>(null)
@@ -666,7 +666,7 @@ function TeamCard({ team, canManage, orgMap, onEdit, onDelete }: TeamCardProps) 
             />
         </>
     )
-}
+})
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
@@ -676,6 +676,98 @@ interface TeamsPanelProps {
     canManage: boolean
     canViewAll: boolean
     userId: string | undefined
+}
+
+const TEAMS_PAGE_SIZE = 9
+
+interface TeamGridProps {
+    teams: (TeamRow | MyTeamRow)[]
+    showControls: boolean
+    canManage: boolean
+    canViewAll: boolean
+    userId: string | undefined
+    orgMap: Map<string, OrgUnit>
+    onEditTeam: (team: TeamRow) => void
+    onDeleteTeam: (team: TeamRow) => void
+}
+
+function TeamGridSkeletonRow() {
+    return (
+        <div className="rounded-xl border border-border/60 bg-card p-4 animate-pulse">
+            <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-lg bg-muted shrink-0" />
+                <div className="flex-1 space-y-2 pt-0.5">
+                    <div className="h-3.5 bg-muted rounded w-2/3" />
+                    <div className="h-2.5 bg-muted rounded w-1/2" />
+                </div>
+            </div>
+            <div className="mt-4 pt-3 border-t border-border/50 flex items-center gap-2">
+                <div className="flex -space-x-2">
+                    {[0, 1, 2].map(i => <div key={i} className="h-7 w-7 rounded-full border-2 border-background bg-muted" />)}
+                </div>
+                <div className="h-2.5 bg-muted rounded w-16" />
+            </div>
+        </div>
+    )
+}
+
+// Top-level (stable identity) so React keeps card state across parent re-renders.
+function TeamGrid({ teams, showControls, canManage, canViewAll, userId, orgMap, onEditTeam, onDeleteTeam }: TeamGridProps) {
+    const [visibleCount, setVisibleCount] = useState(TEAMS_PAGE_SIZE)
+    const sentinelRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => { setVisibleCount(TEAMS_PAGE_SIZE) }, [teams.length])
+
+    useEffect(() => {
+        const el = sentinelRef.current
+        if (!el || visibleCount >= teams.length) return
+        const obs = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setVisibleCount(c => Math.min(c + TEAMS_PAGE_SIZE, teams.length))
+                }
+            },
+            { rootMargin: '300px' },
+        )
+        obs.observe(el)
+        return () => obs.disconnect()
+    }, [teams.length, visibleCount])
+
+    const visibleTeams = teams.slice(0, visibleCount)
+    const hasMore = visibleCount < teams.length
+
+    return (
+        <>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleTeams.map(team => {
+                    const isOwner = showControls && (team as TeamRow).createdById === userId
+                    const editable = canManage && (canViewAll || isOwner)
+                    return (
+                        <TeamCard
+                            key={team.id}
+                            team={team}
+                            canManage={editable}
+                            orgMap={orgMap}
+                            onEdit={editable ? () => onEditTeam(team as TeamRow) : undefined}
+                            onDelete={editable ? () => onDeleteTeam(team as TeamRow) : undefined}
+                        />
+                    )
+                })}
+            </div>
+            {hasMore && (
+                <div ref={sentinelRef} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-4">
+                    {[...Array(Math.min(TEAMS_PAGE_SIZE, teams.length - visibleCount))].map((_, i) => (
+                        <TeamGridSkeletonRow key={i} />
+                    ))}
+                </div>
+            )}
+            {!hasMore && teams.length > TEAMS_PAGE_SIZE && (
+                <p className="text-center text-xs text-muted-foreground py-4">
+                    Showing all {teams.length} teams
+                </p>
+            )}
+        </>
+    )
 }
 
 function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
@@ -689,7 +781,7 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
     const [deleteTarget, setDeleteTarget] = useState<TeamRow | null>(null)
     const deleteMut = useDeleteTeam()
 
-    const handleDelete = async () => {
+    const handleDelete = useCallback(async () => {
         if (!deleteTarget) return
         try {
             await deleteMut.mutateAsync(deleteTarget.id)
@@ -698,27 +790,23 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
         } catch {
             toast.error('Failed to delete team')
         }
-    }
+    }, [deleteTarget, deleteMut])
 
-    const openEdit = (team: TeamRow) => { setEditTarget(team); setFormOpen(true) }
-    const closeForm = () => { setFormOpen(false); setEditTarget(null) }
+    const openEdit = useCallback((team: TeamRow) => { setEditTarget(team); setFormOpen(true) }, [])
+    const closeForm = useCallback(() => { setFormOpen(false); setEditTarget(null) }, [])
+    const onDeleteTargetCb = useCallback((team: TeamRow) => setDeleteTarget(team), [])
 
     const teamGrid = (teams: (TeamRow | MyTeamRow)[], showControls: boolean) => (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {teams.map(team => {
-                const isOwner = showControls && (team as TeamRow).createdById === userId
-                return (
-                    <TeamCard
-                        key={team.id}
-                        team={team}
-                        canManage={canManage && (canViewAll || isOwner)}
-                        orgMap={orgMap}
-                        onEdit={canManage && (canViewAll || isOwner) ? () => openEdit(team as TeamRow) : undefined}
-                        onDelete={canManage && (canViewAll || isOwner) ? () => setDeleteTarget(team as TeamRow) : undefined}
-                    />
-                )
-            })}
-        </div>
+        <TeamGrid
+            teams={teams}
+            showControls={showControls}
+            canManage={canManage}
+            canViewAll={canViewAll}
+            userId={userId}
+            orgMap={orgMap}
+            onEditTeam={openEdit}
+            onDeleteTeam={onDeleteTargetCb}
+        />
     )
 
     return (

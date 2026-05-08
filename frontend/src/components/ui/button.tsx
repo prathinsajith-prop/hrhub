@@ -45,13 +45,20 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, loading, leftIcon, rightIcon, children, disabled, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, loading, leftIcon, rightIcon, children, disabled, type, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+    // Default to type="button" so buttons placed inside <form> elements never
+    // trigger an accidental form submission (which can cause page reloads or
+    // navigation). Callers can still explicitly opt-in with type="submit".
+    // The `type` attribute is invalid on non-button hosts (asChild=true), so
+    // only forward it when we render an actual <button>.
+    const buttonProps = !asChild ? { type: type ?? 'button' } : {}
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || loading}
+        {...buttonProps}
         {...props}
       >
         {asChild ? children : (

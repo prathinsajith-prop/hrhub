@@ -26,6 +26,16 @@ export function formatDate(date: string | Date | null | undefined, format: 'shor
   return d.toLocaleDateString('en-AE', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+/** Date + time, e.g. "08 May 2026, 14:32". Useful for "last login" / audit fields. */
+export function formatDateTime(date: string | Date | null | undefined): string {
+  if (!date) return '—'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return '—'
+  const datePart = d.toLocaleDateString('en-AE', { day: '2-digit', month: 'short', year: 'numeric' })
+  const timePart = d.toLocaleTimeString('en-AE', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${datePart}, ${timePart}`
+}
+
 export function formatCurrency(amount: number, currency = 'AED'): string {
   return new Intl.NumberFormat('en-AE', {
     style: 'currency',
