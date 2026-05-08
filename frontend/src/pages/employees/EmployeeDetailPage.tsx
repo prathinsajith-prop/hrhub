@@ -1329,25 +1329,46 @@ export function EmployeeDetailPage() {
             )
           })()}
 
-          {/* ── Zone 3: Account timeline (managers only, when account exists) ── */}
-          {canManage && accountData?.hasAccount && accountData.account && (
-            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 sm:px-5 py-2.5 border-t border-border/60 bg-muted/30">
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                <Clock className="h-3.5 w-3.5 shrink-0" />
-                <span className="uppercase tracking-wider font-semibold">Last login</span>
-                <span className="text-foreground/90 font-medium tabular-nums">
-                  {accountData.account.lastLoginAt ? formatDateTime(accountData.account.lastLoginAt) : 'Never'}
-                </span>
+          {/* ── Zone 3: Account timeline (managers — always visible, with fallbacks) ── */}
+          {canManage && (() => {
+            const hasAccount = !!accountData?.hasAccount
+            const Spinner = <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+            const lastLogin = accountLoading
+              ? Spinner
+              : !hasAccount
+                ? <button
+                    type="button"
+                    onClick={() => setInviteOpen(true)}
+                    className="text-primary hover:underline cursor-pointer font-medium"
+                  >
+                    No account · Invite
+                  </button>
+                : accountData?.account?.lastLoginAt
+                  ? formatDateTime(accountData.account.lastLoginAt)
+                  : 'Never'
+            const accountCreated = accountLoading
+              ? Spinner
+              : accountData?.account?.createdAt
+                ? formatDateTime(accountData.account.createdAt)
+                : e.createdAt
+                  ? formatDateTime(e.createdAt)
+                  : '—'
+
+            return (
+              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 sm:px-5 py-2.5 border-t border-border/60 bg-muted/30">
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                  <span className="uppercase tracking-wider font-semibold">Last login</span>
+                  <span className="text-foreground/90 font-medium tabular-nums">{lastLogin}</span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <Calendar className="h-3.5 w-3.5 shrink-0" />
+                  <span className="uppercase tracking-wider font-semibold">Account created</span>
+                  <span className="text-foreground/90 font-medium tabular-nums">{accountCreated}</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                <Calendar className="h-3.5 w-3.5 shrink-0" />
-                <span className="uppercase tracking-wider font-semibold">Account created</span>
-                <span className="text-foreground/90 font-medium tabular-nums">
-                  {accountData.account.createdAt ? formatDateTime(accountData.account.createdAt) : '—'}
-                </span>
-              </div>
-            </div>
-          )}
+            )
+          })()}
         </CardContent>
       </Card>
 
