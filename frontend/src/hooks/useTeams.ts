@@ -24,6 +24,8 @@ export interface MyTeamRow {
     createdById: string | null
     memberCount: number
     joinedAt: string
+    /** This employee's role within the team (viewer/member/manager/administrator). */
+    role: 'viewer' | 'member' | 'manager' | 'administrator'
 }
 
 export type TeamMemberRole = 'viewer' | 'member' | 'manager' | 'administrator'
@@ -57,6 +59,7 @@ export function useTeams(departmentId?: string) {
             const path = departmentId ? `/teams?departmentId=${encodeURIComponent(departmentId)}` : '/teams'
             return api.get<{ data: TeamRow[] }>(path).then(r => r.data)
         },
+        staleTime: 30_000,
     })
 }
 
@@ -64,6 +67,7 @@ export function useMyTeams() {
     return useQuery({
         queryKey: ['teams', 'my'],
         queryFn: () => api.get<{ data: MyTeamRow[] }>('/teams/my').then(r => r.data),
+        staleTime: 30_000,
     })
 }
 
@@ -80,6 +84,8 @@ export function useTeamMembers(teamId: string | null) {
         queryKey: ['teams', teamId, 'members'],
         queryFn: () => api.get<{ data: TeamMemberRow[] }>(`/teams/${teamId}/members`).then(r => r.data),
         enabled: !!teamId,
+        staleTime: 60_000,
+        gcTime: 5 * 60_000,
     })
 }
 

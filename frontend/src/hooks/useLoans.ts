@@ -11,6 +11,10 @@ export interface EmployeeLoan {
     employeeName?: string | null
     employeeNo?: string | null
     employeeDepartment?: string | null
+    /** Employee's current basic salary — surfaced so HR can sanity-check loan affordability. */
+    employeeBasicSalary?: string | null
+    /** Employee's current total/gross salary. */
+    employeeTotalSalary?: string | null
     approverName?: string | null
     amount: string
     monthlyDeduction: string
@@ -129,12 +133,38 @@ export function useRejectLoan() {
     })
 }
 
+export interface LoanScheduleEntry {
+    installmentNo: number
+    periodMonth: string
+    dueDate: string
+    amount: number
+    paidAmount: number
+    paidDate: string | null
+    status: 'paid' | 'pending' | 'overdue' | 'upcoming'
+    daysOverdue?: number
+    /** Backend-computed: only the next unpaid installment can be paid. */
+    canPay: boolean
+}
+
+export function useLoanSchedule(loanId: string | null) {
+    return useQuery<{ data: LoanScheduleEntry[] }>({
+        queryKey: ['loans', loanId, 'schedule'],
+        queryFn: () => api.get(`/loans/${loanId}/schedule`),
+        enabled: !!loanId,
+        staleTime: 30_000,
+    })
+}
+
 export function useRecordLoanPayment() {
     const qc = useQueryClient()
     const tenantId = useAuthStore(s => s.tenant?.id)
     return useMutation({
-        mutationFn: (id: string) => api.post(`/loans/${id}/payment`),
-        onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans', tenantId] }) },
+        mutationFn: ({ id, periodMonth, notes }: { id: string; periodMonth?: string; notes?: string }) =>
+            api.post(`/loans/${id}/payment`, { periodMonth, notes }),
+        onSuccess: (_data, vars) => {
+            qc.invalidateQueries({ queryKey: ['loans', tenantId] })
+            qc.invalidateQueries({ queryKey: ['loans', vars.id, 'schedule'] })
+        },
     })
 }
 

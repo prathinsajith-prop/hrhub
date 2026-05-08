@@ -8,7 +8,7 @@ import {
   Clock, Download, Eye, Camera, Loader2, Plus, Package,
   CalendarDays, ClipboardList, UserCheck, Users, GraduationCap, Landmark, DollarSign,
   ArrowRightLeft, Heart, StickyNote, History, Trash2, AlertTriangle, Upload, X as XIcon,
-  MoreHorizontal, CheckCircle2, Ban, UserX, Search, FolderOpen, Scale,
+  MoreHorizontal, CheckCircle2, Ban, UserX, Search, FolderOpen, Scale, AlertCircle,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -33,21 +33,23 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { DatePicker } from '@/components/ui/date-picker'
-import { cn, formatDate, formatCurrency, formatFileSize, getInitials } from '@/lib/utils'
+import { cn, formatDate, formatDateTime, formatCurrency, formatFileSize, getInitials } from '@/lib/utils'
 import { useEmployee, useUpdateEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision, useUpdateEmployeeStatus, useArchiveEmployee } from '@/hooks/useEmployees'
 import type { SalaryHistoryFilters } from '@/hooks/useEmployees'
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
-import { useEmployeeTeams } from '@/hooks/useTeams'
+import { useEmployeeTeams, useTeamMembers, type TeamMemberRole } from '@/hooks/useTeams'
 import { useDocuments, useVerifyDocument, useRejectDocument } from '@/hooks/useDocuments'
 import { usePerformanceReviews } from '@/hooks/usePerformance'
 import { CreatePerformanceReviewDialog } from '@/components/shared/CreatePerformanceReviewDialog'
 import { AddDocumentDialog } from '@/components/shared/AddDocumentDialog'
 import { EmployeeLeavePanel } from '@/components/shared/EmployeeLeavePanel'
 import { EmployeeLoansPanel } from '@/components/shared/EmployeeLoansPanel'
+import { ExpiryStatus } from '@/components/shared/ExpiryStatus'
 import { useEmployeeAssets } from '@/hooks/useAssets'
 import { useAttendance } from '@/hooks/useAttendance'
-import { useEmployeeTransfers, useCreateTransfer, type EmployeeTransfer } from '@/hooks/useTransfers'
+import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
+import { useLoans } from '@/hooks/useLoans'
 import { useDependents, useCreateDependent, useUpdateDependent, useDeleteDependent, useEmployeeNotes, useAddEmployeeNote, useDeleteEmployeeNote, type Dependent } from '@/hooks/useEmployeeDependents'
 import { useActivityLogs, type ActivityLog } from '@/hooks/useAudit'
 import { useEmployeeWarnings, useCreateEmployeeWarning, useDeleteEmployeeWarning, useWarningDocumentUrl, type CreateWarningInput } from '@/hooks/useEmployeeWarnings'
@@ -60,7 +62,15 @@ import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { toast } from '@/components/ui/overlays'
 import { api } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
-import { CopyableEmail, CopyablePhone } from '@/components/shared'
+import { CopyableEmail, CopyablePhone, ActionBadge } from '@/components/shared'
+import { resolveCountryIso } from '@/components/shared/PhoneInput'
+
+/** Convert an ISO-2 country code into its regional-indicator flag emoji. */
+function isoToFlag(iso: string | null | undefined): string {
+  if (!iso || iso.length !== 2) return ''
+  const codePoints = iso.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0))
+  return String.fromCodePoint(...codePoints)
+}
 import type { Employee } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -71,6 +81,7 @@ interface DocRecord {
   docType?: string
   category: string
   status: string
+  docNumber?: string | null
   issueDate?: string | null
   expiryDate?: string | null
   fileSize?: number | null
@@ -121,12 +132,16 @@ const REVISION_TYPE_VARIANT: Record<string, 'success' | 'destructive' | 'info' |
 
 // ─── Small components ─────────────────────────────────────────────────────────
 
-const InfoRow = React.memo(function InfoRow({ label, value, icon: Icon }: { label: string; value?: string | null; icon?: React.ElementType }) {
+const InfoRow = React.memo(function InfoRow({ label, value, icon: Icon, trailing }: { label: string; value?: string | null; icon?: React.ElementType; trailing?: React.ReactNode }) {
+  // Hide rows that have no real value — keeps the layout tight and free of "—" filler.
+  const hasValue = value !== undefined && value !== null && String(value).trim() !== ''
+  if (!hasValue && !trailing) return null
   return (
     <div className="flex items-center gap-3 py-3 border-b border-border/40 last:border-0">
       {Icon && <Icon className="h-4 w-4 text-muted-foreground shrink-0" />}
       <span className="text-sm text-muted-foreground w-36 shrink-0">{label}</span>
-      <span className="text-sm font-medium text-foreground truncate flex-1">{value || '—'}</span>
+      <span className="text-sm font-medium text-foreground truncate flex-1">{hasValue ? value : ''}</span>
+      {trailing && <span className="shrink-0">{trailing}</span>}
     </div>
   )
 })
@@ -156,11 +171,54 @@ const EmployeeStatusBadge = React.memo(function EmployeeStatusBadge({ status }: 
   )
 })
 
-const QuickStat = React.memo(function QuickStat({ label, value, valueClass }: { label: string; value: React.ReactNode; valueClass?: string }) {
+type StatTone = 'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'teal' | 'slate' | 'indigo'
+
+/** Icon-only colour accent — keeps the tile background flat & professional. */
+const STAT_ICON_TONE: Record<StatTone, string> = {
+  blue:    'text-blue-600',
+  emerald: 'text-emerald-600',
+  violet:  'text-violet-600',
+  amber:   'text-amber-600',
+  rose:    'text-rose-600',
+  teal:    'text-teal-600',
+  slate:   'text-slate-600',
+  indigo:  'text-indigo-600',
+}
+
+/** Number of documents shown per category before "Show more" appears. */
+const DOC_PAGE_SIZE = 5
+
+/** Compact stat tile — flat background, colour signal lives only on the icon. */
+const StatTile = React.memo(function StatTile({
+  icon: Icon, label, value, trailing, valueClass, tone = 'slate',
+}: {
+  icon?: React.ElementType
+  label: string
+  value: React.ReactNode
+  trailing?: React.ReactNode
+  valueClass?: string
+  tone?: StatTone
+}) {
+  // Hide tiles with no meaningful value — avoids "—" placeholders cluttering the grid.
+  const isEmpty =
+    value === null
+    || value === undefined
+    || value === ''
+    || value === '—'
+    || (typeof value === 'number' && Number.isNaN(value))
+  if (isEmpty && !trailing) return null
   return (
-    <div>
-      <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className={cn('text-sm font-semibold text-foreground', valueClass)}>{value}</p>
+    <div className="bg-card hover:bg-muted/30 px-3.5 py-2.5 min-w-0 transition-colors">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+        {Icon && <Icon className={cn('h-3 w-3 shrink-0', STAT_ICON_TONE[tone])} />}
+        <span className="truncate">{label}</span>
+      </div>
+      <div className="flex items-center justify-between gap-2 mt-1">
+        <span className={cn('text-sm font-semibold text-foreground truncate', valueClass)}>
+          {value}
+        </span>
+        {trailing && <span className="shrink-0">{trailing}</span>}
+      </div>
     </div>
   )
 })
@@ -640,14 +698,94 @@ const DOC_CATEGORY_CONFIG: Record<string, { label: string; Icon: React.Component
   compliance:    { label: 'Compliance',     Icon: Scale,          iconCls: 'text-teal-600',   bgCls: 'bg-teal-50 border-teal-200' },
 }
 
-const DOC_STATUS_BORDER: Record<string, string> = {
-  valid:          'border-l-emerald-400',
-  expiring_soon:  'border-l-amber-400',
-  expired:        'border-l-red-500',
-  rejected:       'border-l-red-500',
-  under_review:   'border-l-blue-400',
-  pending_upload: 'border-l-border',
+// ─── Team membership row (shared helpers) ───────────────────────────────────
+
+const TEAM_ROLE_TONE: Record<TeamMemberRole, string> = {
+  viewer:        'bg-slate-100 text-slate-700 border-slate-200',
+  member:        'bg-blue-100 text-blue-800 border-blue-200',
+  manager:       'bg-amber-100 text-amber-800 border-amber-200',
+  administrator: 'bg-violet-100 text-violet-800 border-violet-200',
 }
+
+const TeamMembershipRow = React.memo(function TeamMembershipRow({
+  team,
+  branchName, divisionName, departmentName,
+}: {
+  team: { id: string; name: string; memberCount: number; joinedAt: string; role: TeamMemberRole }
+  branchName?: string | null
+  divisionName?: string | null
+  departmentName?: string | null
+}) {
+  const { data: members = [] } = useTeamMembers(team.id)
+  const previewCount = Math.min(team.memberCount, 5)
+  const previewMembers = members.slice(0, 5)
+  const overflow = team.memberCount > 5 ? team.memberCount - 5 : 0
+
+  const orgPath = [branchName, divisionName, departmentName].filter(Boolean) as string[]
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/30 transition-colors min-w-0">
+      {/* Team icon */}
+      <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+        <Users className="h-3.5 w-3.5 text-primary" />
+      </div>
+
+      {/* Team name + org breadcrumb */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-semibold text-foreground truncate leading-tight">{team.name}</p>
+          <span className={cn(
+            'inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none shrink-0',
+            TEAM_ROLE_TONE[team.role] ?? TEAM_ROLE_TONE.member,
+          )}>
+            {team.role.charAt(0).toUpperCase() + team.role.slice(1)}
+          </span>
+        </div>
+        {orgPath.length > 0 && (
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5 truncate">
+            <Building2 className="h-2.5 w-2.5 shrink-0" />
+            {orgPath.map((p, i) => (
+              <span key={i} className="flex items-center gap-1">
+                {i > 0 && <span className="opacity-40">›</span>}
+                <span className={i === orgPath.length - 1 ? 'font-medium text-foreground/80' : ''}>{p}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Member avatar stack */}
+      {team.memberCount > 0 && (
+        <div className="hidden sm:flex -space-x-2 shrink-0">
+          {members.length === 0
+            ? [...Array(previewCount)].map((_, i) => (
+              <div key={i} className="h-7 w-7 rounded-full border-2 border-card bg-muted shrink-0" />
+            ))
+            : previewMembers.map(m => (
+              <Avatar key={m.id} className="h-7 w-7 border-2 border-card shrink-0" title={`${m.firstName} ${m.lastName}`}>
+                {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
+                <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">
+                  {getInitials(`${m.firstName} ${m.lastName}`)}
+                </AvatarFallback>
+              </Avatar>
+            ))
+          }
+          {overflow > 0 && (
+            <div className="h-7 w-7 rounded-full border-2 border-card bg-muted flex items-center justify-center shrink-0">
+              <span className="text-[9px] font-semibold text-muted-foreground tabular-nums">+{overflow}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Joined date */}
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums shrink-0 hidden md:flex">
+        <Calendar className="h-3 w-3" />
+        {formatDate(team.joinedAt)}
+      </span>
+    </div>
+  )
+})
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -698,6 +836,16 @@ export function EmployeeDetailPage() {
 
   // Transfer history
   const { data: transfersData, isLoading: transfersLoading } = useEmployeeTransfers(id)
+
+  // Active/pending loans for this employee — drives the hero "Loans" tile.
+  const { data: employeeLoansData } = useLoans(canManage && id ? { employeeId: id, limit: 25 } : undefined)
+  const employeeLoanSummary = (() => {
+    if (!employeeLoansData?.data) return null
+    const active = employeeLoansData.data.filter(l => l.status === 'active')
+    if (active.length === 0) return null
+    const outstanding = active.reduce((n, l) => n + Number(l.remainingBalance ?? l.amount ?? 0), 0)
+    return { count: active.length, outstanding }
+  })()
 
   // Training history
   const { data: trainingData, isLoading: trainingLoading } = useEmployeeTraining(canManage ? id : undefined)
@@ -762,6 +910,7 @@ export function EmployeeDetailPage() {
   const [noteInput, setNoteInput] = React.useState('')
   const [warningDialogOpen, setWarningDialogOpen] = React.useState(false)
   const [docSearch, setDocSearch] = React.useState('')
+  const [docVisibleByCategory, setDocVisibleByCategory] = React.useState<Map<string, number>>(new Map())
   const avatarInputRef = React.useRef<HTMLInputElement>(null)
 
   const filteredDocs = React.useMemo(() => {
@@ -776,8 +925,14 @@ export function EmployeeDetailPage() {
 
   const docsByCategory = React.useMemo(() => {
     const CATEGORY_ORDER = ['identity', 'visa', 'employment', 'company', 'insurance', 'qualification', 'financial', 'compliance']
+    // LIFO — newest upload first within each category.
+    const sorted = [...filteredDocs].sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return tb - ta
+    })
     const groups: Record<string, DocRecord[]> = {}
-    for (const doc of filteredDocs) {
+    for (const doc of sorted) {
       const key = doc.category || 'other'
       if (!groups[key]) groups[key] = []
       groups[key].push(doc)
@@ -836,8 +991,6 @@ export function EmployeeDetailPage() {
   }
 
   const visaDays = e?.visaExpiry ? Math.ceil((new Date(e.visaExpiry).getTime() - nowMs) / 86400000) : null
-  const visaLabel = visaDays === null ? 'N/A' : visaDays < 0 ? 'Expired' : `${visaDays}d left`
-  const visaClass = visaDays === null ? '' : visaDays < 0 ? 'text-destructive' : visaDays < 90 ? 'text-warning' : 'text-success'
 
   function handleAvatarChange(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0]
@@ -891,9 +1044,10 @@ export function EmployeeDetailPage() {
 
       {/* Hero card */}
       <Card>
-        <CardContent className="p-5 sm:p-6">
-          <div className="flex flex-col sm:flex-row gap-5">
-            {/* Avatar with upload button */}
+        <CardContent className="p-0">
+          {/* ── Zone 1: Identity row ── */}
+          <div className="flex flex-col sm:flex-row gap-4 p-4 sm:p-5">
+            {/* Avatar */}
             <div className="relative shrink-0 self-start">
               <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
                 {e.avatarUrl && <AvatarImage src={e.avatarUrl} alt={e.fullName} />}
@@ -912,92 +1066,103 @@ export function EmployeeDetailPage() {
               </button>
             </div>
 
-            {/* Identity block */}
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                    <Badge variant={STATUS_VARIANT[e.status] ?? 'secondary'} className="capitalize text-[10px]">
-                      {labelFor(e.status)}
-                    </Badge>
-                    {(() => {
-                      const parts = [
-                        orgUnitName(e.branchId),
-                        orgUnitName(e.divisionId),
-                        orgUnitName(e.departmentId) ?? e.department,
-                      ].filter(Boolean) as string[]
-                      return parts.length > 0 ? (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          {parts.map((p, i) => (
-                            <span key={i} className="flex items-center gap-1">
-                              {i > 0 && <span className="opacity-40">›</span>}
-                              <span className={i === parts.length - 1 ? 'font-medium text-foreground/80' : ''}>{p}</span>
-                            </span>
-                          ))}
-                        </span>
-                      ) : null
-                    })()}
-                  </div>
+            {/* Identity + actions */}
+            <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="min-w-0">
+                {/* Row 1: name + status badge (right of name) */}
+                <div className="flex flex-wrap items-center gap-2.5">
                   <h1 className="text-xl sm:text-2xl font-bold tracking-tight font-display truncate">{e.fullName}</h1>
-                  <p className="text-sm text-muted-foreground mt-0.5">{e.designation ?? '—'} · {e.employeeNo}</p>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
-                    {(e.mobileNo ?? e.phone) && (
-                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Phone className="h-3.5 w-3.5 shrink-0" />
-                        <CopyablePhone phone={e.mobileNo ?? e.phone ?? ''} className="text-xs text-muted-foreground" />
-                      </span>
-                    )}
-                    {(e.workEmail ?? e.email) && (
-                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Mail className="h-3.5 w-3.5 shrink-0" />
-                        <CopyableEmail email={e.workEmail ?? e.email ?? ''} className="text-xs text-muted-foreground" />
-                      </span>
-                    )}
-                  </div>
+                  <Badge variant={STATUS_VARIANT[e.status] ?? 'secondary'} className="capitalize text-[10px] shrink-0">
+                    {labelFor(e.status)}
+                  </Badge>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportCSV(e as unknown as Record<string, unknown>)}>
-                    Export
-                  </Button>
-                  {canManage && !accountLoading && !isAccessRestricted && (() => {
-                    if (!accountData?.hasAccount) {
-                      // No account — invite not yet sent
-                      return (
-                        <Button variant="outline" size="sm" leftIcon={<UserCheck className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
-                          Grant Access
-                        </Button>
-                      )
-                    }
-                    if (!accountData?.account?.isActive) {
-                      // Invite sent but password not yet set
-                      return (
-                        <Button variant="outline" size="sm" leftIcon={<Clock className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}
-                          className="text-warning border-warning/40 bg-warning/5 hover:bg-warning/10 hover:text-warning">
-                          Invite Pending
-                        </Button>
-                      )
-                    }
-                    // Active — no button needed here; manage via Account tab
-                    return null
-                  })()}
-                  <Button size="sm" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditOpen(true)}>
-                    Edit Profile
-                  </Button>
-                  {canManage && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" aria-label="More actions">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-52">
-                        {e.status !== 'active' && (
-                          <DropdownMenuItem
-                            onClick={() => setStatusTarget({ status: 'active' })}
-                            className="text-success focus:text-success focus:bg-success/10"
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
-                            Activate
+                {/* Row 2: designation + employeeNo */}
+                <p className="text-sm text-muted-foreground mt-0.5 truncate">
+                  {e.designation ?? '—'}
+                  <span className="text-muted-foreground/60"> · </span>
+                  <span className="font-mono tabular-nums">{e.employeeNo}</span>
+                </p>
+                {/* Row 3: contacts */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+                  {(e.mobileNo ?? e.phone) && (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Phone className="h-3.5 w-3.5 shrink-0" />
+                      <CopyablePhone phone={e.mobileNo ?? e.phone ?? ''} className="text-xs text-muted-foreground" />
+                    </span>
+                  )}
+                  {(e.workEmail ?? e.email) && (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Mail className="h-3.5 w-3.5 shrink-0" />
+                      <CopyableEmail email={e.workEmail ?? e.email ?? ''} className="text-xs text-muted-foreground" />
+                    </span>
+                  )}
+                </div>
+                {/* Row 4: org breadcrumb under email */}
+                {(() => {
+                  const parts = [
+                    orgUnitName(e.branchId),
+                    orgUnitName(e.divisionId),
+                    orgUnitName(e.departmentId) ?? e.department,
+                  ].filter(Boolean) as string[]
+                  return parts.length > 0 ? (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1.5">
+                      <Building2 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="flex items-center gap-1 min-w-0 truncate">
+                        {parts.map((p, i) => (
+                          <span key={i} className="flex items-center gap-1">
+                            {i > 0 && <span className="opacity-40">›</span>}
+                            <span className={i === parts.length - 1 ? 'font-medium text-foreground/80' : ''}>{p}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+                  ) : null
+                })()}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportCSV(e as unknown as Record<string, unknown>)}>
+                  Export
+                </Button>
+                {canManage && !accountLoading && !isAccessRestricted && (() => {
+                  if (!accountData?.hasAccount) {
+                    return (
+                      <Button variant="success" size="sm" leftIcon={<UserCheck className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
+                        Grant Access
+                      </Button>
+                    )
+                  }
+                  if (!accountData?.account?.isActive) {
+                    return (
+                      <Button variant="warning" size="sm" leftIcon={<Clock className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
+                        Invite Pending
+                      </Button>
+                    )
+                  }
+                  return (
+                    <Button variant="info" size="sm" leftIcon={<Shield className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
+                      Manage Access
+                    </Button>
+                  )
+                })()}
+                <Button size="sm" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditOpen(true)}>
+                  Edit Profile
+                </Button>
+                {canManage && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" aria-label="More actions">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52">
+                      {e.status !== 'active' && (
+                        <DropdownMenuItem
+                          onClick={() => setStatusTarget({ status: 'active' })}
+                          className="text-success focus:text-success focus:bg-success/10"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
+                          Activate
                           </DropdownMenuItem>
                         )}
                         {(e.status === 'active' || e.status === 'onboarding') && (
@@ -1031,17 +1196,163 @@ export function EmployeeDetailPage() {
                   )}
                 </div>
               </div>
+            </div>
 
-              {/* Key stats strip */}
-              <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 pt-4 border-t border-border/60">
-                <QuickStat label="Join Date" value={formatDate(e.joinDate) || '—'} />
-                <QuickStat label="Total Salary" value={formatCurrency(e.totalSalary ?? 0)} />
-                <QuickStat label="Visa" value={visaLabel} valueClass={visaClass} />
-                {e.contractType && <QuickStat label="Employment" value={labelFor(e.contractType)} />}
-                {e.workLocation && <QuickStat label="Location" value={e.workLocation} />}
+          {/* ── Zone 2: Stat grid (single source of truth for hero summary) ── */}
+          {(() => {
+            const expiredDocs = docs.filter(d => d.status === 'expired' || (d.expiryDate && new Date(d.expiryDate) < new Date())).length
+            const reviewsCount = (reviews ?? []).length
+            const tenureLabel = (() => {
+              if (!e.joinDate) return null
+              const join = new Date(e.joinDate)
+              if (Number.isNaN(join.getTime())) return null
+              const ms = Date.now() - join.getTime()
+              const years = ms / (365.25 * 24 * 3600 * 1000)
+              if (years < 1) {
+                const months = Math.floor(years * 12)
+                return months <= 0 ? 'New hire' : `${months} mo`
+              }
+              return `${years.toFixed(1)} yr`
+            })()
+            const accountRole = accountData?.account?.role
+            const accountIsActive = !!accountData?.account?.isActive
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-px bg-border/40 border-y border-border/50">
+                <StatTile tone="indigo"  icon={Calendar}   label="Join Date"    value={formatDate(e.joinDate) || '—'} />
+                {tenureLabel && (
+                  <StatTile tone="teal"    icon={Clock}      label="Tenure"       value={tenureLabel} />
+                )}
+                <StatTile tone="emerald" icon={DollarSign} label="Total Salary" value={formatCurrency(e.totalSalary ?? 0)} />
+
+                {/* User role — colour-coded badge (only when an account exists) */}
+                {canManage && accountRole && (
+                  <StatTile
+                    tone="indigo"
+                    icon={Shield}
+                    label="Role"
+                    value={
+                      <span className="flex items-center gap-1.5">
+                        <span className={cn(
+                          'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none',
+                          ROLE_BADGE_STYLE[accountRole] ?? '',
+                        )}>
+                          {ROLE_LABELS[accountRole] ?? labelFor(accountRole)}
+                        </span>
+                        <span className={cn(
+                          'inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none border',
+                          accountIsActive
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-muted text-muted-foreground border-border',
+                        )}>
+                          {accountIsActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </span>
+                    }
+                  />
+                )}
+
+                {e.nationality && (() => {
+                  const flag = isoToFlag(resolveCountryIso(e.nationality))
+                  return (
+                    <StatTile
+                      tone="blue"
+                      icon={MapPin}
+                      label="Nationality"
+                      value={
+                        <span className="flex items-center gap-1.5">
+                          {flag && <span className="text-base leading-none">{flag}</span>}
+                          <span className="truncate">{e.nationality}</span>
+                        </span>
+                      }
+                    />
+                  )
+                })()}
+
+                <StatTile
+                  tone="blue"
+                  icon={Plane}
+                  label="Visa Expiry"
+                  value={e.visaExpiry ? formatDate(e.visaExpiry) : '—'}
+                  trailing={e.visaExpiry ? <ExpiryStatus date={e.visaExpiry} /> : null}
+                />
+                <StatTile
+                  tone="violet"
+                  icon={Hash}
+                  label="Emirates ID"
+                  value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : '—'}
+                  trailing={e.emiratesIdExpiry ? <ExpiryStatus date={e.emiratesIdExpiry} /> : null}
+                />
+                <StatTile
+                  tone="amber"
+                  icon={FileText}
+                  label="Passport"
+                  value={e.passportExpiry ? formatDate(e.passportExpiry) : '—'}
+                  trailing={e.passportExpiry ? <ExpiryStatus date={e.passportExpiry} /> : null}
+                />
+                {e.contractType && (
+                  <StatTile tone="slate" icon={Briefcase} label="Employment" value={labelFor(e.contractType)} />
+                )}
+                {e.workLocation && (
+                  <StatTile tone="teal" icon={MapPin} label="Location" value={e.workLocation} />
+                )}
+                {e.managerName && (
+                  <StatTile tone="indigo" icon={UserCheck} label="Manager" value={e.managerName} />
+                )}
+                {e.gradeLevelName && (
+                  <StatTile tone="violet" icon={Star} label="Grade" value={e.gradeLevelName} />
+                )}
+
+                {/* Active loans — only shown when there's an outstanding balance */}
+                {employeeLoanSummary && (
+                  <StatTile
+                    tone="amber"
+                    icon={DollarSign}
+                    label="Active Loan"
+                    value={formatCurrency(employeeLoanSummary.outstanding)}
+                    trailing={
+                      <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0 text-[10px] font-semibold text-amber-800">
+                        {employeeLoanSummary.count} active
+                      </span>
+                    }
+                  />
+                )}
+
+                {expiredDocs > 0 && (
+                  <StatTile
+                    tone="rose"
+                    icon={AlertTriangle}
+                    label="Documents"
+                    value={`${expiredDocs} expired`}
+                    valueClass="text-red-700"
+                  />
+                )}
+                {reviewsCount > 0 && (
+                  <StatTile tone="amber" icon={Star} label="Reviews" value={`${reviewsCount}`} />
+                )}
+
+              </div>
+            )
+          })()}
+
+          {/* ── Zone 3: Account timeline (managers only, when account exists) ── */}
+          {canManage && accountData?.hasAccount && accountData.account && (
+            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 sm:px-5 py-2.5 border-t border-border/60 bg-muted/30">
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Clock className="h-3.5 w-3.5 shrink-0" />
+                <span className="uppercase tracking-wider font-semibold">Last login</span>
+                <span className="text-foreground/90 font-medium tabular-nums">
+                  {accountData.account.lastLoginAt ? formatDateTime(accountData.account.lastLoginAt) : 'Never'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Calendar className="h-3.5 w-3.5 shrink-0" />
+                <span className="uppercase tracking-wider font-semibold">Account created</span>
+                <span className="text-foreground/90 font-medium tabular-nums">
+                  {accountData.account.createdAt ? formatDateTime(accountData.account.createdAt) : '—'}
+                </span>
               </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1056,15 +1367,12 @@ export function EmployeeDetailPage() {
           { value: 'performance', icon: Star, label: 'Performance' },
           { value: 'assets', icon: Package, label: 'Assets' },
           { value: 'leave', icon: CalendarDays, label: 'Leave' },
-          ...(canManage ? [{ value: 'loans', icon: DollarSign, label: 'Loans' }] : []),
           { value: 'attendance', icon: ClipboardList, label: 'Attendance' },
           ...(canManage ? [{ value: 'training', icon: GraduationCap, label: 'Training' }] : []),
-          ...(canManage ? [{ value: 'transfers', icon: ArrowRightLeft, label: 'Transfers' }] : []),
           ...(canManage ? [{ value: 'warnings', icon: AlertTriangle, label: 'Warnings' }] : []),
           ...(canManage ? [{ value: 'dependents', icon: Heart, label: 'Dependents' }] : []),
           ...(canManage ? [{ value: 'notes', icon: StickyNote, label: 'Notes' }] : []),
           ...(canManage ? [{ value: 'updates', icon: History, label: 'Updates' }] : []),
-          ...(canManage ? [{ value: 'account', icon: UserCheck, label: 'Account' }] : []),
         ]
         return (
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -1157,50 +1465,43 @@ export function EmployeeDetailPage() {
 
             {/* Team memberships */}
             <Card>
-              <CardHeader>
+              <CardHeader className="px-4 py-3 border-b">
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-muted-foreground" />
-                  <CardTitle className="text-base">Team Memberships</CardTitle>
+                  <CardTitle className="text-sm font-semibold">Team Memberships</CardTitle>
                   {employeeTeams.length > 0 && (
-                    <Badge variant="secondary" className="text-[10px] ml-auto">{employeeTeams.length} {employeeTeams.length === 1 ? 'team' : 'teams'}</Badge>
+                    <Badge variant="secondary" className="text-[10px] ml-auto">
+                      {employeeTeams.length} {employeeTeams.length === 1 ? 'team' : 'teams'}
+                    </Badge>
                   )}
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3">
                 {employeeTeams.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Users className="h-8 w-8 mx-auto mb-2 opacity-25" />
+                  <div className="text-center py-6 text-muted-foreground">
+                    <Users className="h-7 w-7 mx-auto mb-1.5 opacity-25" />
                     <p className="text-sm font-medium">Not assigned to any team</p>
-                    <p className="text-xs mt-0.5">Team assignments are managed from the Teams page.</p>
+                    <p className="text-[11px] mt-0.5">Team assignments are managed from the Teams page.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {employeeTeams.map(team => (
-                      <div key={team.id} className="group rounded-xl border bg-card hover:bg-muted/30 transition-colors p-3.5">
-                        <div className="flex items-start gap-3">
-                          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                            <Users className="h-4 w-4 text-primary" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-foreground truncate leading-tight">{team.name}</p>
-                            {team.description && (
-                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{team.description}</p>
-                            )}
-                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                              {team.department && (
-                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4">{team.department}</Badge>
-                              )}
-                              <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                                <Users className="h-2.5 w-2.5" />{team.memberCount} {team.memberCount === 1 ? 'member' : 'members'}
-                              </span>
-                              <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-                                <Calendar className="h-2.5 w-2.5" />Joined {formatDate(team.joinedAt)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="divide-y rounded-lg border bg-card overflow-hidden">
+                    {employeeTeams.map(team => {
+                      // Resolve Branch › Division › Department from the team's deptId
+                      const dept = team.departmentId ? orgUnits.find(u => u.id === team.departmentId) : null
+                      const div = dept?.parentId ? orgUnits.find(u => u.id === dept.parentId && u.type === 'division') : null
+                      const branch = div?.parentId
+                        ? orgUnits.find(u => u.id === div.parentId && u.type === 'branch')
+                        : dept?.parentId ? orgUnits.find(u => u.id === dept.parentId && u.type === 'branch') : null
+                      return (
+                        <TeamMembershipRow
+                          key={team.id}
+                          team={team}
+                          branchName={branch?.name ?? null}
+                          divisionName={div?.name ?? null}
+                          departmentName={dept?.name ?? team.department ?? null}
+                        />
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -1437,16 +1738,36 @@ export function EmployeeDetailPage() {
                       <InfoRow label="Visa Type" value={labelFor(e.visaType)} icon={Plane} />
                       <InfoRow label="Visa Number" value={e.visaNumber} icon={Hash} />
                       <InfoRow label="Visa Issue Date" value={e.visaIssueDate ? formatDate(e.visaIssueDate) : null} icon={Calendar} />
-                      <InfoRow label="Visa Expiry" value={e.visaExpiry ? formatDate(e.visaExpiry) : null} icon={Calendar} />
+                      <InfoRow
+                        label="Visa Expiry"
+                        value={e.visaExpiry ? formatDate(e.visaExpiry) : null}
+                        icon={Calendar}
+                        trailing={<ExpiryStatus date={e.visaExpiry} />}
+                      />
                       <InfoRow label="Sponsoring Entity" value={e.sponsoringEntityName} icon={Building2} />
                     </div>
                     <div>
                       <InfoRow label="Emirates ID" value={e.emiratesId} icon={Hash} />
-                      <InfoRow label="EID Expiry" value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : null} icon={Calendar} />
+                      <InfoRow
+                        label="EID Expiry"
+                        value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : null}
+                        icon={Calendar}
+                        trailing={<ExpiryStatus date={e.emiratesIdExpiry} />}
+                      />
                       <InfoRow label="Passport No." value={e.passportNo} icon={Hash} />
-                      <InfoRow label="Passport Expiry" value={e.passportExpiry ? formatDate(e.passportExpiry) : null} icon={Calendar} />
+                      <InfoRow
+                        label="Passport Expiry"
+                        value={e.passportExpiry ? formatDate(e.passportExpiry) : null}
+                        icon={Calendar}
+                        trailing={<ExpiryStatus date={e.passportExpiry} />}
+                      />
                       <InfoRow label="Labour Card No." value={e.labourCardNumber} icon={Hash} />
-                      <InfoRow label="Labour Card Expiry" value={e.labourCardExpiry ? formatDate(e.labourCardExpiry) : null} icon={Calendar} />
+                      <InfoRow
+                        label="Labour Card Expiry"
+                        value={e.labourCardExpiry ? formatDate(e.labourCardExpiry) : null}
+                        icon={Calendar}
+                        trailing={<ExpiryStatus date={e.labourCardExpiry} />}
+                      />
                     </div>
                   </div>
                 )}
@@ -1458,17 +1779,12 @@ export function EmployeeDetailPage() {
           <TabsContent value="documents" className="mt-4">
             <Card>
               {/* ── Header ── */}
-              <CardHeader className="px-6 py-5 border-b">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <CardTitle className="text-base font-semibold">Documents</CardTitle>
-                      {docs.length > 0 && (
-                        <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">{docs.length}</span>
-                      )}
-                    </div>
+              <CardHeader className="px-4 py-3 border-b">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <CardTitle className="text-base font-semibold">Documents</CardTitle>
                     {docs.length > 0 && (
-                      <p className="text-xs text-muted-foreground mt-0.5">Contracts, IDs, certificates and compliance files</p>
+                      <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">{docs.length}</span>
                     )}
                   </div>
                   <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAddDocOpen(true)}>
@@ -1479,7 +1795,7 @@ export function EmployeeDetailPage() {
 
               {/* ── Stats + search ── */}
               {!docsLoading && docs.length > 0 && (
-                <div className="px-6 py-4 border-b bg-muted/20 space-y-3">
+                <div className="px-4 py-2.5 border-b bg-muted/20 space-y-2">
                   <div className="flex flex-wrap gap-2">
                     {docStats.valid > 0 && (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium">
@@ -1579,129 +1895,131 @@ export function EmployeeDetailPage() {
                             <div className="flex-1 h-px bg-border/60 ml-1" />
                           </div>
 
-                          {/* Document cards */}
-                          <div className="space-y-3">
-                            {categoryDocs.map(doc => {
+                          {/* Document cards — same shape as loan card: single block, status-tinted bg, structured rows */}
+                          <div className="space-y-2">
+                            {categoryDocs.slice(0, docVisibleByCategory.get(category) ?? DOC_PAGE_SIZE).map(doc => {
                               const { variant: statusVariant, label: statusLabel } = DOC_STATUS_BADGE[doc.status] ?? { variant: 'secondary' as const, label: labelFor(doc.status) }
                               const fileSizeLabel = doc.fileSize ? formatFileSize(doc.fileSize) : null
                               const ext = doc.fileName ? doc.fileName.split('.').pop()?.toUpperCase() : null
-                              const isExpired = doc.expiryDate && new Date(doc.expiryDate) < new Date()
-                              const isExpiring = doc.status === 'expiring_soon'
-                              const accentCls = DOC_STATUS_BORDER[doc.status] ?? 'border-l-border'
+                              const isExpired = !!(doc.expiryDate && new Date(doc.expiryDate) < new Date())
                               const needsReview = canManageDocuments && (doc.status === 'pending_upload' || doc.status === 'under_review')
+                              const isApprovedExpired = isExpired && (doc.status === 'valid' || doc.status === 'expired' || !!doc.verifiedAt)
+                              const isValid = doc.status === 'valid' && !isExpired
 
                               return (
                                 <div
                                   key={doc.id}
                                   className={cn(
-                                    'group flex gap-4 p-5 rounded-xl border border-border/70 border-l-2 bg-background hover:bg-muted/20 hover:border-border transition-all',
-                                    accentCls,
+                                    'rounded-lg border bg-card px-3.5 py-2.5 transition-colors',
+                                    isValid && 'border-emerald-200 bg-emerald-50/40',
+                                    needsReview && 'border-amber-200 bg-amber-50/40',
+                                    isApprovedExpired && 'border-red-300 bg-red-50/40',
                                   )}
                                 >
-                                  {/* Icon */}
-                                  <div className={cn('shrink-0 h-11 w-11 rounded-xl border flex items-center justify-center', catCfg.bgCls)}>
-                                    <CatIcon className={cn('h-5 w-5', catCfg.iconCls)} />
-                                  </div>
-
-                                  {/* Body */}
-                                  <div className="flex-1 min-w-0 space-y-2.5">
-
-                                    {/* Row 1: title + badge + actions */}
-                                    <div className="flex items-start justify-between gap-3">
+                                  {/* Top: icon + title + status + actions (mirrors loan card) */}
+                                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+                                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                      <div className={cn('shrink-0 h-8 w-8 rounded-md flex items-center justify-center', catCfg.bgCls)}>
+                                        <CatIcon className={cn('h-4 w-4', catCfg.iconCls)} />
+                                      </div>
                                       <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <p className="text-sm font-semibold text-foreground leading-snug">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <p className="text-sm font-bold text-foreground leading-none truncate">
                                             {doc.docType || doc.fileName || 'Untitled'}
                                           </p>
-                                          <Badge variant={statusVariant} className="text-[10px] px-1.5 py-0 shrink-0">{statusLabel}</Badge>
+                                          {isExpired ? (
+                                            <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800">
+                                              <AlertCircle className="h-2.5 w-2.5" />Expired
+                                            </span>
+                                          ) : doc.expiryDate ? (
+                                            <ExpiryStatus date={doc.expiryDate} />
+                                          ) : (
+                                            <Badge variant={statusVariant} className="text-[10px] px-1.5 py-0 leading-none">{statusLabel}</Badge>
+                                          )}
                                         </div>
-                                        {doc.fileName && doc.fileName !== doc.docType && (
-                                          <p className="text-xs text-muted-foreground truncate mt-0.5">{doc.fileName}</p>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-                                        {needsReview && (
-                                          <>
-                                            <Button
-                                              variant="outline" size="sm"
-                                              className="h-7 text-xs text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 opacity-100"
-                                              disabled={verifyDocument.isPending}
-                                              onClick={() => verifyDocument.mutate(doc.id, {
-                                                onSuccess: () => toast.success('Document approved'),
-                                                onError: (err: Error) => toast.error('Failed to approve', err?.message),
-                                              })}
-                                            >
-                                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Approve
-                                            </Button>
-                                            <Button
-                                              variant="outline" size="sm"
-                                              className="h-7 text-xs text-red-700 border-red-200 bg-red-50 hover:bg-red-100 opacity-100"
-                                              onClick={() => { setRejectDocId(doc.id); setRejectDocReason('') }}
-                                            >
-                                              <Ban className="h-3.5 w-3.5 mr-1" />Reject
-                                            </Button>
-                                          </>
-                                        )}
-                                        <Button variant="ghost" size="icon-sm" aria-label="View" onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}>
-                                          <Eye className="h-3.5 w-3.5" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon-sm" aria-label="Download" onClick={() => downloadDoc(doc)}>
-                                          <Download className="h-3.5 w-3.5" />
-                                        </Button>
+                                        <p className="text-[11px] text-muted-foreground mt-1 leading-tight">
+                                          {(ext || fileSizeLabel) && <>{[ext, fileSizeLabel].filter(Boolean).join(' · ')} · </>}
+                                          Uploaded {formatDate(doc.createdAt)}
+                                          {doc.status === 'valid' && doc.verifiedByName && (
+                                            <> · <span className="text-emerald-700 font-medium">✓ {doc.verifiedByName}</span></>
+                                          )}
+                                        </p>
                                       </div>
                                     </div>
 
-                                    {/* Row 2: file meta */}
-                                    {(ext || fileSizeLabel) && (
-                                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                        <FileText className="h-3 w-3 shrink-0" />
-                                        <span>{[ext, fileSizeLabel].filter(Boolean).join(' · ')}</span>
-                                      </div>
-                                    )}
-
-                                    {/* Row 3: dates grid */}
-                                    {(doc.issueDate || doc.expiryDate) && (
-                                      <div className="grid grid-cols-2 gap-x-6 gap-y-1 max-w-sm">
-                                        {doc.issueDate && (
-                                          <div className="space-y-0.5">
-                                            <p className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wide">Issue Date</p>
-                                            <p className="text-xs text-foreground font-medium">{formatDate(doc.issueDate)}</p>
-                                          </div>
-                                        )}
-                                        {doc.expiryDate && (
-                                          <div className="space-y-0.5">
-                                            <p className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wide">Expiry Date</p>
-                                            <p className={cn('text-xs font-semibold', isExpired ? 'text-red-600' : isExpiring ? 'text-amber-600' : 'text-foreground')}>
-                                              {formatDate(doc.expiryDate)}
-                                              {isExpired && <span className="ml-1.5 text-[10px] font-medium text-red-500">· Expired</span>}
-                                              {isExpiring && !isExpired && <span className="ml-1.5 text-[10px] font-medium text-amber-500">· Expiring Soon</span>}
-                                            </p>
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-
-                                    {/* Row 4: footer meta */}
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 border-t border-border/40">
-                                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                                        <Upload className="h-3 w-3" />Uploaded {formatDate(doc.createdAt)}
-                                      </span>
-                                      {doc.status === 'valid' && doc.verifiedByName && (
-                                        <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
-                                          <CheckCircle2 className="h-3 w-3" />
-                                          Approved by {doc.verifiedByName}
-                                          {doc.verifiedAt && <span className="text-emerald-600/60 font-normal">· {formatDate(doc.verifiedAt)}</span>}
-                                        </span>
+                                    <div className="flex items-center gap-1 flex-wrap sm:flex-nowrap shrink-0 self-start sm:self-auto">
+                                      {needsReview && !isExpired && (
+                                        <Button
+                                          variant="success" size="sm" className="h-7 text-xs"
+                                          disabled={verifyDocument.isPending}
+                                          onClick={() => verifyDocument.mutate(doc.id, {
+                                            onSuccess: () => toast.success('Document approved'),
+                                            onError: (err: Error) => toast.error('Failed to approve', err?.message),
+                                          })}
+                                        >
+                                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Approve
+                                        </Button>
                                       )}
-                                      {doc.notes && (
-                                        <span className="text-[11px] text-muted-foreground/70 italic line-clamp-1">{doc.notes}</span>
+                                      {needsReview && (
+                                        <Button
+                                          variant="destructive" size="sm" className="h-7 text-xs"
+                                          onClick={() => { setRejectDocId(doc.id); setRejectDocReason('') }}
+                                        >
+                                          <Ban className="h-3.5 w-3.5 mr-1" />Reject
+                                        </Button>
                                       )}
+                                      <Button variant="ghost" size="icon-sm" aria-label="View" onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}>
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon-sm" aria-label="Download" onClick={() => downloadDoc(doc)}>
+                                        <Download className="h-3.5 w-3.5" />
+                                      </Button>
                                     </div>
                                   </div>
+
+                                  {/* Bottom strip: structured key-value chips (mirrors loan progress strip) */}
+                                  {(doc.docNumber || doc.issueDate || doc.expiryDate) && (
+                                    <div className="flex items-center gap-x-5 gap-y-1 flex-wrap mt-2 pt-2 border-t border-border/40 text-[11px]">
+                                      {doc.docNumber && (
+                                        <span className="flex items-center gap-1.5">
+                                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">Number</span>
+                                          <span className="font-mono tabular-nums text-foreground/90">{doc.docNumber}</span>
+                                        </span>
+                                      )}
+                                      {doc.issueDate && (
+                                        <span className="flex items-center gap-1.5">
+                                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">Issued</span>
+                                          <span className="tabular-nums text-foreground/90">{formatDate(doc.issueDate)}</span>
+                                        </span>
+                                      )}
+                                      {doc.expiryDate && (
+                                        <span className="flex items-center gap-1.5">
+                                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">Expires</span>
+                                          <span className={cn('tabular-nums font-medium', isExpired ? 'text-red-600' : 'text-foreground/90')}>
+                                            {formatDate(doc.expiryDate)}
+                                          </span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               )
                             })}
                           </div>
+                          {(docVisibleByCategory.get(category) ?? DOC_PAGE_SIZE) < categoryDocs.length && (
+                            <button
+                              type="button"
+                              onClick={() => setDocVisibleByCategory(prev => {
+                                const next = new Map(prev)
+                                next.set(category, (next.get(category) ?? DOC_PAGE_SIZE) + DOC_PAGE_SIZE)
+                                return next
+                              })}
+                              className="mt-2.5 w-full px-3 py-2 text-[11px] font-medium text-primary hover:bg-muted/50 rounded-md border border-dashed border-border transition-colors"
+                            >
+                              Show {Math.min(DOC_PAGE_SIZE, categoryDocs.length - (docVisibleByCategory.get(category) ?? DOC_PAGE_SIZE))} more
+                              <span className="text-muted-foreground"> · {categoryDocs.length - (docVisibleByCategory.get(category) ?? DOC_PAGE_SIZE)} hidden</span>
+                            </button>
+                          )}
 
                         </div>
                       )
@@ -1938,6 +2256,11 @@ export function EmployeeDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* ── Loans (HR/payroll only) ── */}
+            {canManage && (
+              <EmployeeLoansPanel employeeId={id!} canManage={canManage} />
+            )}
           </TabsContent>
 
           {/* ── Performance ── */}
@@ -2038,92 +2361,6 @@ export function EmployeeDetailPage() {
           <TabsContent value="leave" className="mt-4">
             <EmployeeLeavePanel employeeId={id!} canManage={canManage} />
           </TabsContent>
-
-          {/* ── Loans ── */}
-          {canManage && (
-            <TabsContent value="loans" className="mt-4">
-              <EmployeeLoansPanel employeeId={id!} canManage={canManage} />
-            </TabsContent>
-          )}
-
-          {/* ── Account ── */}
-          {canManage && (
-            <TabsContent value="account" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">Login Account</CardTitle>
-                    {!accountLoading && accountData?.hasAccount && !isAccessRestricted && (
-                      <Button size="sm" leftIcon={<UserCheck className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
-                        Manage Access
-                      </Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {accountLoading ? (
-                    <div className="space-y-3">
-                      <Skeleton className="h-5 w-40" />
-                      <Skeleton className="h-16 w-full" />
-                    </div>
-                  ) : isAccessRestricted ? (
-                    <div className="flex items-start gap-4 rounded-xl border border-destructive/20 bg-destructive/5 p-5">
-                      <Shield className="h-9 w-9 text-destructive/40 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium">Access unavailable</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Login access cannot be granted or managed for <span className="font-medium">{labelFor(e.status)}</span> employees.
-                        </p>
-                      </div>
-                    </div>
-                  ) : !accountData?.hasAccount ? (
-                    <div className="flex items-start gap-4 rounded-xl border bg-muted/30 p-5">
-                      <Shield className="h-9 w-9 text-muted-foreground/40 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium">No login account yet</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Use the "Grant Access" button above to send an invitation to this employee.
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border bg-muted/30 p-5 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium">Account status</p>
-                        <Badge variant={accountData.account?.isActive ? 'success' : 'secondary'}>
-                          {accountData.account?.isActive ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </div>
-                      <div className="space-y-1.5 text-sm text-muted-foreground">
-                        <p className="flex items-center gap-2">
-                          <Mail className="h-3.5 w-3.5 shrink-0" />
-                          {accountData.account?.email && <CopyableEmail email={accountData.account.email} className="text-sm text-muted-foreground" />}
-                        </p>
-                        {accountData.account?.role && (
-                          <div className="flex items-center gap-2">
-                            <Shield className="h-3.5 w-3.5 shrink-0" />
-                            <span
-                              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${ROLE_BADGE_STYLE[accountData.account.role] ?? ''}`}
-                            >
-                              {ROLE_LABELS[accountData.account.role] ?? labelFor(accountData.account.role)}
-                            </span>
-                          </div>
-                        )}
-                        <p className="flex items-center gap-2">
-                          <Clock className="h-3.5 w-3.5 shrink-0" />
-                          Last login: {accountData.account?.lastLoginAt ? formatDate(accountData.account.lastLoginAt) : 'Never'}
-                        </p>
-                        <p className="flex items-center gap-2">
-                          <Calendar className="h-3.5 w-3.5 shrink-0" />
-                          Created: {formatDate(accountData.account?.createdAt ?? '')}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
 
           {/* ── Attendance ── */}
           <TabsContent value="attendance" className="mt-4 space-y-4">
@@ -2230,50 +2467,6 @@ export function EmployeeDetailPage() {
                                   {tr.status.replace('_', ' ')}
                                 </span>
                               </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
-
-          {/* ── Transfers ─────────────────────────────────────────────────── */}
-          {canManage && (
-            <TabsContent value="transfers" className="mt-4">
-              <Card>
-                <CardHeader><CardTitle className="text-base">Transfer History</CardTitle></CardHeader>
-                <CardContent className="p-0">
-                  {transfersLoading ? (
-                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
-                  ) : !transfersData?.length ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <ArrowRightLeft className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm font-medium">No transfers recorded</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b bg-muted/40">
-                            {['Date', 'From Designation', 'To Designation', 'From Department', 'To Department', 'New Salary', 'Reason'].map(h => (
-                              <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(transfersData as EmployeeTransfer[]).map(t => (
-                            <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                              <td className="px-4 py-2.5 whitespace-nowrap">{formatDate(t.transferDate)}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{t.fromDesignation ?? '—'}</td>
-                              <td className="px-4 py-2.5 font-medium">{t.toDesignation ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{t.fromDepartment ?? '—'}</td>
-                              <td className="px-4 py-2.5">{t.toDepartment ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{t.newSalary ? formatCurrency(Number(t.newSalary)) : '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{t.reason ?? '—'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -2504,7 +2697,7 @@ export function EmployeeDetailPage() {
                               <td className="px-4 py-2.5 font-medium">{log.actorName ?? '—'}</td>
                               <td className="px-4 py-2.5 text-muted-foreground capitalize">{log.actorRole?.replace('_', ' ') ?? '—'}</td>
                               <td className="px-4 py-2.5">
-                                <Badge variant="secondary" className="text-[10px] capitalize">{log.action}</Badge>
+                                <ActionBadge action={log.action} />
                               </td>
                               <td className="px-4 py-2.5 text-muted-foreground">
                                 {log.changes ? Object.keys(log.changes).join(', ') : '—'}

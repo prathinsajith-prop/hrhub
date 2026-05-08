@@ -29,11 +29,11 @@ import {
     useCreateLoan,
     useApproveLoan,
     useRejectLoan,
-    useRecordLoanPayment,
     useDeleteLoan,
 } from '@/hooks/useLoans'
 import { EmployeeSelect } from '@/components/shared'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
+import { LoanScheduleDialog } from '@/components/shared/EmployeeLoansPanel'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { FilterConfig } from '@/lib/filters'
 
@@ -190,7 +190,6 @@ export function LoansPage() {
     })
     const approve = useApproveLoan()
     const deleteLoan = useDeleteLoan()
-    const recordPayment = useRecordLoanPayment()
 
     const loans = data?.data ?? []
     const summary = data?.summary
@@ -202,13 +201,6 @@ export function LoansPage() {
         })
     }
 
-    function handlePayment() {
-        if (!paymentTarget) return
-        recordPayment.mutate(paymentTarget.id, {
-            onSuccess: () => { toast.success(t('loans.paymentRecorded')); setPaymentTarget(null) },
-            onError: () => toast.error(t('loans.actionFailed')),
-        })
-    }
 
     return (
         <PageWrapper>
@@ -257,6 +249,7 @@ export function LoansPage() {
                         <thead className="border-b bg-muted/40">
                             <tr>
                                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('loans.table.employee')}</th>
+                                <th className="text-right px-4 py-3 font-medium text-muted-foreground">Basic Salary</th>
                                 <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('loans.amount')}</th>
                                 <th className="text-right px-4 py-3 font-medium text-muted-foreground">{t('loans.monthlyDeduction')}</th>
                                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('loans.table.progress')}</th>
@@ -269,14 +262,14 @@ export function LoansPage() {
                             {isLoading ? (
                                 Array.from({ length: 5 }).map((_, i) => (
                                     <tr key={i} className="border-b">
-                                        {Array.from({ length: canManage ? 7 : 6 }).map((__, j) => (
+                                        {Array.from({ length: canManage ? 8 : 7 }).map((__, j) => (
                                             <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
                                         ))}
                                     </tr>
                                 ))
                             ) : loans.length === 0 ? (
                                 <tr>
-                                    <td colSpan={canManage ? 7 : 6} className="px-4 py-12 text-center text-muted-foreground">
+                                    <td colSpan={canManage ? 8 : 7} className="px-4 py-12 text-center text-muted-foreground">
                                         <Banknote className="h-10 w-10 mx-auto mb-2 opacity-30" />
                                         <p>{t('loans.noLoans')}</p>
                                     </td>
@@ -297,11 +290,26 @@ export function LoansPage() {
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">{loan.employeeNo}</div>
                                             </td>
-                                            <td className="px-4 py-3 text-right font-medium">
+                                            <td className="px-4 py-3 text-right tabular-nums">
+                                                {loan.employeeBasicSalary != null
+                                                    ? <span className="font-medium text-foreground/90">AED {Number(loan.employeeBasicSalary).toLocaleString()}</span>
+                                                    : <span className="text-muted-foreground">—</span>}
+                                                {loan.employeeTotalSalary != null && (
+                                                    <div className="text-[10px] text-muted-foreground">
+                                                        Total AED {Number(loan.employeeTotalSalary).toLocaleString()}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3 text-right font-medium tabular-nums">
                                                 AED {Number(loan.amount).toLocaleString()}
                                             </td>
-                                            <td className="px-4 py-3 text-right text-muted-foreground">
+                                            <td className="px-4 py-3 text-right text-muted-foreground tabular-nums">
                                                 AED {Number(loan.monthlyDeduction).toLocaleString()}
+                                                {loan.employeeBasicSalary && Number(loan.employeeBasicSalary) > 0 && (
+                                                    <div className="text-[10px] text-muted-foreground">
+                                                        {Math.round((Number(loan.monthlyDeduction) / Number(loan.employeeBasicSalary)) * 100)}% of basic
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3">
                                                 {total > 0 ? (
@@ -329,25 +337,25 @@ export function LoansPage() {
                                                 </span>
                                             </td>
                                             {canManage && (
-                                                <td className="px-4 py-3">
+                                                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center gap-1 justify-end">
                                                         {loan.status === 'pending' && (
                                                             <>
-                                                                <Button variant="outline" size="sm" className="h-7 text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800" onClick={() => handleApprove(loan)} disabled={approve.isPending}>
+                                                                <Button variant="success" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); handleApprove(loan) }} disabled={approve.isPending}>
                                                                     <Check className="h-3.5 w-3.5 mr-1" />
                                                                     Approve
                                                                 </Button>
-                                                                <Button variant="outline" size="sm" className="h-7 text-red-700 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-800" onClick={() => setRejectTarget(loan)}>
+                                                                <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); setRejectTarget(loan) }}>
                                                                     <X className="h-3.5 w-3.5 mr-1" />
                                                                     Reject
                                                                 </Button>
-                                                                <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(loan)} aria-label="Delete loan">
+                                                                <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteTarget(loan) }} aria-label="Delete loan">
                                                                     <Trash2 className="h-3.5 w-3.5" />
                                                                 </Button>
                                                             </>
                                                         )}
                                                         {loan.status === 'active' && (
-                                                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPaymentTarget(loan)}>
+                                                            <Button variant="info" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); setPaymentTarget(loan) }}>
                                                                 {t('loans.recordPayment')}
                                                             </Button>
                                                         )}
@@ -366,18 +374,14 @@ export function LoansPage() {
             {createOpen && <CreateLoanDialog onClose={() => setCreateOpen(false)} />}
             {rejectTarget && <RejectDialog loan={rejectTarget} onClose={() => setRejectTarget(null)} />}
 
-            <ConfirmDialog
-                open={!!paymentTarget}
-                variant="warning"
-                title={t('loans.paymentConfirmTitle')}
-                description={t('loans.paymentConfirmDesc', {
-                    amount: paymentTarget ? `AED ${Number(paymentTarget.monthlyDeduction).toLocaleString()}` : '',
-                    name: paymentTarget?.employeeName ?? '',
-                })}
-                confirmLabel={t('loans.recordPayment')}
-                onConfirm={handlePayment}
-                onOpenChange={(open) => { if (!open) setPaymentTarget(null) }}
-            />
+            {paymentTarget && (
+                <LoanScheduleDialog
+                    loan={paymentTarget}
+                    open={!!paymentTarget}
+                    onClose={() => setPaymentTarget(null)}
+                    canManage={canManage}
+                />
+            )}
 
             <ConfirmDialog
                 open={!!deleteTarget}

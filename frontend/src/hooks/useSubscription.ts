@@ -25,6 +25,9 @@ export interface SubscriptionData {
     }
     plans: PlanInfo[]
     pricing: {
+        /** AED charged per active user per month — the canonical price now. */
+        pricePerUser: number
+        /** @deprecated kept for older clients; equals 5× pricePerUser */
         pricePerFiveEmployees: number
         currency: string
     }

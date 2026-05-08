@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
-import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight, Check, Settings2, SunIcon, MoonIcon, MonitorIcon, ShieldIcon, Loader2Icon, PlusIcon, ArrowRightLeftIcon } from 'lucide-react'
+import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight, Check, SunIcon, MoonIcon, MonitorIcon, Loader2Icon, PlusIcon, ArrowRightLeftIcon } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { labelFor } from '@/lib/enums'
+import { labelFor, ROLE_BADGE_STYLE, ROLE_LABELS } from '@/lib/enums'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -19,13 +19,8 @@ import {
   DropdownMenuSubContent,
   DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { useNotificationsList, useUnreadCount, useMarkNotificationRead, useMarkAllRead } from '@/hooks/useNotifications'
+import { useUnreadCount } from '@/hooks/useNotifications'
 import { useAuthStore } from '@/store/authStore'
 import { useMyTenants, useSwitchTenant } from '@/hooks/useTenants'
 import { GlobalSearch } from '@/components/shared/GlobalSearch'
@@ -33,6 +28,23 @@ import { NewOrganizationDialog } from '@/components/shared/NewOrganizationDialog
 import { ROOT_NAV_LABELS, ROUTES } from '@/lib/routes'
 
 /** Humanise a URL segment as a fallback label (kebab/snake → Title Case). */
+/** Deterministic colour palette for org/tenant avatar tiles. */
+const ORG_COLORS = [
+  'bg-emerald-500',
+  'bg-blue-500',
+  'bg-violet-500',
+  'bg-amber-500',
+  'bg-rose-500',
+  'bg-cyan-500',
+  'bg-fuchsia-500',
+  'bg-indigo-500',
+]
+function orgColor(name: string): string {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff
+  return ORG_COLORS[h % ORG_COLORS.length]
+}
+
 function humaniseSegment(seg: string): string {
   const decoded = decodeURIComponent(seg)
   // UUIDs and long opaque IDs become "Details"
@@ -56,7 +68,7 @@ function humaniseSegment(seg: string): string {
 export function SiteHeader() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const [searchOpen, setSearchOpen] = useState(false)
   const { theme, setTheme } = useTheme()
 
@@ -78,12 +90,8 @@ export function SiteHeader() {
     })
   }, [location.pathname, t])
 
-  const { data: notifData } = useNotificationsList({ limit: 8 })
-  const { data: unreadCount = 0 } = useUnreadCount()
-  const markRead = useMarkNotificationRead()
-  const markAll = useMarkAllRead()
-  const notifications = notifData?.data ?? []
   const { user, tenant, logout } = useAuthStore()
+  const { data: unreadCount = 0 } = useUnreadCount()
   const isAdmin = user?.role === 'super_admin' || user?.role === 'hr_manager'
   const profileRoute = isAdmin ? ROUTES.settings : '/my/account'
   const { data: myTenants } = useMyTenants()
@@ -227,90 +235,19 @@ export function SiteHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Notifications */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              size="icon"
-              className={cn('relative', iconBtn)}
-              aria-label={t('profile.notifications', { defaultValue: 'Notifications' })}
-            >
-              <BellIcon className="size-4" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1.5 end-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" sideOffset={8} className="w-80 p-0">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-              <div>
-                <p className="text-sm font-semibold">{t('profile.notifications', { defaultValue: 'Notifications' })}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {unreadCount > 0
-                    ? t('notifications.unreadCount', { count: unreadCount, defaultValue: `${unreadCount} unread` })
-                    : t('notifications.allRead', { defaultValue: 'All caught up' })}
-                </p>
-              </div>
-              {unreadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => markAll.mutate()}
-                  className="text-[11px] font-medium text-primary hover:underline"
-                >
-                  {t('notifications.markAll', { defaultValue: 'Mark all read' })}
-                </button>
-              )}
-            </div>
-            <div className="max-h-80 overflow-y-auto divide-y divide-border">
-              {notifications.length === 0 ? (
-                <div className="text-center py-10 px-4">
-                  <BellIcon className="size-8 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-xs text-muted-foreground">
-                    {t('notifications.empty', { defaultValue: 'No notifications yet' })}
-                  </p>
-                </div>
-              ) : notifications.slice(0, 8).map((n) => (
-                <button
-                  key={n.id}
-                  type="button"
-                  className={cn(
-                    'w-full flex gap-3 px-4 py-3 text-start cursor-pointer transition-colors hover:bg-muted/40',
-                    !n.isRead && 'bg-primary/5',
-                  )}
-                  onClick={() => { if (!n.isRead) markRead.mutate(n.id) }}
-                >
-                  <span
-                    className={cn(
-                      'mt-1.5 h-2 w-2 rounded-full shrink-0',
-                      n.type === 'warning' && 'bg-amber-500',
-                      n.type === 'error' && 'bg-destructive',
-                      n.type === 'success' && 'bg-emerald-500',
-                      n.type === 'info' && 'bg-blue-500',
-                    )}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className={cn('text-xs leading-tight', !n.isRead ? 'font-semibold' : 'font-medium')}>{n.title}</p>
-                    <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{n.message}</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1">
-                      {n.createdAt ? new Date(n.createdAt).toLocaleString(i18n.language === 'ar' ? 'ar-AE' : 'en-AE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <div className="p-2 border-t border-border">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-xs"
-                onClick={() => navigate(ROUTES.notifications)}
-              >
-                {t('notifications.viewAll', { defaultValue: 'View all notifications' })}
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
+        {/* Notifications — icon button, navigates to full notifications page */}
+        <Button
+          variant="outline"
+          size="icon"
+          className={cn('relative', iconBtn)}
+          aria-label={t('profile.notifications', { defaultValue: 'Notifications' })}
+          onClick={() => navigate(ROUTES.notifications)}
+        >
+          <BellIcon className="size-4" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1.5 end-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
+          )}
+        </Button>
 
         {/* Profile */}
         <DropdownMenu>
@@ -329,113 +266,108 @@ export function SiteHeader() {
             </button>
           </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" sideOffset={8} className="w-72 p-0">
+          <DropdownMenuContent align="end" sideOffset={8} className="w-80 p-0 overflow-hidden">
             {/* Identity card */}
-            <div className="px-4 py-4 bg-muted/40 border-b border-border">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-11 w-11 border border-border shrink-0">
+            <div className="px-5 pt-5 pb-4 bg-gradient-to-b from-muted/50 to-muted/20 border-b border-border">
+              <div className="flex items-start gap-3">
+                <Avatar className="h-12 w-12 border-2 border-background shadow-sm shrink-0">
                   {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
-                  <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                  <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold leading-tight truncate">{user?.name ?? 'User'}</p>
+                  {/* Row 1: Name + role badge */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="text-sm font-bold leading-tight truncate text-foreground">{user?.name ?? 'User'}</p>
+                    {user?.role && (
+                      <span className={cn(
+                        'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none shrink-0',
+                        ROLE_BADGE_STYLE[user.role] ?? '',
+                      )}>
+                        {ROLE_LABELS[user.role] ?? labelFor(user.role)}
+                      </span>
+                    )}
+                  </div>
+                  {/* Row 2: Email */}
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{user?.email}</p>
-                  {user?.role && (
-                    <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      <ShieldIcon className="size-2.5 shrink-0" />
-                      {labelFor(user.role)}
-                    </span>
+
+                  {/* Row 3: Company name + switch icon — clean, no border */}
+                  {tenant && (
+                    <div className="mt-2 flex items-center gap-1.5 min-w-0">
+                      <Building2 className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                      <span className="text-xs font-bold text-foreground truncate flex-1">{tenant.name}</span>
+                      {hasMultipleOrgs && (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger
+                            className={cn(
+                              'h-5 w-5 aspect-square shrink-0 rounded inline-flex items-center justify-center text-blue-700',
+                              'hover:bg-blue-100',
+                              'focus:bg-blue-100 data-[state=open]:bg-blue-100',
+                              'transition-colors [&>svg:last-child]:hidden',
+                            )}
+                            aria-label="Switch organization"
+                            title="Switch organization"
+                          >
+                            {switchingId
+                              ? <Loader2Icon className="h-3 w-3 animate-spin" strokeWidth={2.5} />
+                              : <ArrowRightLeftIcon className="h-3 w-3" strokeWidth={2.5} />}
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuPortal>
+                            <DropdownMenuSubContent className="min-w-56 rounded-xl p-1.5 shadow-lg">
+                              {myTenants?.map(m => (
+                                <DropdownMenuItem
+                                  key={m.tenantId}
+                                  className={cn('gap-2.5 cursor-pointer px-2 py-2 rounded-md', m.tenantId === tenant?.id && 'bg-primary/8 cursor-default')}
+                                  onClick={() => handleSwitchTenant(m.tenantId)}
+                                  disabled={m.tenantId === tenant?.id || !!switchingId}
+                                >
+                                  <div className={cn(
+                                    'h-7 w-7 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 overflow-hidden',
+                                    m.logoUrl ? 'bg-muted text-muted-foreground' : cn(orgColor(m.tenantName ?? '?'), 'text-white'),
+                                  )}>
+                                    {m.logoUrl
+                                      ? <img src={m.logoUrl} alt="" className="h-full w-full object-cover" />
+                                      : (m.tenantName ?? '?').slice(0, 2).toUpperCase()}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate leading-tight">{m.tenantName}</p>
+                                    <p className="text-[11px] text-muted-foreground capitalize truncate leading-tight">
+                                      {labelFor(m.role)}
+                                    </p>
+                                  </div>
+                                  <span className="ml-auto shrink-0">
+                                    {switchingId === m.tenantId
+                                      ? <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+                                      : m.tenantId === tenant?.id
+                                        ? <Check className="size-3.5 text-primary" />
+                                        : null}
+                                  </span>
+                                </DropdownMenuItem>
+                              ))}
+                              <DropdownMenuSeparator className="my-1" />
+                              <DropdownMenuItem
+                                className="gap-2 rounded-md px-2.5 py-2 cursor-pointer"
+                                onClick={() => setNewOrgOpen(true)}
+                              >
+                                <PlusIcon className="size-3.5 text-muted-foreground" />
+                                <span className="text-sm">New organization</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuSubContent>
+                          </DropdownMenuPortal>
+                        </DropdownMenuSub>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
-
-              {/* Org row: plain text + inline Switch button */}
-              {tenant && (
-                <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <Building2 className="size-3.5 shrink-0 text-muted-foreground/70" />
-                    <span className="text-xs text-muted-foreground truncate">{tenant.name}</span>
-                  </div>
-                  {hasMultipleOrgs && (
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="h-7 px-2 rounded-md bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 focus:bg-primary/15 data-[state=open]:bg-primary/15 text-xs font-medium shrink-0 gap-1 [&>svg:last-child]:size-3 [&>svg:last-child]:opacity-60">
-                        {switchingId
-                          ? <Loader2Icon className="size-3 animate-spin" />
-                          : <ArrowRightLeftIcon className="size-3" />}
-                        Switch
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuPortal>
-                        <DropdownMenuSubContent className="min-w-56 rounded-xl p-1.5 shadow-lg">
-                          {myTenants?.map(m => (
-                            <DropdownMenuItem
-                              key={m.tenantId}
-                              className={cn('gap-2.5 cursor-pointer px-2 py-2 rounded-md', m.tenantId === tenant?.id && 'bg-primary/8 cursor-default')}
-                              onClick={() => handleSwitchTenant(m.tenantId)}
-                              disabled={m.tenantId === tenant?.id || !!switchingId}
-                            >
-                              <div className="h-7 w-7 rounded-md bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground shrink-0 overflow-hidden">
-                                {m.logoUrl
-                                  ? <img src={m.logoUrl} alt="" className="h-full w-full object-cover" />
-                                  : m.tenantName.slice(0, 2).toUpperCase()}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate leading-tight">{m.tenantName}</p>
-                                <p className="text-[11px] text-muted-foreground capitalize truncate leading-tight">
-                                  {labelFor(m.role)}
-                                </p>
-                              </div>
-                              <span className="ml-auto shrink-0">
-                                {switchingId === m.tenantId
-                                  ? <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
-                                  : m.tenantId === tenant?.id
-                                    ? <Check className="size-3.5 text-primary" />
-                                    : null}
-                              </span>
-                            </DropdownMenuItem>
-                          ))}
-                          <DropdownMenuSeparator className="my-1" />
-                          <DropdownMenuItem
-                            className="gap-2 rounded-md px-2.5 py-2 cursor-pointer"
-                            onClick={() => setNewOrgOpen(true)}
-                          >
-                            <PlusIcon className="size-3.5 text-muted-foreground" />
-                            <span className="text-sm">New organization</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuSubContent>
-                      </DropdownMenuPortal>
-                    </DropdownMenuSub>
-                  )}
-                </div>
-              )}
             </div>
 
-            {/* Menu actions */}
+            {/* Menu actions — Organization Settings removed by design (use sidebar) */}
             <div className="p-1.5">
-
-              {/* Org Settings — admin only */}
-              {isAdmin && (
-                <DropdownMenuItem onClick={() => navigate('/organization-settings')} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
-                  <Settings2 className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{t('organizations.settings', { defaultValue: 'Organization Settings' })}</span>
-                </DropdownMenuItem>
-              )}
-
-              <DropdownMenuSeparator className="my-1.5" />
-
               <DropdownMenuItem onClick={() => navigate(profileRoute)} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
                 <UserIcon className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">{t('profile.myAccount', { defaultValue: 'My Account' })}</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate(ROUTES.notifications)} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
-                <BellIcon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">{t('profile.notifications', { defaultValue: 'Notifications' })}</span>
-                {unreadCount > 0 && (
-                  <span className="ms-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
               </DropdownMenuItem>
               <DropdownMenuSeparator className="my-1.5" />
               <DropdownMenuItem

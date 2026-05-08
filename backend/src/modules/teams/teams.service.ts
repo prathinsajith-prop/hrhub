@@ -2,7 +2,7 @@ import { eq, and, inArray, sql } from 'drizzle-orm'
 import { Conditions } from '../../lib/filters.js'
 import { db } from '../../db/index.js'
 import { teams, teamMembers, employees, orgUnits } from '../../db/schema/index.js'
-import { resolveAvatarUrl } from '../../plugins/s3.js'
+import { resolveAvatarUrls } from '../../plugins/s3.js'
 
 export interface CreateTeamInput {
     name: string
@@ -153,11 +153,12 @@ export async function getTeamMembers(tenantId: string, teamId: string): Promise<
         .innerJoin(employees, eq(teamMembers.employeeId, employees.id))
         .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.tenantId, tenantId)))
         .orderBy(employees.firstName, employees.lastName)
-    return Promise.all(rows.map(async r => ({
+    const avatarUrls = await resolveAvatarUrls(rows.map(r => r.avatarUrl))
+    return rows.map((r, i) => ({
         ...r,
         role: r.role as TeamMemberRole,
-        avatarUrl: await resolveAvatarUrl(r.avatarUrl),
-    })))
+        avatarUrl: avatarUrls[i],
+    }))
 }
 
 export async function addTeamMembers(
@@ -247,6 +248,8 @@ export async function getMyTeams(tenantId: string, employeeId: string) {
             createdById: teams.createdById,
             memberCount: sql<number>`COALESCE(${memberCounts.count}, 0)`,
             joinedAt: teamMembers.joinedAt,
+            /** This employee's role within the team. */
+            role: teamMembers.role,
         })
         .from(teamMembers)
         .innerJoin(teams, and(eq(teamMembers.teamId, teams.id), eq(teams.isActive, true)))
@@ -319,5 +322,6 @@ export async function getEligibleEmployees(tenantId: string, teamId: string) {
         .where(conds.where())
         .orderBy(employees.firstName, employees.lastName)
         .limit(200)
-    return Promise.all(rows.map(async r => ({ ...r, avatarUrl: await resolveAvatarUrl(r.avatarUrl) })))
+    const avatarUrls = await resolveAvatarUrls(rows.map(r => r.avatarUrl))
+    return rows.map((r, i) => ({ ...r, avatarUrl: avatarUrls[i] }))
 }

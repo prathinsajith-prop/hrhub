@@ -21,11 +21,24 @@ export const ROLE_LABELS: Record<string, string> = {
 }
 
 export const ROLE_BADGE_STYLE: Record<string, string> = {
-    super_admin: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-800',
-    hr_manager:  'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800',
-    pro_officer: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-800',
-    dept_head:   'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800',
-    employee:    'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+    super_admin: 'bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-900/30 dark:text-violet-200 dark:border-violet-800',
+    hr_manager:  'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-800',
+    pro_officer: 'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/30 dark:text-teal-200 dark:border-teal-800',
+    dept_head:   'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-800',
+    employee:    'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700',
+}
+
+/**
+ * Stronger, color-matched border for the "active/selected" state of role chips.
+ * Uses the same color family as ROLE_BADGE_STYLE but at a deeper shade so the
+ * selection is unambiguous while the chip's identity (role color) is preserved.
+ */
+export const ROLE_BADGE_BORDER_ACTIVE: Record<string, string> = {
+    super_admin: 'border-violet-500 dark:border-violet-400',
+    hr_manager:  'border-blue-500 dark:border-blue-400',
+    pro_officer: 'border-teal-500 dark:border-teal-400',
+    dept_head:   'border-amber-500 dark:border-amber-400',
+    employee:    'border-slate-500 dark:border-slate-400',
 }
 
 // ─── Employee status ────────────────────────────────────────────────────────

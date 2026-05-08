@@ -1,7 +1,7 @@
 import { eq, and, desc, isNull, isNotNull, gte, lte, sql, getTableColumns, aliasedTable } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
-import { resolveAvatarUrl } from '../../plugins/s3.js'
+import { resolveAvatarUrl, resolveAvatarUrls } from '../../plugins/s3.js'
 import { documents, employees, users } from '../../db/schema/index.js'
 import { Conditions } from '../../lib/filters.js'
 import type { InferInsertModel } from 'drizzle-orm'
@@ -15,20 +15,22 @@ const DOCUMENT_FIELD_MAP = {
 }
 const DOCUMENT_ALLOWED = new Set(Object.keys(DOCUMENT_FIELD_MAP))
 
-// Maps docType strings → which employee expiry/date fields to update on verify.
-// Only doc types that carry meaningful employee-level date data are listed.
+// Maps docType strings → which employee expiry/date/number fields to update on verify.
+// Only doc types that carry meaningful employee-level data are listed.
 const DOC_EXPIRY_MAP: Record<string, {
     expiryField: 'passportExpiry' | 'emiratesIdExpiry' | 'visaExpiry' | 'labourCardExpiry'
     issueDateField?: 'visaIssueDate'
+    /** Employee column that holds the document's identifier (visa number, EID, etc.). */
+    numberField?: 'passportNo' | 'emiratesId' | 'visaNumber' | 'labourCardNumber'
 }> = {
-    'Passport':       { expiryField: 'passportExpiry' },
-    'Emirates ID':    { expiryField: 'emiratesIdExpiry' },
-    'Visa':           { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
-    'Residence Visa': { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
-    'Entry Permit':   { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
-    'Work Permit':    { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
-    'Visit Visa':     { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate' },
-    'Labour Card':    { expiryField: 'labourCardExpiry' },
+    'Passport':       { expiryField: 'passportExpiry', numberField: 'passportNo' },
+    'Emirates ID':    { expiryField: 'emiratesIdExpiry', numberField: 'emiratesId' },
+    'Visa':           { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate', numberField: 'visaNumber' },
+    'Residence Visa': { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate', numberField: 'visaNumber' },
+    'Entry Permit':   { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate', numberField: 'visaNumber' },
+    'Work Permit':    { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate', numberField: 'visaNumber' },
+    'Visit Visa':     { expiryField: 'visaExpiry', issueDateField: 'visaIssueDate', numberField: 'visaNumber' },
+    'Labour Card':    { expiryField: 'labourCardExpiry', numberField: 'labourCardNumber' },
 }
 
 type NewDocument = InferInsertModel<typeof documents>
@@ -91,7 +93,10 @@ export async function listDocuments(tenantId: string, params: { employeeId?: str
         ? encodeCursor(lastRow.createdAt, lastRow.id)
         : undefined
 
-    const resolvedRows = await Promise.all(pageRows.map(async r => ({ ...r, employeeAvatarUrl: await resolveAvatarUrl(r.employeeAvatarUrl) })))
+    // Batch-resolve avatars: dedupe unique keys, sign each once, map back.
+    // Avoids N sequential awaits when multiple rows share the same employee.
+    const resolvedAvatars = await resolveAvatarUrls(pageRows.map(r => r.employeeAvatarUrl))
+    const resolvedRows = pageRows.map((r, i) => ({ ...r, employeeAvatarUrl: resolvedAvatars[i] }))
     return {
         data: resolvedRows,
         total: cursor ? undefined : total,
@@ -139,14 +144,19 @@ export async function verifyDocument(tenantId: string, id: string, verifiedBy: s
 
         if (!row) return null
 
-        // Propagate expiry / issue dates back to the employee record so that
-        // the Visa & ID tab, compliance alerts, and expiry workers stay in sync.
+        // Propagate the document's identifier and expiry/issue dates back to
+        // the employee record on verify, so the Visa & ID tab, compliance
+        // alerts, and expiry workers stay in sync.
         if (row.employeeId && row.docType) {
             const mapping = DOC_EXPIRY_MAP[row.docType]
             if (mapping) {
                 const patch: Record<string, unknown> = { updatedAt: new Date() }
                 if (row.expiryDate) patch[mapping.expiryField] = row.expiryDate
                 if (mapping.issueDateField && row.issueDate) patch[mapping.issueDateField] = row.issueDate
+                if (mapping.numberField && row.docNumber && row.docNumber.trim()) {
+                    patch[mapping.numberField] = row.docNumber.trim()
+                }
+                // Only update if at least one real field beyond updatedAt is set.
                 if (Object.keys(patch).length > 1) {
                     await tx.update(employees)
                         .set(patch as any)

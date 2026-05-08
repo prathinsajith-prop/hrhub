@@ -35,12 +35,13 @@ export function useCreateDocument() {
 export function useUploadDocument() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: async (input: { file: File; employeeId?: string; category: string; docType?: string; issueDate?: string; expiryDate?: string; notes?: string }) => {
+        mutationFn: async (input: { file: File; employeeId?: string; category: string; docType?: string; docNumber?: string; issueDate?: string; expiryDate?: string; notes?: string }) => {
             const fd = new FormData()
             fd.append('file', input.file)
             if (input.employeeId) fd.append('employeeId', input.employeeId)
             fd.append('category', input.category)
             if (input.docType) fd.append('docType', input.docType)
+            if (input.docNumber) fd.append('docNumber', input.docNumber)
             if (input.issueDate) fd.append('issueDate', input.issueDate)
             if (input.expiryDate) fd.append('expiryDate', input.expiryDate)
             if (input.notes) fd.append('notes', input.notes)

@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import { eq, and, desc, isNull, sql } from 'drizzle-orm'
 import { log } from '../../lib/logger.js'
 import { db } from '../../db/index.js'
-import { tenants, users, tenantMemberships, entities, employees } from '../../db/schema/index.js'
+import { tenants, users, tenantMemberships, entities, employees, gradeLevels } from '../../db/schema/index.js'
 import {
     type MemberRole,
     buildPermissionMap,
@@ -152,6 +152,32 @@ export async function createTenant(actorUserId: string, input: {
             acceptedAt: new Date(),
             isActive: true,
         })
+
+        // 2b. Seed default grade levels so the tenant can assign grades on day 1.
+        // C-Level is the executive grade (tagged 'employee' per product spec);
+        // Director Level is tagged 'director'. Admins can edit / extend later.
+        await tx.insert(gradeLevels).values([
+            {
+                tenantId: tenant.id,
+                name: 'C-Level',
+                code: 'CL',
+                level: 1,
+                hierarchy: 'Leadership',
+                roles: ['employee'],
+                description: 'Executive / C-Suite leadership.',
+                sortOrder: 1,
+            },
+            {
+                tenantId: tenant.id,
+                name: 'Director Level',
+                code: 'DL',
+                level: 2,
+                hierarchy: 'Leadership',
+                roles: ['director'],
+                description: 'Director-level leadership reporting into C-Suite.',
+                sortOrder: 2,
+            },
+        ])
 
         // 3. Create a default entity for the tenant
         const [entity] = await tx.insert(entities).values({
