@@ -108,6 +108,8 @@ export interface Employee {
   workLocation?: string
   probationEndDate?: string
   contractEndDate?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 // Recruitment
