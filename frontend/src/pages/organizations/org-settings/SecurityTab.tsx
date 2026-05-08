@@ -1,16 +1,24 @@
 import { useState } from 'react'
-import { Shield, Globe, AlertCircle, Plus, Trash2, FileText } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Shield, Globe, AlertCircle, Plus, Trash2, FileText, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/components/ui/overlays'
 import {
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import {
     useIpAllowlist,
     useUpdateIpAllowlist,
     useSecuritySettings,
     useUpdateSecuritySettings,
 } from '@/hooks/useSettings'
+import { useDeleteTenant } from '@/hooks/useTenants'
+import { useAuthStore } from '@/store/authStore'
+import { ApiError } from '@/lib/api'
 import { Section } from './_shared'
 
 // ─── Security Tab ─────────────────────────────────────────────────────────────
@@ -25,6 +33,30 @@ export function SecurityTab() {
     const updateList = useUpdateIpAllowlist()
     const [list, setList] = useState<string[]>([])
     const [newEntry, setNewEntry] = useState('')
+    const tenant = useAuthStore(s => s.tenant)
+    const userRole = useAuthStore(s => s.user?.role)
+    const logout = useAuthStore(s => s.logout)
+    const navigate = useNavigate()
+    const deleteTenant = useDeleteTenant()
+    const [deleteOpen, setDeleteOpen] = useState(false)
+    const [confirmName, setConfirmName] = useState('')
+
+    const canDelete = userRole === 'super_admin'
+
+    async function handleDeleteOrg() {
+        if (!tenant?.name) return
+        try {
+            await deleteTenant.mutateAsync(confirmName)
+            toast.success('Organization deleted', `${tenant.name} has been permanently removed.`)
+            setDeleteOpen(false)
+            setConfirmName('')
+            // Sign the user out — their JWT now points to a deleted tenant
+            logout()
+            navigate('/login', { replace: true })
+        } catch (err) {
+            toast.error('Delete failed', err instanceof ApiError ? err.message : 'Could not delete organization.')
+        }
+    }
 
     // Sync IP list when data loads from server — track previous value in state to avoid
     // overwriting user edits on every re-render.
@@ -163,12 +195,77 @@ export function SecurityTab() {
                     <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20 bg-destructive/5">
                         <div className="min-w-0">
                             <p className="text-sm font-medium text-destructive">Delete Organization</p>
-                            <p className="text-xs text-muted-foreground">Permanently delete this workspace and all its data</p>
+                            <p className="text-xs text-muted-foreground">
+                                {canDelete
+                                    ? 'Permanently delete this workspace and all its data'
+                                    : 'Only a super admin can delete this organization'}
+                            </p>
                         </div>
-                        <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />} className="shrink-0">Delete</Button>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                            className="shrink-0"
+                            disabled={!canDelete}
+                            onClick={() => { setConfirmName(''); setDeleteOpen(true) }}
+                        >
+                            Delete
+                        </Button>
                     </div>
                 </div>
             </Section>
+
+            <Dialog open={deleteOpen} onOpenChange={(o) => { if (!o) { setDeleteOpen(false); setConfirmName('') } }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            Delete Organization
+                        </DialogTitle>
+                        <DialogDescription>
+                            This will permanently delete <span className="font-semibold text-foreground">{tenant?.name}</span> and
+                            every employee, document, payroll record, and team it contains. This cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-3 py-1">
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 leading-relaxed">
+                            All members will lose access immediately. You will be signed out after the deletion completes.
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="confirm-name">
+                                Type <span className="font-mono font-semibold">{tenant?.name}</span> to confirm
+                            </Label>
+                            <Input
+                                id="confirm-name"
+                                value={confirmName}
+                                onChange={e => setConfirmName(e.target.value)}
+                                placeholder={tenant?.name ?? ''}
+                                autoComplete="off"
+                                className="font-mono"
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setDeleteOpen(false); setConfirmName('') }}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteOrg}
+                            disabled={
+                                deleteTenant.isPending
+                                || !tenant?.name
+                                || confirmName.trim().toLowerCase() !== tenant.name.trim().toLowerCase()
+                            }
+                            leftIcon={deleteTenant.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        >
+                            {deleteTenant.isPending ? 'Deleting…' : 'Delete forever'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

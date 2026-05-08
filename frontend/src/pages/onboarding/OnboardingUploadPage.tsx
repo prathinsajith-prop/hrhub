@@ -403,7 +403,7 @@ export function OnboardingUploadPage() {
                     <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mx-auto">
                         <AlertCircle className="h-6 w-6 text-red-500" />
                     </div>
-                    <h2 className="text-lg font-bold text-gray-900">Link Expired or Invalid</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">Link Expired or Invalid</h2>
                     <p className="text-sm text-gray-500">This upload link has expired or is not valid. Please contact your HR team to request a new link.</p>
                 </div>
             </div>
@@ -427,7 +427,7 @@ export function OnboardingUploadPage() {
                             <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-0.5">
                                 {info.companyName ?? 'Your Company'}
                             </p>
-                            <h1 className="text-xl font-bold text-gray-900">Welcome, {info.employeeName}!</h1>
+                            <h1 className="text-xl font-semibold text-gray-900">Welcome, {info.employeeName}!</h1>
                             <p className="text-sm text-gray-500 mt-1">
                                 Please upload the required documents for each onboarding step below.
                                 Your HR team will review and verify them.

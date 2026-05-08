@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react'
 import { z } from 'zod'
-import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X, Building2, UserMinus, GitBranch, ChevronDown } from 'lucide-react'
+import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X, Building2, UserMinus, ChevronDown } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
@@ -74,7 +74,7 @@ interface TeamFormDialogProps {
 
 const DEPT_NONE = '__none__'
 
-function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDepartmentName }: TeamFormDialogProps) {
+export function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDepartmentName }: TeamFormDialogProps) {
     const { data: orgUnits = [] } = useOrgUnits()
     const departments = orgUnits.filter(u => u.type === 'department' && u.isActive)
     const createMut = useCreateTeam()
@@ -133,7 +133,6 @@ function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDep
                             value={name}
                             onChange={e => { setName(e.target.value); setErrors(err => ({ ...err, name: '' })) }}
                             placeholder="e.g. Frontend Squad"
-                            autoFocus
                             aria-invalid={!!errors.name}
                         />
                     </FormField>
@@ -185,7 +184,7 @@ function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDep
 
 // ── Add Members Dialog ────────────────────────────────────────────────────────
 
-function AddMembersDialog({ teamId, open, onClose }: { teamId: string; open: boolean; onClose: () => void }) {
+export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; open: boolean; onClose: () => void }) {
     const [search, setSearch] = useState('')
     const [selected, setSelected] = useState<Set<string>>(new Set())
     const [role, setRole] = useState<TeamMemberRole>('member')
@@ -266,7 +265,7 @@ function AddMembersDialog({ teamId, open, onClose }: { teamId: string; open: boo
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
                             className="pl-8 h-8 text-sm"
-                            placeholder="Search employees..."
+                            placeholder="Search employees…"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                         />
@@ -292,7 +291,7 @@ function AddMembersDialog({ teamId, open, onClose }: { teamId: string; open: boo
 
                     <ScrollArea className="h-56 rounded-md border">
                         {isLoading ? (
-                            <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">Loading...</div>
+                            <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">Loading…</div>
                         ) : filtered.length === 0 ? (
                             <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
                                 {search ? 'No employees match your search' : 'No eligible employees'}
@@ -827,7 +826,7 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
                     </TabsList>
                     <TabsContent value="all">
                         {teamsLoading ? (
-                            <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>
+                            <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
                         ) : allTeams.length === 0 ? (
                             <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
                                 <Users className="h-8 w-8 text-muted-foreground/40" />
@@ -838,7 +837,7 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
                     </TabsContent>
                     <TabsContent value="mine">
                         {myTeamsLoading ? (
-                            <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>
+                            <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
                         ) : myTeams.length === 0 ? (
                             <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
                                 <Users className="h-8 w-8 text-muted-foreground/40" />
@@ -851,7 +850,7 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
                 <div className="space-y-4">
                     <h2 className="text-sm font-medium text-muted-foreground">Teams you belong to</h2>
                     {myTeamsLoading ? (
-                        <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>
+                        <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
                     ) : myTeams.length === 0 ? (
                         <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
                             <Users className="h-8 w-8 text-muted-foreground/40" />
@@ -895,30 +894,12 @@ export function TeamPage() {
                 description="Teams, departments, and org structure"
             />
 
-            <Tabs defaultValue="teams" className="space-y-4">
-                <TabsList>
-                    <TabsTrigger value="teams">
-                        <Users className="h-3.5 w-3.5 mr-1.5" />
-                        Teams
-                    </TabsTrigger>
-                    {canManageOrg && (
-                        <TabsTrigger value="structure">
-                            <GitBranch className="h-3.5 w-3.5 mr-1.5" />
-                            Org Structure
-                        </TabsTrigger>
-                    )}
-                </TabsList>
-
-                <TabsContent value="teams" className="mt-0">
-                    <TeamsPanel canManage={canManage} canViewAll={canViewAll} userId={userId} />
-                </TabsContent>
-
-                {canManageOrg && (
-                    <TabsContent value="structure" className="mt-0">
-                        <OrgStructureTab />
-                    </TabsContent>
-                )}
-            </Tabs>
+            {/* Teams tab hidden for now — manage teams via the Org Structure tree. */}
+            {canManageOrg ? (
+                <OrgStructureTab />
+            ) : (
+                <TeamsPanel canManage={canManage} canViewAll={canViewAll} userId={userId} />
+            )}
         </PageWrapper>
     )
 }

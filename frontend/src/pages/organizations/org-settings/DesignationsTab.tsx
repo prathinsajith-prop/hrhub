@@ -69,7 +69,6 @@ export function DesignationsTab() {
                                     {editingId === d.id ? (
                                         <>
                                             <Input
-                                                autoFocus
                                                 className="flex-1 h-8"
                                                 value={editName}
                                                 onChange={e => setEditName(e.target.value)}
@@ -119,7 +118,6 @@ export function DesignationsTab() {
                     {addingNew ? (
                         <div className="flex items-center gap-2 mt-2">
                             <Input
-                                autoFocus
                                 className="flex-1"
                                 placeholder="e.g. Senior Engineer"
                                 value={newName}

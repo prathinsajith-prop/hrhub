@@ -88,8 +88,8 @@ export default async function subscriptionRoutes(fastify: any): Promise<void> {
     fastify.post('/checkout', { ...adminAuth, schema: { tags: ['Subscription'] } }, async (request: any, reply: any) => {
         const { desiredQuota, action } = request.body as { desiredQuota?: number; action?: string }
 
-        if (!desiredQuota || typeof desiredQuota !== 'number' || desiredQuota < 5 || desiredQuota > 10000) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'desiredQuota must be between 5 and 10000' })
+        if (!desiredQuota || typeof desiredQuota !== 'number' || desiredQuota < 1 || desiredQuota > 10000) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'desiredQuota must be between 1 and 10000' })
         }
         const resolvedAction: 'upgrade' | 'quota_update' = action === 'quota_update' ? 'quota_update' : 'upgrade'
 
@@ -153,8 +153,8 @@ export default async function subscriptionRoutes(fastify: any): Promise<void> {
     fastify.patch('/quota', { ...adminAuth, schema: { tags: ['Subscription'] } }, async (request: any, reply: any) => {
         const { newQuota } = request.body as { newQuota?: number }
 
-        if (!newQuota || typeof newQuota !== 'number' || newQuota < 5 || newQuota > 10000) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'newQuota must be between 5 and 10000' })
+        if (!newQuota || typeof newQuota !== 'number' || newQuota < 1 || newQuota > 10000) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'newQuota must be between 1 and 10000' })
         }
 
         const [tenant] = await db
