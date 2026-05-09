@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 import type { OrgUnitType } from '@/lib/org-unit-meta'
 export type { OrgUnitType } from '@/lib/org-unit-meta'
 
@@ -64,6 +65,7 @@ export function useCreateOrgUnit() {
     return useMutation({
         mutationFn: (data: OrgUnitInput) => api.post<{ data: OrgUnit }>('/org-units', data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['org-units'] }),
+        onError: (err: Error) => toast.error('Failed to create org unit', err.message),
     })
 }
 
@@ -73,6 +75,7 @@ export function useUpdateOrgUnit() {
         mutationFn: ({ id, data }: { id: string; data: Partial<OrgUnitInput> }) =>
             api.patch<{ data: OrgUnit }>(`/org-units/${id}`, data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['org-units'] }),
+        onError: (err: Error) => toast.error('Failed to update org unit', err.message),
     })
 }
 
@@ -81,6 +84,7 @@ export function useDeleteOrgUnit() {
     return useMutation({
         mutationFn: (id: string) => api.delete(`/org-units/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['org-units'] }),
+        onError: (err: Error) => toast.error('Failed to delete org unit', err.message),
     })
 }
 
@@ -90,5 +94,6 @@ export function useCascadeManager() {
         mutationFn: (departmentId: string) =>
             api.post<{ data: { updated: number; managerName: string } }>(`/org-units/${departmentId}/cascade-manager`, {}),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+        onError: (err: Error) => toast.error('Failed to cascade manager', err.message),
     })
 }

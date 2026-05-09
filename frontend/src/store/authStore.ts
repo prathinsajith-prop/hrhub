@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { User, Tenant } from '@/types'
 import { socket } from '@/lib/socket'
+import { apiBase } from '@/lib/apiBase'
 
 // Key used to decide which storage to use across page loads
 const KEEP_SIGNED_IN_KEY = 'hrhub-keep-signed-in'
@@ -73,7 +74,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         const token = get().accessToken
         if (token) {
-          fetch('/api/v1/auth/logout', {
+          fetch(`${apiBase}/auth/logout`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
           }).catch(() => { })
@@ -89,7 +90,7 @@ export const useAuthStore = create<AuthState>()(
         const { refreshToken } = get()
         if (!refreshToken) return false
         try {
-          const res = await fetch('/api/v1/auth/refresh', {
+          const res = await fetch(`${apiBase}/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refreshToken }),

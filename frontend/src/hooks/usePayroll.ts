@@ -101,14 +101,7 @@ export function useDownloadWpsSif() {
     return useMutation({
         onError: () => toast.error('Download failed', 'Could not download the WPS SIF file.'),
         mutationFn: async (runId: string) => {
-            const { useAuthStore } = await import('@/store/authStore')
-            const token = useAuthStore.getState().accessToken
-            const res = await fetch(`/api/v1/payroll/${runId}/wps-sif`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
-                cache: 'no-store',
-            })
-            if (!res.ok) throw new Error('Failed to download WPS file')
-            const blob = await res.blob()
+            const blob = await api.download(`/payroll/${runId}/wps-sif`)
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url
@@ -126,14 +119,7 @@ export function useDownloadPayslip() {
     return useMutation({
         onError: () => toast.error('Download failed', 'Could not download the payslip.'),
         mutationFn: async (payslipId: string) => {
-            const { useAuthStore } = await import('@/store/authStore')
-            const token = useAuthStore.getState().accessToken
-            const res = await fetch(`/api/v1/payroll/payslips/${payslipId}/download`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
-                cache: 'no-store',
-            })
-            if (!res.ok) throw new Error('Failed to download payslip')
-            const blob = await res.blob()
+            const blob = await api.download(`/payroll/payslips/${payslipId}/download`)
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url
