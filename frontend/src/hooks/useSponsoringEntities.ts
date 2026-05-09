@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 export interface SponsoringEntity {
     id: string
@@ -24,6 +25,7 @@ export function useCreateSponsoringEntity() {
         mutationFn: (data: { name: string; sortOrder?: number }) =>
             api.post<{ data: SponsoringEntity }>('/sponsoring-entities', data).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['sponsoring-entities'] }),
+        onError: (err: Error) => toast.error('Failed to create sponsoring entity', err.message),
     })
 }
 
@@ -33,6 +35,7 @@ export function useUpdateSponsoringEntity() {
         mutationFn: ({ id, data }: { id: string; data: { name?: string; isActive?: boolean; sortOrder?: number } }) =>
             api.patch<{ data: SponsoringEntity }>(`/sponsoring-entities/${id}`, data).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['sponsoring-entities'] }),
+        onError: (err: Error) => toast.error('Failed to update sponsoring entity', err.message),
     })
 }
 
@@ -41,5 +44,6 @@ export function useDeleteSponsoringEntity() {
     return useMutation({
         mutationFn: (id: string) => api.delete(`/sponsoring-entities/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['sponsoring-entities'] }),
+        onError: (err: Error) => toast.error('Failed to delete sponsoring entity', err.message),
     })
 }
