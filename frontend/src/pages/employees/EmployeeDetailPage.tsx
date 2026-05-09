@@ -55,6 +55,7 @@ import { useActivityLogs, type ActivityLog } from '@/hooks/useAudit'
 import { useEmployeeWarnings, useCreateEmployeeWarning, useDeleteEmployeeWarning, useWarningDocumentUrl, type CreateWarningInput } from '@/hooks/useEmployeeWarnings'
 import { useSponsoringEntities, useCreateSponsoringEntity, type SponsoringEntity } from '@/hooks/useSponsoringEntities'
 import { useEmployeeTraining, TRAINING_STATUS_STYLE, type TrainingRecord } from '@/hooks/useTraining'
+import { useInitiateExit, useSettlementPreview } from '@/hooks/useExit'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { EditEmployeeDialog, EditEmploymentDialog, EditPayrollDialog, AssignAssetToEmployeeDialog } from '@/components/shared/action-dialogs'
 import { InviteEmployeeDialog } from '@/components/shared/InviteEmployeeDialog'
@@ -142,6 +143,40 @@ const InfoRow = React.memo(function InfoRow({ label, value, icon: Icon, trailing
       <span className="text-sm text-muted-foreground w-36 shrink-0">{label}</span>
       <span className="text-sm font-medium text-foreground truncate flex-1">{hasValue ? value : ''}</span>
       {trailing && <span className="shrink-0">{trailing}</span>}
+    </div>
+  )
+})
+
+/** View + download link shown in InfoRow trailing slot when a document file exists */
+const DocLink = React.memo(function DocLink({
+  doc,
+  onView,
+  onDownload,
+}: {
+  doc: DocRecord
+  onView: () => void
+  onDownload: () => void
+}) {
+  return (
+    <div className="flex items-center gap-1 ml-auto shrink-0">
+      <button
+        type="button"
+        aria-label={`View ${doc.docType ?? 'document'}`}
+        title={`View ${doc.docType ?? 'document'}`}
+        onClick={onView}
+        className="inline-flex items-center gap-1 text-[10px] font-medium text-primary hover:underline px-2 py-0.5 rounded-md hover:bg-primary/5 transition-colors"
+      >
+        <Eye className="h-3 w-3" />View file
+      </button>
+      <button
+        type="button"
+        aria-label="Download document"
+        title="Download"
+        onClick={onDownload}
+        className="inline-flex items-center p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+      >
+        <Download className="h-3 w-3" />
+      </button>
     </div>
   )
 })
@@ -888,10 +923,12 @@ export function EmployeeDetailPage() {
   const updateEmployee = useUpdateEmployee(id!)
   const updateStatus = useUpdateEmployeeStatus()
   const archiveEmployee = useArchiveEmployee()
+  const initiateExit = useInitiateExit()
   const verifyDocument = useVerifyDocument()
   const rejectDocument = useRejectDocument()
   const [activeTab, setActiveTab] = React.useState('personal')
-  const [statusTarget, setStatusTarget] = React.useState<{ status: 'active' | 'suspended' | 'terminated' } | null>(null)
+  const [statusTarget, setStatusTarget] = React.useState<{ status: 'active' | 'suspended' } | null>(null)
+  const [terminateOpen, setTerminateOpen] = React.useState(false)
   const [archiveConfirm, setArchiveConfirm] = React.useState(false)
   const [editOpen, setEditOpen] = React.useState(false)
   const [editEmploymentOpen, setEditEmploymentOpen] = React.useState(false)
@@ -963,9 +1000,8 @@ export function EmployeeDetailPage() {
   const isAccessRestricted = ['terminated', 'suspended'].includes(e?.status ?? '')
 
   const STATUS_CONFIG = {
-    active:     { label: 'Activate',  past: 'activated',  confirmLabel: 'Activate',  variant: 'success'     as const, description: 'This will set the employee status back to active.' },
-    suspended:  { label: 'Suspend',   past: 'suspended',  confirmLabel: 'Suspend',   variant: 'warning'     as const, description: 'The employee will be suspended and cannot log in.' },
-    terminated: { label: 'Terminate', past: 'terminated', confirmLabel: 'Terminate', variant: 'destructive' as const, description: 'This will mark the employee as terminated. This can be reversed later.' },
+    active:    { label: 'Activate', past: 'activated', confirmLabel: 'Activate', variant: 'success'  as const, description: 'This will set the employee status back to active.' },
+    suspended: { label: 'Suspend',  past: 'suspended', confirmLabel: 'Suspend',  variant: 'warning'  as const, description: 'The employee will be suspended and cannot log in.' },
   }
 
   function handleStatusChange() {
@@ -1183,7 +1219,7 @@ export function EmployeeDetailPage() {
                         )}
                         {e.status !== 'terminated' && (
                           <DropdownMenuItem
-                            onClick={() => setStatusTarget({ status: 'terminated' })}
+                            onClick={() => setTerminateOpen(true)}
                             className="text-destructive focus:text-destructive focus:bg-destructive/10"
                           >
                             <UserX className="h-3.5 w-3.5 mr-2" />
@@ -1377,8 +1413,7 @@ export function EmployeeDetailPage() {
         const allTabs: TabDef[] = [
           { value: 'personal', icon: User, label: 'Personal' },
           { value: 'employment', icon: Briefcase, label: 'Employment' },
-          { value: 'visa', icon: Plane, label: 'Visa & ID' },
-          { value: 'documents', icon: FileText, label: 'Documents' },
+          { value: 'documents', icon: FileText, label: 'Documents & ID' },
           { value: 'payroll', icon: CreditCard, label: 'Payroll' },
           { value: 'performance', icon: Star, label: 'Performance' },
           { value: 'assets', icon: Package, label: 'Assets' },
@@ -1666,8 +1701,8 @@ export function EmployeeDetailPage() {
             </Card>
           </TabsContent>
 
-          {/* ── Visa & ID ── */}
-          <TabsContent value="visa" className="mt-4">
+          {/* ── Documents & ID (visa info + uploaded documents) ── */}
+          <TabsContent value="documents" className="mt-4 space-y-4">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1817,51 +1852,64 @@ export function EmployeeDetailPage() {
                       </Button>
                     </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-                    <div>
-                      <InfoRow label="Visa Type" value={labelFor(e.visaType)} icon={Plane} />
-                      <InfoRow label="Visa Number" value={e.visaNumber} icon={Hash} />
-                      <InfoRow label="Visa Issue Date" value={e.visaIssueDate ? formatDate(e.visaIssueDate) : null} icon={Calendar} />
-                      <InfoRow
-                        label="Visa Expiry"
-                        value={e.visaExpiry ? formatDate(e.visaExpiry) : null}
-                        icon={Calendar}
-                        trailing={<ExpiryStatus date={e.visaExpiry} />}
-                      />
-                      <InfoRow label="Sponsoring Entity" value={e.sponsoringEntityName} icon={Building2} />
+                ) : (() => {
+                  // Find the best matching document for each ID type (prefer 'valid', else most recent)
+                  // Pick the most-recent valid doc for a given set of docTypes, falling back to most-recent non-rejected
+                  const findDoc = (types: string[]) => {
+                    const byRecent = (a: DocRecord, b: DocRecord) =>
+                      new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
+                    const matches = docs.filter(d => types.includes(d.docType ?? '') && d.status !== 'rejected').sort(byRecent)
+                    const valid = matches.filter(d => d.status === 'valid')
+                    return valid[0] ?? matches[0] ?? undefined
+                  }
+                  const passportDoc = findDoc(['Passport'])
+                  const eidDoc = findDoc(['Emirates ID'])
+                  const visaDoc = findDoc(['Visa', 'Residence Visa', 'Entry Permit', 'Work Permit', 'Visit Visa', 'Employment Visa'])
+                  const labourDoc = findDoc(['Labour Card'])
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                      <div>
+                        <InfoRow label="Visa Type" value={labelFor(e.visaType)} icon={Plane} />
+                        <InfoRow label="Visa Number" value={e.visaNumber} icon={Hash} trailing={visaDoc ? <DocLink doc={visaDoc} onView={() => setViewDoc({ id: visaDoc.id, fileName: visaDoc.fileName ?? visaDoc.docType })} onDownload={() => downloadDoc(visaDoc)} /> : undefined} />
+                        <InfoRow label="Visa Issue Date" value={e.visaIssueDate ? formatDate(e.visaIssueDate) : null} icon={Calendar} />
+                        <InfoRow
+                          label="Visa Expiry"
+                          value={e.visaExpiry ? formatDate(e.visaExpiry) : null}
+                          icon={Calendar}
+                          trailing={<ExpiryStatus date={e.visaExpiry} />}
+                        />
+                        <InfoRow label="Sponsoring Entity" value={e.sponsoringEntityName} icon={Building2} />
+                      </div>
+                      <div>
+                        <InfoRow label="Emirates ID" value={e.emiratesId} icon={Hash} trailing={eidDoc ? <DocLink doc={eidDoc} onView={() => setViewDoc({ id: eidDoc.id, fileName: eidDoc.fileName ?? eidDoc.docType })} onDownload={() => downloadDoc(eidDoc)} /> : undefined} />
+                        <InfoRow
+                          label="EID Expiry"
+                          value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : null}
+                          icon={Calendar}
+                          trailing={<ExpiryStatus date={e.emiratesIdExpiry} />}
+                        />
+                        <InfoRow label="Passport No." value={e.passportNo} icon={Hash} trailing={passportDoc ? <DocLink doc={passportDoc} onView={() => setViewDoc({ id: passportDoc.id, fileName: passportDoc.fileName ?? passportDoc.docType })} onDownload={() => downloadDoc(passportDoc)} /> : undefined} />
+                        <InfoRow
+                          label="Passport Expiry"
+                          value={e.passportExpiry ? formatDate(e.passportExpiry) : null}
+                          icon={Calendar}
+                          trailing={<ExpiryStatus date={e.passportExpiry} />}
+                        />
+                        <InfoRow label="Labour Card No." value={e.labourCardNumber} icon={Hash} trailing={labourDoc ? <DocLink doc={labourDoc} onView={() => setViewDoc({ id: labourDoc.id, fileName: labourDoc.fileName ?? labourDoc.docType })} onDownload={() => downloadDoc(labourDoc)} /> : undefined} />
+                        <InfoRow
+                          label="Labour Card Expiry"
+                          value={e.labourCardExpiry ? formatDate(e.labourCardExpiry) : null}
+                          icon={Calendar}
+                          trailing={<ExpiryStatus date={e.labourCardExpiry} />}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <InfoRow label="Emirates ID" value={e.emiratesId} icon={Hash} />
-                      <InfoRow
-                        label="EID Expiry"
-                        value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : null}
-                        icon={Calendar}
-                        trailing={<ExpiryStatus date={e.emiratesIdExpiry} />}
-                      />
-                      <InfoRow label="Passport No." value={e.passportNo} icon={Hash} />
-                      <InfoRow
-                        label="Passport Expiry"
-                        value={e.passportExpiry ? formatDate(e.passportExpiry) : null}
-                        icon={Calendar}
-                        trailing={<ExpiryStatus date={e.passportExpiry} />}
-                      />
-                      <InfoRow label="Labour Card No." value={e.labourCardNumber} icon={Hash} />
-                      <InfoRow
-                        label="Labour Card Expiry"
-                        value={e.labourCardExpiry ? formatDate(e.labourCardExpiry) : null}
-                        icon={Calendar}
-                        trailing={<ExpiryStatus date={e.labourCardExpiry} />}
-                      />
-                    </div>
-                  </div>
-                )}
+                  )
+                })()}
               </CardContent>
             </Card>
-          </TabsContent>
 
-          {/* ── Documents ── */}
-          <TabsContent value="documents" className="mt-4">
             <Card>
               {/* ── Header ── */}
               <CardHeader className="px-4 py-3 border-b">
@@ -2946,7 +2994,6 @@ export function EmployeeDetailPage() {
         />
       )}
 
-      {/* Status change confirmation */}
       {statusTarget && e && (
         <ConfirmDialog
           open={!!statusTarget}
@@ -2954,8 +3001,17 @@ export function EmployeeDetailPage() {
           title={`${STATUS_CONFIG[statusTarget.status].label} employee?`}
           description={STATUS_CONFIG[statusTarget.status].description}
           confirmLabel={updateStatus.isPending ? 'Updating…' : STATUS_CONFIG[statusTarget.status].confirmLabel}
-          variant={statusTarget.status === 'active' ? 'success' : statusTarget.status === 'suspended' ? 'warning' : 'destructive'}
+          variant={statusTarget.status === 'active' ? 'success' : 'warning'}
           onConfirm={handleStatusChange}
+        />
+      )}
+
+      {e && (
+        <TerminateDialog
+          open={terminateOpen}
+          onOpenChange={setTerminateOpen}
+          employee={e}
+          initiateExit={initiateExit}
         />
       )}
 
@@ -2972,6 +3028,209 @@ export function EmployeeDetailPage() {
         />
       )}
     </PageWrapper>
+  )
+}
+
+// ─── Terminate Dialog ─────────────────────────────────────────────────────────
+const getToday = () => new Date().toISOString().slice(0, 10)
+
+function TerminateDialog({
+  open,
+  onOpenChange,
+  employee,
+  initiateExit,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  employee: Employee
+  initiateExit: ReturnType<typeof useInitiateExit>
+}) {
+  const [exitDate, setExitDate] = React.useState(getToday)
+  const [lastWorkingDay, setLastWorkingDay] = React.useState(getToday)
+  const [noticePeriodDays, setNoticePeriodDays] = React.useState('0')
+  const [reason, setReason] = React.useState('')
+  const [notes, setNotes] = React.useState('')
+  const [deductions, setDeductions] = React.useState('')
+  const [step, setStep] = React.useState<'form' | 'preview'>('form')
+
+  const { data: preview, isLoading: previewLoading } = useSettlementPreview(
+    step === 'preview' ? employee.id : undefined,
+    step === 'preview' ? exitDate : undefined,
+    step === 'preview' ? 'termination' : undefined,
+    step === 'preview' && deductions ? Number(deductions) : undefined,
+  )
+
+  const reset = React.useCallback(() => {
+    setExitDate(getToday())
+    setLastWorkingDay(getToday())
+    setNoticePeriodDays('0')
+    setReason('')
+    setNotes('')
+    setDeductions('')
+    setStep('form')
+  }, [])
+
+  React.useEffect(() => { if (!open) reset() }, [open, reset])
+
+  const handleClose = () => {
+    if (!initiateExit.isPending) {
+      reset()
+      onOpenChange(false)
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!exitDate) { toast.warning('Exit date required', 'Please enter the termination date.'); return }
+    if (!lastWorkingDay) { toast.warning('Last working day required', 'Please enter the last working day.'); return }
+    if (!reason.trim()) { toast.warning('Reason required', 'Please provide a reason for termination.'); return }
+    try {
+      await initiateExit.mutateAsync({
+        employeeId: employee.id,
+        exitType: 'termination',
+        exitDate,
+        lastWorkingDay,
+        noticePeriodDays: Number(noticePeriodDays) || 0,
+        reason: reason.trim(),
+        notes: notes.trim() || undefined,
+        deductions: deductions ? Number(deductions) : undefined,
+      })
+      toast.success('Termination initiated', `Exit request for ${employee.fullName} has been submitted for approval.`)
+      reset()
+      onOpenChange(false)
+    } catch (err) {
+      toast.error('Failed', (err as Error)?.message ?? 'Could not initiate termination.')
+    }
+  }
+
+  function fmt(n: string | number | undefined | null) {
+    if (n === undefined || n === null) return '—'
+    const num = Number(n)
+    return isNaN(num) ? '—' : formatCurrency(num)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <UserX className="h-4 w-4" />
+            {step === 'form' ? 'Terminate Employee' : 'Settlement Preview'}
+          </DialogTitle>
+        </DialogHeader>
+
+        {step === 'form' && (
+          <div className="space-y-4 py-1">
+            {/* Employee summary */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+              <Avatar className="h-10 w-10 shrink-0">
+                {employee.avatarUrl && <AvatarImage src={employee.avatarUrl} alt={employee.fullName} />}
+                <AvatarFallback className="text-xs font-semibold bg-destructive/10 text-destructive">
+                  {getInitials(employee.fullName)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">{employee.fullName}</p>
+                <p className="text-xs text-muted-foreground">{employee.designation ?? employee.employeeNo}</p>
+              </div>
+              <Badge variant="destructive" className="ml-auto shrink-0 text-[10px]">Termination</Badge>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label required>Exit Date</Label>
+                <DatePicker value={exitDate} onChange={v => setExitDate(v ?? '')} />
+              </div>
+              <div className="space-y-1.5">
+                <Label required>Last Working Day</Label>
+                <DatePicker value={lastWorkingDay} min={exitDate || undefined} onChange={v => setLastWorkingDay(v ?? '')} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Notice Period (days)</Label>
+                <NumericInput decimal={false} value={noticePeriodDays} onChange={e => setNoticePeriodDays(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Deductions (AED)</Label>
+                <NumericInput decimal value={deductions} onChange={e => setDeductions(e.target.value)} placeholder="0.00" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label required>Reason for Termination</Label>
+              <Textarea value={reason} onChange={e => setReason(e.target.value)} rows={2} placeholder="Reason for termination…" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Additional Notes</Label>
+              <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Any additional notes for the record…" />
+            </div>
+          </div>
+        )}
+
+        {step === 'preview' && previewLoading && (
+          <div className="py-12 text-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">Calculating settlement…</p>
+          </div>
+        )}
+
+        {step === 'preview' && !previewLoading && preview && (
+          <div className="space-y-4 py-1">
+            <div className="rounded-lg border bg-muted/20 p-3 space-y-1 text-xs text-muted-foreground">
+              <p className="font-semibold text-foreground text-sm">{preview.employeeName}</p>
+              <p>{preview.yearsOfService} years of service · Basic: {fmt(preview.basicSalary)}</p>
+              <p>Exit: {formatDate(exitDate)} · LWD: {formatDate(lastWorkingDay)}</p>
+            </div>
+
+            <div className="divide-y rounded-lg border overflow-hidden text-sm">
+              {[
+                ['Gratuity (UAE Labour Law 2022)', fmt(preview.gratuityAmount)],
+                [`Leave Encashment (${preview.unusedLeaveDays} unused days)`, fmt(preview.leaveEncashmentAmount)],
+                ['Unpaid Salary', fmt(preview.unpaidSalaryAmount)],
+                ...(preview.deductions > 0 ? [['Deductions', `− ${fmt(preview.deductions)}`]] : []),
+              ].map(([label, val]) => (
+                <div key={label} className="flex justify-between px-4 py-2.5">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-medium">{val}</span>
+                </div>
+              ))}
+              <div className="flex justify-between px-4 py-3 bg-muted/50 font-semibold">
+                <span>Total Settlement</span>
+                <span className="text-primary text-base font-bold">{fmt(preview.totalSettlement)}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+              This exit request will go through the approval workflow before the employee is formally terminated.
+            </p>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={handleClose} disabled={initiateExit.isPending}>Cancel</Button>
+          {step === 'form' ? (
+            <>
+              <Button variant="outline" onClick={() => setStep('preview')} disabled={!exitDate || !lastWorkingDay}>
+                Preview Settlement
+              </Button>
+              <Button variant="destructive" onClick={handleSubmit} loading={initiateExit.isPending}>
+                Submit Termination
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setStep('form')}>Back to Form</Button>
+              <Button variant="destructive" onClick={handleSubmit} loading={initiateExit.isPending}>
+                Confirm Termination
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

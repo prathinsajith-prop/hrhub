@@ -30,7 +30,6 @@ export const ROUTES = {
     // Finance & HR Ops
     payroll: '/payroll',
     leave: '/leave',
-    leavePolicies: '/leave-policies',
     attendance: '/attendance',
     performance: '/performance',
     assets: '/assets',
@@ -77,7 +76,6 @@ export const ROOT_NAV_LABELS: Record<string, string> = {
     compliance: 'nav.compliance',
     payroll: 'nav.payroll',
     leave: 'nav.leave',
-    'leave-policies': 'nav.leavePolicies',
     attendance: 'nav.attendance',
     performance: 'nav.performance',
     assets: 'nav.assets',
