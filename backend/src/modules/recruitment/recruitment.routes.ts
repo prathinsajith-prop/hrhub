@@ -5,8 +5,8 @@ import { createEmployee, generateNextEmployeeNo } from '../employees/employees.s
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 import { createChecklist } from '../onboarding/onboarding.service.js'
 import { db } from '../../db/index.js'
-import { entities, tenants } from '../../db/schema/index.js'
-import { and, eq } from 'drizzle-orm'
+import { entities, tenants, orgUnits } from '../../db/schema/index.js'
+import { and, eq, inArray } from 'drizzle-orm'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { fileTypeFromBuffer } from 'file-type'
 import { broadcastToTenant } from '../../lib/ws-registry.js'
@@ -418,6 +418,16 @@ export default async function (fastify: any): Promise<void> {
                 .where(and(eq(entities.tenantId, tenantId), eq(entities.isActive, true))).limit(1)
             if (!ent) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'No active entity configured for this tenant' })
             entityId = ent.id
+        }
+
+        // Validate supplied org unit IDs belong to this tenant.
+        const orgUnitIds = [body.departmentId, body.branchId, body.divisionId].filter(Boolean) as string[]
+        if (orgUnitIds.length > 0) {
+            const validUnits = await db.select({ id: orgUnits.id }).from(orgUnits)
+                .where(and(inArray(orgUnits.id, orgUnitIds), eq(orgUnits.tenantId, tenantId)))
+            const validIds = new Set(validUnits.map(u => u.id))
+            const invalid = orgUnitIds.find(id => !validIds.has(id))
+            if (invalid) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Org unit not found for this tenant' })
         }
 
         const [firstName, ...rest] = (app.name ?? '').trim().split(/\s+/)
