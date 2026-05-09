@@ -715,6 +715,7 @@ function TeamGrid({ teams, showControls, canManage, canViewAll, userId, orgMap, 
     const [visibleCount, setVisibleCount] = useState(TEAMS_PAGE_SIZE)
     const sentinelRef = useRef<HTMLDivElement>(null)
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { setVisibleCount(TEAMS_PAGE_SIZE) }, [teams.length])
 
     useEffect(() => {

@@ -301,6 +301,7 @@ export function OnboardingPage() {
     }, [enriched, search, statusFilter])
 
     // Reset window when filter changes
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { setVisibleCount(PAGE_SIZE) }, [search, statusFilter])
 
     // IntersectionObserver — auto-expand window as sentinel scrolls into view
