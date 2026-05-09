@@ -792,7 +792,10 @@ export function RecruitmentPage() {
     filters: candidateSearch.appliedFilters,
     enabled: pipelineView === 'list' && activeTab === 'pipeline',
   })
-  const allListCandidates = ((listAppsData as { data?: Candidate[] })?.data ?? []) as Candidate[]
+  const allListCandidates = useMemo(
+    () => ((listAppsData as { data?: Candidate[] })?.data ?? []) as Candidate[],
+    [listAppsData],
+  )
   const filteredListCandidates = useMemo(
     () => listStageFilter === 'all' ? allListCandidates : allListCandidates.filter(c => c.stage === listStageFilter),
     [allListCandidates, listStageFilter],
