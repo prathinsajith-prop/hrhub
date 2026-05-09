@@ -146,6 +146,40 @@ const InfoRow = React.memo(function InfoRow({ label, value, icon: Icon, trailing
   )
 })
 
+/** View + download link shown in InfoRow trailing slot when a document file exists */
+const DocLink = React.memo(function DocLink({
+  doc,
+  onView,
+  onDownload,
+}: {
+  doc: DocRecord
+  onView: () => void
+  onDownload: () => void
+}) {
+  return (
+    <div className="flex items-center gap-1 ml-auto shrink-0">
+      <button
+        type="button"
+        aria-label={`View ${doc.docType ?? 'document'}`}
+        title={`View ${doc.docType ?? 'document'}`}
+        onClick={onView}
+        className="inline-flex items-center gap-1 text-[10px] font-medium text-primary hover:underline px-2 py-0.5 rounded-md hover:bg-primary/5 transition-colors"
+      >
+        <Eye className="h-3 w-3" />View file
+      </button>
+      <button
+        type="button"
+        aria-label="Download document"
+        title="Download"
+        onClick={onDownload}
+        className="inline-flex items-center p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+      >
+        <Download className="h-3 w-3" />
+      </button>
+    </div>
+  )
+})
+
 /** Compact stacked label + value cell for the Employment Details grid */
 const EmpField = React.memo(function EmpField({
   label, value, icon: Icon, children,
@@ -1377,8 +1411,7 @@ export function EmployeeDetailPage() {
         const allTabs: TabDef[] = [
           { value: 'personal', icon: User, label: 'Personal' },
           { value: 'employment', icon: Briefcase, label: 'Employment' },
-          { value: 'visa', icon: Plane, label: 'Visa & ID' },
-          { value: 'documents', icon: FileText, label: 'Documents' },
+          { value: 'documents', icon: FileText, label: 'Documents & ID' },
           { value: 'payroll', icon: CreditCard, label: 'Payroll' },
           { value: 'performance', icon: Star, label: 'Performance' },
           { value: 'assets', icon: Package, label: 'Assets' },
@@ -1666,8 +1699,8 @@ export function EmployeeDetailPage() {
             </Card>
           </TabsContent>
 
-          {/* ── Visa & ID ── */}
-          <TabsContent value="visa" className="mt-4">
+          {/* ── Documents & ID (visa info + uploaded documents) ── */}
+          <TabsContent value="documents" className="mt-4 space-y-4">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1817,51 +1850,64 @@ export function EmployeeDetailPage() {
                       </Button>
                     </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-                    <div>
-                      <InfoRow label="Visa Type" value={labelFor(e.visaType)} icon={Plane} />
-                      <InfoRow label="Visa Number" value={e.visaNumber} icon={Hash} />
-                      <InfoRow label="Visa Issue Date" value={e.visaIssueDate ? formatDate(e.visaIssueDate) : null} icon={Calendar} />
-                      <InfoRow
-                        label="Visa Expiry"
-                        value={e.visaExpiry ? formatDate(e.visaExpiry) : null}
-                        icon={Calendar}
-                        trailing={<ExpiryStatus date={e.visaExpiry} />}
-                      />
-                      <InfoRow label="Sponsoring Entity" value={e.sponsoringEntityName} icon={Building2} />
+                ) : (() => {
+                  // Find the best matching document for each ID type (prefer 'valid', else most recent)
+                  // Pick the most-recent valid doc for a given set of docTypes, falling back to most-recent non-rejected
+                  const findDoc = (types: string[]) => {
+                    const byRecent = (a: DocRecord, b: DocRecord) =>
+                      new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()
+                    const matches = docs.filter(d => types.includes(d.docType ?? '') && d.status !== 'rejected').sort(byRecent)
+                    const valid = matches.filter(d => d.status === 'valid')
+                    return valid[0] ?? matches[0] ?? undefined
+                  }
+                  const passportDoc = findDoc(['Passport'])
+                  const eidDoc = findDoc(['Emirates ID'])
+                  const visaDoc = findDoc(['Visa', 'Residence Visa', 'Entry Permit', 'Work Permit', 'Visit Visa', 'Employment Visa'])
+                  const labourDoc = findDoc(['Labour Card'])
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                      <div>
+                        <InfoRow label="Visa Type" value={labelFor(e.visaType)} icon={Plane} />
+                        <InfoRow label="Visa Number" value={e.visaNumber} icon={Hash} trailing={visaDoc ? <DocLink doc={visaDoc} onView={() => setViewDoc({ id: visaDoc.id, fileName: visaDoc.fileName ?? visaDoc.docType })} onDownload={() => downloadDoc(visaDoc)} /> : undefined} />
+                        <InfoRow label="Visa Issue Date" value={e.visaIssueDate ? formatDate(e.visaIssueDate) : null} icon={Calendar} />
+                        <InfoRow
+                          label="Visa Expiry"
+                          value={e.visaExpiry ? formatDate(e.visaExpiry) : null}
+                          icon={Calendar}
+                          trailing={<ExpiryStatus date={e.visaExpiry} />}
+                        />
+                        <InfoRow label="Sponsoring Entity" value={e.sponsoringEntityName} icon={Building2} />
+                      </div>
+                      <div>
+                        <InfoRow label="Emirates ID" value={e.emiratesId} icon={Hash} trailing={eidDoc ? <DocLink doc={eidDoc} onView={() => setViewDoc({ id: eidDoc.id, fileName: eidDoc.fileName ?? eidDoc.docType })} onDownload={() => downloadDoc(eidDoc)} /> : undefined} />
+                        <InfoRow
+                          label="EID Expiry"
+                          value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : null}
+                          icon={Calendar}
+                          trailing={<ExpiryStatus date={e.emiratesIdExpiry} />}
+                        />
+                        <InfoRow label="Passport No." value={e.passportNo} icon={Hash} trailing={passportDoc ? <DocLink doc={passportDoc} onView={() => setViewDoc({ id: passportDoc.id, fileName: passportDoc.fileName ?? passportDoc.docType })} onDownload={() => downloadDoc(passportDoc)} /> : undefined} />
+                        <InfoRow
+                          label="Passport Expiry"
+                          value={e.passportExpiry ? formatDate(e.passportExpiry) : null}
+                          icon={Calendar}
+                          trailing={<ExpiryStatus date={e.passportExpiry} />}
+                        />
+                        <InfoRow label="Labour Card No." value={e.labourCardNumber} icon={Hash} trailing={labourDoc ? <DocLink doc={labourDoc} onView={() => setViewDoc({ id: labourDoc.id, fileName: labourDoc.fileName ?? labourDoc.docType })} onDownload={() => downloadDoc(labourDoc)} /> : undefined} />
+                        <InfoRow
+                          label="Labour Card Expiry"
+                          value={e.labourCardExpiry ? formatDate(e.labourCardExpiry) : null}
+                          icon={Calendar}
+                          trailing={<ExpiryStatus date={e.labourCardExpiry} />}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <InfoRow label="Emirates ID" value={e.emiratesId} icon={Hash} />
-                      <InfoRow
-                        label="EID Expiry"
-                        value={e.emiratesIdExpiry ? formatDate(e.emiratesIdExpiry) : null}
-                        icon={Calendar}
-                        trailing={<ExpiryStatus date={e.emiratesIdExpiry} />}
-                      />
-                      <InfoRow label="Passport No." value={e.passportNo} icon={Hash} />
-                      <InfoRow
-                        label="Passport Expiry"
-                        value={e.passportExpiry ? formatDate(e.passportExpiry) : null}
-                        icon={Calendar}
-                        trailing={<ExpiryStatus date={e.passportExpiry} />}
-                      />
-                      <InfoRow label="Labour Card No." value={e.labourCardNumber} icon={Hash} />
-                      <InfoRow
-                        label="Labour Card Expiry"
-                        value={e.labourCardExpiry ? formatDate(e.labourCardExpiry) : null}
-                        icon={Calendar}
-                        trailing={<ExpiryStatus date={e.labourCardExpiry} />}
-                      />
-                    </div>
-                  </div>
-                )}
+                  )
+                })()}
               </CardContent>
             </Card>
-          </TabsContent>
 
-          {/* ── Documents ── */}
-          <TabsContent value="documents" className="mt-4">
             <Card>
               {/* ── Header ── */}
               <CardHeader className="px-4 py-3 border-b">

@@ -21,6 +21,9 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/overlays'
 import { cn } from '@/lib/utils'
 import { useApplication, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume } from '@/hooks/useRecruitment'
+import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
+import { buildOrgOptions } from '@/components/shared/action-dialogs'
+import { Combobox } from '@/components/ui/combobox'
 import { toast } from '@/components/ui/overlays'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { CopyableEmail, CopyablePhone } from '@/components/shared'
@@ -57,9 +60,13 @@ export function CandidateProfilePage() {
         joinDate: new Date().toISOString().slice(0, 10),
         designation: '',
         department: '',
+        departmentId: '',
         basicSalary: '',
         note: '',
     })
+    const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
+    const orgOptions = buildOrgOptions(orgUnits)
     const [notesDraft, setNotesDraft] = useState('')
     const [newNote, setNewNote] = useState('')
 
@@ -199,6 +206,7 @@ export function CandidateProfilePage() {
                                 joinDate: convertForm.joinDate || undefined,
                                 designation: convertForm.designation || undefined,
                                 department: convertForm.department || undefined,
+                                departmentId: convertForm.departmentId || undefined,
                                 basicSalary: convertForm.basicSalary ? Number(convertForm.basicSalary) : undefined,
                             },
                         },
@@ -601,10 +609,14 @@ export function CandidateProfilePage() {
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Department</Label>
-                                <Input
-                                    value={convertForm.department}
-                                    onChange={(e) => setConvertForm((f) => ({ ...f, department: e.target.value }))}
-                                    placeholder="e.g. Engineering"
+                                <Combobox
+                                    value={convertForm.departmentId}
+                                    onValueChange={(id) => {
+                                        const opt = orgOptions.find(o => o.value === id)
+                                        setConvertForm(f => ({ ...f, departmentId: id, department: opt?.label ?? '' }))
+                                    }}
+                                    options={orgOptions}
+                                    placeholder="Select department…"
                                 />
                             </div>
                             <div className="space-y-1.5">

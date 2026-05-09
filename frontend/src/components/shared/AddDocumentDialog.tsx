@@ -5,10 +5,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { DatePicker } from '@/components/ui/date-picker'
-import {
-    Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
+import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { useUploadDocument } from '@/hooks/useDocuments'
 import { DOC_TYPE_CATALOG, CATEGORY_LABELS } from '@/lib/docTypes'
 import { toast } from '@/components/ui/overlays'
@@ -49,6 +47,19 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
 
     const allDocTypes = Object.values(DOC_TYPE_CATALOG).flat()
     const selectedDef = allDocTypes.find(d => d.docType === docType)
+
+    // Build ordered combobox options: identity, visa, insurance first, then rest
+    const CAT_ORDER = ['identity', 'visa', 'insurance', 'employment', 'qualification', 'compliance', 'financial', 'company'] as const
+    const docTypeOptions: ComboboxOption[] = [
+        ...CAT_ORDER.flatMap(cat =>
+            (DOC_TYPE_CATALOG[cat] ?? []).map(d => ({
+                value: d.docType,
+                label: d.label,
+                secondary: CATEGORY_LABELS[cat as keyof typeof CATEGORY_LABELS],
+            })),
+        ),
+        { value: 'Other', label: 'Other', secondary: 'Other' },
+    ]
     const expiryRequired = selectedDef?.expiryRequired ?? false
 
     function handleIssueDateChange(v: string | undefined) {
@@ -179,29 +190,14 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
                         <Label className="text-sm font-medium">
                             Document Type <span className="text-destructive">*</span>
                         </Label>
-                        <Select value={docType || undefined} onValueChange={v => { setDocType(v); setErrors(e => ({ ...e, docType: undefined })) }}>
-                            <SelectTrigger className={cn('h-9', errors.docType && 'border-destructive ring-destructive/20')}>
-                                <SelectValue placeholder="Select document type…" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-80">
-                                {(Object.keys(DOC_TYPE_CATALOG) as (keyof typeof DOC_TYPE_CATALOG)[]).map(cat => (
-                                    <SelectGroup key={cat}>
-                                        <SelectLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5 uppercase tracking-wide">
-                                            {CATEGORY_LABELS[cat]}
-                                        </SelectLabel>
-                                        {DOC_TYPE_CATALOG[cat].map(d => (
-                                            <SelectItem key={d.docType} value={d.docType}>{d.label}</SelectItem>
-                                        ))}
-                                    </SelectGroup>
-                                ))}
-                                <SelectGroup>
-                                    <SelectLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5 uppercase tracking-wide">
-                                        Other
-                                    </SelectLabel>
-                                    <SelectItem value="Other">Other</SelectItem>
-                                </SelectGroup>
-                            </SelectContent>
-                        </Select>
+                        <Combobox
+                            value={docType}
+                            onValueChange={v => { setDocType(v); setErrors(e => ({ ...e, docType: undefined })) }}
+                            options={docTypeOptions}
+                            placeholder="Select document type…"
+                            searchPlaceholder="Search by name or category…"
+                            clearable
+                        />
                         {errors.docType && <p className="text-xs text-destructive">{errors.docType}</p>}
                     </div>
 

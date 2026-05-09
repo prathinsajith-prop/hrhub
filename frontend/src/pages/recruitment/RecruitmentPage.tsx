@@ -1,10 +1,8 @@
 import { useEffect, useRef, useMemo, useState, memo } from 'react'
-
-const PAGE_SIZE = 10
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
-import { Plus, Briefcase, Users, Clock, TrendingUp, Star, Mail, Phone, Eye, Edit2, UserCheck, RefreshCcw } from 'lucide-react'
+import { Plus, Briefcase, Users, Clock, TrendingUp, Star, Mail, Phone, Eye, Edit2, UserCheck, RefreshCcw, LayoutList, LayoutGrid, ChevronRight, Loader2, AlertCircle, FileText, XCircle } from 'lucide-react'
 import {
   DndContext,
   PointerSensor,
@@ -16,7 +14,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -27,7 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
-import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useUpdateApplication, useConvertCandidateToEmployee } from '@/hooks/useRecruitment'
+import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume } from '@/hooks/useRecruitment'
 import { useRecruitmentSocket } from '@/hooks/useRecruitmentSocket'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/overlays'
@@ -37,7 +35,9 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/primitives'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { Textarea } from '@/components/ui/textarea'
-import { NewJobDialog, EditJobDialog } from '@/components/shared/action-dialogs'
+import { NewJobDialog, EditJobDialog, buildOrgOptions } from '@/components/shared/action-dialogs'
+import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
+import { Combobox } from '@/components/ui/combobox'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig, buildFilterQueryString } from '@/lib/filters'
@@ -47,6 +47,9 @@ import { JOB_STATUS_OPTIONS } from '@/lib/options'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { exportRecruitment } from '@/lib/export'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
+
+const PAGE_SIZE = 10
 
 const JOB_FILTERS: FilterConfig[] = [
   { name: 'title', label: 'Job title', type: 'text', field: 'title' },
@@ -102,25 +105,20 @@ const CandidateCard = memo(function CandidateCard({
   // Pass the full candidate through drag data so handleDragStart can capture it
   // for the DragOverlay and optimistic stage update without a flat-array lookup.
   const drag = useDraggable({ id: candidate.id, data: { candidate }, disabled: !draggable })
-  const style: React.CSSProperties = drag.transform
-    ? { transform: `translate3d(${drag.transform.x}px, ${drag.transform.y}px, 0)` }
-    : {}
   const isDragging = draggable && drag.isDragging
   const cardDragProps = draggable && !isDragOverlay ? { ...drag.attributes, ...drag.listeners } : {}
 
   return (
     <div
       ref={draggable ? drag.setNodeRef : undefined}
-      style={style}
       {...cardDragProps}
       className={cn(
         'bg-card rounded-xl border border-border p-3 shadow-sm hover:shadow-md transition-shadow select-none',
         draggable && !isDragOverlay && 'cursor-grab active:cursor-grabbing',
-        isDragging && !isDragOverlay && 'opacity-30',
-        isDragOverlay && 'ring-2 ring-primary shadow-lg cursor-grabbing rotate-2',
+        isDragging && !isDragOverlay && 'opacity-20 pointer-events-none',
+        isDragOverlay && 'ring-2 ring-primary shadow-xl cursor-grabbing',
       )}
     >
-      {/* Header: avatar + name + score + edit */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Avatar className="h-8 w-8 shrink-0">
@@ -161,7 +159,6 @@ const CandidateCard = memo(function CandidateCard({
         </div>
       </div>
 
-      {/* Job + experience row */}
       {(candidate.jobTitle || candidate.experience !== undefined) && (
         <div className="flex items-center gap-1.5 mb-2 px-0.5">
           <Briefcase className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -176,7 +173,6 @@ const CandidateCard = memo(function CandidateCard({
         </div>
       )}
 
-      {/* Contact info */}
       <div className="space-y-1 mb-3 bg-muted/40 rounded-lg p-2">
         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground min-w-0">
           <Mail className="h-3 w-3 shrink-0" />
@@ -363,7 +359,7 @@ const buildJobColumns = (onEdit: (job: Job) => void): ColumnDef<Job>[] => [
     },
   },
   { accessorKey: 'openings', header: 'Openings', cell: ({ getValue }) => <span className="text-sm font-medium">{getValue() as number}</span> },
-  { accessorKey: 'applications', header: 'Applications', cell: ({ getValue }) => <span className="text-sm">{getValue() as number}</span> },
+  { accessorKey: 'applications', header: 'Applications', cell: ({ getValue }) => <span className="text-sm">{(getValue() as number | null | undefined) ?? 0}</span> },
   {
     id: 'salary',
     header: 'Salary Range',
@@ -381,7 +377,7 @@ const buildJobColumns = (onEdit: (job: Job) => void): ColumnDef<Job>[] => [
         variant="ghost"
         aria-label="Edit job"
         className="text-muted-foreground hover:text-foreground"
-        onClick={() => onEdit(j)}
+        onClick={(e) => { e.stopPropagation(); onEdit(j) }}
       >
         <Edit2 className="h-3.5 w-3.5" />
       </Button>
@@ -399,11 +395,13 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
   const [experience, setExperience] = useState('')
   const [expectedSalary, setExpectedSalary] = useState('')
   const [notes, setNotes] = useState('')
+  const [resumeFile, setResumeFile] = useState<File | null>(null)
   const createApp = useCreateApplication()
+  const uploadResume = useUploadResume()
 
   const reset = () => {
     setJobId(''); setName(''); setEmail(''); setPhone(''); setNationality('')
-    setExperience(''); setExpectedSalary(''); setNotes('')
+    setExperience(''); setExpectedSalary(''); setNotes(''); setResumeFile(null)
   }
 
   const handleSave = async () => {
@@ -411,7 +409,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
     if (!name.trim()) { toast.warning('Name required', 'Enter the candidate name.'); return }
     if (!email.trim()) { toast.warning('Email required', 'Enter the candidate email.'); return }
     try {
-      await createApp.mutateAsync({
+      const result = await createApp.mutateAsync({
         jobId,
         data: {
           name: name.trim(),
@@ -423,6 +421,10 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           notes: notes.trim() || undefined,
         },
       })
+      const newId = (result as { data?: { id?: string } })?.data?.id
+      if (resumeFile && newId) {
+        await uploadResume.mutateAsync({ id: newId, file: resumeFile })
+      }
       toast.success('Candidate added', `${name.trim()} added to the pipeline.`)
       reset()
       onOpenChange(false)
@@ -488,10 +490,39 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
             <Label>Notes</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Source, recruiter remarks, etc." />
           </div>
+          <div className="space-y-1.5">
+            <Label>Resume</Label>
+            <label className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg border border-dashed border-border cursor-pointer transition-colors',
+              'hover:border-primary/50 hover:bg-primary/5',
+              resumeFile && 'border-primary/40 bg-primary/5',
+            )}>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                className="sr-only"
+                onChange={e => setResumeFile(e.target.files?.[0] ?? null)}
+              />
+              <FileText className={cn('h-4 w-4 shrink-0', resumeFile ? 'text-primary' : 'text-muted-foreground')} />
+              <span className={cn('text-sm truncate', resumeFile ? 'text-foreground' : 'text-muted-foreground')}>
+                {resumeFile ? resumeFile.name : 'Attach resume (PDF, DOC, DOCX)'}
+              </span>
+              {resumeFile && (
+                <button
+                  type="button"
+                  onClick={e => { e.preventDefault(); setResumeFile(null) }}
+                  className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+                  aria-label="Remove resume"
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
+              )}
+            </label>
+          </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} loading={createApp.isPending} leftIcon={<Plus className="h-3.5 w-3.5" />}>
+          <Button onClick={handleSave} loading={createApp.isPending || uploadResume.isPending} leftIcon={<Plus className="h-3.5 w-3.5" />}>
             Add to pipeline
           </Button>
         </DialogFooter>
@@ -514,8 +545,12 @@ function ConvertCandidateDialog({
   const [joinDate, setJoinDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [designation, setDesignation] = useState('')
   const [department, setDepartment] = useState('')
+  const [departmentId, setDepartmentId] = useState('')
   const [basicSalary, setBasicSalary] = useState('')
   const [note, setNote] = useState('')
+  const { data: orgUnitsRaw = [] } = useOrgUnits()
+  const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
+  const orgOptions = buildOrgOptions(orgUnits)
 
   if (!candidate) return null
 
@@ -543,6 +578,7 @@ function ConvertCandidateDialog({
                 joinDate: joinDate || undefined,
                 designation: designation || undefined,
                 department: department || undefined,
+                departmentId: departmentId || undefined,
                 basicSalary: basicSalary ? Number(basicSalary) : undefined,
               },
             },
@@ -588,7 +624,16 @@ function ConvertCandidateDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Department</Label>
-            <Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Engineering" />
+            <Combobox
+              value={departmentId}
+              onValueChange={(id) => {
+                const opt = orgOptions.find(o => o.value === id)
+                setDepartmentId(id)
+                setDepartment(opt?.label ?? '')
+              }}
+              options={orgOptions}
+              placeholder="Select department…"
+            />
           </div>
           <div className="space-y-1.5">
             <Label required>Conversion Note</Label>
@@ -606,6 +651,88 @@ function ConvertCandidateDialog({
   )
 }
 
+const CandidateListRow = memo(function CandidateListRow({
+  candidate,
+  onView,
+  onEdit,
+}: {
+  candidate: Candidate
+  onView: (id: string) => void
+  onEdit?: (c: Candidate) => void
+}) {
+  const stage = stages.find(s => s.id === candidate.stage)
+  return (
+    <div
+      className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4 hover:bg-muted/40 transition-colors group cursor-pointer"
+      onClick={() => onView(candidate.id)}
+    >
+      {/* Candidate info — flex-1 matches header */}
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <Avatar className="h-9 w-9 shrink-0 border border-border/60">
+          <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+            {getInitials(candidate.name)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-foreground truncate">{candidate.name}</p>
+          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+            {candidate.nationality && <span className="text-[11px] text-muted-foreground">{candidate.nationality}</span>}
+            {candidate.experience > 0 && <span className="text-[11px] text-muted-foreground">{candidate.experience}y exp</span>}
+            {candidate.jobTitle && (
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <Briefcase className="h-3 w-3 shrink-0" />{candidate.jobTitle}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      {/* Fixed-width data columns — match sticky header widths */}
+      <div className="hidden sm:flex items-center gap-3 shrink-0">
+        <div className="w-[90px]">
+          {stage && (
+            <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border max-w-full', stage.bgClass)}>
+              <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', stage.dotClass)} />
+              <span className="truncate">{stage.label}</span>
+            </span>
+          )}
+        </div>
+        <div className="w-10 flex justify-center">
+          {candidate.score > 0
+            ? <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="h-3 w-3 fill-amber-400 text-amber-400" /><span className="font-medium">{candidate.score}</span></div>
+            : <span className="text-[11px] text-muted-foreground/30">—</span>
+          }
+        </div>
+        <div className="w-20 text-right text-[11px] text-muted-foreground">
+          {candidate.expectedSalary != null ? formatCurrency(candidate.expectedSalary) : <span className="text-muted-foreground/30">—</span>}
+        </div>
+        <div className="w-[70px] text-right text-[11px] text-muted-foreground">
+          {formatDate(candidate.appliedDate)}
+        </div>
+      </div>
+      <div className="flex sm:hidden items-center gap-2 flex-wrap">
+        {stage && (
+          <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border', stage.bgClass)}>
+            <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', stage.dotClass)} />{stage.label}
+          </span>
+        )}
+        {candidate.score > 0 && <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="h-3 w-3 fill-amber-400 text-amber-400" /><span>{candidate.score}</span></div>}
+        {candidate.expectedSalary != null && <span className="text-[11px] text-muted-foreground">{formatCurrency(candidate.expectedSalary)}</span>}
+        <span className="text-[11px] text-muted-foreground">{formatDate(candidate.appliedDate)}</span>
+      </div>
+      {/* Actions — w-8 matches header spacer */}
+      <div
+        className="w-8 shrink-0 flex items-center justify-end sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+        onClick={e => e.stopPropagation()}
+      >
+        {onEdit
+          ? <Button size="icon-sm" variant="ghost" aria-label="Edit candidate" onClick={() => onEdit(candidate)}><Edit2 className="h-3.5 w-3.5" /></Button>
+          : <ChevronRight className="h-4 w-4 text-muted-foreground/40" />
+        }
+      </div>
+    </div>
+  )
+})
+
 export function RecruitmentPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -613,6 +740,8 @@ export function RecruitmentPage() {
   // Real-time: subscribe to all recruitment WS events for this tenant
   useRecruitmentSocket()
   const [activeTab, setActiveTab] = useState('pipeline')
+  const [pipelineView, setPipelineView] = useState<'kanban' | 'list'>('kanban')
+  const [listStageFilter, setListStageFilter] = useState<ApplicationStage | 'all'>('all')
   const [jobDialogOpen, setJobDialogOpen] = useState(false)
   const [editJob, setEditJob] = useState<Job | null>(null)
   const [closeConfirm, setCloseConfirm] = useState<string[] | null>(null)
@@ -657,6 +786,22 @@ export function RecruitmentPage() {
   const { data: interviewData } = useKanbanStage('interview', candidateParams)
   const { data: offerData } = useKanbanStage('offer', candidateParams)
   const { data: preBoardingData } = useKanbanStage('pre_boarding', candidateParams)
+  const { data: listAppsData, isLoading: listAppsLoading } = useApplications({
+    limit: 200,
+    q: candidateSearch.searchInput || undefined,
+    filters: candidateSearch.appliedFilters,
+    enabled: pipelineView === 'list' && activeTab === 'pipeline',
+  })
+  const allListCandidates = ((listAppsData as { data?: Candidate[] })?.data ?? []) as Candidate[]
+  const filteredListCandidates = useMemo(
+    () => listStageFilter === 'all' ? allListCandidates : allListCandidates.filter(c => c.stage === listStageFilter),
+    [allListCandidates, listStageFilter],
+  )
+
+  const { visibleCount: listVisibleCount, setVisibleCount: setListVisibleCount, sentinelRef: listSentinelRef } =
+    useInfiniteScroll(filteredListCandidates.length)
+  useEffect(() => { setListVisibleCount(20) }, [listStageFilter, candidateSearch.searchInput, candidateFilterStr, setListVisibleCount])
+
   const qc = useQueryClient()
 
   const updateStage = useUpdateApplicationStage()
@@ -675,12 +820,16 @@ export function RecruitmentPage() {
   }
 
   // Drag and drop — 3px activation lets buttons still receive clicks.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 3 } }))
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }))
   const [activeDragCandidate, setActiveDragCandidate] = useState<Candidate | null>(null)
+  const [dragCardWidth, setDragCardWidth] = useState<number>(200)
 
   const handleDragStart = (e: DragStartEvent) => {
     const c = (e.active.data?.current as { candidate?: Candidate } | undefined)?.candidate ?? null
     setActiveDragCandidate(c)
+    // Capture the exact card width so the overlay matches the original card
+    const rect = e.active.rect.current.initial
+    if (rect) setDragCardWidth(Math.round(rect.width))
   }
   const handleDragEnd = (e: DragEndEvent) => {
     const candidate = activeDragCandidate
@@ -729,7 +878,6 @@ export function RecruitmentPage() {
         }
       />
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCardCompact label="Open Positions" value={openJobs} icon={Briefcase} color="blue" />
         <KpiCardCompact label="Total Applicants" value={appsTotalData?.total ?? 0} icon={Users} color="cyan" />
@@ -748,37 +896,171 @@ export function RecruitmentPage() {
       />
 
       {activeTab === 'pipeline' && (
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <AdvancedSearchBar
-            search={candidateSearch}
-            filters={CANDIDATE_FILTERS}
-            placeholder="Search candidates by name or email…"
-          />
-          <div className="overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
-            <div className="flex gap-3 min-w-max">
-              {stages.map(stage => (
-                <StageColumn
-                  key={stage.id}
-                  stage={stage}
-                  onMove={moveCandidate}
-                  onConvert={setConvertCandidate}
-                  onEdit={setEditCandidate}
-                  showAdd={stage.id === 'received'}
-                  onAdd={() => setAddCandidateOpen(true)}
-                  addDisabled={jobs.filter((j) => j.status === 'open').length === 0}
-                  kanbanParams={candidateParams}
-                />
-              ))}
+        <>
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <AdvancedSearchBar
+                search={candidateSearch}
+                filters={CANDIDATE_FILTERS}
+                placeholder="Search candidates by name or email…"
+              />
+            </div>
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1 shrink-0 mt-0.5">
+              <button
+                type="button"
+                title="Kanban view"
+                onClick={() => setPipelineView('kanban')}
+                className={cn(
+                  'p-1.5 rounded-md transition-colors',
+                  pipelineView === 'kanban'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                title="List view"
+                onClick={() => setPipelineView('list')}
+                className={cn(
+                  'p-1.5 rounded-md transition-colors',
+                  pipelineView === 'list'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <LayoutList className="h-4 w-4" />
+              </button>
             </div>
           </div>
-          <DragOverlay dropAnimation={null}>
-            {activeDragCandidate && (
-              <div className="w-56">
-                <CandidateCard candidate={activeDragCandidate} onMove={moveCandidate} isDragOverlay />
+
+          {pipelineView === 'kanban' && (
+            <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} autoScroll={false}>
+              <div className="overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+                <div className="flex gap-3 min-w-max">
+                  {stages.map(stage => (
+                    <StageColumn
+                      key={stage.id}
+                      stage={stage}
+                      onMove={moveCandidate}
+                      onConvert={setConvertCandidate}
+                      onEdit={setEditCandidate}
+                      showAdd={stage.id === 'received'}
+                      onAdd={() => setAddCandidateOpen(true)}
+                      addDisabled={jobs.filter((j) => j.status === 'open').length === 0}
+                      kanbanParams={candidateParams}
+                    />
+                  ))}
+                </div>
               </div>
-            )}
-          </DragOverlay>
-        </DndContext>
+              <DragOverlay dropAnimation={null}>
+                {activeDragCandidate && (
+                  <div style={{ width: dragCardWidth }}>
+                    <CandidateCard candidate={activeDragCandidate} onMove={moveCandidate} isDragOverlay />
+                  </div>
+                )}
+              </DragOverlay>
+            </DndContext>
+          )}
+
+          {pipelineView === 'list' && (
+            <div className="space-y-3">
+              {allListCandidates.length > 0 && (() => {
+                const stageCounts = allListCandidates.reduce<Record<string, number>>((acc, c) => {
+                  acc[c.stage] = (acc[c.stage] ?? 0) + 1
+                  return acc
+                }, {})
+                return (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setListStageFilter('all')}
+                      className={cn(
+                        'px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
+                        listStageFilter === 'all'
+                          ? 'bg-foreground text-background border-foreground'
+                          : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
+                      )}
+                    >
+                      All · {allListCandidates.length}
+                    </button>
+                    {stages.map(s => {
+                      const count = stageCounts[s.id] ?? 0
+                      if (count === 0) return null
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setListStageFilter(listStageFilter === s.id ? 'all' : s.id)}
+                          className={cn(
+                            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
+                            listStageFilter === s.id
+                              ? s.bgClass
+                              : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
+                          )}
+                        >
+                          <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', s.dotClass)} />
+                          {s.label} · {count}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+
+              <Card>
+                <CardContent className="p-0">
+                  {listAppsLoading ? (
+                    <div className="px-4 py-4 space-y-2">
+                      {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-14 rounded-lg bg-muted/50 animate-pulse" />)}
+                    </div>
+                  ) : filteredListCandidates.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                      <AlertCircle className="h-8 w-8 text-muted-foreground/20 mb-2" />
+                      <p className="text-sm font-semibold">
+                        {allListCandidates.length === 0 ? 'No candidates yet' : 'No candidates in this stage'}
+                      </p>
+                      {listStageFilter !== 'all' && (
+                        <button type="button" onClick={() => setListStageFilter('all')} className="text-xs text-primary mt-2 hover:underline">
+                          Show all
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="sticky top-0 z-10 hidden sm:flex items-center gap-3 px-4 py-2 border-b bg-card/95 backdrop-blur-sm">
+                        <div className="flex-1 min-w-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Candidate</div>
+                        <div className="flex items-center gap-3 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          <span className="w-[90px]">Stage</span>
+                          <span className="w-10 text-center">Score</span>
+                          <span className="w-20 text-right">Salary</span>
+                          <span className="w-[70px] text-right">Applied</span>
+                        </div>
+                        <div className="w-8 shrink-0" />
+                      </div>
+                      <div className="divide-y divide-border/40">
+                        {filteredListCandidates.slice(0, listVisibleCount).map(c => (
+                          <CandidateListRow
+                            key={c.id}
+                            candidate={c}
+                            onView={id => navigate(`/recruitment/candidates/${id}`)}
+                            onEdit={setEditCandidate}
+                          />
+                        ))}
+                      </div>
+                      {filteredListCandidates.length > listVisibleCount && (
+                        <div ref={listSentinelRef} className="py-3 flex justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </>
       )}
 
       {activeTab === 'jobs' && (
@@ -786,6 +1068,7 @@ export function RecruitmentPage() {
           <DataTable
             columns={jobColumns}
             data={filteredJobs}
+            onRowClick={(j) => navigate(`/recruitment/jobs/${j.id}`)}
             advancedFilter={{
               search: jobSearch,
               filters: JOB_FILTERS,

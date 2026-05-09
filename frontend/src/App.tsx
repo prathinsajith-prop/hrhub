@@ -20,6 +20,7 @@ const EmployeesPage = lazy(() => import('@/pages/employees/EmployeesPage').then(
 const EmployeeDetailPage = lazy(() => import('@/pages/employees/EmployeeDetailPage').then(m => ({ default: m.EmployeeDetailPage })))
 const RecruitmentPage = lazy(() => import('@/pages/recruitment/RecruitmentPage').then(m => ({ default: m.RecruitmentPage })))
 const CandidateProfilePage = lazy(() => import('@/pages/recruitment/CandidateProfilePage').then(m => ({ default: m.CandidateProfilePage })))
+const JobDetailPage = lazy(() => import('@/pages/recruitment/JobDetailPage').then(m => ({ default: m.JobDetailPage })))
 const VisaPage = lazy(() => import('@/pages/visa/VisaPage').then(m => ({ default: m.VisaPage })))
 const VisaDetailPage = lazy(() => import('@/pages/visa/VisaDetailPage').then(m => ({ default: m.VisaDetailPage })))
 const DocumentsPage = lazy(() => import('@/pages/documents/DocumentsPage').then(m => ({ default: m.DocumentsPage })))
@@ -118,16 +119,15 @@ const PAGE_TITLE_MAP: Record<string, string> = {
 }
 
 function TitleManager() {
-  const location = useLocation()
+  const { pathname } = useLocation()
   const { t } = useTranslation()
 
   useEffect(() => {
-    const path = location.pathname
-    const key = PAGE_TITLE_MAP[path] ??
-      Object.entries(PAGE_TITLE_MAP).find(([k]) => path.startsWith(k + '/') && k !== '/')?.[1]
+    const key = PAGE_TITLE_MAP[pathname] ??
+      Object.entries(PAGE_TITLE_MAP).find(([k]) => pathname.startsWith(k + '/') && k !== '/')?.[1]
     const pageTitle = key ? t(key) : null
     document.title = pageTitle ? `${pageTitle} | HRHub` : 'HRHub'
-  }, [location.pathname, t])
+  }, [pathname, t])
 
   return null
 }
@@ -180,6 +180,7 @@ export default function App() {
               <Route path="employees" element={<RoleRoute routeKey="employees"><EmployeesPage /></RoleRoute>} />
               <Route path="employees/:id" element={<RoleRoute routeKey="employees/:id"><EmployeeDetailPage /></RoleRoute>} />
               <Route path="recruitment" element={<RoleRoute routeKey="recruitment"><RecruitmentPage /></RoleRoute>} />
+              <Route path="recruitment/jobs/:id" element={<RoleRoute routeKey="recruitment"><JobDetailPage /></RoleRoute>} />
               <Route path="recruitment/candidates" element={<Navigate to="/recruitment" replace />} />
               <Route path="recruitment/candidates/:id" element={<RoleRoute routeKey="recruitment/candidates/:id"><CandidateProfilePage /></RoleRoute>} />
               <Route path="onboarding" element={<RoleRoute routeKey="onboarding"><OnboardingPage /></RoleRoute>} />

@@ -4,7 +4,7 @@ import { buildFilterQueryString, type AppliedFiltersMap } from '@/lib/filters'
 import type { Candidate } from '@/types'
 
 interface JobParams { status?: string; department?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number }
-interface AppParams { jobId?: string; stage?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number }
+interface AppParams { jobId?: string; stage?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number; enabled?: boolean }
 
 interface KanbanPage { data: Candidate[]; total: number; hasMore: boolean; limit: number; offset: number }
 
@@ -30,6 +30,14 @@ export function useJobs(params: JobParams = {}) {
     })
 }
 
+export function useJob(id: string | undefined) {
+    return useQuery({
+        queryKey: ['job', id],
+        queryFn: () => api.get<{ data: unknown }>(`/jobs/${id}`),
+        enabled: !!id,
+    })
+}
+
 export function useCreateJob() {
     const qc = useQueryClient()
     return useMutation({
@@ -47,7 +55,7 @@ export function useApplication(id: string | undefined) {
 }
 
 export function useApplications(params: AppParams = {}) {
-    const { filters, q, ...rest } = params
+    const { filters, q, enabled = true, ...rest } = params
     const qs = new URLSearchParams(toQS({ ...rest, limit: rest.limit ?? 20, offset: rest.offset ?? 0 }))
     if (q) qs.set('q', q)
     if (filters && Object.keys(filters).length > 0) {
@@ -57,6 +65,7 @@ export function useApplications(params: AppParams = {}) {
     return useQuery({
         queryKey: ['applications', params],
         queryFn: () => api.get<{ data: unknown[]; total: number }>(`/applications?${qs}`),
+        enabled,
     })
 }
 
