@@ -423,7 +423,16 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
       })
       const newId = (result as { data?: { id?: string } })?.data?.id
       if (resumeFile && newId) {
-        await uploadResume.mutateAsync({ id: newId, file: resumeFile })
+        try {
+          await uploadResume.mutateAsync({ id: newId, file: resumeFile })
+        } catch {
+          // Candidate was created successfully; only the resume upload failed.
+          // Show a warning so the user can retry from the candidate profile.
+          toast.warning('Candidate added (resume upload failed)', `${name.trim()} was added to the pipeline. Re-attach the resume from their profile.`)
+          reset()
+          onOpenChange(false)
+          return
+        }
       }
       toast.success('Candidate added', `${name.trim()} added to the pipeline.`)
       reset()
@@ -800,6 +809,13 @@ export function RecruitmentPage() {
     () => listStageFilter === 'all' ? allListCandidates : allListCandidates.filter(c => c.stage === listStageFilter),
     [allListCandidates, listStageFilter],
   )
+  const listStageCounts = useMemo(
+    () => allListCandidates.reduce<Partial<Record<ApplicationStage, number>>>((acc, c) => {
+      acc[c.stage] = (acc[c.stage] ?? 0) + 1
+      return acc
+    }, {}),
+    [allListCandidates],
+  )
 
   const { visibleCount: listVisibleCount, setVisibleCount: setListVisibleCount, sentinelRef: listSentinelRef } =
     useInfiniteScroll(filteredListCandidates.length)
@@ -969,12 +985,7 @@ export function RecruitmentPage() {
 
           {pipelineView === 'list' && (
             <div className="space-y-3">
-              {allListCandidates.length > 0 && (() => {
-                const stageCounts = allListCandidates.reduce<Record<string, number>>((acc, c) => {
-                  acc[c.stage] = (acc[c.stage] ?? 0) + 1
-                  return acc
-                }, {})
-                return (
+              {allListCandidates.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       type="button"
@@ -989,7 +1000,7 @@ export function RecruitmentPage() {
                       All · {allListCandidates.length}
                     </button>
                     {stages.map(s => {
-                      const count = stageCounts[s.id] ?? 0
+                      const count = listStageCounts[s.id] ?? 0
                       if (count === 0) return null
                       return (
                         <button
@@ -1009,8 +1020,7 @@ export function RecruitmentPage() {
                       )
                     })}
                   </div>
-                )
-              })()}
+              )}
 
               <Card>
                 <CardContent className="p-0">

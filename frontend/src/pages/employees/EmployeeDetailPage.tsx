@@ -834,8 +834,7 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
 export function EmployeeDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const nowMs = React.useMemo(() => Date.now(), [])
+  const [nowMs] = React.useState(Date.now)
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_employees')
@@ -1249,7 +1248,7 @@ export function EmployeeDetailPage() {
               if (!e.joinDate) return null
               const join = new Date(e.joinDate)
               if (Number.isNaN(join.getTime())) return null
-              const ms = Date.now() - join.getTime()
+              const ms = nowMs - join.getTime()
               const years = ms / (365.25 * 24 * 3600 * 1000)
               if (years < 1) {
                 const months = Math.floor(years * 12)
@@ -3033,6 +3032,11 @@ export function EmployeeDetailPage() {
 
 // ─── Terminate Dialog ─────────────────────────────────────────────────────────
 const getToday = () => new Date().toISOString().slice(0, 10)
+function fmtCurrency(n: string | number | undefined | null) {
+  if (n === undefined || n === null) return '—'
+  const num = Number(n)
+  return isNaN(num) ? '—' : formatCurrency(num)
+}
 
 function TerminateDialog({
   open,
@@ -3070,6 +3074,7 @@ function TerminateDialog({
     setStep('form')
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   React.useEffect(() => { if (!open) reset() }, [open, reset])
 
   const handleClose = () => {
@@ -3100,12 +3105,6 @@ function TerminateDialog({
     } catch (err) {
       toast.error('Failed', (err as Error)?.message ?? 'Could not initiate termination.')
     }
-  }
-
-  function fmt(n: string | number | undefined | null) {
-    if (n === undefined || n === null) return '—'
-    const num = Number(n)
-    return isNaN(num) ? '—' : formatCurrency(num)
   }
 
   return (
@@ -3180,16 +3179,16 @@ function TerminateDialog({
           <div className="space-y-4 py-1">
             <div className="rounded-lg border bg-muted/20 p-3 space-y-1 text-xs text-muted-foreground">
               <p className="font-semibold text-foreground text-sm">{preview.employeeName}</p>
-              <p>{preview.yearsOfService} years of service · Basic: {fmt(preview.basicSalary)}</p>
+              <p>{preview.yearsOfService} years of service · Basic: {fmtCurrency(preview.basicSalary)}</p>
               <p>Exit: {formatDate(exitDate)} · LWD: {formatDate(lastWorkingDay)}</p>
             </div>
 
             <div className="divide-y rounded-lg border overflow-hidden text-sm">
               {[
-                ['Gratuity (UAE Labour Law 2022)', fmt(preview.gratuityAmount)],
-                [`Leave Encashment (${preview.unusedLeaveDays} unused days)`, fmt(preview.leaveEncashmentAmount)],
-                ['Unpaid Salary', fmt(preview.unpaidSalaryAmount)],
-                ...(preview.deductions > 0 ? [['Deductions', `− ${fmt(preview.deductions)}`]] : []),
+                ['Gratuity (UAE Labour Law 2022)', fmtCurrency(preview.gratuityAmount)],
+                [`Leave Encashment (${preview.unusedLeaveDays} unused days)`, fmtCurrency(preview.leaveEncashmentAmount)],
+                ['Unpaid Salary', fmtCurrency(preview.unpaidSalaryAmount)],
+                ...(preview.deductions > 0 ? [['Deductions', `− ${fmtCurrency(preview.deductions)}`]] : []),
               ].map(([label, val]) => (
                 <div key={label} className="flex justify-between px-4 py-2.5">
                   <span className="text-muted-foreground">{label}</span>
@@ -3198,7 +3197,7 @@ function TerminateDialog({
               ))}
               <div className="flex justify-between px-4 py-3 bg-muted/50 font-semibold">
                 <span>Total Settlement</span>
-                <span className="text-primary text-base font-bold">{fmt(preview.totalSettlement)}</span>
+                <span className="text-primary text-base font-bold">{fmtCurrency(preview.totalSettlement)}</span>
               </div>
             </div>
 

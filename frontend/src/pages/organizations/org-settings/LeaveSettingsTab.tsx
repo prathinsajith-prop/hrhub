@@ -78,11 +78,14 @@ export function LeaveSettingsTab() {
     }
 
     // ── Dirty state ─────────────────────────────────────────────────────────────
-    const settingsDirty = useMemo(() => !!(settingsData && (
-        rolloverEnabledFrom !== (settingsData.rolloverEnabledFrom ?? '') ||
-        JSON.stringify(weekOffDays) !== JSON.stringify(settingsData.weekOffDays ?? ['saturday', 'sunday']) ||
-        workingWeekStart !== (settingsData.workingWeekStart ?? 'monday')
-    )), [settingsData, rolloverEnabledFrom, weekOffDays, workingWeekStart])
+    const settingsDirty = useMemo(() => {
+        if (!settingsData) return false
+        const savedDays = settingsData.weekOffDays ?? ['saturday', 'sunday']
+        const daysChanged = weekOffDays.length !== savedDays.length || weekOffDays.some((d, i) => d !== savedDays[i])
+        return rolloverEnabledFrom !== (settingsData.rolloverEnabledFrom ?? '') ||
+            daysChanged ||
+            workingWeekStart !== (settingsData.workingWeekStart ?? 'monday')
+    }, [settingsData, rolloverEnabledFrom, weekOffDays, workingWeekStart])
     const policiesDirty = useMemo(
         () => JSON.stringify(policyDraft) !== JSON.stringify(policiesData ?? []),
         [policyDraft, policiesData],
@@ -90,13 +93,14 @@ export function LeaveSettingsTab() {
     const dirty = settingsDirty || policiesDirty
 
     // ── Rollover gate ───────────────────────────────────────────────────────────
-    const isRolloverLocked = (() => {
-        if (!settingsData?.rolloverEnabledFrom) return false
-        const unlock = new Date(settingsData.rolloverEnabledFrom)
+    const rolloverEnabledFromServer = settingsData?.rolloverEnabledFrom
+    const isRolloverLocked = useMemo(() => {
+        if (!rolloverEnabledFromServer) return false
+        const unlock = new Date(rolloverEnabledFromServer)
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         return today < unlock
-    })()
+    }, [rolloverEnabledFromServer])
 
     const [rolloverConfirmOpen, setRolloverConfirmOpen] = useState(false)
     const [saved, setSaved] = useState(false)
