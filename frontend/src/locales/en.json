@@ -12,7 +12,7 @@
     "leave": "Leave",
     "attendance": "Attendance",
     "performance": "Performance",
-    "assets": "Asset Management",
+    "assets": "Assets",
     "exit": "Exit & Offboarding",
     "calendar": "Calendar",
     "reports": "Reports",
@@ -744,7 +744,7 @@
     "collapse": "Collapse All"
   },
   "assets": {
-    "title": "Asset Management",
+    "title": "Assets",
     "description": "Manage company assets and employee assignments",
     "newAsset": "New Asset",
     "newCategory": "New Category",

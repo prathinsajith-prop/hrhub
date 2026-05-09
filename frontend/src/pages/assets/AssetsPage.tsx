@@ -733,7 +733,7 @@ export function AssetsPage() {
     return (
         <PageWrapper>
             <PageHeader
-                title="Asset Management"
+                title="Assets"
                 description="Track and manage company assets"
                 actions={
                     <div className="flex items-center gap-2">
