@@ -3,7 +3,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import { cn } from '@/lib/utils'
 import {
@@ -248,12 +248,15 @@ export function RichTextDisplay({
   html: string
   className?: string
 }) {
-  if (!html || html === '<p></p>') return null
-  const clean = DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'code', 'pre'],
-    ALLOWED_ATTR: ['href', 'target', 'rel'],
-    FORCE_BODY: true,
-  })
+  const clean = useMemo(() => {
+    if (!html || html === '<p></p>') return null
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'code', 'pre'],
+      ALLOWED_ATTR: ['href', 'target', 'rel'],
+      FORCE_BODY: true,
+    })
+  }, [html])
+  if (!clean) return null
   return (
     <div
       className={cn('prose-display text-sm text-muted-foreground leading-relaxed', className)}

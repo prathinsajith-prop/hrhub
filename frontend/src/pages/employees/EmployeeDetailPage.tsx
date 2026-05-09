@@ -3032,6 +3032,7 @@ export function EmployeeDetailPage() {
 }
 
 // ─── Terminate Dialog ─────────────────────────────────────────────────────────
+const getToday = () => new Date().toISOString().slice(0, 10)
 
 function TerminateDialog({
   open,
@@ -3044,7 +3045,6 @@ function TerminateDialog({
   employee: Employee
   initiateExit: ReturnType<typeof useInitiateExit>
 }) {
-  const getToday = () => new Date().toISOString().slice(0, 10)
   const [exitDate, setExitDate] = React.useState(getToday)
   const [lastWorkingDay, setLastWorkingDay] = React.useState(getToday)
   const [noticePeriodDays, setNoticePeriodDays] = React.useState('0')
@@ -3068,7 +3068,7 @@ function TerminateDialog({
     setNotes('')
     setDeductions('')
     setStep('form')
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   React.useEffect(() => { if (!open) reset() }, [open, reset])
 
