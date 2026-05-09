@@ -3,14 +3,7 @@
  */
 import { useAuthStore } from '@/store/authStore'
 import { socket } from '@/lib/socket'
-
-// API base URL.
-//   • In local dev → defaults to '/api/v1' (proxied by Vite to the backend).
-//   • In production (Vercel/Netlify) → set VITE_API_URL at build time, e.g.
-//     VITE_API_URL=https://your-backend.up.railway.app/api/v1
-// Trailing slashes are stripped so callers can keep using `/auth/login` etc.
-const ENV_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '')
-const BASE = ENV_BASE && ENV_BASE.length > 0 ? ENV_BASE : '/api/v1'
+import { apiBase as BASE } from '@/lib/apiBase'
 
 export class ApiError extends Error {
     statusCode: number
@@ -172,6 +165,27 @@ export const api = {
         request<T>(path, body !== undefined
             ? { method: 'DELETE', body: JSON.stringify(body) }
             : { method: 'DELETE' }),
+    /** Fetch a binary response (e.g. file download) with auth. Returns the raw Blob. */
+    download: async (path: string, retry = true): Promise<Blob> => {
+        const { accessToken, refreshTokens } = useAuthStore.getState() as {
+            accessToken: string | null
+            refreshTokens: () => Promise<boolean>
+        }
+        const headers: Record<string, string> = {}
+        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
+        const res = await fetch(`${BASE}${path}`, { method: 'GET', headers, cache: 'no-store' })
+        if (res.status === 401 && retry) {
+            const ok = await refreshTokens()
+            if (ok) return api.download(path, false)
+            useAuthStore.getState().logout()
+            throw new ApiError(401, 'Session expired')
+        }
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            throw new ApiError(res.status, (body as { message?: string })?.message ?? res.statusText, body)
+        }
+        return res.blob()
+    },
     upload: async <T>(path: string, formData: FormData, retry = true): Promise<T> => {
         // Do NOT set Content-Type — browser must set it with the multipart boundary
         const { accessToken, refreshTokens } = useAuthStore.getState() as {

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 export interface Interview {
     id: string
@@ -34,6 +35,7 @@ export function useScheduleInterview() {
     return useMutation({
         mutationFn: (data: unknown) => api.post('/interviews', data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['interviews'] }),
+        onError: (err: Error) => toast.error('Failed to schedule interview', err.message),
     })
 }
 
@@ -42,6 +44,7 @@ export function useUpdateInterview() {
     return useMutation({
         mutationFn: ({ id, ...data }: { id: string } & Record<string, unknown>) => api.patch(`/interviews/${id}`, data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['interviews'] }),
+        onError: (err: Error) => toast.error('Failed to update interview', err.message),
     })
 }
 
@@ -50,5 +53,6 @@ export function useDeleteInterview() {
     return useMutation({
         mutationFn: (id: string) => api.delete(`/interviews/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['interviews'] }),
+        onError: (err: Error) => toast.error('Failed to delete interview', err.message),
     })
 }

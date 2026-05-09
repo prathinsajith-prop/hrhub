@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 export interface Designation {
     id: string
@@ -24,6 +25,7 @@ export function useCreateDesignation() {
         mutationFn: (data: { name: string; sortOrder?: number }) =>
             api.post<{ data: Designation }>('/designations', data).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['designations'] }),
+        onError: (err: Error) => toast.error('Failed to create designation', err.message),
     })
 }
 
@@ -33,6 +35,7 @@ export function useUpdateDesignation() {
         mutationFn: ({ id, data }: { id: string; data: { name?: string; isActive?: boolean; sortOrder?: number } }) =>
             api.patch<{ data: Designation }>(`/designations/${id}`, data).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['designations'] }),
+        onError: (err: Error) => toast.error('Failed to update designation', err.message),
     })
 }
 
@@ -41,5 +44,6 @@ export function useDeleteDesignation() {
     return useMutation({
         mutationFn: (id: string) => api.delete(`/designations/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['designations'] }),
+        onError: (err: Error) => toast.error('Failed to delete designation', err.message),
     })
 }

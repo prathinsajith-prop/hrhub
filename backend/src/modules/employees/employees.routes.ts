@@ -440,8 +440,16 @@ export default async function (fastify: any): Promise<void> {
         const part = await request.file()
         if (!part) return reply.code(400).send({ message: 'No file provided' })
 
+        const MAX_AVATAR_BYTES = 5 * 1024 * 1024 // 5 MB
         const chunks: Buffer[] = []
-        for await (const chunk of part.file) chunks.push(chunk as Buffer)
+        let totalSize = 0
+        for await (const chunk of part.file) {
+            totalSize += (chunk as Buffer).length
+            if (totalSize > MAX_AVATAR_BYTES) {
+                return reply.code(413).send({ message: 'Avatar image must be under 5 MB' })
+            }
+            chunks.push(chunk as Buffer)
+        }
         const buffer = Buffer.concat(chunks)
 
         // Validate via magic bytes — never trust the client-supplied Content-Type

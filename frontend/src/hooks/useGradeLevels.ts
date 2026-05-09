@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 export type GradeHierarchy = 'Entry' | 'Junior' | 'Mid' | 'Senior' | 'Lead' | 'Manager' | 'Leadership'
 
@@ -67,6 +68,7 @@ export function useCreateGradeLevel() {
         mutationFn: (data: GradeLevelInput) =>
             api.post<{ data: GradeLevel }>('/grade-levels', data).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
+        onError: (err: Error) => toast.error('Failed to create grade level', err.message),
     })
 }
 
@@ -76,6 +78,7 @@ export function useUpdateGradeLevel() {
         mutationFn: ({ id, data }: { id: string; data: Partial<GradeLevelInput> & { isActive?: boolean } }) =>
             api.patch<{ data: GradeLevel }>(`/grade-levels/${id}`, data).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
+        onError: (err: Error) => toast.error('Failed to update grade level', err.message),
     })
 }
 
@@ -84,6 +87,7 @@ export function useDeleteGradeLevel() {
     return useMutation({
         mutationFn: (id: string) => api.delete(`/grade-levels/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
+        onError: (err: Error) => toast.error('Failed to delete grade level', err.message),
     })
 }
 
@@ -92,5 +96,6 @@ export function useSeedDefaultGradeLevels() {
     return useMutation({
         mutationFn: () => api.post('/grade-levels/seed-defaults', {}),
         onSuccess: () => qc.invalidateQueries({ queryKey: QK }),
+        onError: (err: Error) => toast.error('Failed to seed grade levels', err.message),
     })
 }
