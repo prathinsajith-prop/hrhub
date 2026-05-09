@@ -124,15 +124,16 @@ export function JobDetailPage() {
     [appsData],
   )
   const stageCounts = useMemo(
-    () => allCandidates.reduce<Record<string, number>>((acc, c) => {
+    () => allCandidates.reduce<Partial<Record<ApplicationStage, number>>>((acc, c) => {
       acc[c.stage] = (acc[c.stage] ?? 0) + 1
       return acc
     }, {}),
     [allCandidates],
   )
-  const candidates = stageFilter === 'all'
-    ? allCandidates
-    : allCandidates.filter(c => c.stage === stageFilter)
+  const candidates = useMemo(
+    () => stageFilter === 'all' ? allCandidates : allCandidates.filter(c => c.stage === stageFilter),
+    [allCandidates, stageFilter],
+  )
 
   const { visibleCount, setVisibleCount, sentinelRef } = useInfiniteScroll(candidates.length)
   useEffect(() => { setVisibleCount(20) }, [stageFilter, setVisibleCount])
