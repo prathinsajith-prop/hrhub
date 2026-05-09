@@ -5,8 +5,8 @@ import { createEmployee, generateNextEmployeeNo } from '../employees/employees.s
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 import { createChecklist } from '../onboarding/onboarding.service.js'
 import { db } from '../../db/index.js'
-import { entities, tenants } from '../../db/schema/index.js'
-import { and, eq } from 'drizzle-orm'
+import { entities, tenants, orgUnits } from '../../db/schema/index.js'
+import { and, eq, inArray } from 'drizzle-orm'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { fileTypeFromBuffer } from 'file-type'
 import { broadcastToTenant } from '../../lib/ws-registry.js'
@@ -384,6 +384,9 @@ export default async function (fastify: any): Promise<void> {
                     joinDate: { type: 'string', format: 'date' },
                     designation: { type: 'string' },
                     department: { type: 'string' },
+                    departmentId: { type: 'string', format: 'uuid' },
+                    branchId: { type: 'string', format: 'uuid' },
+                    divisionId: { type: 'string', format: 'uuid' },
                     basicSalary: { type: 'number' },
                     entityId: { type: 'string', format: 'uuid' },
                     employeeNo: { type: 'string' },
@@ -417,6 +420,16 @@ export default async function (fastify: any): Promise<void> {
             entityId = ent.id
         }
 
+        // Validate supplied org unit IDs belong to this tenant.
+        const orgUnitIds = [body.departmentId, body.branchId, body.divisionId].filter(Boolean) as string[]
+        if (orgUnitIds.length > 0) {
+            const validUnits = await db.select({ id: orgUnits.id }).from(orgUnits)
+                .where(and(inArray(orgUnits.id, orgUnitIds), eq(orgUnits.tenantId, tenantId)))
+            const validIds = new Set(validUnits.map(u => u.id))
+            const invalid = orgUnitIds.find(id => !validIds.has(id))
+            if (invalid) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Org unit not found for this tenant' })
+        }
+
         const [firstName, ...rest] = (app.name ?? '').trim().split(/\s+/)
         const lastName = rest.join(' ') || firstName || 'Candidate'
         const employeeNo = (body.employeeNo as string) || await generateNextEmployeeNo(tenantId)
@@ -431,6 +444,9 @@ export default async function (fastify: any): Promise<void> {
             phone: app.phone ?? undefined,
             nationality: app.nationality ?? undefined,
             department: (body.department as string) ?? undefined,
+            departmentId: (body.departmentId as string) ?? undefined,
+            branchId: (body.branchId as string) ?? undefined,
+            divisionId: (body.divisionId as string) ?? undefined,
             designation: (body.designation as string) ?? undefined,
             joinDate,
             status: 'onboarding',
