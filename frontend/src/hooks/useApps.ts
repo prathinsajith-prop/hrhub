@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 export interface ConnectedApp {
     id: string
@@ -47,6 +48,7 @@ export function useCreateApp() {
             ipAllowlist?: string[]
         }) => api.post<{ data: CreatedApp }>('/apps', body).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['connected-apps'] }),
+        onError: (err: Error) => toast.error('Failed to create app', err.message),
     })
 }
 
@@ -56,6 +58,7 @@ export function useUpdateApp() {
         mutationFn: ({ id, patch }: { id: string; patch: Partial<ConnectedApp> }) =>
             api.patch<{ data: ConnectedApp }>(`/apps/${id}`, patch).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['connected-apps'] }),
+        onError: (err: Error) => toast.error('Failed to update app', err.message),
     })
 }
 
@@ -65,6 +68,7 @@ export function useRegenerateAppSecret() {
         mutationFn: (id: string) =>
             api.post<{ data: CreatedApp }>(`/apps/${id}/regenerate-secret`).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['connected-apps'] }),
+        onError: (err: Error) => toast.error('Failed to regenerate secret', err.message),
     })
 }
 
@@ -73,6 +77,7 @@ export function useDeleteApp() {
     return useMutation({
         mutationFn: (id: string) => api.delete<void>(`/apps/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['connected-apps'] }),
+        onError: (err: Error) => toast.error('Failed to delete app', err.message),
     })
 }
 

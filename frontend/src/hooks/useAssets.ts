@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -125,6 +126,7 @@ export function useCreateAssetCategory() {
         mutationFn: (data: { name: string; description?: string }) =>
             api.post<{ data: AssetCategory }>('/assets/categories', data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['asset-categories'] }),
+        onError: (err: Error) => toast.error('Failed to create category', err.message),
     })
 }
 
@@ -133,6 +135,7 @@ export function useDeleteAssetCategory() {
     return useMutation({
         mutationFn: (id: string) => api.delete(`/assets/categories/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['asset-categories'] }),
+        onError: (err: Error) => toast.error('Failed to delete category', err.message),
     })
 }
 
@@ -163,6 +166,7 @@ export function useCreateAsset() {
     return useMutation({
         mutationFn: (data: Partial<Asset>) => api.post<{ data: Asset }>('/assets', data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+        onError: (err: Error) => toast.error('Failed to create asset', err.message),
     })
 }
 
@@ -174,6 +178,7 @@ export function useUpdateAsset(id: string) {
             qc.invalidateQueries({ queryKey: ['assets'] })
             qc.invalidateQueries({ queryKey: ['assets', id] })
         },
+        onError: (err: Error) => toast.error('Failed to update asset', err.message),
     })
 }
 
@@ -182,6 +187,7 @@ export function useDeleteAsset() {
     return useMutation({
         mutationFn: (id: string) => api.delete(`/assets/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+        onError: (err: Error) => toast.error('Failed to delete asset', err.message),
     })
 }
 
@@ -201,6 +207,7 @@ export function useAssignAsset() {
             notes?: string
         }) => api.post<{ data: AssetAssignment }>(`/assets/${assetId}/assign`, data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+        onError: (err: Error) => toast.error('Failed to assign asset', err.message),
     })
 }
 
@@ -216,6 +223,7 @@ export function useReturnAsset() {
             notes?: string
         }) => api.post<{ data: AssetAssignment }>(`/assets/assignments/${assignmentId}/return`, data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+        onError: (err: Error) => toast.error('Failed to return asset', err.message),
     })
 }
 
@@ -225,6 +233,7 @@ export function useMarkAssetLost() {
         mutationFn: (assignmentId: string) =>
             api.post<{ data: AssetAssignment }>(`/assets/assignments/${assignmentId}/lost`, {}),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+        onError: (err: Error) => toast.error('Failed to mark asset as lost', err.message),
     })
 }
 
@@ -272,6 +281,7 @@ export function useCreateMaintenanceRecord() {
             notes?: string
         }) => api.post<{ data: AssetMaintenance }>(`/assets/${assetId}/maintenance`, data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+        onError: (err: Error) => toast.error('Failed to log maintenance', err.message),
     })
 }
 
@@ -288,5 +298,6 @@ export function useUpdateMaintenanceRecord() {
             notes?: string
         }) => api.patch<{ data: AssetMaintenance }>(`/assets/maintenance/${maintenanceId}`, data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+        onError: (err: Error) => toast.error('Failed to update maintenance record', err.message),
     })
 }

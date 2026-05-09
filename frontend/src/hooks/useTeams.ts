@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 export interface TeamRow {
     id: string
@@ -103,6 +104,7 @@ export function useCreateTeam() {
         mutationFn: (data: { name: string; description?: string; departmentId?: string }) =>
             api.post<{ data: TeamRow }>('/teams', data).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['teams'] }),
+        onError: (err: Error) => toast.error('Failed to create team', err.message),
     })
 }
 
@@ -112,6 +114,7 @@ export function useUpdateTeam() {
         mutationFn: ({ id, ...data }: { id: string; name?: string; description?: string }) =>
             api.patch<{ data: TeamRow }>(`/teams/${id}`, data).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['teams'] }),
+        onError: (err: Error) => toast.error('Failed to update team', err.message),
     })
 }
 
@@ -120,6 +123,7 @@ export function useDeleteTeam() {
     return useMutation({
         mutationFn: (id: string) => api.delete(`/teams/${id}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['teams'] }),
+        onError: (err: Error) => toast.error('Failed to delete team', err.message),
     })
 }
 
@@ -133,6 +137,7 @@ export function useAddTeamMembers(teamId: string) {
             void qc.invalidateQueries({ queryKey: ['teams', teamId, 'eligible'] })
             void qc.invalidateQueries({ queryKey: ['teams'] })
         },
+        onError: (err: Error) => toast.error('Failed to add team members', err.message),
     })
 }
 
@@ -144,6 +149,7 @@ export function useUpdateTeamMemberRole(teamId: string) {
         onSuccess: () => {
             void qc.invalidateQueries({ queryKey: ['teams', teamId, 'members'] })
         },
+        onError: (err: Error) => toast.error('Failed to update member role', err.message),
     })
 }
 
@@ -157,5 +163,6 @@ export function useRemoveTeamMember(teamId: string) {
             void qc.invalidateQueries({ queryKey: ['teams', teamId, 'eligible'] })
             void qc.invalidateQueries({ queryKey: ['teams'] })
         },
+        onError: (err: Error) => toast.error('Failed to remove team member', err.message),
     })
 }
