@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
-import type { ChangeEvent } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import type { ChangeEvent, KeyboardEvent } from 'react'
+import { cn } from '@/lib/utils'
+import { Briefcase, MapPin, Users, DollarSign, CalendarDays, Tag, X as XIcon, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
 import { Label, Input } from '@/components/ui/primitives'
@@ -23,6 +25,7 @@ import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from
 import { FormField } from '@/components/shared/FormField'
 import { api, apiErrorToFieldMap, ApiError } from '@/lib/api'
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
+import { RichTextEditor } from '@/components/ui/rich-text-editor'
 import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, jobPostSchema, visaApplicationSchema, leaveRequestSchema, documentMetaSchema, zodToFieldErrors } from '@/lib/schemas'
 import {
     JOB_TYPE_OPTIONS, JOB_STATUS_OPTIONS,
@@ -100,24 +103,44 @@ export function buildOrgOptions(units: OrgUnit[]): Array<ComboboxOption & { bran
 export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
     const [title, setTitle] = useState('')
     const [department, setDepartment] = useState('')
+    const [departmentId, setDepartmentId] = useState('')
     const [location, setLocation] = useState('')
     const [type, setType] = useState('full_time')
     const [openings, setOpenings] = useState(1)
     const [minSalary, setMinSalary] = useState(0)
     const [maxSalary, setMaxSalary] = useState(0)
     const [description, setDescription] = useState('')
+    const [closingDate, setClosingDate] = useState('')
+    const [status, setStatus] = useState<'open' | 'draft'>('open')
+    const [requirements, setRequirements] = useState<string[]>([])
+    const [reqInput, setReqInput] = useState('')
+    const reqInputRef = useRef<HTMLInputElement>(null)
     const createJob = useCreateJob()
+    const { data: orgUnitsRaw = [] } = useOrgUnits()
+    const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
+    const orgOptions = buildOrgOptions(orgUnits)
 
-    // Reset form when dialog closes. Track previous `open` value in state so we can
-    // call setState during render without useEffect (React 18+ supported pattern).
     const [prevOpen, setPrevOpen] = useState(true)
     if (!open && prevOpen) {
         setPrevOpen(false)
-        setTitle(''); setDepartment(''); setLocation(''); setType('full_time')
+        setTitle(''); setDepartment(''); setDepartmentId(''); setLocation(''); setType('full_time')
         setOpenings(1); setMinSalary(0); setMaxSalary(0); setDescription('')
+        setClosingDate(''); setStatus('open'); setRequirements([]); setReqInput('')
     } else if (open && !prevOpen) {
         setPrevOpen(true)
     }
+
+    const addRequirement = useCallback(() => {
+        const val = reqInput.trim()
+        if (val && !requirements.includes(val)) setRequirements(r => [...r, val])
+        setReqInput('')
+    }, [reqInput, requirements])
+
+    const onReqKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') { e.preventDefault(); addRequirement() }
+        if (e.key === 'Backspace' && !reqInput && requirements.length > 0)
+            setRequirements(r => r.slice(0, -1))
+    }, [addRequirement, reqInput, requirements.length])
 
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
@@ -126,12 +149,11 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             return
         }
         createJob.mutate(
-            { title, department, location, type, openings, minSalary, maxSalary, description, status: 'open' },
+            { title, department, location: location || null, type, openings, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements },
             {
                 onSuccess: () => {
-                    toast.success('Job posted', `${title} is now open for applications.`)
+                    toast.success('Job posted', `${title} has been ${status === 'draft' ? 'saved as draft' : 'posted'}.`)
                     onOpenChange(false)
-                    setTitle(''); setDepartment(''); setLocation(''); setDescription('')
                 },
                 onError: () => toast.error('Failed to post job', 'Please try again.'),
             },
@@ -140,56 +162,133 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent size="md">
+            <DialogContent size="xl">
                 <DialogHeader>
-                    <DialogTitle>Post New Job</DialogTitle>
-                </DialogHeader>
-                <DialogBody className="space-y-3">
-                    <div className="space-y-1.5">
-                        <Label required>Job Title</Label>
-                        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Property Consultant" />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <Label required>Department</Label>
-                            <Input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="e.g. Sales" />
+                    <div className="flex items-center justify-between">
+                        <DialogTitle>Post New Job</DialogTitle>
+                        <div className="flex items-center gap-1 rounded-full border border-border bg-muted/40 p-0.5 mr-8">
+                            <button
+                                type="button"
+                                onClick={() => setStatus('open')}
+                                className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all', status === 'open' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
+                            >Open</button>
+                            <button
+                                type="button"
+                                onClick={() => setStatus('draft')}
+                                className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all', status === 'draft' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
+                            >Draft</button>
                         </div>
+                    </div>
+                </DialogHeader>
+
+                <DialogBody className="p-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border min-h-0">
+                    {/* ── Left: job metadata ── */}
+                    <div className="md:w-[42%] shrink-0 overflow-y-auto p-5 space-y-4">
+
                         <div className="space-y-1.5">
-                            <Label>Location</Label>
+                            <Label required className="flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 text-muted-foreground" />Job Title</Label>
+                            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Property Consultant" />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label required className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-muted-foreground" />Department</Label>
+                            <Combobox
+                                value={departmentId}
+                                onValueChange={(id) => {
+                                    const opt = orgOptions.find(o => o.value === id)
+                                    setDepartmentId(id)
+                                    setDepartment(opt?.label ?? '')
+                                }}
+                                options={orgOptions}
+                                placeholder="Select department…"
+                                clearable
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-muted-foreground" />Location</Label>
                             <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Dubai Marina" />
                         </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="space-y-1.5">
-                            <Label>Type</Label>
-                            <Select value={type} onValueChange={setType}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {JOB_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label>Employment Type</Label>
+                                <Select value={type} onValueChange={setType}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {JOB_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Openings</Label>
+                                <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
+                            </div>
                         </div>
+
                         <div className="space-y-1.5">
-                            <Label>Openings</Label>
-                            <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
+                            <Label className="flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5 text-muted-foreground" />Salary Range (AED)</Label>
+                            <div className="flex items-center gap-2">
+                                <NumericInput value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} placeholder="Min" className="flex-1" />
+                                <span className="text-muted-foreground text-sm shrink-0">–</span>
+                                <NumericInput value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} placeholder="Max" className="flex-1" />
+                            </div>
                         </div>
+
                         <div className="space-y-1.5">
-                            <Label>Min Salary (AED)</Label>
-                            <NumericInput value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} />
+                            <Label className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
                         </div>
                     </div>
-                    <div className="space-y-1.5">
-                        <Label>Max Salary (AED)</Label>
-                        <NumericInput value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label>Description</Label>
-                        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Brief job description..." />
+
+                    {/* ── Right: description + requirements ── */}
+                    <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                        <div className="space-y-1.5">
+                            <Label>Job Description</Label>
+                            <RichTextEditor
+                                value={description}
+                                onChange={setDescription}
+                                placeholder="Describe the role, responsibilities, and what success looks like…"
+                                minHeight={200}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5 text-muted-foreground" />Requirements <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            {requirements.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5" role="list" aria-label="Requirements">
+                                    {requirements.map(r => (
+                                        <span key={r} role="listitem" className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
+                                            {r}
+                                            <button type="button" aria-label={`Remove "${r}"`} onClick={() => setRequirements(prev => prev.filter(x => x !== r))} className="ml-0.5 text-primary/60 hover:text-primary">
+                                                <XIcon className="h-3 w-3" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="flex gap-2">
+                                <input
+                                    ref={reqInputRef}
+                                    value={reqInput}
+                                    onChange={e => setReqInput(e.target.value)}
+                                    onKeyDown={onReqKeyDown}
+                                    placeholder="e.g. 3+ years experience · Press Enter to add"
+                                    className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                />
+                                <Button type="button" variant="outline" size="sm" onClick={addRequirement} disabled={!reqInput.trim()}>
+                                    <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </DialogBody>
+
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button onClick={submit} loading={createJob.isPending}>Post Job</Button>
+                    <Button onClick={submit} loading={createJob.isPending}>
+                        {status === 'draft' ? 'Save Draft' : 'Post Job'}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -1487,10 +1586,11 @@ export function EditJobDialog({
 }: {
     open: boolean
     onOpenChange: (o: boolean) => void
-    job: { id: string; title?: string; department?: string; location?: string | null; type?: string; openings?: number; minSalary?: number | string | null; maxSalary?: number | string | null; description?: string | null; status?: string }
+    job: { id: string; title?: string; department?: string; location?: string | null; type?: string; openings?: number; minSalary?: number | string | null; maxSalary?: number | string | null; description?: string | null; status?: string; closingDate?: string | null; requirements?: string[] }
 }) {
     const [title, setTitle] = useState(job.title ?? '')
     const [department, setDepartment] = useState(job.department ?? '')
+    const [departmentId, setDepartmentId] = useState('')
     const [location, setLocation] = useState(job.location ?? '')
     const [type, setType] = useState(job.type ?? 'full_time')
     const [openings, setOpenings] = useState(job.openings ?? 1)
@@ -1498,19 +1598,41 @@ export function EditJobDialog({
     const [maxSalary, setMaxSalary] = useState(Number(job.maxSalary ?? 0))
     const [description, setDescription] = useState(job.description ?? '')
     const [status, setStatus] = useState(job.status ?? 'open')
+    const [closingDate, setClosingDate] = useState(job.closingDate ?? '')
+    const [requirements, setRequirements] = useState<string[]>(job.requirements ?? [])
+    const [reqInput, setReqInput] = useState('')
+    const editReqInputRef = useRef<HTMLInputElement>(null)
     const updateJob = useUpdateJob()
+    const { data: orgUnitsRawEdit = [] } = useOrgUnits()
+    const orgUnitsEdit = Array.isArray(orgUnitsRawEdit) ? orgUnitsRawEdit as OrgUnit[] : []
+    const orgOptionsEdit = buildOrgOptions(orgUnitsEdit)
 
-    // Sync form from job prop when dialog opens.
     const [prevEditJobOpen, setPrevEditJobOpen] = useState(false)
     if (open && !prevEditJobOpen) {
         setPrevEditJobOpen(true)
-        setTitle(job.title ?? ''); setDepartment(job.department ?? ''); setLocation(job.location ?? '')
+        setTitle(job.title ?? ''); setLocation(job.location ?? '')
         setType(job.type ?? 'full_time'); setOpenings(job.openings ?? 1)
         setMinSalary(Number(job.minSalary ?? 0)); setMaxSalary(Number(job.maxSalary ?? 0))
         setDescription(job.description ?? ''); setStatus(job.status ?? 'open')
+        setClosingDate(job.closingDate ?? ''); setRequirements(job.requirements ?? [])
+        const match = orgOptionsEdit.find(o => o.label === job.department)
+        setDepartmentId(match?.value ?? '')
+        setDepartment(job.department ?? '')
     } else if (!open && prevEditJobOpen) {
         setPrevEditJobOpen(false)
     }
+
+    const addEditRequirement = useCallback(() => {
+        const val = reqInput.trim()
+        if (val && !requirements.includes(val)) setRequirements(r => [...r, val])
+        setReqInput('')
+    }, [reqInput, requirements])
+
+    const onEditReqKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') { e.preventDefault(); addEditRequirement() }
+        if (e.key === 'Backspace' && !reqInput && requirements.length > 0)
+            setRequirements(r => r.slice(0, -1))
+    }, [addEditRequirement, reqInput, requirements.length])
 
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
@@ -1519,7 +1641,7 @@ export function EditJobDialog({
             return
         }
         updateJob.mutate(
-            { id: job.id, data: { title, department, location: location || null, type, openings, minSalary, maxSalary, description: description || null, status } },
+            { id: job.id, data: { title, department, location: location || null, type, openings, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements } },
             {
                 onSuccess: () => {
                     toast.success('Job updated', `${title} has been saved.`)
@@ -1532,64 +1654,126 @@ export function EditJobDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent size="md">
+            <DialogContent size="xl">
                 <DialogHeader>
-                    <DialogTitle>Edit Job</DialogTitle>
-                </DialogHeader>
-                <DialogBody className="space-y-3">
-                    <div className="space-y-1.5">
-                        <Label required>Job Title</Label>
-                        <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <Label required>Department</Label>
-                            <Input value={department} onChange={(e) => setDepartment(e.target.value)} />
+                    <div className="flex items-center justify-between">
+                        <DialogTitle>Edit Job</DialogTitle>
+                        <div className="flex items-center gap-1 rounded-full border border-border bg-muted/40 p-0.5 mr-8">
+                            {JOB_STATUS_OPTIONS.map((o: SelectOption) => (
+                                <button
+                                    key={o.value}
+                                    type="button"
+                                    onClick={() => setStatus(o.value)}
+                                    className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all', status === o.value ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
+                                >{o.label}</button>
+                            ))}
                         </div>
+                    </div>
+                </DialogHeader>
+
+                <DialogBody className="p-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border min-h-0">
+                    {/* ── Left: job metadata ── */}
+                    <div className="md:w-[42%] shrink-0 overflow-y-auto p-5 space-y-4">
+
                         <div className="space-y-1.5">
-                            <Label>Location</Label>
+                            <Label required className="flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 text-muted-foreground" />Job Title</Label>
+                            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label required className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-muted-foreground" />Department</Label>
+                            <Combobox
+                                value={departmentId}
+                                onValueChange={(id) => {
+                                    const opt = orgOptionsEdit.find(o => o.value === id)
+                                    setDepartmentId(id)
+                                    setDepartment(opt?.label ?? '')
+                                }}
+                                options={orgOptionsEdit}
+                                placeholder="Select department…"
+                                clearable
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-muted-foreground" />Location</Label>
                             <Input value={location ?? ''} onChange={(e) => setLocation(e.target.value)} />
                         </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="space-y-1.5">
-                            <Label>Type</Label>
-                            <Select value={type} onValueChange={setType}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {JOB_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label>Employment Type</Label>
+                                <Select value={type} onValueChange={setType}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {JOB_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Openings</Label>
+                                <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
+                            </div>
                         </div>
+
                         <div className="space-y-1.5">
-                            <Label>Openings</Label>
-                            <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
+                            <Label className="flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5 text-muted-foreground" />Salary Range (AED)</Label>
+                            <div className="flex items-center gap-2">
+                                <NumericInput value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} placeholder="Min" className="flex-1" />
+                                <span className="text-muted-foreground text-sm shrink-0">–</span>
+                                <NumericInput value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} placeholder="Max" className="flex-1" />
+                            </div>
                         </div>
+
                         <div className="space-y-1.5">
-                            <Label>Status</Label>
-                            <Select value={status} onValueChange={setStatus}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {JOB_STATUS_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <Label>Min Salary (AED)</Label>
-                            <NumericInput value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label>Max Salary (AED)</Label>
-                            <NumericInput value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} />
+                            <Label className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
                         </div>
                     </div>
-                    <div className="space-y-1.5">
-                        <Label>Description</Label>
-                        <Textarea value={description ?? ''} onChange={(e) => setDescription(e.target.value)} rows={3} />
+
+                    {/* ── Right: description + requirements ── */}
+                    <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                        <div className="space-y-1.5">
+                            <Label>Job Description</Label>
+                            <RichTextEditor
+                                value={description ?? ''}
+                                onChange={setDescription}
+                                placeholder="Describe the role, responsibilities, and what success looks like…"
+                                minHeight={200}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5 text-muted-foreground" />Requirements <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            {requirements.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5" role="list" aria-label="Requirements">
+                                    {requirements.map(r => (
+                                        <span key={r} role="listitem" className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
+                                            {r}
+                                            <button type="button" aria-label={`Remove "${r}"`} onClick={() => setRequirements(prev => prev.filter(x => x !== r))} className="ml-0.5 text-primary/60 hover:text-primary">
+                                                <XIcon className="h-3 w-3" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="flex gap-2">
+                                <input
+                                    ref={editReqInputRef}
+                                    value={reqInput}
+                                    onChange={e => setReqInput(e.target.value)}
+                                    onKeyDown={onEditReqKeyDown}
+                                    placeholder="e.g. 3+ years experience · Press Enter to add"
+                                    className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                />
+                                <Button type="button" variant="outline" size="sm" onClick={addEditRequirement} disabled={!reqInput.trim()}>
+                                    <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </DialogBody>
+
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                     <Button onClick={submit} loading={updateJob.isPending}>Save Changes</Button>

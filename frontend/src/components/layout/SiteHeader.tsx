@@ -66,14 +66,14 @@ function humaniseSegment(seg: string): string {
  *   via `ROOT_LABELS`, deeper segments humanised.
  */
 export function SiteHeader() {
-  const location = useLocation()
+  const { pathname } = useLocation()
   const navigate = useNavigate()
   const { t } = useTranslation()
   const [searchOpen, setSearchOpen] = useState(false)
   const { theme, setTheme } = useTheme()
 
   const crumbs = useMemo(() => {
-    const segments = location.pathname.split('/').filter(Boolean)
+    const segments = pathname.split('/').filter(Boolean)
     if (segments.length === 0) return [] as { href: string; label: string; isLast: boolean }[]
     const detailsLabel = t('common.details', { defaultValue: 'Details' })
     return segments.map((seg, idx) => {
@@ -88,7 +88,7 @@ export function SiteHeader() {
           : humanised
       return { href, label, isLast: idx === segments.length - 1 }
     })
-  }, [location.pathname, t])
+  }, [pathname, t])
 
   const { user, tenant, logout } = useAuthStore()
   const { data: unreadCount = 0 } = useUnreadCount()

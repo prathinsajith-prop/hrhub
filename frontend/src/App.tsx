@@ -20,6 +20,7 @@ const EmployeesPage = lazy(() => import('@/pages/employees/EmployeesPage').then(
 const EmployeeDetailPage = lazy(() => import('@/pages/employees/EmployeeDetailPage').then(m => ({ default: m.EmployeeDetailPage })))
 const RecruitmentPage = lazy(() => import('@/pages/recruitment/RecruitmentPage').then(m => ({ default: m.RecruitmentPage })))
 const CandidateProfilePage = lazy(() => import('@/pages/recruitment/CandidateProfilePage').then(m => ({ default: m.CandidateProfilePage })))
+const JobDetailPage = lazy(() => import('@/pages/recruitment/JobDetailPage').then(m => ({ default: m.JobDetailPage })))
 const VisaPage = lazy(() => import('@/pages/visa/VisaPage').then(m => ({ default: m.VisaPage })))
 const VisaDetailPage = lazy(() => import('@/pages/visa/VisaDetailPage').then(m => ({ default: m.VisaDetailPage })))
 const DocumentsPage = lazy(() => import('@/pages/documents/DocumentsPage').then(m => ({ default: m.DocumentsPage })))
@@ -46,7 +47,6 @@ const TeamPage = lazy(() => import('@/pages/organizations/TeamPage').then(m => (
 const UsersPage = lazy(() => import('@/pages/settings/UsersPage').then(m => ({ default: m.UsersPage })))
 const ConnectedAppsPage = lazy(() => import('@/pages/organizations/ConnectedAppsPage').then(m => ({ default: m.ConnectedAppsPage })))
 const AppDetailPage = lazy(() => import('@/pages/organizations/AppDetailPage').then(m => ({ default: m.AppDetailPage })))
-const LeavePoliciesPage = lazy(() => import('@/pages/leave/LeavePoliciesPage').then(m => ({ default: m.LeavePoliciesPage })))
 const OnboardingUploadPage = lazy(() => import('@/pages/onboarding/OnboardingUploadPage').then(m => ({ default: m.OnboardingUploadPage })))
 const OrganizationSettingsPage = lazy(() => import('@/pages/organizations/OrganizationSettingsPage').then(m => ({ default: m.OrganizationSettingsPage })))
 const OrgStructurePage = lazy(() => import('@/pages/organizations/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })))
@@ -102,7 +102,6 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/organizations': 'organizations.title',
   '/team': 'team.title',
   '/apps': 'apps.title',
-  '/leave-policies': 'leavePolicies.title',
   '/training': 'training.pageTitle',
   '/my/training': 'training.myPageTitle',
   '/loans': 'loans.pageTitle',
@@ -118,16 +117,15 @@ const PAGE_TITLE_MAP: Record<string, string> = {
 }
 
 function TitleManager() {
-  const location = useLocation()
+  const { pathname } = useLocation()
   const { t } = useTranslation()
 
   useEffect(() => {
-    const path = location.pathname
-    const key = PAGE_TITLE_MAP[path] ??
-      Object.entries(PAGE_TITLE_MAP).find(([k]) => path.startsWith(k + '/') && k !== '/')?.[1]
+    const key = PAGE_TITLE_MAP[pathname] ??
+      Object.entries(PAGE_TITLE_MAP).find(([k]) => pathname.startsWith(k + '/') && k !== '/')?.[1]
     const pageTitle = key ? t(key) : null
     document.title = pageTitle ? `${pageTitle} | HRHub` : 'HRHub'
-  }, [location.pathname, t])
+  }, [pathname, t])
 
   return null
 }
@@ -180,6 +178,7 @@ export default function App() {
               <Route path="employees" element={<RoleRoute routeKey="employees"><EmployeesPage /></RoleRoute>} />
               <Route path="employees/:id" element={<RoleRoute routeKey="employees/:id"><EmployeeDetailPage /></RoleRoute>} />
               <Route path="recruitment" element={<RoleRoute routeKey="recruitment"><RecruitmentPage /></RoleRoute>} />
+              <Route path="recruitment/jobs/:id" element={<RoleRoute routeKey="recruitment"><JobDetailPage /></RoleRoute>} />
               <Route path="recruitment/candidates" element={<Navigate to="/recruitment" replace />} />
               <Route path="recruitment/candidates/:id" element={<RoleRoute routeKey="recruitment/candidates/:id"><CandidateProfilePage /></RoleRoute>} />
               <Route path="onboarding" element={<RoleRoute routeKey="onboarding"><OnboardingPage /></RoleRoute>} />
@@ -210,7 +209,7 @@ export default function App() {
               <Route path="users" element={<RoleRoute routeKey="users"><UsersPage /></RoleRoute>} />
               <Route path="apps" element={<RoleRoute routeKey="apps"><ConnectedAppsPage /></RoleRoute>} />
               <Route path="apps/:id" element={<RoleRoute routeKey="apps"><AppDetailPage /></RoleRoute>} />
-              <Route path="leave-policies" element={<RoleRoute routeKey="leave-policies"><LeavePoliciesPage /></RoleRoute>} />
+              <Route path="leave-policies" element={<Navigate to="/organization-settings" state={{ tab: 'leave' }} replace />} />
               <Route path="organization-settings" element={<RoleRoute routeKey="organization-settings"><OrganizationSettingsPage /></RoleRoute>} />
               <Route path="org-structure" element={<RoleRoute routeKey="org-structure"><OrgStructurePage /></RoleRoute>} />
               <Route path="subscription" element={<RoleRoute routeKey="subscription"><SubscriptionPage /></RoleRoute>} />
