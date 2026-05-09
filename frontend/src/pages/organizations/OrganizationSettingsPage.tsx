@@ -33,7 +33,7 @@ const tabs = [
     { value: 'grade-levels',  label: 'Grade Levels',         desc: 'Employee grade & band configuration',     icon: GraduationCap, requires: 'manage_settings' as Permission | null },
     { value: 'roles',         label: 'Roles & Permissions',  desc: 'View built-in role permissions',          icon: KeyRound,      requires: 'manage_users'    as Permission | null },
     { value: 'holidays',      label: 'Public Holidays',      desc: 'Manage company-wide holidays by year',    icon: CalendarDays,  requires: 'manage_settings' as Permission | null },
-    { value: 'leave',         label: 'Leave Settings',       desc: 'Rollover gate & leave policies',          icon: CalendarClock, requires: 'manage_settings' as Permission | null },
+    { value: 'leave',         label: 'Leave Settings',       desc: 'Working week, policies & rollover gate',  icon: CalendarClock, requires: 'manage_settings' as Permission | null },
     { value: 'security',      label: 'Security',             desc: 'Policies, IP allowlist & data',           icon: Shield,        requires: 'manage_settings' as Permission | null },
 ]
 

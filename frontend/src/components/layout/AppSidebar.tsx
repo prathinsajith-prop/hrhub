@@ -17,7 +17,6 @@ import {
   StarIcon,
   PackageIcon,
   UserMinusIcon,
-  CalendarClockIcon,
   MessageSquareWarningIcon,
   GraduationCapIcon,
   HandCoinsIcon,
@@ -87,7 +86,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       items: [
         { title: t('nav.payroll'), url: "/payroll", icon: BanknoteIcon },
         { title: t('nav.leave'), url: "/leave", icon: CalendarCheckIcon },
-        { title: t('nav.leavePolicies'), url: "/leave-policies", icon: CalendarClockIcon },
         { title: t('nav.leaveAdjustments', { defaultValue: 'Adjustments' }), url: "/leave-adjustments", icon: CalendarPlusIcon },
         { title: t('nav.attendance'), url: "/attendance", icon: ClockIcon },
         { title: t('nav.performance'), url: "/performance", icon: StarIcon },

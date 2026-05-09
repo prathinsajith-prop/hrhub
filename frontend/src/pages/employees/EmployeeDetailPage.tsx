@@ -55,6 +55,7 @@ import { useActivityLogs, type ActivityLog } from '@/hooks/useAudit'
 import { useEmployeeWarnings, useCreateEmployeeWarning, useDeleteEmployeeWarning, useWarningDocumentUrl, type CreateWarningInput } from '@/hooks/useEmployeeWarnings'
 import { useSponsoringEntities, useCreateSponsoringEntity, type SponsoringEntity } from '@/hooks/useSponsoringEntities'
 import { useEmployeeTraining, TRAINING_STATUS_STYLE, type TrainingRecord } from '@/hooks/useTraining'
+import { useInitiateExit, useSettlementPreview } from '@/hooks/useExit'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { EditEmployeeDialog, EditEmploymentDialog, EditPayrollDialog, AssignAssetToEmployeeDialog } from '@/components/shared/action-dialogs'
 import { InviteEmployeeDialog } from '@/components/shared/InviteEmployeeDialog'
@@ -922,10 +923,12 @@ export function EmployeeDetailPage() {
   const updateEmployee = useUpdateEmployee(id!)
   const updateStatus = useUpdateEmployeeStatus()
   const archiveEmployee = useArchiveEmployee()
+  const initiateExit = useInitiateExit()
   const verifyDocument = useVerifyDocument()
   const rejectDocument = useRejectDocument()
   const [activeTab, setActiveTab] = React.useState('personal')
-  const [statusTarget, setStatusTarget] = React.useState<{ status: 'active' | 'suspended' | 'terminated' } | null>(null)
+  const [statusTarget, setStatusTarget] = React.useState<{ status: 'active' | 'suspended' } | null>(null)
+  const [terminateOpen, setTerminateOpen] = React.useState(false)
   const [archiveConfirm, setArchiveConfirm] = React.useState(false)
   const [editOpen, setEditOpen] = React.useState(false)
   const [editEmploymentOpen, setEditEmploymentOpen] = React.useState(false)
@@ -997,9 +1000,8 @@ export function EmployeeDetailPage() {
   const isAccessRestricted = ['terminated', 'suspended'].includes(e?.status ?? '')
 
   const STATUS_CONFIG = {
-    active:     { label: 'Activate',  past: 'activated',  confirmLabel: 'Activate',  variant: 'success'     as const, description: 'This will set the employee status back to active.' },
-    suspended:  { label: 'Suspend',   past: 'suspended',  confirmLabel: 'Suspend',   variant: 'warning'     as const, description: 'The employee will be suspended and cannot log in.' },
-    terminated: { label: 'Terminate', past: 'terminated', confirmLabel: 'Terminate', variant: 'destructive' as const, description: 'This will mark the employee as terminated. This can be reversed later.' },
+    active:    { label: 'Activate', past: 'activated', confirmLabel: 'Activate', variant: 'success'  as const, description: 'This will set the employee status back to active.' },
+    suspended: { label: 'Suspend',  past: 'suspended', confirmLabel: 'Suspend',  variant: 'warning'  as const, description: 'The employee will be suspended and cannot log in.' },
   }
 
   function handleStatusChange() {
@@ -1217,7 +1219,7 @@ export function EmployeeDetailPage() {
                         )}
                         {e.status !== 'terminated' && (
                           <DropdownMenuItem
-                            onClick={() => setStatusTarget({ status: 'terminated' })}
+                            onClick={() => setTerminateOpen(true)}
                             className="text-destructive focus:text-destructive focus:bg-destructive/10"
                           >
                             <UserX className="h-3.5 w-3.5 mr-2" />
@@ -2992,7 +2994,6 @@ export function EmployeeDetailPage() {
         />
       )}
 
-      {/* Status change confirmation */}
       {statusTarget && e && (
         <ConfirmDialog
           open={!!statusTarget}
@@ -3000,8 +3001,17 @@ export function EmployeeDetailPage() {
           title={`${STATUS_CONFIG[statusTarget.status].label} employee?`}
           description={STATUS_CONFIG[statusTarget.status].description}
           confirmLabel={updateStatus.isPending ? 'Updating…' : STATUS_CONFIG[statusTarget.status].confirmLabel}
-          variant={statusTarget.status === 'active' ? 'success' : statusTarget.status === 'suspended' ? 'warning' : 'destructive'}
+          variant={statusTarget.status === 'active' ? 'success' : 'warning'}
           onConfirm={handleStatusChange}
+        />
+      )}
+
+      {e && (
+        <TerminateDialog
+          open={terminateOpen}
+          onOpenChange={setTerminateOpen}
+          employee={e}
+          initiateExit={initiateExit}
         />
       )}
 
@@ -3018,6 +3028,207 @@ export function EmployeeDetailPage() {
         />
       )}
     </PageWrapper>
+  )
+}
+
+// ─── Terminate Dialog ─────────────────────────────────────────────────────────
+
+function TerminateDialog({
+  open,
+  onOpenChange,
+  employee,
+  initiateExit,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  employee: Employee
+  initiateExit: ReturnType<typeof useInitiateExit>
+}) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [exitDate, setExitDate] = React.useState(today)
+  const [lastWorkingDay, setLastWorkingDay] = React.useState(today)
+  const [noticePeriodDays, setNoticePeriodDays] = React.useState('0')
+  const [reason, setReason] = React.useState('')
+  const [notes, setNotes] = React.useState('')
+  const [deductions, setDeductions] = React.useState('')
+  const [step, setStep] = React.useState<'form' | 'preview'>('form')
+
+  const { data: preview, isLoading: previewLoading } = useSettlementPreview(
+    step === 'preview' ? employee.id : undefined,
+    step === 'preview' ? exitDate : undefined,
+    step === 'preview' ? 'termination' : undefined,
+    step === 'preview' && deductions ? Number(deductions) : undefined,
+  )
+
+  const reset = () => {
+    setExitDate(today)
+    setLastWorkingDay(today)
+    setNoticePeriodDays('0')
+    setReason('')
+    setNotes('')
+    setDeductions('')
+    setStep('form')
+  }
+
+  const handleClose = () => {
+    if (!initiateExit.isPending) {
+      reset()
+      onOpenChange(false)
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!exitDate) { toast.warning('Exit date required', 'Please enter the termination date.'); return }
+    if (!lastWorkingDay) { toast.warning('Last working day required', 'Please enter the last working day.'); return }
+    if (!reason.trim()) { toast.warning('Reason required', 'Please provide a reason for termination.'); return }
+    try {
+      await initiateExit.mutateAsync({
+        employeeId: employee.id,
+        exitType: 'termination',
+        exitDate,
+        lastWorkingDay,
+        noticePeriodDays: Number(noticePeriodDays) || 0,
+        reason: reason.trim(),
+        notes: notes.trim() || undefined,
+        deductions: deductions ? Number(deductions) : undefined,
+      })
+      toast.success('Termination initiated', `Exit request for ${employee.fullName} has been submitted for approval.`)
+      reset()
+      onOpenChange(false)
+    } catch (err) {
+      toast.error('Failed', (err as Error)?.message ?? 'Could not initiate termination.')
+    }
+  }
+
+  function fmt(n: string | number | undefined | null) {
+    if (n === undefined || n === null) return '—'
+    const num = Number(n)
+    return isNaN(num) ? '—' : formatCurrency(num)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <UserX className="h-4 w-4" />
+            {step === 'form' ? 'Terminate Employee' : 'Settlement Preview'}
+          </DialogTitle>
+        </DialogHeader>
+
+        {step === 'form' && (
+          <div className="space-y-4 py-1">
+            {/* Employee summary */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+              <Avatar className="h-10 w-10 shrink-0">
+                {employee.avatarUrl && <AvatarImage src={employee.avatarUrl} alt={employee.fullName} />}
+                <AvatarFallback className="text-xs font-semibold bg-destructive/10 text-destructive">
+                  {getInitials(employee.fullName)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">{employee.fullName}</p>
+                <p className="text-xs text-muted-foreground">{employee.designation ?? employee.employeeNo}</p>
+              </div>
+              <Badge variant="destructive" className="ml-auto shrink-0 text-[10px]">Termination</Badge>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label required>Exit Date</Label>
+                <DatePicker value={exitDate} onChange={v => setExitDate(v ?? '')} />
+              </div>
+              <div className="space-y-1.5">
+                <Label required>Last Working Day</Label>
+                <DatePicker value={lastWorkingDay} min={exitDate || undefined} onChange={v => setLastWorkingDay(v ?? '')} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Notice Period (days)</Label>
+                <NumericInput decimal={false} value={noticePeriodDays} onChange={e => setNoticePeriodDays(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Deductions (AED)</Label>
+                <NumericInput decimal value={deductions} onChange={e => setDeductions(e.target.value)} placeholder="0.00" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label required>Reason for Termination</Label>
+              <Textarea value={reason} onChange={e => setReason(e.target.value)} rows={2} placeholder="Reason for termination…" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Additional Notes</Label>
+              <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Any additional notes for the record…" />
+            </div>
+          </div>
+        )}
+
+        {step === 'preview' && previewLoading && (
+          <div className="py-12 text-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">Calculating settlement…</p>
+          </div>
+        )}
+
+        {step === 'preview' && !previewLoading && preview && (
+          <div className="space-y-4 py-1">
+            <div className="rounded-lg border bg-muted/20 p-3 space-y-1 text-xs text-muted-foreground">
+              <p className="font-semibold text-foreground text-sm">{preview.employeeName}</p>
+              <p>{preview.yearsOfService} years of service · Basic: {fmt(preview.basicSalary)}</p>
+              <p>Exit: {formatDate(exitDate)} · LWD: {formatDate(lastWorkingDay)}</p>
+            </div>
+
+            <div className="divide-y rounded-lg border overflow-hidden text-sm">
+              {[
+                ['Gratuity (UAE Labour Law 2022)', fmt(preview.gratuityAmount)],
+                [`Leave Encashment (${preview.unusedLeaveDays} unused days)`, fmt(preview.leaveEncashmentAmount)],
+                ['Unpaid Salary', fmt(preview.unpaidSalaryAmount)],
+                ...(preview.deductions > 0 ? [['Deductions', `− ${fmt(preview.deductions)}`]] : []),
+              ].map(([label, val]) => (
+                <div key={label} className="flex justify-between px-4 py-2.5">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-medium">{val}</span>
+                </div>
+              ))}
+              <div className="flex justify-between px-4 py-3 bg-muted/50 font-semibold">
+                <span>Total Settlement</span>
+                <span className="text-primary text-base font-bold">{fmt(preview.totalSettlement)}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+              This exit request will go through the approval workflow before the employee is formally terminated.
+            </p>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={handleClose} disabled={initiateExit.isPending}>Cancel</Button>
+          {step === 'form' ? (
+            <>
+              <Button variant="outline" onClick={() => setStep('preview')} disabled={!exitDate || !lastWorkingDay}>
+                Preview Settlement
+              </Button>
+              <Button variant="destructive" onClick={handleSubmit} loading={initiateExit.isPending}>
+                Submit Termination
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setStep('form')}>Back to Form</Button>
+              <Button variant="destructive" onClick={handleSubmit} loading={initiateExit.isPending}>
+                Confirm Termination
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
