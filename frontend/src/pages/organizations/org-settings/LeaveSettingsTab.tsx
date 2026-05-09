@@ -34,7 +34,7 @@ const ACCRUAL_RULES: { value: AccrualRule; label: string; desc: string }[] = [
     { value: 'none',               label: 'None',                   desc: 'Leave type is tracked but not accrued' },
 ]
 
-const LEAVE_TYPE_LABELS: Record<string, string> = {
+const POLICY_TYPE_LABELS: Record<string, string> = {
     annual:        'Annual Leave',
     sick:          'Sick Leave',
     maternity:     'Maternity Leave',
@@ -78,11 +78,11 @@ export function LeaveSettingsTab() {
     }
 
     // ── Dirty state ─────────────────────────────────────────────────────────────
-    const settingsDirty = !!(settingsData && (
+    const settingsDirty = useMemo(() => !!(settingsData && (
         rolloverEnabledFrom !== (settingsData.rolloverEnabledFrom ?? '') ||
         JSON.stringify(weekOffDays) !== JSON.stringify(settingsData.weekOffDays ?? ['saturday', 'sunday']) ||
         workingWeekStart !== (settingsData.workingWeekStart ?? 'monday')
-    ))
+    )), [settingsData, rolloverEnabledFrom, weekOffDays, workingWeekStart])
     const policiesDirty = useMemo(
         () => JSON.stringify(policyDraft) !== JSON.stringify(policiesData ?? []),
         [policyDraft, policiesData],
@@ -277,7 +277,7 @@ export function LeaveSettingsTab() {
                         </div>
 
                         {policyDraft.map((p, i) => {
-                            const label = LEAVE_TYPE_LABELS[p.leaveType] ?? p.leaveType
+                            const label = POLICY_TYPE_LABELS[p.leaveType] ?? p.leaveType
                             const isUnlimitedOrNone = p.accrualRule === 'unlimited' || p.accrualRule === 'none'
                             return (
                                 <div

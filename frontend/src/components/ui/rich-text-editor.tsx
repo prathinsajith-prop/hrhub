@@ -4,6 +4,7 @@ import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import { useEffect, useCallback } from 'react'
+import DOMPurify from 'dompurify'
 import { cn } from '@/lib/utils'
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
@@ -248,10 +249,15 @@ export function RichTextDisplay({
   className?: string
 }) {
   if (!html || html === '<p></p>') return null
+  const clean = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'code', 'pre'],
+    ALLOWED_ATTR: ['href', 'target', 'rel'],
+    FORCE_BODY: true,
+  })
   return (
     <div
       className={cn('prose-display text-sm text-muted-foreground leading-relaxed', className)}
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={{ __html: clean }}
     />
   )
 }

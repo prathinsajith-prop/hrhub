@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { RichTextDisplay } from '@/components/ui/rich-text-editor'
 import {
@@ -119,7 +119,17 @@ export function JobDetailPage() {
   const { data: appsData, isLoading: appsLoading } = useApplications({ jobId: id, limit: 200 })
 
   const job = (jobData as { data?: Job })?.data
-  const allCandidates = ((appsData as { data?: Candidate[] })?.data ?? []) as Candidate[]
+  const allCandidates = useMemo(
+    () => ((appsData as { data?: Candidate[] })?.data ?? []) as Candidate[],
+    [appsData],
+  )
+  const stageCounts = useMemo(
+    () => allCandidates.reduce<Record<string, number>>((acc, c) => {
+      acc[c.stage] = (acc[c.stage] ?? 0) + 1
+      return acc
+    }, {}),
+    [allCandidates],
+  )
   const candidates = stageFilter === 'all'
     ? allCandidates
     : allCandidates.filter(c => c.stage === stageFilter)
@@ -307,12 +317,7 @@ export function JobDetailPage() {
                 </Button>
               </div>
 
-              {allCandidates.length > 0 && (() => {
-                const stageCounts = allCandidates.reduce<Record<string, number>>((acc, c) => {
-                  acc[c.stage] = (acc[c.stage] ?? 0) + 1
-                  return acc
-                }, {})
-                return (
+              {allCandidates.length > 0 && (
                   <div className="flex items-center gap-1.5 px-4 py-2.5 border-b bg-muted/10 flex-wrap">
                     <button
                       type="button"
@@ -345,8 +350,7 @@ export function JobDetailPage() {
                       )
                     })}
                   </div>
-                )
-              })()}
+              )}
 
               <CardContent className="p-0">
                 {appsLoading ? (

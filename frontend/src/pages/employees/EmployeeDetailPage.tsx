@@ -3044,9 +3044,9 @@ function TerminateDialog({
   employee: Employee
   initiateExit: ReturnType<typeof useInitiateExit>
 }) {
-  const today = new Date().toISOString().slice(0, 10)
-  const [exitDate, setExitDate] = React.useState(today)
-  const [lastWorkingDay, setLastWorkingDay] = React.useState(today)
+  const getToday = () => new Date().toISOString().slice(0, 10)
+  const [exitDate, setExitDate] = React.useState(getToday)
+  const [lastWorkingDay, setLastWorkingDay] = React.useState(getToday)
   const [noticePeriodDays, setNoticePeriodDays] = React.useState('0')
   const [reason, setReason] = React.useState('')
   const [notes, setNotes] = React.useState('')
@@ -3060,15 +3060,17 @@ function TerminateDialog({
     step === 'preview' && deductions ? Number(deductions) : undefined,
   )
 
-  const reset = () => {
-    setExitDate(today)
-    setLastWorkingDay(today)
+  const reset = React.useCallback(() => {
+    setExitDate(getToday())
+    setLastWorkingDay(getToday())
     setNoticePeriodDays('0')
     setReason('')
     setNotes('')
     setDeductions('')
     setStep('form')
-  }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => { if (!open) reset() }, [open, reset])
 
   const handleClose = () => {
     if (!initiateExit.isPending) {
