@@ -91,6 +91,7 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
     const checkoutMut = useCheckoutSession()
     const upgradeMut = useUpgradeRequest()
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => {
         if (open) setQuota(Math.max(1, (currentQuota ?? 0) + 1))
     }, [open, currentQuota])

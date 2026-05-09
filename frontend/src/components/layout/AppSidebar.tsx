@@ -49,7 +49,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { t } = useTranslation()
   const role = user?.role as UserRole | undefined
-  const roles: UserRole[] = (user?.roles?.length ? user.roles : role ? [role] : []) as UserRole[]
+  const userRoles = user?.roles
 
   // The sidebar re-renders on every route change because of useLocation().
   // Memoize the static-shape nav config so we don't rebuild dozens of objects
@@ -114,6 +114,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // Filter groups + items by all user roles (union). Groups with no visible items are hidden.
   const navGroups = React.useMemo(() => {
+    const roles = (userRoles?.length ? userRoles : role ? [role] : []) as UserRole[]
     if (roles.length === 0) return []
     return allNavGroups
       .map((group) => ({
@@ -124,7 +125,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         }),
       }))
       .filter((group) => group.items.length > 0)
-  }, [allNavGroups, roles])
+  }, [allNavGroups, userRoles, role])
 
 
   const userData = React.useMemo(() => ({

@@ -834,8 +834,7 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
 export function EmployeeDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const nowMs = React.useMemo(() => Date.now(), [])
+  const [nowMs] = React.useState(Date.now)
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canManage = can('manage_employees')
@@ -1249,7 +1248,7 @@ export function EmployeeDetailPage() {
               if (!e.joinDate) return null
               const join = new Date(e.joinDate)
               if (Number.isNaN(join.getTime())) return null
-              const ms = Date.now() - join.getTime()
+              const ms = nowMs - join.getTime()
               const years = ms / (365.25 * 24 * 3600 * 1000)
               if (years < 1) {
                 const months = Math.floor(years * 12)
@@ -3070,6 +3069,7 @@ function TerminateDialog({
     setStep('form')
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   React.useEffect(() => { if (!open) reset() }, [open, reset])
 
   const handleClose = () => {
