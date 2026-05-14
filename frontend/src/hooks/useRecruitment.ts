@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery, type InfiniteData } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { buildFilterQueryString, type AppliedFiltersMap } from '@/lib/filters'
+import { toast } from '@/components/ui/overlays'
 import type { Candidate } from '@/types'
+import type { RecruitmentStage } from '@/lib/recruitmentStages'
 
 interface JobParams { status?: string; department?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number }
 interface AppParams { jobId?: string; stage?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number; enabled?: boolean }
@@ -213,5 +215,70 @@ export function useUploadResume() {
             qc.invalidateQueries({ queryKey: ['applications-kanban'] })
             qc.invalidateQueries({ queryKey: ['applications'] })
         },
+    })
+}
+
+/* ─── Recruitment pipeline stages (per-tenant settings) ───────────────────── */
+
+const STAGES_KEY = ['recruitment-stages'] as const
+
+export function useRecruitmentStages() {
+    return useQuery({
+        queryKey: STAGES_KEY,
+        queryFn: () => api.get<{ data: RecruitmentStage[] }>('/stages').then(r => r.data),
+        // Stages change rarely; cache for 5 minutes to avoid refetching across
+        // every recruitment page navigation.
+        staleTime: 5 * 60_000,
+    })
+}
+
+export function useCreateRecruitmentStage() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: { label: string; colorKey?: string; isTerminal?: boolean }) =>
+            api.post<{ data: RecruitmentStage }>('/stages', data).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: STAGES_KEY }),
+        onError: (err: Error) => toast.error('Failed to add stage', err.message),
+    })
+}
+
+export function useUpdateRecruitmentStage() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ stageId, ...data }: { stageId: string; label?: string; colorKey?: string }) =>
+            api.patch<{ data: RecruitmentStage }>(`/stages/${stageId}`, data).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: STAGES_KEY }),
+        onError: (err: Error) => toast.error('Failed to update stage', err.message),
+    })
+}
+
+export function useDeleteRecruitmentStage() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (stageId: string) => api.delete(`/stages/${stageId}`),
+        onSuccess: () => qc.invalidateQueries({ queryKey: STAGES_KEY }),
+        // Suppress the generic toast — the settings tab handles the
+        // candidate-still-on-stage case with its own clearer message.
+        onError: () => { },
+    })
+}
+
+export function useReorderRecruitmentStages() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (orderedIds: string[]) =>
+            api.post<{ data: RecruitmentStage[] }>('/stages/reorder', { orderedIds }).then(r => r.data),
+        onSuccess: (data) => qc.setQueryData(STAGES_KEY, data),
+        onError: (err: Error) => toast.error('Failed to reorder stages', err.message),
+    })
+}
+
+export function useResetRecruitmentStages() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: () =>
+            api.post<{ data: RecruitmentStage[] }>('/stages/reset').then(r => r.data),
+        onSuccess: (data) => qc.setQueryData(STAGES_KEY, data),
+        onError: (err: Error) => toast.error('Failed to reset stages', err.message),
     })
 }

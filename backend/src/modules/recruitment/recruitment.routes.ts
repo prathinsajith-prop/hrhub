@@ -1,4 +1,4 @@
-import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication } from './recruitment.service.js'
+import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages } from './recruitment.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
@@ -13,6 +13,149 @@ import { broadcastToTenant } from '../../lib/ws-registry.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
+    const writeAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
+
+    // ── Pipeline stages (per-tenant) ──────────────────────────────────────────
+    fastify.get('/stages', { ...auth, schema: { tags: ['Recruitment'] } }, async (request: any, reply: any) => {
+        const data = await listRecruitmentStages(request.user.tenantId)
+        return reply.send({ data })
+    })
+
+    fastify.post('/stages', {
+        ...writeAuth,
+        schema: {
+            tags: ['Recruitment'],
+            body: {
+                type: 'object',
+                required: ['label'],
+                properties: {
+                    label: { type: 'string', minLength: 1, maxLength: 100 },
+                    colorKey: { type: 'string', minLength: 1, maxLength: 32 },
+                    isTerminal: { type: 'boolean' },
+                },
+            },
+        },
+    }, async (request: any, reply: any) => {
+        const row = await createRecruitmentStage(request.user.tenantId, request.body as never)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'recruitment_stage',
+            entityId: row.id,
+            entityName: row.label,
+            action: 'create',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(201).send({ data: row })
+    })
+
+    fastify.delete('/stages/:stageId', { ...writeAuth, schema: { tags: ['Recruitment'] } }, async (request: any, reply: any) => {
+        const { stageId } = request.params as { stageId: string }
+        const { row, blockedBy } = await deleteRecruitmentStage(request.user.tenantId, stageId)
+        if (blockedBy > 0) {
+            return reply.code(409).send({
+                statusCode: 409,
+                error: 'Conflict',
+                message: `${blockedBy} candidate${blockedBy === 1 ? '' : 's'} are currently on this stage. Move them to another stage first.`,
+                blockedBy,
+            })
+        }
+        if (!row) return reply.code(404).send({ message: 'Stage not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'recruitment_stage',
+            entityId: row.id,
+            entityName: row.label,
+            action: 'delete',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(204).send()
+    })
+
+    fastify.patch('/stages/:stageId', {
+        ...writeAuth,
+        schema: {
+            tags: ['Recruitment'],
+            body: {
+                type: 'object',
+                properties: {
+                    label: { type: 'string', minLength: 1, maxLength: 100 },
+                    colorKey: { type: 'string', minLength: 1, maxLength: 32 },
+                },
+            },
+        },
+    }, async (request: any, reply: any) => {
+        const { stageId } = request.params as { stageId: string }
+        const row = await updateRecruitmentStage(request.user.tenantId, stageId, request.body as never)
+        if (!row) return reply.code(404).send({ message: 'Stage not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'recruitment_stage',
+            entityId: row.id,
+            entityName: row.label,
+            action: 'update',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: row })
+    })
+
+    fastify.post('/stages/reorder', {
+        ...writeAuth,
+        schema: {
+            tags: ['Recruitment'],
+            body: {
+                type: 'object',
+                required: ['orderedIds'],
+                properties: {
+                    orderedIds: { type: 'array', items: { type: 'string', format: 'uuid' }, maxItems: 50 },
+                },
+            },
+        },
+    }, async (request: any, reply: any) => {
+        const { orderedIds } = request.body as { orderedIds: string[] }
+        const data = await reorderRecruitmentStages(request.user.tenantId, orderedIds)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'recruitment_stages',
+            entityId: request.user.tenantId,
+            entityName: `${data.length} stages`,
+            action: 'update',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data })
+    })
+
+    fastify.post('/stages/reset', { ...writeAuth, schema: { tags: ['Recruitment'] } }, async (request: any, reply: any) => {
+        const data = await resetRecruitmentStages(request.user.tenantId)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'recruitment_stages',
+            entityId: request.user.tenantId,
+            entityName: 'reset to defaults',
+            action: 'update',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data })
+    })
 
     // GET /api/v1/jobs
     fastify.get('/jobs', { ...auth, schema: { tags: ['Recruitment'] } }, async (request, reply) => {

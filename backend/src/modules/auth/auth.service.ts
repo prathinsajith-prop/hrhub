@@ -2,7 +2,9 @@ import bcrypt from 'bcrypt'
 import { eq, and, lt, sql } from 'drizzle-orm'
 import crypto from 'node:crypto'
 import { db } from '../../db/index.js'
-import { users, refreshTokens, tenants, passwordResetTokens, entities, employees } from '../../db/schema/index.js'
+import { users, refreshTokens, tenants, passwordResetTokens, entities, employees, onboardingTemplateSteps, recruitmentStages } from '../../db/schema/index.js'
+import { buildDefaultOnboardingTemplateRows } from '../onboarding/onboarding.defaults.js'
+import { buildDefaultRecruitmentStageRows } from '../recruitment/recruitment.defaults.js'
 import { sendEmail, passwordResetEmail } from '../../plugins/email.js'
 import { loadEnv } from '../../config/env.js'
 import { recordLoginEvent } from '../audit/audit.service.js'
@@ -339,6 +341,12 @@ export async function registerTenant(input: {
 
         // Seed default document templates for the new tenant (non-fatal if it fails)
         seedDefaultTemplates(tenant.id, adminUser.id).catch(() => { })
+
+        // Seed default onboarding template steps and recruitment pipeline
+        // stages so HR has a starting point. Admins can edit / reorder /
+        // recolour these from Organization Settings.
+        await tx.insert(onboardingTemplateSteps).values(buildDefaultOnboardingTemplateRows(tenant.id))
+        await tx.insert(recruitmentStages).values(buildDefaultRecruitmentStageRows(tenant.id))
 
         return { ok: true as const }
     })

@@ -20,6 +20,7 @@ import { useDeleteTenant } from '@/hooks/useTenants'
 import { useAuthStore } from '@/store/authStore'
 import { ApiError } from '@/lib/api'
 import { Section } from './_shared'
+import { useTranslation } from 'react-i18next'
 
 // ─── Security Tab ─────────────────────────────────────────────────────────────
 function isValidCidr(value: string) {
@@ -27,6 +28,7 @@ function isValidCidr(value: string) {
 }
 
 export function SecurityTab() {
+    const { t } = useTranslation()
     const { data: security, isLoading: secLoading } = useSecuritySettings()
     const updateSecurity = useUpdateSecuritySettings()
     const { data: ipList, isLoading: ipLoading } = useIpAllowlist()
@@ -47,14 +49,14 @@ export function SecurityTab() {
         if (!tenant?.name) return
         try {
             await deleteTenant.mutateAsync(confirmName)
-            toast.success('Organization deleted', `${tenant.name} has been permanently removed.`)
+            toast.success(t('orgSettings.security.orgDeleted'), t('orgSettings.security.orgDeletedDesc', { name: tenant.name }))
             setDeleteOpen(false)
             setConfirmName('')
             // Sign the user out — their JWT now points to a deleted tenant
             logout()
             navigate('/login', { replace: true })
         } catch (err) {
-            toast.error('Delete failed', err instanceof ApiError ? err.message : 'Could not delete organization.')
+            toast.error(t('orgSettings.security.deleteFailed'), err instanceof ApiError ? err.message : t('orgSettings.security.deleteFailedDesc'))
         }
     }
 
@@ -70,7 +72,7 @@ export function SecurityTab() {
         try {
             await updateSecurity.mutateAsync({ sessionTimeoutMinutes: checked ? 480 : 0 })
         } catch {
-            toast.error('Save failed', 'Could not update session timeout.')
+            toast.error(t('common.error'), t('settingsDetail.security.sessionTimeoutFailed'))
         }
     }
 
@@ -79,45 +81,45 @@ export function SecurityTab() {
         try {
             await updateSecurity.mutateAsync({ auditLoggingEnabled: !security.auditLoggingEnabled })
         } catch {
-            toast.error('Save failed', 'Could not update audit logging.')
+            toast.error(t('common.error'), t('orgSettings.security.auditToggleFailed'))
         }
     }
 
     const handleAddIp = async () => {
         const trimmed = newEntry.trim()
         if (!trimmed) return
-        if (!isValidCidr(trimmed)) { toast.warning('Invalid entry', 'Enter a valid IP address or CIDR range.'); return }
-        if (list.includes(trimmed)) { toast.warning('Duplicate', 'This IP is already in the allowlist.'); return }
+        if (!isValidCidr(trimmed)) { toast.warning(t('settingsDetail.security.invalidEntry'), t('settingsDetail.security.invalidEntryDesc')); return }
+        if (list.includes(trimmed)) { toast.warning(t('settingsDetail.security.duplicate'), t('settingsDetail.security.duplicateDesc')); return }
         try {
             await updateList.mutateAsync([...list, trimmed])
             setNewEntry('')
-            toast.success('IP added', `${trimmed} added to allowlist.`)
+            toast.success(t('settingsDetail.security.ipAdded'), t('settingsDetail.security.ipAddedDesc', { ip: trimmed }))
         } catch {
-            toast.error('Update failed', 'Could not update IP allowlist.')
+            toast.error(t('settingsDetail.security.updateFailed'), t('settingsDetail.security.ipUpdateFailedDesc'))
         }
     }
 
     const handleRemoveIp = async (ip: string) => {
         try {
             await updateList.mutateAsync(list.filter(x => x !== ip))
-            toast.success('IP removed')
+            toast.success(t('settingsDetail.security.ipRemoved'))
         } catch {
-            toast.error('Update failed', 'Could not update IP allowlist.')
+            toast.error(t('settingsDetail.security.updateFailed'), t('settingsDetail.security.ipUpdateFailedDesc'))
         }
     }
 
     return (
         <div className="space-y-5">
-            <Section icon={Shield} title="Security Policies" description="Workspace-wide protection rules">
+            <Section icon={Shield} title={t('settingsDetail.security.policiesTitle')} description={t('settingsDetail.security.policiesDesc')}>
                 {secLoading ? (
                     <Skeleton className="h-20 w-full" />
                 ) : (
                     <div className="divide-y border rounded-lg overflow-hidden">
                         <div className="flex items-center justify-between px-4 py-3.5">
                             <div>
-                                <p className="text-sm font-medium">Auto Session Timeout</p>
+                                <p className="text-sm font-medium">{t('settingsDetail.security.sessionTimeoutTitle')}</p>
                                 <p className="text-xs text-muted-foreground">
-                                    Log out after {security?.sessionTimeoutMinutes ?? 480} minutes of inactivity
+                                    {t('settingsDetail.security.sessionTimeoutActive', { minutes: security?.sessionTimeoutMinutes ?? 480 })}
                                 </p>
                             </div>
                             <Switch
@@ -128,8 +130,8 @@ export function SecurityTab() {
                         </div>
                         <div className="flex items-center justify-between px-4 py-3.5">
                             <div>
-                                <p className="text-sm font-medium">Audit Logging</p>
-                                <p className="text-xs text-muted-foreground">Record all admin actions for compliance</p>
+                                <p className="text-sm font-medium">{t('settingsDetail.security.auditLoggingTitle')}</p>
+                                <p className="text-xs text-muted-foreground">{t('orgSettings.security.auditLoggingComplianceDesc')}</p>
                             </div>
                             <Switch
                                 checked={security?.auditLoggingEnabled ?? true}
@@ -141,13 +143,13 @@ export function SecurityTab() {
                 )}
             </Section>
 
-            <Section icon={Globe} title="IP Allowlist" description="Restrict logins to specific IP addresses or CIDR ranges. Leave empty to allow all IPs.">
+            <Section icon={Globe} title={t('settingsDetail.security.ipAllowlistTitle')} description={t('orgSettings.security.ipAllowlistDesc')}>
                 {ipLoading ? (
                     <Skeleton className="h-20 w-full" />
                 ) : (
                     <div className="space-y-4">
                         {list.length === 0 ? (
-                            <p className="text-sm text-muted-foreground italic">No restrictions — all IPs are allowed.</p>
+                            <p className="text-sm text-muted-foreground italic">{t('settingsDetail.security.noIpRestrictions')}</p>
                         ) : (
                             <div className="divide-y border rounded-lg overflow-hidden">
                                 {list.map(ip => (
@@ -159,7 +161,7 @@ export function SecurityTab() {
                                             className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                             onClick={() => handleRemoveIp(ip)}
                                             disabled={updateList.isPending}
-                                            aria-label={`Remove ${ip}`}
+                                            aria-label={t('settingsDetail.security.removeIp', { ip })}
                                         >
                                             <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
@@ -176,29 +178,29 @@ export function SecurityTab() {
                                 className="font-mono"
                             />
                             <Button size="sm" onClick={handleAddIp} loading={updateList.isPending} leftIcon={<Plus className="h-3.5 w-3.5" />}>
-                                Add
+                                {t('common.add')}
                             </Button>
                         </div>
                     </div>
                 )}
             </Section>
 
-            <Section icon={AlertCircle} title="Danger Zone" description="Irreversible workspace actions" className="border-destructive/30">
+            <Section icon={AlertCircle} title={t('settingsDetail.security.dangerZoneTitle')} description={t('settingsDetail.security.dangerZoneDesc')} className="border-destructive/30">
                 <div className="space-y-3">
                     <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20 bg-destructive/5">
                         <div className="min-w-0">
-                            <p className="text-sm font-medium">Export All Data</p>
-                            <p className="text-xs text-muted-foreground">Download a complete export of your organization data</p>
+                            <p className="text-sm font-medium">{t('settingsDetail.security.exportAllData')}</p>
+                            <p className="text-xs text-muted-foreground">{t('orgSettings.security.exportOrgDataDesc')}</p>
                         </div>
-                        <Button variant="outline" size="sm" leftIcon={<FileText className="h-3.5 w-3.5" />} className="shrink-0">Export</Button>
+                        <Button variant="outline" size="sm" leftIcon={<FileText className="h-3.5 w-3.5" />} className="shrink-0">{t('common.export')}</Button>
                     </div>
                     <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20 bg-destructive/5">
                         <div className="min-w-0">
-                            <p className="text-sm font-medium text-destructive">Delete Organization</p>
+                            <p className="text-sm font-medium text-destructive">{t('orgSettings.security.deleteOrgTitle')}</p>
                             <p className="text-xs text-muted-foreground">
                                 {canDelete
-                                    ? 'Permanently delete this workspace and all its data'
-                                    : 'Only a super admin can delete this organization'}
+                                    ? t('orgSettings.security.deleteOrgDesc')
+                                    : t('orgSettings.security.deleteOrgNoPermission')}
                             </p>
                         </div>
                         <Button
@@ -209,7 +211,7 @@ export function SecurityTab() {
                             disabled={!canDelete}
                             onClick={() => { setConfirmName(''); setDeleteOpen(true) }}
                         >
-                            Delete
+                            {t('common.delete')}
                         </Button>
                     </div>
                 </div>
@@ -220,21 +222,20 @@ export function SecurityTab() {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-destructive">
                             <AlertCircle className="h-4 w-4" />
-                            Delete Organization
+                            {t('orgSettings.security.deleteOrgTitle')}
                         </DialogTitle>
                         <DialogDescription>
-                            This will permanently delete <span className="font-semibold text-foreground">{tenant?.name}</span> and
-                            every employee, document, payroll record, and team it contains. This cannot be undone.
+                            {t('orgSettings.security.deleteOrgDialogDesc', { name: tenant?.name ?? '' })}
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-3 py-1">
                         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 leading-relaxed">
-                            All members will lose access immediately. You will be signed out after the deletion completes.
+                            {t('orgSettings.security.deleteOrgWarning')}
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="confirm-name">
-                                Type <span className="font-mono font-semibold">{tenant?.name}</span> to confirm
+                                {t('orgSettings.security.typeToConfirm', { name: tenant?.name ?? '' })}
                             </Label>
                             <Input
                                 id="confirm-name"
@@ -249,7 +250,7 @@ export function SecurityTab() {
 
                     <DialogFooter>
                         <Button variant="outline" onClick={() => { setDeleteOpen(false); setConfirmName('') }}>
-                            Cancel
+                            {t('common.cancel')}
                         </Button>
                         <Button
                             variant="destructive"
@@ -261,7 +262,7 @@ export function SecurityTab() {
                             }
                             leftIcon={deleteTenant.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         >
-                            {deleteTenant.isPending ? 'Deleting…' : 'Delete forever'}
+                            {deleteTenant.isPending ? t('orgSettings.security.deleting') : t('orgSettings.security.deleteForever')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

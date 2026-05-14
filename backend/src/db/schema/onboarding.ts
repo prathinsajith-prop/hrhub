@@ -3,6 +3,24 @@ import { relations } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
 
+export const onboardingTemplateSteps = pgTable('onboarding_template_steps', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    stepOrder: integer('step_order').notNull(),
+    title: text('title').notNull(),
+    owner: text('owner'),
+    slaDays: integer('sla_days'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    tenantIdx: index('idx_onboarding_template_tenant').on(t.tenantId),
+    tenantOrderIdx: index('idx_onboarding_template_tenant_order').on(t.tenantId, t.stepOrder),
+}))
+
+export const onboardingTemplateStepsRelations = relations(onboardingTemplateSteps, ({ one }) => ({
+    tenant: one(tenants, { fields: [onboardingTemplateSteps.tenantId], references: [tenants.id] }),
+}))
+
 export const onboardingChecklists = pgTable('onboarding_checklists', {
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),

@@ -7,8 +7,10 @@ import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import { useDesignations, useCreateDesignation, useUpdateDesignation } from '@/hooks/useDesignations'
 import type { Designation } from '@/hooks/useDesignations'
 import { Section } from './_shared'
+import { useTranslation } from 'react-i18next'
 
 export function DesignationsTab() {
+    const { t } = useTranslation()
     const { data: items = [], isLoading } = useDesignations()
     const designations = Array.isArray(items) ? items as Designation[] : []
     const create = useCreateDesignation()
@@ -24,8 +26,8 @@ export function DesignationsTab() {
         const name = newName.trim()
         if (!name) return
         create.mutate({ name }, {
-            onSuccess: () => { setNewName(''); setAddingNew(false); toast.success('Designation added') },
-            onError: (err: Error) => toast.error(err.message.includes('unique') ? 'Designation already exists' : 'Failed to add'),
+            onSuccess: () => { setNewName(''); setAddingNew(false); toast.success(t('orgSettings.designations.added')) },
+            onError: (err: Error) => toast.error(err.message.includes('unique') ? t('orgSettings.designations.alreadyExists') : t('orgSettings.designations.addFailed')),
         })
     }
 
@@ -33,16 +35,21 @@ export function DesignationsTab() {
         const name = editName.trim()
         if (!name) return
         update.mutate({ id, data: { name } }, {
-            onSuccess: () => { setEditingId(null); toast.success('Updated') },
-            onError: (err: Error) => toast.error(err.message.includes('unique') ? 'Name already exists' : 'Failed to update'),
+            onSuccess: () => { setEditingId(null); toast.success(t('orgSettings.designations.updated')) },
+            onError: (err: Error) => toast.error(err.message.includes('unique') ? t('orgSettings.designations.nameExists') : t('orgSettings.designations.updateFailed')),
         })
     }
 
     function handleToggle() {
         if (!toggleTarget) return
         update.mutate({ id: toggleTarget.id, data: { isActive: !toggleTarget.isActive } }, {
-            onSuccess: () => { toast.success(toggleTarget.isActive ? `"${toggleTarget.name}" deactivated` : `"${toggleTarget.name}" activated`); setToggleTarget(null) },
-            onError: () => { toast.error('Failed to update'); setToggleTarget(null) },
+            onSuccess: () => {
+                toast.success(toggleTarget.isActive
+                    ? t('orgSettings.designations.deactivated', { name: toggleTarget.name })
+                    : t('orgSettings.designations.activated', { name: toggleTarget.name }))
+                setToggleTarget(null)
+            },
+            onError: () => { toast.error(t('orgSettings.designations.toggleFailed')); setToggleTarget(null) },
         })
     }
 
@@ -50,18 +57,18 @@ export function DesignationsTab() {
         <>
         <div className="space-y-6">
             <div>
-                <h3 className="text-base font-semibold">Designations</h3>
+                <h3 className="text-base font-semibold">{t('orgSettings.designations.title')}</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                    Define job titles that can be assigned to employees. These appear as a dropdown when adding or editing employees.
+                    {t('orgSettings.designations.desc')}
                 </p>
             </div>
 
-            <Section icon={Briefcase} title="Job Titles" description="Add, rename, activate or deactivate designations used across the organization.">
+            <Section icon={Briefcase} title={t('orgSettings.designations.jobTitlesTitle')} description={t('orgSettings.designations.jobTitlesDesc')}>
                 <div className="space-y-2">
                     {isLoading ? (
                         <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-9 rounded-lg bg-muted animate-pulse" />)}</div>
                     ) : designations.length === 0 && !addingNew ? (
-                        <p className="text-sm text-muted-foreground text-center py-4">No designations yet. Add one to get started.</p>
+                        <p className="text-sm text-muted-foreground text-center py-4">{t('orgSettings.designations.empty')}</p>
                     ) : (
                         <div className="divide-y divide-border/50 rounded-lg border bg-background">
                             {designations.map(d => (
@@ -88,12 +95,12 @@ export function DesignationsTab() {
                                         <>
                                             <span className={cn('flex-1 text-sm font-medium', !d.isActive && 'line-through text-muted-foreground')}>{d.name}</span>
                                             {!d.isActive && (
-                                                <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-medium shrink-0">Inactive</span>
+                                                <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-medium shrink-0">{t('common.inactive')}</span>
                                             )}
                                             <Button
                                                 size="sm" variant="ghost"
                                                 className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                                                title="Rename"
+                                                title={t('common.edit')}
                                                 onClick={() => { setEditingId(d.id); setEditName(d.name) }}
                                             >
                                                 <Pencil className="h-3.5 w-3.5" />
@@ -103,10 +110,10 @@ export function DesignationsTab() {
                                                 className={cn('text-xs h-6 px-2 rounded-full font-medium', d.isActive
                                                     ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'
                                                     : 'border-muted-foreground/30 text-muted-foreground hover:bg-muted')}
-                                                title={d.isActive ? 'Deactivate' : 'Activate'}
+                                                title={d.isActive ? t('orgSettings.designations.deactivateLabel') : t('orgSettings.designations.activateLabel')}
                                                 onClick={() => setToggleTarget(d)}
                                             >
-                                                {d.isActive ? 'Active' : 'Inactive'}
+                                                {d.isActive ? t('common.active') : t('common.inactive')}
                                             </Button>
                                         </>
                                     )}
@@ -119,7 +126,7 @@ export function DesignationsTab() {
                         <div className="flex items-center gap-2 mt-2">
                             <Input
                                 className="flex-1"
-                                placeholder="e.g. Senior Engineer"
+                                placeholder={t('orgSettings.designations.placeholder')}
                                 value={newName}
                                 onChange={e => setNewName(e.target.value)}
                                 onKeyDown={e => {
@@ -128,7 +135,7 @@ export function DesignationsTab() {
                                 }}
                             />
                             <Button size="sm" onClick={handleAdd} disabled={!newName.trim() || create.isPending}>
-                                {create.isPending ? '…' : 'Add'}
+                                {create.isPending ? '…' : t('common.add')}
                             </Button>
                             <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-muted-foreground" onClick={() => { setAddingNew(false); setNewName('') }}>
                                 <XCircle className="h-4 w-4" />
@@ -136,7 +143,7 @@ export function DesignationsTab() {
                         </div>
                     ) : (
                         <Button variant="ghost" size="sm" className="gap-1.5 text-primary font-medium mt-1" onClick={() => setAddingNew(true)}>
-                            <Plus className="h-3.5 w-3.5" /> Add designation
+                            <Plus className="h-3.5 w-3.5" /> {t('orgSettings.designations.addDesignation')}
                         </Button>
                     )}
                 </div>
@@ -146,11 +153,13 @@ export function DesignationsTab() {
         <ConfirmDialog
             open={!!toggleTarget}
             onOpenChange={o => !o && setToggleTarget(null)}
-            title={toggleTarget?.isActive ? `Deactivate "${toggleTarget?.name}"?` : `Activate "${toggleTarget?.name}"?`}
+            title={toggleTarget?.isActive
+                ? t('orgSettings.designations.deactivateConfirmTitle', { name: toggleTarget?.name })
+                : t('orgSettings.designations.activateConfirmTitle', { name: toggleTarget?.name })}
             description={toggleTarget?.isActive
-                ? 'This designation will be hidden from employee forms. Employees currently assigned this title are not affected.'
-                : 'This designation will become available again in employee forms.'}
-            confirmLabel={toggleTarget?.isActive ? 'Deactivate' : 'Activate'}
+                ? t('orgSettings.designations.deactivateConfirmDesc')
+                : t('orgSettings.designations.activateConfirmDesc')}
+            confirmLabel={toggleTarget?.isActive ? t('orgSettings.designations.deactivateLabel') : t('orgSettings.designations.activateLabel')}
             variant={toggleTarget?.isActive ? 'destructive' : 'success'}
             onConfirm={handleToggle}
         />

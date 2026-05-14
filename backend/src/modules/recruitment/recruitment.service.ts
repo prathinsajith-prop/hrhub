@@ -1,9 +1,10 @@
-import { eq, and, desc, isNull, sql, getTableColumns, ne } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns, ne, inArray } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
-import { recruitmentJobs, jobApplications } from '../../db/schema/index.js'
+import { recruitmentJobs, jobApplications, recruitmentStages } from '../../db/schema/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { Conditions } from '../../lib/filters.js'
+import { buildDefaultRecruitmentStageRows } from './recruitment.defaults.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 const JOB_FIELD_MAP = {
@@ -165,4 +166,159 @@ export async function softDeleteApplication(tenantId: string, id: string) {
         .where(and(eq(jobApplications.id, id), eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
         .returning()
     return row ?? null
+}
+
+/* ─── Recruitment pipeline stages (per-tenant) ────────────────────────────── */
+
+/**
+ * List the tenant's recruitment stages, ordered by stage_order. If the tenant
+ * has no rows yet (legacy tenants created before the table existed), seed the
+ * defaults inside a transaction. The re-check inside the transaction prevents
+ * concurrent first-reads from duplicating the seed.
+ */
+export async function listRecruitmentStages(tenantId: string) {
+    const existing = await db.select().from(recruitmentStages)
+        .where(eq(recruitmentStages.tenantId, tenantId))
+        .orderBy(recruitmentStages.stageOrder)
+    if (existing.length > 0) return existing
+
+    return db.transaction(async (tx) => {
+        const rechecked = await tx.select().from(recruitmentStages)
+            .where(eq(recruitmentStages.tenantId, tenantId))
+            .orderBy(recruitmentStages.stageOrder)
+        if (rechecked.length > 0) return rechecked
+        await tx.insert(recruitmentStages).values(buildDefaultRecruitmentStageRows(tenantId))
+        return tx.select().from(recruitmentStages)
+            .where(eq(recruitmentStages.tenantId, tenantId))
+            .orderBy(recruitmentStages.stageOrder)
+    })
+}
+
+/**
+ * Edit a stage's label and/or colour. Stage keys and is_terminal are system-
+ * controlled and intentionally not editable.
+ */
+export async function updateRecruitmentStage(
+    tenantId: string,
+    stageId: string,
+    data: { label?: string; colorKey?: string },
+) {
+    const [row] = await db.update(recruitmentStages)
+        .set(withTimestamp(data as Record<string, unknown>))
+        .where(and(eq(recruitmentStages.id, stageId), eq(recruitmentStages.tenantId, tenantId)))
+        .returning()
+    return row ?? null
+}
+
+/**
+ * Reorder stages atomically. Accepts an ordered list of stage IDs; positions
+ * are re-numbered 1..N. IDs not belonging to the tenant are silently ignored.
+ * Single CASE-based UPDATE — one round-trip regardless of N.
+ */
+export async function reorderRecruitmentStages(tenantId: string, orderedIds: string[]) {
+    return db.transaction(async (tx) => {
+        const rows = await tx.select({ id: recruitmentStages.id })
+            .from(recruitmentStages)
+            .where(eq(recruitmentStages.tenantId, tenantId))
+        const allowed = new Set(rows.map(r => r.id))
+        const valid = orderedIds.filter(id => allowed.has(id))
+        if (valid.length === 0) return []
+
+        const caseClauses = valid.map((id, i) => sql`WHEN ${id}::uuid THEN ${i + 1}`)
+        await tx.update(recruitmentStages)
+            .set({
+                stageOrder: sql`CASE ${recruitmentStages.id} ${sql.join(caseClauses, sql` `)} END`,
+                updatedAt: new Date(),
+            })
+            .where(and(
+                eq(recruitmentStages.tenantId, tenantId),
+                inArray(recruitmentStages.id, valid),
+            ))
+        return tx.select().from(recruitmentStages)
+            .where(eq(recruitmentStages.tenantId, tenantId))
+            .orderBy(recruitmentStages.stageOrder)
+    })
+}
+
+/**
+ * Slug-ify a label into a stable stage_key. Lowercases, replaces runs of
+ * non-alphanumerics with `_`, and trims leading/trailing underscores. If the
+ * derived key collides with an existing one for the tenant, a numeric suffix
+ * is appended (`stage_2`, `stage_3`, …).
+ */
+async function deriveStageKey(tenantId: string, label: string): Promise<string> {
+    const base = label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 40) || 'stage'
+    const existing = await db.select({ stageKey: recruitmentStages.stageKey })
+        .from(recruitmentStages)
+        .where(eq(recruitmentStages.tenantId, tenantId))
+    const taken = new Set(existing.map(r => r.stageKey))
+    if (!taken.has(base)) return base
+    for (let i = 2; i < 1000; i++) {
+        const candidate = `${base}_${i}`
+        if (!taken.has(candidate)) return candidate
+    }
+    throw new Error('Could not derive a unique stage key')
+}
+
+/** Create a new pipeline stage for the tenant. Appended at the end of the list. */
+export async function createRecruitmentStage(
+    tenantId: string,
+    data: { label: string; colorKey?: string; isTerminal?: boolean },
+) {
+    const stageKey = await deriveStageKey(tenantId, data.label)
+    const existing = await db.select({ stageOrder: recruitmentStages.stageOrder })
+        .from(recruitmentStages)
+        .where(eq(recruitmentStages.tenantId, tenantId))
+    const nextOrder = existing.length > 0 ? Math.max(...existing.map(s => s.stageOrder)) + 1 : 1
+    const [row] = await db.insert(recruitmentStages).values({
+        tenantId,
+        stageKey,
+        label: data.label,
+        colorKey: data.colorKey ?? 'slate',
+        stageOrder: nextOrder,
+        isTerminal: data.isTerminal ?? false,
+    }).returning()
+    return row
+}
+
+/**
+ * Delete a stage. Refuses if any candidate is currently on this stage — the
+ * caller should reassign those candidates first. Returns `{ row, blockedBy }`
+ * where `blockedBy` is the candidate count when deletion is refused.
+ */
+export async function deleteRecruitmentStage(tenantId: string, stageId: string) {
+    const [stage] = await db.select().from(recruitmentStages)
+        .where(and(eq(recruitmentStages.id, stageId), eq(recruitmentStages.tenantId, tenantId)))
+    if (!stage) return { row: null, blockedBy: 0 }
+
+    const [{ count }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(jobApplications)
+        .where(and(
+            eq(jobApplications.tenantId, tenantId),
+            eq(jobApplications.stage, stage.stageKey),
+            isNull(jobApplications.deletedAt),
+        ))
+    if (count > 0) return { row: null, blockedBy: count }
+
+    const [deleted] = await db.delete(recruitmentStages)
+        .where(and(eq(recruitmentStages.id, stageId), eq(recruitmentStages.tenantId, tenantId)))
+        .returning()
+    return { row: deleted ?? null, blockedBy: 0 }
+}
+
+/** Reset the tenant's recruitment stages back to the system defaults. */
+export async function resetRecruitmentStages(tenantId: string) {
+    return db.transaction(async (tx) => {
+        await tx.delete(recruitmentStages)
+            .where(eq(recruitmentStages.tenantId, tenantId))
+        await tx.insert(recruitmentStages).values(buildDefaultRecruitmentStageRows(tenantId))
+        return tx.select().from(recruitmentStages)
+            .where(eq(recruitmentStages.tenantId, tenantId))
+            .orderBy(recruitmentStages.stageOrder)
+    })
 }

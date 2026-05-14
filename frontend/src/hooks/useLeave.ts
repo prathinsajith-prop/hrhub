@@ -48,7 +48,8 @@ export function useApproveLeave() {
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['leave'] })
             qc.invalidateQueries({ queryKey: ['leave-balance'] })
-            qc.invalidateQueries({ queryKey: ['dashboard'] })
+            qc.invalidateQueries({ queryKey: ['dashboard', 'kpis'] })
+            qc.invalidateQueries({ queryKey: ['dashboard', 'summary'] })
         },
         onError: (err: Error) => toast.error('Action failed', err?.message ?? 'Could not update the leave request.'),
     })

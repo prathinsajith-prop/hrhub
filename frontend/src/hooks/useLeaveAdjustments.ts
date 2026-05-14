@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
+import { toast } from '@/components/ui/overlays'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,7 +85,9 @@ export function useDeleteLeaveAdjustment() {
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['leave', 'adjustments', tenantId] })
             qc.invalidateQueries({ queryKey: ['leave-balance'] })
+            qc.invalidateQueries({ queryKey: ['leave'] })
         },
+        onError: (err: Error) => toast.error('Failed to reverse adjustment', err.message),
     })
 }
 
