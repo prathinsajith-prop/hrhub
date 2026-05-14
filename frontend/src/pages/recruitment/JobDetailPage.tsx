@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { RichTextDisplay } from '@/components/ui/rich-text-editor'
 import {
   ArrowLeft, Edit2, MapPin, Briefcase, Users,
@@ -19,14 +20,14 @@ import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
 import { labelFor } from '@/lib/enums'
 import type { Job, Candidate, ApplicationStage } from '@/types'
 
-const STAGE_CONFIG: Record<ApplicationStage, { label: string; cls: string }> = {
-  received:    { label: 'Received',     cls: 'bg-slate-100 text-slate-600 border-slate-300' },
-  screening:   { label: 'Screening',    cls: 'bg-info/10 text-info border-info/20' },
-  interview:   { label: 'Interview',    cls: 'bg-warning/10 text-warning border-warning/20' },
-  assessment:  { label: 'Assessment',   cls: 'bg-primary/10 text-primary border-primary/20' },
-  offer:       { label: 'Offer',        cls: 'bg-success/10 text-success border-success/20' },
-  pre_boarding:{ label: 'Pre-Boarding', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  rejected:    { label: 'Rejected',     cls: 'bg-destructive/10 text-destructive border-destructive/20' },
+const STAGE_CONFIG: Record<ApplicationStage, { labelKey: string; cls: string }> = {
+  received:    { labelKey: 'recruitment.stages.received',    cls: 'bg-slate-100 text-slate-600 border-slate-300' },
+  screening:   { labelKey: 'recruitment.stages.screening',   cls: 'bg-info/10 text-info border-info/20' },
+  interview:   { labelKey: 'recruitment.stages.interview',   cls: 'bg-warning/10 text-warning border-warning/20' },
+  assessment:  { labelKey: 'recruitment.stages.assessment',  cls: 'bg-primary/10 text-primary border-primary/20' },
+  offer:       { labelKey: 'recruitment.stages.offer',       cls: 'bg-success/10 text-success border-success/20' },
+  pre_boarding:{ labelKey: 'recruitment.stages.preBoarding', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  rejected:    { labelKey: 'recruitment.stages.rejected',    cls: 'bg-destructive/10 text-destructive border-destructive/20' },
 }
 
 const JOB_STATUS_STYLE: Record<string, string> = {
@@ -41,7 +42,8 @@ const STAGE_ORDER: ApplicationStage[] = [
 ]
 
 function CandidateRow({ c, onView }: { c: Candidate; onView: (id: string) => void }) {
-  const stageCfg = STAGE_CONFIG[c.stage] ?? { label: c.stage, cls: 'bg-muted text-muted-foreground' }
+  const { t } = useTranslation()
+  const stageCfg = STAGE_CONFIG[c.stage] ?? { labelKey: c.stage, cls: 'bg-muted text-muted-foreground' }
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4 rounded-lg hover:bg-muted/40 transition-colors group">
@@ -57,11 +59,11 @@ function CandidateRow({ c, onView }: { c: Candidate; onView: (id: string) => voi
           <div className="flex items-center gap-2 flex-wrap mt-0.5">
             <span className="text-[11px] text-muted-foreground">{c.nationality}</span>
             {c.experience > 0 && (
-              <span className="text-[11px] text-muted-foreground">{c.experience}y exp</span>
+              <span className="text-[11px] text-muted-foreground">{t('recruitment.jobDetail.experienceYears', { count: c.experience })}</span>
             )}
             {c.expectedSalary != null && (
               <span className="text-[11px] text-muted-foreground">
-                {formatCurrency(c.expectedSalary)} expected
+                {t('recruitment.jobDetail.expectedSalary', { salary: formatCurrency(c.expectedSalary) })}
               </span>
             )}
           </div>
@@ -70,7 +72,7 @@ function CandidateRow({ c, onView }: { c: Candidate; onView: (id: string) => voi
 
       <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
         <Badge variant="outline" className={cn('text-[10px] px-2 py-0.5 shrink-0', stageCfg.cls)}>
-          {stageCfg.label}
+          {t(stageCfg.labelKey)}
         </Badge>
         {c.score > 0 && (
           <div className="flex items-center gap-0.5 text-[11px] text-amber-600 shrink-0">
@@ -90,7 +92,7 @@ function CandidateRow({ c, onView }: { c: Candidate; onView: (id: string) => voi
             download
             onClick={e => e.stopPropagation()}
           >
-            <Button size="icon-sm" variant="ghost" aria-label="Download resume">
+            <Button size="icon-sm" variant="ghost" aria-label={t('recruitment.jobDetail.downloadResume')}>
               <Download className="h-3.5 w-3.5" />
             </Button>
           </a>
@@ -98,7 +100,7 @@ function CandidateRow({ c, onView }: { c: Candidate; onView: (id: string) => voi
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label="View candidate"
+          aria-label={t('recruitment.jobDetail.viewCandidate')}
           onClick={() => onView(c.id)}
         >
           <Eye className="h-3.5 w-3.5" />
@@ -110,6 +112,7 @@ function CandidateRow({ c, onView }: { c: Candidate; onView: (id: string) => voi
 }
 
 export function JobDetailPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [editOpen, setEditOpen] = useState(false)
@@ -155,9 +158,9 @@ export function JobDetailPage() {
       <PageWrapper>
         <div className="flex flex-col items-center justify-center py-24 gap-4">
           <XCircle className="h-12 w-12 text-muted-foreground/30" />
-          <p className="text-muted-foreground">Job not found.</p>
+          <p className="text-muted-foreground">{t('recruitment.jobDetail.jobNotFound')}</p>
           <Button variant="outline" onClick={() => navigate('/recruitment')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />Back to Recruitment
+            <ArrowLeft className="h-4 w-4 mr-2" />{t('recruitment.candidateProfile.backToRecruitment')}
           </Button>
         </div>
       </PageWrapper>
@@ -177,7 +180,7 @@ export function JobDetailPage() {
         className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
-        Recruitment
+        {t('recruitment.jobDetail.backToRecruitment')}
       </button>
 
       <div className="space-y-4">
@@ -216,27 +219,27 @@ export function JobDetailPage() {
                 leftIcon={<Edit2 className="h-3.5 w-3.5" />}
                 onClick={() => setEditOpen(true)}
               >
-                Edit Job
+                {t('recruitment.jobDetail.editJob')}
               </Button>
             </div>
 
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Openings</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{t('recruitment.jobDetail.openings')}</p>
                 <p className="text-lg font-bold text-foreground mt-0.5">{job.openings}</p>
               </div>
               <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Applications</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{t('recruitment.jobDetail.applications')}</p>
                 <p className="text-lg font-bold text-foreground mt-0.5">{job.applications ?? 0}</p>
               </div>
               <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Salary Range</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{t('recruitment.jobDetail.salaryRange')}</p>
                 <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
                   {formatCurrency(job.minSalary)} – {formatCurrency(job.maxSalary)}
                 </p>
               </div>
               <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Closing</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{t('recruitment.jobDetail.closing')}</p>
                 <p className="text-sm font-semibold text-foreground mt-0.5">{formatDate(job.closingDate)}</p>
               </div>
             </div>
@@ -244,8 +247,8 @@ export function JobDetailPage() {
             {job.openings > 0 && (
               <div className="mt-3">
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
-                  <span>Application fill rate</span>
-                  <span className="font-medium">{job.applications ?? 0} / {job.openings} openings</span>
+                  <span>{t('recruitment.jobDetail.fillRate')}</span>
+                  <span className="font-medium">{t('recruitment.jobDetail.fillRateCount', { applications: job.applications ?? 0, openings: job.openings })}</span>
                 </div>
                 <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                   <div
@@ -264,7 +267,7 @@ export function JobDetailPage() {
             {job.description && (
               <Card>
                 <CardHeader className="pb-2 pt-4 px-4">
-                  <CardTitle className="text-sm font-semibold text-foreground">Job Description</CardTitle>
+                  <CardTitle className="text-sm font-semibold text-foreground">{t('recruitment.jobDetail.jobDescription')}</CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 pb-4">
                   <RichTextDisplay html={job.description} />
@@ -274,7 +277,7 @@ export function JobDetailPage() {
             {job.requirements && job.requirements.length > 0 && (
               <Card>
                 <CardHeader className="pb-2 pt-4 px-4">
-                  <CardTitle className="text-sm font-semibold text-foreground">Requirements</CardTitle>
+                  <CardTitle className="text-sm font-semibold text-foreground">{t('recruitment.jobDetail.requirements')}</CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 pb-4">
                   <ul className="space-y-1.5">
@@ -292,9 +295,9 @@ export function JobDetailPage() {
               <Card>
                 <CardContent className="py-10 text-center">
                   <FileText className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">No description added yet.</p>
+                  <p className="text-sm text-muted-foreground">{t('recruitment.jobDetail.noDescription')}</p>
                   <Button size="sm" variant="outline" className="mt-3" onClick={() => setEditOpen(true)}>
-                    Add Details
+                    {t('recruitment.jobDetail.addDetails')}
                   </Button>
                 </CardContent>
               </Card>
@@ -305,7 +308,7 @@ export function JobDetailPage() {
             <Card>
               <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
                 <div className="flex items-center gap-2">
-                  <CardTitle className="text-sm font-semibold">Candidates</CardTitle>
+                  <CardTitle className="text-sm font-semibold">{t('recruitment.jobDetail.candidates')}</CardTitle>
                   {allCandidates.length > 0 && (
                     <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-muted text-[11px] font-medium tabular-nums">
                       {allCandidates.length}
@@ -314,7 +317,7 @@ export function JobDetailPage() {
                 </div>
                 <Button size="sm" variant="outline" onClick={() => navigate('/recruitment')}>
                   <Users className="h-3.5 w-3.5 mr-1.5" />
-                  Pipeline
+                  {t('recruitment.jobDetail.pipeline')}
                 </Button>
               </div>
 
@@ -330,7 +333,7 @@ export function JobDetailPage() {
                           : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
                       )}
                     >
-                      All · {allCandidates.length}
+                      {t('recruitment.jobDetail.allCount', { count: allCandidates.length })}
                     </button>
                     {STAGE_ORDER.map(s => {
                       const count = stageCounts[s] ?? 0
@@ -346,7 +349,7 @@ export function JobDetailPage() {
                             stageFilter === s ? cfg.cls : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
                           )}
                         >
-                          {cfg.label} · {count}
+                          {t(cfg.labelKey)} · {count}
                         </button>
                       )
                     })}
@@ -363,19 +366,19 @@ export function JobDetailPage() {
                     <div className="h-12 w-12 rounded-xl bg-muted/60 border flex items-center justify-center mb-3">
                       <Users className="h-6 w-6 text-muted-foreground/30" />
                     </div>
-                    <p className="text-sm font-semibold">No candidates yet</p>
-                    <p className="text-xs text-muted-foreground mt-1">Candidates who apply will appear here.</p>
+                    <p className="text-sm font-semibold">{t('recruitment.jobDetail.noCandidatesYet')}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('recruitment.jobDetail.candidatesWillAppear')}</p>
                   </div>
                 ) : candidates.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
                     <AlertCircle className="h-8 w-8 text-muted-foreground/20 mb-2" />
-                    <p className="text-sm text-muted-foreground">No candidates in this stage.</p>
+                    <p className="text-sm text-muted-foreground">{t('recruitment.jobDetail.noCandidatesInStage')}</p>
                     <button
                       type="button"
                       onClick={() => setStageFilter('all')}
                       className="text-xs text-primary mt-2 hover:underline"
                     >
-                      Show all
+                      {t('recruitment.jobDetail.showAll')}
                     </button>
                   </div>
                 ) : (

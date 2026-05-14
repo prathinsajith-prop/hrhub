@@ -21,6 +21,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyableEmail, MultiRoleToggle, MULTI_ROLE_OPTIONS } from '@/components/shared'
+import { useTranslation } from 'react-i18next'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 function formatLastLogin(lastLoginAt: string | null): string {
@@ -39,11 +40,11 @@ function initials(name: string) {
 }
 
 const ROLES_INFO = [
-    { id: 'super_admin', label: 'Super Admin', desc: 'Full access to all modules and settings', color: 'text-red-600 bg-red-50' },
-    { id: 'hr_manager', label: 'HR Manager', desc: 'Employees, leave, recruitment, onboarding', color: 'text-blue-600 bg-blue-50' },
-    { id: 'pro_officer', label: 'PRO Officer', desc: 'Visa, documents, and compliance', color: 'text-primary bg-primary/10' },
-    { id: 'dept_head', label: 'Department Manager', desc: 'Team attendance, leave approval, performance', color: 'text-orange-600 bg-orange-50' },
-    { id: 'employee', label: 'Employee', desc: 'Self-service: leaves, payslips, profile', color: 'text-gray-600 bg-gray-50' },
+    { id: 'super_admin', labelKey: 'team.roles.super_admin', descKey: 'settingsDetail.users.roleDesc.super_admin', color: 'text-red-600 bg-red-50' },
+    { id: 'hr_manager', labelKey: 'team.roles.hr_manager', descKey: 'settingsDetail.users.roleDesc.hr_manager', color: 'text-blue-600 bg-blue-50' },
+    { id: 'pro_officer', labelKey: 'team.roles.pro_officer', descKey: 'settingsDetail.users.roleDesc.pro_officer', color: 'text-primary bg-primary/10' },
+    { id: 'dept_head', labelKey: 'team.roles.dept_head', descKey: 'settingsDetail.users.roleDesc.dept_head', color: 'text-orange-600 bg-orange-50' },
+    { id: 'employee', labelKey: 'team.roles.employee', descKey: 'settingsDetail.users.roleDesc.employee', color: 'text-gray-600 bg-gray-50' },
 ]
 
 const ROLE_ACCESS_MAP: Record<string, string[]> = {
@@ -56,6 +57,7 @@ const ROLE_ACCESS_MAP: Record<string, string[]> = {
 
 // ─── Grant Access Modal ───────────────────────────────────────────────────────
 function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+    const { t } = useTranslation()
     const { data: invitableEmployees = [], isLoading } = useInvitableEmployees({ enabled: open })
     const inviteBulk = useInviteUserBulk()
     const [search, setSearch] = useState('')
@@ -115,19 +117,19 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
             if (succeeded.length > 0) {
                 toast.success(
                     succeeded.length === 1
-                        ? `Access granted to ${succeeded[0].name}`
-                        : `Access granted to ${succeeded.length} employees`,
+                        ? t('settingsDetail.users.accessGrantedOne', { name: succeeded[0].name })
+                        : t('settingsDetail.users.accessGrantedMany', { count: succeeded.length }),
                 )
             }
             if (failed.length > 0) {
                 toast.error(
-                    `${failed.length} invite${failed.length > 1 ? 's' : ''} failed`,
+                    t('settingsDetail.users.invitesFailed', { count: failed.length }),
                     failed.map((f: { reason: string }) => f.reason).join('; '),
                 )
             }
             handleClose()
         } catch (err) {
-            toast.error((err as Error)?.message ?? 'Failed to send invitations')
+            toast.error((err as Error)?.message ?? t('settingsDetail.users.failedToSendInvitations'))
         }
     }
 
@@ -142,15 +144,15 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                 <DialogHeader className="px-5 pt-5 pb-4 border-b">
                     <DialogTitle className="flex items-center gap-2 text-base">
                         <UserPlus className="h-4 w-4 text-primary" />
-                        Grant Access
+                        {t('settingsDetail.users.grantAccess')}
                     </DialogTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        Select employees to invite. Each will receive a secure link to set up their login.
+                        {t('settingsDetail.users.grantAccessDesc')}
                     </p>
                 </DialogHeader>
 
                 <div className="px-5 pt-4 pb-3 border-b bg-muted/30 flex items-center gap-3 flex-wrap">
-                    <p className="text-xs font-medium text-muted-foreground shrink-0">Assign roles</p>
+                    <p className="text-xs font-medium text-muted-foreground shrink-0">{t('settingsDetail.users.assignRoles')}</p>
                     <MultiRoleToggle roles={roles} onChange={setRoles} availableRoles={MULTI_ROLE_OPTIONS} />
                 </div>
 
@@ -159,7 +161,7 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                         <Input
                             className="pl-8 h-8 text-sm"
-                            placeholder="Search by name, department…"
+                            placeholder={t('settingsDetail.users.searchPlaceholder')}
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
@@ -176,7 +178,7 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                             )}>
                                 {allVisibleSelected && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
                             </div>
-                            {allVisibleSelected ? 'Deselect all' : 'Select all'}
+                            {allVisibleSelected ? t('settingsDetail.users.deselectAll') : t('settingsDetail.users.selectAll')}
                         </button>
                     )}
                 </div>
@@ -195,8 +197,8 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                     ) : filtered.length === 0 ? (
                         <div className="py-8 text-center text-xs text-muted-foreground">
                             {invitableEmployees.length === 0
-                                ? 'All employees already have accounts'
-                                : 'No matching employees'}
+                                ? t('settingsDetail.users.allHaveAccounts')
+                                : t('settingsDetail.users.noMatchingEmployees')}
                         </div>
                     ) : (
                         filtered.map((emp: InvitableEmployee) => {
@@ -208,7 +210,7 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                                     type="button"
                                     disabled={noEmail}
                                     onClick={() => toggle(emp.id)}
-                                    title={noEmail ? 'No email on file — add one to the employee profile first' : undefined}
+                                    title={noEmail ? t('settingsDetail.users.noEmailTitle') : undefined}
                                     className={cn(
                                         'w-full flex items-center gap-3 py-2.5 text-start transition-colors',
                                         noEmail ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/30 cursor-pointer',
@@ -236,7 +238,7 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                                         </p>
                                     </div>
                                     {noEmail && (
-                                        <Badge variant="secondary" className="text-[10px] shrink-0">No email</Badge>
+                                        <Badge variant="secondary" className="text-[10px] shrink-0">{t('settingsDetail.users.noEmail')}</Badge>
                                     )}
                                 </button>
                             )
@@ -247,14 +249,14 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                 <div className="px-5 py-4 border-t bg-muted/20 flex items-center justify-between gap-3">
                     <p className="text-xs text-muted-foreground">
                         {selectedCount === 0
-                            ? 'No employees selected'
-                            : `${selectedCount} employee${selectedCount > 1 ? 's' : ''} selected`}
+                            ? t('settingsDetail.users.noEmployeesSelected')
+                            : t('settingsDetail.users.employeesSelected', { count: selectedCount })}
                         {hasEmailless && (
-                            <span className="ml-1.5 text-amber-600">(some lack an email)</span>
+                            <span className="ml-1.5 text-amber-600">{t('settingsDetail.users.someLackEmail')}</span>
                         )}
                     </p>
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={handleClose}>Cancel</Button>
+                        <Button variant="outline" size="sm" onClick={handleClose}>{t('common.cancel')}</Button>
                         <Button
                             size="sm"
                             disabled={selectedCount === 0 || inviteBulk.isPending}
@@ -262,10 +264,10 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                             leftIcon={<UserPlus className="h-3.5 w-3.5" />}
                         >
                             {inviteBulk.isPending
-                                ? 'Sending…'
+                                ? t('settingsDetail.users.sending')
                                 : selectedCount > 1
-                                    ? `Grant Access (${selectedCount})`
-                                    : 'Grant Access'}
+                                    ? t('settingsDetail.users.grantAccessCount', { count: selectedCount })
+                                    : t('settingsDetail.users.grantAccess')}
                         </Button>
                     </div>
                 </div>
@@ -276,6 +278,7 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function UsersPage() {
+    const { t } = useTranslation()
     const { can } = usePermissions()
     const { user: me } = useAuthStore()
     const canManageUsers = can('manage_users')
@@ -288,9 +291,9 @@ export function UsersPage() {
     async function handleRolesChange(userId: string, newRoles: string[]) {
         try {
             await updateUser.mutateAsync({ id: userId, roles: newRoles, role: newRoles[0] })
-            toast.success('Roles updated')
+            toast.success(t('settingsDetail.users.rolesUpdated'))
         } catch {
-            toast.error('Failed to update roles')
+            toast.error(t('settingsDetail.users.rolesUpdateFailed'))
         }
     }
 
@@ -298,34 +301,34 @@ export function UsersPage() {
         if (!deactivateTarget) return
         try {
             await updateUser.mutateAsync({ id: deactivateTarget.id, isActive: !deactivateTarget.active })
-            toast.success(deactivateTarget.active ? 'User deactivated' : 'User activated')
+            toast.success(deactivateTarget.active ? t('settingsDetail.users.userDeactivated') : t('settingsDetail.users.userActivated'))
             setDeactivateTarget(null)
         } catch {
-            toast.error('Failed to update user status')
+            toast.error(t('settingsDetail.users.statusUpdateFailed'))
         }
     }
 
     async function handleResendInvite(employeeId: string, name: string) {
         try {
             await resendInvite.mutateAsync(employeeId)
-            toast.success(`Invite resent to ${name}`)
+            toast.success(t('settingsDetail.users.inviteResent', { name }))
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to resend invite')
+            toast.error(err instanceof Error ? err.message : t('settingsDetail.users.resendInviteFailed'))
         }
     }
 
     return (
         <PageWrapper>
             <PageHeader
-                title="Users & Roles"
-                description="Manage system access, roles, and permissions for your workspace."
+                title={t('settings.users')}
+                description={t('settingsDetail.users.pageDesc')}
                 actions={canManageUsers && (
                     <Button
                         size="sm"
                         leftIcon={<Plus className="h-3.5 w-3.5" />}
                         onClick={() => setShowInvite(true)}
                     >
-                        Grant Access
+                        {t('settingsDetail.users.grantAccess')}
                     </Button>
                 )}
             />
@@ -334,8 +337,8 @@ export function UsersPage() {
                 {/* ── User List ─────────────────────────────────────────── */}
                 <section className="space-y-3">
                     <div>
-                        <h2 className="text-sm font-semibold">Users</h2>
-                        <p className="text-xs text-muted-foreground">All accounts with access to this workspace.</p>
+                        <h2 className="text-sm font-semibold">{t('settingsDetail.users.usersTitle')}</h2>
+                        <p className="text-xs text-muted-foreground">{t('settingsDetail.users.usersDesc')}</p>
                     </div>
 
                     {isLoading ? (
@@ -353,7 +356,7 @@ export function UsersPage() {
                     ) : (tenantUsers ?? []).length === 0 ? (
                         <div className="text-center py-10 text-muted-foreground border rounded-lg">
                             <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                            <p className="text-sm">No users found</p>
+                            <p className="text-sm">{t('settingsDetail.users.noUsersFound')}</p>
                         </div>
                     ) : (
                         <div className="divide-y border rounded-lg overflow-hidden">
@@ -374,9 +377,9 @@ export function UsersPage() {
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <p className="text-sm font-medium truncate">{u.name}</p>
-                                                    {isSelf && <span className="text-[10px] text-muted-foreground">(you)</span>}
+                                                    {isSelf && <span className="text-[10px] text-muted-foreground">{t('settingsDetail.users.youLabel')}</span>}
                                                     {!u.isActive && (
-                                                        <Badge variant="secondary" className="text-[10px]">Inactive</Badge>
+                                                        <Badge variant="secondary" className="text-[10px]">{t('common.inactive')}</Badge>
                                                     )}
                                                 </div>
                                                 <p className="text-xs text-muted-foreground truncate">
@@ -401,7 +404,7 @@ export function UsersPage() {
                                                 'text-[10px] font-medium px-2 py-0.5 rounded-full',
                                                 u.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500',
                                             )}>
-                                                {u.isActive ? 'Active' : 'Inactive'}
+                                                {u.isActive ? t('common.active') : t('common.inactive')}
                                             </span>
 
                                             {canManageUsers && !isSelf && !u.isActive && (
@@ -409,7 +412,7 @@ export function UsersPage() {
                                                     variant="ghost"
                                                     size="sm"
                                                     className="h-7 text-xs text-sky-600 hover:bg-sky-50"
-                                                    title="Resend invite"
+                                                    title={t('settingsDetail.users.resendInvite')}
                                                     onClick={() => handleResendInvite(u.employeeId, u.name)}
                                                     disabled={resendInvite.isPending}
                                                 >
@@ -445,8 +448,8 @@ export function UsersPage() {
                     <div className="flex items-center gap-2">
                         <Shield className="h-4 w-4 text-muted-foreground" />
                         <div>
-                            <h2 className="text-sm font-semibold">Roles & Permissions</h2>
-                            <p className="text-xs text-muted-foreground">What each role is allowed to do in this workspace.</p>
+                            <h2 className="text-sm font-semibold">{t('settingsDetail.users.rolesPermissionsTitle')}</h2>
+                            <p className="text-xs text-muted-foreground">{t('settingsDetail.users.rolesPermissionsDesc')}</p>
                         </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -457,8 +460,8 @@ export function UsersPage() {
                                         <UserCircle className="h-4 w-4" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-semibold leading-tight">{role.label}</p>
-                                        <p className="text-[10px] text-muted-foreground">{role.desc}</p>
+                                        <p className="text-sm font-semibold leading-tight">{t(role.labelKey)}</p>
+                                        <p className="text-[10px] text-muted-foreground">{t(role.descKey)}</p>
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap gap-1">
@@ -478,11 +481,17 @@ export function UsersPage() {
             <ConfirmDialog
                 open={!!deactivateTarget}
                 onOpenChange={(v) => { if (!v) setDeactivateTarget(null) }}
-                title={deactivateTarget ? `${deactivateTarget.active ? 'Deactivate' : 'Activate'} ${deactivateTarget.name}?` : ''}
+                title={deactivateTarget
+                    ? t(deactivateTarget.active ? 'settingsDetail.users.deactivateTitle' : 'settingsDetail.users.activateTitle', { name: deactivateTarget.name })
+                    : ''}
                 description={deactivateTarget?.active
-                    ? 'This user will immediately lose access. They can be reactivated at any time.'
-                    : 'This user will regain access to the workspace.'}
-                confirmLabel={updateUser.isPending ? 'Saving…' : deactivateTarget?.active ? 'Deactivate' : 'Activate'}
+                    ? t('settingsDetail.users.deactivateDesc')
+                    : t('settingsDetail.users.activateDesc')}
+                confirmLabel={updateUser.isPending
+                    ? t('settingsDetail.users.saving')
+                    : deactivateTarget?.active
+                        ? t('settingsDetail.users.deactivate')
+                        : t('settingsDetail.users.activate')}
                 onConfirm={handleToggleActive}
                 variant={deactivateTarget?.active ? 'destructive' : 'success'}
             />

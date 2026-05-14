@@ -7,9 +7,11 @@ import { useAuthStore } from '@/store/authStore'
 import { labelFor } from '@/lib/enums'
 import { useMyTenants, useSwitchTenant, type TenantMembershipSummary } from '@/hooks/useTenants'
 import { Section } from './_shared'
+import { useTranslation } from 'react-i18next'
 
 // ─── Switch Organizations Tab ─────────────────────────────────────────────────
 export function SwitchTab() {
+    const { t } = useTranslation()
     const { data: tenants, isLoading } = useMyTenants()
     const switchMut = useSwitchTenant()
     const { tenant: currentTenant } = useAuthStore()
@@ -18,22 +20,22 @@ export function SwitchTab() {
         if (tenantId === currentTenant?.id) return
         try {
             await switchMut.mutateAsync(tenantId)
-            toast.success('Switched', `Now working in ${name}`)
+            toast.success(t('orgSettings.switch.switched'), t('orgSettings.switch.switchedDesc', { name }))
             window.location.assign('/dashboard')
         } catch {
-            toast.error('Switch failed', 'Could not switch organization.')
+            toast.error(t('orgSettings.switch.switchFailed'), t('orgSettings.switch.switchFailedDesc'))
         }
     }
 
     return (
         <div className="space-y-5">
-            <Section icon={ArrowRightLeft} title="Switch Organization" description="Select a workspace to switch into">
+            <Section icon={ArrowRightLeft} title={t('orgSettings.switch.title')} description={t('orgSettings.switch.desc')}>
                 {isLoading ? (
                     <div className="grid sm:grid-cols-2 gap-3">
                         {[1, 2, 3].map(n => <Skeleton key={n} className="h-20 w-full" />)}
                     </div>
                 ) : (tenants ?? []).length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic">You don't belong to any organization yet.</p>
+                    <p className="text-sm text-muted-foreground italic">{t('orgSettings.switch.noOrgs')}</p>
                 ) : (
                     <div className="grid sm:grid-cols-2 gap-3">
                         {(tenants ?? []).map((m: TenantMembershipSummary) => {
@@ -59,9 +61,9 @@ export function SwitchTab() {
                                         </div>
                                     </div>
                                     {isActive ? (
-                                        <Badge variant="secondary" className="text-[10px] shrink-0">Current</Badge>
+                                        <Badge variant="secondary" className="text-[10px] shrink-0">{t('orgSettings.switch.current')}</Badge>
                                     ) : (
-                                        <Badge variant="outline" className="text-[10px] shrink-0">Switch</Badge>
+                                        <Badge variant="outline" className="text-[10px] shrink-0">{t('orgSettings.switch.switchLabel')}</Badge>
                                     )}
                                 </button>
                             )

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import {
     Zap, CreditCard, Building, Users2, AlertCircle, CheckCircle, Send,
@@ -36,14 +37,6 @@ const PLAN_COLORS: Record<string, { badge: string; ring: string; button: string;
     enterprise: { badge: 'bg-purple-100 text-purple-700', ring: 'ring-purple-300', button: 'bg-purple-600 hover:bg-purple-700 text-white', bg: '#f5f3ff', icon: '#7c3aed' },
 }
 
-const EVENT_LABELS: Record<string, string> = {
-    plan_activated: 'Plan Activation',
-    quota_updated: 'Capacity Update',
-    upgrade_request: 'Upgrade Request',
-    enterprise_contact: 'Enterprise Enquiry',
-    checkout_created: 'Checkout Initiated',
-}
-
 const EVENT_BADGE: Record<string, string> = {
     plan_activated: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
     quota_updated: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
@@ -55,17 +48,26 @@ const EVENT_BADGE: Record<string, string> = {
 // ─── Invoice Row ──────────────────────────────────────────────────────────────
 
 function InvoiceRow({ event }: { event: SubscriptionEvent }) {
+    const { t } = useTranslation()
     const [downloading, setDownloading] = useState(false)
     const meta = event.metadata ?? {}
     const invoiceRef = (meta.invoiceRef as string) ?? `INV-${event.id.slice(0, 8).toUpperCase()}`
     const isDownloadable = ['plan_activated', 'quota_updated'].includes(event.eventType)
+
+    const EVENT_LABELS: Record<string, string> = {
+        plan_activated: t('orgSettings.subscription.eventPlanActivation'),
+        quota_updated: t('orgSettings.subscription.eventCapacityUpdate'),
+        upgrade_request: t('orgSettings.subscription.eventUpgradeRequest'),
+        enterprise_contact: t('orgSettings.subscription.eventEnterpriseEnquiry'),
+        checkout_created: t('orgSettings.subscription.eventCheckoutInitiated'),
+    }
 
     async function handleDownload() {
         setDownloading(true)
         try {
             await downloadInvoicePdf(event.id, invoiceRef)
         } catch {
-            toast.error('Download failed', 'Could not generate invoice PDF.')
+            toast.error(t('orgSettings.subscription.downloadFailed'), t('orgSettings.subscription.downloadFailedDesc'))
         } finally {
             setDownloading(false)
         }
@@ -109,7 +111,7 @@ function InvoiceRow({ event }: { event: SubscriptionEvent }) {
                         disabled={downloading}
                     >
                         <Download className="h-3.5 w-3.5" />
-                        {downloading ? 'Downloading…' : 'Download PDF'}
+                        {downloading ? t('orgSettings.subscription.downloading') : t('orgSettings.subscription.downloadPdf')}
                     </Button>
                 ) : (
                     <span className="text-xs text-muted-foreground/40">—</span>
@@ -122,6 +124,7 @@ function InvoiceRow({ event }: { event: SubscriptionEvent }) {
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 
 export function SubscriptionTab() {
+    const { t } = useTranslation()
     const { data: sub, isLoading, refetch } = useSubscription()
     const { data: events = [], isLoading: eventsLoading } = useSubscriptionEvents()
     const checkoutMut = useCheckoutSession()
@@ -134,13 +137,13 @@ export function SubscriptionTab() {
     const checkoutResult = searchParams.get('checkout')
     useEffect(() => {
         if (checkoutResult === 'upgraded') {
-            toast.success('Professional plan activated', 'Payment confirmed. Your plan is now active.')
+            toast.success(t('orgSettings.subscription.professionalActivated'), t('orgSettings.subscription.professionalActivatedDesc'))
             refetch()
             const next = new URLSearchParams(searchParams)
             next.delete('checkout')
             setSearchParams(next, { replace: true })
         } else if (checkoutResult === 'quota') {
-            toast.success('Capacity updated', 'Payment confirmed. Your new employee capacity is now active.')
+            toast.success(t('orgSettings.subscription.capacityUpdated'), t('orgSettings.subscription.capacityUpdatedDesc'))
             refetch()
             const next = new URLSearchParams(searchParams)
             next.delete('checkout')
@@ -173,32 +176,32 @@ export function SubscriptionTab() {
                 window.location.href = result.url
             } else if (isOnProfessional) {
                 const result = await updateQuotaMut.mutateAsync(desiredQuota)
-                toast.success('Capacity updated', result.message)
+                toast.success(t('orgSettings.subscription.capacityUpdated'), result.message)
                 setUpgradeModal(false)
                 refetch()
             } else {
                 const result = await upgradeMut.mutateAsync(desiredQuota)
-                toast.success('Upgrade request sent', result.message)
+                toast.success(t('orgSettings.subscription.upgradeRequestSent'), result.message)
                 setUpgradeModal(false)
             }
         } catch (err) {
-            const msg = err instanceof ApiError ? err.message : 'Please try again.'
-            toast.error(isOnProfessional ? 'Failed to update capacity' : 'Upgrade failed', msg)
+            const msg = err instanceof ApiError ? err.message : t('common.error')
+            toast.error(isOnProfessional ? t('orgSettings.subscription.failedToUpdateCapacity') : t('orgSettings.subscription.upgradeFailed'), msg)
         }
     }
 
     const handleEnterpriseContact = async () => {
         if (!contactForm.contactName || !contactForm.contactEmail || !contactForm.companySize || !contactForm.message) {
-            toast.error('All fields required', 'Please fill in all fields.')
+            toast.error(t('orgSettings.subscription.allFieldsRequired'), t('orgSettings.subscription.allFieldsRequiredDesc'))
             return
         }
         try {
             await contactMut.mutateAsync(contactForm)
-            toast.success('Inquiry sent', 'Our enterprise team will reach out within 1 business day.')
+            toast.success(t('orgSettings.subscription.inquirySent'), t('orgSettings.subscription.inquirySentDesc'))
             setEnterpriseModal(false)
         } catch (err) {
-            const msg = err instanceof ApiError ? err.message : 'Please try again.'
-            toast.error('Failed to send inquiry', msg)
+            const msg = err instanceof ApiError ? err.message : t('common.error')
+            toast.error(t('orgSettings.subscription.failedToSendInquiry'), msg)
         }
     }
 
@@ -233,7 +236,7 @@ export function SubscriptionTab() {
                                 <ShieldCheck className="h-4 w-4" style={{ color: planColors.icon }} />
                             </div>
                             <div>
-                                <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Current plan</p>
+                                <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">{t('orgSettings.subscription.currentPlan')}</p>
                                 <p className="text-base font-bold leading-tight">{current.planName}</p>
                             </div>
                         </div>
@@ -247,13 +250,13 @@ export function SubscriptionTab() {
                             <div className="flex items-center justify-between text-xs">
                                 <div className="flex items-center gap-1.5 text-muted-foreground">
                                     <Users2 className="h-3.5 w-3.5" />
-                                    <span>Employees</span>
+                                    <span>{t('orgSettings.subscription.employees')}</span>
                                 </div>
                                 <span className="font-semibold">
                                     {current.employeeCount}
                                     {current.quota !== null
                                         ? <span className="text-muted-foreground font-normal"> / {current.quota}</span>
-                                        : <span className="text-muted-foreground font-normal"> / Unlimited</span>}
+                                        : <span className="text-muted-foreground font-normal"> / {t('orgSettings.subscription.unlimited')}</span>}
                                 </span>
                             </div>
                             {current.quota !== null ? (
@@ -267,17 +270,17 @@ export function SubscriptionTab() {
                                             }}
                                         />
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground">{current.usagePercent}% of capacity used</p>
+                                    <p className="text-[11px] text-muted-foreground">{t('orgSettings.subscription.usagePercent', { percent: current.usagePercent })}</p>
                                 </>
                             ) : (
-                                <p className="text-[11px] text-muted-foreground">No employee limit</p>
+                                <p className="text-[11px] text-muted-foreground">{t('orgSettings.subscription.noLimit')}</p>
                             )}
                         </div>
 
                         {!current.canAdd && (
                             <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                                 <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                                <span>Employee limit reached — upgrade to add more</span>
+                                <span>{t('orgSettings.subscription.limitReached')}</span>
                             </div>
                         )}
 
@@ -290,14 +293,14 @@ export function SubscriptionTab() {
                                 onClick={() => setUpgradeModal(isOnProfessional ? 'quota' : 'plans')}
                                 leftIcon={<Zap className="h-3.5 w-3.5" />}
                             >
-                                {isOnProfessional ? 'Update capacity' : 'Upgrade plan'}
+                                {isOnProfessional ? t('orgSettings.subscription.updateCapacity') : t('orgSettings.subscription.upgradePlan')}
                             </Button>
                             <Button
                                 size="sm" variant="outline" className="w-full"
                                 onClick={() => setEnterpriseModal(true)}
                                 leftIcon={<Send className="h-3.5 w-3.5" />}
                             >
-                                Contact enterprise sales
+                                {t('orgSettings.subscription.contactEnterpriseSales')}
                             </Button>
                         </div>
                     </CardContent>
@@ -307,8 +310,8 @@ export function SubscriptionTab() {
                 <Card className="min-h-[256px]">
                     <CardHeader className="pb-3 flex flex-row items-center justify-between">
                         <div>
-                            <CardTitle className="text-sm font-semibold">Billing History</CardTitle>
-                            <CardDescription className="text-xs mt-0.5">Invoices and subscription events</CardDescription>
+                            <CardTitle className="text-sm font-semibold">{t('orgSettings.subscription.billingHistory')}</CardTitle>
+                            <CardDescription className="text-xs mt-0.5">{t('orgSettings.subscription.billingHistoryDesc')}</CardDescription>
                         </div>
                         <FileText className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
@@ -320,20 +323,20 @@ export function SubscriptionTab() {
                     ) : events.length === 0 ? (
                         <CardContent className="py-10 text-center">
                             <FileText className="h-7 w-7 text-muted-foreground/30 mx-auto mb-2" />
-                            <p className="text-sm text-muted-foreground">No billing history yet</p>
-                            <p className="text-xs text-muted-foreground/60 mt-1">Invoices appear here after your first payment.</p>
+                            <p className="text-sm text-muted-foreground">{t('orgSettings.subscription.noBillingHistory')}</p>
+                            <p className="text-xs text-muted-foreground/60 mt-1">{t('orgSettings.subscription.noBillingHistoryHint')}</p>
                         </CardContent>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead>
                                     <tr className="border-b bg-muted/40">
-                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Invoice</th>
-                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Type</th>
-                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Capacity</th>
-                                        <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">Amount</th>
-                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Date</th>
-                                        <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">PDF</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">{t('orgSettings.subscription.invoiceCol')}</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">{t('orgSettings.subscription.typeCol')}</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">{t('orgSettings.subscription.capacityCol')}</th>
+                                        <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">{t('orgSettings.subscription.amountCol')}</th>
+                                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">{t('orgSettings.subscription.dateCol')}</th>
+                                        <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground">{t('orgSettings.subscription.pdfCol')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -349,8 +352,8 @@ export function SubscriptionTab() {
             <Dialog open={upgradeModal === 'plans'} onOpenChange={v => !v && setUpgradeModal(false)}>
                 <DialogContent className="max-w-4xl w-full">
                     <DialogHeader>
-                        <DialogTitle className="text-lg">Choose a plan</DialogTitle>
-                        <DialogDescription>Select the plan that fits your team. You can change at any time.</DialogDescription>
+                        <DialogTitle className="text-lg">{t('orgSettings.subscription.choosePlan')}</DialogTitle>
+                        <DialogDescription>{t('orgSettings.subscription.choosePlanDesc')}</DialogDescription>
                     </DialogHeader>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-2">
@@ -377,7 +380,7 @@ export function SubscriptionTab() {
                                             </div>
                                         </div>
                                         {plan.isCurrent && (
-                                            <span className={cn('text-[10px] font-semibold px-2.5 py-1 rounded-full shrink-0', colors?.badge)}>Active</span>
+                                            <span className={cn('text-[10px] font-semibold px-2.5 py-1 rounded-full shrink-0', colors?.badge)}>{t('orgSettings.subscription.activePlan')}</span>
                                         )}
                                     </div>
 
@@ -399,14 +402,14 @@ export function SubscriptionTab() {
                                     {/* CTA */}
                                     <div className="pt-3 border-t mt-auto">
                                         {plan.isCurrent ? (
-                                            <Button size="sm" variant="outline" className="w-full" disabled>Current plan</Button>
+                                            <Button size="sm" variant="outline" className="w-full" disabled>{t('orgSettings.subscription.currentPlanBtn')}</Button>
                                         ) : plan.key === 'growth' ? (
                                             <Button
                                                 className={cn('w-full', colors?.button)}
                                                 onClick={() => { setDesiredQuota(10); setUpgradeModal('quota') }}
                                                 leftIcon={<Zap className="h-4 w-4" />}
                                             >
-                                                Select Professional
+                                                {t('orgSettings.subscription.selectProfessional')}
                                             </Button>
                                         ) : plan.key === 'enterprise' ? (
                                             <Button
@@ -414,10 +417,10 @@ export function SubscriptionTab() {
                                                 onClick={() => { setUpgradeModal(false); setEnterpriseModal(true) }}
                                                 leftIcon={<Send className="h-4 w-4" />}
                                             >
-                                                Contact Sales
+                                                {t('orgSettings.subscription.contactSales')}
                                             </Button>
                                         ) : (
-                                            <Button variant="outline" className="w-full" disabled>Free plan</Button>
+                                            <Button variant="outline" className="w-full" disabled>{t('orgSettings.subscription.freePlan')}</Button>
                                         )}
                                     </div>
                                 </div>
@@ -431,16 +434,18 @@ export function SubscriptionTab() {
             <Dialog open={upgradeModal === 'quota'} onOpenChange={v => !v && setUpgradeModal(false)}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle>{isOnProfessional ? 'Update employee capacity' : 'Upgrade to Professional'}</DialogTitle>
+                        <DialogTitle>{isOnProfessional ? t('orgSettings.subscription.updateEmployeeCapacity') : t('orgSettings.subscription.upgradeToProfessional')}</DialogTitle>
                         <DialogDescription>
                             {isOnProfessional
-                                ? stripeEnabled ? 'Choose your new capacity. A payment will be processed for the updated monthly amount.' : 'Adjust your employee capacity. Changes take effect immediately.'
-                                : `AED ${pricePerUser} per user per month. ${stripeEnabled ? 'Pay by card — plan activates instantly.' : 'Our team will confirm payment before activating.'}`}
+                                ? stripeEnabled
+                                    ? t('orgSettings.subscription.stripeCapacityDesc')
+                                    : t('orgSettings.subscription.manualCapacityDesc')
+                                : `${t('orgSettings.subscription.pricePerUserDesc', { price: pricePerUser })} ${stripeEnabled ? t('orgSettings.subscription.stripeDesc') : t('orgSettings.subscription.manualDesc')}`}
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-3">
-                        <Label>Number of users</Label>
+                        <Label>{t('orgSettings.subscription.numberOfUsers')}</Label>
                         <div className="flex items-center gap-3">
                             <Button type="button" variant="outline" size="icon-sm" onClick={() => setDesiredQuota(q => Math.max(1, q - 1))}>
                                 <Minus className="h-4 w-4" />
@@ -458,12 +463,12 @@ export function SubscriptionTab() {
 
                         <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 flex items-center justify-between">
                             <div>
-                                <p className="text-xs text-blue-600 font-medium">Monthly cost</p>
+                                <p className="text-xs text-blue-600 font-medium">{t('orgSettings.subscription.monthlyCost')}</p>
                                 <p className="text-2xl font-bold text-blue-700">AED {monthlyCost.toLocaleString()}</p>
                             </div>
                             <div className="text-right text-xs text-blue-600">
-                                <p>{desiredQuota} {desiredQuota === 1 ? 'user' : 'users'}</p>
-                                <p>AED {pricePerUser} × {desiredQuota} per month</p>
+                                <p>{desiredQuota} {desiredQuota === 1 ? t('orgSettings.subscription.user') : t('orgSettings.subscription.users')}</p>
+                                <p>{t('orgSettings.subscription.priceFormula', { price: pricePerUser, count: desiredQuota })}</p>
                             </div>
                         </div>
                     </div>
@@ -471,24 +476,24 @@ export function SubscriptionTab() {
                     <div className="flex gap-3 pt-2">
                         {!isOnProfessional && (
                             <Button variant="ghost" size="sm" onClick={() => setUpgradeModal('plans')} className="gap-1 text-xs px-2">
-                                ← Back
+                                ← {t('common.back')}
                             </Button>
                         )}
-                        <Button variant="outline" size="sm" className="flex-1" onClick={() => setUpgradeModal(false)}>Cancel</Button>
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => setUpgradeModal(false)}>{t('common.cancel')}</Button>
                         {stripeEnabled ? (
                             <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" loading={checkoutMut.isPending} onClick={handlePay}
                                 leftIcon={<ExternalLink className="h-3.5 w-3.5" />}>
-                                {isOnProfessional ? 'Pay & update' : 'Pay & activate'}
+                                {isOnProfessional ? t('orgSettings.subscription.payUpdate') : t('orgSettings.subscription.payActivate')}
                             </Button>
                         ) : isOnProfessional ? (
                             <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" loading={updateQuotaMut.isPending} onClick={handlePay}
                                 leftIcon={<CheckCircle className="h-3.5 w-3.5" />}>
-                                Save changes
+                                {t('orgSettings.subscription.saveChanges')}
                             </Button>
                         ) : (
                             <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" loading={upgradeMut.isPending} onClick={handlePay}
                                 leftIcon={<Send className="h-3.5 w-3.5" />}>
-                                Send upgrade request
+                                {t('orgSettings.subscription.sendUpgradeRequest')}
                             </Button>
                         )}
                     </div>
@@ -499,29 +504,29 @@ export function SubscriptionTab() {
             <Dialog open={enterpriseModal} onOpenChange={setEnterpriseModal}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Contact Sales — Enterprise</DialogTitle>
-                        <DialogDescription>Our team will reach out within 1 business day.</DialogDescription>
+                        <DialogTitle>{t('orgSettings.subscription.contactSalesEnterprise')}</DialogTitle>
+                        <DialogDescription>{t('orgSettings.subscription.contactSalesEnterpriseDesc')}</DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-3">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label>Your name</Label>
-                                <Input value={contactForm.contactName} onChange={e => setContactForm(f => ({ ...f, contactName: e.target.value }))} placeholder="Full name" />
+                                <Label>{t('orgSettings.subscription.yourName')}</Label>
+                                <Input value={contactForm.contactName} onChange={e => setContactForm(f => ({ ...f, contactName: e.target.value }))} placeholder={t('orgSettings.subscription.fullNamePlaceholder')} />
                             </div>
                             <div className="space-y-1.5">
-                                <Label>Work email</Label>
-                                <Input type="email" value={contactForm.contactEmail} onChange={e => setContactForm(f => ({ ...f, contactEmail: e.target.value }))} placeholder="you@company.com" />
+                                <Label>{t('orgSettings.subscription.workEmail')}</Label>
+                                <Input type="email" value={contactForm.contactEmail} onChange={e => setContactForm(f => ({ ...f, contactEmail: e.target.value }))} placeholder={t('orgSettings.subscription.workEmailPlaceholder')} />
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Company size</Label>
+                            <Label>{t('orgSettings.subscription.companySize')}</Label>
                             <select
                                 className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
                                 value={contactForm.companySize}
                                 onChange={e => setContactForm(f => ({ ...f, companySize: e.target.value }))}
                             >
-                                <option value="">Select company size</option>
+                                <option value="">{t('orgSettings.subscription.selectCompanySize')}</option>
                                 <option value="50-100">50–100 employees</option>
                                 <option value="100-250">100–250 employees</option>
                                 <option value="250-500">250–500 employees</option>
@@ -530,11 +535,11 @@ export function SubscriptionTab() {
                             </select>
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Tell us about your needs</Label>
+                            <Label>{t('orgSettings.subscription.tellUsNeeds')}</Label>
                             <textarea
                                 rows={3}
                                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
-                                placeholder="Describe your requirements, integrations, timeline…"
+                                placeholder={t('orgSettings.subscription.requirementsPlaceholder')}
                                 value={contactForm.message}
                                 onChange={e => setContactForm(f => ({ ...f, message: e.target.value }))}
                             />
@@ -542,10 +547,10 @@ export function SubscriptionTab() {
                     </div>
 
                     <div className="flex gap-3 pt-1">
-                        <Button variant="outline" size="sm" className="flex-1" onClick={() => setEnterpriseModal(false)}>Cancel</Button>
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => setEnterpriseModal(false)}>{t('common.cancel')}</Button>
                         <Button size="sm" className="flex-1 bg-purple-600 hover:bg-purple-700 text-white" loading={contactMut.isPending} onClick={handleEnterpriseContact}
                             leftIcon={<Send className="h-3.5 w-3.5" />}>
-                            Send inquiry
+                            {t('orgSettings.subscription.sendInquiry')}
                         </Button>
                     </div>
                 </DialogContent>

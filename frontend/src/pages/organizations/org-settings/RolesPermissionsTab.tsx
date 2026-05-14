@@ -5,6 +5,7 @@ import { labelFor } from '@/lib/enums'
 import { ALL_ROLES, ALL_PERMISSIONS, getRolePermissionMatrix, type Permission } from '@/lib/permissions'
 import type { UserRole } from '@/types'
 import { Section } from './_shared'
+import { useTranslation } from 'react-i18next'
 
 // ─── Roles & Permissions Tab (read-only matrix) ──────────────────────────────
 const ROLE_LABEL: Record<UserRole, string> = {
@@ -28,6 +29,7 @@ function permGroup(p: Permission): string {
 }
 
 export function RolesPermissionsTab() {
+    const { t } = useTranslation()
     const matrix = getRolePermissionMatrix()
     const grouped = ALL_PERMISSIONS.reduce<Record<string, Permission[]>>((acc, p) => {
         const g = permGroup(p)
@@ -39,18 +41,18 @@ export function RolesPermissionsTab() {
         <div className="space-y-5">
             <Section
                 icon={KeyRound}
-                title="Built-in Roles & Permissions"
-                description="What each role can do across the workspace. These defaults are managed in code and apply to every organization."
+                title={t('orgSettings.roles.builtInTitle')}
+                description={t('orgSettings.roles.builtInDesc')}
             >
                 <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 mb-4">
                     <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                    <span>Read-only view. Per-tenant role customization is on the roadmap and will appear here once available.</span>
+                    <span>{t('orgSettings.roles.readOnlyNote')}</span>
                 </div>
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
                         <thead className="bg-muted/40 text-xs font-medium text-muted-foreground">
                             <tr>
-                                <th className="text-start px-3 py-2.5 font-medium sticky start-0 bg-muted/40 min-w-[220px]">Permission</th>
+                                <th className="text-start px-3 py-2.5 font-medium sticky start-0 bg-muted/40 min-w-[220px]">{t('orgSettings.roles.permissionCol')}</th>
                                 {ALL_ROLES.map((r) => (
                                     <th key={r} className="px-2 py-2.5 font-medium text-center min-w-[100px]">{ROLE_LABEL[r]}</th>
                                 ))}
@@ -76,10 +78,10 @@ export function RolesPermissionsTab() {
                                                         {granted ? (
                                                             <CheckCircle2
                                                                 className="h-4 w-4 text-emerald-600 inline"
-                                                                aria-label="granted"
+                                                                aria-label={t('orgSettings.roles.granted')}
                                                             />
                                                         ) : (
-                                                            <MinusCircle className="h-4 w-4 text-muted-foreground/40 inline" aria-label="denied" />
+                                                            <MinusCircle className="h-4 w-4 text-muted-foreground/40 inline" aria-label={t('orgSettings.roles.denied')} />
                                                         )}
                                                     </td>
                                                 )
@@ -93,21 +95,21 @@ export function RolesPermissionsTab() {
                 </div>
             </Section>
 
-            <Section icon={UserCircle} title="Role Summary" description="Quick reference for each role">
+            <Section icon={UserCircle} title={t('orgSettings.roles.roleSummaryTitle')} description={t('orgSettings.roles.roleSummaryDesc')}>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     {ALL_ROLES.map((r) => {
                         const count = matrix[r]?.length ?? 0
                         const blurb =
-                            r === 'super_admin' ? 'Full access to all modules and settings.' :
-                                r === 'hr_manager' ? 'Manages employees, payroll, leave, recruitment.' :
-                                    r === 'pro_officer' ? 'Handles visa, documents and compliance.' :
-                                        r === 'dept_head' ? 'Approves leave and manages team performance.' :
-                                            'Self-service for own leave, attendance, payslips.'
+                            r === 'super_admin' ? t('orgSettings.roles.blurb.super_admin') :
+                                r === 'hr_manager' ? t('orgSettings.roles.blurb.hr_manager') :
+                                    r === 'pro_officer' ? t('orgSettings.roles.blurb.pro_officer') :
+                                        r === 'dept_head' ? t('orgSettings.roles.blurb.dept_head') :
+                                            t('orgSettings.roles.blurb.employee')
                         return (
                             <div key={r} className="rounded-lg border p-4">
                                 <div className="flex items-center justify-between mb-1.5">
                                     <p className="text-sm font-semibold">{ROLE_LABEL[r]}</p>
-                                    <Badge variant="secondary" className="text-[10px]">{count} perms</Badge>
+                                    <Badge variant="secondary" className="text-[10px]">{t('orgSettings.roles.permsCount', { count })}</Badge>
                                 </div>
                                 <p className="text-xs text-muted-foreground">{blurb}</p>
                             </div>

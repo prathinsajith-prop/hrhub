@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
     CreditCard, CheckCircle2, Zap, Building2, Users, ArrowUpRight,
     Download, FileText, Calendar, Plus, Minus, Send,
@@ -57,13 +58,7 @@ const PLAN_META: Record<string, {
     },
 }
 
-const EVENT_LABELS: Record<string, string> = {
-    plan_activated: 'Plan activated',
-    quota_updated: 'Capacity updated',
-    upgrade_request: 'Upgrade requested',
-    enterprise_contact: 'Enterprise enquiry',
-    checkout_created: 'Checkout started',
-}
+// EVENT_LABELS are now translated inline via t() in InvoiceRow
 
 const EVENT_TONE: Record<string, string> = {
     plan_activated: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
@@ -87,6 +82,7 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
     pricePerUser: number
     currency: string
 }) {
+    const { t } = useTranslation()
     const [quota, setQuota] = useState(Math.max(1, (currentQuota ?? 0) + 1))
     const checkoutMut = useCheckoutSession()
     const upgradeMut = useUpgradeRequest()
@@ -106,15 +102,15 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
         if (stripeEnabled) {
             checkoutMut.mutate({ desiredQuota: quota, action: 'upgrade' }, {
                 onSuccess: (data) => { if (data?.url) window.location.href = data.url },
-                onError: (err) => toast.error('Checkout failed', err instanceof ApiError ? err.message : 'Please try again.'),
+                onError: (err) => toast.error(t('subscriptionPage.checkoutFailed'), err instanceof ApiError ? err.message : t('subscriptionPage.tryAgain')),
             })
         } else {
             upgradeMut.mutate(quota, {
                 onSuccess: () => {
-                    toast.success('Upgrade request sent', 'Our team will contact you within 1 business day.')
+                    toast.success(t('subscriptionPage.upgradeRequestSent'), t('subscriptionPage.upgradeRequestSentDesc'))
                     onClose()
                 },
-                onError: (err) => toast.error('Request failed', err instanceof ApiError ? err.message : 'Please try again.'),
+                onError: (err) => toast.error(t('subscriptionPage.requestFailed'), err instanceof ApiError ? err.message : t('subscriptionPage.tryAgain')),
             })
         }
     }
@@ -127,17 +123,17 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Sparkles className="h-4 w-4 text-primary" />
-                        Adjust capacity
+                        {t('subscriptionPage.adjustCapacity')}
                     </DialogTitle>
                     <DialogDescription>
-                        {fmtMoney(pricePerUser, currency)} per user, billed monthly. Cancel anytime.
+                        {t('subscriptionPage.perUserBilledMonthly', { price: fmtMoney(pricePerUser, currency) })}
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-5 py-2">
                     {/* Capacity stepper — pill style */}
                     <div className="rounded-2xl border bg-muted/30 p-5">
-                        <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Employees</Label>
+                        <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t('subscriptionPage.employees')}</Label>
                         <div className="flex items-center gap-3 mt-2">
                             <Button
                                 type="button" variant="outline" size="icon"
@@ -170,16 +166,16 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
                     {/* Cost summary */}
                     <div className="space-y-2.5 px-1">
                         <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Per user</span>
+                            <span className="text-muted-foreground">{t('subscriptionPage.perUser')}</span>
                             <span className="font-medium tabular-figures">{fmtMoney(pricePerUser, currency)}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Monthly total</span>
+                            <span className="text-muted-foreground">{t('subscriptionPage.monthlyTotal')}</span>
                             <span className="font-semibold tabular-figures">{fmtMoney(monthlyCost, currency)}</span>
                         </div>
                         <Separator />
                         <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold">Annual estimate</span>
+                            <span className="text-sm font-semibold">{t('subscriptionPage.annualEstimate')}</span>
                             <span className="font-bold tabular-figures text-primary">{fmtMoney(monthlyCost * 12, currency)}</span>
                         </div>
                     </div>
@@ -187,16 +183,16 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
                     {!stripeEnabled && (
                         <div className="flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                             <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
-                            <span>Online payment isn't configured yet. We'll send your request to our team and follow up directly.</span>
+                            <span>{t('subscriptionPage.noOnlinePayment')}</span>
                         </div>
                     )}
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={onClose} disabled={isPending}>Cancel</Button>
+                    <Button variant="outline" onClick={onClose} disabled={isPending}>{t('common.cancel')}</Button>
                     <Button onClick={handleSubmit} disabled={isPending}
                         leftIcon={stripeEnabled ? <CreditCard className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}>
-                        {isPending ? 'Processing…' : stripeEnabled ? 'Continue to payment' : 'Send request'}
+                        {isPending ? t('subscriptionPage.processing') : stripeEnabled ? t('subscriptionPage.continueToPayment') : t('subscriptionPage.sendRequest')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -207,6 +203,7 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
 // ─── Enterprise Dialog ────────────────────────────────────────────────────────
 
 function EnterpriseDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+    const { t } = useTranslation()
     const user = useAuthStore(s => s.user)
     const contactMut = useEnterpriseContact()
     const [form, setForm] = useState({
@@ -218,15 +215,15 @@ function EnterpriseDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
     function handleSubmit() {
         if (!form.contactName || !form.contactEmail || !form.companySize || !form.message) {
-            toast.error('All fields are required')
+            toast.error(t('subscriptionPage.allFieldsRequired'))
             return
         }
         contactMut.mutate(form, {
             onSuccess: () => {
-                toast.success('Enquiry sent', 'Our enterprise team will reach out within 1 business day.')
+                toast.success(t('subscriptionPage.enquirySent'), t('subscriptionPage.enquirySentDesc'))
                 onClose()
             },
-            onError: (err) => toast.error('Failed to send', err instanceof ApiError ? err.message : 'Please try again.'),
+            onError: (err) => toast.error(t('subscriptionPage.failedToSend'), err instanceof ApiError ? err.message : t('subscriptionPage.tryAgain')),
         })
     }
 
@@ -236,14 +233,14 @@ function EnterpriseDialog({ open, onClose }: { open: boolean; onClose: () => voi
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Building2 className="h-4 w-4 text-violet-600" />
-                        Talk to Enterprise Sales
+                        {t('subscriptionPage.talkToEnterprise')}
                     </DialogTitle>
-                    <DialogDescription>Tell us about your team and we'll tailor a plan that fits.</DialogDescription>
+                    <DialogDescription>{t('subscriptionPage.talkToEnterpriseDesc')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3.5 py-1">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <Label>Your name</Label>
+                            <Label>{t('subscriptionPage.yourName')}</Label>
                             <Input
                                 value={form.contactName}
                                 onChange={e => setForm(f => ({ ...f, contactName: e.target.value }))}

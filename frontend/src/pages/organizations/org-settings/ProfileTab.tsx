@@ -16,9 +16,11 @@ import {
 import type { CompanySettings } from '@/hooks/useSettings'
 import { labelFor } from '@/lib/enums'
 import { Card, Section } from './_shared'
+import { useTranslation } from 'react-i18next'
 
 // ─── Profile Tab — company identity + regional settings ───────────────────────
 export function ProfileTab() {
+    const { t } = useTranslation()
     const { tenant } = useAuthStore()
     const { data: company, isLoading } = useCompanySettings()
     const { data: regional, isLoading: regionalLoading } = useRegionalSettings()
@@ -50,10 +52,10 @@ export function ProfileTab() {
         try {
             await Promise.all([updateCompany.mutateAsync(form), updateRegional.mutateAsync(regionalForm)])
             setSaved(true)
-            toast.success('Settings saved', 'Organization profile updated successfully.')
+            toast.success(t('orgSettings.profile.settingsSaved'), t('orgSettings.profile.settingsSavedDesc'))
             setTimeout(() => setSaved(false), 2000)
         } catch {
-            toast.error('Save failed', 'Could not update organization profile.')
+            toast.error(t('orgSettings.profile.saveFailed'), t('orgSettings.profile.saveFailedDesc'))
         }
     }
 
@@ -68,7 +70,7 @@ export function ProfileTab() {
                         {(company?.name ?? tenant?.name ?? 'HR').slice(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
-                        <p className="font-semibold truncate">{company?.name ?? tenant?.name ?? 'Organization'}</p>
+                        <p className="font-semibold truncate">{company?.name ?? tenant?.name ?? t('orgSettings.profile.organization')}</p>
                         <p className="text-sm text-muted-foreground capitalize truncate">
                             {company?.jurisdiction ?? 'UAE'}
                             {company?.industryType ? ` · ${labelFor(company.industryType)}` : ''}
@@ -76,7 +78,7 @@ export function ProfileTab() {
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
                         <Badge variant="secondary" className="capitalize">
-                            {company?.subscriptionPlan ?? 'free'} plan
+                            {company?.subscriptionPlan ?? 'free'} {t('settingsDetail.company.plan')}
                         </Badge>
                         {company?.companyCode && (
                             <span className="text-xs font-mono text-muted-foreground tracking-widest">{company.companyCode}</span>
@@ -85,16 +87,16 @@ export function ProfileTab() {
                 </div>
                 <div className="pt-5 space-y-4">
                     <div>
-                        <h3 className="text-sm font-semibold">Company Profile</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">Legal name, license, and jurisdiction details</p>
+                        <h3 className="text-sm font-semibold">{t('settingsDetail.company.companyProfile')}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">{t('settingsDetail.company.companyProfileDesc')}</p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <Label htmlFor="org_name">Company Name</Label>
+                            <Label htmlFor="org_name">{t('orgSettings.profile.companyName')}</Label>
                             <Input id="org_name" value={form.name ?? ''} onChange={e => set('name', e.target.value)} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="company_code">Company Code</Label>
+                            <Label htmlFor="company_code">{t('orgSettings.profile.companyCode')}</Label>
                             <Input
                                 id="company_code"
                                 value={form.companyCode ?? ''}
@@ -103,18 +105,18 @@ export function ProfileTab() {
                                 maxLength={4}
                                 className="font-mono tracking-widest"
                             />
-                            <p className="text-[11px] text-muted-foreground">2–4 chars, uppercase. Used as prefix in employee IDs (e.g. PROP-001-04-2026).</p>
+                            <p className="text-[11px] text-muted-foreground">{t('orgSettings.profile.companyCodeHint')}</p>
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="trade_license">Trade License No.</Label>
+                            <Label htmlFor="trade_license">{t('settingsDetail.company.tradeLicense')}</Label>
                             <Input id="trade_license" value={form.tradeLicenseNo ?? ''} onChange={e => set('tradeLicenseNo', e.target.value)} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="jurisdiction">Jurisdiction</Label>
+                            <Label htmlFor="jurisdiction">{t('settingsDetail.company.jurisdiction')}</Label>
                             <Input id="jurisdiction" value={form.jurisdiction ?? ''} onChange={e => set('jurisdiction', e.target.value)} placeholder="e.g. Dubai Mainland" />
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="industry">Industry Type</Label>
+                            <Label htmlFor="industry">{t('settings.industry')}</Label>
                             <Input id="industry" value={form.industryType ?? ''} onChange={e => set('industryType', e.target.value)} placeholder="e.g. Technology" />
                         </div>
                     </div>
@@ -122,7 +124,7 @@ export function ProfileTab() {
             </Card>
 
             {/* Regional Settings */}
-            <Section icon={Globe} title="Regional Settings" description="Defaults applied across the workspace">
+            <Section icon={Globe} title={t('settingsDetail.company.regionalSettings')} description={t('settingsDetail.company.regionalSettingsDesc')}>
                 {regionalLoading ? (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {[1, 2, 3].map(n => <Skeleton key={n} className="h-10 w-full" />)}
@@ -130,15 +132,15 @@ export function ProfileTab() {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-1.5">
-                            <Label htmlFor="timezone">Time Zone</Label>
+                            <Label htmlFor="timezone">{t('settings.timezone')}</Label>
                             <Input id="timezone" value={regionalForm.timezone} onChange={e => setRegionalForm(p => ({ ...p, timezone: e.target.value }))} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="currency">Currency</Label>
+                            <Label htmlFor="currency">{t('settings.currency')}</Label>
                             <Input id="currency" value={regionalForm.currency} onChange={e => setRegionalForm(p => ({ ...p, currency: e.target.value }))} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="dateFormat">Date Format</Label>
+                            <Label htmlFor="dateFormat">{t('settingsDetail.company.dateFormat')}</Label>
                             <Input id="dateFormat" value={regionalForm.dateFormat} onChange={e => setRegionalForm(p => ({ ...p, dateFormat: e.target.value }))} placeholder="DD/MM/YYYY" />
                         </div>
                     </div>
@@ -152,7 +154,7 @@ export function ProfileTab() {
                     leftIcon={saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
                     variant={saved ? 'success' : 'default'}
                 >
-                    {saved ? 'Saved!' : 'Save Changes'}
+                    {saved ? t('settingsDetail.profile.saved') : t('settingsDetail.profile.saveChanges')}
                 </Button>
             </div>
         </div>

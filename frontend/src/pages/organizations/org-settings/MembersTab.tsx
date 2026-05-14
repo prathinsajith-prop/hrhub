@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Users, Plus, XCircle, CheckCircle2, UserCircle, Search, Send, MailCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -35,6 +36,7 @@ function EmployeePicker({
     employees: InvitableEmployee[]
     isLoading: boolean
 }) {
+    const { t } = useTranslation()
     const [search, setSearch] = useState('')
     const filtered = useMemo(() => {
         const q = search.toLowerCase()
@@ -58,10 +60,10 @@ function EmployeePicker({
                 </Avatar>
                 <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{selected.fullName}</p>
-                    <p className="text-xs text-muted-foreground truncate">{selected.inviteEmail ?? 'No email on file'}</p>
+                    <p className="text-xs text-muted-foreground truncate">{selected.inviteEmail ?? t('orgSettings.members.noEmail')}</p>
                 </div>
                 <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" onClick={() => onSelect(null)}>
-                    Change
+                    {t('orgSettings.members.change')}
                 </Button>
             </div>
         )
@@ -73,7 +75,7 @@ function EmployeePicker({
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                 <Input
                     className="pl-8 h-8 text-sm"
-                    placeholder="Search by name, department…"
+                    placeholder={t('orgSettings.members.searchPlaceholder')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                 />
@@ -91,7 +93,7 @@ function EmployeePicker({
                     ))
                 ) : filtered.length === 0 ? (
                     <div className="py-6 text-center text-xs text-muted-foreground">
-                        {employees.length === 0 ? 'All employees already have accounts' : 'No matching employees'}
+                        {employees.length === 0 ? t('orgSettings.members.allHaveAccounts') : t('orgSettings.members.noMatchingEmployees')}
                     </div>
                 ) : (
                     filtered.map((emp) => (
@@ -115,7 +117,7 @@ function EmployeePicker({
                                 </p>
                             </div>
                             {!emp.inviteEmail && (
-                                <Badge variant="secondary" className="text-[9px] shrink-0">No email</Badge>
+                                <Badge variant="secondary" className="text-[9px] shrink-0">{t('orgSettings.members.noEmailBadge')}</Badge>
                             )}
                         </button>
                     ))
@@ -127,6 +129,7 @@ function EmployeePicker({
 
 // ─── Invite Panel ─────────────────────────────────────────────────────────────
 function InvitePanel({ onClose }: { onClose: () => void }) {
+    const { t } = useTranslation()
     const { data: invitableEmployees = [], isLoading: loadingEmployees } = useInvitableEmployees()
     const inviteUser = useInviteUser()
     const callerIsSuperAdmin = useAuthStore(s => s.user?.role) === 'super_admin'
@@ -138,15 +141,15 @@ function InvitePanel({ onClose }: { onClose: () => void }) {
         e.preventDefault()
         if (!selected) return
         if (!selected.inviteEmail) {
-            toast.error('This employee has no email address. Add one to their profile first.')
+            toast.error(t('orgSettings.members.noEmailError'))
             return
         }
         try {
             await inviteUser.mutateAsync({ employeeId: selected.id, role: roles[0], roles })
-            toast.success(`Invitation sent to ${selected.inviteEmail}`)
+            toast.success(t('orgSettings.members.invitationSent', { email: selected.inviteEmail }))
             onClose()
         } catch (err) {
-            toast.error((err as Error)?.message ?? 'Failed to send invitation')
+            toast.error((err as Error)?.message ?? t('orgSettings.members.inviteFailed'))
         }
     }
 
@@ -154,12 +157,12 @@ function InvitePanel({ onClose }: { onClose: () => void }) {
         <Card className="bg-muted/30">
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">Invite Employee</h3>
-                    <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+                    <h3 className="text-sm font-semibold">{t('orgSettings.members.inviteEmployee')}</h3>
+                    <Button variant="ghost" size="sm" onClick={onClose}>{t('orgSettings.members.cancelInvite')}</Button>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">Employee</p>
+                        <p className="text-xs font-medium text-muted-foreground">{t('orgSettings.members.employee')}</p>
                         <EmployeePicker
                             selected={selected}
                             onSelect={setSelected}
@@ -168,7 +171,7 @@ function InvitePanel({ onClose }: { onClose: () => void }) {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">Roles</p>
+                        <p className="text-xs font-medium text-muted-foreground">{t('orgSettings.members.roles')}</p>
                         <MultiRoleToggle
                             roles={roles}
                             onChange={setRoles}
@@ -181,7 +184,7 @@ function InvitePanel({ onClose }: { onClose: () => void }) {
                             disabled={!selected || !selected.inviteEmail || inviteUser.isPending}
                             leftIcon={<Send className="h-3.5 w-3.5" />}
                         >
-                            {inviteUser.isPending ? 'Sending…' : 'Send Invitation'}
+                            {inviteUser.isPending ? t('orgSettings.members.sending') : t('orgSettings.members.sendInvitation')}
                         </Button>
                     </div>
                 </form>
@@ -192,6 +195,7 @@ function InvitePanel({ onClose }: { onClose: () => void }) {
 
 // ─── Members Tab ──────────────────────────────────────────────────────────────
 export function MembersTab() {
+    const { t } = useTranslation()
     const me = useAuthStore(s => s.user)
     const { can } = usePermissions()
     const canManageUsers = can('manage_users')
@@ -204,9 +208,9 @@ export function MembersTab() {
     async function handleRolesChange(userId: string, newRoles: string[]) {
         try {
             await updateUser.mutateAsync({ id: userId, roles: newRoles, role: newRoles[0] })
-            toast.success('Roles updated')
+            toast.success(t('orgSettings.members.rolesUpdated'))
         } catch {
-            toast.error('Failed to update roles')
+            toast.error(t('orgSettings.members.rolesUpdateFailed'))
         }
     }
 
@@ -214,19 +218,19 @@ export function MembersTab() {
         if (!deactivateTarget) return
         try {
             await updateUser.mutateAsync({ id: deactivateTarget.id, isActive: !deactivateTarget.active })
-            toast.success(deactivateTarget.active ? 'User deactivated' : 'User activated')
+            toast.success(deactivateTarget.active ? t('orgSettings.members.userDeactivated') : t('orgSettings.members.userActivated'))
             setDeactivateTarget(null)
         } catch {
-            toast.error('Failed to update user')
+            toast.error(t('orgSettings.members.failedToUpdateUser'))
         }
     }
 
     async function handleResendInvite(employeeId: string, name: string) {
         try {
             await resendInvite.mutateAsync(employeeId)
-            toast.success(`Invite resent to ${name}`)
+            toast.success(t('orgSettings.members.inviteResent', { name }))
         } catch (err) {
-            toast.error((err as Error)?.message ?? 'Failed to resend invite')
+            toast.error((err as Error)?.message ?? t('orgSettings.members.failedToResendInvite'))
         }
     }
 
@@ -238,11 +242,11 @@ export function MembersTab() {
 
             <Section
                 icon={Users}
-                title="Users"
-                description="Manage roles and access for all workspace users"
+                title={t('orgSettings.members.usersTitle')}
+                description={t('orgSettings.members.usersDesc')}
                 action={canManageUsers && !showInvite ? (
                     <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setShowInvite(true)}>
-                        Invite
+                        {t('orgSettings.members.invite')}
                     </Button>
                 ) : undefined}
             >
@@ -261,7 +265,7 @@ export function MembersTab() {
                 ) : (tenantUsers ?? []).length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground border rounded-lg">
                         <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">No users found</p>
+                        <p className="text-sm">{t('orgSettings.members.noUsers')}</p>
                     </div>
                 ) : (
                     <div className="divide-y border rounded-lg overflow-hidden">
@@ -295,8 +299,8 @@ export function MembersTab() {
                                         <div className="min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <p className="text-sm font-medium truncate">{u.name}</p>
-                                                {isSelf && <span className="text-[10px] text-muted-foreground">(you)</span>}
-                                                {!u.isActive && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
+                                                {isSelf && <span className="text-[10px] text-muted-foreground">{t('orgSettings.members.you')}</span>}
+                                                {!u.isActive && <Badge variant="secondary" className="text-[10px]">{t('orgSettings.members.inactive')}</Badge>}
                                             </div>
                                             <p className="text-xs text-muted-foreground truncate">
                                                 <CopyableEmail email={u.email} className="text-xs text-muted-foreground" />
@@ -330,7 +334,7 @@ export function MembersTab() {
                                                 variant="ghost"
                                                 size="sm"
                                                 className="h-7 text-xs text-sky-600 hover:bg-sky-50"
-                                                title="Resend invite"
+                                                title={t('orgSettings.members.resendInvite')}
                                                 onClick={() => handleResendInvite(u.employeeId, u.name)}
                                                 disabled={resendInvite.isPending}
                                             >
@@ -342,7 +346,7 @@ export function MembersTab() {
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                title={isDeactivated ? 'Restore access' : u.isActive ? 'Revoke access' : 'Restore access'}
+                                                title={isDeactivated ? t('orgSettings.members.restoreAccess') : u.isActive ? t('orgSettings.members.revokeAccess') : t('orgSettings.members.restoreAccess')}
                                                 className={cn('h-7 text-xs', u.isActive ? 'text-destructive hover:text-destructive hover:bg-destructive/10' : 'text-emerald-600 hover:bg-emerald-50')}
                                                 onClick={() => setDeactivateTarget({ id: u.id, name: u.name, active: u.isActive })}
                                             >
@@ -358,7 +362,7 @@ export function MembersTab() {
             </Section>
 
             {/* Roles reference */}
-            <Section icon={UserCircle} title="Roles & Permissions" description="Access levels for each role in this workspace">
+            <Section icon={UserCircle} title={t('orgSettings.members.rolesPermissionsTitle')} description={t('orgSettings.members.rolesPermissionsDesc')}>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     {Object.entries(ROLE_ACCESS_MAP).map(([roleId, accesses]) => (
                         <div key={roleId} className="rounded-lg border p-4 hover:border-primary/30 hover:bg-muted/20 transition-colors">
@@ -376,11 +380,19 @@ export function MembersTab() {
             <ConfirmDialog
                 open={!!deactivateTarget}
                 onOpenChange={(v) => { if (!v) setDeactivateTarget(null) }}
-                title={deactivateTarget ? `${deactivateTarget.active ? 'Deactivate' : 'Activate'} ${deactivateTarget.name}?` : ''}
+                title={deactivateTarget
+                    ? deactivateTarget.active
+                        ? t('orgSettings.members.deactivateTitle', { name: deactivateTarget.name })
+                        : t('orgSettings.members.activateTitle', { name: deactivateTarget.name })
+                    : ''}
                 description={deactivateTarget?.active
-                    ? 'This user will immediately lose access. They can be reactivated at any time.'
-                    : 'This user will regain access to the workspace.'}
-                confirmLabel={updateUser.isPending ? 'Saving…' : deactivateTarget?.active ? 'Deactivate' : 'Activate'}
+                    ? t('orgSettings.members.deactivateDesc')
+                    : t('orgSettings.members.activateDesc')}
+                confirmLabel={updateUser.isPending
+                    ? t('orgSettings.members.saving')
+                    : deactivateTarget?.active
+                        ? t('orgSettings.members.deactivate')
+                        : t('orgSettings.gradeLevels.activate')}
                 onConfirm={handleToggleActive}
                 variant={deactivateTarget?.active ? 'destructive' : 'success'}
             />

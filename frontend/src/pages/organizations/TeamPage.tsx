@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { Users, Plus, MoreHorizontal, UserPlus, Trash2, Pencil, Search, X, Building2, UserMinus, ChevronDown } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useTranslation } from 'react-i18next'
 import {
     useTeams, useMyTeams, useTeamMembers, useEligibleEmployees,
     useCreateTeam, useUpdateTeam, useDeleteTeam, useAddTeamMembers, useRemoveTeamMember, useUpdateTeamMemberRole,
@@ -59,7 +60,7 @@ function RoleBadge({ role }: { role: TeamMemberRole }) {
 // ── Create / Edit Team Dialog ─────────────────────────────────────────────────
 
 const teamFormSchema = z.object({
-    name: z.string().min(1, 'Team name is required'),
+    name: z.string().min(1, 'Team name is required'), // validation message stays untranslated (zod fallback)
     description: z.string().optional(),
     departmentId: z.string().optional(),
 })
@@ -75,6 +76,7 @@ interface TeamFormDialogProps {
 const DEPT_NONE = '__none__'
 
 export function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lockedDepartmentName }: TeamFormDialogProps) {
+    const { t } = useTranslation()
     const { data: orgUnits = [] } = useOrgUnits()
     const departments = orgUnits.filter(u => u.type === 'department' && u.isActive)
     const createMut = useCreateTeam()
@@ -113,10 +115,10 @@ export function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lo
             } else {
                 await createMut.mutateAsync({ name, description, departmentId: departmentId || undefined })
             }
-            toast.success(isEdit ? 'Team updated' : 'Team created')
+            toast.success(isEdit ? t('team.teamUpdated') : t('team.teamCreated'))
             onClose()
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to save team')
+            toast.error(err instanceof ApiError ? err.message : t('team.saveTeamFailed'))
         }
     }
 
@@ -124,10 +126,10 @@ export function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lo
         <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>{isEdit ? 'Edit Team' : 'Create Team'}</DialogTitle>
+                    <DialogTitle>{isEdit ? t('team.editTeam') : t('team.createTeam')}</DialogTitle>
                 </DialogHeader>
                 <form id="team-form" onSubmit={submit} className="space-y-4">
-                    <FormField label="Team Name" required error={errors.name}>
+                    <FormField label={t('team.teamName')} required error={errors.name}>
                         <Input
                             id="team-name"
                             value={name}
@@ -137,18 +139,18 @@ export function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lo
                         />
                     </FormField>
                     <div className="space-y-1.5">
-                        <Label htmlFor="team-desc">Description</Label>
+                        <Label htmlFor="team-desc">{t('team.description')}</Label>
                         <Textarea
                             id="team-desc"
                             value={description}
                             onChange={e => setDescription(e.target.value)}
-                            placeholder="What does this team do?"
+                            placeholder={t('team.descriptionPlaceholder')}
                             rows={2}
                         />
                     </div>
                     {!isEdit && (
                         <div className="space-y-1.5">
-                            <Label>Department</Label>
+                            <Label>{t('team.department')}</Label>
                             {lockedDepartmentId ? (
                                 <p className="text-sm text-muted-foreground py-1.5">{lockedDepartmentName}</p>
                             ) : (
@@ -157,24 +159,24 @@ export function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lo
                                     onValueChange={v => setDepartmentId(v === DEPT_NONE ? '' : v)}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="No department filter" />
+                                        <SelectValue placeholder={t('team.noDeptFilter')} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value={DEPT_NONE}>— No department filter —</SelectItem>
+                                        <SelectItem value={DEPT_NONE}>{t('team.noDeptFilterOption')}</SelectItem>
                                         {departments.map(d => (
                                             <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             )}
-                            <p className="text-xs text-muted-foreground">Optionally restrict this team to employees in a specific department.</p>
+                            <p className="text-xs text-muted-foreground">{t('team.deptFilterHint')}</p>
                         </div>
                     )}
                 </form>
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
                     <Button type="submit" form="team-form" loading={isPending}>
-                        {isEdit ? 'Save Changes' : 'Create Team'}
+                        {isEdit ? t('team.saveChanges') : t('team.createTeam')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -185,6 +187,7 @@ export function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lo
 // ── Add Members Dialog ────────────────────────────────────────────────────────
 
 export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; open: boolean; onClose: () => void }) {
+    const { t } = useTranslation()
     const [search, setSearch] = useState('')
     const [selected, setSelected] = useState<Set<string>>(new Set())
     const [role, setRole] = useState<TeamMemberRole>('member')
@@ -225,10 +228,10 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
         if (selected.size === 0) return
         try {
             await addMut.mutateAsync({ employeeIds: [...selected], role })
-            toast.success(`${selected.size} member${selected.size === 1 ? '' : 's'} added as ${roleMeta(role).label}`)
+            toast.success(t('team.membersAdded', { count: selected.size, roleLabel: roleMeta(role).label }))
             handleClose()
         } catch (err) {
-            toast.error(err instanceof ApiError ? err.message : 'Failed to add members')
+            toast.error(err instanceof ApiError ? err.message : t('team.addMembersFailed'))
         }
     }
 
@@ -236,14 +239,14 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
         <Dialog open={open} onOpenChange={v => !v && handleClose()}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>Add Members</DialogTitle>
+                    <DialogTitle>{t('team.addMembers')}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
                     {/* Role selector */}
                     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40 border">
                         <div className="flex-1">
-                            <p className="text-xs font-medium text-foreground">Assign role</p>
-                            <p className="text-[11px] text-muted-foreground mt-0.5">All selected members will receive this role</p>
+                            <p className="text-xs font-medium text-foreground">{t('team.assignRole')}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">{t('team.assignRoleDesc')}</p>
                         </div>
                         <Select value={role} onValueChange={v => setRole(v as TeamMemberRole)}>
                             <SelectTrigger className="w-36 h-8 text-xs">
@@ -265,7 +268,7 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
                             className="pl-8 h-8 text-sm"
-                            placeholder="Search employees…"
+                            placeholder={t('team.searchEmployees')}
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                         />
@@ -284,17 +287,17 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
                                 onCheckedChange={toggleAll}
                             />
                             <label htmlFor="select-all" className="text-xs text-muted-foreground cursor-pointer select-none">
-                                Select all ({filtered.length})
+                                {t('team.selectAll', { count: filtered.length })}
                             </label>
                         </div>
                     )}
 
                     <ScrollArea className="h-56 rounded-md border">
                         {isLoading ? (
-                            <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">Loading…</div>
+                            <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">{t('common.loading')}</div>
                         ) : filtered.length === 0 ? (
                             <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
-                                {search ? 'No employees match your search' : 'No eligible employees'}
+                                {search ? t('team.noEmployeesMatch') : t('team.noEligibleEmployees')}
                             </div>
                         ) : (
                             <div className="divide-y">
@@ -324,9 +327,9 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
                     </ScrollArea>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={handleClose}>Cancel</Button>
+                    <Button variant="outline" onClick={handleClose}>{t('common.cancel')}</Button>
                     <Button onClick={submit} loading={addMut.isPending} disabled={selected.size === 0}>
-                        Add {selected.size > 0 ? `(${selected.size})` : ''}
+                        {selected.size > 0 ? t('team.addCount', { count: selected.size }) : t('common.add')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -345,6 +348,7 @@ interface TeamCardProps {
 }
 
 const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDelete }: TeamCardProps) {
+    const { t } = useTranslation()
     const [expanded, setExpanded] = useState(false)
     const [addOpen, setAddOpen] = useState(false)
     const [removeTarget, setRemoveTarget] = useState<string | null>(null)
@@ -369,10 +373,10 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
         if (!removeTarget) return
         try {
             await removeMut.mutateAsync(removeTarget)
-            toast.success('Member removed')
+            toast.success(t('team.memberRemoved'))
             setRemoveTarget(null)
         } catch {
-            toast.error('Failed to remove member')
+            toast.error(t('team.removeFailed'))
         }
     }
 
@@ -420,11 +424,11 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={onEdit}>
-                                        <Pencil className="h-3.5 w-3.5 mr-2" /> Edit team
+                                        <Pencil className="h-3.5 w-3.5 mr-2" /> {t('team.editTeam')}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
-                                        <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete team
+                                        <Trash2 className="h-3.5 w-3.5 mr-2" /> {t('team.deleteTeam')}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -442,7 +446,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                     <div className="flex items-center justify-between pt-3 border-t border-border/50">
                         <div className="flex items-center gap-2">
                             {team.memberCount === 0 ? (
-                                <span className="text-xs text-muted-foreground">No members</span>
+                                <span className="text-xs text-muted-foreground">{t('team.noMembers')}</span>
                             ) : (
                                 <>
                                     <TooltipProvider delayDuration={200}>
@@ -476,7 +480,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                         </div>
                                     </TooltipProvider>
                                     <span className="text-[11px] text-muted-foreground">
-                                        {team.memberCount} {team.memberCount === 1 ? 'member' : 'members'}
+                                        {t('team.memberCount', { count: team.memberCount })}
                                     </span>
                                 </>
                             )}
@@ -494,7 +498,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                             : 'text-muted-foreground hover:bg-muted/30 hover:text-foreground'
                     )}
                 >
-                    {expanded ? 'Hide members' : 'Members'}
+                    {expanded ? t('team.hideMembers') : t('team.members')}
                     <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', expanded && 'rotate-180')} />
                 </button>
 
@@ -507,7 +511,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                                 <Input
                                     className="pl-8 h-8 text-xs bg-background"
-                                    placeholder="Search members…"
+                                    placeholder={t('team.searchMembers')}
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
                                     onClick={e => e.stopPropagation()}
@@ -553,7 +557,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                     <Users className="h-5 w-5 text-muted-foreground/40" />
                                 </div>
                                 <p className="text-xs text-muted-foreground font-medium">
-                                    {search ? 'No members match' : 'No members yet'}
+                                    {search ? t('team.noMembersMatch') : t('team.noMembersYet')}
                                 </p>
                                 {canManage && !search && (
                                     <Button
@@ -563,7 +567,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                         leftIcon={<UserPlus className="h-3 w-3" />}
                                         onClick={e => { e.stopPropagation(); setAddOpen(true) }}
                                     >
-                                        Add Members
+                                        {t('team.addMembers')}
                                     </Button>
                                 )}
                             </div>
@@ -605,7 +609,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end" className="w-44" onClick={e => e.stopPropagation()}>
                                                             <p className="px-2 pt-1.5 pb-1 text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                                                                Change role
+                                                                {t('team.changeRole')}
                                                             </p>
                                                             {TEAM_ROLES.map(r => (
                                                                 <DropdownMenuItem
@@ -615,8 +619,8 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                                                     onClick={() => updateRoleMut.mutate(
                                                                         { employeeId: m.employeeId, role: r.value },
                                                                         {
-                                                                            onSuccess: () => toast.success(`Role changed to ${r.label}`),
-                                                                            onError: () => toast.error('Failed to update role'),
+                                                                            onSuccess: () => toast.success(t('team.roleChangedTo', { role: r.label })),
+                                                                            onError: () => toast.error(t('team.roleUpdateFailed')),
                                                                         }
                                                                     )}
                                                                 >
@@ -633,7 +637,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                                                 className="text-destructive focus:text-destructive text-xs gap-2"
                                                                 onClick={e => { e.stopPropagation(); setRemoveTarget(m.employeeId) }}
                                                             >
-                                                                <UserMinus className="h-3 w-3" /> Remove from team
+                                                                <UserMinus className="h-3 w-3" /> {t('team.removeFromTeam')}
                                                             </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
@@ -657,9 +661,9 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
             <ConfirmDialog
                 open={!!removeTarget}
                 onOpenChange={o => !o && setRemoveTarget(null)}
-                title="Remove Member"
-                description="Are you sure you want to remove this member from the team?"
-                confirmLabel="Remove"
+                title={t('team.removeConfirmTitle')}
+                description={t('team.removeConfirmDesc')}
+                confirmLabel={t('common.delete')}
                 variant="warning"
                 onConfirm={handleRemove}
             />
@@ -763,7 +767,7 @@ function TeamGrid({ teams, showControls, canManage, canViewAll, userId, orgMap, 
             )}
             {!hasMore && teams.length > TEAMS_PAGE_SIZE && (
                 <p className="text-center text-xs text-muted-foreground py-4">
-                    Showing all {teams.length} teams
+                    {t('team.showingAllTeams', { count: teams.length })}
                 </p>
             )}
         </>
@@ -771,6 +775,7 @@ function TeamGrid({ teams, showControls, canManage, canViewAll, userId, orgMap, 
 }
 
 function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
+    const { t } = useTranslation()
     const { data: allTeams = [], isLoading: teamsLoading } = useTeams()
     const { data: myTeams = [], isLoading: myTeamsLoading } = useMyTeams()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
@@ -785,12 +790,12 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
         if (!deleteTarget) return
         try {
             await deleteMut.mutateAsync(deleteTarget.id)
-            toast.success('Team deleted')
+            toast.success(t('team.teamDeleted'))
             setDeleteTarget(null)
         } catch {
-            toast.error('Failed to delete team')
+            toast.error(t('team.deleteTeamFailed'))
         }
-    }, [deleteTarget, deleteMut])
+    }, [deleteTarget, deleteMut, t])
 
     const openEdit = useCallback((team: TeamRow) => { setEditTarget(team); setFormOpen(true) }, [])
     const closeForm = useCallback(() => { setFormOpen(false); setEditTarget(null) }, [])
@@ -814,7 +819,7 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
             {canManage && (
                 <div className="flex justify-end mb-4">
                     <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => { setEditTarget(null); setFormOpen(true) }}>
-                        Create Team
+                        {t('team.createTeam')}
                     </Button>
                 </div>
             )}
@@ -822,43 +827,43 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
             {canViewAll ? (
                 <Tabs defaultValue="all">
                     <TabsList className="mb-4">
-                        <TabsTrigger value="all">All Teams</TabsTrigger>
-                        <TabsTrigger value="mine">My Teams</TabsTrigger>
+                        <TabsTrigger value="all">{t('team.allTeams')}</TabsTrigger>
+                        <TabsTrigger value="mine">{t('team.myTeams')}</TabsTrigger>
                     </TabsList>
                     <TabsContent value="all">
                         {teamsLoading ? (
-                            <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
+                            <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                         ) : allTeams.length === 0 ? (
                             <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
                                 <Users className="h-8 w-8 text-muted-foreground/40" />
-                                <p className="text-sm text-muted-foreground">No teams yet. Create one to get started.</p>
-                                {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>Create Team</Button>}
+                                <p className="text-sm text-muted-foreground">{t('team.noTeamsYet')}</p>
+                                {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>{t('team.createTeam')}</Button>}
                             </CardContent></Card>
                         ) : teamGrid(allTeams, true)}
                     </TabsContent>
                     <TabsContent value="mine">
                         {myTeamsLoading ? (
-                            <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
+                            <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                         ) : myTeams.length === 0 ? (
                             <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
                                 <Users className="h-8 w-8 text-muted-foreground/40" />
-                                <p className="text-sm text-muted-foreground">You haven't been assigned to any teams yet.</p>
+                                <p className="text-sm text-muted-foreground">{t('team.notAssignedToTeams')}</p>
                             </CardContent></Card>
                         ) : teamGrid(myTeams, false)}
                     </TabsContent>
                 </Tabs>
             ) : (
                 <div className="space-y-4">
-                    <h2 className="text-sm font-medium text-muted-foreground">Teams you belong to</h2>
+                    <h2 className="text-sm font-medium text-muted-foreground">{t('team.teamsBelongTo')}</h2>
                     {myTeamsLoading ? (
-                        <div className="text-sm text-muted-foreground py-8 text-center">Loading…</div>
+                        <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                     ) : myTeams.length === 0 ? (
                         <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
                             <Users className="h-8 w-8 text-muted-foreground/40" />
                             <p className="text-sm text-muted-foreground">
-                                {canManage ? 'Create a team to get started.' : "You haven't been assigned to any teams yet."}
+                                {canManage ? t('team.createToGetStarted') : t('team.notAssignedToTeams')}
                             </p>
-                            {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>Create Team</Button>}
+                            {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>{t('team.createTeam')}</Button>}
                         </CardContent></Card>
                     ) : teamGrid(myTeams, true)}
                 </div>
@@ -868,9 +873,9 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
             <ConfirmDialog
                 open={!!deleteTarget}
                 onOpenChange={o => !o && setDeleteTarget(null)}
-                title="Delete Team"
-                description={`Delete "${deleteTarget?.name}"? All members will be removed. This cannot be undone.`}
-                confirmLabel="Delete"
+                title={t('team.deleteTeamTitle')}
+                description={t('team.deleteTeamDesc', { name: deleteTarget?.name ?? '' })}
+                confirmLabel={t('common.delete')}
                 variant="destructive"
                 onConfirm={handleDelete}
             />
@@ -881,6 +886,7 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function TeamPage() {
+    const { t } = useTranslation()
     const { can, hasRole } = usePermissions()
     const userId = useAuthStore(s => s.user?.id)
     const canManage = can('manage_team')
@@ -891,8 +897,8 @@ export function TeamPage() {
     return (
         <PageWrapper>
             <PageHeader
-                title="Organization"
-                description="Teams, departments, and org structure"
+                title={t('team.title')}
+                description={t('team.orgDescription')}
             />
 
             {/* Teams tab hidden for now — manage teams via the Org Structure tree. */}

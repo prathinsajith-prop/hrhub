@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
     ArrowLeft, Mail, Phone, Globe, Briefcase, DollarSign, Star,
     XCircle, UserPlus, Save, Edit2, FileText, Upload, CheckCircle2,
@@ -34,19 +35,19 @@ import { FlagImg, resolveCountryIso } from '@/components/shared/PhoneInput'
 import type { Candidate, ApplicationStage } from '@/types'
 
 const STAGE_CONFIG: Record<ApplicationStage, {
-    label: string
+    labelKey: string
     badgeClass: string
     dotClass: string
     textClass: string
     lineClass: string
 }> = {
-    received: { label: 'Received', badgeClass: 'bg-slate-100 text-slate-600 border-slate-300', dotClass: 'bg-slate-400 border-slate-400 text-white', lineClass: 'bg-slate-200', textClass: 'text-slate-600' },
-    screening: { label: 'Screening', badgeClass: 'bg-info/10 text-info border-info/20', dotClass: 'bg-info border-info text-white', lineClass: 'bg-info/30', textClass: 'text-info' },
-    interview: { label: 'Interview', badgeClass: 'bg-warning/10 text-warning border-warning/20', dotClass: 'bg-warning border-warning text-warning-foreground', lineClass: 'bg-warning/30', textClass: 'text-warning' },
-    assessment: { label: 'Assessment', badgeClass: 'bg-primary/10 text-primary border-primary/20', dotClass: 'bg-primary border-primary text-primary-foreground', lineClass: 'bg-primary/30', textClass: 'text-primary' },
-    offer: { label: 'Offer', badgeClass: 'bg-success/10 text-success border-success/20', dotClass: 'bg-success border-success text-success-foreground', lineClass: 'bg-success/30', textClass: 'text-success' },
-    pre_boarding: { label: 'Pre-Boarding', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200', dotClass: 'bg-emerald-500 border-emerald-500 text-white', lineClass: 'bg-emerald-200', textClass: 'text-emerald-600' },
-    rejected: { label: 'Rejected', badgeClass: 'bg-destructive/10 text-destructive border-destructive/20', dotClass: 'bg-destructive border-destructive text-destructive-foreground', lineClass: 'bg-destructive/30', textClass: 'text-destructive' },
+    received: { labelKey: 'recruitment.stages.received', badgeClass: 'bg-slate-100 text-slate-600 border-slate-300', dotClass: 'bg-slate-400 border-slate-400 text-white', lineClass: 'bg-slate-200', textClass: 'text-slate-600' },
+    screening: { labelKey: 'recruitment.stages.screening', badgeClass: 'bg-info/10 text-info border-info/20', dotClass: 'bg-info border-info text-white', lineClass: 'bg-info/30', textClass: 'text-info' },
+    interview: { labelKey: 'recruitment.stages.interview', badgeClass: 'bg-warning/10 text-warning border-warning/20', dotClass: 'bg-warning border-warning text-warning-foreground', lineClass: 'bg-warning/30', textClass: 'text-warning' },
+    assessment: { labelKey: 'recruitment.stages.assessment', badgeClass: 'bg-primary/10 text-primary border-primary/20', dotClass: 'bg-primary border-primary text-primary-foreground', lineClass: 'bg-primary/30', textClass: 'text-primary' },
+    offer: { labelKey: 'recruitment.stages.offer', badgeClass: 'bg-success/10 text-success border-success/20', dotClass: 'bg-success border-success text-success-foreground', lineClass: 'bg-success/30', textClass: 'text-success' },
+    pre_boarding: { labelKey: 'recruitment.stages.preBoarding', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200', dotClass: 'bg-emerald-500 border-emerald-500 text-white', lineClass: 'bg-emerald-200', textClass: 'text-emerald-600' },
+    rejected: { labelKey: 'recruitment.stages.rejected', badgeClass: 'bg-destructive/10 text-destructive border-destructive/20', dotClass: 'bg-destructive border-destructive text-destructive-foreground', lineClass: 'bg-destructive/30', textClass: 'text-destructive' },
 }
 
 const STAGE_ORDER: ApplicationStage[] = ['received', 'screening', 'interview', 'assessment', 'offer', 'pre_boarding']
@@ -90,8 +91,9 @@ function ScoreBadge({ score }: { score: number }) {
 }
 
 function NoteHistory({ notes }: { notes: string | undefined }) {
+    const { t } = useTranslation()
     const entries = useMemo(() => parseNoteEntries(notes ?? ''), [notes])
-    if (!entries.length) return <p className="text-sm text-muted-foreground py-4 text-center">No notes yet.</p>
+    if (!entries.length) return <p className="text-sm text-muted-foreground py-4 text-center">{t('recruitment.candidateProfile.notes.noNotes')}</p>
     return (
         <ol className="space-y-3">
             {entries.map((e, i) => (
@@ -112,6 +114,7 @@ function NoteHistory({ notes }: { notes: string | undefined }) {
 }
 
 export function CandidateProfilePage() {
+    const { t } = useTranslation()
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const { data: candidateData, isLoading } = useApplication(id)
@@ -163,9 +166,9 @@ export function CandidateProfilePage() {
             <PageWrapper>
                 <div className="flex flex-col items-center gap-4 py-24">
                     <XCircle className="h-12 w-12 text-muted-foreground/40" />
-                    <p className="text-sm text-muted-foreground">Candidate not found.</p>
+                    <p className="text-sm text-muted-foreground">{t('recruitment.candidateProfile.notFound')}</p>
                     <Button variant="outline" size="sm" onClick={() => navigate('/recruitment')}>
-                        <ArrowLeft className="h-4 w-4 mr-2" /> Back to Recruitment
+                        <ArrowLeft className="h-4 w-4 mr-2" /> {t('recruitment.candidateProfile.backToRecruitment')}
                     </Button>
                 </div>
             </PageWrapper>
@@ -184,15 +187,15 @@ export function CandidateProfilePage() {
         updateStage.mutate(
             { id: candidate!.id, stage: nextStage },
             {
-                onSuccess: () => toast.success(`Moved to ${STAGE_CONFIG[nextStage].label}`),
-                onError: () => toast.error('Failed to update stage'),
+                onSuccess: () => toast.success(t('recruitment.candidateProfile.toast.movedTo', { stage: t(STAGE_CONFIG[nextStage].labelKey) })),
+                onError: () => toast.error(t('recruitment.candidateProfile.toast.failedUpdateStage')),
             },
         )
     }
 
     function handleReject() {
         const trimmed = rejectNote.trim()
-        if (!trimmed) { toast.error('Reason required', 'Please add a rejection note before continuing.'); return }
+        if (!trimmed) { toast.error(t('recruitment.candidateProfile.toast.reasonRequired'), t('recruitment.candidateProfile.toast.addRejectionNote')); return }
         const merged = appendNoteEntry(candidate!.notes, 'Rejected', trimmed)
         updateApplication.mutate(
             { id: candidate!.id, data: { notes: merged } },
@@ -200,11 +203,11 @@ export function CandidateProfilePage() {
                 onSuccess: () => updateStage.mutate(
                     { id: candidate!.id, stage: 'rejected' },
                     {
-                        onSuccess: () => { setRejectOpen(false); setRejectNote(''); toast.success('Candidate rejected'); navigate('/recruitment') },
-                        onError: () => toast.error('Failed to update stage'),
+                        onSuccess: () => { setRejectOpen(false); setRejectNote(''); toast.success(t('recruitment.candidateProfile.toast.candidateRejected')); navigate('/recruitment') },
+                        onError: () => toast.error(t('recruitment.candidateProfile.toast.failedUpdateStage')),
                     },
                 ),
-                onError: () => toast.error('Failed to save rejection note'),
+                onError: () => toast.error(t('recruitment.candidateProfile.toast.failedSaveRejection')),
             },
         )
     }
@@ -216,15 +219,15 @@ export function CandidateProfilePage() {
         updateApplication.mutate(
             { id: candidate!.id, data: { notes: merged } },
             {
-                onSuccess: () => { toast.success('Note added'); setNewNote('') },
-                onError: () => toast.error('Failed to add note'),
+                onSuccess: () => { toast.success(t('recruitment.candidateProfile.toast.noteAdded')); setNewNote('') },
+                onError: () => toast.error(t('recruitment.candidateProfile.toast.failedAddNote')),
             },
         )
     }
 
     function handleConvertSubmit() {
         const trimmedNote = convertForm.note.trim()
-        if (!trimmedNote) { toast.error('Note required', 'Please add a conversion note before creating the employee record.'); return }
+        if (!trimmedNote) { toast.error(t('recruitment.candidateProfile.toast.noteRequired'), t('recruitment.candidateProfile.toast.addConversionNote')); return }
         const merged = appendNoteEntry(candidate!.notes, 'Converted', trimmedNote)
         updateApplication.mutate(
             { id: candidate!.id, data: { notes: merged } },
@@ -244,14 +247,14 @@ export function CandidateProfilePage() {
                         onSuccess: (res) => {
                             setConvertOpen(false)
                             const empNo = res?.data?.employee?.employeeNo
-                            toast.success('Candidate converted', empNo ? `Employee ${empNo} created.` : 'Employee created.')
+                            toast.success(t('recruitment.candidateProfile.toast.candidateConverted'), empNo ? t('recruitment.candidateProfile.toast.employeeCreatedNo', { empNo }) : t('recruitment.candidateProfile.toast.employeeCreated'))
                             const empId = res?.data?.employee?.id
                             if (empId) navigate(`/employees/${empId}`)
                         },
-                        onError: (err: Error & { message?: string }) => toast.error('Conversion failed', err?.message ?? 'Could not create employee.'),
+                        onError: (err: Error & { message?: string }) => toast.error(t('recruitment.candidateProfile.toast.conversionFailed'), err?.message ?? t('recruitment.candidateProfile.toast.couldNotCreateEmployee')),
                     },
                 ),
-                onError: () => toast.error('Failed to save conversion note'),
+                onError: () => toast.error(t('recruitment.candidateProfile.toast.failedSaveConversion')),
             },
         )
     }
@@ -275,20 +278,20 @@ export function CandidateProfilePage() {
                             )}
                             {candidate.jobTitle && <span className="text-muted-foreground/40">·</span>}
                             <span className="text-sm text-muted-foreground">
-                                Applied {candidate.appliedDate ? formatDate(candidate.appliedDate) : '—'}
+                                {t('recruitment.candidateProfile.appliedDate', { date: candidate.appliedDate ? formatDate(candidate.appliedDate) : '—' })}
                             </span>
                             <Badge variant="outline" className={cn('text-[11px]', stageCfg.badgeClass)}>
-                                {stageCfg.label}
+                                {t(stageCfg.labelKey)}
                             </Badge>
                         </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-                        <Edit2 className="h-3.5 w-3.5 mr-1.5" /> Edit
+                        <Edit2 className="h-3.5 w-3.5 mr-1.5" /> {t('common.edit')}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => navigate('/recruitment')}>
-                        <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> Back
+                        <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> {t('common.back')}
                     </Button>
                 </div>
             </div>
@@ -301,7 +304,7 @@ export function CandidateProfilePage() {
                     {/* Contact & details */}
                     <Card>
                         <CardHeader className="pb-3">
-                            <CardTitle className="text-sm">Profile</CardTitle>
+                            <CardTitle className="text-sm">{t('recruitment.candidateProfile.profile')}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3 pt-0">
                             <div className="flex items-start gap-2 text-sm">
@@ -326,7 +329,7 @@ export function CandidateProfilePage() {
                             {candidate.experience !== undefined && (
                                 <div className="flex items-center gap-2 text-sm">
                                     <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                    <span className="text-muted-foreground">{candidate.experience} yr{candidate.experience !== 1 ? 's' : ''} experience</span>
+                                    <span className="text-muted-foreground">{t('recruitment.candidateProfile.experience', { count: candidate.experience })}</span>
                                 </div>
                             )}
 
@@ -334,19 +337,19 @@ export function CandidateProfilePage() {
                                 <div className="border-t border-border pt-3 space-y-2.5">
                                     {candidate.score !== undefined && (
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="text-muted-foreground">Score</span>
+                                            <span className="text-muted-foreground">{t('recruitment.candidateProfile.score')}</span>
                                             <ScoreBadge score={candidate.score} />
                                         </div>
                                     )}
                                     {candidate.currentSalary && (
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="text-muted-foreground">Current salary</span>
+                                            <span className="text-muted-foreground">{t('recruitment.candidateProfile.currentSalary')}</span>
                                             <span className="font-medium tabular-nums">{formatCurrency(candidate.currentSalary)}</span>
                                         </div>
                                     )}
                                     {candidate.expectedSalary && (
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="text-muted-foreground">Expected salary</span>
+                                            <span className="text-muted-foreground">{t('recruitment.candidateProfile.expectedSalary')}</span>
                                             <span className="font-medium tabular-nums">{formatCurrency(candidate.expectedSalary)}</span>
                                         </div>
                                     )}
@@ -358,7 +361,7 @@ export function CandidateProfilePage() {
                     {/* Resume */}
                     <Card>
                         <CardHeader className="pb-3">
-                            <CardTitle className="text-sm">Resume / CV</CardTitle>
+                            <CardTitle className="text-sm">{t('recruitment.candidateProfile.resumeCV')}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2 pt-0">
                             {effectiveResumeUrl ? (
@@ -369,13 +372,13 @@ export function CandidateProfilePage() {
                                     className="flex items-center gap-2 text-sm text-primary hover:underline"
                                 >
                                     <FileText className="h-3.5 w-3.5 shrink-0" />
-                                    View / Download Resume
+                                    {t('recruitment.candidateProfile.viewDownloadResume')}
                                 </a>
                             ) : (
-                                <p className="text-sm text-muted-foreground">No resume on file.</p>
+                                <p className="text-sm text-muted-foreground">{t('recruitment.candidateProfile.noResume')}</p>
                             )}
                             <label>
-                                <span className="sr-only">Upload resume</span>
+                                <span className="sr-only">{t('recruitment.candidateProfile.uploadResumeLabel')}</span>
                                 <input
                                     id="resume-upload"
                                     type="file"
@@ -387,8 +390,8 @@ export function CandidateProfilePage() {
                                         uploadResume.mutate(
                                             { id: candidate.id, file },
                                             {
-                                                onSuccess: (res) => { setResumeDownloadUrl(res?.data?.downloadUrl ?? null); toast.success('Resume uploaded') },
-                                                onError: () => toast.error('Upload failed', 'Could not upload resume.'),
+                                                onSuccess: (res) => { setResumeDownloadUrl(res?.data?.downloadUrl ?? null); toast.success(t('recruitment.candidateProfile.toast.resumeUploaded')) },
+                                                onError: () => toast.error(t('recruitment.candidateProfile.toast.uploadFailed'), t('recruitment.candidateProfile.toast.couldNotUploadResume')),
                                             },
                                         )
                                         e.target.value = ''
@@ -403,7 +406,7 @@ export function CandidateProfilePage() {
                                     type="button"
                                 >
                                     <Upload className="h-3.5 w-3.5 mr-1.5" />
-                                    {uploadResume.isPending ? 'Uploading…' : effectiveResumeUrl ? 'Replace Resume' : 'Upload Resume'}
+                                    {uploadResume.isPending ? t('recruitment.candidateProfile.uploading') : effectiveResumeUrl ? t('recruitment.candidateProfile.replaceResume') : t('recruitment.candidateProfile.uploadResume')}
                                 </Button>
                             </label>
                         </CardContent>
@@ -415,12 +418,12 @@ export function CandidateProfilePage() {
                             {candidate.stage === 'pre_boarding' ? (
                                 <Button className="w-full" onClick={() => setConvertOpen(true)} disabled={convertToEmployee.isPending}>
                                     <UserPlus className="h-4 w-4 mr-2" />
-                                    Convert to Employee
+                                    {t('recruitment.candidateProfile.convertToEmployee')}
                                 </Button>
                             ) : !isLastStage ? (
                                 <Button className="w-full" onClick={handleAdvanceStage} disabled={updateStage.isPending}>
                                     <ChevronRight className="h-4 w-4 mr-1.5" />
-                                    Move to {STAGE_CONFIG[STAGE_ORDER[currentStageIdx + 1]].label}
+                                    {t('recruitment.candidateProfile.moveTo', { stage: t(STAGE_CONFIG[STAGE_ORDER[currentStageIdx + 1]].labelKey) })}
                                 </Button>
                             ) : null}
                             <Button
@@ -429,7 +432,7 @@ export function CandidateProfilePage() {
                                 onClick={() => setRejectOpen(true)}
                                 disabled={updateStage.isPending}
                             >
-                                Reject Candidate
+                                {t('recruitment.candidateProfile.rejectCandidate')}
                             </Button>
                         </div>
                     )}
@@ -439,9 +442,9 @@ export function CandidateProfilePage() {
                 <div className="lg:col-span-2">
                     <Tabs defaultValue="overview">
                         <TabsList>
-                            <TabsTrigger value="overview">Overview</TabsTrigger>
-                            <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
-                            <TabsTrigger value="notes">Notes</TabsTrigger>
+                            <TabsTrigger value="overview">{t('recruitment.candidateProfile.tabs.overview')}</TabsTrigger>
+                            <TabsTrigger value="pipeline">{t('recruitment.candidateProfile.tabs.pipeline')}</TabsTrigger>
+                            <TabsTrigger value="notes">{t('recruitment.candidateProfile.tabs.notes')}</TabsTrigger>
                         </TabsList>
 
                         {/* ── Overview tab ── */}
@@ -455,14 +458,14 @@ export function CandidateProfilePage() {
                                         </div>
                                         <div>
                                             <p className="font-semibold text-sm">
-                                                {isRejected ? 'Application Rejected' : `Currently in ${stageCfg.label}`}
+                                                {isRejected ? t('recruitment.candidateProfile.overview.applicationRejected') : t('recruitment.candidateProfile.overview.currentlyIn', { stage: t(stageCfg.labelKey) })}
                                             </p>
                                             <p className="text-xs text-muted-foreground mt-0.5">
                                                 {isRejected
-                                                    ? 'This candidate has been removed from the active pipeline.'
+                                                    ? t('recruitment.candidateProfile.overview.removedFromPipeline')
                                                     : !isLastStage
-                                                        ? `Next: ${STAGE_CONFIG[STAGE_ORDER[currentStageIdx + 1]].label}`
-                                                        : 'Final stage — ready to convert to employee.'}
+                                                        ? t('recruitment.candidateProfile.overview.nextStage', { stage: t(STAGE_CONFIG[STAGE_ORDER[currentStageIdx + 1]].labelKey) })
+                                                        : t('recruitment.candidateProfile.overview.finalStage')}
                                             </p>
                                         </div>
                                     </div>
@@ -471,10 +474,10 @@ export function CandidateProfilePage() {
 
                             {/* Quick stats */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                <StatCard label="Score" value={candidate.score !== undefined ? `${candidate.score}/100` : '—'} icon={<Star className="h-4 w-4 text-warning" />} />
-                                <StatCard label="Experience" value={candidate.experience !== undefined ? `${candidate.experience} yr${candidate.experience !== 1 ? 's' : ''}` : '—'} icon={<Briefcase className="h-4 w-4 text-primary" />} />
-                                <StatCard label="Expected" value={candidate.expectedSalary ? formatCurrency(candidate.expectedSalary) : '—'} icon={<DollarSign className="h-4 w-4 text-success" />} />
-                                <StatCard label="Applied" value={candidate.appliedDate ? formatDate(candidate.appliedDate) : '—'} icon={<CheckCircle2 className="h-4 w-4 text-muted-foreground" />} />
+                                <StatCard label={t('recruitment.candidateProfile.overview.statScore')} value={candidate.score !== undefined ? `${candidate.score}/100` : '—'} icon={<Star className="h-4 w-4 text-warning" />} />
+                                <StatCard label={t('recruitment.candidateProfile.overview.statExperience')} value={candidate.experience !== undefined ? `${candidate.experience} yr${candidate.experience !== 1 ? 's' : ''}` : '—'} icon={<Briefcase className="h-4 w-4 text-primary" />} />
+                                <StatCard label={t('recruitment.candidateProfile.overview.statExpected')} value={candidate.expectedSalary ? formatCurrency(candidate.expectedSalary) : '—'} icon={<DollarSign className="h-4 w-4 text-success" />} />
+                                <StatCard label={t('recruitment.candidateProfile.overview.statApplied')} value={candidate.appliedDate ? formatDate(candidate.appliedDate) : '—'} icon={<CheckCircle2 className="h-4 w-4 text-muted-foreground" />} />
                             </div>
 
                             {/* Latest note preview */}
@@ -484,7 +487,7 @@ export function CandidateProfilePage() {
                                     <Card>
                                         <CardHeader className="pb-2">
                                             <div className="flex items-center justify-between">
-                                                <CardTitle className="text-sm">Latest Note</CardTitle>
+                                                <CardTitle className="text-sm">{t('recruitment.candidateProfile.overview.latestNote')}</CardTitle>
                                                 {latest.stamp && <span className="text-[11px] text-muted-foreground tabular-nums">{latest.stamp}</span>}
                                             </div>
                                         </CardHeader>
@@ -501,7 +504,7 @@ export function CandidateProfilePage() {
                         <TabsContent value="pipeline" className="mt-4">
                             <Card>
                                 <CardHeader className="pb-4">
-                                    <CardTitle className="text-sm">Recruitment Pipeline</CardTitle>
+                                    <CardTitle className="text-sm">{t('recruitment.candidateProfile.pipeline.title')}</CardTitle>
                                 </CardHeader>
                                 <CardContent className="pt-0 space-y-1">
                                     {STAGE_ORDER.map((stage, i) => {
@@ -524,16 +527,16 @@ export function CandidateProfilePage() {
                                                 <div className="pb-4 flex-1">
                                                     <div className="flex items-center gap-2">
                                                         <p className={cn('font-medium text-sm', done || current ? cfg.textClass : 'text-muted-foreground')}>
-                                                            {cfg.label}
+                                                            {t(cfg.labelKey)}
                                                         </p>
                                                         {current && (
                                                             <Badge variant="outline" className={cn('text-[10px] py-0 h-4', cfg.badgeClass)}>
-                                                                Current
+                                                                {t('recruitment.candidateProfile.pipeline.current')}
                                                             </Badge>
                                                         )}
                                                     </div>
                                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                                        {done ? 'Completed' : current ? 'In progress' : 'Upcoming'}
+                                                        {done ? t('recruitment.candidateProfile.pipeline.completed') : current ? t('recruitment.candidateProfile.pipeline.inProgress') : t('recruitment.candidateProfile.pipeline.upcoming')}
                                                     </p>
                                                 </div>
                                             </div>
@@ -545,8 +548,8 @@ export function CandidateProfilePage() {
                                                 ✕
                                             </div>
                                             <div className="flex-1 pb-2">
-                                                <p className={cn('font-medium text-sm', STAGE_CONFIG.rejected.textClass)}>Rejected</p>
-                                                <p className="text-xs text-muted-foreground mt-0.5">Application closed</p>
+                                                <p className={cn('font-medium text-sm', STAGE_CONFIG.rejected.textClass)}>{t('recruitment.stages.rejected')}</p>
+                                                <p className="text-xs text-muted-foreground mt-0.5">{t('recruitment.candidateProfile.pipeline.applicationClosed')}</p>
                                             </div>
                                         </div>
                                     )}
@@ -558,13 +561,13 @@ export function CandidateProfilePage() {
                         <TabsContent value="notes" className="mt-4 space-y-4">
                             <Card>
                                 <CardHeader className="pb-3">
-                                    <CardTitle className="text-sm">Add a Note</CardTitle>
+                                    <CardTitle className="text-sm">{t('recruitment.candidateProfile.notes.addNote')}</CardTitle>
                                 </CardHeader>
                                 <CardContent className="pt-0 space-y-3">
                                     <Textarea
                                         value={newNote}
                                         onChange={(e) => setNewNote(e.target.value)}
-                                        placeholder="Interview feedback, screening summary, references checked…"
+                                        placeholder={t('recruitment.candidateProfile.notes.placeholder')}
                                         rows={3}
                                     />
                                     <div className="flex justify-end">
@@ -574,7 +577,7 @@ export function CandidateProfilePage() {
                                             disabled={updateApplication.isPending || !newNote.trim()}
                                         >
                                             <Save className="h-3.5 w-3.5 mr-1.5" />
-                                            {updateApplication.isPending ? 'Saving…' : 'Add Note'}
+                                            {updateApplication.isPending ? t('recruitment.candidateProfile.notes.saving') : t('recruitment.candidateProfile.notes.addNoteButton')}
                                         </Button>
                                     </div>
                                 </CardContent>
@@ -582,7 +585,7 @@ export function CandidateProfilePage() {
 
                             <Card>
                                 <CardHeader className="pb-3">
-                                    <CardTitle className="text-sm">Notes History</CardTitle>
+                                    <CardTitle className="text-sm">{t('recruitment.candidateProfile.notes.history')}</CardTitle>
                                 </CardHeader>
                                 <CardContent className="pt-0">
                                     <NoteHistory notes={candidate.notes} />
@@ -599,30 +602,29 @@ export function CandidateProfilePage() {
             <AlertDialog open={rejectOpen} onOpenChange={(v) => { setRejectOpen(v); if (!v) setRejectNote('') }}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Reject this candidate?</AlertDialogTitle>
+                        <AlertDialogTitle>{t('recruitment.candidateProfile.rejectDialog.title')}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will move <strong>{candidate.name}</strong> to the rejected stage. A rejection reason
-                            is required and will be stored in the notes history.
+                            {t('recruitment.candidateProfile.rejectDialog.description', { name: candidate.name })}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <div className="space-y-2 py-2">
-                        <Label htmlFor="reject-note">Rejection reason *</Label>
+                        <Label htmlFor="reject-note">{t('recruitment.candidateProfile.rejectDialog.reasonLabel')}</Label>
                         <Textarea
                             id="reject-note"
                             value={rejectNote}
                             onChange={(e) => setRejectNote(e.target.value)}
-                            placeholder="e.g. Salary expectation outside range; withdrew application…"
+                            placeholder={t('recruitment.candidateProfile.rejectDialog.reasonPlaceholder')}
                             rows={3}
                         />
                     </div>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                         <AlertDialogAction
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             onClick={(e) => { e.preventDefault(); handleReject() }}
                             disabled={!rejectNote.trim() || updateApplication.isPending || updateStage.isPending}
                         >
-                            Reject Candidate
+                            {t('recruitment.candidateProfile.rejectDialog.confirmButton')}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
@@ -631,31 +633,30 @@ export function CandidateProfilePage() {
             <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
                 <DialogContent size="md">
                     <DialogHeader>
-                        <DialogTitle>Convert to Employee</DialogTitle>
+                        <DialogTitle>{t('recruitment.candidateProfile.convertDialog.title')}</DialogTitle>
                     </DialogHeader>
                     <DialogBody className="space-y-4">
                         <p className="text-sm text-muted-foreground">
-                            Create an employee record for <strong>{candidate.name}</strong>. The new employee
-                            will start in <em>onboarding</em> status with an auto-generated employee number.
+                            {t('recruitment.candidateProfile.convertDialog.description', { name: candidate.name })}
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label required>Join Date</Label>
+                                <Label required>{t('recruitment.candidateProfile.convertDialog.joinDate')}</Label>
                                 <DatePicker
                                     value={convertForm.joinDate}
                                     onChange={(v) => setConvertForm((f) => ({ ...f, joinDate: v }))}
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label>Designation</Label>
+                                <Label>{t('recruitment.candidateProfile.convertDialog.designation')}</Label>
                                 <Input
                                     value={convertForm.designation}
                                     onChange={(e) => setConvertForm((f) => ({ ...f, designation: e.target.value }))}
-                                    placeholder="e.g. Senior Developer"
+                                    placeholder={t('recruitment.candidateProfile.convertDialog.designationPlaceholder')}
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label>Department</Label>
+                                <Label>{t('recruitment.department')}</Label>
                                 <Combobox
                                     value={convertForm.departmentId}
                                     onValueChange={(id) => {
@@ -663,11 +664,11 @@ export function CandidateProfilePage() {
                                         setConvertForm(f => ({ ...f, departmentId: id, department: opt?.label ?? '' }))
                                     }}
                                     options={orgOptions}
-                                    placeholder="Select department…"
+                                    placeholder={t('recruitment.candidateProfile.convertDialog.selectDepartment')}
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label>Basic Salary (AED)</Label>
+                                <Label>{t('recruitment.candidateProfile.convertDialog.basicSalary')}</Label>
                                 <NumericInput
                                     value={convertForm.basicSalary}
                                     onChange={(e) => setConvertForm((f) => ({ ...f, basicSalary: e.target.value }))}
@@ -676,27 +677,27 @@ export function CandidateProfilePage() {
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="convert-note">Conversion note *</Label>
+                            <Label htmlFor="convert-note">{t('recruitment.candidateProfile.convertDialog.conversionNote')}</Label>
                             <Textarea
                                 id="convert-note"
                                 value={convertForm.note}
                                 onChange={(e) => setConvertForm((f) => ({ ...f, note: e.target.value }))}
-                                placeholder="e.g. Offer accepted on 12 Apr; reporting to Engineering Manager."
+                                placeholder={t('recruitment.candidateProfile.convertDialog.notePlaceholder')}
                                 rows={3}
                             />
                             <p className="text-[11px] text-muted-foreground">
-                                This note will be appended to the candidate's notes history alongside the conversion timestamp.
+                                {t('recruitment.candidateProfile.convertDialog.noteHelper')}
                             </p>
                         </div>
                     </DialogBody>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setConvertOpen(false)}>Cancel</Button>
+                        <Button variant="outline" onClick={() => setConvertOpen(false)}>{t('common.cancel')}</Button>
                         <Button
                             onClick={handleConvertSubmit}
                             loading={convertToEmployee.isPending || updateApplication.isPending}
                             disabled={!convertForm.note.trim()}
                         >
-                            <UserPlus className="h-4 w-4 mr-2" /> Create Employee
+                            <UserPlus className="h-4 w-4 mr-2" /> {t('recruitment.candidateProfile.convertDialog.createEmployee')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
