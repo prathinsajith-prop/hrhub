@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import {
   Plane, FileText, ShieldCheck, AlertTriangle,
@@ -43,13 +44,14 @@ interface DocItem {
   employeeName?: string
 }
 
-const URGENCY_META: Record<string, { variant: 'destructive' | 'warning' | 'info'; label: string }> = {
-  critical: { variant: 'destructive', label: 'Critical' },
-  urgent:   { variant: 'warning',     label: 'Urgent' },
-  normal:   { variant: 'info',        label: 'Normal' },
+const URGENCY_META: Record<string, { variant: 'destructive' | 'warning' | 'info'; labelKey: string }> = {
+  critical: { variant: 'destructive', labelKey: 'dashboard.urgencyCritical' },
+  urgent:   { variant: 'warning',     labelKey: 'dashboard.urgencyUrgent' },
+  normal:   { variant: 'info',        labelKey: 'dashboard.urgencyNormal' },
 }
 
 export function ProDashboard() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
 
@@ -73,8 +75,8 @@ export function ProDashboard() {
   return (
     <PageWrapper>
       <PageHeader
-        title={`Good ${getTimeOfDay()}, ${user?.name?.split(' ')[0] ?? 'PRO Officer'}`}
-        description={`PRO Officer · ${today}`}
+        title={t(`dashboard.greeting_${getTimeOfDay()}`, { name: user?.name?.split(' ')[0] ?? t('dashboard.proOfficerFallback') })}
+        description={`${t('dashboard.proOfficerRole')} · ${today}`}
       />
 
       {/* Critical alert banner */}
@@ -83,7 +85,7 @@ export function ProDashboard() {
           <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-destructive">
-              {criticalVisas.length} critical visa case{criticalVisas.length > 1 ? 's' : ''} require immediate action
+              {t('dashboard.criticalVisaAlert', { count: criticalVisas.length })}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {criticalVisas.slice(0, 2).map(v => {
@@ -92,11 +94,11 @@ export function ProDashboard() {
                   : v.employeeName ?? 'Unknown'
                 return name
               }).join(', ')}
-              {criticalVisas.length > 2 && ` and ${criticalVisas.length - 2} more`}
+              {criticalVisas.length > 2 && ` ${t('dashboard.andMore', { count: criticalVisas.length - 2 })}`}
             </p>
           </div>
           <Button size="sm" variant="ghost" className="text-destructive h-auto px-2 py-1 text-xs shrink-0" onClick={() => navigate('/visa')}>
-            View <ArrowUpRight className="h-3 w-3 ml-1" />
+            {t('dashboard.view')} <ArrowUpRight className="h-3 w-3 ml-1" />
           </Button>
         </div>
       )}
@@ -104,36 +106,36 @@ export function ProDashboard() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCardCompact
-          label="Active Visas"
+          label={t('dashboard.activeVisas')}
           value={kpisLoading ? undefined : kpis?.activeVisas}
           icon={Plane}
           color="blue"
           loading={kpisLoading}
-          hint="Processing now"
+          hint={t('dashboard.subProcessingNow')}
         />
         <KpiCardCompact
-          label="Expiring Visas"
+          label={t('dashboard.expiringVisas')}
           value={kpisLoading ? undefined : kpis?.expiringVisas}
           icon={Clock}
           color={kpis?.expiringVisas ? 'red' : 'green'}
           loading={kpisLoading}
-          hint="Next 90 days"
+          hint={t('dashboard.subNext90Days')}
         />
         <KpiCardCompact
-          label="Critical Cases"
+          label={t('dashboard.criticalCases')}
           value={visaLoading ? undefined : criticalVisas.length}
           icon={AlertTriangle}
           color={criticalVisas.length > 0 ? 'red' : 'green'}
           loading={visaLoading}
-          hint="Need immediate action"
+          hint={t('dashboard.needImmediateAction')}
         />
         <KpiCardCompact
-          label="Docs to Review"
+          label={t('dashboard.docsToReview')}
           value={pendingDocsLoading ? undefined : pendingDocList.length}
           icon={FileText}
           color={pendingDocList.length > 0 ? 'amber' : 'green'}
           loading={pendingDocsLoading}
-          hint="Pending verification"
+          hint={t('dashboard.pendingVerification')}
         />
       </div>
 
@@ -145,11 +147,11 @@ export function ProDashboard() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Visa Pipeline</CardTitle>
-                <CardDescription>Active cases by urgency</CardDescription>
+                <CardTitle>{t('dashboard.visaPipeline')}</CardTitle>
+                <CardDescription>{t('dashboard.activeCasesByUrgency')}</CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/visa')}>
-                All cases <ArrowUpRight className="h-3 w-3 ml-1" />
+                {t('dashboard.allCases')} <ArrowUpRight className="h-3 w-3 ml-1" />
               </Button>
             </div>
           </CardHeader>
@@ -159,8 +161,8 @@ export function ProDashboard() {
             ) : pipeline.length === 0 ? (
               <div className="py-10 text-center">
                 <CheckCircle2 className="h-8 w-8 text-success/60 mx-auto mb-2" />
-                <p className="text-sm font-medium">No active visa cases</p>
-                <p className="text-xs text-muted-foreground mt-0.5">All visa cases have been processed</p>
+                <p className="text-sm font-medium">{t('dashboard.noActiveVisaCases')}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('dashboard.allVisasProcessed')}</p>
               </div>
             ) : (
               <div className="space-y-3.5">
@@ -183,7 +185,7 @@ export function ProDashboard() {
                           <p className="text-[11px] text-muted-foreground">{labelFor(v.visaType ?? '')}</p>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <Badge variant={meta.variant} className="text-[10px] h-5">{meta.label}</Badge>
+                          <Badge variant={meta.variant} className="text-[10px] h-5">{t(meta.labelKey)}</Badge>
                           <Button
                             size="sm"
                             variant="ghost"
@@ -216,11 +218,11 @@ export function ProDashboard() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Docs to Verify</CardTitle>
-                  <CardDescription>Pending review</CardDescription>
+                  <CardTitle>{t('dashboard.docsToVerify')}</CardTitle>
+                  <CardDescription>{t('dashboard.pendingReview')}</CardDescription>
                 </div>
                 <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/documents')}>
-                  All <ArrowUpRight className="h-3 w-3 ml-1" />
+                  {t('common.all')} <ArrowUpRight className="h-3 w-3 ml-1" />
                 </Button>
               </div>
             </CardHeader>
@@ -230,7 +232,7 @@ export function ProDashboard() {
               ) : pendingDocList.length === 0 ? (
                 <div className="py-8 text-center">
                   <ClipboardCheck className="h-7 w-7 text-success/60 mx-auto mb-2" />
-                  <p className="text-xs text-muted-foreground">No documents pending review</p>
+                  <p className="text-xs text-muted-foreground">{t('dashboard.noDocsPendingReview')}</p>
                 </div>
               ) : (
                 <div className="divide-y divide-border/50">
@@ -245,7 +247,7 @@ export function ProDashboard() {
                           ? <EmployeeLink id={doc.employeeId} name={doc.employeeName} className="text-[10px] text-muted-foreground" />
                           : <p className="text-[10px] text-muted-foreground">{doc.employeeName ?? '—'}</p>}
                       </div>
-                      <Badge variant="warning" className="text-[9px] h-4 px-1.5 shrink-0">Review</Badge>
+                      <Badge variant="warning" className="text-[9px] h-4 px-1.5 shrink-0">{t('dashboard.review')}</Badge>
                     </div>
                   ))}
                 </div>
@@ -256,8 +258,8 @@ export function ProDashboard() {
           {/* Expiring documents */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Expiring Documents</CardTitle>
-              <CardDescription>Next 90 days</CardDescription>
+              <CardTitle className="text-sm">{t('dashboard.expiringDocuments')}</CardTitle>
+              <CardDescription>{t('dashboard.subNext90Days')}</CardDescription>
             </CardHeader>
             <CardContent>
               {expDocsLoading ? (
@@ -265,7 +267,7 @@ export function ProDashboard() {
                   {[1, 2, 3].map(i => <div key={i} className="flex gap-2"><div className="skeleton-shimmer h-3 flex-1 rounded-full" /></div>)}
                 </div>
               ) : expiringDocList.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-4">No documents expiring soon</p>
+                <p className="text-xs text-muted-foreground text-center py-4">{t('dashboard.noExpiringDocs')}</p>
               ) : (
                 <div className="space-y-2.5">
                   {expiringDocList.slice(0, 4).map((doc) => {
@@ -297,12 +299,12 @@ export function ProDashboard() {
 
       {/* Quick actions */}
       <div className="space-y-3">
-        <SectionHeading title="Quick Actions" />
+        <SectionHeading title={t('dashboard.quickActions')} />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <QuickAction icon={Plane}        label="Visa Cases"   onClick={() => navigate('/visa')} />
-          <QuickAction icon={FileText}     label="Documents"    onClick={() => navigate('/documents')} />
-          <QuickAction icon={ShieldCheck}  label="Compliance"   onClick={() => navigate('/compliance')} />
-          <QuickAction icon={ClipboardCheck} label="Reports"    onClick={() => navigate('/reports')} />
+          <QuickAction icon={Plane}        label={t('dashboard.visaCases')}   onClick={() => navigate('/visa')} />
+          <QuickAction icon={FileText}     label={t('dashboard.documents')}   onClick={() => navigate('/documents')} />
+          <QuickAction icon={ShieldCheck}  label={t('dashboard.compliance')}  onClick={() => navigate('/compliance')} />
+          <QuickAction icon={ClipboardCheck} label={t('dashboard.reports')}   onClick={() => navigate('/reports')} />
         </div>
       </div>
     </PageWrapper>

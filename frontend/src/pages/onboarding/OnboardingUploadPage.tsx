@@ -1,11 +1,14 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { labelFor } from '@/lib/enums'
-import { CheckCircle2, Clock, Upload, FileText, AlertCircle, ChevronDown, ChevronUp, CalendarDays, Building2, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock, Upload, FileText, AlertCircle, ChevronDown, ChevronUp, CalendarDays, Building2, XCircle, X } from 'lucide-react'
 import { useOnboardingUploadInfo, useOnboardingPublicUpload, type UploadInfoStep } from '@/hooks/useOnboarding'
-import { DOC_TYPE_CATALOG, type DocCategory } from '@/lib/docTypes'
+import { DOC_TYPE_CATALOG, docNumberMeta, type DocCategory } from '@/lib/docTypes'
 import { DatePicker } from '@/components/ui/date-picker'
 import { cn, formatDate, formatFileSize } from '@/lib/utils'
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+const ACCEPTED_EXTENSIONS = /\.(pdf|jpg|jpeg|png|webp|gif|doc|docx|xlsx)$/i
 
 // ── Status pill ──────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -33,8 +36,10 @@ function StepUploadArea({
     const [expanded, setExpanded] = useState(step.uploadedDocs.length === 0 && step.status !== 'completed')
     const [selectedCategory, setSelectedCategory] = useState<DocCategory | ''>('')
     const [selectedDocType, setSelectedDocType] = useState('')
+    const [docNumber, setDocNumber] = useState('')
     const [expiryDate, setExpiryDate] = useState('')
     const [file, setFile] = useState<File | null>(null)
+    const [dragging, setDragging] = useState(false)
     const [uploading, setUploading] = useState(false)
     const [success, setSuccess] = useState(false)
     const [error, setError] = useState('')
@@ -45,10 +50,37 @@ function StepUploadArea({
     const selectedDocDef = categoryDocs.find(d => d.docType === selectedDocType)
     const expiryRequired = selectedDocDef?.expiryRequired ?? false
 
-    const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const f = e.target.files?.[0]
-        if (f) { setFile(f); setError('') }
-    }
+    const pickFile = useCallback((picked: File | null | undefined) => {
+        if (!picked) return
+        if (!ACCEPTED_EXTENSIONS.test(picked.name)) {
+            setError('Unsupported file type. Please upload a PDF, image, Word, or Excel document.')
+            return
+        }
+        if (picked.size > MAX_UPLOAD_BYTES) {
+            setError('File too large. Maximum size is 10 MB.')
+            return
+        }
+        setFile(picked)
+        setError('')
+    }, [])
+
+    const onDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        setDragging(false)
+        pickFile(e.dataTransfer.files[0])
+    }, [pickFile])
+
+    const onDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        setDragging(true)
+    }, [])
+
+    const onDragLeave = useCallback(() => setDragging(false), [])
+
+    const clearFile = useCallback(() => {
+        setFile(null)
+        if (fileRef.current) fileRef.current.value = ''
+    }, [])
 
     const handleUpload = async () => {
         if (!selectedCategory) { setError('Please select a document category.'); return }
@@ -64,14 +96,15 @@ function StepUploadArea({
                 stepId: step.id,
                 category: selectedCategory,
                 docType: selectedDocType,
+                docNumber: docNumber.trim() || undefined,
                 expiryDate: expiryDate || undefined,
             })
             setSuccess(true)
-            setFile(null)
             setSelectedCategory('')
             setSelectedDocType('')
+            setDocNumber('')
             setExpiryDate('')
-            if (fileRef.current) fileRef.current.value = ''
+            clearFile()
             onUploaded()
             setTimeout(() => { setSuccess(false); setExpanded(false) }, 2000)
         } catch {
@@ -294,6 +327,24 @@ function StepUploadArea({
                             </div>
                         </div>
 
+                        {selectedDocType && (() => {
+                            const meta = docNumberMeta(selectedDocType)
+                            return (
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-medium text-gray-500">
+                                        {meta.label} <span className="text-[10px] font-normal text-gray-400">(optional)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={docNumber}
+                                        onChange={(e) => setDocNumber(e.target.value)}
+                                        placeholder={meta.placeholder}
+                                        className="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    />
+                                </div>
+                            )
+                        })()}
+
                         {expiryRequired && (
                             <div className="space-y-1">
                                 <label className="text-[11px] font-medium text-red-600 flex items-center gap-1">
@@ -317,33 +368,58 @@ function StepUploadArea({
                         )}
 
                         {/* File picker */}
-                        <div>
+                        <div className="space-y-1">
                             <label className="text-[11px] font-medium text-gray-500">File *</label>
-                            <div
-                                className="mt-1 border-2 border-dashed border-gray-200 rounded-lg p-4 text-center hover:border-blue-300 hover:bg-blue-50/30 transition-colors cursor-pointer"
-                                onClick={() => fileRef.current?.click()}
-                            >
-                                {file ? (
-                                    <div className="flex items-center justify-center gap-2">
-                                        <FileText className="h-4 w-4 text-blue-500" />
-                                        <span className="text-sm font-medium text-gray-800">{file.name}</span>
-                                        <span className="text-[11px] text-gray-400">({formatFileSize(file.size)})</span>
+                            <input
+                                ref={fileRef}
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xlsx"
+                                className="hidden"
+                                onChange={(e) => pickFile(e.target.files?.[0])}
+                            />
+                            {file ? (
+                                <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                                    <div className="h-9 w-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                                        <FileText className="h-4 w-4 text-blue-600" />
                                     </div>
-                                ) : (
-                                    <div>
-                                        <Upload className="h-5 w-5 text-gray-300 mx-auto mb-1" />
-                                        <p className="text-xs text-gray-500">Click to select file</p>
-                                        <p className="text-[10px] text-gray-400">PDF, JPG, PNG — max 10 MB</p>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                                        <p className="text-[11px] text-gray-500">{formatFileSize(file.size)}</p>
                                     </div>
-                                )}
-                                <input
-                                    ref={fileRef}
-                                    type="file"
-                                    accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xlsx"
-                                    className="hidden"
-                                    onChange={handleFile}
-                                />
-                            </div>
+                                    <button
+                                        type="button"
+                                        onClick={clearFile}
+                                        aria-label="Remove file"
+                                        className="rounded-md p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => fileRef.current?.click()}
+                                    onDrop={onDrop}
+                                    onDragOver={onDragOver}
+                                    onDragLeave={onDragLeave}
+                                    className={cn(
+                                        'w-full rounded-lg border-2 border-dashed px-6 py-7 flex flex-col items-center gap-2 transition-colors cursor-pointer',
+                                        dragging
+                                            ? 'border-blue-500 bg-blue-50'
+                                            : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/40',
+                                    )}
+                                >
+                                    <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
+                                        <Upload className="h-5 w-5 text-blue-500" />
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-sm font-medium text-gray-900">
+                                            Click to upload <span className="font-normal text-gray-500">or drag and drop</span>
+                                        </p>
+                                        <p className="text-[11px] text-gray-400 mt-0.5">PDF, JPG, PNG, WEBP, DOC, XLSX · Max 10 MB</p>
+                                    </div>
+                                </button>
+                            )}
                         </div>
 
                         {error && (

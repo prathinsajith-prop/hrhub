@@ -1,9 +1,15 @@
-import { getChecklist, updateStep, listChecklists, addStep, deleteStep, createChecklist, getAnalytics } from './onboarding.service.js'
+import {
+    getChecklist, updateStep, listChecklists, addStep, deleteStep, createChecklist, getAnalytics,
+    listTemplateSteps, createTemplateStep, updateTemplateStep, deleteTemplateStep, reorderTemplateSteps, resetTemplateSteps,
+} from './onboarding.service.js'
 import {
     listRequiredDocs,
     addRequiredDoc,
     deleteRequiredDoc,
     seedRequiredDocsFromTemplate,
+    listTemplateRequiredDocs,
+    addTemplateRequiredDoc,
+    deleteTemplateRequiredDoc,
     getStepDocSummary,
     issueUploadToken,
     listUploadTokens,
@@ -13,6 +19,7 @@ import {
     defaultRequiredDocsForStep,
 } from './onboarding.docs.service.js'
 import { sendEmail, onboardingUploadLinkEmail } from '../../plugins/email.js'
+import { recordActivity } from '../audit/audit.service.js'
 import { db } from '../../db/index.js'
 import { onboardingChecklists, onboardingSteps, onboardingStepRequiredDocs, documents, tenants, employees } from '../../db/schema/index.js'
 import { eq, and, isNull, inArray } from 'drizzle-orm'
@@ -55,6 +62,105 @@ function getStepSuggestions(title: string) {
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
     const writeAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')] }
+
+    // ── Template steps (per-tenant default checklist) ────────────────────────
+    fastify.get('/template-steps', { ...auth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
+        const data = await listTemplateSteps(request.user.tenantId)
+        return reply.send({ data })
+    })
+
+    fastify.post('/template-steps', {
+        ...writeAuth,
+        schema: {
+            tags: ['Onboarding'],
+            body: {
+                type: 'object',
+                required: ['title'],
+                properties: {
+                    title: { type: 'string', minLength: 1, maxLength: 200 },
+                    owner: { type: 'string', maxLength: 100 },
+                    slaDays: { type: 'number', minimum: 0, maximum: 365 },
+                },
+            },
+        },
+    }, async (request: any, reply: any) => {
+        const created = await createTemplateStep(request.user.tenantId, request.body as never)
+        return reply.code(201).send({ data: created })
+    })
+
+    fastify.patch('/template-steps/:stepId', {
+        ...writeAuth,
+        schema: {
+            tags: ['Onboarding'],
+            body: {
+                type: 'object',
+                properties: {
+                    title: { type: 'string', minLength: 1, maxLength: 200 },
+                    owner: { type: ['string', 'null'], maxLength: 100 },
+                    slaDays: { type: ['number', 'null'], minimum: 0, maximum: 365 },
+                },
+            },
+        },
+    }, async (request: any, reply: any) => {
+        const { stepId } = request.params as { stepId: string }
+        const row = await updateTemplateStep(request.user.tenantId, stepId, request.body as never)
+        if (!row) return reply.code(404).send({ message: 'Template step not found' })
+        return reply.send({ data: row })
+    })
+
+    fastify.delete('/template-steps/:stepId', { ...writeAuth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
+        const { stepId } = request.params as { stepId: string }
+        const row = await deleteTemplateStep(request.user.tenantId, stepId)
+        if (!row) return reply.code(404).send({ message: 'Template step not found' })
+        return reply.code(204).send()
+    })
+
+    fastify.post('/template-steps/reorder', {
+        ...writeAuth,
+        schema: {
+            tags: ['Onboarding'],
+            body: {
+                type: 'object',
+                required: ['orderedIds'],
+                properties: {
+                    orderedIds: { type: 'array', items: { type: 'string', format: 'uuid' }, maxItems: 200 },
+                },
+            },
+        },
+    }, async (request: any, reply: any) => {
+        const { orderedIds } = request.body as { orderedIds: string[] }
+        const data = await reorderTemplateSteps(request.user.tenantId, orderedIds)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'onboarding_template_steps',
+            entityId: request.user.tenantId,
+            entityName: `${data.length} steps`,
+            action: 'update',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data })
+    })
+
+    fastify.post('/template-steps/reset', { ...writeAuth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
+        const data = await resetTemplateSteps(request.user.tenantId)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'onboarding_template_steps',
+            entityId: request.user.tenantId,
+            entityName: 'reset to defaults',
+            action: 'update',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data })
+    })
 
     fastify.get('/analytics', { ...auth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
         const data = await getAnalytics(request.user.tenantId)
@@ -474,7 +580,7 @@ export default async function (fastify: any): Promise<void> {
 
         const fileMeta = { fileName: pendingFile.originalName, mime, s3Key, size: pendingFile.buffer.length }
 
-        const { stepId, category, docType, expiryDate } = fields
+        const { stepId, category, docType, docNumber, expiryDate } = fields
         if (!category) return reply.code(400).send({ message: 'category is required' })
         if (!docType) return reply.code(400).send({ message: 'docType is required' })
 
@@ -507,6 +613,7 @@ export default async function (fastify: any): Promise<void> {
             stepId: stepId || null,
             category: category as any,
             docType,
+            docNumber: docNumber?.trim() || null,
             fileName: fileMeta.fileName,
             s3Key: fileMeta.s3Key,
             fileSize: fileMeta.size,
@@ -563,6 +670,46 @@ export default async function (fastify: any): Promise<void> {
     fastify.delete('/required-docs/:requiredDocId', { ...writeAuth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
         const { requiredDocId } = request.params as { requiredDocId: string }
         const deleted = await deleteRequiredDoc(request.user.tenantId, requiredDocId)
+        if (!deleted) return reply.code(404).send({ message: 'Required-doc not found' })
+        return reply.send({ data: deleted })
+    })
+
+    // ── Template-level required-docs config (Organization Settings) ──────────
+    // These live on onboarding_template_steps and are copied into each new
+    // checklist when createChecklist runs.
+    fastify.get('/template-steps/:stepId/required-docs', { ...auth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
+        const { stepId } = request.params as { stepId: string }
+        const data = await listTemplateRequiredDocs(request.user.tenantId, stepId)
+        return reply.send({ data })
+    })
+
+    fastify.post('/template-steps/:stepId/required-docs', {
+        ...writeAuth,
+        schema: {
+            tags: ['Onboarding'],
+            body: {
+                type: 'object',
+                required: ['category', 'docType'],
+                properties: {
+                    category: { type: 'string', enum: ['identity', 'visa', 'company', 'employment', 'insurance', 'qualification', 'financial', 'compliance'] },
+                    docType: { type: 'string', minLength: 1 },
+                    expiryRequired: { type: 'boolean' },
+                    isMandatory: { type: 'boolean' },
+                    hint: { type: 'string' },
+                    sortOrder: { type: 'number' },
+                },
+            },
+        },
+    }, async (request: any, reply: any) => {
+        const { stepId } = request.params as { stepId: string }
+        const created = await addTemplateRequiredDoc(request.user.tenantId, stepId, request.body as any)
+        if (!created) return reply.code(404).send({ message: 'Template step not found' })
+        return reply.code(201).send({ data: created })
+    })
+
+    fastify.delete('/template-required-docs/:requiredDocId', { ...writeAuth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
+        const { requiredDocId } = request.params as { requiredDocId: string }
+        const deleted = await deleteTemplateRequiredDoc(request.user.tenantId, requiredDocId)
         if (!deleted) return reply.code(404).send({ message: 'Required-doc not found' })
         return reply.send({ data: deleted })
     })

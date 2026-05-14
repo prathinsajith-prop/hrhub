@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/authStore'
 import { api } from '@/lib/api'
 import { labelFor } from '@/lib/enums'
 import { SettingsCard } from './_shared'
+import { useTranslation } from 'react-i18next'
 
 function splitName(full: string): { firstName: string; lastName: string } {
     const parts = full.trim().split(/\s+/)
@@ -17,6 +18,7 @@ function splitName(full: string): { firstName: string; lastName: string } {
 
 // ─── Profile Tab — current user avatar / name / department ────────────────────
 export function ProfileTab() {
+    const { t } = useTranslation()
     const { user, setUser } = useAuthStore()
     const [firstName, setFirstName] = useState(() => splitName(user?.name ?? '').firstName)
     const [lastName, setLastName] = useState(() => splitName(user?.name ?? '').lastName)
@@ -45,11 +47,11 @@ export function ProfileTab() {
     const handleFile = async (file: File) => {
         const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
         if (!allowed.includes(file.type)) {
-            toast.error('Unsupported file', 'Please choose a JPEG, PNG, WEBP, or GIF image.')
+            toast.error(t('settingsDetail.profile.unsupportedFile'), t('settingsDetail.profile.unsupportedFileDesc'))
             return
         }
         if (file.size > 5 * 1024 * 1024) {
-            toast.error('File too large', 'Maximum size is 5 MB.')
+            toast.error(t('settingsDetail.profile.fileTooLarge'), t('settingsDetail.profile.fileTooLargeDesc'))
             return
         }
         try {
@@ -58,9 +60,9 @@ export function ProfileTab() {
             fd.append('file', file)
             const res = await api.upload<{ data: { avatarUrl: string } }>('/auth/me/avatar', fd)
             setUser({ avatarUrl: res.data.avatarUrl })
-            toast.success('Profile photo updated')
+            toast.success(t('settingsDetail.profile.photoUpdated'))
         } catch {
-            toast.error('Upload failed', 'Could not update your profile photo.')
+            toast.error(t('settingsDetail.profile.uploadFailed'), t('settingsDetail.profile.uploadFailedDesc'))
         } finally {
             setUploading(false)
             if (fileRef.current) fileRef.current.value = ''
@@ -69,7 +71,7 @@ export function ProfileTab() {
 
     const handleSave = async () => {
         if (!firstName.trim()) {
-            toast.error('First name is required')
+            toast.error(t('settingsDetail.profile.firstNameRequired'))
             return
         }
         const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ')
@@ -85,10 +87,10 @@ export function ProfileTab() {
                 avatarUrl: res.data.avatarUrl ?? undefined,
             })
             setSaved(true)
-            toast.success('Profile updated')
+            toast.success(t('settingsDetail.profile.profileUpdated'))
             setTimeout(() => setSaved(false), 2000)
         } catch {
-            toast.error('Save failed', 'Could not update your profile.')
+            toast.error(t('settingsDetail.profile.saveFailed'), t('settingsDetail.profile.saveFailedDesc'))
         } finally {
             setSaving(false)
         }
@@ -110,7 +112,7 @@ export function ProfileTab() {
                             onClick={handlePickFile}
                             disabled={uploading}
                             className="absolute -bottom-1 -end-1 h-7 w-7 rounded-full bg-primary text-primary-foreground border-2 border-card shadow-sm flex items-center justify-center hover:bg-primary/90 disabled:opacity-50"
-                            aria-label="Change profile photo"
+                            aria-label={t('settingsDetail.profile.changePhoto')}
                         >
                             <UserCircle className="h-3.5 w-3.5" />
                         </button>
@@ -134,29 +136,29 @@ export function ProfileTab() {
                         </p>
                         <div className="mt-3 flex items-center gap-2">
                             <Button size="sm" variant="outline" onClick={handlePickFile} loading={uploading}>
-                                {user?.avatarUrl ? 'Change photo' : 'Upload photo'}
+                                {user?.avatarUrl ? t('settingsDetail.profile.changePhoto') : t('settingsDetail.profile.uploadPhoto')}
                             </Button>
-                            <span className="text-[11px] text-muted-foreground">JPEG, PNG, WEBP, GIF · max 5 MB</span>
+                            <span className="text-[11px] text-muted-foreground">{t('settingsDetail.profile.photoHint')}</span>
                         </div>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-5">
                     <div>
-                        <Label htmlFor="profile-first-name">First Name</Label>
+                        <Label htmlFor="profile-first-name">{t('settingsDetail.profile.firstName')}</Label>
                         <Input id="profile-first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Jane" />
                     </div>
                     <div>
-                        <Label htmlFor="profile-last-name">Last Name</Label>
+                        <Label htmlFor="profile-last-name">{t('settingsDetail.profile.lastName')}</Label>
                         <Input id="profile-last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Smith" />
                     </div>
                     <div>
-                        <Label htmlFor="profile-email">Email</Label>
+                        <Label htmlFor="profile-email">{t('common.email')}</Label>
                         <Input id="profile-email" value={user?.email ?? ''} disabled />
-                        <p className="text-[11px] text-muted-foreground mt-1">Contact an admin to change your email.</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">{t('settingsDetail.profile.emailHint')}</p>
                     </div>
                     <div>
-                        <Label htmlFor="profile-role">Role</Label>
+                        <Label htmlFor="profile-role">{t('team.role')}</Label>
                         <Input id="profile-role" value={labelFor(user?.role)} disabled className="capitalize" />
                     </div>
                 </div>
@@ -168,7 +170,7 @@ export function ProfileTab() {
                         leftIcon={saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
                         variant={saved ? 'success' : 'default'}
                     >
-                        {saved ? 'Saved!' : 'Save Changes'}
+                        {saved ? t('settingsDetail.profile.saved') : t('settingsDetail.profile.saveChanges')}
                     </Button>
                 </div>
             </SettingsCard>

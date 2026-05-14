@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, Pencil, Check, XCircle, GraduationCap, Building2, Trash2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,9 +18,9 @@ import { Section } from './_shared'
 // ─── Role categories ──────────────────────────────────────────────────────────
 
 const ROLE_CATEGORY_OPTIONS = [
-    { value: 'employee',  label: 'Employee' },
-    { value: 'manager',   label: 'Manager' },
-    { value: 'director',  label: 'Director' },
+    { value: 'employee',  labelKey: 'orgSettings.gradeLevels.roleEmployee' },
+    { value: 'manager',   labelKey: 'orgSettings.gradeLevels.roleManager' },
+    { value: 'director',  labelKey: 'orgSettings.gradeLevels.roleDirector' },
 ] as const
 
 type RoleCategory = (typeof ROLE_CATEGORY_OPTIONS)[number]['value']
@@ -34,10 +35,6 @@ const ROLE_CATEGORY_BORDER_ACTIVE: Record<RoleCategory, string> = {
     employee:  'border-blue-500',
     manager:   'border-violet-500',
     director:  'border-amber-500',
-}
-
-function roleCategoryLabel(value: string): string {
-    return ROLE_CATEGORY_OPTIONS.find(o => o.value === value)?.label ?? value
 }
 
 function roleCategoryColor(value: string): string {
@@ -95,6 +92,7 @@ interface GradeLevelModalProps {
 }
 
 function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPending }: GradeLevelModalProps) {
+    const { t } = useTranslation()
     const [form, setForm] = useState<ModalState>(() => editing ? gradeLevelToModal(editing) : EMPTY_MODAL)
     const [salaryError, setSalaryError] = useState('')
 
@@ -134,7 +132,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
         const salaryMin = form.salaryMin !== '' ? Number(form.salaryMin) : (editing ? null : undefined)
         const salaryMax = form.salaryMax !== '' ? Number(form.salaryMax) : (editing ? null : undefined)
         if (salaryMin != null && salaryMax != null && salaryMin >= salaryMax) {
-            return { ok: false, salaryError: 'Minimum must be less than maximum' }
+            return { ok: false, salaryError: t('orgSettings.gradeLevels.minSalaryError') }
         }
         return {
             ok: true,
@@ -164,13 +162,13 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent size="md">
                 <DialogHeader>
-                    <DialogTitle>{editing ? 'Edit Grade Level' : 'Add Grade Level'}</DialogTitle>
+                    <DialogTitle>{editing ? t('orgSettings.gradeLevels.editGradeLevel') : t('orgSettings.gradeLevels.addGradeLevel')}</DialogTitle>
                 </DialogHeader>
                 <DialogBody className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">
-                                Level <span className="text-muted-foreground font-normal text-xs">(sort order)</span>
+                                {t('orgSettings.gradeLevels.levelLabel')} <span className="text-muted-foreground font-normal text-xs">{t('orgSettings.gradeLevels.levelHint')}</span>
                             </label>
                             <NumericInput
                                 decimal={false}
@@ -181,7 +179,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">
-                                Code <span className="text-muted-foreground font-normal text-xs">(auto from level)</span>
+                                {t('orgSettings.gradeLevels.codeLabel')} <span className="text-muted-foreground font-normal text-xs">{t('orgSettings.gradeLevels.codeHint')}</span>
                             </label>
                             <Input
                                 placeholder="e.g. G6"
@@ -195,7 +193,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
 
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">
-                            Name <span className="text-destructive">*</span>
+                            {t('orgSettings.gradeLevels.nameLabel')} <span className="text-destructive">*</span>
                         </label>
                         <Input
                             placeholder="e.g. Mid Level 1"
@@ -208,7 +206,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
 
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">
-                            Grade Category <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+                            {t('orgSettings.gradeLevels.gradeCategoryLabel')} <span className="text-muted-foreground font-normal text-xs">{t('orgSettings.gradeLevels.gradeCategoryHint')}</span>
                         </label>
                         <div className="flex flex-wrap gap-2">
                             {ROLE_CATEGORY_OPTIONS.map(opt => {
@@ -226,19 +224,19 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                                         )}
                                     >
                                         {selected && <Check className="h-3 w-3" />}
-                                        {opt.label}
+                                        {t(opt.labelKey)}
                                     </button>
                                 )
                             })}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Tag which category of staff this grade applies to — used to filter grades in employee forms.
+                            {t('orgSettings.gradeLevels.gradeCategoryDesc')}
                         </p>
                     </div>
 
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">
-                            Salary Range <span className="text-muted-foreground font-normal text-xs">(AED / month)</span>
+                            {t('orgSettings.gradeLevels.salaryRangeLabel')} <span className="text-muted-foreground font-normal text-xs">{t('orgSettings.gradeLevels.salaryRangeHint')}</span>
                         </label>
                         <div className="grid grid-cols-2 gap-3">
                             <NumericInput
@@ -258,9 +256,9 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Description</label>
+                        <label className="text-sm font-medium">{t('orgSettings.gradeLevels.descriptionLabel')}</label>
                         <Textarea
-                            placeholder="Brief description of this grade level…"
+                            placeholder={t('orgSettings.gradeLevels.descriptionPlaceholder')}
                             value={form.description}
                             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                             maxLength={500}
@@ -270,9 +268,13 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                     </div>
                 </DialogBody>
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
                     <Button onClick={handleSubmit} disabled={!form.name.trim() || isPending}>
-                        {isPending ? 'Saving…' : editing ? 'Save Changes' : 'Add Grade Level'}
+                        {isPending
+                            ? t('orgSettings.gradeLevels.saving')
+                            : editing
+                                ? t('orgSettings.gradeLevels.saveChanges')
+                                : t('orgSettings.gradeLevels.addGradeLevel')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -293,6 +295,7 @@ function formatSalary(min: number | null, max: number | null): string {
 }
 
 function GradeLevelsSection() {
+    const { t } = useTranslation()
     const { data: items = [], isLoading } = useAllGradeLevels()
     const levels = sortByLevel(Array.isArray(items) ? items as GradeLevel[] : [])
     const create = useCreateGradeLevel()
@@ -310,15 +313,15 @@ function GradeLevelsSection() {
 
     function handleCreate(data: GradeLevelInput) {
         create.mutate(data, {
-            onSuccess: () => { setModalOpen(false); toast.success('Grade level added') },
-            onError: (err: Error) => toast.error(err.message.includes('unique') ? 'Code or name already exists' : 'Failed to add'),
+            onSuccess: () => { setModalOpen(false); toast.success(t('orgSettings.gradeLevels.added')) },
+            onError: (err: Error) => toast.error(err.message.includes('unique') ? t('orgSettings.gradeLevels.codeOrNameExists') : t('orgSettings.gradeLevels.failedToAdd')),
         })
     }
 
     function handleUpdate(id: string, data: Partial<GradeLevelInput>) {
         update.mutate({ id, data }, {
-            onSuccess: () => { setModalOpen(false); toast.success('Grade level updated') },
-            onError: (err: Error) => toast.error(err.message.includes('unique') ? 'Code or name already exists' : 'Failed to update'),
+            onSuccess: () => { setModalOpen(false); toast.success(t('orgSettings.gradeLevels.updated')) },
+            onError: (err: Error) => toast.error(err.message.includes('unique') ? t('orgSettings.gradeLevels.codeOrNameExists') : t('orgSettings.gradeLevels.failedToUpdate')),
         })
     }
 
@@ -326,37 +329,46 @@ function GradeLevelsSection() {
         if (!toggleTarget) return
         update.mutate({ id: toggleTarget.id, data: { isActive: !toggleTarget.isActive } }, {
             onSuccess: () => {
-                toast.success(toggleTarget.isActive ? `"${toggleTarget.name}" deactivated` : `"${toggleTarget.name}" activated`)
+                toast.success(
+                    toggleTarget.isActive
+                        ? t('orgSettings.gradeLevels.deactivated', { name: toggleTarget.name })
+                        : t('orgSettings.gradeLevels.activated', { name: toggleTarget.name }),
+                )
                 setToggleTarget(null)
             },
-            onError: () => { toast.error('Failed to update'); setToggleTarget(null) },
+            onError: () => { toast.error(t('orgSettings.gradeLevels.failedToToggle')); setToggleTarget(null) },
         })
     }
 
     function handleDelete() {
         if (!deleteTarget) return
         remove.mutate(deleteTarget.id, {
-            onSuccess: () => { toast.success(`"${deleteTarget.name}" deleted`); setDeleteTarget(null) },
-            onError: () => { toast.error('Failed to delete'); setDeleteTarget(null) },
+            onSuccess: () => { toast.success(t('orgSettings.gradeLevels.deleted', { name: deleteTarget.name })); setDeleteTarget(null) },
+            onError: () => { toast.error(t('orgSettings.gradeLevels.failedToDelete')); setDeleteTarget(null) },
         })
     }
 
     function handleSeedDefaults() {
         seed.mutate(undefined, {
-            onSuccess: () => toast.success('G1–G15 defaults loaded'),
-            onError: (err: Error) => toast.error(err.message.includes('409') || err.message.includes('already exist') ? 'Grade levels already exist' : 'Failed to load defaults'),
+            onSuccess: () => toast.success(t('orgSettings.gradeLevels.defaultsLoaded')),
+            onError: (err: Error) => toast.error(err.message.includes('409') || err.message.includes('already exist') ? t('orgSettings.gradeLevels.alreadyExist') : t('orgSettings.gradeLevels.failedToLoadDefaults')),
         })
+    }
+
+    const getRoleCategoryLabel = (value: string) => {
+        const opt = ROLE_CATEGORY_OPTIONS.find(o => o.value === value)
+        return opt ? t(opt.labelKey) : value
     }
 
     return (
         <>
             <Section
                 icon={GraduationCap}
-                title="Grade Levels"
-                description="Define grades or bands that can be assigned to employees (e.g. G1, G6, Senior Level 2)."
+                title={t('orgSettings.gradeLevels.sectionTitle')}
+                description={t('orgSettings.gradeLevels.sectionDescription')}
                 action={
                     <Button size="sm" className="gap-1.5" onClick={openAdd} disabled={isLoading}>
-                        <Plus className="h-3.5 w-3.5" /> Add Grade Level
+                        <Plus className="h-3.5 w-3.5" /> {t('orgSettings.gradeLevels.addGradeLevel')}
                     </Button>
                 }
             >
@@ -367,16 +379,16 @@ function GradeLevelsSection() {
                 ) : levels.length === 0 ? (
                     <div className="rounded-xl border border-dashed bg-muted/30 flex flex-col items-center justify-center py-12 text-center gap-4">
                         <div className="space-y-1">
-                            <p className="text-sm font-medium">No grade levels yet</p>
-                            <p className="text-xs text-muted-foreground">Load the G1–G15 defaults or add your own.</p>
+                            <p className="text-sm font-medium">{t('orgSettings.gradeLevels.noGradeLevels')}</p>
+                            <p className="text-xs text-muted-foreground">{t('orgSettings.gradeLevels.noGradeLevelsHint')}</p>
                         </div>
                         <div className="flex gap-2">
                             <Button variant="outline" size="sm" className="gap-1.5" onClick={handleSeedDefaults} disabled={seed.isPending}>
                                 <Sparkles className="h-3.5 w-3.5" />
-                                {seed.isPending ? 'Loading…' : 'Load G1–G15 Defaults'}
+                                {seed.isPending ? t('orgSettings.gradeLevels.loading') : t('orgSettings.gradeLevels.loadDefaults')}
                             </Button>
                             <Button size="sm" className="gap-1.5" onClick={openAdd}>
-                                <Plus className="h-3.5 w-3.5" /> Add Grade Level
+                                <Plus className="h-3.5 w-3.5" /> {t('orgSettings.gradeLevels.addGradeLevel')}
                             </Button>
                         </div>
                     </div>
@@ -385,12 +397,12 @@ function GradeLevelsSection() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b bg-muted/40">
-                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-16">Code</th>
-                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8">Lvl</th>
-                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
-                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Grade Category</th>
-                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-44">Salary Range</th>
-                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">Status</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-16">{t('orgSettings.gradeLevels.codeCol')}</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-8">{t('orgSettings.gradeLevels.levelCol')}</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">{t('orgSettings.gradeLevels.nameCol')}</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">{t('orgSettings.gradeLevels.gradeCategoryCol')}</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-44">{t('orgSettings.gradeLevels.salaryRangeCol')}</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-20">{t('orgSettings.gradeLevels.statusCol')}</th>
                                     <th className="w-28 px-4 py-2.5" />
                                 </tr>
                             </thead>
@@ -419,7 +431,7 @@ function GradeLevelsSection() {
                                                 <div className="flex flex-wrap gap-1">
                                                     {g.roles.map(r => (
                                                         <span key={r} className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium', roleCategoryColor(r))}>
-                                                            {roleCategoryLabel(r)}
+                                                            {getRoleCategoryLabel(r)}
                                                         </span>
                                                     ))}
                                                 </div>
@@ -432,7 +444,7 @@ function GradeLevelsSection() {
                                         </td>
                                         <td className="px-4 py-2.5">
                                             <Badge variant={g.isActive ? 'success' : 'secondary'} className="text-[11px]">
-                                                {g.isActive ? 'Active' : 'Inactive'}
+                                                {g.isActive ? t('common.active') : t('common.inactive')}
                                             </Badge>
                                         </td>
                                         <td className="px-4 py-2.5">
@@ -440,7 +452,7 @@ function GradeLevelsSection() {
                                                 <Button
                                                     size="sm" variant="ghost"
                                                     className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                                                    title="Edit"
+                                                    title={t('common.edit')}
                                                     onClick={() => openEdit(g)}
                                                 >
                                                     <Pencil className="h-3.5 w-3.5" />
@@ -454,12 +466,12 @@ function GradeLevelsSection() {
                                                     )}
                                                     onClick={() => setToggleTarget(g)}
                                                 >
-                                                    {g.isActive ? 'Deactivate' : 'Activate'}
+                                                    {g.isActive ? t('orgSettings.gradeLevels.deactivate') : t('orgSettings.gradeLevels.activate')}
                                                 </Button>
                                                 <Button
                                                     size="sm" variant="ghost"
                                                     className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                                    title="Delete"
+                                                    title={t('common.delete')}
                                                     onClick={() => setDeleteTarget(g)}
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
@@ -487,11 +499,13 @@ function GradeLevelsSection() {
             <ConfirmDialog
                 open={!!toggleTarget}
                 onOpenChange={o => !o && setToggleTarget(null)}
-                title={toggleTarget?.isActive ? `Deactivate "${toggleTarget?.name}"?` : `Activate "${toggleTarget?.name}"?`}
+                title={toggleTarget?.isActive
+                    ? t('orgSettings.gradeLevels.deactivateTitle', { name: toggleTarget?.name })
+                    : t('orgSettings.gradeLevels.activateTitle', { name: toggleTarget?.name })}
                 description={toggleTarget?.isActive
-                    ? 'This grade level will be hidden from employee forms. Employees currently assigned this level are not affected.'
-                    : 'This grade level will become available again in employee forms.'}
-                confirmLabel={toggleTarget?.isActive ? 'Deactivate' : 'Activate'}
+                    ? t('orgSettings.gradeLevels.deactivateDesc')
+                    : t('orgSettings.gradeLevels.activateDesc')}
+                confirmLabel={toggleTarget?.isActive ? t('orgSettings.gradeLevels.deactivate') : t('orgSettings.gradeLevels.activate')}
                 variant={toggleTarget?.isActive ? 'destructive' : 'success'}
                 onConfirm={handleToggle}
             />
@@ -499,9 +513,9 @@ function GradeLevelsSection() {
             <ConfirmDialog
                 open={!!deleteTarget}
                 onOpenChange={o => !o && setDeleteTarget(null)}
-                title={`Delete "${deleteTarget?.name}"?`}
-                description="This action cannot be undone. Employees currently assigned this grade level will retain their assignment but the level will no longer be selectable."
-                confirmLabel="Delete"
+                title={t('orgSettings.gradeLevels.deleteTitle', { name: deleteTarget?.name })}
+                description={t('orgSettings.gradeLevels.deleteDesc')}
+                confirmLabel={t('common.delete')}
                 variant="destructive"
                 onConfirm={handleDelete}
             />
@@ -540,6 +554,7 @@ function MasterList({
     onStartEdit, onEditNameChange, onCancelEdit, onSaveEdit,
     onToggle, addLabel, emptyMessage,
 }: MasterListProps) {
+    const { t } = useTranslation()
     return (
         <div className="space-y-3">
             {isLoading ? (
@@ -556,8 +571,8 @@ function MasterList({
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b bg-muted/40">
-                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
-                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-24">Status</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">{t('orgSettings.gradeLevels.masterList.nameCol')}</th>
+                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-24">{t('orgSettings.gradeLevels.masterList.statusCol')}</th>
                                     <th className="w-24 px-4 py-2.5" />
                                 </tr>
                             </thead>
@@ -584,7 +599,7 @@ function MasterList({
                                         <td className="px-4 py-2.5">
                                             {editingId !== item.id && (
                                                 <Badge variant={item.isActive ? 'success' : 'secondary'} className="text-[11px]">
-                                                    {item.isActive ? 'Active' : 'Inactive'}
+                                                    {item.isActive ? t('orgSettings.gradeLevels.masterList.activeStatus') : t('orgSettings.gradeLevels.masterList.inactiveStatus')}
                                                 </Badge>
                                             )}
                                         </td>
@@ -604,7 +619,7 @@ function MasterList({
                                                         <Button
                                                             size="sm" variant="ghost"
                                                             className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                                                            title="Rename"
+                                                            title={t('orgSettings.gradeLevels.rename')}
                                                             onClick={() => onStartEdit(item)}
                                                         >
                                                             <Pencil className="h-3.5 w-3.5" />
@@ -618,7 +633,7 @@ function MasterList({
                                                             )}
                                                             onClick={() => onToggle(item)}
                                                         >
-                                                            {item.isActive ? 'Deactivate' : 'Activate'}
+                                                            {item.isActive ? t('orgSettings.gradeLevels.deactivate') : t('orgSettings.gradeLevels.activate')}
                                                         </Button>
                                                     </>
                                                 )}
@@ -632,7 +647,7 @@ function MasterList({
                                             <div className="flex items-center gap-2">
                                                 <Input
                                                     className="h-8 max-w-xs"
-                                                    placeholder="Enter name…"
+                                                    placeholder={t('orgSettings.gradeLevels.masterList.enterName')}
                                                     value={newName}
                                                     onChange={e => onNewNameChange(e.target.value)}
                                                     onKeyDown={e => {
@@ -641,7 +656,7 @@ function MasterList({
                                                     }}
                                                 />
                                                 <Button size="sm" onClick={onAdd} disabled={!newName.trim() || addPending}>
-                                                    {addPending ? '…' : 'Add'}
+                                                    {addPending ? '…' : t('common.add')}
                                                 </Button>
                                                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground" onClick={onCancelAdd}>
                                                     <XCircle className="h-4 w-4" />
@@ -666,6 +681,7 @@ function MasterList({
 }
 
 function SponsoringEntitiesSection() {
+    const { t } = useTranslation()
     const { data: items = [], isLoading } = useSponsoringEntities()
     const entities = Array.isArray(items) ? items as SponsoringEntity[] : []
     const create = useCreateSponsoringEntity()
@@ -681,8 +697,8 @@ function SponsoringEntitiesSection() {
         const name = newName.trim()
         if (!name) return
         create.mutate({ name }, {
-            onSuccess: () => { setNewName(''); setAddingNew(false); toast.success('Sponsoring entity added') },
-            onError: (err: Error) => toast.error(err.message.includes('unique') ? 'Entity already exists' : 'Failed to add'),
+            onSuccess: () => { setNewName(''); setAddingNew(false); toast.success(t('orgSettings.gradeLevels.sponsoring.added')) },
+            onError: (err: Error) => toast.error(err.message.includes('unique') ? t('orgSettings.gradeLevels.sponsoring.entityExists') : t('orgSettings.gradeLevels.sponsoring.failedToAdd')),
         })
     }
 
@@ -690,8 +706,8 @@ function SponsoringEntitiesSection() {
         const name = editName.trim()
         if (!name) return
         update.mutate({ id, data: { name } }, {
-            onSuccess: () => { setEditingId(null); toast.success('Updated') },
-            onError: (err: Error) => toast.error(err.message.includes('unique') ? 'Name already exists' : 'Failed to update'),
+            onSuccess: () => { setEditingId(null); toast.success(t('orgSettings.gradeLevels.sponsoring.updated')) },
+            onError: (err: Error) => toast.error(err.message.includes('unique') ? t('orgSettings.gradeLevels.sponsoring.nameExists') : t('orgSettings.gradeLevels.sponsoring.failedToUpdate')),
         })
     }
 
@@ -699,10 +715,14 @@ function SponsoringEntitiesSection() {
         if (!toggleTarget) return
         update.mutate({ id: toggleTarget.id, data: { isActive: !toggleTarget.isActive } }, {
             onSuccess: () => {
-                toast.success(toggleTarget.isActive ? `"${toggleTarget.name}" deactivated` : `"${toggleTarget.name}" activated`)
+                toast.success(
+                    toggleTarget.isActive
+                        ? t('orgSettings.gradeLevels.sponsoring.deactivated', { name: toggleTarget.name })
+                        : t('orgSettings.gradeLevels.sponsoring.activated', { name: toggleTarget.name }),
+                )
                 setToggleTarget(null)
             },
-            onError: () => { toast.error('Failed to update'); setToggleTarget(null) },
+            onError: () => { toast.error(t('orgSettings.gradeLevels.sponsoring.failedToToggle')); setToggleTarget(null) },
         })
     }
 
@@ -710,8 +730,8 @@ function SponsoringEntitiesSection() {
         <>
             <Section
                 icon={Building2}
-                title="Sponsoring Entities"
-                description="Companies or entities that sponsor employee visas. Used in the Visa & ID section of employee profiles."
+                title={t('orgSettings.gradeLevels.sponsoring.sectionTitle')}
+                description={t('orgSettings.gradeLevels.sponsoring.sectionDescription')}
             >
                 <MasterList
                     items={entities}
@@ -730,18 +750,20 @@ function SponsoringEntitiesSection() {
                     onCancelEdit={() => setEditingId(null)}
                     onSaveEdit={handleUpdate}
                     onToggle={(item) => setToggleTarget(item as SponsoringEntity)}
-                    addLabel="Add sponsoring entity"
-                    emptyMessage="No sponsoring entities yet. Add one to get started."
+                    addLabel={t('orgSettings.gradeLevels.sponsoring.addLabel')}
+                    emptyMessage={t('orgSettings.gradeLevels.sponsoring.emptyMessage')}
                 />
             </Section>
             <ConfirmDialog
                 open={!!toggleTarget}
                 onOpenChange={o => !o && setToggleTarget(null)}
-                title={toggleTarget?.isActive ? `Deactivate "${toggleTarget?.name}"?` : `Activate "${toggleTarget?.name}"?`}
+                title={toggleTarget?.isActive
+                    ? t('orgSettings.gradeLevels.sponsoring.deactivateTitle', { name: toggleTarget?.name })
+                    : t('orgSettings.gradeLevels.sponsoring.activateTitle', { name: toggleTarget?.name })}
                 description={toggleTarget?.isActive
-                    ? 'This sponsoring entity will be hidden from employee visa forms. Existing assignments are not affected.'
-                    : 'This sponsoring entity will become available again in employee visa forms.'}
-                confirmLabel={toggleTarget?.isActive ? 'Deactivate' : 'Activate'}
+                    ? t('orgSettings.gradeLevels.sponsoring.deactivateDesc')
+                    : t('orgSettings.gradeLevels.sponsoring.activateDesc')}
+                confirmLabel={toggleTarget?.isActive ? t('orgSettings.gradeLevels.deactivate') : t('orgSettings.gradeLevels.activate')}
                 variant={toggleTarget?.isActive ? 'destructive' : 'success'}
                 onConfirm={handleToggle}
             />
@@ -752,12 +774,13 @@ function SponsoringEntitiesSection() {
 // ─── Tab ──────────────────────────────────────────────────────────────────────
 
 export function GradeLevelsTab() {
+    const { t } = useTranslation()
     return (
         <div className="space-y-8">
             <div>
-                <h3 className="text-base font-semibold">Grade Levels & Sponsoring Entities</h3>
+                <h3 className="text-base font-semibold">{t('orgSettings.gradeLevels.title')}</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                    Manage the master lists used across employee records. Changes apply to all employees going forward.
+                    {t('orgSettings.gradeLevels.description')}
                 </p>
             </div>
 

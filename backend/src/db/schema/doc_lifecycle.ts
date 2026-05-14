@@ -1,7 +1,7 @@
 import { pgTable, uuid, text, boolean, integer, timestamp, jsonb, index, unique } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { tenants } from './tenants.js'
-import { onboardingSteps, onboardingChecklists } from './onboarding.js'
+import { onboardingSteps, onboardingChecklists, onboardingTemplateSteps } from './onboarding.js'
 import { employees } from './employees.js'
 import { users } from './users.js'
 import { documents } from './documents.js'
@@ -23,6 +23,29 @@ export const onboardingStepRequiredDocs = pgTable('onboarding_step_required_docs
     stepIdx: index('idx_required_docs_step').on(t.stepId),
     tenantIdx: index('idx_required_docs_tenant').on(t.tenantId),
     uniq: unique('onboarding_required_docs_unique').on(t.stepId, t.category, t.docType),
+}))
+
+// ─── Template-level required documents (copied into each new checklist) ─────
+// Per-tenant template; rows reference onboarding_template_steps so admins can
+// curate the default required-docs once in Organization Settings → Onboarding
+// Steps. When a new employee's checklist is created from the template, these
+// rows are copied verbatim into onboarding_step_required_docs (instance-level).
+export const onboardingTemplateStepRequiredDocs = pgTable('onboarding_template_step_required_docs', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    templateStepId: uuid('template_step_id').notNull().references(() => onboardingTemplateSteps.id, { onDelete: 'cascade' }),
+    category: text('category').notNull()
+        .$type<'identity' | 'visa' | 'company' | 'employment' | 'insurance' | 'qualification' | 'financial' | 'compliance'>(),
+    docType: text('doc_type').notNull(),
+    expiryRequired: boolean('expiry_required').notNull().default(false),
+    isMandatory: boolean('is_mandatory').notNull().default(true),
+    hint: text('hint'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    stepIdx: index('idx_template_required_docs_step').on(t.templateStepId),
+    tenantIdx: index('idx_template_required_docs_tenant').on(t.tenantId),
+    uniq: unique('onboarding_template_required_docs_unique').on(t.templateStepId, t.category, t.docType),
 }))
 
 // ─── Revocable upload tokens ─────────────────────────────────────────────────
@@ -69,6 +92,11 @@ export const documentAuditLog = pgTable('document_audit_log', {
 export const onboardingStepRequiredDocsRelations = relations(onboardingStepRequiredDocs, ({ one }) => ({
     tenant: one(tenants, { fields: [onboardingStepRequiredDocs.tenantId], references: [tenants.id] }),
     step: one(onboardingSteps, { fields: [onboardingStepRequiredDocs.stepId], references: [onboardingSteps.id] }),
+}))
+
+export const onboardingTemplateStepRequiredDocsRelations = relations(onboardingTemplateStepRequiredDocs, ({ one }) => ({
+    tenant: one(tenants, { fields: [onboardingTemplateStepRequiredDocs.tenantId], references: [tenants.id] }),
+    templateStep: one(onboardingTemplateSteps, { fields: [onboardingTemplateStepRequiredDocs.templateStepId], references: [onboardingTemplateSteps.id] }),
 }))
 
 export const onboardingUploadTokensRelations = relations(onboardingUploadTokens, ({ one }) => ({

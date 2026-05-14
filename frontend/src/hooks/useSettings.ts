@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 export interface CompanySettings {
     id: string
@@ -117,10 +118,11 @@ export function useInviteUserBulk() {
     })
 }
 
-export function useResendInvite() {
+export function useResendUserInvite() {
     return useMutation({
         mutationFn: (employeeId: string) =>
             api.post(`/settings/users/${employeeId}/resend-invite`, {}).then(() => undefined),
+        onError: (err: Error) => toast.error('Failed to resend invite', err.message),
     })
 }
 

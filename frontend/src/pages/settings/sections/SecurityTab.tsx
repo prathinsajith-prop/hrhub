@@ -13,9 +13,11 @@ import { labelFor } from '@/lib/enums'
 import { useSecuritySettings, useUpdateSecuritySettings, useIpAllowlist, useUpdateIpAllowlist, useTwoFaStatus, useTwoFaSetup, useTwoFaVerify, useTwoFaDisable, useTwoFaRegenerateBackupCodes } from '@/hooks/useSettings'
 import { useInfiniteLoginHistory, type LoginHistoryRecord } from '@/hooks/useAudit'
 import { Section } from './_shared'
+import { useTranslation } from 'react-i18next'
 
 // ─── Security Policies Card ────────────────────────────────────────────────────
 function SecurityPoliciesCard() {
+    const { t } = useTranslation()
     const { data: security, isLoading } = useSecuritySettings()
     const updateSecurity = useUpdateSecuritySettings()
 
@@ -24,20 +26,20 @@ function SecurityPoliciesCard() {
         try {
             await updateSecurity.mutateAsync({ [key]: !security[key] })
         } catch {
-            toast.error('Save failed', 'Could not update security settings.')
+            toast.error(t('common.error'), t('settingsDetail.security.saveFailedDesc'))
         }
     }
 
     return (
-        <Section icon={Shield} title="Security Policies" description="Workspace-wide protection rules">
+        <Section icon={Shield} title={t('settingsDetail.security.policiesTitle')} description={t('settingsDetail.security.policiesDesc')}>
             <div className="divide-y border rounded-lg overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3.5">
                     <div>
-                        <p className="text-sm font-medium">Auto Session Timeout</p>
+                        <p className="text-sm font-medium">{t('settingsDetail.security.sessionTimeoutTitle')}</p>
                         <p className="text-xs text-muted-foreground">
                             {(security?.sessionTimeoutMinutes ?? 0) > 0
-                                ? `Log out after ${security?.sessionTimeoutMinutes ?? 480} minutes of inactivity`
-                                : 'Sessions never time out automatically'}
+                                ? t('settingsDetail.security.sessionTimeoutActive', { minutes: security?.sessionTimeoutMinutes ?? 480 })
+                                : t('settingsDetail.security.sessionTimeoutOff')}
                         </p>
                     </div>
                     <Switch
@@ -46,23 +48,23 @@ function SecurityPoliciesCard() {
                             try {
                                 await updateSecurity.mutateAsync({ sessionTimeoutMinutes: checked ? 480 : 0 })
                             } catch {
-                                toast.error('Save failed', 'Could not update session timeout.')
+                                toast.error(t('common.error'), t('settingsDetail.security.sessionTimeoutFailed'))
                             }
                         }}
                         disabled={isLoading || updateSecurity.isPending}
-                        aria-label="Auto Session Timeout"
+                        aria-label={t('settingsDetail.security.sessionTimeoutTitle')}
                     />
                 </div>
                 <div className="flex items-center justify-between px-4 py-3.5">
                     <div>
-                        <p className="text-sm font-medium">Audit Logging</p>
-                        <p className="text-xs text-muted-foreground">Track all admin actions and changes</p>
+                        <p className="text-sm font-medium">{t('settingsDetail.security.auditLoggingTitle')}</p>
+                        <p className="text-xs text-muted-foreground">{t('settingsDetail.security.auditLoggingDesc')}</p>
                     </div>
                     <Switch
                         checked={security?.auditLoggingEnabled ?? true}
                         onCheckedChange={() => handleToggle('auditLoggingEnabled')}
                         disabled={isLoading || updateSecurity.isPending}
-                        aria-label="Audit Logging"
+                        aria-label={t('settingsDetail.security.auditLoggingTitle')}
                     />
                 </div>
             </div>
@@ -72,6 +74,7 @@ function SecurityPoliciesCard() {
 
 // ─── Two-Factor Authentication Card ──────────────────────────────────────────
 function TwoFactorCard() {
+    const { t } = useTranslation()
     const { data: status, isLoading } = useTwoFaStatus()
     const setup = useTwoFaSetup()
     const verify = useTwoFaVerify()
@@ -95,59 +98,59 @@ function TwoFactorCard() {
             setSecret(result.secret)
             setStep('setup')
         } catch {
-            toast.error('Setup failed', 'Could not generate 2FA setup.')
+            toast.error(t('settingsDetail.security.mfaSetupFailed'), t('settingsDetail.security.mfaSetupFailedDesc'))
         }
     }
 
     const handleVerify = async () => {
-        if (token.length !== 6) { toast.warning('Invalid code', 'Enter the 6-digit code from your authenticator app.'); return }
+        if (token.length !== 6) { toast.warning(t('settingsDetail.security.invalidCode'), t('settingsDetail.security.invalidCodeDesc')); return }
         try {
             const result = await verify.mutateAsync(token)
-            toast.success('2FA enabled', 'Two-factor authentication is now active.')
+            toast.success(t('settingsDetail.security.mfaEnabled'), t('settingsDetail.security.mfaEnabledDesc'))
             setStep('idle'); setToken(''); setQrDataUrl(null); setSecret(null)
             // Show backup codes — user must save them now
             if (result.backupCodes?.length) setBackupCodes(result.backupCodes)
         } catch {
-            toast.error('Verification failed', 'The code was incorrect. Please try again.')
+            toast.error(t('settingsDetail.security.verificationFailed'), t('settingsDetail.security.verificationFailedDesc'))
         }
     }
 
     const handleDisable = async () => {
-        if (token.length !== 6) { toast.warning('Invalid code', 'Enter the 6-digit code from your authenticator app.'); return }
+        if (token.length !== 6) { toast.warning(t('settingsDetail.security.invalidCode'), t('settingsDetail.security.invalidCodeDesc')); return }
         try {
             await disable.mutateAsync(token)
-            toast.success('2FA disabled', 'Two-factor authentication has been turned off.')
+            toast.success(t('settingsDetail.security.mfaDisabled'), t('settingsDetail.security.mfaDisabledDesc'))
             setStep('idle'); setToken('')
         } catch {
-            toast.error('Verification failed', 'The code was incorrect. Please try again.')
+            toast.error(t('settingsDetail.security.verificationFailed'), t('settingsDetail.security.verificationFailedDesc'))
         }
     }
 
     const handleRegenerate = async () => {
-        if (token.length !== 6) { toast.warning('Invalid code', 'Enter the 6-digit code from your authenticator app.'); return }
+        if (token.length !== 6) { toast.warning(t('settingsDetail.security.invalidCode'), t('settingsDetail.security.invalidCodeDesc')); return }
         try {
             const result = await regenerate.mutateAsync(token)
-            toast.success('Backup codes regenerated', 'Old codes are now invalid. Save the new ones.')
+            toast.success(t('settingsDetail.security.backupCodesRegenerated'), t('settingsDetail.security.backupCodesRegeneratedDesc'))
             setStep('idle'); setToken('')
             setBackupCodes(result.backupCodes)
         } catch {
-            toast.error('Regeneration failed', 'The code was incorrect. Please try again.')
+            toast.error(t('settingsDetail.security.regenerationFailed'), t('settingsDetail.security.verificationFailedDesc'))
         }
     }
 
     const copySecret = () => {
         if (!secret) return
         navigator.clipboard.writeText(secret).then(
-            () => toast.success('Copied', 'Secret key copied to clipboard.'),
-            () => toast.error('Copy failed', 'Could not copy secret key.'),
+            () => toast.success(t('settingsDetail.security.copied'), t('settingsDetail.security.secretCopied')),
+            () => toast.error(t('settingsDetail.security.copyFailed'), t('settingsDetail.security.copyFailedDesc')),
         )
     }
 
     const copyBackupCodes = () => {
         if (!backupCodes) return
         navigator.clipboard.writeText(backupCodes.join('\n')).then(
-            () => toast.success('Copied', 'All backup codes copied to clipboard.'),
-            () => toast.error('Copy failed', 'Could not copy codes.'),
+            () => toast.success(t('settingsDetail.security.copied'), t('settingsDetail.security.allCodesCopied')),
+            () => toast.error(t('settingsDetail.security.copyFailed'), t('settingsDetail.security.copyCodesFailed')),
         )
     }
 
@@ -175,12 +178,12 @@ function TwoFactorCard() {
     return (
         <Section
             icon={Shield}
-            title="Two-Factor Authentication"
-            description="Add an extra security layer with a 6-digit code from your authenticator app."
+            title={t('settingsDetail.security.mfaTitle')}
+            description={t('settingsDetail.security.mfaDesc')}
             action={!isLoading && (
                 <Badge variant={enabled ? 'success' : 'secondary'} className="gap-1">
                     {enabled && <CheckCircle2 className="h-3 w-3" />}
-                    {enabled ? 'Active' : 'Off'}
+                    {enabled ? t('common.active') : t('settingsDetail.security.mfaOff')}
                 </Badge>
             )}
         >
@@ -193,19 +196,19 @@ function TwoFactorCard() {
                             <div className="flex items-center gap-3 min-w-0">
                                 <Smartphone className="h-4 w-4 text-muted-foreground shrink-0" />
                                 <div className="min-w-0">
-                                    <p className="text-sm font-medium leading-tight">Authenticator App</p>
+                                    <p className="text-sm font-medium leading-tight">{t('settingsDetail.security.authenticatorApp')}</p>
                                     <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                                        Google Authenticator · Authy · 1Password · any TOTP app
+                                        {t('settingsDetail.security.authenticatorAppDesc')}
                                     </p>
                                 </div>
                             </div>
                             {enabled ? (
                                 <Button variant="outline" size="sm" onClick={() => setStep('disable')} className="shrink-0">
-                                    Turn Off
+                                    {t('settingsDetail.security.turnOff')}
                                 </Button>
                             ) : (
                                 <Button size="sm" onClick={handleSetup} loading={setup.isPending} className="shrink-0">
-                                    Set Up
+                                    {t('settingsDetail.security.setUp')}
                                 </Button>
                             )}
                         </div>
@@ -217,16 +220,16 @@ function TwoFactorCard() {
                             <div className="flex items-center gap-3 min-w-0">
                                 <Key className="h-4 w-4 text-muted-foreground shrink-0" />
                                 <div className="min-w-0">
-                                    <p className="text-sm font-medium leading-tight">Recovery Backup Codes</p>
+                                    <p className="text-sm font-medium leading-tight">{t('settingsDetail.security.recoveryBackupCodes')}</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                         {backupRemaining > 0
-                                            ? `${backupRemaining} unused code${backupRemaining === 1 ? '' : 's'} remaining`
-                                            : 'No active codes — generate new ones to protect against device loss.'}
+                                            ? t('settingsDetail.security.backupCodesRemaining', { count: backupRemaining })
+                                            : t('settingsDetail.security.noActiveCodes')}
                                     </p>
                                 </div>
                             </div>
                             <Button variant="outline" size="sm" onClick={() => setStep('regenerate')} className="shrink-0">
-                                {backupRemaining > 0 ? 'Regenerate' : 'Generate'}
+                                {backupRemaining > 0 ? t('settingsDetail.security.regenerate') : t('settingsDetail.security.generate')}
                             </Button>
                         </div>
                     )}
@@ -237,9 +240,9 @@ function TwoFactorCard() {
                             <div className="flex items-start gap-2">
                                 <Key className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-semibold text-foreground">Save these codes now</p>
+                                    <p className="text-sm font-semibold text-foreground">{t('settingsDetail.security.saveCodesNow')}</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                        Each code can be used <span className="font-medium text-foreground">once</span> to sign in if you lose access to your authenticator. They will not be shown again.
+                                        {t('settingsDetail.security.saveCodesDesc')}
                                     </p>
                                 </div>
                             </div>
@@ -251,9 +254,9 @@ function TwoFactorCard() {
                                 ))}
                             </div>
                             <div className="flex gap-2 justify-end pt-1">
-                                <Button size="sm" variant="outline" onClick={copyBackupCodes}>Copy all</Button>
-                                <Button size="sm" variant="outline" onClick={downloadBackupCodes}>Download .txt</Button>
-                                <Button size="sm" onClick={() => setBackupCodes(null)}>I've saved them</Button>
+                                <Button size="sm" variant="outline" onClick={copyBackupCodes}>{t('settingsDetail.security.copyAll')}</Button>
+                                <Button size="sm" variant="outline" onClick={downloadBackupCodes}>{t('settingsDetail.security.downloadTxt')}</Button>
+                                <Button size="sm" onClick={() => setBackupCodes(null)}>{t('settingsDetail.security.iSavedThem')}</Button>
                             </div>
                         </div>
                     )}
@@ -261,10 +264,10 @@ function TwoFactorCard() {
                     {step === 'regenerate' && (
                         <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
                             <p className="text-sm text-foreground">
-                                Enter your current 6-digit code to generate a fresh set of backup codes. <span className="font-medium">All previous codes will stop working.</span>
+                                {t('settingsDetail.security.regenPrompt')}
                             </p>
                             <div className="space-y-2">
-                                <Label htmlFor="regen_token" className="text-xs">Verification Code</Label>
+                                <Label htmlFor="regen_token" className="text-xs">{t('settingsDetail.security.verificationCode')}</Label>
                                 <Input
                                     id="regen_token"
                                     inputMode="numeric"
@@ -277,9 +280,9 @@ function TwoFactorCard() {
                                 />
                             </div>
                             <div className="flex gap-2 justify-end pt-1">
-                                <Button size="sm" variant="ghost" onClick={() => { setStep('idle'); setToken('') }}>Cancel</Button>
+                                <Button size="sm" variant="ghost" onClick={() => { setStep('idle'); setToken('') }}>{t('common.cancel')}</Button>
                                 <Button size="sm" onClick={handleRegenerate} loading={regenerate.isPending} disabled={token.length !== 6}>
-                                    Generate New Codes
+                                    {t('settingsDetail.security.generateNewCodes')}
                                 </Button>
                             </div>
                         </div>
@@ -288,23 +291,23 @@ function TwoFactorCard() {
                     {step === 'setup' && qrDataUrl && (
                         <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
                             <ol className="space-y-1 text-xs text-muted-foreground list-decimal list-inside">
-                                <li>Scan the QR with your authenticator app</li>
-                                <li>Enter the 6-digit code below to confirm</li>
+                                <li>{t('settingsDetail.security.setupStep1')}</li>
+                                <li>{t('settingsDetail.security.setupStep2')}</li>
                             </ol>
 
                             <div className="grid sm:grid-cols-[auto_1fr] gap-4 items-start">
                                 <div className="rounded-lg bg-background border border-border p-2 mx-auto sm:mx-0">
-                                    <img src={qrDataUrl} alt="2FA QR Code" className="rounded w-40 h-40 block" />
+                                    <img src={qrDataUrl} alt={t('settingsDetail.security.qrAlt')} className="rounded w-40 h-40 block" />
                                 </div>
                                 {secret && (
                                     <div className="space-y-2">
-                                        <Label className="text-xs text-muted-foreground">Or enter this key manually</Label>
+                                        <Label className="text-xs text-muted-foreground">{t('settingsDetail.security.orEnterManually')}</Label>
                                         <div className="flex items-center gap-2">
                                             <code className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-xs font-mono break-all leading-relaxed">
                                                 {secret}
                                             </code>
                                             <Button type="button" variant="outline" size="sm" onClick={copySecret} className="shrink-0">
-                                                Copy
+                                                {t('settingsDetail.security.copy')}
                                             </Button>
                                         </div>
                                     </div>
@@ -312,7 +315,7 @@ function TwoFactorCard() {
                             </div>
 
                             <div className="space-y-2 pt-2 border-t border-border">
-                                <Label htmlFor="totp_token" className="text-xs">Verification Code</Label>
+                                <Label htmlFor="totp_token" className="text-xs">{t('settingsDetail.security.verificationCode')}</Label>
                                 <Input
                                     id="totp_token"
                                     inputMode="numeric"
@@ -326,9 +329,9 @@ function TwoFactorCard() {
                             </div>
 
                             <div className="flex gap-2 justify-end pt-1">
-                                <Button size="sm" variant="ghost" onClick={cancel}>Cancel</Button>
+                                <Button size="sm" variant="ghost" onClick={cancel}>{t('common.cancel')}</Button>
                                 <Button size="sm" onClick={handleVerify} loading={verify.isPending} disabled={token.length !== 6}>
-                                    Confirm &amp; Enable
+                                    {t('settingsDetail.security.confirmEnable')}
                                 </Button>
                             </div>
                         </div>
@@ -337,10 +340,10 @@ function TwoFactorCard() {
                     {step === 'disable' && (
                         <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
                             <p className="text-sm text-foreground">
-                                Enter your current 6-digit code to turn off two-factor authentication.
+                                {t('settingsDetail.security.disablePrompt')}
                             </p>
                             <div className="space-y-2">
-                                <Label htmlFor="disable_token" className="text-xs">Verification Code</Label>
+                                <Label htmlFor="disable_token" className="text-xs">{t('settingsDetail.security.verificationCode')}</Label>
                                 <Input
                                     id="disable_token"
                                     inputMode="numeric"
@@ -353,9 +356,9 @@ function TwoFactorCard() {
                                 />
                             </div>
                             <div className="flex gap-2 justify-end pt-1">
-                                <Button size="sm" variant="ghost" onClick={() => { setStep('idle'); setToken('') }}>Cancel</Button>
+                                <Button size="sm" variant="ghost" onClick={() => { setStep('idle'); setToken('') }}>{t('common.cancel')}</Button>
                                 <Button size="sm" variant="destructive" onClick={handleDisable} loading={disable.isPending} disabled={token.length !== 6}>
-                                    Turn Off 2FA
+                                    {t('settingsDetail.security.turnOff2fa')}
                                 </Button>
                             </div>
                         </div>
@@ -368,6 +371,7 @@ function TwoFactorCard() {
 
 // ─── IP Allowlist Card ────────────────────────────────────────────────────────
 function IpAllowlistCard() {
+    const { t } = useTranslation()
     const { data, isLoading } = useIpAllowlist()
     const updateList = useUpdateIpAllowlist()
     const [newEntry, setNewEntry] = useState('')
@@ -378,38 +382,38 @@ function IpAllowlistCard() {
 
     const handleAdd = async () => {
         const trimmed = newEntry.trim()
-        if (!isValidCidr(trimmed)) { toast.warning('Invalid entry', 'Enter a valid IP address or CIDR range (e.g. 192.168.1.0/24).'); return }
-        if (list.includes(trimmed)) { toast.warning('Duplicate', 'This IP/range is already in the allowlist.'); return }
+        if (!isValidCidr(trimmed)) { toast.warning(t('settingsDetail.security.invalidEntry'), t('settingsDetail.security.invalidEntryDesc')); return }
+        if (list.includes(trimmed)) { toast.warning(t('settingsDetail.security.duplicate'), t('settingsDetail.security.duplicateDesc')); return }
         try {
             await updateList.mutateAsync([...list, trimmed])
             setNewEntry('')
-            toast.success('IP added', `${trimmed} added to allowlist.`)
+            toast.success(t('settingsDetail.security.ipAdded'), t('settingsDetail.security.ipAddedDesc', { ip: trimmed }))
         } catch {
-            toast.error('Update failed', 'Could not update IP allowlist.')
+            toast.error(t('settingsDetail.security.updateFailed'), t('settingsDetail.security.ipUpdateFailedDesc'))
         }
     }
 
     const handleRemove = async (ip: string) => {
         try {
             await updateList.mutateAsync(list.filter((x) => x !== ip))
-            toast.success('IP removed', `${ip} removed from allowlist.`)
+            toast.success(t('settingsDetail.security.ipRemoved'), t('settingsDetail.security.ipRemovedDesc', { ip }))
         } catch {
-            toast.error('Update failed', 'Could not update IP allowlist.')
+            toast.error(t('settingsDetail.security.updateFailed'), t('settingsDetail.security.ipUpdateFailedDesc'))
         }
     }
 
     return (
         <Section
             icon={Globe}
-            title="IP Allowlist"
-            description="Restrict access to specific IP addresses or CIDR ranges. Leave empty to allow all IPs."
+            title={t('settingsDetail.security.ipAllowlistTitle')}
+            description={t('settingsDetail.security.ipAllowlistDesc')}
         >
             {isLoading ? (
                 <Skeleton className="h-20 w-full" />
             ) : (
                 <div className="space-y-4">
                     {list.length === 0 ? (
-                        <p className="text-sm text-muted-foreground italic">No restrictions — all IPs are allowed.</p>
+                        <p className="text-sm text-muted-foreground italic">{t('settingsDetail.security.noIpRestrictions')}</p>
                     ) : (
                         <div className="divide-y border rounded-lg overflow-hidden">
                             {list.map((ip) => (
@@ -421,7 +425,7 @@ function IpAllowlistCard() {
                                         className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                         onClick={() => handleRemove(ip)}
                                         disabled={updateList.isPending}
-                                        aria-label={`Remove ${ip}`}
+                                        aria-label={t('settingsDetail.security.removeIp', { ip })}
                                     >
                                         <Trash2 className="h-3.5 w-3.5" />
                                     </Button>
@@ -438,7 +442,7 @@ function IpAllowlistCard() {
                             className="font-mono"
                         />
                         <Button size="sm" onClick={handleAdd} loading={updateList.isPending} leftIcon={<Plus className="h-3.5 w-3.5" />}>
-                            Add
+                            {t('common.add')}
                         </Button>
                     </div>
                 </div>
@@ -449,6 +453,7 @@ function IpAllowlistCard() {
 
 // ─── Login History Card ───────────────────────────────────────────────────────
 function LoginHistoryCard() {
+    const { t } = useTranslation()
     const {
         data,
         isLoading,
@@ -487,13 +492,13 @@ function LoginHistoryCard() {
     return (
         <Section
             icon={Clock}
-            title="Login History"
-            description="Recent sign-in activity for your account"
+            title={t('settingsDetail.security.loginHistoryTitle')}
+            description={t('settingsDetail.security.loginHistoryDesc')}
         >
             {isLoading ? (
                 <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-12 rounded bg-muted animate-pulse" />)}</div>
             ) : history.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-10 border rounded-lg">No login history found.</p>
+                <p className="text-xs text-muted-foreground text-center py-10 border rounded-lg">{t('settingsDetail.security.noLoginHistory')}</p>
             ) : (
                 <div className="border rounded-lg overflow-hidden">
                     <div className="max-h-[480px] overflow-y-auto divide-y text-sm">
@@ -505,7 +510,7 @@ function LoginHistoryCard() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-medium capitalize">{labelFor(h.eventType)}</p>
-                                    <p className="text-xs text-muted-foreground truncate">{h.browser} on {h.os} · {h.ipAddress ?? 'unknown IP'}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{h.browser} on {h.os} · {h.ipAddress ?? t('settingsDetail.security.unknownIp')}</p>
                                     {h.failureReason && <p className="text-xs text-red-500">{labelFor(h.failureReason)}</p>}
                                 </div>
                                 <div className="text-xs text-muted-foreground whitespace-nowrap">
@@ -515,10 +520,10 @@ function LoginHistoryCard() {
                         ))}
                         <div ref={sentinelRef} className="py-3 text-center text-xs text-muted-foreground">
                             {isFetchingNextPage
-                                ? 'Loading more…'
+                                ? t('settingsDetail.security.loadingMore')
                                 : hasNextPage
-                                    ? 'Scroll to load more'
-                                    : history.length > 0 ? 'You’ve reached the end' : ''}
+                                    ? t('settingsDetail.security.scrollToLoad')
+                                    : history.length > 0 ? t('settingsDetail.security.reachedEnd') : ''}
                         </div>
                     </div>
                 </div>
@@ -529,6 +534,7 @@ function LoginHistoryCard() {
 
 // ─── Security Tab ─────────────────────────────────────────────────────────────
 export function SecurityTab() {
+    const { t } = useTranslation()
     const { user } = useAuthStore()
     const [currentPw, setCurrentPw] = useState('')
     const [newPw, setNewPw] = useState('')
@@ -536,17 +542,17 @@ export function SecurityTab() {
     const [saving, setSaving] = useState(false)
 
     const handleUpdatePassword = async () => {
-        if (!currentPw || !newPw || !confirmPw) { toast.warning('Missing fields', 'Please fill in all password fields.'); return }
-        if (newPw !== confirmPw) { toast.warning('Passwords do not match', 'New password and confirmation must match.'); return }
-        if (newPw.length < 8) { toast.warning('Password too short', 'New password must be at least 8 characters.'); return }
+        if (!currentPw || !newPw || !confirmPw) { toast.warning(t('settingsDetail.security.missingFields'), t('settingsDetail.security.missingFieldsDesc')); return }
+        if (newPw !== confirmPw) { toast.warning(t('settingsDetail.security.passwordMismatch'), t('settingsDetail.security.passwordMismatchDesc')); return }
+        if (newPw.length < 8) { toast.warning(t('settingsDetail.security.passwordTooShort'), t('settingsDetail.security.passwordTooShortDesc')); return }
         setSaving(true)
         try {
             await api.post('/auth/change-password', { currentPassword: currentPw, newPassword: newPw })
-            toast.success('Password updated', 'Your password has been changed successfully.')
+            toast.success(t('settingsDetail.security.passwordUpdated'), t('settingsDetail.security.passwordUpdatedDesc'))
             setCurrentPw(''); setNewPw(''); setConfirmPw('')
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Current password may be incorrect.'
-            toast.error('Update failed', msg)
+            const msg = err instanceof Error ? err.message : t('settingsDetail.security.passwordUpdateDefaultError')
+            toast.error(t('settingsDetail.security.updateFailed'), msg)
         } finally { setSaving(false) }
     }
 
@@ -554,8 +560,8 @@ export function SecurityTab() {
         <div className="space-y-5">
             <Section
                 icon={Key}
-                title="Password"
-                description="Change your account password. Use at least 8 characters."
+                title={t('settings.updatePassword')}
+                description={t('settingsDetail.security.passwordDesc')}
             >
                 <form
                     className="space-y-4"
@@ -576,21 +582,21 @@ export function SecurityTab() {
                         tabIndex={-1}
                     />
                     <div className="space-y-1.5">
-                        <Label htmlFor="current_password">Current Password</Label>
+                        <Label htmlFor="current_password">{t('auth.currentPassword')}</Label>
                         <Input id="current_password" name="current_password" type="password" autoComplete="current-password" placeholder="••••••••" value={currentPw} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentPw(e.target.value)} />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <Label htmlFor="new_password">New Password</Label>
-                            <Input id="new_password" name="new_password" type="password" autoComplete="new-password" placeholder="Min. 8 characters" value={newPw} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPw(e.target.value)} />
+                            <Label htmlFor="new_password">{t('auth.newPassword')}</Label>
+                            <Input id="new_password" name="new_password" type="password" autoComplete="new-password" placeholder={t('settingsDetail.security.minCharsPlaceholder')} value={newPw} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPw(e.target.value)} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="confirm_password">Confirm New Password</Label>
-                            <Input id="confirm_password" name="confirm_password" type="password" autoComplete="new-password" placeholder="Repeat new password" value={confirmPw} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPw(e.target.value)} />
+                            <Label htmlFor="confirm_password">{t('settingsDetail.security.confirmNewPassword')}</Label>
+                            <Input id="confirm_password" name="confirm_password" type="password" autoComplete="new-password" placeholder={t('settingsDetail.security.repeatNewPassword')} value={confirmPw} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPw(e.target.value)} />
                         </div>
                     </div>
                     <div className="flex justify-end">
-                        <Button type="submit" size="sm" loading={saving}>Update Password</Button>
+                        <Button type="submit" size="sm" loading={saving}>{t('auth.updatePassword')}</Button>
                     </div>
                 </form>
             </Section>
@@ -601,24 +607,24 @@ export function SecurityTab() {
 
             <Section
                 icon={AlertCircle}
-                title="Danger Zone"
-                description="Irreversible workspace actions"
+                title={t('settingsDetail.security.dangerZoneTitle')}
+                description={t('settingsDetail.security.dangerZoneDesc')}
                 className="border-destructive/30"
             >
                 <div className="space-y-3">
                     <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20 bg-destructive/5">
                         <div className="min-w-0">
-                            <p className="text-sm font-medium">Export All Data</p>
-                            <p className="text-xs text-muted-foreground">Download a complete export of your company data</p>
+                            <p className="text-sm font-medium">{t('settingsDetail.security.exportAllData')}</p>
+                            <p className="text-xs text-muted-foreground">{t('settingsDetail.security.exportAllDataDesc')}</p>
                         </div>
-                        <Button variant="outline" size="sm" leftIcon={<FileText className="h-3.5 w-3.5" />} className="shrink-0">Export</Button>
+                        <Button variant="outline" size="sm" leftIcon={<FileText className="h-3.5 w-3.5" />} className="shrink-0">{t('common.export')}</Button>
                     </div>
                     <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20 bg-destructive/5">
                         <div className="min-w-0">
-                            <p className="text-sm font-medium text-destructive">Delete Account</p>
-                            <p className="text-xs text-muted-foreground">Permanently delete this workspace and all data</p>
+                            <p className="text-sm font-medium text-destructive">{t('settings.deleteAccount')}</p>
+                            <p className="text-xs text-muted-foreground">{t('settingsDetail.security.deleteAccountDesc')}</p>
                         </div>
-                        <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />} className="shrink-0">Delete</Button>
+                        <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />} className="shrink-0">{t('common.delete')}</Button>
                     </div>
                 </div>
             </Section>

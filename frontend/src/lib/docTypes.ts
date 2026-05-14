@@ -147,3 +147,54 @@ export function getStepDocSuggestions(stepTitle: string): DocTypeDefinition[] {
     }
     return []
 }
+
+// ── Document-number metadata ────────────────────────────────────────────────
+//
+// Shared by the three document upload UIs (AddDocumentDialog, the onboarding
+// magic-link upload, and the HR per-step upload in OnboardingDetailPage) so a
+// renamed doc type stays in sync across them.
+
+const DOC_NUMBER_LABELS: Record<string, string> = {
+    'Passport':                'Passport No.',
+    'Emirates ID':             'Emirates ID No.',
+    'National ID':             'National ID No.',
+    'Driving License':         'Driving License No.',
+    'Visa':                    'Visa No.',
+    'Residence Visa':          'Residence Visa No.',
+    'Entry Permit':            'Entry Permit No.',
+    'Work Permit':             'Work Permit No.',
+    'Visit Visa':              'Visit Visa No.',
+    'Labour Card':             'Labour Card No.',
+    'Trade License':           'License No.',
+    'Establishment Card':      'Establishment Card No.',
+    'Health Insurance Card':   'Policy No.',
+    'Medical Insurance Card':  'Policy No.',
+}
+
+// Doc types whose `docNumber` propagates onto the employee record on approval
+// (passport_no, emirates_id_no, etc.). Surfaced as a hint in the verbose
+// document dialog.
+const EMPLOYEE_LINKED_DOC_TYPES = new Set([
+    'Passport',
+    'Emirates ID',
+    'Visa',
+    'Residence Visa',
+    'Entry Permit',
+    'Work Permit',
+    'Visit Visa',
+    'Labour Card',
+])
+
+export interface DocNumberMeta {
+    label: string
+    placeholder: string
+    linksToEmployee: boolean
+}
+
+export function docNumberMeta(docType: string): DocNumberMeta {
+    const label = DOC_NUMBER_LABELS[docType] ?? 'Document Number'
+    const placeholder = docType === 'Emirates ID'
+        ? '784-XXXX-XXXXXXX-X'
+        : `Enter ${label.toLowerCase()}`
+    return { label, placeholder, linksToEmployee: EMPLOYEE_LINKED_DOC_TYPES.has(docType) }
+}

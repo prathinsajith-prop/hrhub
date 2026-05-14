@@ -87,7 +87,7 @@ export interface EmiratisationStatus {
     progress: number
 }
 
-export function useEmiratisation() {
+export function useDashboardEmiratisation() {
     return useQuery({
         queryKey: ['dashboard', 'emiratisation'],
         queryFn: () => api.get<{ data: EmiratisationStatus }>('/dashboard/emiratisation').then(r => r.data),

@@ -79,7 +79,7 @@ async function request<T>(
 
     // Identify the browser tab so the server can echo it back in WS broadcasts.
     // The receiving tab skips its own events (optimistic update already applied).
-    headers['X-Socket-Id'] = socket.socketId
+    if (socket.socketId) headers['X-Socket-Id'] = socket.socketId
 
     // Triple-belt cache bypass:
     //   1. fetch cache: 'no-store' — browser HTTP cache is skipped entirely
