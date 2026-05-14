@@ -3,6 +3,7 @@ import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
+import { validate, createEmployeeSchema } from '../../lib/validation.js'
 import { createChecklist } from '../onboarding/onboarding.service.js'
 import { db } from '../../db/index.js'
 import { entities, tenants, orgUnits } from '../../db/schema/index.js'
@@ -530,7 +531,7 @@ export default async function (fastify: any): Promise<void> {
             // used as fallbacks when the body omits them.
             body: {
                 type: 'object',
-                additionalProperties: true,
+                additionalProperties: false,
                 properties: {
                     // Personal info
                     firstName: { type: 'string' },
@@ -591,29 +592,41 @@ export default async function (fastify: any): Promise<void> {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Only pre-boarding candidates can be converted to employees' })
         }
 
-        // Enforce subscription quota before creating the employee record
-        await enforceEmployeeQuota(tenantId)
-
         const body = (request.body as Record<string, unknown>) ?? {}
 
-        // Pick the supplied entity (must belong to tenant) or the tenant's first active entity.
-        let entityId = body.entityId as string | undefined
-        if (entityId) {
-            const [ent] = await db.select().from(entities)
-                .where(and(eq(entities.id, entityId), eq(entities.tenantId, tenantId))).limit(1)
-            if (!ent) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Entity not found for this tenant' })
-        } else {
-            const [ent] = await db.select().from(entities)
-                .where(and(eq(entities.tenantId, tenantId), eq(entities.isActive, true))).limit(1)
-            if (!ent) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'No active entity configured for this tenant' })
-            entityId = ent.id
-        }
-
-        // Validate supplied org unit IDs belong to this tenant.
+        // Independent pre-flight checks run in parallel — quota, entity resolution,
+        // and org-unit validation all hit different tables and have no ordering
+        // dependency.
+        const suppliedEntityId = body.entityId as string | undefined
         const orgUnitIds = [body.departmentId, body.branchId, body.divisionId].filter(Boolean) as string[]
+
+        const [, entityRow, validUnits] = await Promise.all([
+            enforceEmployeeQuota(tenantId),
+            suppliedEntityId
+                ? db.select().from(entities)
+                    .where(and(eq(entities.id, suppliedEntityId), eq(entities.tenantId, tenantId))).limit(1)
+                    .then(rows => rows[0])
+                : db.select().from(entities)
+                    .where(and(eq(entities.tenantId, tenantId), eq(entities.isActive, true))).limit(1)
+                    .then(rows => rows[0]),
+            orgUnitIds.length > 0
+                ? db.select({ id: orgUnits.id }).from(orgUnits)
+                    .where(and(inArray(orgUnits.id, orgUnitIds), eq(orgUnits.tenantId, tenantId)))
+                : Promise.resolve([] as Array<{ id: string }>),
+        ])
+
+        if (!entityRow) {
+            return reply.code(400).send({
+                statusCode: 400,
+                error: 'Bad Request',
+                message: suppliedEntityId
+                    ? 'Entity not found for this tenant'
+                    : 'No active entity configured for this tenant',
+            })
+        }
+        const entityId = entityRow.id
+
         if (orgUnitIds.length > 0) {
-            const validUnits = await db.select({ id: orgUnits.id }).from(orgUnits)
-                .where(and(inArray(orgUnits.id, orgUnitIds), eq(orgUnits.tenantId, tenantId)))
             const validIds = new Set(validUnits.map(u => u.id))
             const invalid = orgUnitIds.find(id => !validIds.has(id))
             if (invalid) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Org unit not found for this tenant' })
@@ -626,9 +639,13 @@ export default async function (fastify: any): Promise<void> {
         const lastName = (body.lastName as string | undefined) || candidateLast
         const employeeNo = (body.employeeNo as string) || await generateNextEmployeeNo(tenantId)
         const joinDate = (body.joinDate as string) || new Date().toISOString().slice(0, 10)
-        const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? v.toString() : undefined
+        const expectedSalaryNum = app.expectedSalary != null ? parseFloat(app.expectedSalary as unknown as string) : undefined
+        const expectedSalary = expectedSalaryNum != null && Number.isFinite(expectedSalaryNum) ? expectedSalaryNum : undefined
 
-        const employee = await createEmployee(tenantId, {
+        // Run the merged payload through the same Zod schema as POST /employees
+        // so the convert path enjoys identical refinements (salary ordering,
+        // age check, contract/probation date ordering, enum validation).
+        const employeePayload = validate(createEmployeeSchema, {
             entityId,
             employeeNo,
             firstName,
@@ -637,53 +654,54 @@ export default async function (fastify: any): Promise<void> {
             email: (body.workEmail as string | undefined) || app.email,
             phone: (body.mobileNo as string | undefined) || app.phone || undefined,
             nationality: (body.nationality as string | undefined) || app.nationality || undefined,
-            dateOfBirth: (body.dateOfBirth as string | undefined) || undefined,
-            gender: (body.gender as never) || undefined,
-            maritalStatus: (body.maritalStatus as never) || undefined,
-            passportNo: (body.passportNo as string | undefined) || undefined,
-            personalEmail: (body.personalEmail as string | undefined) || undefined,
-            workEmail: (body.workEmail as string | undefined) || undefined,
+            dateOfBirth: body.dateOfBirth,
+            gender: body.gender,
+            maritalStatus: body.maritalStatus,
+            passportNo: body.passportNo,
+            personalEmail: body.personalEmail,
+            workEmail: body.workEmail,
             mobileNo: (body.mobileNo as string | undefined) || app.phone || undefined,
-            emergencyContact: (body.emergencyContact as string | undefined) || undefined,
-            emergencyContactName: (body.emergencyContactName as string | undefined) || undefined,
-            emergencyContactPhone: (body.emergencyContactPhone as string | undefined) || undefined,
-            homeCountryAddress: (body.homeCountryAddress as string | undefined) || undefined,
+            emergencyContact: body.emergencyContact,
+            emergencyContactName: body.emergencyContactName,
+            emergencyContactPhone: body.emergencyContactPhone,
+            homeCountryAddress: body.homeCountryAddress,
             // Employment
-            department: (body.department as string) ?? undefined,
-            departmentId: (body.departmentId as string) ?? undefined,
-            branchId: (body.branchId as string) ?? undefined,
-            divisionId: (body.divisionId as string) ?? undefined,
-            designation: (body.designation as string) ?? undefined,
-            contractType: (body.contractType as never) || undefined,
-            workLocation: (body.workLocation as string | undefined) || undefined,
-            managerName: (body.managerName as string | undefined) || undefined,
+            department: body.department,
+            departmentId: body.departmentId,
+            branchId: body.branchId,
+            divisionId: body.divisionId,
+            designation: body.designation,
+            contractType: body.contractType,
+            workLocation: body.workLocation,
+            managerName: body.managerName,
             reportingTo: (body.reportingTo as string | null | undefined) ?? null,
-            gradeLevelId: (body.gradeLevelId as string | undefined) || undefined,
-            probationEndDate: (body.probationEndDate as string | undefined) || undefined,
-            contractEndDate: (body.contractEndDate as string | undefined) || undefined,
+            gradeLevelId: body.gradeLevelId,
+            probationEndDate: body.probationEndDate,
+            contractEndDate: body.contractEndDate,
             joinDate,
-            status: ((body.status as never) || 'onboarding'),
+            status: body.status ?? 'onboarding',
             // Salary
-            basicSalary: num(body.basicSalary) ?? (app.expectedSalary ?? undefined),
-            housingAllowance: num(body.housingAllowance),
-            transportAllowance: num(body.transportAllowance),
-            otherAllowances: num(body.otherAllowances),
-            totalSalary: num(body.totalSalary),
-            paymentMethod: (body.paymentMethod as never) || undefined,
-            bankName: (body.bankName as string | undefined) || undefined,
-            accountName: (body.accountName as string | undefined) || undefined,
-            accountNumber: (body.accountNumber as string | undefined) || undefined,
-            swiftCode: (body.swiftCode as string | undefined) || undefined,
-            bankBranch: (body.bankBranch as string | undefined) || undefined,
-            iban: (body.iban as string | undefined) || undefined,
-            emiratisationCategory: ((body.emiratisationCategory as never) || 'expat'),
-        } as never)
+            basicSalary: typeof body.basicSalary === 'number' ? body.basicSalary : expectedSalary,
+            housingAllowance: body.housingAllowance,
+            transportAllowance: body.transportAllowance,
+            otherAllowances: body.otherAllowances,
+            totalSalary: body.totalSalary,
+            paymentMethod: body.paymentMethod,
+            bankName: body.bankName,
+            accountName: body.accountName,
+            accountNumber: body.accountNumber,
+            swiftCode: body.swiftCode,
+            bankBranch: body.bankBranch,
+            iban: body.iban,
+            emiratisationCategory: body.emiratisationCategory ?? 'expat',
+        })
+        const employee = await createEmployee(tenantId, employeePayload as never)
 
         // Auto-create onboarding checklist with 9 template steps — fire-and-forget
         createChecklist(tenantId, { employeeId: employee.id, startDate: joinDate, useTemplate: true }).catch(() => { })
 
         // Mark the application completed (no more pipeline stage).
-        await updateApplication(tenantId, id, { stage: 'hired', notes: `${app.notes ?? ''}\n[Converted to employee ${employeeNo} on ${new Date().toISOString().slice(0, 10)}]`.trim() } as never)
+        const updatedApplication = await updateApplication(tenantId, id, { stage: 'hired', notes: `${app.notes ?? ''}\n[Converted to employee ${employeeNo} on ${new Date().toISOString().slice(0, 10)}]`.trim() } as never)
 
         recordActivity({
             tenantId,
@@ -708,7 +726,7 @@ export default async function (fastify: any): Promise<void> {
             type: 'recruitment:job-changed',
             payload: { jobId: app.jobId, action: 'update', actorId: request.user.id, actorSocketId },
         })
-        return reply.code(201).send({ data: { employee, application: await getApplication(tenantId, id) } })
+        return reply.code(201).send({ data: { employee, application: updatedApplication } })
     })
 
     // GET /api/v1/applications/export?format=csv|pdf&stage=...

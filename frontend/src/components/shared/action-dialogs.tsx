@@ -582,18 +582,31 @@ export function AddEmployeeDialog({
     const [errors, setErrors] = useState<Record<string, string>>({})
     const createEmployee = useCreateEmployee()
 
-    useEffect(() => {
+    // State-during-render sync: re-seed the form when either `open` toggles or
+    // `initialValues` changes content. JSON.stringify gives a stable fingerprint
+    // so parents that build the seed inline each render don't cause thrash —
+    // we only re-apply when the actual values differ.
+    const seedKey = open ? JSON.stringify(initialValues ?? null) : null
+    const [lastSeedKey, setLastSeedKey] = useState<string | null>(null)
+    if (seedKey !== lastSeedKey) {
+        setLastSeedKey(seedKey)
         if (open) {
-            // Apply (or re-apply) initialValues each time the dialog opens so
-            // re-opening with a different candidate seeds fresh data.
             setForm({ ...EMPTY_FORM, ...initialValues })
             setStep(1)
             setErrors({})
-            return
         }
-        const id = setTimeout(() => { setStep(1); setForm({ ...EMPTY_FORM, ...initialValues }); setErrors({}) }, 300)
+    }
+
+    useEffect(() => {
+        if (open) return
+        // Delayed reset on close so the closing animation doesn't see the form
+        // flicker back to empty before unmount.
+        const id = setTimeout(() => {
+            setStep(1)
+            setForm({ ...EMPTY_FORM })
+            setErrors({})
+        }, 300)
         return () => clearTimeout(id)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open])
     const navigate = useNavigate()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
