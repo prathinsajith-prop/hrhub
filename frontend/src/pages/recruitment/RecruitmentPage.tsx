@@ -24,7 +24,7 @@ import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
+import { formatCurrency, formatDate, getInitials, splitFullName, cn } from '@/lib/utils'
 import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useConvertCandidateToEmployee, useUploadResume, useRecruitmentStages } from '@/hooks/useRecruitment'
 import { DEFAULT_STAGES, kanbanStages as filterKanbanStages, resolveStageColor, stageByKey, type RecruitmentStage } from '@/lib/recruitmentStages'
 import { StageBadge } from '@/components/shared/StageBadge'
@@ -555,10 +555,9 @@ function ConvertCandidateDialog({
 
   if (!candidate) return null
 
-  const [firstName, ...rest] = (candidate.name ?? '').trim().split(/\s+/)
-  const lastName = rest.join(' ') || firstName || ''
+  const { firstName, lastName } = splitFullName(candidate.name)
   const initialValues: Partial<EmpForm> = {
-    firstName: firstName || '',
+    firstName,
     lastName,
     nationality: candidate.nationality ?? '',
     personalEmail: candidate.email,

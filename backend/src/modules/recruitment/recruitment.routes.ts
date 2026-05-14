@@ -6,7 +6,7 @@ import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 import { validate, createEmployeeSchema } from '../../lib/validation.js'
 import { createChecklist } from '../onboarding/onboarding.service.js'
 import { db } from '../../db/index.js'
-import { entities, tenants, orgUnits } from '../../db/schema/index.js'
+import { entities, tenants, orgUnits, employees } from '../../db/schema/index.js'
 import { and, eq, inArray } from 'drizzle-orm'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { fileTypeFromBuffer } from 'file-type'
@@ -564,7 +564,6 @@ export default async function (fastify: any): Promise<void> {
                     probationEndDate: { type: 'string' },
                     contractEndDate: { type: 'string' },
                     status: { type: 'string' },
-                    teamId: { type: 'string' },
                     entityId: { type: 'string', format: 'uuid' },
                     // Salary & payroll
                     basicSalary: { type: 'number' },
@@ -630,6 +629,16 @@ export default async function (fastify: any): Promise<void> {
             const validIds = new Set(validUnits.map(u => u.id))
             const invalid = orgUnitIds.find(id => !validIds.has(id))
             if (invalid) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Org unit not found for this tenant' })
+        }
+
+        // The `reportingTo` FK on employees doesn't carry a tenant constraint
+        // (cross-tenant FKs aren't enforced at the DB layer here), so verify
+        // that the manager belongs to the same tenant before accepting it.
+        const reportingToId = (body.reportingTo as string | null | undefined) ?? null
+        if (reportingToId) {
+            const [mgr] = await db.select({ id: employees.id }).from(employees)
+                .where(and(eq(employees.id, reportingToId), eq(employees.tenantId, tenantId))).limit(1)
+            if (!mgr) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Reporting manager not found for this tenant' })
         }
 
         // Derive name from the candidate when the body doesn't override.

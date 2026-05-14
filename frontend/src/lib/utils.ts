@@ -69,6 +69,19 @@ export function getInitials(name: string): string {
     .toUpperCase()
 }
 
+/**
+ * Split a free-form full name into `{ firstName, lastName }`. The first token
+ * is the first name; everything after is collapsed into the last name. Falls
+ * back to using the first token for last name if only one is present.
+ */
+export function splitFullName(full: string | null | undefined): { firstName: string; lastName: string } {
+  const trimmed = (full ?? '').trim()
+  if (!trimmed) return { firstName: '', lastName: '' }
+  const [firstName, ...rest] = trimmed.split(/\s+/)
+  const lastName = rest.join(' ') || firstName
+  return { firstName, lastName }
+}
+
 export function generateId(): string {
   return Math.random().toString(36).substr(2, 9).toUpperCase()
 }
