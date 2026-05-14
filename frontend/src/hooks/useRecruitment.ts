@@ -245,7 +245,7 @@ export function useCreateRecruitmentStage() {
 export function useUpdateRecruitmentStage() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: ({ stageId, ...data }: { stageId: string; label?: string; colorKey?: string }) =>
+        mutationFn: ({ stageId, ...data }: { stageId: string; label?: string; colorKey?: string; isFirst?: boolean; isFinal?: boolean; showInKanban?: boolean }) =>
             api.patch<{ data: RecruitmentStage }>(`/stages/${stageId}`, data).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: STAGES_KEY }),
         onError: (err: Error) => toast.error('Failed to update stage', err.message),

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
 
@@ -26,10 +27,10 @@ export function useDesignations() {
  */
 export function useDesignationOptions() {
     const { data = [] } = useDesignations()
-    const list = Array.isArray(data) ? data : []
-    return list
-        .filter((d) => d.isActive)
-        .map((d) => ({ value: d.name, label: d.name }))
+    return useMemo(() => {
+        const list = Array.isArray(data) ? data : []
+        return list.filter((d) => d.isActive).map((d) => ({ value: d.name, label: d.name }))
+    }, [data])
 }
 
 export function useCreateDesignation() {

@@ -7,24 +7,48 @@ import { DEFAULT_ONBOARDING_TEMPLATE, buildDefaultOnboardingTemplateRows } from 
 
 /* ─── Template steps (per-tenant) ─────────────────────────────────────────── */
 
+/**
+ * List template steps, each annotated with `requiredDocsCount` so the
+ * Onboarding Steps settings tab can render the badge without an extra round
+ * trip per row. The count is the number of `onboarding_template_step_required_docs`
+ * rows pointing at the step.
+ */
 export async function listTemplateSteps(tenantId: string) {
-    const existing = await db.select().from(onboardingTemplateSteps)
+    const rows = await db
+        .select({
+            id: onboardingTemplateSteps.id,
+            tenantId: onboardingTemplateSteps.tenantId,
+            stepOrder: onboardingTemplateSteps.stepOrder,
+            title: onboardingTemplateSteps.title,
+            owner: onboardingTemplateSteps.owner,
+            slaDays: onboardingTemplateSteps.slaDays,
+            createdAt: onboardingTemplateSteps.createdAt,
+            updatedAt: onboardingTemplateSteps.updatedAt,
+            requiredDocsCount: sql<number>`COALESCE(COUNT(${onboardingTemplateStepRequiredDocs.id}), 0)::int`,
+        })
+        .from(onboardingTemplateSteps)
+        .leftJoin(
+            onboardingTemplateStepRequiredDocs,
+            eq(onboardingTemplateStepRequiredDocs.templateStepId, onboardingTemplateSteps.id),
+        )
         .where(eq(onboardingTemplateSteps.tenantId, tenantId))
+        .groupBy(onboardingTemplateSteps.id)
         .orderBy(onboardingTemplateSteps.stepOrder)
-    if (existing.length > 0) return existing
+    if (rows.length > 0) return rows
 
-    // First read for a tenant whose template wasn't seeded at signup (legacy tenants,
-    // or tenants created before the template table existed). Re-check inside a
-    // transaction so concurrent first-reads can't duplicate the seed.
+    // Legacy tenant with no template rows — seed inside a transaction with a
+    // recheck so concurrent first-reads can't duplicate. Newly-seeded rows
+    // have no required docs, so requiredDocsCount is 0 for all.
     return db.transaction(async (tx) => {
         const rechecked = await tx.select().from(onboardingTemplateSteps)
             .where(eq(onboardingTemplateSteps.tenantId, tenantId))
             .orderBy(onboardingTemplateSteps.stepOrder)
-        if (rechecked.length > 0) return rechecked
+        if (rechecked.length > 0) return rechecked.map(r => ({ ...r, requiredDocsCount: 0 }))
         await tx.insert(onboardingTemplateSteps).values(buildDefaultOnboardingTemplateRows(tenantId))
-        return tx.select().from(onboardingTemplateSteps)
+        const seeded = await tx.select().from(onboardingTemplateSteps)
             .where(eq(onboardingTemplateSteps.tenantId, tenantId))
             .orderBy(onboardingTemplateSteps.stepOrder)
+        return seeded.map(r => ({ ...r, requiredDocsCount: 0 }))
     })
 }
 
@@ -83,8 +107,25 @@ export async function reorderTemplateSteps(tenantId: string, orderedIds: string[
                 eq(onboardingTemplateSteps.tenantId, tenantId),
                 inArray(onboardingTemplateSteps.id, valid),
             ))
-        return tx.select().from(onboardingTemplateSteps)
+        return tx
+            .select({
+                id: onboardingTemplateSteps.id,
+                tenantId: onboardingTemplateSteps.tenantId,
+                stepOrder: onboardingTemplateSteps.stepOrder,
+                title: onboardingTemplateSteps.title,
+                owner: onboardingTemplateSteps.owner,
+                slaDays: onboardingTemplateSteps.slaDays,
+                createdAt: onboardingTemplateSteps.createdAt,
+                updatedAt: onboardingTemplateSteps.updatedAt,
+                requiredDocsCount: sql<number>`COALESCE(COUNT(${onboardingTemplateStepRequiredDocs.id}), 0)::int`,
+            })
+            .from(onboardingTemplateSteps)
+            .leftJoin(
+                onboardingTemplateStepRequiredDocs,
+                eq(onboardingTemplateStepRequiredDocs.templateStepId, onboardingTemplateSteps.id),
+            )
             .where(eq(onboardingTemplateSteps.tenantId, tenantId))
+            .groupBy(onboardingTemplateSteps.id)
             .orderBy(onboardingTemplateSteps.stepOrder)
     })
 }
@@ -98,9 +139,11 @@ export async function resetTemplateSteps(tenantId: string) {
         await tx.delete(onboardingTemplateSteps)
             .where(eq(onboardingTemplateSteps.tenantId, tenantId))
         await tx.insert(onboardingTemplateSteps).values(buildDefaultOnboardingTemplateRows(tenantId))
-        return tx.select().from(onboardingTemplateSteps)
+        const seeded = await tx.select().from(onboardingTemplateSteps)
             .where(eq(onboardingTemplateSteps.tenantId, tenantId))
             .orderBy(onboardingTemplateSteps.stepOrder)
+        // Reset wipes required docs (cascade), so all counts are 0.
+        return seeded.map(r => ({ ...r, requiredDocsCount: 0 }))
     })
 }
 

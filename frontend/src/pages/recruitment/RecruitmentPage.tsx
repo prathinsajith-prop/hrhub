@@ -24,8 +24,8 @@ import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
-import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume, useRecruitmentStages } from '@/hooks/useRecruitment'
+import { formatCurrency, formatDate, getInitials, splitFullName, cn } from '@/lib/utils'
+import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useConvertCandidateToEmployee, useUploadResume, useRecruitmentStages } from '@/hooks/useRecruitment'
 import { DEFAULT_STAGES, kanbanStages as filterKanbanStages, resolveStageColor, stageByKey, type RecruitmentStage } from '@/lib/recruitmentStages'
 import { StageBadge } from '@/components/shared/StageBadge'
 import { useRecruitmentSocket } from '@/hooks/useRecruitmentSocket'
@@ -33,14 +33,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/overlays'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
-import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/primitives'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { Textarea } from '@/components/ui/textarea'
-import { NewJobDialog, EditJobDialog, buildOrgOptions } from '@/components/shared/action-dialogs'
-import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
-import { useDesignations, useDesignationOptions, useCreateDesignation } from '@/hooks/useDesignations'
-import { Combobox } from '@/components/ui/combobox'
+import { NewJobDialog, EditJobDialog, AddEmployeeDialog, type EmpForm } from '@/components/shared/action-dialogs'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig, buildFilterQueryString } from '@/lib/filters'
@@ -540,6 +536,12 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
   )
 }
 
+/**
+ * Convert a candidate into an employee using the full AddEmployeeDialog flow
+ * (3-step wizard: Personal Info / Employment / Salary & Payroll). The dialog
+ * is pre-seeded from the candidate's known data and submits via
+ * `useConvertCandidateToEmployee` instead of the default create-employee path.
+ */
 function ConvertCandidateDialog({
   candidate,
   onOpenChange,
@@ -549,133 +551,36 @@ function ConvertCandidateDialog({
   onOpenChange: (o: boolean) => void
   onConverted: (employeeId?: string) => void
 }) {
-  const updateApplication = useUpdateApplication()
   const convertToEmployee = useConvertCandidateToEmployee()
-  const createDesignation = useCreateDesignation()
-  const [joinDate, setJoinDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [designation, setDesignation] = useState('')
-  const [department, setDepartment] = useState('')
-  const [departmentId, setDepartmentId] = useState('')
-  const [basicSalary, setBasicSalary] = useState('')
-  const [note, setNote] = useState('')
-  const { data: orgUnitsRaw = [] } = useOrgUnits()
-  const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
-  const orgOptions = buildOrgOptions(orgUnits)
-  const { data: designationList = [] } = useDesignations()
-  const designationOptions = useDesignationOptions()
 
   if (!candidate) return null
 
-  const appendNoteEntry = (existing: string | undefined, label: string, body: string): string => {
-    const stamp = new Date().toISOString().replace('T', ' ').slice(0, 16)
-    const entry = `[${stamp}] ${label}: ${body.trim()}`
-    return existing && existing.trim().length > 0 ? `${existing.trim()}\n${entry}` : entry
+  const { firstName, lastName } = splitFullName(candidate.name)
+  const initialValues: Partial<EmpForm> = {
+    firstName,
+    lastName,
+    nationality: candidate.nationality ?? '',
+    personalEmail: candidate.email,
+    mobileNo: candidate.phone ?? '',
+    basicSalary: candidate.expectedSalary != null ? String(candidate.expectedSalary) : '',
   }
-
-  const handleSubmit = async () => {
-    const trimmed = note.trim()
-    if (!trimmed) {
-      toast.error('Note required', 'Please add a conversion note before creating the employee record.')
-      return
-    }
-    // Auto-create the designation if the user typed a new one not already in the list.
-    if (designation) {
-      const exists = (Array.isArray(designationList) ? designationList : [])
-        .some((d: { name: string; isActive: boolean }) => d.isActive && d.name.toLowerCase() === designation.toLowerCase())
-      if (!exists) {
-        try { await createDesignation.mutateAsync({ name: designation }) } catch { /* toast handled by hook */ }
-      }
-    }
-    const merged = appendNoteEntry(candidate.notes, 'Converted', trimmed)
-    updateApplication.mutate(
-      { id: candidate.id, data: { notes: merged } },
-      {
-        onSuccess: () => {
-          convertToEmployee.mutate(
-            {
-              id: candidate.id,
-              data: {
-                joinDate: joinDate || undefined,
-                designation: designation || undefined,
-                department: department || undefined,
-                departmentId: departmentId || undefined,
-                basicSalary: basicSalary ? Number(basicSalary) : undefined,
-              },
-            },
-            {
-              onSuccess: (res) => {
-                const resData = (res as { data?: { employee?: { employeeNo?: string; id?: string } } })?.data?.employee
-                const empNo = resData?.employeeNo
-                const empId = resData?.id
-                toast.success('Candidate converted', empNo ? `Employee ${empNo} created.` : 'Employee created.')
-                onConverted(empId)
-              },
-              onError: (err: unknown) => toast.error('Conversion failed', (err as { message?: string })?.message ?? 'Could not create employee.'),
-            },
-          )
-        },
-        onError: () => toast.error('Failed to save conversion note'),
-      },
-    )
-  }
-
-  const pending = updateApplication.isPending || convertToEmployee.isPending || createDesignation.isPending
 
   return (
-    <Dialog open={!!candidate} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>Convert {candidate.name} to Employee</DialogTitle>
-        </DialogHeader>
-        <DialogBody className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Join Date</Label>
-              <DatePicker value={joinDate} onChange={setJoinDate} placeholder="Select join date" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Basic Salary (AED)</Label>
-              <NumericInput value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Designation</Label>
-            <Combobox
-              value={designation}
-              onValueChange={setDesignation}
-              options={designationOptions}
-              placeholder="Select or type designation…"
-              searchPlaceholder="Search or create…"
-              clearable
-              creatable
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Department</Label>
-            <Combobox
-              value={departmentId}
-              onValueChange={(id) => {
-                const opt = orgOptions.find(o => o.value === id)
-                setDepartmentId(id)
-                setDepartment(opt?.label ?? '')
-              }}
-              options={orgOptions}
-              placeholder="Select department…"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label required>Conversion Note</Label>
-            <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="Reason / context for conversion" />
-          </div>
-        </DialogBody>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button>
-          <Button onClick={handleSubmit} loading={pending} leftIcon={<UserCheck className="h-3.5 w-3.5" />}>
-            Create Employee
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <AddEmployeeDialog
+      open={!!candidate}
+      onOpenChange={(o) => { if (!o) onOpenChange(false) }}
+      title={`Convert ${candidate.name} to Employee`}
+      submitLabel="Create Employee"
+      externalPending={convertToEmployee.isPending}
+      initialValues={initialValues}
+      onSubmit={async (payload) => {
+        const res = await convertToEmployee.mutateAsync({ id: candidate.id, data: payload })
+        const data = (res as { data?: { employee?: { id?: string; employeeNo?: string } } }).data?.employee
+        toast.success('Candidate converted', data?.employeeNo ? `Employee ${data.employeeNo} created.` : 'Employee created.')
+        onConverted(data?.id)
+        return { id: data?.id }
+      }}
+    />
   )
 }
 
