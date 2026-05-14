@@ -4,7 +4,7 @@ import { db } from '../../db/index.js'
 import { recruitmentJobs, jobApplications, recruitmentStages } from '../../db/schema/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { Conditions } from '../../lib/filters.js'
-import { DEFAULT_RECRUITMENT_STAGES, buildDefaultRecruitmentStageRows } from './recruitment.defaults.js'
+import { buildDefaultRecruitmentStageRows } from './recruitment.defaults.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
 const JOB_FIELD_MAP = {

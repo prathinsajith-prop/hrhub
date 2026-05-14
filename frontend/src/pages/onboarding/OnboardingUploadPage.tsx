@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { labelFor } from '@/lib/enums'
 import { CheckCircle2, Clock, Upload, FileText, AlertCircle, ChevronDown, ChevronUp, CalendarDays, Building2, XCircle, X } from 'lucide-react'
 import { useOnboardingUploadInfo, useOnboardingPublicUpload, type UploadInfoStep } from '@/hooks/useOnboarding'
-import { DOC_TYPE_CATALOG, type DocCategory } from '@/lib/docTypes'
+import { DOC_TYPE_CATALOG, docNumberMeta, type DocCategory } from '@/lib/docTypes'
 import { DatePicker } from '@/components/ui/date-picker'
 import { cn, formatDate, formatFileSize } from '@/lib/utils'
 
@@ -327,38 +327,18 @@ function StepUploadArea({
                             </div>
                         </div>
 
-                        {/* Document number — label adapts to the selected type, mirrors AddDocumentDialog */}
                         {selectedDocType && (() => {
-                            const numberLabelMap: Record<string, string> = {
-                                'Passport':                'Passport No.',
-                                'Emirates ID':             'Emirates ID No.',
-                                'National ID':             'National ID No.',
-                                'Driving License':         'Driving License No.',
-                                'Visa':                    'Visa No.',
-                                'Residence Visa':          'Residence Visa No.',
-                                'Entry Permit':            'Entry Permit No.',
-                                'Work Permit':             'Work Permit No.',
-                                'Visit Visa':              'Visit Visa No.',
-                                'Labour Card':             'Labour Card No.',
-                                'Trade License':           'License No.',
-                                'Establishment Card':      'Establishment Card No.',
-                                'Health Insurance Card':   'Policy No.',
-                                'Medical Insurance Card':  'Policy No.',
-                            }
-                            const label = numberLabelMap[selectedDocType] ?? 'Document Number'
-                            const placeholder = selectedDocType === 'Emirates ID'
-                                ? '784-XXXX-XXXXXXX-X'
-                                : `Enter ${label.toLowerCase()}`
+                            const meta = docNumberMeta(selectedDocType)
                             return (
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-medium text-gray-500">
-                                        {label} <span className="text-[10px] font-normal text-gray-400">(optional)</span>
+                                        {meta.label} <span className="text-[10px] font-normal text-gray-400">(optional)</span>
                                     </label>
                                     <input
                                         type="text"
                                         value={docNumber}
                                         onChange={(e) => setDocNumber(e.target.value)}
-                                        placeholder={placeholder}
+                                        placeholder={meta.placeholder}
                                         className="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                     />
                                 </div>

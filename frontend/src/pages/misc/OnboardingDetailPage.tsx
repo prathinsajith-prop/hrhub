@@ -21,7 +21,7 @@ import { useDocuments, useUploadDocument } from '@/hooks/useDocuments'
 import { useQueryClient } from '@tanstack/react-query'
 import { useActivityLogs } from '@/hooks/useAudit'
 import { InitialsAvatar } from '@/components/shared/Avatar'
-import { DOC_TYPE_CATALOG, CATEGORY_LABELS, type DocCategory } from '@/lib/docTypes'
+import { DOC_TYPE_CATALOG, CATEGORY_LABELS, docNumberMeta, type DocCategory } from '@/lib/docTypes'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
     ONBOARDING_TEMPLATE_STEPS,
@@ -33,6 +33,11 @@ import {
 } from './onboarding-helpers'
 
 export function OnboardingDetailPage() {
+    // Steps tab is intentionally hidden in the UI for now — keep the
+    // RequiredDocsDialog + StepsTab implementations below intact so we can
+    // re-enable by restoring the <TabsTrigger value="steps"> + matching
+    // <TabsContent> below.
+    void StepsTab
     const { employeeId = '' } = useParams<{ employeeId: string }>()
     const navigate = useNavigate()
     const { data: raw, isLoading } = useEmployeeChecklist(employeeId)
@@ -137,13 +142,11 @@ export function OnboardingDetailPage() {
             <Tabs defaultValue="overview">
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="steps">Steps ({checklist.totalCount})</TabsTrigger>
                     <TabsTrigger value="documents">Documents</TabsTrigger>
                     <TabsTrigger value="activity">Activity</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview"><OverviewTab checklist={checklist} /></TabsContent>
-                <TabsContent value="steps"><StepsTab checklist={checklist} /></TabsContent>
                 <TabsContent value="documents"><DocumentsTab checklist={checklist} /></TabsContent>
                 <TabsContent value="activity"><ActivityTab employeeId={checklist.employeeId} /></TabsContent>
             </Tabs>
@@ -783,36 +786,17 @@ function StepDocPanel({
                             </div>
 
                             {selectedDocType && (() => {
-                                const numberLabelMap: Record<string, string> = {
-                                    'Passport':                'Passport No.',
-                                    'Emirates ID':             'Emirates ID No.',
-                                    'National ID':             'National ID No.',
-                                    'Driving License':         'Driving License No.',
-                                    'Visa':                    'Visa No.',
-                                    'Residence Visa':          'Residence Visa No.',
-                                    'Entry Permit':            'Entry Permit No.',
-                                    'Work Permit':             'Work Permit No.',
-                                    'Visit Visa':              'Visit Visa No.',
-                                    'Labour Card':             'Labour Card No.',
-                                    'Trade License':           'License No.',
-                                    'Establishment Card':      'Establishment Card No.',
-                                    'Health Insurance Card':   'Policy No.',
-                                    'Medical Insurance Card':  'Policy No.',
-                                }
-                                const label = numberLabelMap[selectedDocType] ?? 'Document Number'
-                                const placeholder = selectedDocType === 'Emirates ID'
-                                    ? '784-XXXX-XXXXXXX-X'
-                                    : `Enter ${label.toLowerCase()}`
+                                const meta = docNumberMeta(selectedDocType)
                                 return (
                                     <div className="space-y-1">
                                         <label className="text-[11px] font-medium text-muted-foreground">
-                                            {label} <span className="text-[10px] font-normal">(optional)</span>
+                                            {meta.label} <span className="text-[10px] font-normal">(optional)</span>
                                         </label>
                                         <input
                                             type="text"
                                             value={docNumber}
                                             onChange={(e) => setDocNumber(e.target.value)}
-                                            placeholder={placeholder}
+                                            placeholder={meta.placeholder}
                                             className="w-full h-8 px-2.5 text-xs rounded-md border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
                                         />
                                     </div>
