@@ -195,19 +195,41 @@ export async function listRecruitmentStages(tenantId: string) {
 }
 
 /**
- * Edit a stage's label and/or colour. Stage keys and is_terminal are system-
- * controlled and intentionally not editable.
+ * Edit a stage's user-controllable fields. Stage keys and is_terminal are
+ * system-controlled and intentionally not editable. When `isFirst` or
+ * `isFinal` flips on, the previous holder of that flag is automatically
+ * cleared so the per-tenant uniqueness invariant holds.
  */
 export async function updateRecruitmentStage(
     tenantId: string,
     stageId: string,
-    data: { label?: string; colorKey?: string },
+    data: { label?: string; colorKey?: string; isFirst?: boolean; isFinal?: boolean; showInKanban?: boolean },
 ) {
-    const [row] = await db.update(recruitmentStages)
-        .set(withTimestamp(data as Record<string, unknown>))
-        .where(and(eq(recruitmentStages.id, stageId), eq(recruitmentStages.tenantId, tenantId)))
-        .returning()
-    return row ?? null
+    return db.transaction(async (tx) => {
+        if (data.isFirst === true) {
+            await tx.update(recruitmentStages)
+                .set({ isFirst: false, updatedAt: new Date() })
+                .where(and(
+                    eq(recruitmentStages.tenantId, tenantId),
+                    eq(recruitmentStages.isFirst, true),
+                    ne(recruitmentStages.id, stageId),
+                ))
+        }
+        if (data.isFinal === true) {
+            await tx.update(recruitmentStages)
+                .set({ isFinal: false, updatedAt: new Date() })
+                .where(and(
+                    eq(recruitmentStages.tenantId, tenantId),
+                    eq(recruitmentStages.isFinal, true),
+                    ne(recruitmentStages.id, stageId),
+                ))
+        }
+        const [row] = await tx.update(recruitmentStages)
+            .set(withTimestamp(data as Record<string, unknown>))
+            .where(and(eq(recruitmentStages.id, stageId), eq(recruitmentStages.tenantId, tenantId)))
+            .returning()
+        return row ?? null
+    })
 }
 
 /**

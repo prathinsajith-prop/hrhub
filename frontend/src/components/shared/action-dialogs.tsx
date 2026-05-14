@@ -461,7 +461,7 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
 // ─── Add Employee Dialog (3-step wizard) ───────────────────────────────────
 type Step = 1 | 2 | 3
 
-interface EmpForm {
+export interface EmpForm {
     // Step 1 — Personal
     firstName: string
     lastName: string
@@ -546,17 +546,54 @@ function StepIndicator({ step }: { step: Step }) {
     )
 }
 
-export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+export interface AddEmployeeDialogProps {
+    open: boolean
+    onOpenChange: (o: boolean) => void
+    /** Pre-fill the form (e.g. when converting a candidate). Applied on open. */
+    initialValues?: Partial<EmpForm>
+    /**
+     * If provided, replaces the internal `useCreateEmployee` mutation. Receives
+     * the full normalised payload that would otherwise be sent to create-employee.
+     * Should throw to signal failure; the dialog will close on success.
+     */
+    onSubmit?: (payload: Record<string, unknown>) => Promise<{ id?: string } | void>
+    /** Dialog title — defaults to "Add New Employee". */
+    title?: string
+    /** Submit-button label — defaults to "Add Employee". */
+    submitLabel?: string
+    /** External pending state when `onSubmit` is provided. */
+    externalPending?: boolean
+    /** Called after a successful save with the new employee id (if returned). */
+    onSaved?: (employeeId?: string) => void
+}
+
+export function AddEmployeeDialog({
+    open,
+    onOpenChange,
+    initialValues,
+    onSubmit,
+    title,
+    submitLabel,
+    externalPending,
+    onSaved,
+}: AddEmployeeDialogProps) {
     const [step, setStep] = useState<Step>(1)
-    const [form, setForm] = useState<EmpForm>(EMPTY_FORM)
+    const [form, setForm] = useState<EmpForm>(() => ({ ...EMPTY_FORM, ...initialValues }))
     const [errors, setErrors] = useState<Record<string, string>>({})
     const createEmployee = useCreateEmployee()
 
     useEffect(() => {
-        if (!open) {
-            const id = setTimeout(() => { setStep(1); setForm(EMPTY_FORM); setErrors({}) }, 300)
-            return () => clearTimeout(id)
+        if (open) {
+            // Apply (or re-apply) initialValues each time the dialog opens so
+            // re-opening with a different candidate seeds fresh data.
+            setForm({ ...EMPTY_FORM, ...initialValues })
+            setStep(1)
+            setErrors({})
+            return
         }
+        const id = setTimeout(() => { setStep(1); setForm({ ...EMPTY_FORM, ...initialValues }); setErrors({}) }, 300)
+        return () => clearTimeout(id)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open])
     const navigate = useNavigate()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
@@ -621,7 +658,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                     .some((d: { name: string; isActive: boolean }) => d.isActive && d.name.toLowerCase() === form.designation.toLowerCase())
                 if (!exists) await createDesignation.mutateAsync({ name: form.designation })
             }
-            const newEmp = await createEmployee.mutateAsync({
+            const payload = {
                 firstName: form.firstName, lastName: form.lastName,
                 dateOfBirth: form.dateOfBirth || undefined,
                 gender: (form.gender as Employee['gender']) || undefined,
@@ -663,12 +700,22 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                 bankBranch: form.bankBranch || undefined,
                 iban: form.iban || undefined,
                 emiratisationCategory: (form.emiratisationCategory as Employee['emiratisationCategory']) || 'expat',
-            })
-            // Assign to team if selected (best-effort — doesn't fail the whole create)
-            if (form.teamId && newEmp?.id) {
-                api.post(`/teams/${form.teamId}/members`, { employeeIds: [newEmp.id] }).catch(() => {})
+            } as const
+            let newEmp: { id?: string } | void
+            if (onSubmit) {
+                newEmp = await onSubmit(payload as Record<string, unknown>)
+            } else {
+                newEmp = await createEmployee.mutateAsync(payload)
             }
-            toast.success('Employee added', `${form.firstName} ${form.lastName} has been onboarded.`)
+            const newId = (newEmp as { id?: string } | undefined)?.id
+            // Assign to team if selected (best-effort — doesn't fail the whole create)
+            if (form.teamId && newId) {
+                api.post(`/teams/${form.teamId}/members`, { employeeIds: [newId] }).catch(() => {})
+            }
+            if (!onSubmit) {
+                toast.success('Employee added', `${form.firstName} ${form.lastName} has been onboarded.`)
+            }
+            onSaved?.(newId)
             close()
         } catch (err: unknown) {
             const e = err as Error & { message?: string; statusCode?: number }
@@ -713,7 +760,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
         <Dialog open={open} onOpenChange={close}>
             <DialogContent size="lg">
                 <DialogHeader>
-                    <DialogTitle>Add New Employee</DialogTitle>
+                    <DialogTitle>{title ?? 'Add New Employee'}</DialogTitle>
                 </DialogHeader>
                 <DialogBody>
                     <StepIndicator step={step} />
@@ -1042,7 +1089,7 @@ export function AddEmployeeDialog({ open, onOpenChange }: { open: boolean; onOpe
                             setStep(s => (s + 1) as Step)
                         }}>Next →</Button>
                     ) : (
-                        <Button onClick={submit} loading={createEmployee.isPending}>Add Employee</Button>
+                        <Button onClick={submit} loading={createEmployee.isPending || externalPending}>{submitLabel ?? 'Add Employee'}</Button>
                     )}
                 </DialogFooter>
             </DialogContent>

@@ -88,6 +88,9 @@ export default async function (fastify: any): Promise<void> {
                 properties: {
                     label: { type: 'string', minLength: 1, maxLength: 100 },
                     colorKey: { type: 'string', minLength: 1, maxLength: 32 },
+                    isFirst: { type: 'boolean' },
+                    isFinal: { type: 'boolean' },
+                    showInKanban: { type: 'boolean' },
                 },
             },
         },
@@ -521,18 +524,61 @@ export default async function (fastify: any): Promise<void> {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: {
             tags: ['Recruitment'],
+            // Body mirrors the full AddEmployeeDialog payload so converting a
+            // candidate captures the same data as creating an employee from
+            // scratch. Candidate fields (name, email, phone, nationality) are
+            // used as fallbacks when the body omits them.
             body: {
                 type: 'object',
+                additionalProperties: true,
                 properties: {
+                    // Personal info
+                    firstName: { type: 'string' },
+                    lastName: { type: 'string' },
+                    dateOfBirth: { type: 'string' },
+                    gender: { type: 'string' },
+                    nationality: { type: 'string' },
+                    passportNo: { type: 'string' },
+                    mobileNo: { type: 'string' },
+                    personalEmail: { type: 'string' },
+                    workEmail: { type: 'string' },
+                    maritalStatus: { type: 'string' },
+                    emergencyContact: { type: 'string' },
+                    emergencyContactName: { type: 'string' },
+                    emergencyContactPhone: { type: 'string' },
+                    homeCountryAddress: { type: 'string' },
+                    // Employment
+                    employeeNo: { type: 'string' },
                     joinDate: { type: 'string', format: 'date' },
                     designation: { type: 'string' },
                     department: { type: 'string' },
                     departmentId: { type: 'string', format: 'uuid' },
                     branchId: { type: 'string', format: 'uuid' },
                     divisionId: { type: 'string', format: 'uuid' },
-                    basicSalary: { type: 'number' },
+                    contractType: { type: 'string' },
+                    workLocation: { type: 'string' },
+                    managerName: { type: 'string' },
+                    reportingTo: { type: ['string', 'null'] },
+                    gradeLevelId: { type: 'string' },
+                    probationEndDate: { type: 'string' },
+                    contractEndDate: { type: 'string' },
+                    status: { type: 'string' },
+                    teamId: { type: 'string' },
                     entityId: { type: 'string', format: 'uuid' },
-                    employeeNo: { type: 'string' },
+                    // Salary & payroll
+                    basicSalary: { type: 'number' },
+                    housingAllowance: { type: 'number' },
+                    transportAllowance: { type: 'number' },
+                    otherAllowances: { type: 'number' },
+                    totalSalary: { type: 'number' },
+                    paymentMethod: { type: 'string' },
+                    bankName: { type: 'string' },
+                    accountName: { type: 'string' },
+                    accountNumber: { type: 'string' },
+                    swiftCode: { type: 'string' },
+                    bankBranch: { type: 'string' },
+                    iban: { type: 'string' },
+                    emiratisationCategory: { type: 'string' },
                 },
             },
         },
@@ -573,27 +619,64 @@ export default async function (fastify: any): Promise<void> {
             if (invalid) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Org unit not found for this tenant' })
         }
 
-        const [firstName, ...rest] = (app.name ?? '').trim().split(/\s+/)
-        const lastName = rest.join(' ') || firstName || 'Candidate'
+        // Derive name from the candidate when the body doesn't override.
+        const [candidateFirst, ...candidateRest] = (app.name ?? '').trim().split(/\s+/)
+        const candidateLast = candidateRest.join(' ') || candidateFirst || 'Candidate'
+        const firstName = (body.firstName as string | undefined) || candidateFirst || 'Candidate'
+        const lastName = (body.lastName as string | undefined) || candidateLast
         const employeeNo = (body.employeeNo as string) || await generateNextEmployeeNo(tenantId)
         const joinDate = (body.joinDate as string) || new Date().toISOString().slice(0, 10)
+        const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? v.toString() : undefined
 
         const employee = await createEmployee(tenantId, {
             entityId,
             employeeNo,
-            firstName: firstName || 'Candidate',
+            firstName,
             lastName,
-            email: app.email,
-            phone: app.phone ?? undefined,
-            nationality: app.nationality ?? undefined,
+            // Personal info — prefer body, fall back to candidate
+            email: (body.workEmail as string | undefined) || app.email,
+            phone: (body.mobileNo as string | undefined) || app.phone || undefined,
+            nationality: (body.nationality as string | undefined) || app.nationality || undefined,
+            dateOfBirth: (body.dateOfBirth as string | undefined) || undefined,
+            gender: (body.gender as never) || undefined,
+            maritalStatus: (body.maritalStatus as never) || undefined,
+            passportNo: (body.passportNo as string | undefined) || undefined,
+            personalEmail: (body.personalEmail as string | undefined) || undefined,
+            workEmail: (body.workEmail as string | undefined) || undefined,
+            mobileNo: (body.mobileNo as string | undefined) || app.phone || undefined,
+            emergencyContact: (body.emergencyContact as string | undefined) || undefined,
+            emergencyContactName: (body.emergencyContactName as string | undefined) || undefined,
+            emergencyContactPhone: (body.emergencyContactPhone as string | undefined) || undefined,
+            homeCountryAddress: (body.homeCountryAddress as string | undefined) || undefined,
+            // Employment
             department: (body.department as string) ?? undefined,
             departmentId: (body.departmentId as string) ?? undefined,
             branchId: (body.branchId as string) ?? undefined,
             divisionId: (body.divisionId as string) ?? undefined,
             designation: (body.designation as string) ?? undefined,
+            contractType: (body.contractType as never) || undefined,
+            workLocation: (body.workLocation as string | undefined) || undefined,
+            managerName: (body.managerName as string | undefined) || undefined,
+            reportingTo: (body.reportingTo as string | null | undefined) ?? null,
+            gradeLevelId: (body.gradeLevelId as string | undefined) || undefined,
+            probationEndDate: (body.probationEndDate as string | undefined) || undefined,
+            contractEndDate: (body.contractEndDate as string | undefined) || undefined,
             joinDate,
-            status: 'onboarding',
-            basicSalary: (body.basicSalary as number)?.toString() ?? (app.expectedSalary ?? undefined),
+            status: ((body.status as never) || 'onboarding'),
+            // Salary
+            basicSalary: num(body.basicSalary) ?? (app.expectedSalary ?? undefined),
+            housingAllowance: num(body.housingAllowance),
+            transportAllowance: num(body.transportAllowance),
+            otherAllowances: num(body.otherAllowances),
+            totalSalary: num(body.totalSalary),
+            paymentMethod: (body.paymentMethod as never) || undefined,
+            bankName: (body.bankName as string | undefined) || undefined,
+            accountName: (body.accountName as string | undefined) || undefined,
+            accountNumber: (body.accountNumber as string | undefined) || undefined,
+            swiftCode: (body.swiftCode as string | undefined) || undefined,
+            bankBranch: (body.bankBranch as string | undefined) || undefined,
+            iban: (body.iban as string | undefined) || undefined,
+            emiratisationCategory: ((body.emiratisationCategory as never) || 'expat'),
         } as never)
 
         // Auto-create onboarding checklist with 9 template steps — fire-and-forget

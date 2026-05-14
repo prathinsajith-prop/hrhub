@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { GripVertical, Pencil, Plus, RotateCcw, Trash2, Workflow, Check } from 'lucide-react'
+import { GripVertical, Pencil, Plus, RotateCcw, Trash2, Workflow, Check, Eye, EyeOff, Flag, Goal } from 'lucide-react'
 import {
     DndContext,
     KeyboardSensor,
@@ -58,9 +58,13 @@ interface SortableRowProps {
     stage: RecruitmentStage
     onEdit: () => void
     onDelete: () => void
+    onSetFirst: () => void
+    onSetFinal: () => void
+    onToggleKanban: () => void
+    isUpdating: boolean
 }
 
-function SortableRow({ stage, onEdit, onDelete }: SortableRowProps) {
+function SortableRow({ stage, onEdit, onDelete, onSetFirst, onSetFinal, onToggleKanban, isUpdating }: SortableRowProps) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stage.id })
     const color = resolveStageColor(stage.colorKey)
 
@@ -71,6 +75,8 @@ function SortableRow({ stage, onEdit, onDelete }: SortableRowProps) {
             className={cn(
                 'group flex items-center gap-3 px-3 py-2.5 rounded-lg border bg-card',
                 isDragging && 'shadow-lg ring-2 ring-primary/30 z-10 relative',
+                stage.isFirst && 'ring-1 ring-success/40',
+                stage.isFinal && 'ring-1 ring-destructive/40',
             )}
         >
             <button
@@ -89,14 +95,54 @@ function SortableRow({ stage, onEdit, onDelete }: SortableRowProps) {
                     <Badge variant="outline" className="font-mono h-4 px-1.5 text-[10px] text-muted-foreground">
                         {stage.stageKey}
                     </Badge>
-                    {stage.isTerminal && (
-                        <Badge variant="outline" className="h-4 px-1.5 text-[10px] text-destructive border-destructive/30">
-                            Terminal
-                        </Badge>
+                    {stage.isFirst && (
+                        <Badge variant="outline" className="h-4 px-1.5 text-[10px] text-success border-success/30">First</Badge>
+                    )}
+                    {stage.isFinal && (
+                        <Badge variant="outline" className="h-4 px-1.5 text-[10px] text-destructive border-destructive/30">Final</Badge>
+                    )}
+                    {!stage.showInKanban && (
+                        <Badge variant="outline" className="h-4 px-1.5 text-[10px] text-muted-foreground">Hidden</Badge>
                     )}
                 </div>
             </div>
-            <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            <div className="flex items-center gap-1 shrink-0">
+                <Button
+                    type="button"
+                    variant={stage.isFirst ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className={cn('h-7 w-7', stage.isFirst && 'text-success')}
+                    onClick={onSetFirst}
+                    disabled={isUpdating || stage.isFirst}
+                    aria-label="Mark as first stage"
+                    title="Mark as first stage"
+                >
+                    <Flag className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                    type="button"
+                    variant={stage.isFinal ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className={cn('h-7 w-7', stage.isFinal && 'text-destructive')}
+                    onClick={onSetFinal}
+                    disabled={isUpdating || stage.isFinal}
+                    aria-label="Mark as final stage"
+                    title="Mark as final stage"
+                >
+                    <Goal className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn('h-7 w-7', !stage.showInKanban && 'text-muted-foreground/60')}
+                    onClick={onToggleKanban}
+                    disabled={isUpdating}
+                    aria-label={stage.showInKanban ? 'Hide from kanban' : 'Show on kanban'}
+                    title={stage.showInKanban ? 'Hide from kanban' : 'Show on kanban'}
+                >
+                    {stage.showInKanban ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                </Button>
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit} aria-label="Edit stage">
                     <Pencil className="h-3.5 w-3.5" />
                 </Button>
@@ -277,6 +323,11 @@ export function RecruitmentStagesTab() {
     const [pendingDelete, setPendingDelete] = useState<RecruitmentStage | null>(null)
     const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
 
+    // Inline-action mutation for the per-row first/final/kanban toggles. Distinct
+    // from the StageDialog's update mutation so its pending state doesn't disable
+    // the dialog's Save button mid-edit.
+    const flagMutation = useUpdateRecruitmentStage()
+
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -394,6 +445,10 @@ export function RecruitmentStagesTab() {
                                         stage={stage}
                                         onEdit={() => openEdit(stage)}
                                         onDelete={() => setPendingDelete(stage)}
+                                        onSetFirst={() => flagMutation.mutate({ stageId: stage.id, isFirst: true })}
+                                        onSetFinal={() => flagMutation.mutate({ stageId: stage.id, isFinal: true })}
+                                        onToggleKanban={() => flagMutation.mutate({ stageId: stage.id, showInKanban: !stage.showInKanban })}
+                                        isUpdating={flagMutation.isPending}
                                     />
                                 ))}
                             </div>
