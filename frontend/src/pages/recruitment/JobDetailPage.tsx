@@ -13,22 +13,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { useJob, useApplications } from '@/hooks/useRecruitment'
+import { useJob, useApplications, useRecruitmentStages } from '@/hooks/useRecruitment'
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
 import { EditJobDialog } from '@/components/shared/action-dialogs'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
 import { labelFor } from '@/lib/enums'
+import { DEFAULT_STAGES, resolveStageColor, stageByKey, type RecruitmentStage } from '@/lib/recruitmentStages'
 import type { Job, Candidate, ApplicationStage } from '@/types'
-
-const STAGE_CONFIG: Record<ApplicationStage, { labelKey: string; cls: string }> = {
-  received:    { labelKey: 'recruitment.stages.received',    cls: 'bg-slate-100 text-slate-600 border-slate-300' },
-  screening:   { labelKey: 'recruitment.stages.screening',   cls: 'bg-info/10 text-info border-info/20' },
-  interview:   { labelKey: 'recruitment.stages.interview',   cls: 'bg-warning/10 text-warning border-warning/20' },
-  assessment:  { labelKey: 'recruitment.stages.assessment',  cls: 'bg-primary/10 text-primary border-primary/20' },
-  offer:       { labelKey: 'recruitment.stages.offer',       cls: 'bg-success/10 text-success border-success/20' },
-  pre_boarding:{ labelKey: 'recruitment.stages.preBoarding', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  rejected:    { labelKey: 'recruitment.stages.rejected',    cls: 'bg-destructive/10 text-destructive border-destructive/20' },
-}
 
 const JOB_STATUS_STYLE: Record<string, string> = {
   open:    'bg-success/10 text-success border-success/20',
@@ -37,13 +28,9 @@ const JOB_STATUS_STYLE: Record<string, string> = {
   draft:   'bg-muted text-muted-foreground border-border',
 }
 
-const STAGE_ORDER: ApplicationStage[] = [
-  'received', 'screening', 'interview', 'assessment', 'offer', 'pre_boarding', 'rejected',
-]
-
-function CandidateRow({ c, onView }: { c: Candidate; onView: (id: string) => void }) {
+function CandidateRow({ c, stage, onView }: { c: Candidate; stage: RecruitmentStage | undefined; onView: (id: string) => void }) {
   const { t } = useTranslation()
-  const stageCfg = STAGE_CONFIG[c.stage] ?? { labelKey: c.stage, cls: 'bg-muted text-muted-foreground' }
+  const color = resolveStageColor(stage?.colorKey)
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4 rounded-lg hover:bg-muted/40 transition-colors group">
@@ -71,8 +58,8 @@ function CandidateRow({ c, onView }: { c: Candidate; onView: (id: string) => voi
       </div>
 
       <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-        <Badge variant="outline" className={cn('text-[10px] px-2 py-0.5 shrink-0', stageCfg.cls)}>
-          {t(stageCfg.labelKey)}
+        <Badge variant="outline" className={cn('text-[10px] px-2 py-0.5 shrink-0', color.badgeClass)}>
+          {stage?.label ?? c.stage}
         </Badge>
         {c.score > 0 && (
           <div className="flex items-center gap-0.5 text-[11px] text-amber-600 shrink-0">
@@ -120,6 +107,13 @@ export function JobDetailPage() {
 
   const { data: jobData, isLoading: jobLoading } = useJob(id)
   const { data: appsData, isLoading: appsLoading } = useApplications({ jobId: id, limit: 200 })
+  const { data: stagesData } = useRecruitmentStages()
+  const allStages = useMemo<RecruitmentStage[]>(
+    () => (stagesData && stagesData.length > 0
+      ? stagesData
+      : DEFAULT_STAGES.map((s) => ({ ...s, id: `default-${s.stageKey}`, tenantId: '', createdAt: '', updatedAt: '' }))),
+    [stagesData],
+  )
 
   const job = (jobData as { data?: Job })?.data
   const allCandidates = useMemo(
@@ -335,21 +329,22 @@ export function JobDetailPage() {
                     >
                       {t('recruitment.jobDetail.allCount', { count: allCandidates.length })}
                     </button>
-                    {STAGE_ORDER.map(s => {
-                      const count = stageCounts[s] ?? 0
+                    {allStages.map(s => {
+                      const count = stageCounts[s.stageKey] ?? 0
                       if (count === 0) return null
-                      const cfg = STAGE_CONFIG[s]
+                      const color = resolveStageColor(s.colorKey)
+                      const isActive = stageFilter === s.stageKey
                       return (
                         <button
-                          key={s}
+                          key={s.id}
                           type="button"
-                          onClick={() => setStageFilter(stageFilter === s ? 'all' : s)}
+                          onClick={() => setStageFilter(isActive ? 'all' : s.stageKey)}
                           className={cn(
                             'px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
-                            stageFilter === s ? cfg.cls : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
+                            isActive ? color.badgeClass : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
                           )}
                         >
-                          {t(cfg.labelKey)} · {count}
+                          {s.label} · {count}
                         </button>
                       )
                     })}
@@ -388,6 +383,7 @@ export function JobDetailPage() {
                         <CandidateRow
                           key={c.id}
                           c={c}
+                          stage={stageByKey(allStages, c.stage)}
                           onView={cid => navigate(`/recruitment/candidates/${cid}`)}
                         />
                       ))}

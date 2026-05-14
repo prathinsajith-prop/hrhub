@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { labelFor } from '@/lib/enums'
-import { Clock, CheckCircle2, Plus, ArrowLeft, Trash2, Mail, Phone, FileText, Activity, Sparkles, Send, Upload, AlertCircle, ChevronDown, ChevronUp, BookOpen, X } from 'lucide-react'
+import { Clock, CheckCircle2, Plus, ArrowLeft, Trash2, Mail, Phone, FileText, Activity, Sparkles, Send, Upload, AlertCircle, ChevronDown, ChevronUp, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
 import { ConfirmDialog, toast, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, DialogClose } from '@/components/ui/overlays'
@@ -15,7 +15,8 @@ import { NumericInput } from '@/components/ui/numeric-input'
 import { Textarea } from '@/components/ui/textarea'
 import { formatDate, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { useEmployeeChecklist, useUpdateOnboardingStep, useAddOnboardingStep, useDeleteOnboardingStep, useSendOnboardingUploadLink, useStepRequiredDocs, useAddStepRequiredDoc, useDeleteStepRequiredDoc, useChecklistDocSummary, type OnboardingChecklist, type OnboardingStep, type OnboardingStepStatus, type StepRequiredDoc } from '@/hooks/useOnboarding'
+import { useEmployeeChecklist, useUpdateOnboardingStep, useAddOnboardingStep, useDeleteOnboardingStep, useSendOnboardingUploadLink, useStepRequiredDocs, useAddStepRequiredDoc, useDeleteStepRequiredDoc, useChecklistDocSummary, type OnboardingChecklist, type OnboardingStep, type OnboardingStepStatus } from '@/hooks/useOnboarding'
+import { RequiredDocsManager } from '@/components/shared/RequiredDocsManager'
 import { useDocuments, useUploadDocument } from '@/hooks/useDocuments'
 import { useQueryClient } from '@tanstack/react-query'
 import { useActivityLogs } from '@/hooks/useAudit'
@@ -243,163 +244,38 @@ function OverviewTab({ checklist }: { checklist: OnboardingChecklist }) {
 }
 
 // ── Required docs management dialog ──────────────────────────────────────────
+// Thin wrapper around the shared RequiredDocsManager — this dialog is the
+// per-employee (instance-level) entry point. The Organization Settings →
+// Onboarding Steps tab uses a parallel wrapper pointed at the template hooks.
 function RequiredDocsDialog({ step, open, onClose }: { step: OnboardingStep; open: boolean; onClose: () => void }) {
     const { data: requiredDocs = [], isLoading } = useStepRequiredDocs(open ? step.id : null)
     const addDoc = useAddStepRequiredDoc()
     const deleteDoc = useDeleteStepRequiredDoc()
-    const [addOpen, setAddOpen] = useState(false)
-    const [category, setCategory] = useState<DocCategory | ''>('')
-    const [docType, setDocType] = useState('')
-    const [isMandatory, setIsMandatory] = useState(true)
-    const [expiryRequired, setExpiryRequired] = useState(false)
-    const [confirmDeleteDoc, setConfirmDeleteDoc] = useState<StepRequiredDoc | null>(null)
-
-    const categoryDocs = category ? DOC_TYPE_CATALOG[category] : []
-
-    const handleAdd = () => {
-        if (!category || !docType) {
-            toast.warning('Incomplete', 'Select a category and document type.')
-            return
-        }
-        addDoc.mutate(
-            { stepId: step.id, category, docType, isMandatory, expiryRequired },
-            {
-                onSuccess: () => {
-                    toast.success('Required doc added', `${docType} added to "${step.title}".`)
-                    setAddOpen(false)
-                    setCategory('')
-                    setDocType('')
-                    setIsMandatory(true)
-                    setExpiryRequired(false)
-                },
-                onError: () => toast.error('Failed', 'Could not add required document.'),
-            },
-        )
-    }
-
-    const handleDelete = (doc: StepRequiredDoc) => {
-        deleteDoc.mutate(doc.id, {
-            onSuccess: () => { toast.success('Removed', `${doc.docType} removed.`); setConfirmDeleteDoc(null) },
-            onError: () => toast.error('Failed', 'Could not remove required document.'),
-        })
-    }
 
     return (
-        <>
-            <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-                <DialogContent className="max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Required documents — {step.title}</DialogTitle>
-                    </DialogHeader>
-                    <DialogBody className="space-y-4">
-                        <p className="text-xs text-muted-foreground">
-                            Configure which documents employees must submit for this step. Mandatory docs block step completion.
-                        </p>
-
-                        {isLoading ? (
-                            <div className="space-y-2">{[1, 2].map(i => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}</div>
-                        ) : requiredDocs.length === 0 ? (
-                            <p className="text-xs text-muted-foreground py-2 text-center">No required documents configured yet.</p>
-                        ) : (
-                            <div className="space-y-1.5">
-                                {requiredDocs.map((doc) => (
-                                    <div key={doc.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-card">
-                                        <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-semibold truncate">{doc.docType}</p>
-                                            <p className="text-[10px] text-muted-foreground truncate">
-                                                {CATEGORY_LABELS[doc.category as DocCategory] ?? doc.category}
-                                                {doc.isMandatory ? ' · Mandatory' : ' · Optional'}
-                                                {doc.expiryRequired ? ' · Expiry required' : ''}
-                                            </p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setConfirmDeleteDoc(doc)}
-                                            className="p-1 rounded hover:bg-destructive/10 text-destructive shrink-0"
-                                            aria-label="Remove"
-                                        >
-                                            <X className="h-3.5 w-3.5" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {addOpen ? (
-                            <div className="border rounded-xl p-3.5 space-y-3 bg-muted/30">
-                                <p className="text-xs font-semibold">Add required document</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-medium text-muted-foreground">Category *</label>
-                                        <Select value={category || undefined} onValueChange={(v) => { setCategory(v as DocCategory); setDocType('') }}>
-                                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
-                                            <SelectContent>
-                                                {(Object.entries(CATEGORY_LABELS) as [DocCategory, string][]).map(([k, l]) => (
-                                                    <SelectItem key={k} value={k} className="text-xs">{l}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-medium text-muted-foreground">Document type *</label>
-                                        <Select value={docType || undefined} onValueChange={setDocType} disabled={!category}>
-                                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
-                                            <SelectContent>
-                                                {categoryDocs.map(d => (
-                                                    <SelectItem key={d.docType} value={d.docType} className="text-xs">{d.label}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={isMandatory}
-                                            onChange={(e) => setIsMandatory(e.target.checked)}
-                                            className="rounded"
-                                        />
-                                        Mandatory
-                                    </label>
-                                    <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={expiryRequired}
-                                            onChange={(e) => setExpiryRequired(e.target.checked)}
-                                            className="rounded"
-                                        />
-                                        Expiry required
-                                    </label>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button size="sm" loading={addDoc.isPending} onClick={handleAdd}>Add</Button>
-                                    <Button size="sm" variant="ghost" onClick={() => { setAddOpen(false); setCategory(''); setDocType('') }}>Cancel</Button>
-                                </div>
-                            </div>
-                        ) : (
-                            <Button size="sm" variant="outline" leftIcon={<Plus className="h-3 w-3" />} onClick={() => setAddOpen(true)}>
-                                Add required document
-                            </Button>
-                        )}
-                    </DialogBody>
-                    <DialogFooter>
-                        <DialogClose asChild><Button variant="outline" size="sm">Close</Button></DialogClose>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <ConfirmDialog
-                open={!!confirmDeleteDoc}
-                onOpenChange={(o) => { if (!o) setConfirmDeleteDoc(null) }}
-                title="Remove required document?"
-                description={`Remove "${confirmDeleteDoc?.docType}" from required docs for this step?`}
-                confirmLabel="Remove"
-                variant="destructive"
-                onConfirm={() => confirmDeleteDoc && handleDelete(confirmDeleteDoc)}
-            />
-        </>
+        <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+            <DialogContent className="max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Required documents — {step.title}</DialogTitle>
+                </DialogHeader>
+                <DialogBody className="space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                        Configure which documents employees must submit for this step. Mandatory docs block step completion.
+                    </p>
+                    <RequiredDocsManager
+                        requiredDocs={requiredDocs}
+                        isLoading={isLoading}
+                        isAdding={addDoc.isPending}
+                        isDeleting={deleteDoc.isPending}
+                        onAdd={(input) => addDoc.mutateAsync({ stepId: step.id, ...input }).then(() => undefined)}
+                        onDelete={(id) => deleteDoc.mutateAsync(id).then(() => undefined)}
+                    />
+                </DialogBody>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="outline" size="sm">Close</Button></DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     )
 }
 
@@ -756,6 +632,7 @@ function StepDocPanel({
     const [uploadOpen, setUploadOpen] = useState(false)
     const [selectedCategory, setSelectedCategory] = useState<DocCategory | ''>('')
     const [selectedDocType, setSelectedDocType] = useState('')
+    const [docNumber, setDocNumber] = useState('')
     const [expiryDate, setExpiryDate] = useState('')
     const [file, setFile] = useState<File | null>(null)
     const [uploading, setUploading] = useState(false)
@@ -783,6 +660,7 @@ function StepDocPanel({
                 employeeId,
                 category: selectedCategory,
                 docType: selectedDocType,
+                docNumber: docNumber.trim() || undefined,
                 expiryDate: expiryDate || undefined,
             })
             await qc.invalidateQueries({ queryKey: ['documents'] })
@@ -791,6 +669,7 @@ function StepDocPanel({
             setFile(null)
             setSelectedCategory('')
             setSelectedDocType('')
+            setDocNumber('')
             setExpiryDate('')
         } catch {
             toast.error('Upload failed', 'Could not upload the document.')
@@ -903,6 +782,43 @@ function StepDocPanel({
                                 </div>
                             </div>
 
+                            {selectedDocType && (() => {
+                                const numberLabelMap: Record<string, string> = {
+                                    'Passport':                'Passport No.',
+                                    'Emirates ID':             'Emirates ID No.',
+                                    'National ID':             'National ID No.',
+                                    'Driving License':         'Driving License No.',
+                                    'Visa':                    'Visa No.',
+                                    'Residence Visa':          'Residence Visa No.',
+                                    'Entry Permit':            'Entry Permit No.',
+                                    'Work Permit':             'Work Permit No.',
+                                    'Visit Visa':              'Visit Visa No.',
+                                    'Labour Card':             'Labour Card No.',
+                                    'Trade License':           'License No.',
+                                    'Establishment Card':      'Establishment Card No.',
+                                    'Health Insurance Card':   'Policy No.',
+                                    'Medical Insurance Card':  'Policy No.',
+                                }
+                                const label = numberLabelMap[selectedDocType] ?? 'Document Number'
+                                const placeholder = selectedDocType === 'Emirates ID'
+                                    ? '784-XXXX-XXXXXXX-X'
+                                    : `Enter ${label.toLowerCase()}`
+                                return (
+                                    <div className="space-y-1">
+                                        <label className="text-[11px] font-medium text-muted-foreground">
+                                            {label} <span className="text-[10px] font-normal">(optional)</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={docNumber}
+                                            onChange={(e) => setDocNumber(e.target.value)}
+                                            placeholder={placeholder}
+                                            className="w-full h-8 px-2.5 text-xs rounded-md border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
+                                        />
+                                    </div>
+                                )
+                            })()}
+
                             {expiryRequired && (
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-medium text-destructive flex items-center gap-1">
@@ -934,7 +850,7 @@ function StepDocPanel({
                                 <Button size="sm" loading={uploading} leftIcon={<Upload className="h-3 w-3" />} onClick={handleUpload}>
                                     Upload
                                 </Button>
-                                <Button size="sm" variant="ghost" onClick={() => { setUploadOpen(false); setFile(null); setSelectedCategory(''); setSelectedDocType(''); setExpiryDate('') }}>
+                                <Button size="sm" variant="ghost" onClick={() => { setUploadOpen(false); setFile(null); setSelectedCategory(''); setSelectedDocType(''); setDocNumber(''); setExpiryDate('') }}>
                                     Cancel
                                 </Button>
                             </div>

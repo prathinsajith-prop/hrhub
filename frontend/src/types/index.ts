@@ -114,7 +114,15 @@ export interface Employee {
 
 // Recruitment
 export type JobStatus = 'draft' | 'open' | 'closed' | 'on_hold'
-export type ApplicationStage = 'received' | 'screening' | 'interview' | 'assessment' | 'offer' | 'pre_boarding' | 'rejected'
+/**
+ * Stage keys are per-tenant — admins can add/rename them in Organization
+ * Settings → Recruitment Stages. The seven names below are the system defaults
+ * seeded for every new tenant; the union is widened to `string` so user-
+ * defined keys are accepted. Code that branches on a specific key (e.g.
+ * `pre_boarding` for the Convert button) still works because string-literal
+ * comparison is well-defined against `string`.
+ */
+export type ApplicationStage = string
 
 export interface Job {
   id: string

@@ -25,7 +25,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
-import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume } from '@/hooks/useRecruitment'
+import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume, useRecruitmentStages } from '@/hooks/useRecruitment'
+import { DEFAULT_STAGES, kanbanStages as filterKanbanStages, resolveStageColor, stageByKey, type RecruitmentStage } from '@/lib/recruitmentStages'
+import { StageBadge } from '@/components/shared/StageBadge'
 import { useRecruitmentSocket } from '@/hooks/useRecruitmentSocket'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/overlays'
@@ -37,6 +39,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { NewJobDialog, EditJobDialog, buildOrgOptions } from '@/components/shared/action-dialogs'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
+import { useDesignations, useDesignationOptions, useCreateDesignation } from '@/hooks/useDesignations'
 import { Combobox } from '@/components/ui/combobox'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
@@ -70,18 +73,15 @@ const CANDIDATE_FILTERS: FilterConfig[] = [
 import type { Candidate, ApplicationStage, Job } from '@/types'
 import type { ColumnDef } from '@tanstack/react-table'
 
-const stages: { id: ApplicationStage; label: string; bgClass: string; dotClass: string }[] = [
-  { id: 'received', label: 'Received', bgClass: 'bg-muted/50 border-border', dotClass: 'bg-slate-400' },
-  { id: 'screening', label: 'Screening', bgClass: 'bg-info/5 border-info/20', dotClass: 'bg-info' },
-  { id: 'interview', label: 'Interview', bgClass: 'bg-warning/5 border-warning/20', dotClass: 'bg-warning' },
-  { id: 'assessment', label: 'Assessment', bgClass: 'bg-primary/5 border-primary/20', dotClass: 'bg-primary' },
-  { id: 'offer', label: 'Offer', bgClass: 'bg-success/5 border-success/20', dotClass: 'bg-success' },
-  { id: 'pre_boarding', label: 'Pre-boarding', bgClass: 'bg-accent/50 border-accent', dotClass: 'bg-emerald-500' },
-  { id: 'rejected', label: 'Rejected', bgClass: 'bg-destructive/5 border-destructive/20', dotClass: 'bg-destructive' },
-]
+// Stage list comes from the backend per-tenant settings via useRecruitmentStages.
+// While the API is loading we render the DEFAULT_STAGES fallback so the kanban
+// doesn't flash empty columns. Terminal stages (e.g. rejected) are filtered
+// out of the kanban — rejection is reached from the candidate profile page
+// (it requires a reason).
 
 const CandidateCard = memo(function CandidateCard({
   candidate,
+  nextStage,
   onMove,
   onConvert,
   onEdit,
@@ -89,17 +89,13 @@ const CandidateCard = memo(function CandidateCard({
   isDragOverlay = false,
 }: {
   candidate: Candidate
+  nextStage?: RecruitmentStage
   onMove: (candidate: Candidate, stage: ApplicationStage) => void
   onConvert?: (candidate: Candidate) => void
   onEdit?: (candidate: Candidate) => void
   draggable?: boolean
   isDragOverlay?: boolean
 }) {
-  const stageIdx = stages.findIndex(s => s.id === candidate.stage)
-  // Skip 'rejected' as a "next stage" — it's a terminal state reached only via reject action.
-  const nextStage = candidate.stage !== 'rejected' && candidate.stage !== 'pre_boarding'
-    ? stages[stageIdx + 1] && stages[stageIdx + 1].id !== 'rejected' ? stages[stageIdx + 1] : undefined
-    : undefined
   const navigate = useNavigate()
 
   // Pass the full candidate through drag data so handleDragStart can capture it
@@ -191,7 +187,7 @@ const CandidateCard = memo(function CandidateCard({
           variant="secondary"
           className="w-full text-[10px] h-6"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onMove(candidate, nextStage.id) }}
+          onClick={(e) => { e.stopPropagation(); onMove(candidate, nextStage.stageKey) }}
         >
           Move to {nextStage.label} &rarr;
         </Button>
@@ -215,6 +211,7 @@ const CandidateCard = memo(function CandidateCard({
 // This replaces the old approach of loading 500 candidates upfront and slicing client-side.
 function StageColumn({
   stage,
+  nextStage,
   onMove,
   onConvert,
   onEdit,
@@ -223,7 +220,8 @@ function StageColumn({
   addDisabled,
   kanbanParams,
 }: {
-  stage: typeof stages[number]
+  stage: RecruitmentStage
+  nextStage?: RecruitmentStage
   onMove: (candidate: Candidate, targetStage: ApplicationStage) => void
   onConvert?: (candidate: Candidate) => void
   onEdit?: (candidate: Candidate) => void
@@ -232,9 +230,10 @@ function StageColumn({
   addDisabled: boolean
   kanbanParams?: { q?: string; filter?: string }
 }) {
-  const { isOver, setNodeRef } = useDroppable({ id: `stage:${stage.id}` })
+  const color = resolveStageColor(stage.colorKey)
+  const { isOver, setNodeRef } = useDroppable({ id: `stage:${stage.stageKey}` })
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } = useKanbanStage(stage.id, kanbanParams)
+  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } = useKanbanStage(stage.stageKey, kanbanParams)
 
   const candidates: Candidate[] = data?.pages.flatMap((p) => p.data) ?? []
   const total = data?.pages[0]?.total ?? 0
@@ -256,13 +255,13 @@ function StageColumn({
       ref={setNodeRef}
       className={cn(
         'w-56 rounded-xl border p-3 space-y-2 transition-colors',
-        stage.bgClass,
+        color.bgClass,
         isOver && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
       )}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <div className={cn('h-2 w-2 rounded-full shrink-0', stage.dotClass)} />
+          <div className={cn('h-2 w-2 rounded-full shrink-0', color.dotClass)} />
           <p className="text-xs font-semibold text-foreground">{stage.label}</p>
         </div>
         <div className="flex items-center gap-1">
@@ -304,6 +303,7 @@ function StageColumn({
               <CandidateCard
                 key={c.id}
                 candidate={c}
+                nextStage={nextStage}
                 onMove={onMove}
                 onConvert={onConvert}
                 onEdit={onEdit}
@@ -551,6 +551,7 @@ function ConvertCandidateDialog({
 }) {
   const updateApplication = useUpdateApplication()
   const convertToEmployee = useConvertCandidateToEmployee()
+  const createDesignation = useCreateDesignation()
   const [joinDate, setJoinDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [designation, setDesignation] = useState('')
   const [department, setDepartment] = useState('')
@@ -560,6 +561,8 @@ function ConvertCandidateDialog({
   const { data: orgUnitsRaw = [] } = useOrgUnits()
   const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
   const orgOptions = buildOrgOptions(orgUnits)
+  const { data: designationList = [] } = useDesignations()
+  const designationOptions = useDesignationOptions()
 
   if (!candidate) return null
 
@@ -569,11 +572,19 @@ function ConvertCandidateDialog({
     return existing && existing.trim().length > 0 ? `${existing.trim()}\n${entry}` : entry
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const trimmed = note.trim()
     if (!trimmed) {
       toast.error('Note required', 'Please add a conversion note before creating the employee record.')
       return
+    }
+    // Auto-create the designation if the user typed a new one not already in the list.
+    if (designation) {
+      const exists = (Array.isArray(designationList) ? designationList : [])
+        .some((d: { name: string; isActive: boolean }) => d.isActive && d.name.toLowerCase() === designation.toLowerCase())
+      if (!exists) {
+        try { await createDesignation.mutateAsync({ name: designation }) } catch { /* toast handled by hook */ }
+      }
     }
     const merged = appendNoteEntry(candidate.notes, 'Converted', trimmed)
     updateApplication.mutate(
@@ -608,7 +619,7 @@ function ConvertCandidateDialog({
     )
   }
 
-  const pending = updateApplication.isPending || convertToEmployee.isPending
+  const pending = updateApplication.isPending || convertToEmployee.isPending || createDesignation.isPending
 
   return (
     <Dialog open={!!candidate} onOpenChange={onOpenChange}>
@@ -629,7 +640,15 @@ function ConvertCandidateDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Designation</Label>
-            <Input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="e.g. Senior Engineer" />
+            <Combobox
+              value={designation}
+              onValueChange={setDesignation}
+              options={designationOptions}
+              placeholder="Select or type designation…"
+              searchPlaceholder="Search or create…"
+              clearable
+              creatable
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Department</Label>
@@ -662,14 +681,16 @@ function ConvertCandidateDialog({
 
 const CandidateListRow = memo(function CandidateListRow({
   candidate,
+  stage,
   onView,
   onEdit,
 }: {
   candidate: Candidate
+  stage: RecruitmentStage | undefined
   onView: (id: string) => void
   onEdit?: (c: Candidate) => void
 }) {
-  const stage = stages.find(s => s.id === candidate.stage)
+  const color = resolveStageColor(stage?.colorKey)
   return (
     <div
       className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4 hover:bg-muted/40 transition-colors group cursor-pointer"
@@ -699,8 +720,8 @@ const CandidateListRow = memo(function CandidateListRow({
       <div className="hidden sm:flex items-center gap-3 shrink-0">
         <div className="w-[90px]">
           {stage && (
-            <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border max-w-full', stage.bgClass)}>
-              <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', stage.dotClass)} />
+            <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border max-w-full', color.bgClass)}>
+              <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', color.dotClass)} />
               <span className="truncate">{stage.label}</span>
             </span>
           )}
@@ -720,8 +741,8 @@ const CandidateListRow = memo(function CandidateListRow({
       </div>
       <div className="flex sm:hidden items-center gap-2 flex-wrap">
         {stage && (
-          <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border', stage.bgClass)}>
-            <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', stage.dotClass)} />{stage.label}
+          <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border', color.bgClass)}>
+            <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', color.dotClass)} />{stage.label}
           </span>
         )}
         {candidate.score > 0 && <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="h-3 w-3 fill-amber-400 text-amber-400" /><span>{candidate.score}</span></div>}
@@ -748,6 +769,37 @@ export function RecruitmentPage() {
 
   // Real-time: subscribe to all recruitment WS events for this tenant
   useRecruitmentSocket()
+
+  // Per-tenant pipeline configuration (label / colour / order). DEFAULT_STAGES
+  // is the optimistic fallback so the page renders something useful before the
+  // request resolves; the data also has a 5-minute staleTime so this hook is
+  // effectively free across navigations.
+  const { data: stagesData } = useRecruitmentStages()
+  const allStages = useMemo<RecruitmentStage[]>(
+    () => (stagesData && stagesData.length > 0
+      ? stagesData
+      : DEFAULT_STAGES.map((s) => ({
+        ...s,
+        // Synthetic ids let dnd-kit + React keep stable identity during the
+        // initial pre-fetch window. They get replaced by real ids on first
+        // fetch resolve.
+        id: `default-${s.stageKey}`,
+        tenantId: '',
+        createdAt: '',
+        updatedAt: '',
+      }))),
+    [stagesData],
+  )
+  const kanbanStagesList = useMemo(() => filterKanbanStages(allStages), [allStages])
+  // For each kanban stage, the next stage shown on the "Move to → " card button.
+  // Computed once at the page level so memo'd CandidateCards don't re-derive it.
+  const nextStageByKey = useMemo(() => {
+    const map = new Map<string, RecruitmentStage>()
+    for (let i = 0; i < kanbanStagesList.length - 1; i++) {
+      map.set(kanbanStagesList[i].stageKey, kanbanStagesList[i + 1])
+    }
+    return map
+  }, [kanbanStagesList])
   const [activeTab, setActiveTab] = useState('pipeline')
   const [pipelineView, setPipelineView] = useState<'kanban' | 'list'>('kanban')
   const [listStageFilter, setListStageFilter] = useState<ApplicationStage | 'all'>('all')
@@ -831,7 +883,8 @@ export function RecruitmentPage() {
   const jobColumns = useMemo(() => buildJobColumns((j) => setEditJob(j)), [])
 
   const moveCandidate = (candidate: Candidate, newStage: ApplicationStage) => {
-    toast.success('Candidate moved', `${candidate.name} moved to ${labelFor(newStage)} stage.`)
+    const targetLabel = stageByKey(allStages, newStage)?.label ?? newStage
+    toast.success('Candidate moved', `${candidate.name} moved to ${targetLabel} stage.`)
     updateStage.mutate(
       { id: candidate.id, stage: newStage, fromStage: candidate.stage, candidate },
       { onError: () => toast.error('Move failed', `Could not move ${candidate.name}. Reverted.`) },
@@ -859,10 +912,6 @@ export function RecruitmentPage() {
     if (!overId.startsWith('stage:')) return
     const targetStage = overId.slice('stage:'.length) as ApplicationStage
     if (candidate.stage === targetStage) return
-    if (targetStage === 'rejected') {
-      toast.warning('Open profile to reject', 'Rejection requires a reason. Open the candidate profile and use the Reject button.')
-      return
-    }
     moveCandidate(candidate, targetStage)
   }
 
@@ -958,14 +1007,15 @@ export function RecruitmentPage() {
             <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} autoScroll={false}>
               <div className="overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
                 <div className="flex gap-3 min-w-max">
-                  {stages.map(stage => (
+                  {kanbanStagesList.map(stage => (
                     <StageColumn
                       key={stage.id}
                       stage={stage}
+                      nextStage={nextStageByKey.get(stage.stageKey)}
                       onMove={moveCandidate}
                       onConvert={setConvertCandidate}
                       onEdit={setEditCandidate}
-                      showAdd={stage.id === 'received'}
+                      showAdd={stage.stageKey === 'received'}
                       onAdd={() => setAddCandidateOpen(true)}
                       addDisabled={jobs.filter((j) => j.status === 'open').length === 0}
                       kanbanParams={candidateParams}
@@ -999,23 +1049,18 @@ export function RecruitmentPage() {
                     >
                       All · {allListCandidates.length}
                     </button>
-                    {stages.map(s => {
-                      const count = listStageCounts[s.id] ?? 0
+                    {allStages.map(s => {
+                      const count = listStageCounts[s.stageKey] ?? 0
                       if (count === 0) return null
+                      const isActive = listStageFilter === s.stageKey
                       return (
                         <button
                           key={s.id}
                           type="button"
-                          onClick={() => setListStageFilter(listStageFilter === s.id ? 'all' : s.id)}
-                          className={cn(
-                            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
-                            listStageFilter === s.id
-                              ? s.bgClass
-                              : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
-                          )}
+                          onClick={() => setListStageFilter(isActive ? 'all' : s.stageKey)}
+                          className="rounded-full"
                         >
-                          <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', s.dotClass)} />
-                          {s.label} · {count}
+                          <StageBadge stage={s} count={count} active={isActive} />
                         </button>
                       )
                     })}
@@ -1057,6 +1102,7 @@ export function RecruitmentPage() {
                           <CandidateListRow
                             key={c.id}
                             candidate={c}
+                            stage={stageByKey(allStages, c.stage)}
                             onView={id => navigate(`/recruitment/candidates/${id}`)}
                             onEdit={setEditCandidate}
                           />

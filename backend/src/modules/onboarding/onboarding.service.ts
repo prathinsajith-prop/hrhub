@@ -1,20 +1,108 @@
-import { eq, and, inArray, isNotNull, or, desc } from 'drizzle-orm'
+import { eq, and, inArray, isNotNull, or, desc, sql } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
-import { onboardingChecklists, onboardingSteps, employees } from '../../db/schema/index.js'
+import { onboardingChecklists, onboardingSteps, employees, onboardingTemplateSteps, onboardingTemplateStepRequiredDocs, onboardingStepRequiredDocs } from '../../db/schema/index.js'
+import { DEFAULT_ONBOARDING_TEMPLATE, buildDefaultOnboardingTemplateRows } from './onboarding.defaults.js'
 
-const DEFAULT_TEMPLATE_STEPS = [
-    { stepOrder: 1, title: 'HR documentation & contracts', owner: 'HR', slaDays: 1 },
-    { stepOrder: 2, title: 'IT equipment setup & laptop handover', owner: 'IT', slaDays: 1 },
-    { stepOrder: 3, title: 'System access & account creation', owner: 'IT', slaDays: 2 },
-    { stepOrder: 4, title: 'Access card & office orientation', owner: 'Admin', slaDays: 2 },
-    { stepOrder: 5, title: 'Introduction to team & manager', owner: 'Manager', slaDays: 3 },
-    { stepOrder: 6, title: 'Employee handbook & policy review', owner: 'HR', slaDays: 5 },
-    { stepOrder: 7, title: 'Benefits enrollment & payroll setup', owner: 'HR', slaDays: 7 },
-    { stepOrder: 8, title: 'Compliance & safety training', owner: 'HR', slaDays: 10 },
-    { stepOrder: 9, title: '30-day check-in with manager', owner: 'Manager', slaDays: 30 },
-] as const
+/* ─── Template steps (per-tenant) ─────────────────────────────────────────── */
+
+export async function listTemplateSteps(tenantId: string) {
+    const existing = await db.select().from(onboardingTemplateSteps)
+        .where(eq(onboardingTemplateSteps.tenantId, tenantId))
+        .orderBy(onboardingTemplateSteps.stepOrder)
+    if (existing.length > 0) return existing
+
+    // First read for a tenant whose template wasn't seeded at signup (legacy tenants,
+    // or tenants created before the template table existed). Re-check inside a
+    // transaction so concurrent first-reads can't duplicate the seed.
+    return db.transaction(async (tx) => {
+        const rechecked = await tx.select().from(onboardingTemplateSteps)
+            .where(eq(onboardingTemplateSteps.tenantId, tenantId))
+            .orderBy(onboardingTemplateSteps.stepOrder)
+        if (rechecked.length > 0) return rechecked
+        await tx.insert(onboardingTemplateSteps).values(buildDefaultOnboardingTemplateRows(tenantId))
+        return tx.select().from(onboardingTemplateSteps)
+            .where(eq(onboardingTemplateSteps.tenantId, tenantId))
+            .orderBy(onboardingTemplateSteps.stepOrder)
+    })
+}
+
+export async function createTemplateStep(tenantId: string, data: { title: string; owner?: string; slaDays?: number }) {
+    const existing = await db.select({ stepOrder: onboardingTemplateSteps.stepOrder })
+        .from(onboardingTemplateSteps)
+        .where(eq(onboardingTemplateSteps.tenantId, tenantId))
+    const nextOrder = existing.length > 0 ? Math.max(...existing.map(s => s.stepOrder)) + 1 : 1
+    const [row] = await db.insert(onboardingTemplateSteps).values({
+        tenantId,
+        stepOrder: nextOrder,
+        title: data.title,
+        owner: data.owner,
+        slaDays: data.slaDays,
+    }).returning()
+    return row
+}
+
+export async function updateTemplateStep(tenantId: string, stepId: string, data: { title?: string; owner?: string | null; slaDays?: number | null }) {
+    const [row] = await db.update(onboardingTemplateSteps)
+        .set(withTimestamp(data as Record<string, unknown>))
+        .where(and(eq(onboardingTemplateSteps.id, stepId), eq(onboardingTemplateSteps.tenantId, tenantId)))
+        .returning()
+    return row ?? null
+}
+
+export async function deleteTemplateStep(tenantId: string, stepId: string) {
+    const [row] = await db.delete(onboardingTemplateSteps)
+        .where(and(eq(onboardingTemplateSteps.id, stepId), eq(onboardingTemplateSteps.tenantId, tenantId)))
+        .returning()
+    return row ?? null
+}
+
+/**
+ * Reorder template steps atomically. Accepts an ordered list of step IDs;
+ * positions are re-numbered 1..N. Step IDs not belonging to the tenant
+ * are silently ignored. Implemented as a single CASE-based UPDATE so the
+ * whole renumber is one round-trip regardless of N (was 1 + N updates).
+ */
+export async function reorderTemplateSteps(tenantId: string, orderedIds: string[]) {
+    return db.transaction(async (tx) => {
+        const rows = await tx.select({ id: onboardingTemplateSteps.id })
+            .from(onboardingTemplateSteps)
+            .where(eq(onboardingTemplateSteps.tenantId, tenantId))
+        const allowed = new Set(rows.map(r => r.id))
+        const valid = orderedIds.filter(id => allowed.has(id))
+        if (valid.length === 0) return []
+
+        const caseClauses = valid.map((id, i) => sql`WHEN ${id}::uuid THEN ${i + 1}`)
+        await tx.update(onboardingTemplateSteps)
+            .set({
+                stepOrder: sql`CASE ${onboardingTemplateSteps.id} ${sql.join(caseClauses, sql` `)} END`,
+                updatedAt: new Date(),
+            })
+            .where(and(
+                eq(onboardingTemplateSteps.tenantId, tenantId),
+                inArray(onboardingTemplateSteps.id, valid),
+            ))
+        return tx.select().from(onboardingTemplateSteps)
+            .where(eq(onboardingTemplateSteps.tenantId, tenantId))
+            .orderBy(onboardingTemplateSteps.stepOrder)
+    })
+}
+
+/**
+ * Reset the tenant's onboarding template back to the system defaults.
+ * Deletes existing template rows and reinserts the seed list.
+ */
+export async function resetTemplateSteps(tenantId: string) {
+    return db.transaction(async (tx) => {
+        await tx.delete(onboardingTemplateSteps)
+            .where(eq(onboardingTemplateSteps.tenantId, tenantId))
+        await tx.insert(onboardingTemplateSteps).values(buildDefaultOnboardingTemplateRows(tenantId))
+        return tx.select().from(onboardingTemplateSteps)
+            .where(eq(onboardingTemplateSteps.tenantId, tenantId))
+            .orderBy(onboardingTemplateSteps.stepOrder)
+    })
+}
 
 export async function getChecklist(tenantId: string, employeeId: string) {
     const [row] = await db
@@ -278,17 +366,74 @@ export async function createChecklist(tenantId: string, data: {
     }).returning()
 
     if (data.useTemplate) {
+        // Pull from this tenant's editable template; fall back to the system
+        // defaults only if the tenant has no template rows (legacy tenants).
+        const tenantTemplate = await db.select().from(onboardingTemplateSteps)
+            .where(eq(onboardingTemplateSteps.tenantId, tenantId))
+            .orderBy(onboardingTemplateSteps.stepOrder)
+        const usingTenantTemplate = tenantTemplate.length > 0
+        const source = usingTenantTemplate
+            ? tenantTemplate.map(s => ({ id: s.id, stepOrder: s.stepOrder, title: s.title, owner: s.owner ?? undefined, slaDays: s.slaDays ?? 0 }))
+            : DEFAULT_ONBOARDING_TEMPLATE.map(s => ({ id: null as string | null, stepOrder: s.stepOrder, title: s.title, owner: s.owner as string | undefined, slaDays: s.slaDays }))
+
         const startMs = data.startDate ? new Date(data.startDate).getTime() : Date.now()
-        const templateSteps = DEFAULT_TEMPLATE_STEPS.map(s => ({
+        const templateSteps = source.map(s => ({
             checklistId: checklist.id,
             stepOrder: s.stepOrder,
             title: s.title,
             owner: s.owner,
             slaDays: s.slaDays,
             status: 'pending' as const,
-            dueDate: new Date(startMs + s.slaDays * 24 * 3600 * 1000).toISOString().split('T')[0],
+            dueDate: new Date(startMs + (s.slaDays ?? 0) * 24 * 3600 * 1000).toISOString().split('T')[0],
         }))
-        await db.insert(onboardingSteps).values(templateSteps)
+        if (templateSteps.length > 0) {
+            const insertedSteps = await db.insert(onboardingSteps).values(templateSteps).returning({
+                id: onboardingSteps.id,
+                stepOrder: onboardingSteps.stepOrder,
+            })
+
+            // Copy template required-docs into the new instance steps. Only
+            // applies when we used the tenant's editable template (not the
+            // hard-coded fallback for legacy tenants, since those rows have no
+            // template-step id to look up against).
+            if (usingTenantTemplate) {
+                const templateStepIds = source
+                    .map(s => s.id)
+                    .filter((id): id is string => typeof id === 'string')
+                if (templateStepIds.length > 0) {
+                    const templateDocs = await db.select().from(onboardingTemplateStepRequiredDocs)
+                        .where(and(
+                            eq(onboardingTemplateStepRequiredDocs.tenantId, tenantId),
+                            inArray(onboardingTemplateStepRequiredDocs.templateStepId, templateStepIds),
+                        ))
+                    if (templateDocs.length > 0) {
+                        // Map: template_step_id → new instance step id (paired by stepOrder).
+                        const instanceByOrder = new Map(insertedSteps.map(s => [s.stepOrder, s.id]))
+                        const templateOrderById = new Map(source.filter(s => s.id).map(s => [s.id as string, s.stepOrder]))
+                        const docRows = templateDocs
+                            .map(d => {
+                                const order = templateOrderById.get(d.templateStepId)
+                                const instanceStepId = order != null ? instanceByOrder.get(order) : undefined
+                                if (!instanceStepId) return null
+                                return {
+                                    tenantId,
+                                    stepId: instanceStepId,
+                                    category: d.category,
+                                    docType: d.docType,
+                                    expiryRequired: d.expiryRequired,
+                                    isMandatory: d.isMandatory,
+                                    hint: d.hint,
+                                    sortOrder: d.sortOrder,
+                                }
+                            })
+                            .filter((r): r is NonNullable<typeof r> => r != null)
+                        if (docRows.length > 0) {
+                            await db.insert(onboardingStepRequiredDocs).values(docRows)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     return { checklist }

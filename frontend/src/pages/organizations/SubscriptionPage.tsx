@@ -391,11 +391,13 @@ function PlanCard({ plan, isCurrent, onUpgrade, onEnterprise }: {
 // ─── Invoice row (clean card-style) ───────────────────────────────────────────
 
 function InvoiceRow({ event }: { event: SubscriptionEvent }) {
+    const { t } = useTranslation()
     const [downloading, setDownloading] = useState(false)
     const meta = event.metadata ?? {}
     const invoiceRef = (meta.invoiceRef as string) ?? `INV-${event.id.slice(0, 8).toUpperCase()}`
     const isDownloadable = ['plan_activated', 'quota_updated'].includes(event.eventType)
     const tone = EVENT_TONE[event.eventType] ?? 'bg-slate-100 text-slate-600 ring-slate-200'
+    const eventLabel = t(`subscriptionPage.events.${event.eventType}`, { defaultValue: event.eventType })
 
     async function handleDownload() {
         setDownloading(true)
@@ -423,7 +425,7 @@ function InvoiceRow({ event }: { event: SubscriptionEvent }) {
                         'shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full ring-1 capitalize',
                         tone,
                     )}>
-                        {EVENT_LABELS[event.eventType] ?? event.eventType}
+                        {eventLabel}
                     </span>
                 </div>
                 <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">

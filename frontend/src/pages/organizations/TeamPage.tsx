@@ -716,6 +716,7 @@ function TeamGridSkeletonRow() {
 
 // Top-level (stable identity) so React keeps card state across parent re-renders.
 function TeamGrid({ teams, showControls, canManage, canViewAll, userId, orgMap, onEditTeam, onDeleteTeam }: TeamGridProps) {
+    const { t } = useTranslation()
     const [visibleCount, setVisibleCount] = useState(TEAMS_PAGE_SIZE)
     const sentinelRef = useRef<HTMLDivElement>(null)
 

@@ -30,20 +30,32 @@ export function ProfileTab() {
     const [regionalForm, setRegionalForm] = useState({ timezone: 'Asia/Dubai', currency: 'AED', dateFormat: 'DD/MM/YYYY' })
     const [saved, setSaved] = useState(false)
 
-    // Sync form when company settings load — track a stable property in state to avoid
-    // resetting in-progress edits on every re-render.
-    const companyId = company?.id as string | undefined
+    // Hydrate the form from server data when (and only when) the source row identity
+    // changes. Tracked via a "previous" sentinel so we don't clobber in-progress
+    // edits on every re-render. (React docs pattern: "Storing information from
+    // previous renders" — preferred over useEffect for sync.)
+    const companyId = company?.id
     const [prevCompanyId, setPrevCompanyId] = useState<string | undefined>(undefined)
     if (companyId !== undefined && companyId !== prevCompanyId) {
         setPrevCompanyId(companyId)
-        setForm({ name: company?.name ?? '', companyCode: company?.companyCode ?? '', tradeLicenseNo: company?.tradeLicenseNo ?? '', jurisdiction: company?.jurisdiction ?? '', industryType: company?.industryType ?? '' })
+        setForm({
+            name: company?.name ?? '',
+            companyCode: company?.companyCode ?? '',
+            tradeLicenseNo: company?.tradeLicenseNo ?? '',
+            jurisdiction: company?.jurisdiction ?? '',
+            industryType: company?.industryType ?? '',
+        })
     }
 
     const loadedTz = regional?.timezone
     const [prevRegionalTz, setPrevRegionalTz] = useState<string | undefined>(undefined)
     if (loadedTz !== undefined && loadedTz !== prevRegionalTz) {
         setPrevRegionalTz(loadedTz)
-        setRegionalForm({ timezone: regional?.timezone ?? 'Asia/Dubai', currency: regional?.currency ?? 'AED', dateFormat: regional?.dateFormat ?? 'DD/MM/YYYY' })
+        setRegionalForm({
+            timezone: regional?.timezone ?? 'Asia/Dubai',
+            currency: regional?.currency ?? 'AED',
+            dateFormat: regional?.dateFormat ?? 'DD/MM/YYYY',
+        })
     }
 
     const set = (field: keyof CompanySettings, value: string) => setForm(p => ({ ...p, [field]: value }))

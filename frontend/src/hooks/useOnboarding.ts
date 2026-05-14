@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { toast } from '@/components/ui/overlays'
 
 export type OnboardingStepStatus = 'pending' | 'in_progress' | 'completed' | 'overdue'
 
@@ -197,6 +198,39 @@ export function useDeleteStepRequiredDoc() {
     })
 }
 
+// ─── Template-level required-docs (Organization Settings) ───────────────────
+// Same wire format as the instance-level hooks above; just point at the
+// /template-steps/... routes so admins curate the defaults once.
+
+export function useTemplateStepRequiredDocs(templateStepId: string | null | undefined) {
+    return useQuery({
+        queryKey: ['onboarding-template-required-docs', templateStepId],
+        queryFn: () =>
+            api.get<{ data: StepRequiredDoc[] }>(`/onboarding/template-steps/${templateStepId}/required-docs`).then(r => r.data),
+        enabled: !!templateStepId,
+    })
+}
+
+export function useAddTemplateStepRequiredDoc() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (input: { templateStepId: string; category: string; docType: string; expiryRequired?: boolean; isMandatory?: boolean; hint?: string }) =>
+            api.post<{ data: StepRequiredDoc }>(`/onboarding/template-steps/${input.templateStepId}/required-docs`, input).then(r => r.data),
+        onSuccess: (_d, vars) => {
+            qc.invalidateQueries({ queryKey: ['onboarding-template-required-docs', vars.templateStepId] })
+        },
+    })
+}
+
+export function useDeleteTemplateStepRequiredDoc() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (requiredDocId: string) =>
+            api.delete<{ data: StepRequiredDoc }>(`/onboarding/template-required-docs/${requiredDocId}`).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['onboarding-template-required-docs'] }),
+    })
+}
+
 export interface ChecklistDocSummary {
     steps: Array<{
         stepId: string
@@ -260,14 +294,85 @@ export function useOnboardingUploadInfo(token: string) {
     })
 }
 
+/* ─── Onboarding Template Steps (per-tenant) ──────────────────────────────── */
+
+export interface OnboardingTemplateStep {
+    id: string
+    tenantId: string
+    stepOrder: number
+    title: string
+    owner: string | null
+    slaDays: number | null
+    createdAt: string
+    updatedAt: string
+}
+
+export function useOnboardingTemplateSteps() {
+    return useQuery({
+        queryKey: ['onboarding-template-steps'],
+        queryFn: () => api.get<{ data: OnboardingTemplateStep[] }>('/onboarding/template-steps').then(r => r.data),
+        staleTime: 60_000,
+    })
+}
+
+export function useCreateOnboardingTemplateStep() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: { title: string; owner?: string; slaDays?: number }) =>
+            api.post<{ data: OnboardingTemplateStep }>('/onboarding/template-steps', data).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['onboarding-template-steps'] }),
+        onError: (err: Error) => toast.error('Failed to add step', err.message),
+    })
+}
+
+export function useUpdateOnboardingTemplateStep() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ stepId, ...data }: { stepId: string; title?: string; owner?: string | null; slaDays?: number | null }) =>
+            api.patch<{ data: OnboardingTemplateStep }>(`/onboarding/template-steps/${stepId}`, data).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['onboarding-template-steps'] }),
+        onError: (err: Error) => toast.error('Failed to update step', err.message),
+    })
+}
+
+export function useDeleteOnboardingTemplateStep() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (stepId: string) => api.delete(`/onboarding/template-steps/${stepId}`),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['onboarding-template-steps'] }),
+        onError: (err: Error) => toast.error('Failed to delete step', err.message),
+    })
+}
+
+export function useReorderOnboardingTemplateSteps() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (orderedIds: string[]) =>
+            api.post<{ data: OnboardingTemplateStep[] }>('/onboarding/template-steps/reorder', { orderedIds }).then(r => r.data),
+        onSuccess: (data) => qc.setQueryData(['onboarding-template-steps'], data),
+        onError: (err: Error) => toast.error('Failed to reorder steps', err.message),
+    })
+}
+
+export function useResetOnboardingTemplate() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: () =>
+            api.post<{ data: OnboardingTemplateStep[] }>('/onboarding/template-steps/reset').then(r => r.data),
+        onSuccess: (data) => qc.setQueryData(['onboarding-template-steps'], data),
+        onError: (err: Error) => toast.error('Failed to reset template', err.message),
+    })
+}
+
 export function useOnboardingPublicUpload(token: string) {
     return useMutation({
-        mutationFn: async (input: { file: File; stepId: string; category: string; docType: string; expiryDate?: string }) => {
+        mutationFn: async (input: { file: File; stepId: string; category: string; docType: string; docNumber?: string; expiryDate?: string }) => {
             const fd = new FormData()
             fd.append('file', input.file)
             fd.append('stepId', input.stepId)
             fd.append('category', input.category)
             fd.append('docType', input.docType)
+            if (input.docNumber) fd.append('docNumber', input.docNumber)
             if (input.expiryDate) fd.append('expiryDate', input.expiryDate)
             return api.upload<{ data: unknown }>(`/onboarding/upload?t=${encodeURIComponent(token)}`, fd)
         },

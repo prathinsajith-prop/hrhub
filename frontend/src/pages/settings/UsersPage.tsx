@@ -14,7 +14,7 @@ import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
 import {
     useTenantUsers, useUpdateUser, useInvitableEmployees,
-    useInviteUserBulk, useResendInvite,
+    useInviteUserBulk, useResendUserInvite,
     type InvitableEmployee,
 } from '@/hooks/useSettings'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -284,7 +284,7 @@ export function UsersPage() {
     const canManageUsers = can('manage_users')
     const { data: tenantUsers, isLoading } = useTenantUsers()
     const updateUser = useUpdateUser()
-    const resendInvite = useResendInvite()
+    const resendInvite = useResendUserInvite()
     const [showInvite, setShowInvite] = useState(false)
     const [deactivateTarget, setDeactivateTarget] = useState<{ id: string; name: string; active: boolean } | null>(null)
 

@@ -9,7 +9,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -26,31 +25,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { cn, getInitials, formatDate, formatCurrency } from '@/lib/utils'
 import { useApplication, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume } from '@/hooks/useRecruitment'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
+import { useDesignations, useDesignationOptions, useCreateDesignation } from '@/hooks/useDesignations'
+import { useRecruitmentStages } from '@/hooks/useRecruitment'
+import { DEFAULT_STAGES, kanbanStages as filterKanbanStages, resolveStageColor, stageByKey, type RecruitmentStage } from '@/lib/recruitmentStages'
 import { buildOrgOptions } from '@/components/shared/action-dialogs'
 import { Combobox } from '@/components/ui/combobox'
 import { toast } from '@/components/ui/overlays'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { CopyableEmail, CopyablePhone } from '@/components/shared'
 import { FlagImg, resolveCountryIso } from '@/components/shared/PhoneInput'
-import type { Candidate, ApplicationStage } from '@/types'
+import type { Candidate } from '@/types'
 
-const STAGE_CONFIG: Record<ApplicationStage, {
-    labelKey: string
-    badgeClass: string
-    dotClass: string
-    textClass: string
-    lineClass: string
-}> = {
-    received: { labelKey: 'recruitment.stages.received', badgeClass: 'bg-slate-100 text-slate-600 border-slate-300', dotClass: 'bg-slate-400 border-slate-400 text-white', lineClass: 'bg-slate-200', textClass: 'text-slate-600' },
-    screening: { labelKey: 'recruitment.stages.screening', badgeClass: 'bg-info/10 text-info border-info/20', dotClass: 'bg-info border-info text-white', lineClass: 'bg-info/30', textClass: 'text-info' },
-    interview: { labelKey: 'recruitment.stages.interview', badgeClass: 'bg-warning/10 text-warning border-warning/20', dotClass: 'bg-warning border-warning text-warning-foreground', lineClass: 'bg-warning/30', textClass: 'text-warning' },
-    assessment: { labelKey: 'recruitment.stages.assessment', badgeClass: 'bg-primary/10 text-primary border-primary/20', dotClass: 'bg-primary border-primary text-primary-foreground', lineClass: 'bg-primary/30', textClass: 'text-primary' },
-    offer: { labelKey: 'recruitment.stages.offer', badgeClass: 'bg-success/10 text-success border-success/20', dotClass: 'bg-success border-success text-success-foreground', lineClass: 'bg-success/30', textClass: 'text-success' },
-    pre_boarding: { labelKey: 'recruitment.stages.preBoarding', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200', dotClass: 'bg-emerald-500 border-emerald-500 text-white', lineClass: 'bg-emerald-200', textClass: 'text-emerald-600' },
-    rejected: { labelKey: 'recruitment.stages.rejected', badgeClass: 'bg-destructive/10 text-destructive border-destructive/20', dotClass: 'bg-destructive border-destructive text-destructive-foreground', lineClass: 'bg-destructive/30', textClass: 'text-destructive' },
-}
-
-const STAGE_ORDER: ApplicationStage[] = ['received', 'screening', 'interview', 'assessment', 'offer', 'pre_boarding']
+// Stage labels / colours come from the per-tenant config via useRecruitmentStages.
+// DEFAULT_STAGES is the fallback while the API is loading.
 
 const NOTE_ENTRY_RE = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\]\s*(?:([^:]+):\s*)?(.*)$/
 
@@ -141,6 +128,18 @@ export function CandidateProfilePage() {
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const orgOptions = buildOrgOptions(orgUnits)
+    const { data: designationList = [] } = useDesignations()
+    const createDesignation = useCreateDesignation()
+    const designationOptions = useDesignationOptions()
+
+    const { data: stagesData } = useRecruitmentStages()
+    const allStages = useMemo<RecruitmentStage[]>(
+        () => (stagesData && stagesData.length > 0
+            ? stagesData
+            : DEFAULT_STAGES.map((s) => ({ ...s, id: `default-${s.stageKey}`, tenantId: '', createdAt: '', updatedAt: '' }))),
+        [stagesData],
+    )
+    const linearStages = useMemo(() => filterKanbanStages(allStages), [allStages])
 
     const candidate = candidateData as Candidate | undefined
 
@@ -175,19 +174,23 @@ export function CandidateProfilePage() {
         )
     }
 
-    const currentStageIdx = STAGE_ORDER.indexOf(candidate.stage)
+    const currentStageIdx = linearStages.findIndex(s => s.stageKey === candidate.stage)
     const isRejected = candidate.stage === 'rejected'
-    const isLastStage = currentStageIdx >= STAGE_ORDER.length - 1
-    const stageCfg = STAGE_CONFIG[candidate.stage]
+    const isLastStage = currentStageIdx >= linearStages.length - 1
+    const currentStage = stageByKey(allStages, candidate.stage)
+    const stageColor = resolveStageColor(currentStage?.colorKey)
+    const rejectedStage = stageByKey(allStages, 'rejected')
+    const rejectedColor = resolveStageColor(rejectedStage?.colorKey)
+    const nextStageEntry = currentStageIdx >= 0 ? linearStages[currentStageIdx + 1] : undefined
     const effectiveResumeUrl = resumeDownloadUrl ?? candidate.resumeUrl
 
     function handleAdvanceStage() {
-        const nextStage = STAGE_ORDER[currentStageIdx + 1]
-        if (!nextStage) return
+        if (!nextStageEntry) return
+        const nextKey = nextStageEntry.stageKey
         updateStage.mutate(
-            { id: candidate!.id, stage: nextStage },
+            { id: candidate!.id, stage: nextKey },
             {
-                onSuccess: () => toast.success(t('recruitment.candidateProfile.toast.movedTo', { stage: t(STAGE_CONFIG[nextStage].labelKey) })),
+                onSuccess: () => toast.success(t('recruitment.candidateProfile.toast.movedTo', { stage: nextStageEntry.label })),
                 onError: () => toast.error(t('recruitment.candidateProfile.toast.failedUpdateStage')),
             },
         )
@@ -225,9 +228,17 @@ export function CandidateProfilePage() {
         )
     }
 
-    function handleConvertSubmit() {
+    async function handleConvertSubmit() {
         const trimmedNote = convertForm.note.trim()
         if (!trimmedNote) { toast.error(t('recruitment.candidateProfile.toast.noteRequired'), t('recruitment.candidateProfile.toast.addConversionNote')); return }
+        // Auto-create the designation if the user typed a new name not already in the list.
+        if (convertForm.designation) {
+            const exists = (Array.isArray(designationList) ? designationList : [])
+                .some((d: { name: string; isActive: boolean }) => d.isActive && d.name.toLowerCase() === convertForm.designation.toLowerCase())
+            if (!exists) {
+                try { await createDesignation.mutateAsync({ name: convertForm.designation }) } catch { /* toast handled by hook */ }
+            }
+        }
         const merged = appendNoteEntry(candidate!.notes, 'Converted', trimmedNote)
         updateApplication.mutate(
             { id: candidate!.id, data: { notes: merged } },
@@ -280,8 +291,8 @@ export function CandidateProfilePage() {
                             <span className="text-sm text-muted-foreground">
                                 {t('recruitment.candidateProfile.appliedDate', { date: candidate.appliedDate ? formatDate(candidate.appliedDate) : '—' })}
                             </span>
-                            <Badge variant="outline" className={cn('text-[11px]', stageCfg.badgeClass)}>
-                                {t(stageCfg.labelKey)}
+                            <Badge variant="outline" className={cn('text-[11px]', stageColor.badgeClass)}>
+                                {currentStage?.label ?? candidate.stage}
                             </Badge>
                         </div>
                     </div>
@@ -423,7 +434,7 @@ export function CandidateProfilePage() {
                             ) : !isLastStage ? (
                                 <Button className="w-full" onClick={handleAdvanceStage} disabled={updateStage.isPending}>
                                     <ChevronRight className="h-4 w-4 mr-1.5" />
-                                    {t('recruitment.candidateProfile.moveTo', { stage: t(STAGE_CONFIG[STAGE_ORDER[currentStageIdx + 1]].labelKey) })}
+                                    {t('recruitment.candidateProfile.moveTo', { stage: nextStageEntry?.label ?? '' })}
                                 </Button>
                             ) : null}
                             <Button
@@ -453,18 +464,18 @@ export function CandidateProfilePage() {
                             <Card className={cn('border', isRejected ? 'border-destructive/30 bg-destructive/5' : 'border-primary/20 bg-primary/5')}>
                                 <CardContent className="p-4">
                                     <div className="flex items-center gap-3">
-                                        <div className={cn('h-9 w-9 rounded-full flex items-center justify-center shrink-0', stageCfg.dotClass)}>
+                                        <div className={cn('h-9 w-9 rounded-full flex items-center justify-center shrink-0 text-white', stageColor.dotClass)}>
                                             {isRejected ? <XCircle className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
                                         </div>
                                         <div>
                                             <p className="font-semibold text-sm">
-                                                {isRejected ? t('recruitment.candidateProfile.overview.applicationRejected') : t('recruitment.candidateProfile.overview.currentlyIn', { stage: t(stageCfg.labelKey) })}
+                                                {isRejected ? t('recruitment.candidateProfile.overview.applicationRejected') : t('recruitment.candidateProfile.overview.currentlyIn', { stage: currentStage?.label ?? candidate.stage })}
                                             </p>
                                             <p className="text-xs text-muted-foreground mt-0.5">
                                                 {isRejected
                                                     ? t('recruitment.candidateProfile.overview.removedFromPipeline')
                                                     : !isLastStage
-                                                        ? t('recruitment.candidateProfile.overview.nextStage', { stage: t(STAGE_CONFIG[STAGE_ORDER[currentStageIdx + 1]].labelKey) })
+                                                        ? t('recruitment.candidateProfile.overview.nextStage', { stage: nextStageEntry?.label ?? '' })
                                                         : t('recruitment.candidateProfile.overview.finalStage')}
                                             </p>
                                         </div>
@@ -507,27 +518,27 @@ export function CandidateProfilePage() {
                                     <CardTitle className="text-sm">{t('recruitment.candidateProfile.pipeline.title')}</CardTitle>
                                 </CardHeader>
                                 <CardContent className="pt-0 space-y-1">
-                                    {STAGE_ORDER.map((stage, i) => {
+                                    {linearStages.map((stage, i) => {
                                         const done = i < currentStageIdx
                                         const current = i === currentStageIdx && !isRejected
-                                        const cfg = STAGE_CONFIG[stage]
+                                        const cfg = resolveStageColor(stage.colorKey)
                                         return (
-                                            <div key={stage} className="flex gap-4">
+                                            <div key={stage.id} className="flex gap-4">
                                                 <div className="flex flex-col items-center">
                                                     <div className={cn(
-                                                        'h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2',
+                                                        'h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2 text-white',
                                                         done || current ? cfg.dotClass : 'bg-card border-border text-muted-foreground',
                                                     )}>
                                                         {done ? '✓' : i + 1}
                                                     </div>
-                                                    {i < STAGE_ORDER.length - 1 && (
+                                                    {i < linearStages.length - 1 && (
                                                         <div className={cn('w-0.5 flex-1 min-h-[24px] mt-1', done ? cfg.lineClass : 'bg-border')} />
                                                     )}
                                                 </div>
                                                 <div className="pb-4 flex-1">
                                                     <div className="flex items-center gap-2">
                                                         <p className={cn('font-medium text-sm', done || current ? cfg.textClass : 'text-muted-foreground')}>
-                                                            {t(cfg.labelKey)}
+                                                            {stage.label}
                                                         </p>
                                                         {current && (
                                                             <Badge variant="outline" className={cn('text-[10px] py-0 h-4', cfg.badgeClass)}>
@@ -544,11 +555,11 @@ export function CandidateProfilePage() {
                                     })}
                                     {isRejected && (
                                         <div className="flex gap-4">
-                                            <div className={cn('h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2', STAGE_CONFIG.rejected.dotClass)}>
+                                            <div className={cn('h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2 text-white', rejectedColor.dotClass)}>
                                                 ✕
                                             </div>
                                             <div className="flex-1 pb-2">
-                                                <p className={cn('font-medium text-sm', STAGE_CONFIG.rejected.textClass)}>{t('recruitment.stages.rejected')}</p>
+                                                <p className={cn('font-medium text-sm', rejectedColor.textClass)}>{rejectedStage?.label ?? t('recruitment.stages.rejected')}</p>
                                                 <p className="text-xs text-muted-foreground mt-0.5">{t('recruitment.candidateProfile.pipeline.applicationClosed')}</p>
                                             </div>
                                         </div>
@@ -649,10 +660,14 @@ export function CandidateProfilePage() {
                             </div>
                             <div className="space-y-1.5">
                                 <Label>{t('recruitment.candidateProfile.convertDialog.designation')}</Label>
-                                <Input
+                                <Combobox
                                     value={convertForm.designation}
-                                    onChange={(e) => setConvertForm((f) => ({ ...f, designation: e.target.value }))}
+                                    onValueChange={(v) => setConvertForm((f) => ({ ...f, designation: v }))}
+                                    options={designationOptions}
                                     placeholder={t('recruitment.candidateProfile.convertDialog.designationPlaceholder')}
+                                    searchPlaceholder="Search or create…"
+                                    clearable
+                                    creatable
                                 />
                             </div>
                             <div className="space-y-1.5">

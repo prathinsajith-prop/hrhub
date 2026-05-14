@@ -7,11 +7,11 @@ interface DocParams { employeeId?: string; q?: string; filters?: AppliedFiltersM
 
 export function useDocuments(params: DocParams = {}) {
     const { employeeId, q, filters, limit = 20, offset = 0 } = params
-    const qs = buildSearchQuery(q, filters, { limit, offset })
-    const extraQS = employeeId ? `&employeeId=${employeeId}` : ''
+    const search = new URLSearchParams(buildSearchQuery(q, filters, { limit, offset }))
+    if (employeeId) search.set('employeeId', employeeId)
     return useQuery({
         queryKey: ['documents', employeeId, q, filters, limit, offset],
-        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/documents?${qs}${extraQS}`),
+        queryFn: () => api.get<{ data: unknown[]; total: number }>(`/documents?${search.toString()}`),
         staleTime: 30_000,
     })
 }
