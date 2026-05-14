@@ -197,10 +197,22 @@ function SortableRow({ step, index, onEdit, onDelete, onRequiredDocs }: Sortable
                     {step.slaDays != null && <span>{t('orgSettings.onboardingTemplate.slaPrefix', { days: step.slaDays })}</span>}
                 </div>
             </div>
+            <button
+                type="button"
+                onClick={onRequiredDocs}
+                className={cn(
+                    'flex items-center gap-1.5 px-2 h-6 rounded-full border text-[10px] font-medium transition-colors shrink-0',
+                    step.requiredDocsCount > 0
+                        ? 'bg-primary/5 border-primary/20 text-primary hover:bg-primary/10'
+                        : 'bg-muted/40 border-border text-muted-foreground hover:bg-muted',
+                )}
+                aria-label={t('orgSettings.onboardingTemplate.requiredDocsLabel')}
+                title={t('orgSettings.onboardingTemplate.requiredDocsLabel')}
+            >
+                <FileText className="h-3 w-3" />
+                {step.requiredDocsCount} {step.requiredDocsCount === 1 ? 'doc' : 'docs'}
+            </button>
             <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onRequiredDocs} aria-label={t('orgSettings.onboardingTemplate.requiredDocsLabel')} title={t('orgSettings.onboardingTemplate.requiredDocsLabel')}>
-                    <FileText className="h-3.5 w-3.5" />
-                </Button>
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit} aria-label={t('orgSettings.onboardingTemplate.editLabel')}>
                     <Pencil className="h-3.5 w-3.5" />
                 </Button>

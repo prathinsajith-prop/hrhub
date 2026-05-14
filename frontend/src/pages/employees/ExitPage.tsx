@@ -180,8 +180,13 @@ export function ExitPage() {
     const set = (k: keyof InitiateForm, v: string | number) => setForm(f => ({ ...f, [k]: v }))
 
     async function handleSubmit() {
+        if (!form.reason?.trim()) {
+            toast.warning('Reason required', 'Please provide a reason for the exit.')
+            setStep('form')
+            return
+        }
         try {
-            await initiate.mutateAsync(form)
+            await initiate.mutateAsync({ ...form, reason: form.reason.trim() })
             toast.success('Exit initiated', 'Employee exit request submitted successfully.')
             setShowDialog(false)
             setForm(defaultForm)
@@ -627,7 +632,7 @@ export function ExitPage() {
                                 </div>
                             </div>
                             <div className="space-y-1.5">
-                                <Label>Reason</Label>
+                                <Label required>Reason</Label>
                                 <Textarea value={form.reason} onChange={e => set('reason', e.target.value)} rows={2} placeholder="Reason for exit…" />
                             </div>
                             <div className="space-y-1.5">
@@ -698,7 +703,7 @@ export function ExitPage() {
                                 <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
                                 <Button
                                     onClick={() => setStep('preview')}
-                                    disabled={!form.employeeId || !form.exitDate || !form.lastWorkingDay}
+                                    disabled={!form.employeeId || !form.exitDate || !form.lastWorkingDay || !form.reason?.trim()}
                                 >
                                     Preview Settlement
                                 </Button>

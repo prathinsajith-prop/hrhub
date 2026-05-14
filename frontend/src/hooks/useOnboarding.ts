@@ -303,6 +303,8 @@ export interface OnboardingTemplateStep {
     title: string
     owner: string | null
     slaDays: number | null
+    /** Number of required documents configured for this template step. */
+    requiredDocsCount: number
     createdAt: string
     updatedAt: string
 }

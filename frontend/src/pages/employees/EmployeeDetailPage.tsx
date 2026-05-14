@@ -3157,13 +3157,13 @@ function TerminateDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label required>Reason for Termination</Label>
+              <Label required>Reason</Label>
               <Textarea value={reason} onChange={e => setReason(e.target.value)} rows={2} placeholder="Reason for termination…" />
             </div>
 
             <div className="space-y-1.5">
-              <Label>Additional Notes</Label>
-              <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Any additional notes for the record…" />
+              <Label>Notes</Label>
+              <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Additional notes…" />
             </div>
           </div>
         )}
@@ -3209,21 +3209,18 @@ function TerminateDialog({
         )}
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={handleClose} disabled={initiateExit.isPending}>Cancel</Button>
           {step === 'form' ? (
             <>
-              <Button variant="outline" onClick={() => setStep('preview')} disabled={!exitDate || !lastWorkingDay}>
+              <Button variant="outline" onClick={handleClose} disabled={initiateExit.isPending}>Cancel</Button>
+              <Button onClick={() => setStep('preview')} disabled={!exitDate || !lastWorkingDay || !reason.trim()}>
                 Preview Settlement
-              </Button>
-              <Button variant="destructive" onClick={handleSubmit} loading={initiateExit.isPending}>
-                Submit Termination
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={() => setStep('form')}>Back to Form</Button>
-              <Button variant="destructive" onClick={handleSubmit} loading={initiateExit.isPending}>
-                Confirm Termination
+              <Button variant="outline" onClick={() => setStep('form')} disabled={initiateExit.isPending}>Back</Button>
+              <Button variant="destructive" onClick={handleSubmit} loading={initiateExit.isPending || previewLoading}>
+                Confirm &amp; Submit
               </Button>
             </>
           )}

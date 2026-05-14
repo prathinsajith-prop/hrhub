@@ -28,6 +28,12 @@ export interface RecruitmentStage {
     colorKey: string
     stageOrder: number
     isTerminal: boolean
+    /** True for the tenant's designated entry stage. Exactly one per tenant. */
+    isFirst: boolean
+    /** True for the tenant's designated final stage. Exactly one per tenant. */
+    isFinal: boolean
+    /** Admins can hide any stage from the kanban while keeping it valid in the data. */
+    showInKanban: boolean
     createdAt: string
     updatedAt: string
 }
@@ -78,19 +84,19 @@ export function resolveStageColor(colorKey: string | undefined): StageColor {
 
 // Used as the optimistic fallback while the API is loading. Always kept in
 // sync with DEFAULT_RECRUITMENT_STAGES on the backend.
-export const DEFAULT_STAGES: ReadonlyArray<Pick<RecruitmentStage, 'stageKey' | 'label' | 'colorKey' | 'stageOrder' | 'isTerminal'>> = [
-    { stageOrder: 1, stageKey: 'received',     label: 'Received',     colorKey: 'slate',   isTerminal: false },
-    { stageOrder: 2, stageKey: 'screening',    label: 'Screening',    colorKey: 'blue',    isTerminal: false },
-    { stageOrder: 3, stageKey: 'interview',    label: 'Interview',    colorKey: 'amber',   isTerminal: false },
-    { stageOrder: 4, stageKey: 'assessment',   label: 'Assessment',   colorKey: 'primary', isTerminal: false },
-    { stageOrder: 5, stageKey: 'offer',        label: 'Offer',        colorKey: 'green',   isTerminal: false },
-    { stageOrder: 6, stageKey: 'pre_boarding', label: 'Pre-boarding', colorKey: 'emerald', isTerminal: false },
-    { stageOrder: 7, stageKey: 'rejected',     label: 'Rejected',     colorKey: 'red',     isTerminal: true  },
+export const DEFAULT_STAGES: ReadonlyArray<Pick<RecruitmentStage, 'stageKey' | 'label' | 'colorKey' | 'stageOrder' | 'isTerminal' | 'isFirst' | 'isFinal' | 'showInKanban'>> = [
+    { stageOrder: 1, stageKey: 'received',     label: 'Received',     colorKey: 'slate',   isTerminal: false, isFirst: true,  isFinal: false, showInKanban: true  },
+    { stageOrder: 2, stageKey: 'screening',    label: 'Screening',    colorKey: 'blue',    isTerminal: false, isFirst: false, isFinal: false, showInKanban: true  },
+    { stageOrder: 3, stageKey: 'interview',    label: 'Interview',    colorKey: 'amber',   isTerminal: false, isFirst: false, isFinal: false, showInKanban: true  },
+    { stageOrder: 4, stageKey: 'assessment',   label: 'Assessment',   colorKey: 'primary', isTerminal: false, isFirst: false, isFinal: false, showInKanban: true  },
+    { stageOrder: 5, stageKey: 'offer',        label: 'Offer',        colorKey: 'green',   isTerminal: false, isFirst: false, isFinal: false, showInKanban: true  },
+    { stageOrder: 6, stageKey: 'pre_boarding', label: 'Pre-boarding', colorKey: 'emerald', isTerminal: false, isFirst: false, isFinal: false, showInKanban: true  },
+    { stageOrder: 7, stageKey: 'rejected',     label: 'Rejected',     colorKey: 'red',     isTerminal: true,  isFirst: false, isFinal: true,  showInKanban: false },
 ]
 
-/** Stages shown on the kanban board — terminal stages (e.g. rejected) are filtered out. */
-export function kanbanStages<T extends { isTerminal: boolean }>(stages: ReadonlyArray<T>): T[] {
-    return stages.filter(s => !s.isTerminal)
+/** Stages rendered on the kanban board. Admin-controlled per stage. */
+export function kanbanStages<T extends { showInKanban: boolean }>(stages: ReadonlyArray<T>): T[] {
+    return stages.filter(s => s.showInKanban)
 }
 
 /** Find a stage by its key. Returns undefined if not present. */
@@ -98,8 +104,8 @@ export function stageByKey<T extends { stageKey: string }>(stages: ReadonlyArray
     return stages.find(s => s.stageKey === key)
 }
 
-/** Next stage in the configured order, skipping terminal stages. */
-export function nextStage<T extends { stageKey: string; stageOrder: number; isTerminal: boolean }>(
+/** Next stage in the configured order, skipping stages hidden from the kanban. */
+export function nextStage<T extends { stageKey: string; stageOrder: number; showInKanban: boolean }>(
     stages: ReadonlyArray<T>,
     currentKey: string,
 ): T | undefined {
