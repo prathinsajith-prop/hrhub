@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import { labelFor } from '@/lib/enums'
 import {
@@ -38,23 +39,24 @@ import { usePermissions } from '@/hooks/usePermissions'
 
 // ─── Status badges ────────────────────────────────────────────────────────────
 
-const STATUS_BADGE: Record<Asset['status'], { variant: 'success' | 'info' | 'warning' | 'destructive' | 'secondary'; label: string }> = {
-    available: { variant: 'success', label: 'Available' },
-    assigned: { variant: 'info', label: 'Assigned' },
-    maintenance: { variant: 'warning', label: 'Maintenance' },
-    lost: { variant: 'destructive', label: 'Lost' },
-    retired: { variant: 'secondary', label: 'Retired' },
+const STATUS_BADGE: Record<Asset['status'], { variant: 'success' | 'info' | 'warning' | 'destructive' | 'secondary'; labelKey: string }> = {
+    available: { variant: 'success', labelKey: 'assets.available' },
+    assigned: { variant: 'info', labelKey: 'assets.assigned' },
+    maintenance: { variant: 'warning', labelKey: 'assets.maintenance' },
+    lost: { variant: 'destructive', labelKey: 'assets.lost' },
+    retired: { variant: 'secondary', labelKey: 'assets.retired' },
 }
 
-const CONDITION_BADGE: Record<Asset['condition'], { variant: 'success' | 'info' | 'warning'; label: string }> = {
-    new: { variant: 'success', label: 'New' },
-    good: { variant: 'info', label: 'Good' },
-    damaged: { variant: 'warning', label: 'Damaged' },
+const CONDITION_BADGE: Record<Asset['condition'], { variant: 'success' | 'info' | 'warning'; labelKey: string }> = {
+    new: { variant: 'success', labelKey: 'assets.new' },
+    good: { variant: 'info', labelKey: 'assets.good' },
+    damaged: { variant: 'warning', labelKey: 'assets.damaged' },
 }
 
 // ─── Categories Panel ─────────────────────────────────────────────────────────
 
 function CategoriesPanel({ canManage }: { canManage: boolean }) {
+    const { t } = useTranslation()
     const { data: categories, isLoading } = useAssetCategories()
     const createCategory = useCreateAssetCategory()
     const deleteCategory = useDeleteAssetCategory()
@@ -68,20 +70,20 @@ function CategoriesPanel({ canManage }: { canManage: boolean }) {
         if (!newName.trim()) return
         try {
             await createCategory.mutateAsync({ name: newName.trim(), description: newDesc.trim() || undefined })
-            toast.success('Category added')
+            toast.success(t('assets.categoryAdded'))
             setNewName('')
             setNewDesc('')
         } catch {
-            toast.error('Failed to add category')
+            toast.error(t('assets.categoryAddFailed'))
         }
     }
 
     async function handleDelete(id: string, name: string) {
         try {
             await deleteCategory.mutateAsync(id)
-            toast.success(`"${name}" deleted`)
+            toast.success(t('assets.categoryDeleted', { name }))
         } catch {
-            toast.error('Failed to delete category')
+            toast.error(t('assets.categoryDeleteFailed'))
         }
     }
 
@@ -93,8 +95,8 @@ function CategoriesPanel({ canManage }: { canManage: boolean }) {
                 onClick={() => setCollapsed(c => !c)}
             >
                 <Tags className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Asset Categories</span>
-                <span className="ml-auto text-xs text-muted-foreground">{collapsed ? 'Show' : 'Hide'}</span>
+                <span className="text-sm font-medium">{t('assets.categories')}</span>
+                <span className="ml-auto text-xs text-muted-foreground">{collapsed ? t('assets.show') : t('assets.hide')}</span>
             </button>
 
             {!collapsed && (
@@ -103,7 +105,7 @@ function CategoriesPanel({ canManage }: { canManage: boolean }) {
                     {isLoading ? (
                         <Skeleton className="h-8 w-full" />
                     ) : (categories ?? []).length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No categories yet.</p>
+                        <p className="text-xs text-muted-foreground">{t('assets.noCategories')}</p>
                     ) : (
                         <div className="flex flex-wrap gap-2">
                             {(categories ?? []).map(c => (
@@ -119,7 +121,7 @@ function CategoriesPanel({ canManage }: { canManage: boolean }) {
                                         <button
                                             type="button"
                                             className="ml-1 text-muted-foreground hover:text-destructive transition-colors"
-                                            title={`Delete ${c.name}`}
+                                            title={t('assets.deleteCategory', { name: c.name })}
                                             onClick={() => handleDelete(c.id, c.name)}
                                             disabled={deleteCategory.isPending}
                                         >
@@ -135,26 +137,26 @@ function CategoriesPanel({ canManage }: { canManage: boolean }) {
                     {canManage && (
                         <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-2 border-t pt-3">
                             <div className="space-y-1">
-                                <Label className="text-xs">Name</Label>
+                                <Label className="text-xs">{t('assets.categoryName')}</Label>
                                 <Input
                                     className="h-8 text-sm w-40"
-                                    placeholder="e.g. Electronics"
+                                    placeholder={t('assets.categoryNamePlaceholder')}
                                     value={newName}
                                     onChange={e => setNewName(e.target.value)}
                                     required
                                 />
                             </div>
                             <div className="space-y-1">
-                                <Label className="text-xs">Description (optional)</Label>
+                                <Label className="text-xs">{t('assets.categoryDescription')}</Label>
                                 <Input
                                     className="h-8 text-sm w-52"
-                                    placeholder="Short description…"
+                                    placeholder={t('assets.categoryDescPlaceholder')}
                                     value={newDesc}
                                     onChange={e => setNewDesc(e.target.value)}
                                 />
                             </div>
                             <Button type="submit" size="sm" className="h-8" disabled={createCategory.isPending || !newName.trim()}>
-                                {createCategory.isPending ? 'Adding…' : 'Add'}
+                                {createCategory.isPending ? t('assets.adding') : t('common.add')}
                             </Button>
                         </form>
                     )}
@@ -175,19 +177,16 @@ function AssetFormDialog({
     onOpenChange: (o: boolean) => void
     asset?: Asset
 }) {
+    const { t } = useTranslation()
     const { data: categories } = useAssetCategories()
     const createAsset = useCreateAsset()
     const updateAsset = useUpdateAsset(asset?.id ?? '')
 
     const [form, setForm] = useState<Partial<Asset>>(() => asset ?? { status: 'available', condition: 'good' })
 
-    const [prevAssetFormOpen, setPrevAssetFormOpen] = useState(true)
-    if (!open && prevAssetFormOpen && !asset) {
-        setPrevAssetFormOpen(false)
-        setForm({ status: 'available', condition: 'good' })
-    } else if (open && !prevAssetFormOpen) {
-        setPrevAssetFormOpen(true)
-    }
+    useEffect(() => {
+        if (!open && !asset) setForm({ status: 'available', condition: 'good' })
+    }, [open, asset])
 
     const isEdit = !!asset
     const pending = createAsset.isPending || updateAsset.isPending
@@ -202,14 +201,14 @@ function AssetFormDialog({
         try {
             if (isEdit) {
                 await updateAsset.mutateAsync(payload)
-                toast.success('Asset updated')
+                toast.success(t('assets.assetUpdated'))
             } else {
                 await createAsset.mutateAsync(payload)
-                toast.success('Asset created')
+                toast.success(t('assets.assetCreated'))
             }
             onOpenChange(false)
         } catch {
-            toast.error(isEdit ? 'Failed to update asset' : 'Failed to create asset')
+            toast.error(isEdit ? t('assets.updateFailed') : t('assets.createFailed'))
         }
     }
 
@@ -217,34 +216,34 @@ function AssetFormDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>{isEdit ? 'Edit Asset' : 'New Asset'}</DialogTitle>
+                    <DialogTitle>{isEdit ? t('assets.editAsset') : t('assets.newAsset')}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
                     <DialogBody className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {/* Asset Code — read-only display when editing, hidden on create */}
                         {isEdit && asset?.assetCode && (
                             <div className="space-y-1.5">
-                                <Label>Asset Code</Label>
+                                <Label>{t('assets.assetCode')}</Label>
                                 <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm font-mono font-medium text-muted-foreground">
                                     {asset.assetCode}
                                 </div>
                             </div>
                         )}
                         <div className="space-y-1.5">
-                            <Label required>Name</Label>
+                            <Label required>{t('common.name')}</Label>
                             <Input
                                 value={form.name ?? ''}
                                 onChange={e => set('name', e.target.value)}
-                                placeholder="e.g. MacBook Pro"
+                                placeholder={t('assets.assetNamePlaceholder')}
                                 required
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Category</Label>
+                            <Label>{t('assets.category')}</Label>
                             <Select value={form.categoryId ?? 'none'} onValueChange={v => set('categoryId', v === 'none' ? null : v)}>
-                                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder={t('assets.selectCategory')} /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="none">— None —</SelectItem>
+                                    <SelectItem value="none">{t('assets.noneCategory')}</SelectItem>
                                     {(categories ?? []).map(c => (
                                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                                     ))}
@@ -252,49 +251,49 @@ function AssetFormDialog({
                             </Select>
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Status</Label>
+                            <Label>{t('common.status')}</Label>
                             <Select value={form.status ?? 'available'} onValueChange={v => set('status', v)}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="available">Available</SelectItem>
-                                    <SelectItem value="maintenance">Maintenance</SelectItem>
-                                    <SelectItem value="lost">Lost</SelectItem>
-                                    <SelectItem value="retired">Retired</SelectItem>
+                                    <SelectItem value="available">{t('assets.available')}</SelectItem>
+                                    <SelectItem value="maintenance">{t('assets.maintenance')}</SelectItem>
+                                    <SelectItem value="lost">{t('assets.lost')}</SelectItem>
+                                    <SelectItem value="retired">{t('assets.retired')}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Brand</Label>
-                            <Input value={form.brand ?? ''} onChange={e => set('brand', e.target.value)} placeholder="e.g. Apple" />
+                            <Label>{t('assets.brand')}</Label>
+                            <Input value={form.brand ?? ''} onChange={e => set('brand', e.target.value)} placeholder={t('assets.brandPlaceholder')} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Model</Label>
-                            <Input value={form.model ?? ''} onChange={e => set('model', e.target.value)} placeholder="e.g. M2 Pro" />
+                            <Label>{t('assets.model')}</Label>
+                            <Input value={form.model ?? ''} onChange={e => set('model', e.target.value)} placeholder={t('assets.modelPlaceholder')} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Serial Number</Label>
-                            <Input value={form.serialNumber ?? ''} onChange={e => set('serialNumber', e.target.value)} placeholder="e.g. SN123456" />
+                            <Label>{t('assets.serialNumber')}</Label>
+                            <Input value={form.serialNumber ?? ''} onChange={e => set('serialNumber', e.target.value)} placeholder={t('assets.serialPlaceholder')} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Condition</Label>
+                            <Label>{t('assets.condition')}</Label>
                             <Select value={form.condition ?? 'good'} onValueChange={v => set('condition', v)}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="new">New</SelectItem>
-                                    <SelectItem value="good">Good</SelectItem>
-                                    <SelectItem value="damaged">Damaged</SelectItem>
+                                    <SelectItem value="new">{t('assets.new')}</SelectItem>
+                                    <SelectItem value="good">{t('assets.good')}</SelectItem>
+                                    <SelectItem value="damaged">{t('assets.damaged')}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Purchase Date</Label>
+                            <Label>{t('assets.purchaseDate')}</Label>
                             <DatePicker
                                 value={form.purchaseDate ?? ''}
                                 onChange={v => set('purchaseDate', v || null)}
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Purchase Cost (AED)</Label>
+                            <Label>{t('assets.purchaseCost')}</Label>
                             <NumericInput
                                 maxDecimals={2}
                                 value={form.purchaseCost ?? ''}
@@ -303,14 +302,14 @@ function AssetFormDialog({
                             />
                         </div>
                         <div className="col-span-2 space-y-1.5">
-                            <Label>Notes</Label>
+                            <Label>{t('common.notes')}</Label>
                             <Textarea value={form.notes ?? ''} onChange={e => set('notes', e.target.value)} rows={2} />
                         </div>
                     </DialogBody>
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
                         <Button type="submit" disabled={pending}>
-                            {pending ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Asset'}
+                            {pending ? t('assets.saving') : isEdit ? t('assets.saveChanges') : t('assets.createAsset')}
                         </Button>
                     </DialogFooter>
                 </form>
@@ -330,6 +329,7 @@ function AssignAssetDialog({
     open: boolean
     onOpenChange: (o: boolean) => void
 }) {
+    const { t } = useTranslation()
     const assignAsset = useAssignAsset()
 
     const [employeeId, setEmployeeId] = useState('')
@@ -338,28 +338,26 @@ function AssignAssetDialog({
     const [notes, setNotes] = useState('')
     const [errors, setErrors] = useState<Record<string, string>>({})
 
-    const [prevAssignAssetOpen, setPrevAssignAssetOpen] = useState(true)
-    if (!open && prevAssignAssetOpen) {
-        setPrevAssignAssetOpen(false)
-        setEmployeeId('')
-        setAssignedDate(new Date().toISOString().slice(0, 10))
-        setExpectedReturnDate(undefined)
-        setNotes('')
-        setErrors({})
-    } else if (open && !prevAssignAssetOpen) {
-        setPrevAssignAssetOpen(true)
-    }
+    useEffect(() => {
+        if (!open) {
+            setEmployeeId('')
+            setAssignedDate(new Date().toISOString().slice(0, 10))
+            setExpectedReturnDate(undefined)
+            setNotes('')
+            setErrors({})
+        }
+    }, [open])
 
     async function handleSubmit(e: { preventDefault(): void }) {
         e.preventDefault()
-        if (!employeeId) { setErrors({ employeeId: 'Employee is required' }); return }
+        if (!employeeId) { setErrors({ employeeId: t('assets.employeeRequired') }); return }
         setErrors({})
         try {
             await assignAsset.mutateAsync({ assetId: asset.id, employeeId, assignedDate, expectedReturnDate, notes: notes || undefined })
-            toast.success('Asset assigned successfully')
+            toast.success(t('assets.assignedSuccess'))
             onOpenChange(false)
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to assign asset')
+            toast.error(err instanceof Error ? err.message : t('assets.assignFailed'))
         }
     }
 
@@ -367,33 +365,33 @@ function AssignAssetDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Assign Asset: {asset.name}</DialogTitle>
+                    <DialogTitle>{t('assets.assignTitle', { name: asset.name })}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
                     <DialogBody className="space-y-4">
-                        <FormField label="Employee" required error={errors.employeeId}>
+                        <FormField label={t('assets.employee')} required error={errors.employeeId}>
                             <EmployeeSelect
                                 value={employeeId}
                                 onValueChange={v => { setEmployeeId(v); setErrors(err => ({ ...err, employeeId: '' })) }}
                             />
                         </FormField>
                         <div className="space-y-1.5">
-                            <Label>Assigned Date</Label>
+                            <Label>{t('assets.assignedDate')}</Label>
                             <DatePicker value={assignedDate} onChange={v => setAssignedDate(v || assignedDate)} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Expected Return Date</Label>
+                            <Label>{t('assets.expectedReturnDate')}</Label>
                             <DatePicker value={expectedReturnDate ?? ''} onChange={v => setExpectedReturnDate(v || undefined)} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Notes</Label>
-                            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Optional notes..." />
+                            <Label>{t('common.notes')}</Label>
+                            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder={t('assets.optionalNotes')} />
                         </div>
                     </DialogBody>
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
                         <Button type="submit" disabled={assignAsset.isPending}>
-                            {assignAsset.isPending ? 'Assigning…' : 'Assign Asset'}
+                            {assignAsset.isPending ? t('assets.assigning') : t('assets.assignAsset')}
                         </Button>
                     </DialogFooter>
                 </form>
@@ -413,6 +411,7 @@ function ReturnAssetDialog({
     open: boolean
     onOpenChange: (o: boolean) => void
 }) {
+    const { t } = useTranslation()
     const { data: historyData } = useAssetHistory(asset.id)
     const returnAsset = useReturnAsset()
     const [notes, setNotes] = useState('')
@@ -427,10 +426,10 @@ function ReturnAssetDialog({
                 actualReturnDate: new Date().toISOString().slice(0, 10),
                 notes: notes || undefined,
             })
-            toast.success('Asset returned successfully')
+            toast.success(t('assets.returnedSuccess'))
             onOpenChange(false)
         } catch {
-            toast.error('Failed to return asset')
+            toast.error(t('assets.returnFailed'))
         }
     }
 
@@ -438,23 +437,23 @@ function ReturnAssetDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Return Asset: {asset.name}</DialogTitle>
+                    <DialogTitle>{t('assets.returnTitle', { name: asset.name })}</DialogTitle>
                 </DialogHeader>
                 <DialogBody className="space-y-4">
                     {activeAssignment && (
                         <p className="text-sm text-muted-foreground">
-                            Assigned to <strong>{activeAssignment.employeeName}</strong> on {formatDate(activeAssignment.assignedDate)}
+                            {t('assets.assignedToOn', { employee: activeAssignment.employeeName, date: formatDate(activeAssignment.assignedDate) })}
                         </p>
                     )}
                     <div className="space-y-1.5">
-                        <Label>Notes</Label>
-                        <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Return condition notes..." />
+                        <Label>{t('common.notes')}</Label>
+                        <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder={t('assets.returnConditionNotes')} />
                     </div>
                 </DialogBody>
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
                     <Button onClick={handleReturn} disabled={returnAsset.isPending || !activeAssignment}>
-                        {returnAsset.isPending ? 'Processing…' : 'Confirm Return'}
+                        {returnAsset.isPending ? t('assets.processing') : t('assets.confirmReturn')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -473,6 +472,7 @@ function MaintenanceDialog({
     open: boolean
     onOpenChange: (o: boolean) => void
 }) {
+    const { t } = useTranslation()
     const { data: records, isLoading } = useAssetMaintenance(asset.id)
     const createRecord = useCreateMaintenanceRecord()
     const updateRecord = useUpdateMaintenanceRecord()
@@ -484,20 +484,20 @@ function MaintenanceDialog({
         e.preventDefault()
         try {
             await createRecord.mutateAsync({ assetId: asset.id, issueDescription, notes: notes || undefined })
-            toast.success('Maintenance record created')
+            toast.success(t('assets.maintenanceCreated'))
             setIssueDescription('')
             setNotes('')
         } catch {
-            toast.error('Failed to create maintenance record')
+            toast.error(t('assets.maintenanceCreateFailed'))
         }
     }
 
     async function handleResolve(record: AssetMaintenance) {
         try {
             await updateRecord.mutateAsync({ maintenanceId: record.id, status: 'resolved' })
-            toast.success('Marked as resolved')
+            toast.success(t('assets.markedResolved'))
         } catch {
-            toast.error('Failed to resolve')
+            toast.error(t('assets.resolveFailed'))
         }
     }
 
@@ -505,38 +505,38 @@ function MaintenanceDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Maintenance — {asset.name}</DialogTitle>
+                    <DialogTitle>{t('assets.maintenanceTitle', { name: asset.name })}</DialogTitle>
                 </DialogHeader>
                 <DialogBody className="space-y-6">
                     {/* New Record Form */}
                     <form onSubmit={handleCreate} className="space-y-3 border rounded-lg p-4 bg-muted/30">
-                        <p className="text-sm font-medium">Log New Issue</p>
+                        <p className="text-sm font-medium">{t('assets.logNewIssue')}</p>
                         <div className="space-y-1.5">
-                            <Label required>Issue Description</Label>
+                            <Label required>{t('assets.issueDescription')}</Label>
                             <Textarea
                                 value={issueDescription}
                                 onChange={e => setIssueDescription(e.target.value)}
                                 rows={2}
-                                placeholder="Describe the issue..."
+                                placeholder={t('assets.describeIssue')}
                                 required
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Notes</Label>
+                            <Label>{t('common.notes')}</Label>
                             <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={1} />
                         </div>
                         <Button type="submit" size="sm" disabled={createRecord.isPending}>
-                            {createRecord.isPending ? 'Logging…' : 'Log Issue'}
+                            {createRecord.isPending ? t('assets.logging') : t('assets.logIssue')}
                         </Button>
                     </form>
 
                     {/* Existing Records */}
                     <div className="space-y-2">
-                        <p className="text-sm font-medium">Maintenance History</p>
+                        <p className="text-sm font-medium">{t('assets.maintenanceHistory')}</p>
                         {isLoading ? (
                             <Skeleton className="h-16 w-full" />
                         ) : (records ?? []).length === 0 ? (
-                            <p className="text-xs text-muted-foreground">No maintenance records yet.</p>
+                            <p className="text-xs text-muted-foreground">{t('assets.noMaintenanceRecords')}</p>
                         ) : (records ?? []).map(r => (
                             <div key={r.id} className="border rounded-lg p-3 text-sm space-y-1">
                                 <div className="flex items-center justify-between gap-2">
@@ -549,7 +549,7 @@ function MaintenanceDialog({
                                 <p className="text-xs text-muted-foreground">{formatDate(r.createdAt)}</p>
                                 {r.status !== 'resolved' && (
                                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleResolve(r)}>
-                                        Mark Resolved
+                                        {t('assets.markResolved')}
                                     </Button>
                                 )}
                             </div>
@@ -564,19 +564,20 @@ function MaintenanceDialog({
 // ─── History Dialog ────────────────────────────────────────────────────────────
 
 function HistoryDialog({ asset, open, onOpenChange }: { asset: Asset; open: boolean; onOpenChange: (o: boolean) => void }) {
+    const { t } = useTranslation()
     const { data, isLoading } = useAssetHistory(asset.id)
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Assignment History — {asset.name}</DialogTitle>
+                    <DialogTitle>{t('assets.historyTitle', { name: asset.name })}</DialogTitle>
                 </DialogHeader>
                 <DialogBody>
                     {isLoading ? (
                         <Skeleton className="h-32 w-full" />
                     ) : (data ?? []).length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No assignment history yet.</p>
+                        <p className="text-sm text-muted-foreground">{t('assets.noHistory')}</p>
                     ) : (
                         <div className="space-y-2">
                             {(data ?? []).map((a: AssetAssignment) => (
@@ -591,8 +592,8 @@ function HistoryDialog({ asset, open, onOpenChange }: { asset: Asset; open: bool
                                         </Badge>
                                     </div>
                                     <p className="text-xs text-muted-foreground">
-                                        Assigned: {formatDate(a.assignedDate)}
-                                        {a.actualReturnDate && ` · Returned: ${formatDate(a.actualReturnDate)}`}
+                                        {t('assets.assignedOn', { date: formatDate(a.assignedDate) })}
+                                        {a.actualReturnDate && ` ${t('assets.returnedOn', { date: formatDate(a.actualReturnDate) })}`}
                                     </p>
                                     {a.notes && <p className="text-muted-foreground">{a.notes}</p>}
                                 </div>
@@ -608,6 +609,7 @@ function HistoryDialog({ asset, open, onOpenChange }: { asset: Asset; open: bool
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function AssetsPage() {
+    const { t } = useTranslation()
     const { can } = usePermissions()
     const canManageAssets = can('manage_assets')
 
@@ -635,12 +637,12 @@ export function AssetsPage() {
     const columns = useMemo<ColumnDef<Asset>[]>(() => [
         {
             accessorKey: 'assetCode',
-            header: 'Code',
+            header: t('assets.code'),
             cell: ({ row }) => <span className="font-mono text-xs font-medium">{row.original.assetCode}</span>,
         },
         {
             accessorKey: 'name',
-            header: 'Name',
+            header: t('common.name'),
             cell: ({ row }) => (
                 <div>
                     <p className="font-medium text-sm">{row.original.name}</p>
@@ -652,37 +654,37 @@ export function AssetsPage() {
         },
         {
             accessorKey: 'categoryName',
-            header: 'Category',
+            header: t('assets.category'),
             cell: ({ row }) => row.original.categoryName
                 ? <Badge variant="outline">{row.original.categoryName}</Badge>
                 : <span className="text-xs text-muted-foreground">—</span>,
         },
         {
             accessorKey: 'serialNumber',
-            header: 'Serial No.',
+            header: t('assets.serialNo'),
             cell: ({ row }) => row.original.serialNumber
                 ? <span className="text-xs font-mono">{row.original.serialNumber}</span>
                 : <span className="text-xs text-muted-foreground">—</span>,
         },
         {
             accessorKey: 'status',
-            header: 'Status',
+            header: t('common.status'),
             cell: ({ row }) => {
                 const s = STATUS_BADGE[row.original.status]
-                return <Badge variant={s.variant}>{s.label}</Badge>
+                return <Badge variant={s.variant}>{t(s.labelKey)}</Badge>
             },
         },
         {
             accessorKey: 'condition',
-            header: 'Condition',
+            header: t('assets.condition'),
             cell: ({ row }) => {
                 const c = CONDITION_BADGE[row.original.condition]
-                return <Badge variant={c.variant}>{c.label}</Badge>
+                return <Badge variant={c.variant}>{t(c.labelKey)}</Badge>
             },
         },
         {
             id: 'assignedTo',
-            header: 'Assigned To',
+            header: t('assets.assignedTo'),
             cell: ({ row }) => row.original.assignedEmployeeName
                 ? (
                     <div>
@@ -702,43 +704,44 @@ export function AssetsPage() {
                 const asset = row.original
                 return (
                     <div className="flex items-center gap-1 justify-end">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Edit" onClick={() => setEditTarget(asset)}>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title={t('common.edit')} onClick={() => setEditTarget(asset)}>
                             <Edit2 className="h-3.5 w-3.5" />
                         </Button>
                         {asset.status === 'available' && (
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-600" title="Assign" onClick={() => setAssignTarget(asset)}>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-600" title={t('assets.assignAsset')} onClick={() => setAssignTarget(asset)}>
                                 <UserPlus className="h-3.5 w-3.5" />
                             </Button>
                         )}
                         {asset.status === 'assigned' && (
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-600" title="Return" onClick={() => setReturnTarget(asset)}>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-600" title={t('assets.returnAsset')} onClick={() => setReturnTarget(asset)}>
                                 <RotateCcw className="h-3.5 w-3.5" />
                             </Button>
                         )}
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-amber-600" title="Maintenance" onClick={() => setMaintenanceTarget(asset)}>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-amber-600" title={t('assets.logMaintenance')} onClick={() => setMaintenanceTarget(asset)}>
                             <Wrench className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="History" onClick={() => setHistoryTarget(asset)}>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title={t('assets.viewHistory')} onClick={() => setHistoryTarget(asset)}>
                             <History className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" title="Delete" onClick={() => setDeleteTarget(asset)}>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" title={t('common.delete')} onClick={() => setDeleteTarget(asset)}>
                             <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                     </div>
                 )
             },
         },
-    ], [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ], [t])
 
     return (
         <PageWrapper>
             <PageHeader
-                title="Assets"
-                description="Track and manage company assets"
+                title={t('assets.title')}
+                description={t('assets.pageDescription')}
                 actions={
                     <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
-                            Refresh
+                            {t('assets.refresh')}
                         </Button>
                         <ExportDropdown
                             onExportCsv={() => exportAssets({ format: 'csv' })}
@@ -747,7 +750,7 @@ export function AssetsPage() {
                         {canManageAssets && (
                             <Button onClick={() => setCreateOpen(true)}>
                                 <Plus className="h-4 w-4 mr-1.5" />
-                                New Asset
+                                {t('assets.newAsset')}
                             </Button>
                         )}
                     </div>
@@ -757,28 +760,28 @@ export function AssetsPage() {
             {/* KPI Summary */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <KpiCardCompact
-                    label="Total Assets"
+                    label={t('assets.totalAssets')}
                     value={isLoading ? '—' : String(summary?.total ?? 0)}
                     icon={Package}
                     color="blue"
                     loading={isLoading}
                 />
                 <KpiCardCompact
-                    label="Available"
+                    label={t('assets.totalAvailable')}
                     value={isLoading ? '—' : String(summary?.available ?? 0)}
                     icon={CheckCircle2}
                     color="green"
                     loading={isLoading}
                 />
                 <KpiCardCompact
-                    label="Assigned"
+                    label={t('assets.totalAssigned')}
                     value={isLoading ? '—' : String(summary?.assigned ?? 0)}
                     icon={UserPlus}
                     color="purple"
                     loading={isLoading}
                 />
                 <KpiCardCompact
-                    label="In Maintenance"
+                    label={t('assets.inMaintenance')}
                     value={isLoading ? '—' : String(summary?.maintenance ?? 0)}
                     icon={Wrench}
                     color="amber"
@@ -794,7 +797,7 @@ export function AssetsPage() {
                 <div className="flex flex-wrap gap-3">
                     <Input
                         className="h-8 w-48 text-sm"
-                        placeholder="Search assets…"
+                        placeholder={t('assets.searchAssets')}
                         value={params.search ?? ''}
                         onChange={e => setParams(p => ({ ...p, search: e.target.value || undefined, offset: 0 }))}
                     />
@@ -802,23 +805,23 @@ export function AssetsPage() {
                         value={params.status ?? 'all'}
                         onValueChange={v => setParams(p => ({ ...p, status: v === 'all' ? undefined : v, offset: 0 }))}
                     >
-                        <SelectTrigger className="h-8 w-40 text-sm"><SelectValue placeholder="All statuses" /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-40 text-sm"><SelectValue placeholder={t('assets.allStatuses')} /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">All statuses</SelectItem>
-                            <SelectItem value="available">Available</SelectItem>
-                            <SelectItem value="assigned">Assigned</SelectItem>
-                            <SelectItem value="maintenance">Maintenance</SelectItem>
-                            <SelectItem value="lost">Lost</SelectItem>
-                            <SelectItem value="retired">Retired</SelectItem>
+                            <SelectItem value="all">{t('assets.allStatuses')}</SelectItem>
+                            <SelectItem value="available">{t('assets.available')}</SelectItem>
+                            <SelectItem value="assigned">{t('assets.assigned')}</SelectItem>
+                            <SelectItem value="maintenance">{t('assets.maintenance')}</SelectItem>
+                            <SelectItem value="lost">{t('assets.lost')}</SelectItem>
+                            <SelectItem value="retired">{t('assets.retired')}</SelectItem>
                         </SelectContent>
                     </Select>
                     <Select
                         value={params.categoryId ?? 'all'}
                         onValueChange={v => setParams(p => ({ ...p, categoryId: v === 'all' ? undefined : v, offset: 0 }))}
                     >
-                        <SelectTrigger className="h-8 w-48 text-sm"><SelectValue placeholder="All categories" /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-48 text-sm"><SelectValue placeholder={t('assets.allCategories')} /></SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">All categories</SelectItem>
+                            <SelectItem value="all">{t('assets.allCategories')}</SelectItem>
                             {(categories ?? []).map(c => (
                                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                             ))}
@@ -831,7 +834,7 @@ export function AssetsPage() {
                             className="h-8 text-xs"
                             onClick={() => setParams({ offset: 0 })}
                         >
-                            Clear filters
+                            {t('assets.clearFilters')}
                         </Button>
                     )}
                 </div>
@@ -846,7 +849,7 @@ export function AssetsPage() {
                 <DataTable
                     columns={columns}
                     data={data?.data ?? []}
-                    emptyMessage="No assets found"
+                    emptyMessage={t('assets.noAssetsFound')}
                     pageSize={25}
                     serverPagination={{ total: data?.total ?? 0, offset: params.offset, limit: 25, onPageChange: offset => setParams(p => ({ ...p, offset })), loading: isFetching }}
                 />
@@ -900,14 +903,14 @@ export function AssetsPage() {
             <ConfirmDialog
                 open={!!deleteTarget}
                 onOpenChange={o => { if (!o) setDeleteTarget(null) }}
-                title="Delete Asset"
-                description={`Are you sure you want to delete "${deleteTarget?.name}"? This cannot be undone.`}
-                confirmLabel="Delete"
+                title={t('assets.deleteAssetTitle')}
+                description={t('assets.deleteAssetConfirm', { name: deleteTarget?.name })}
+                confirmLabel={t('common.delete')}
                 onConfirm={() => {
                     if (!deleteTarget) return
                     deleteAsset.mutateAsync(deleteTarget.id)
-                        .then(() => toast.success('Asset deleted'))
-                        .catch(() => toast.error('Failed to delete asset'))
+                        .then(() => toast.success(t('assets.assetDeleted')))
+                        .catch(() => toast.error(t('assets.deleteFailed')))
                         .finally(() => setDeleteTarget(null))
                 }}
             />

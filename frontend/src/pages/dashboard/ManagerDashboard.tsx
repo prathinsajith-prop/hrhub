@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import {
   Users, CalendarCheck, ClipboardList, BarChart3,
@@ -38,16 +39,17 @@ interface LeaveRequest {
 import type { AttendanceSummary } from '@/hooks/useAttendance'
 
 // ─── Attendance rows config — maps AttendanceSummary fields → display ─────────
-const ATTENDANCE_ROWS: Array<{ field: keyof AttendanceSummary; label: string; cls: string }> = [
-  { field: 'totalPresent',  label: 'Present',  cls: 'bg-success' },
-  { field: 'totalAbsent',   label: 'Absent',   cls: 'bg-destructive' },
-  { field: 'totalLate',     label: 'Late',     cls: 'bg-warning' },
-  { field: 'totalWfh',      label: 'WFH',      cls: 'bg-info' },
-  { field: 'totalOnLeave',  label: 'On Leave', cls: 'bg-muted-foreground' },
-  { field: 'totalHalfDay',  label: 'Half Day', cls: 'bg-amber-500' },
+const ATTENDANCE_ROWS: Array<{ field: keyof AttendanceSummary; labelKey: string; cls: string }> = [
+  { field: 'totalPresent',  labelKey: 'dashboard.present',     cls: 'bg-success' },
+  { field: 'totalAbsent',   labelKey: 'dashboard.absent',      cls: 'bg-destructive' },
+  { field: 'totalLate',     labelKey: 'dashboard.late',        cls: 'bg-warning' },
+  { field: 'totalWfh',      labelKey: 'dashboard.wfh',         cls: 'bg-info' },
+  { field: 'totalOnLeave',  labelKey: 'dashboard.onLeaveLabel', cls: 'bg-muted-foreground' },
+  { field: 'totalHalfDay',  labelKey: 'dashboard.halfDay',     cls: 'bg-amber-500' },
 ]
 
 export function ManagerDashboard() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
   const department = user?.department ?? ''
@@ -71,43 +73,43 @@ export function ManagerDashboard() {
   return (
     <PageWrapper>
       <PageHeader
-        title={`Good ${getTimeOfDay()}, ${user?.name?.split(' ')[0] ?? 'Manager'}`}
+        title={t(`dashboard.greeting_${getTimeOfDay()}`, { name: user?.name?.split(' ')[0] ?? t('dashboard.managerFallback') })}
         description={`${department ? `${department} · ` : ''}${today}`}
       />
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCardCompact
-          label="Team Size"
+          label={t('dashboard.teamSize')}
           value={empLoading ? undefined : totalCount}
           icon={Users}
           color="blue"
           loading={empLoading}
-          hint={empLoading ? undefined : `${activeCount} active`}
+          hint={empLoading ? undefined : t('dashboard.activeCount', { count: activeCount })}
         />
         <KpiCardCompact
-          label="Pending Leave"
+          label={t('dashboard.pendingLeave')}
           value={leaveLoading ? undefined : pendingLeave.length}
           icon={CalendarCheck}
           color={pendingLeave.length > 0 ? 'amber' : 'green'}
           loading={leaveLoading}
-          hint="Awaiting approval"
+          hint={t('dashboard.awaitingApproval')}
         />
         <KpiCardCompact
-          label="Onboarding"
+          label={t('dashboard.onboarding')}
           value={onboardingLoading ? undefined : onboarding?.active ?? 0}
           icon={ClipboardList}
           color="purple"
           loading={onboardingLoading}
-          hint={onboarding?.overdue ? `${onboarding.overdue} overdue` : 'Active checklists'}
+          hint={onboarding?.overdue ? t('dashboard.overdueCount', { count: onboarding.overdue }) : t('dashboard.activeChecklists')}
         />
         <KpiCardCompact
-          label="This Month Present"
+          label={t('dashboard.thisMonthPresent')}
           value={attLoading ? undefined : attendanceSummary?.totalPresent ?? '—'}
           icon={UserCheck}
           color="green"
           loading={attLoading}
-          hint={attLoading ? undefined : `${attendanceSummary?.totalAbsent ?? 0} absent`}
+          hint={attLoading ? undefined : t('dashboard.absentCount', { count: attendanceSummary?.totalAbsent ?? 0 })}
         />
       </div>
 
@@ -116,11 +118,10 @@ export function ManagerDashboard() {
         <div className="flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/8 px-4 py-3 animate-fade-fast">
           <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
           <p className="text-sm text-warning-foreground flex-1">
-            <span className="font-semibold">{onboarding!.overdue} overdue onboarding step{onboarding!.overdue > 1 ? 's' : ''}</span>
-            {' '}— action required to keep new hires on track.
+            {t('dashboard.overdueOnboardingWarning', { count: onboarding!.overdue })}
           </p>
           <Button size="sm" variant="ghost" className="text-warning-foreground h-auto px-2 py-1 text-xs shrink-0" onClick={() => navigate('/onboarding')}>
-            Review <ArrowUpRight className="h-3 w-3 ml-1" />
+            {t('dashboard.review')} <ArrowUpRight className="h-3 w-3 ml-1" />
           </Button>
         </div>
       )}
@@ -133,11 +134,11 @@ export function ManagerDashboard() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Leave Requests</CardTitle>
-                <CardDescription>Pending your approval</CardDescription>
+                <CardTitle>{t('dashboard.leaveRequests')}</CardTitle>
+                <CardDescription>{t('dashboard.pendingYourApproval')}</CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/leave')}>
-                View all <ArrowUpRight className="h-3 w-3 ml-1" />
+                {t('dashboard.viewAll')} <ArrowUpRight className="h-3 w-3 ml-1" />
               </Button>
             </div>
           </CardHeader>
@@ -147,8 +148,8 @@ export function ManagerDashboard() {
             ) : pendingLeave.length === 0 ? (
               <div className="py-10 text-center">
                 <CheckCircle2 className="h-8 w-8 text-success/60 mx-auto mb-2" />
-                <p className="text-sm font-medium text-foreground">All caught up</p>
-                <p className="text-xs text-muted-foreground mt-0.5">No leave requests pending approval</p>
+                <p className="text-sm font-medium text-foreground">{t('dashboard.allCaughtUp')}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('dashboard.noLeaveRequestsPending')}</p>
               </div>
             ) : (
               <div className="divide-y divide-border/50">
@@ -181,7 +182,7 @@ export function ManagerDashboard() {
                           onClick={() => approveLeave.mutate({ id: req.id, approved: true })}
                           disabled={approveLeave.isPending}
                         >
-                          <CheckCircle2 className="h-3 w-3 mr-1" /> Approve
+                          <CheckCircle2 className="h-3 w-3 mr-1" /> {t('dashboard.approve')}
                         </Button>
                         <Button
                           size="sm"
@@ -190,7 +191,7 @@ export function ManagerDashboard() {
                           onClick={() => approveLeave.mutate({ id: req.id, approved: false })}
                           disabled={approveLeave.isPending}
                         >
-                          <XCircle className="h-3 w-3 mr-1" /> Decline
+                          <XCircle className="h-3 w-3 mr-1" /> {t('dashboard.decline')}
                         </Button>
                       </div>
                     </div>
@@ -206,13 +207,13 @@ export function ManagerDashboard() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Today's Attendance</CardTitle>
+                <CardTitle>{t('dashboard.todaysAttendance')}</CardTitle>
                 <CardDescription>
                   {attLoading ? ' ' : new Date().toLocaleDateString('en-AE', { day: 'numeric', month: 'short' })}
                 </CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/attendance')}>
-                Full report <ArrowUpRight className="h-3 w-3 ml-1" />
+                {t('dashboard.fullReport')} <ArrowUpRight className="h-3 w-3 ml-1" />
               </Button>
             </div>
           </CardHeader>
@@ -231,14 +232,14 @@ export function ManagerDashboard() {
                 const total = ATTENDANCE_ROWS.reduce((s, r) => s + (attendanceSummary[r.field] as number ?? 0), 0) || 1
                 return (
                   <div className="space-y-3">
-                    {ATTENDANCE_ROWS.map(({ field, label, cls }) => {
+                    {ATTENDANCE_ROWS.map(({ field, labelKey, cls }) => {
                       const count = attendanceSummary[field] as number ?? 0
                       if (count === 0) return null
                       const pct = Math.round((count / total) * 100)
                       return (
                         <div key={field} className="space-y-1">
                           <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground font-medium">{label}</span>
+                            <span className="text-muted-foreground font-medium">{t(labelKey)}</span>
                             <span className="font-bold tabular-figures text-foreground">{count}</span>
                           </div>
                           <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
@@ -250,7 +251,7 @@ export function ManagerDashboard() {
                   </div>
                 )
               })() : (
-              <p className="text-xs text-muted-foreground text-center py-6">No attendance data this month</p>
+              <p className="text-xs text-muted-foreground text-center py-6">{t('dashboard.noAttendanceData')}</p>
             )}
           </CardContent>
         </Card>
@@ -258,12 +259,12 @@ export function ManagerDashboard() {
 
       {/* Quick actions */}
       <div className="space-y-3">
-        <SectionHeading title="Quick Actions" />
+        <SectionHeading title={t('dashboard.quickActions')} />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <QuickAction icon={CalendarCheck} label="Leave Requests" onClick={() => navigate('/leave')} />
-          <QuickAction icon={Users} label="My Team" onClick={() => navigate('/employees')} />
-          <QuickAction icon={CalendarDays} label="Attendance" onClick={() => navigate('/attendance')} />
-          <QuickAction icon={BarChart3} label="Performance" onClick={() => navigate('/performance')} />
+          <QuickAction icon={CalendarCheck} label={t('dashboard.leaveRequests')} onClick={() => navigate('/leave')} />
+          <QuickAction icon={Users} label={t('dashboard.myTeam')} onClick={() => navigate('/employees')} />
+          <QuickAction icon={CalendarDays} label={t('dashboard.attendance')} onClick={() => navigate('/attendance')} />
+          <QuickAction icon={BarChart3} label={t('dashboard.performance')} onClick={() => navigate('/performance')} />
         </div>
       </div>
     </PageWrapper>

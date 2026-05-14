@@ -1,4 +1,5 @@
 import { useState, useMemo, type ChangeEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, Trash2, Pencil, GitBranch, ChevronDown, ChevronRight as ChevronRightIcon, Users, UserPlus, Settings2, UserCog, X as XIcon, Crown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -45,17 +46,6 @@ const EMPTY_FORM: OrgUnitFormState = {
     name: '', type: 'branch', parentId: '', headEmployeeId: '', description: '', isActive: true,
 }
 
-const PLACEHOLDERS: Record<OrgUnitType, string> = {
-    branch: 'e.g. Dubai Branch',
-    division: 'e.g. Enterprise Solutions Division',
-    department: 'e.g. Backend Engineering',
-}
-
-const PARENT_LABEL: Partial<Record<OrgUnitType, string>> = {
-    division: 'Parent Branch',
-    department: 'Parent Division',
-}
-
 function OrgUnitDialog({
     open, onClose, editing, defaultType, units, employees: empList,
 }: {
@@ -66,6 +56,7 @@ function OrgUnitDialog({
     units: OrgUnit[]
     employees: Array<{ id: string; firstName: string; lastName: string }>
 }) {
+    const { t } = useTranslation()
     const create = useCreateOrgUnit()
     const update = useUpdateOrgUnit()
     const cascade = useCascadeManager()
@@ -94,7 +85,7 @@ function OrgUnitDialog({
             setForm(f => ({ ...f, [k]: e.target.value }))
 
     async function submit() {
-        if (!form.name.trim()) return toast.error('Name required', 'Please enter a name.')
+        if (!form.name.trim()) return toast.error(t('orgSettings.structure.nameRequired'), t('orgSettings.structure.nameRequiredDesc'))
         const payload: OrgUnitInput = {
             name: form.name.trim(),
             type: form.type,
@@ -106,22 +97,22 @@ function OrgUnitDialog({
         try {
             if (editing) {
                 await update.mutateAsync({ id: editing.id, data: payload })
-                toast.success('Updated', `${form.name} has been updated.`)
+                toast.success(t('orgSettings.structure.updated'), t('orgSettings.structure.unitUpdated', { name: form.name }))
                 // If this is a department and the head changed, offer to cascade
                 const headChanged = editing.type === 'department' && form.headEmployeeId && form.headEmployeeId !== (editing.headEmployeeId ?? '')
                 if (headChanged) {
                     const newManager = empList.find(e => e.id === form.headEmployeeId)
-                    const newManagerName = newManager ? `${newManager.firstName} ${newManager.lastName}` : 'the new manager'
+                    const newManagerName = newManager ? `${newManager.firstName} ${newManager.lastName}` : t('orgSettings.structure.unassignedPlaceholder')
                     setCascadePrompt({ departmentId: editing.id, newManagerName })
                     return // keep dialog open for cascade prompt
                 }
             } else {
                 await create.mutateAsync(payload)
-                toast.success('Created', `${form.name} has been created.`)
+                toast.success(t('orgSettings.structure.created'), t('orgSettings.structure.unitCreated', { name: form.name }))
             }
             onClose()
         } catch (err) {
-            toast.error('Save failed', err instanceof ApiError ? err.message : 'Could not save org unit.')
+            toast.error(t('orgSettings.structure.saveFailed'), err instanceof ApiError ? err.message : t('orgSettings.structure.saveFailedDesc'))
         }
     }
 
@@ -130,9 +121,14 @@ function OrgUnitDialog({
         try {
             const res = await cascade.mutateAsync(cascadePrompt.departmentId)
             const count = res?.data?.updated ?? 0
-            toast.success('Reporting managers updated', `${count} employee${count !== 1 ? 's' : ''} now report to ${cascadePrompt.newManagerName}.`)
+            toast.success(
+                t('orgSettings.structure.cascadeSuccess'),
+                count === 1
+                    ? t('orgSettings.structure.cascadeSuccessDesc', { count, name: cascadePrompt.newManagerName })
+                    : t('orgSettings.structure.cascadeSuccessDesc_plural', { count, name: cascadePrompt.newManagerName }),
+            )
         } catch {
-            toast.error('Cascade failed', 'Could not update reporting managers.')
+            toast.error(t('orgSettings.structure.cascadeFailed'), t('orgSettings.structure.cascadeFailedDesc'))
         } finally {
             setCascadePrompt(null)
             onClose()
@@ -144,37 +140,39 @@ function OrgUnitDialog({
     const parentBranches = units.filter(u => u.type === 'branch' && u.id !== editing?.id)
     const parentDivisions = units.filter(u => u.type === 'division' && u.id !== editing?.id)
     const parentOptions = form.type === 'division' ? parentBranches : parentDivisions
-    const parentLabel = PARENT_LABEL[form.type]
+    const parentLabel = form.type === 'division' ? t('orgSettings.structure.parentBranch') : t('orgSettings.structure.parentDivision')
     const noParentHint = form.type === 'division'
-        ? 'No branches yet — create a branch first to nest divisions under it.'
-        : 'No divisions yet — create a division first to nest departments under it.'
+        ? t('orgSettings.structure.noBranchesYet')
+        : t('orgSettings.structure.noDivisionsYet')
 
     return (
         <UiDialog open={open} onOpenChange={o => { if (!o) onClose() }}>
             <UiDialogContent className="sm:max-w-lg">
                 <UiDialogHeader>
-                    <UiDialogTitle>{editing ? 'Edit' : 'Add'} {meta.label}</UiDialogTitle>
+                    <UiDialogTitle>
+                        {editing ? t('orgSettings.structure.editUnit', { type: meta.label }) : t('orgSettings.structure.createUnit', { type: meta.label })}
+                    </UiDialogTitle>
                     <UiDialogDescription>
-                        {editing ? 'Update the details for this org unit.' : 'Create a new org unit in your structure.'}
+                        {editing ? t('orgSettings.structure.editUnitDesc') : t('orgSettings.structure.createUnitDesc')}
                     </UiDialogDescription>
                 </UiDialogHeader>
                 <div className="space-y-4 py-1">
                     {!editing && (
                         <div className="space-y-1.5">
-                            <Label required>Type</Label>
+                            <Label required>{t('orgSettings.structure.type')}</Label>
                             <UiSelect
                                 value={form.type}
                                 onValueChange={v => setForm(f => ({ ...f, type: v as OrgUnitType, parentId: '' }))}
                             >
                                 <UiSelectTrigger><UiSelectValue /></UiSelectTrigger>
                                 <UiSelectContent>
-                                    {ORG_HIERARCHY.map(t => {
-                                        const Icon = ORG_TYPE_META[t].icon
+                                    {ORG_HIERARCHY.map(type => {
+                                        const Icon = ORG_TYPE_META[type].icon
                                         return (
-                                            <UiSelectItem key={t} value={t}>
+                                            <UiSelectItem key={type} value={type}>
                                                 <span className="flex items-center gap-2">
                                                     <Icon className="h-3.5 w-3.5" />
-                                                    {ORG_TYPE_META[t].label}
+                                                    {ORG_TYPE_META[type].label}
                                                 </span>
                                             </UiSelectItem>
                                         )
@@ -182,19 +180,14 @@ function OrgUnitDialog({
                                 </UiSelectContent>
                             </UiSelect>
                             <p className="text-[11px] text-muted-foreground">
-                                Hierarchy:{' '}
-                                <span className="text-emerald-600 font-medium">Branch</span>
-                                {' → '}
-                                <span className="text-violet-600 font-medium">Division</span>
-                                {' → '}
-                                <span className="text-blue-600 font-medium">Department</span>
+                                {t('orgSettings.structure.typeHierarchy')}
                             </p>
                         </div>
                     )}
 
                     <div className="space-y-1.5">
-                        <Label required>Name</Label>
-                        <Input value={form.name} onChange={field('name')} placeholder={PLACEHOLDERS[form.type]} />
+                        <Label required>{t('orgSettings.structure.name')}</Label>
+                        <Input value={form.name} onChange={field('name')} placeholder={meta.label} />
                     </div>
 
                     {(form.type === 'division' || form.type === 'department') && (
@@ -205,10 +198,10 @@ function OrgUnitDialog({
                                 onValueChange={v => setForm(f => ({ ...f, parentId: v === NONE ? '' : v }))}
                             >
                                 <UiSelectTrigger>
-                                    <UiSelectValue placeholder="No parent (standalone)" />
+                                    <UiSelectValue placeholder={t('orgSettings.structure.noParentStandalone')} />
                                 </UiSelectTrigger>
                                 <UiSelectContent>
-                                    <UiSelectItem value={NONE}>— No parent (standalone) —</UiSelectItem>
+                                    <UiSelectItem value={NONE}>— {t('orgSettings.structure.noParentStandalone')} —</UiSelectItem>
                                     {parentOptions.map(u => (
                                         <UiSelectItem key={u.id} value={u.id}>{u.name}</UiSelectItem>
                                     ))}
@@ -221,14 +214,14 @@ function OrgUnitDialog({
                     )}
 
                     <div className="space-y-1.5">
-                        <Label>Head / Manager</Label>
+                        <Label>{t('orgSettings.structure.headManager')}</Label>
                         <UiSelect
                             value={form.headEmployeeId || NONE}
                             onValueChange={v => setForm(f => ({ ...f, headEmployeeId: v === NONE ? '' : v }))}
                         >
-                            <UiSelectTrigger><UiSelectValue placeholder="Unassigned" /></UiSelectTrigger>
+                            <UiSelectTrigger><UiSelectValue placeholder={t('orgSettings.structure.unassignedPlaceholder')} /></UiSelectTrigger>
                             <UiSelectContent>
-                                <UiSelectItem value={NONE}>— Unassigned —</UiSelectItem>
+                                <UiSelectItem value={NONE}>{t('orgSettings.structure.unassigned')}</UiSelectItem>
                                 {empList.map(e => (
                                     <UiSelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</UiSelectItem>
                                 ))}
@@ -237,8 +230,8 @@ function OrgUnitDialog({
                     </div>
 
                     <div className="space-y-1.5">
-                        <Label>Description</Label>
-                        <UiTextarea value={form.description} onChange={field('description')} rows={2} placeholder="Optional description…" />
+                        <Label>{t('orgSettings.structure.description_field')}</Label>
+                        <UiTextarea value={form.description} onChange={field('description')} rows={2} placeholder={t('orgSettings.structure.optionalDescription')} />
                     </div>
 
                     <div className="flex items-center gap-2 pt-1">
@@ -247,13 +240,17 @@ function OrgUnitDialog({
                             onCheckedChange={v => setForm(f => ({ ...f, isActive: v }))}
                             id="ou-active"
                         />
-                        <Label htmlFor="ou-active" className="cursor-pointer">Active</Label>
+                        <Label htmlFor="ou-active" className="cursor-pointer">{t('orgSettings.structure.active')}</Label>
                     </div>
                 </div>
                 <UiDialogFooter>
-                    <Button variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
                     <Button onClick={submit} disabled={isPending}>
-                        {isPending ? 'Saving…' : editing ? 'Save Changes' : `Create ${meta.label}`}
+                        {isPending
+                            ? t('orgSettings.structure.saving')
+                            : editing
+                                ? t('orgSettings.structure.saveChanges')
+                                : t('orgSettings.structure.createUnit', { type: meta.label })}
                     </Button>
                 </UiDialogFooter>
             </UiDialogContent>
@@ -263,9 +260,9 @@ function OrgUnitDialog({
                 <ConfirmDialog
                     open={!!cascadePrompt}
                     onOpenChange={o => { if (!o) { setCascadePrompt(null); onClose() } }}
-                    title="Update reporting managers?"
-                    description={`All employees in this department currently report to the previous manager. Would you like to update their reporting person to ${cascadePrompt.newManagerName}?`}
-                    confirmLabel={cascade.isPending ? 'Updating…' : 'Yes, update all'}
+                    title={t('orgSettings.structure.cascadeTitle')}
+                    description={t('orgSettings.structure.cascadeDesc', { name: cascadePrompt.newManagerName })}
+                    confirmLabel={cascade.isPending ? t('orgSettings.structure.cascadeUpdating') : t('orgSettings.structure.cascadeConfirm')}
                     variant="warning"
                     onConfirm={handleCascadeConfirm}
                 />
@@ -298,6 +295,7 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
     onClose: () => void
     onAddMembers: () => void
 }) {
+    const { t } = useTranslation()
     const updateTeam = useUpdateTeam()
     const deleteTeam = useDeleteTeam()
     const removeMember = useRemoveTeamMember(team.id)
@@ -319,21 +317,21 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
     const dirty = name !== team.name || (description ?? '') !== (team.description ?? '')
 
     async function handleSave() {
-        if (!name.trim()) return toast.error('Name required')
+        if (!name.trim()) return toast.error(t('orgSettings.structure.nameRequired'))
         try {
             await updateTeam.mutateAsync({ id: team.id, name: name.trim(), description: description.trim() })
-            toast.success('Team updated')
+            toast.success(t('orgSettings.structure.teamUpdated'))
         } catch (err) {
-            toast.error('Save failed', err instanceof ApiError ? err.message : 'Could not update team.')
+            toast.error(t('orgSettings.structure.teamSaveFailed'), err instanceof ApiError ? err.message : t('orgSettings.structure.teamSaveFailedDesc'))
         }
     }
 
     async function handleRemove(employeeId: string) {
         try {
             await removeMember.mutateAsync(employeeId)
-            toast.success('Member removed')
+            toast.success(t('orgSettings.structure.memberRemoved'))
         } catch (err) {
-            toast.error('Remove failed', err instanceof ApiError ? err.message : 'Could not remove member.')
+            toast.error(t('orgSettings.structure.memberRemoveFailed'), err instanceof ApiError ? err.message : t('orgSettings.structure.memberRemoveFailedDesc'))
         }
     }
 
@@ -341,18 +339,18 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
         try {
             await updateRole.mutateAsync({ employeeId, role })
         } catch (err) {
-            toast.error('Update failed', err instanceof ApiError ? err.message : 'Could not change role.')
+            toast.error(t('orgSettings.structure.roleUpdateFailed'), err instanceof ApiError ? err.message : t('orgSettings.structure.roleUpdateFailedDesc'))
         }
     }
 
     async function handleDeleteTeam() {
         try {
             await deleteTeam.mutateAsync(team.id)
-            toast.success('Team deleted')
+            toast.success(t('orgSettings.structure.teamDeleted'))
             setConfirmDelete(false)
             onClose()
         } catch (err) {
-            toast.error('Delete failed', err instanceof ApiError ? err.message : 'Could not delete team.')
+            toast.error(t('orgSettings.structure.teamDeleteFailed'), err instanceof ApiError ? err.message : t('orgSettings.structure.teamDeleteFailedDesc'))
         }
     }
 
@@ -362,25 +360,25 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
                 <UiDialogHeader>
                     <UiDialogTitle className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-primary" />
-                        Manage Team
+                        {t('orgSettings.structure.manageTeamTitle')}
                     </UiDialogTitle>
-                    <UiDialogDescription>Rename, edit, and assign members for this team.</UiDialogDescription>
+                    <UiDialogDescription>{t('orgSettings.structure.manageTeamDesc')}</UiDialogDescription>
                 </UiDialogHeader>
 
                 <div className="space-y-5 py-1">
                     {/* Team identity */}
                     <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
                         <div className="space-y-1.5">
-                            <Label htmlFor="team-name" required>Name</Label>
+                            <Label htmlFor="team-name" required>{t('orgSettings.structure.teamName')}</Label>
                             <Input id="team-name" value={name} onChange={e => setName(e.target.value)} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="team-desc">Description</Label>
-                            <UiTextarea id="team-desc" value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="What does this team do?" />
+                            <Label htmlFor="team-desc">{t('orgSettings.structure.teamDesc')}</Label>
+                            <UiTextarea id="team-desc" value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder={t('orgSettings.structure.teamDescPlaceholder')} />
                         </div>
                         <div className="flex justify-end">
                             <Button size="sm" disabled={!dirty || updateTeam.isPending} onClick={handleSave}>
-                                {updateTeam.isPending ? 'Saving…' : 'Save changes'}
+                                {updateTeam.isPending ? t('orgSettings.structure.saving') : t('orgSettings.structure.saveChanges')}
                             </Button>
                         </div>
                     </div>
@@ -389,11 +387,15 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-semibold">Members</p>
-                                <p className="text-[11px] text-muted-foreground">{members.length} {members.length === 1 ? 'person' : 'people'} assigned to this team</p>
+                                <p className="text-sm font-semibold">{t('orgSettings.structure.teamMembers')}</p>
+                                <p className="text-[11px] text-muted-foreground">
+                                    {members.length === 1
+                                        ? t('orgSettings.structure.teamMembersCount', { count: members.length })
+                                        : t('orgSettings.structure.teamMembersCount_plural', { count: members.length })}
+                                </p>
                             </div>
                             <Button size="sm" onClick={onAddMembers} leftIcon={<UserPlus className="h-3.5 w-3.5" />}>
-                                Add members
+                                {t('orgSettings.structure.addMembers')}
                             </Button>
                         </div>
 
@@ -403,8 +405,8 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
                             ) : members.length === 0 ? (
                                 <div className="text-center py-8 text-muted-foreground">
                                     <Users className="h-7 w-7 mx-auto mb-1.5 opacity-30" />
-                                    <p className="text-sm font-medium">No members yet</p>
-                                    <p className="text-xs mt-0.5">Click "Add members" to assign people to this team.</p>
+                                    <p className="text-sm font-medium">{t('orgSettings.structure.noMembersYet')}</p>
+                                    <p className="text-xs mt-0.5">{t('orgSettings.structure.noMembersHint')}</p>
                                 </div>
                             ) : (
                                 <ul className="divide-y">
@@ -438,7 +440,7 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
                                                 className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
                                                 onClick={() => handleRemove(m.employeeId)}
                                                 disabled={removeMember.isPending}
-                                                title="Remove from team"
+                                                title={t('orgSettings.structure.removeFromTeam')}
                                             >
                                                 <XIcon className="h-3.5 w-3.5" />
                                             </Button>
@@ -452,17 +454,17 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
 
                 <UiDialogFooter className="justify-between sm:justify-between">
                     <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(true)}>
-                        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete team
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('orgSettings.structure.deleteTeam')}
                     </Button>
-                    <Button variant="outline" onClick={onClose}>Close</Button>
+                    <Button variant="outline" onClick={onClose}>{t('common.close')}</Button>
                 </UiDialogFooter>
 
                 <ConfirmDialog
                     open={confirmDelete}
                     onOpenChange={setConfirmDelete}
-                    title={`Delete "${team.name}"?`}
-                    description="All members will be removed from this team. This action cannot be undone."
-                    confirmLabel={deleteTeam.isPending ? 'Deleting…' : 'Delete'}
+                    title={t('orgSettings.structure.deleteTeamTitle', { name: team.name })}
+                    description={t('orgSettings.structure.deleteTeamDesc')}
+                    confirmLabel={deleteTeam.isPending ? t('orgSettings.structure.deleting') : t('common.delete')}
                     variant="destructive"
                     onConfirm={handleDeleteTeam}
                 />
@@ -479,6 +481,7 @@ function HeadAssignDialog({ unit, open, onClose, empList }: {
     onClose: () => void
     empList: Array<{ id: string; firstName: string; lastName: string }>
 }) {
+    const { t } = useTranslation()
     const update = useUpdateOrgUnit()
     const cascade = useCascadeManager()
     const [headId, setHeadId] = useState<string>(unit.headEmployeeId ?? '')
@@ -510,8 +513,8 @@ function HeadAssignDialog({ unit, open, onClose, empList }: {
                 },
             })
             const newHead = empList.find(e => e.id === newId)
-            const label = newHead ? `${newHead.firstName} ${newHead.lastName}` : 'unassigned'
-            toast.success('Head updated', `${unit.name} → ${label}.`)
+            const label = newHead ? `${newHead.firstName} ${newHead.lastName}` : t('orgSettings.structure.unassignedPlaceholder').toLowerCase()
+            toast.success(t('orgSettings.structure.headUpdated'), t('orgSettings.structure.headUpdatedDesc', { unit: unit.name, label }))
 
             // Offer to cascade for departments when head was changed (not just cleared)
             if (unit.type === 'department' && newId && newId !== previousHead) {
@@ -520,7 +523,7 @@ function HeadAssignDialog({ unit, open, onClose, empList }: {
                 onClose()
             }
         } catch (err) {
-            toast.error('Update failed', err instanceof ApiError ? err.message : 'Could not save head.')
+            toast.error(t('orgSettings.structure.updateFailed'), err instanceof ApiError ? err.message : t('orgSettings.structure.updateFailedDesc'))
         }
     }
 
@@ -528,9 +531,14 @@ function HeadAssignDialog({ unit, open, onClose, empList }: {
         try {
             const res = await cascade.mutateAsync(unit.id)
             const count = res?.data?.updated ?? 0
-            toast.success('Reporting managers updated', `${count} employee${count !== 1 ? 's' : ''} now report to the new head.`)
+            toast.success(
+                t('orgSettings.structure.cascadeSuccess'),
+                count === 1
+                    ? t('orgSettings.structure.cascadeHeadSuccess', { count })
+                    : t('orgSettings.structure.cascadeHeadSuccess_plural', { count }),
+            )
         } catch {
-            toast.error('Cascade failed')
+            toast.error(t('orgSettings.structure.cascadeHeadFailed'))
         } finally {
             setPendingCascade(false)
             onClose()
@@ -538,7 +546,7 @@ function HeadAssignDialog({ unit, open, onClose, empList }: {
     }
 
     const newHeadName = empList.find(e => e.id === headId)
-    const newHeadLabel = newHeadName ? `${newHeadName.firstName} ${newHeadName.lastName}` : 'the new head'
+    const newHeadLabel = newHeadName ? `${newHeadName.firstName} ${newHeadName.lastName}` : t('orgSettings.structure.headManager')
 
     return (
         <UiDialog open={open} onOpenChange={o => { if (!o) onClose() }}>
@@ -546,17 +554,17 @@ function HeadAssignDialog({ unit, open, onClose, empList }: {
                 <UiDialogHeader>
                     <UiDialogTitle className="flex items-center gap-2">
                         <Crown className="h-4 w-4 text-amber-500" />
-                        {unit.headEmployeeId ? 'Change Head' : 'Assign Head'}
+                        {unit.headEmployeeId ? t('orgSettings.structure.changeHead') : t('orgSettings.structure.assignHeadTitle')}
                     </UiDialogTitle>
                     <UiDialogDescription>{unit.name}</UiDialogDescription>
                 </UiDialogHeader>
                 <div className="space-y-3 py-1">
                     <div className="space-y-1.5">
-                        <Label>Head / Manager</Label>
+                        <Label>{t('orgSettings.structure.headManager')}</Label>
                         <UiSelect value={headId || NONE} onValueChange={v => setHeadId(v === NONE ? '' : v)}>
-                            <UiSelectTrigger><UiSelectValue placeholder="Unassigned" /></UiSelectTrigger>
+                            <UiSelectTrigger><UiSelectValue placeholder={t('orgSettings.structure.unassignedPlaceholder')} /></UiSelectTrigger>
                             <UiSelectContent>
-                                <UiSelectItem value={NONE}>— Unassigned —</UiSelectItem>
+                                <UiSelectItem value={NONE}>{t('orgSettings.structure.unassigned')}</UiSelectItem>
                                 {empList.map(e => (
                                     <UiSelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</UiSelectItem>
                                 ))}
@@ -565,18 +573,18 @@ function HeadAssignDialog({ unit, open, onClose, empList }: {
                     </div>
                 </div>
                 <UiDialogFooter>
-                    <Button variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
                     <Button onClick={handleSave} disabled={update.isPending}>
-                        {update.isPending ? 'Saving…' : 'Save'}
+                        {update.isPending ? t('orgSettings.structure.saving') : t('common.save')}
                     </Button>
                 </UiDialogFooter>
 
                 <ConfirmDialog
                     open={pendingCascade}
                     onOpenChange={(o) => { if (!o) { setPendingCascade(false); onClose() } }}
-                    title="Update reporting managers?"
-                    description={`All employees in ${unit.name} currently report to the previous head. Would you like to update their reporting person to ${newHeadLabel}?`}
-                    confirmLabel={cascade.isPending ? 'Updating…' : 'Yes, update all'}
+                    title={t('orgSettings.structure.cascadeTitle')}
+                    description={t('orgSettings.structure.cascadeHeadDesc', { name: unit.name, head: newHeadLabel })}
+                    confirmLabel={cascade.isPending ? t('orgSettings.structure.cascadeUpdating') : t('orgSettings.structure.cascadeConfirm')}
                     variant="warning"
                     onConfirm={handleCascade}
                 />
@@ -586,6 +594,7 @@ function HeadAssignDialog({ unit, open, onClose, empList }: {
 }
 
 function TeamSubRow({ team, canManage }: { team: TeamRow; canManage: boolean }) {
+    const { t } = useTranslation()
     const { data: members = [] } = useTeamMembers(team.id)
     const [manageOpen, setManageOpen] = useState(false)
     const [addMembersOpen, setAddMembersOpen] = useState(false)
@@ -608,14 +617,14 @@ function TeamSubRow({ team, canManage }: { team: TeamRow; canManage: boolean }) 
                 {/* Team type badge — distinct amber tone, same shape as branch/division/department */}
                 <div className="flex items-center gap-1.5 shrink-0 px-2 py-0.5 rounded-md border text-xs font-medium text-amber-700 bg-amber-50 border-amber-200">
                     <Users className="h-3 w-3" />
-                    Team
+                    {t('orgSettings.structure.team')}
                 </div>
 
                 {/* Name + member count */}
                 <div className="flex-1 min-w-0">
                     <span className="text-sm font-medium">{team.name}</span>
                     <span className="ml-2 text-[11px] text-muted-foreground">
-                        · {total} {total === 1 ? 'member' : 'members'}
+                        · {total} {total === 1 ? t('orgSettings.structure.member') : t('orgSettings.structure.members')}
                     </span>
                 </div>
 
@@ -680,14 +689,14 @@ function TeamSubRow({ team, canManage }: { team: TeamRow; canManage: boolean }) 
                     <div className="flex gap-1 shrink-0">
                         <Button
                             size="sm" variant="ghost" className="h-7 w-7 p-0"
-                            title="Add members"
+                            title={t('orgSettings.structure.addMembers')}
                             onClick={() => setAddMembersOpen(true)}
                         >
                             <UserPlus className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                             size="sm" variant="ghost" className="h-7 w-7 p-0"
-                            title="Manage team"
+                            title={t('orgSettings.structure.manageTeam')}
                             onClick={() => setManageOpen(true)}
                         >
                             <Settings2 className="h-3.5 w-3.5" />
@@ -723,6 +732,7 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
     empList: Array<{ id: string; firstName: string; lastName: string }>
     teamsByDept: Map<string, TeamRow[]>
 }) {
+    const { t } = useTranslation()
     const deleteMut = useDeleteOrgUnit()
     const [editing, setEditing] = useState(false)
     const [addTeamOpen, setAddTeamOpen] = useState(false)
@@ -768,7 +778,7 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                             type="button"
                             onClick={e => { e.stopPropagation(); setHeadDialogOpen(true) }}
                             className="ml-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground hover:underline transition-colors"
-                            title="Change head"
+                            title={t('orgSettings.structure.changeHead')}
                         >
                             <Crown className="h-3 w-3 text-amber-500" />
                             {unit.headEmployeeName}
@@ -778,10 +788,10 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                             type="button"
                             onClick={e => { e.stopPropagation(); setHeadDialogOpen(true) }}
                             className="ml-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground/70 hover:text-primary hover:underline transition-colors italic"
-                            title="Assign head"
+                            title={t('orgSettings.structure.assignHead')}
                         >
                             <UserCog className="h-3 w-3" />
-                            Assign head
+                            {t('orgSettings.structure.assignHead')}
                         </button>
                     )}
                 </div>
@@ -790,11 +800,13 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                 {isDept && deptTeams.length > 0 && (
                     <span className="inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary border border-primary/20">
                         <Users className="h-3 w-3" />
-                        {deptTeams.length} {deptTeams.length === 1 ? 'team' : 'teams'}
+                        {deptTeams.length === 1
+                            ? t('orgSettings.structure.team_count', { count: deptTeams.length })
+                            : t('orgSettings.structure.teams_count', { count: deptTeams.length })}
                     </span>
                 )}
 
-                {!unit.isActive && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
+                {!unit.isActive && <Badge variant="secondary" className="text-[10px]">{t('orgSettings.structure.inactive')}</Badge>}
 
                 <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                     {isDept && (
@@ -802,13 +814,13 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                             size="sm" variant="ghost"
                             className="h-7 px-2 gap-1 text-primary hover:text-primary"
                             onClick={() => setAddTeamOpen(true)}
-                            title="Add team"
+                            title={t('orgSettings.structure.addTeam')}
                         >
                             <Plus className="h-3.5 w-3.5" />
-                            <span className="text-[11px] font-medium">Team</span>
+                            <span className="text-[11px] font-medium">{t('orgSettings.structure.team')}</span>
                         </Button>
                     )}
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditing(true)} title="Edit">
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditing(true)} title={t('common.edit')}>
                         <Pencil className="h-3.5 w-3.5" />
                     </Button>
                     <Button
@@ -816,7 +828,7 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                         className="h-7 w-7 p-0 text-destructive hover:text-destructive"
                         disabled={deleteMut.isPending}
                         onClick={() => setConfirmDelete(true)}
-                        title="Delete"
+                        title={t('common.delete')}
                     >
                         <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -866,13 +878,13 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
             <ConfirmDialog
                 open={confirmDelete}
                 onOpenChange={setConfirmDelete}
-                title={`Delete "${unit.name}"?`}
-                description="Its child units will become standalone. This action cannot be undone."
-                confirmLabel="Delete"
+                title={t('orgSettings.structure.deleteTitle', { name: unit.name })}
+                description={t('orgSettings.structure.deleteDesc')}
+                confirmLabel={t('common.delete')}
                 onConfirm={() => {
                     deleteMut.mutate(unit.id, {
-                        onSuccess: () => { toast.success('Deleted', `${unit.name} has been removed.`); setConfirmDelete(false) },
-                        onError: () => toast.error('Error', 'Could not delete org unit.'),
+                        onSuccess: () => { toast.success(t('orgSettings.structure.deleted'), t('orgSettings.structure.deletedDesc', { name: unit.name })); setConfirmDelete(false) },
+                        onError: () => toast.error(t('orgSettings.structure.deleteError'), t('orgSettings.structure.deleteErrorDesc')),
                     })
                 }}
             />
@@ -883,6 +895,7 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
 // ─── Org Structure Tab ────────────────────────────────────────────────────────
 
 export function OrgStructureTab() {
+    const { t } = useTranslation()
     const { data: units = [], isLoading } = useOrgUnits()
     const { data: employees } = useEmployees({ limit: 100 })
     const { data: teams = [] } = useTeams()
@@ -897,11 +910,11 @@ export function OrgStructureTab() {
     // Group teams by department once → O(1) lookup per row
     const teamsByDept = useMemo(() => {
         const map = new Map<string, TeamRow[]>()
-        for (const t of teams) {
-            if (!t.departmentId) continue
-            const arr = map.get(t.departmentId) ?? []
-            arr.push(t)
-            map.set(t.departmentId, arr)
+        for (const team of teams) {
+            if (!team.departmentId) continue
+            const arr = map.get(team.departmentId) ?? []
+            arr.push(team)
+            map.set(team.departmentId, arr)
         }
         for (const arr of map.values()) arr.sort((a, b) => a.name.localeCompare(b.name))
         return map
@@ -917,23 +930,17 @@ export function OrgStructureTab() {
     return (
         <div className="space-y-6">
             <div>
-                <h3 className="text-base font-semibold">Organization Structure</h3>
+                <h3 className="text-base font-semibold">{t('orgSettings.structure.title')}</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                    Three-level hierarchy:{' '}
-                    <span className="text-emerald-600 font-medium">Branch</span>
-                    {' → '}
-                    <span className="text-violet-600 font-medium">Division</span>
-                    {' → '}
-                    <span className="text-blue-600 font-medium">Department</span>.
-                    {' '}Start with branches, add divisions under each branch, then departments under each division.
+                    {t('orgSettings.structure.description')}
                 </p>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <KpiCardCompact label="Branches" value={counts.branch} icon={ORG_TYPE_META.branch.icon} color="green" loading={isLoading} />
-                <KpiCardCompact label="Divisions" value={counts.division} icon={ORG_TYPE_META.division.icon} color="purple" loading={isLoading} />
-                <KpiCardCompact label="Departments" value={counts.department} icon={ORG_TYPE_META.department.icon} color="blue" loading={isLoading} />
-                <KpiCardCompact label="Teams" value={teams.length} icon={Users} color="amber" loading={isLoading} />
+                <KpiCardCompact label={t('orgSettings.structure.branches')} value={counts.branch} icon={ORG_TYPE_META.branch.icon} color="green" loading={isLoading} />
+                <KpiCardCompact label={t('orgSettings.structure.divisions')} value={counts.division} icon={ORG_TYPE_META.division.icon} color="purple" loading={isLoading} />
+                <KpiCardCompact label={t('orgSettings.structure.departments')} value={counts.department} icon={ORG_TYPE_META.department.icon} color="blue" loading={isLoading} />
+                <KpiCardCompact label={t('orgSettings.structure.teams')} value={teams.length} icon={Users} color="amber" loading={isLoading} />
             </div>
 
             <div className="flex gap-2 flex-wrap">
@@ -943,7 +950,7 @@ export function OrgStructureTab() {
                     return (
                         <Button key={type} size="sm" variant="outline" onClick={() => setAdding(type)}
                             leftIcon={<Icon className="h-3.5 w-3.5" />}>
-                            Add {meta.label}
+                            {t('orgSettings.structure.addUnit', { type: meta.label })}
                         </Button>
                     )
                 })}
@@ -953,9 +960,9 @@ export function OrgStructureTab() {
                     onClick={() => setAddTeamOpen(true)}
                     leftIcon={<Users className="h-3.5 w-3.5" />}
                     disabled={counts.department === 0}
-                    title={counts.department === 0 ? 'Create a department first' : undefined}
+                    title={counts.department === 0 ? t('orgSettings.structure.createDeptFirst') : undefined}
                 >
-                    Add Team
+                    {t('orgSettings.structure.addTeam')}
                 </Button>
             </div>
 
@@ -969,13 +976,13 @@ export function OrgStructureTab() {
                 <div className="flex flex-col items-center gap-3 py-12 text-center">
                     <GitBranch className="h-10 w-10 text-muted-foreground" />
                     <div>
-                        <p className="font-medium text-sm">No structure defined yet</p>
+                        <p className="font-medium text-sm">{t('orgSettings.structure.noStructure')}</p>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Start by adding a Branch, then add Divisions under it, then Departments under each Division.
+                            {t('orgSettings.structure.noStructureHint')}
                         </p>
                     </div>
                     <Button size="sm" onClick={() => setAdding('branch')} leftIcon={<Plus className="h-3.5 w-3.5" />}>
-                        Add your first Branch
+                        {t('orgSettings.structure.addFirstBranch')}
                     </Button>
                 </div>
             ) : (

@@ -21,7 +21,8 @@ export function useCreateVisa() {
         mutationFn: (data: unknown) => api.post('/visa', data),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['visa'] })
-            qc.invalidateQueries({ queryKey: ['dashboard'] })
+            qc.invalidateQueries({ queryKey: ['dashboard', 'kpis'] })
+            qc.invalidateQueries({ queryKey: ['dashboard', 'summary'] })
         },
         onError: (err: Error) => toast.error('Failed to create visa application', err?.message ?? 'Please try again.'),
     })
@@ -79,7 +80,8 @@ export function useAdvanceVisaWithCosts() {
             qc.invalidateQueries({ queryKey: ['visa', variables.id, 'costs'] })
             qc.invalidateQueries({ queryKey: ['visa', variables.id, 'history'] })
             qc.invalidateQueries({ queryKey: ['reports', 'pro-costs'] })
-            qc.invalidateQueries({ queryKey: ['dashboard'] })
+            qc.invalidateQueries({ queryKey: ['dashboard', 'kpis'] })
+            qc.invalidateQueries({ queryKey: ['dashboard', 'summary'] })
         },
         onError: (err) => toast.error('Advance failed', err?.message ?? 'Could not advance the visa step.'),
     })
@@ -120,7 +122,8 @@ export function useCancelVisa() {
             api.post(`/visa/${id}/cancel`, { reason }),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['visa'] })
-            qc.invalidateQueries({ queryKey: ['dashboard'] })
+            qc.invalidateQueries({ queryKey: ['dashboard', 'kpis'] })
+            qc.invalidateQueries({ queryKey: ['dashboard', 'summary'] })
         },
         onError: (err: Error) => toast.error('Cancellation failed', err?.message ?? 'Could not cancel the visa application.'),
     })

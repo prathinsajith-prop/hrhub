@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CalendarDays, Plus, Trash2, ChevronLeft, ChevronRight, Repeat2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +20,7 @@ import { Card } from './_shared'
 const UAE_FLAG = '🇦🇪'
 
 export function HolidaysTab() {
+    const { t } = useTranslation()
     const thisYear = new Date().getFullYear()
     const [year, setYear] = useState(thisYear)
     const [showForm, setShowForm] = useState(false)
@@ -42,30 +44,30 @@ export function HolidaysTab() {
                 isRecurring: form.isRecurring,
                 notes: form.notes || undefined,
             })
-            toast.success('Holiday added', `${form.name} added to ${year}.`)
+            toast.success(t('orgSettings.holidays.holidayAdded'), t('orgSettings.holidays.holidayAddedDesc', { name: form.name, year }))
             setForm({ name: '', date: '', isRecurring: false, notes: '' })
             setShowForm(false)
         } catch {
-            toast.error('Failed', 'Could not add holiday.')
+            toast.error(t('orgSettings.holidays.addFailed'), t('orgSettings.holidays.addFailedDesc'))
         }
     }
 
     const handleDelete = async (id: string) => {
         try {
             await deleteHoliday.mutateAsync(id)
-            toast.success('Holiday removed')
+            toast.success(t('orgSettings.holidays.holidayRemoved'))
             setDeleteTarget(null)
         } catch {
-            toast.error('Failed', 'Could not remove holiday.')
+            toast.error(t('orgSettings.holidays.removeFailed'), t('orgSettings.holidays.removeFailedDesc'))
         }
     }
 
     const handleSeedUae = async () => {
         try {
             const result = await seedUae.mutateAsync(year)
-            toast.success('UAE holidays seeded', `${result.seeded} holidays added for ${year}.`)
+            toast.success(t('orgSettings.holidays.seeded'), t('orgSettings.holidays.seededDesc', { count: result.seeded, year }))
         } catch {
-            toast.error('Failed', 'Could not seed UAE holidays.')
+            toast.error(t('orgSettings.holidays.seedFailed'), t('orgSettings.holidays.seedFailedDesc'))
         }
     }
 
@@ -93,7 +95,7 @@ export function HolidaysTab() {
                             variant="outline"
                             size="icon-sm"
                             onClick={() => setYear(y => y - 1)}
-                            aria-label="Previous year"
+                            aria-label={t('orgSettings.holidays.previousYear')}
                         >
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
@@ -102,7 +104,7 @@ export function HolidaysTab() {
                             variant="outline"
                             size="icon-sm"
                             onClick={() => setYear(y => y + 1)}
-                            aria-label="Next year"
+                            aria-label={t('orgSettings.holidays.nextYear')}
                         >
                             <ChevronRight className="h-4 w-4" />
                         </Button>
@@ -113,7 +115,7 @@ export function HolidaysTab() {
                                 className="h-7 text-xs"
                                 onClick={() => setYear(thisYear)}
                             >
-                                Today's Year
+                                {t('orgSettings.holidays.todaysYear')}
                             </Button>
                         )}
                     </div>
@@ -125,7 +127,7 @@ export function HolidaysTab() {
                             loading={seedUae.isPending}
                             leftIcon={<span className="text-sm">{UAE_FLAG}</span>}
                         >
-                            Seed UAE Holidays
+                            {t('orgSettings.holidays.seedUaeHolidays')}
                         </Button>
                         <Button
                             size="sm"
@@ -135,7 +137,7 @@ export function HolidaysTab() {
                                 setForm(f => ({ ...f, date: `${year}-01-01` }))
                             }}
                         >
-                            Add Holiday
+                            {t('orgSettings.holidays.addHoliday')}
                         </Button>
                     </div>
                 </div>
@@ -143,20 +145,20 @@ export function HolidaysTab() {
                 {/* Inline add form */}
                 {showForm && (
                     <form onSubmit={handleAdd} className="mt-5 pt-5 border-t space-y-4">
-                        <p className="text-sm font-semibold">New holiday for {year}</p>
+                        <p className="text-sm font-semibold">{t('orgSettings.holidays.newHolidayFor', { year })}</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                                <Label htmlFor="h_name">Holiday Name *</Label>
+                                <Label htmlFor="h_name">{t('orgSettings.holidays.holidayName')}</Label>
                                 <Input
                                     id="h_name"
                                     value={form.name}
                                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                                    placeholder="e.g. National Day"
+                                    placeholder={t('orgSettings.holidays.holidayNamePlaceholder')}
                                     required
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label htmlFor="h_date">Date *</Label>
+                                <Label htmlFor="h_date">{t('orgSettings.holidays.date')}</Label>
                                 <DatePicker
                                     id="h_date"
                                     value={form.date}
@@ -164,12 +166,12 @@ export function HolidaysTab() {
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label htmlFor="h_notes">Notes (optional)</Label>
+                                <Label htmlFor="h_notes">{t('orgSettings.holidays.notesOptional')}</Label>
                                 <Input
                                     id="h_notes"
                                     value={form.notes}
                                     onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                                    placeholder="Additional details"
+                                    placeholder={t('orgSettings.holidays.notesPlaceholder')}
                                 />
                             </div>
                             <div className="flex items-center gap-3 pt-5">
@@ -179,7 +181,7 @@ export function HolidaysTab() {
                                     onCheckedChange={v => setForm(f => ({ ...f, isRecurring: v }))}
                                 />
                                 <Label htmlFor="h_recurring" className="cursor-pointer">
-                                    Recurring annually
+                                    {t('orgSettings.holidays.recurringAnnually')}
                                 </Label>
                             </div>
                         </div>
@@ -190,10 +192,10 @@ export function HolidaysTab() {
                                 size="sm"
                                 onClick={() => setShowForm(false)}
                             >
-                                Cancel
+                                {t('common.cancel')}
                             </Button>
                             <Button type="submit" size="sm" loading={createHoliday.isPending}>
-                                Add Holiday
+                                {t('orgSettings.holidays.addHoliday')}
                             </Button>
                         </div>
                     </form>
@@ -209,17 +211,9 @@ export function HolidaysTab() {
                 <Card>
                     <div className="text-center py-14 text-muted-foreground">
                         <CalendarDays className="h-10 w-10 mx-auto mb-3 opacity-25" />
-                        <p className="text-sm font-medium">No holidays configured for {year}</p>
+                        <p className="text-sm font-medium">{t('orgSettings.holidays.noHolidays', { year })}</p>
                         <p className="text-xs mt-1">
-                            Add holidays manually or click{' '}
-                            <button
-                                type="button"
-                                className="underline underline-offset-2 hover:text-foreground"
-                                onClick={handleSeedUae}
-                            >
-                                Seed UAE Holidays
-                            </button>{' '}
-                            to pre-fill UAE national holidays.
+                            {t('orgSettings.holidays.noHolidaysHint')}
                         </p>
                     </div>
                 </Card>
@@ -229,7 +223,9 @@ export function HolidaysTab() {
                         <Card key={month} className="p-0 overflow-hidden">
                             <div className="px-4 py-2.5 bg-muted/40 border-b">
                                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                    {month} · {items.length} holiday{items.length > 1 ? 's' : ''}
+                                    {month} · {items.length === 1
+                                        ? t('orgSettings.holidays.monthCount', { count: items.length })
+                                        : t('orgSettings.holidays.monthCount_plural', { count: items.length })}
                                 </p>
                             </div>
                             <div className="divide-y">
@@ -248,7 +244,7 @@ export function HolidaysTab() {
                                                     {h.isRecurring && (
                                                         <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 border border-blue-200 text-blue-700 px-1.5 py-0.5 rounded-full">
                                                             <Repeat2 className="h-2.5 w-2.5" />
-                                                            Recurring
+                                                            {t('orgSettings.holidays.recurring')}
                                                         </span>
                                                     )}
                                                 </div>
@@ -263,7 +259,7 @@ export function HolidaysTab() {
                                             size="icon"
                                             className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                             onClick={() => setDeleteTarget(h.id)}
-                                            aria-label={`Delete ${h.name}`}
+                                            aria-label={t('orgSettings.holidays.deleteAria', { name: h.name })}
                                         >
                                             <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
@@ -278,7 +274,9 @@ export function HolidaysTab() {
             {/* Summary footer */}
             {sorted.length > 0 && (
                 <p className="text-xs text-muted-foreground text-right">
-                    {sorted.length} public holiday{sorted.length > 1 ? 's' : ''} · {year}
+                    {sorted.length === 1
+                        ? t('orgSettings.holidays.totalCount', { count: sorted.length, year })
+                        : t('orgSettings.holidays.totalCount_plural', { count: sorted.length, year })}
                 </p>
             )}
 
@@ -286,9 +284,9 @@ export function HolidaysTab() {
             <ConfirmDialog
                 open={!!deleteTarget}
                 onOpenChange={(v) => { if (!v) setDeleteTarget(null) }}
-                title="Remove this holiday?"
-                description="This will remove it from the organization calendar. Employees already on leave for this day are not affected."
-                confirmLabel={deleteHoliday.isPending ? 'Removing…' : 'Remove'}
+                title={t('orgSettings.holidays.deleteTitle')}
+                description={t('orgSettings.holidays.deleteDesc')}
+                confirmLabel={deleteHoliday.isPending ? t('orgSettings.holidays.removing') : t('orgSettings.holidays.remove')}
                 onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
                 variant="destructive"
             />

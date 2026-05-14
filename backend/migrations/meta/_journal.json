@@ -204,6 +204,27 @@
       "when": 1778889600000,
       "tag": "0028_loan_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1778976000000,
+      "tag": "0029_onboarding_template_steps",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1779062400000,
+      "tag": "0030_recruitment_stages",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1779148800000,
+      "tag": "0031_onboarding_template_required_docs",
+      "breakpoints": true
     }
   ]
 }

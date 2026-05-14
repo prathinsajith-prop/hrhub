@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, numeric, date, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, numeric, date, timestamp, jsonb, boolean, index, unique } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { users } from './users.js'
@@ -38,8 +38,10 @@ export const jobApplications = pgTable('job_applications', {
     email: text('email').notNull(),
     phone: text('phone'),
     nationality: text('nationality'),
-    stage: text('stage').notNull().default('received')
-        .$type<'received' | 'screening' | 'interview' | 'assessment' | 'offer' | 'pre_boarding' | 'hired' | 'rejected'>(),
+    // Stage keys are per-tenant — admins can add/rename them in Organization
+    // Settings → Recruitment Stages. Typed as plain string so user-defined
+    // keys are accepted; the seven default keys are seeded for every tenant.
+    stage: text('stage').notNull().default('received'),
     score: integer('score').default(0),
     experience: integer('experience'),
     expectedSalary: numeric('expected_salary', { precision: 12, scale: 2 }),
@@ -66,4 +68,30 @@ export const recruitmentJobsRelations = relations(recruitmentJobs, ({ one, many 
 export const jobApplicationsRelations = relations(jobApplications, ({ one }) => ({
     job: one(recruitmentJobs, { fields: [jobApplications.jobId], references: [recruitmentJobs.id] }),
     tenant: one(tenants, { fields: [jobApplications.tenantId], references: [tenants.id] }),
+}))
+
+// Per-tenant customisation of the recruitment pipeline stages.
+//
+// Stage keys are fixed (must match the `jobApplications.stage` union — adding /
+// renaming keys would break candidate.stage references). What tenants customise
+// is the user-facing label, the colour, and the display order. Terminal stages
+// (e.g. rejected) are filtered out of the kanban board on the client.
+export const recruitmentStages = pgTable('recruitment_stages', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    stageKey: text('stage_key').notNull(),
+    label: text('label').notNull(),
+    colorKey: text('color_key').notNull().default('slate'),
+    stageOrder: integer('stage_order').notNull(),
+    isTerminal: boolean('is_terminal').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    tenantStageKeyUniq: unique('recruitment_stages_tenant_key_unique').on(t.tenantId, t.stageKey),
+    tenantIdx: index('idx_recruitment_stages_tenant').on(t.tenantId),
+    tenantOrderIdx: index('idx_recruitment_stages_tenant_order').on(t.tenantId, t.stageOrder),
+}))
+
+export const recruitmentStagesRelations = relations(recruitmentStages, ({ one }) => ({
+    tenant: one(tenants, { fields: [recruitmentStages.tenantId], references: [tenants.id] }),
 }))

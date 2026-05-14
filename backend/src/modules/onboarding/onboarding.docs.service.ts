@@ -7,6 +7,8 @@ import { db } from '../../db/index.js'
 import { log } from '../../lib/logger.js'
 import {
     onboardingStepRequiredDocs,
+    onboardingTemplateStepRequiredDocs,
+    onboardingTemplateSteps,
     onboardingSteps,
     onboardingChecklists,
     onboardingUploadTokens,
@@ -97,6 +99,59 @@ export async function deleteRequiredDoc(tenantId: string, requiredDocId: string)
         .where(and(
             eq(onboardingStepRequiredDocs.id, requiredDocId),
             eq(onboardingStepRequiredDocs.tenantId, tenantId),
+        ))
+        .returning()
+    return deleted ?? null
+}
+
+// ─── Template-level required-docs CRUD ───────────────────────────────────────
+// These rows live on onboarding_template_steps and are copied into each new
+// employee's checklist when createChecklist is called from the template path.
+//
+// Same shape as the instance-level CRUD above; we keep the two paths separate
+// so the per-employee table doesn't carry a nullable template_step_id and the
+// access checks ("does this step belong to my tenant?") stay explicit.
+
+export async function listTemplateRequiredDocs(tenantId: string, templateStepId: string) {
+    return await db
+        .select()
+        .from(onboardingTemplateStepRequiredDocs)
+        .where(and(
+            eq(onboardingTemplateStepRequiredDocs.tenantId, tenantId),
+            eq(onboardingTemplateStepRequiredDocs.templateStepId, templateStepId),
+        ))
+        .orderBy(onboardingTemplateStepRequiredDocs.sortOrder, onboardingTemplateStepRequiredDocs.docType)
+}
+
+export async function addTemplateRequiredDoc(tenantId: string, templateStepId: string, data: {
+    category: string; docType: string; expiryRequired?: boolean; isMandatory?: boolean; hint?: string; sortOrder?: number
+}) {
+    // Verify template step belongs to tenant
+    const [step] = await db
+        .select({ id: onboardingTemplateSteps.id })
+        .from(onboardingTemplateSteps)
+        .where(and(eq(onboardingTemplateSteps.id, templateStepId), eq(onboardingTemplateSteps.tenantId, tenantId)))
+        .limit(1)
+    if (!step) return null
+
+    const [row] = await db.insert(onboardingTemplateStepRequiredDocs).values({
+        tenantId,
+        templateStepId,
+        category: data.category as any,
+        docType: data.docType,
+        expiryRequired: data.expiryRequired ?? false,
+        isMandatory: data.isMandatory ?? true,
+        hint: data.hint,
+        sortOrder: data.sortOrder ?? 0,
+    }).returning()
+    return row
+}
+
+export async function deleteTemplateRequiredDoc(tenantId: string, requiredDocId: string) {
+    const [deleted] = await db.delete(onboardingTemplateStepRequiredDocs)
+        .where(and(
+            eq(onboardingTemplateStepRequiredDocs.id, requiredDocId),
+            eq(onboardingTemplateStepRequiredDocs.tenantId, tenantId),
         ))
         .returning()
     return deleted ?? null

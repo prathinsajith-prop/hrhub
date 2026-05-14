@@ -1,17 +1,19 @@
 import { useNavigate } from 'react-router-dom'
 import { ShieldOffIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 export function ForbiddenPage() {
     const navigate = useNavigate()
+    const { t } = useTranslation()
 
     return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-8 text-center">
             <ShieldOffIcon className="h-16 w-16 text-muted-foreground/30" />
             <div className="space-y-1">
                 <p className="text-8xl font-bold text-muted-foreground/20 select-none">403</p>
-                <h1 className="text-2xl font-bold">Access Denied</h1>
+                <h1 className="text-2xl font-bold">{t('errors.accessDenied')}</h1>
                 <p className="text-sm text-muted-foreground">
-                    You don't have permission to view this page.
+                    {t('errors.forbidden')}
                 </p>
             </div>
             <button
@@ -19,7 +21,7 @@ export function ForbiddenPage() {
                 onClick={() => navigate('/dashboard')}
                 className="rounded-lg border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
             >
-                Go to Dashboard
+                {t('errors.backToHome')}
             </button>
         </div>
     )
