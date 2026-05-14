@@ -84,6 +84,9 @@ export const recruitmentStages = pgTable('recruitment_stages', {
     colorKey: text('color_key').notNull().default('slate'),
     stageOrder: integer('stage_order').notNull(),
     isTerminal: boolean('is_terminal').notNull().default(false),
+    isFirst: boolean('is_first').notNull().default(false),
+    isFinal: boolean('is_final').notNull().default(false),
+    showInKanban: boolean('show_in_kanban').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({

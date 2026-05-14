@@ -11,13 +11,13 @@
  * palette keys here in sync with that file.
  */
 export const DEFAULT_RECRUITMENT_STAGES = [
-    { stageOrder: 1, stageKey: 'received',     label: 'Received',     colorKey: 'slate',   isTerminal: false },
-    { stageOrder: 2, stageKey: 'screening',    label: 'Screening',    colorKey: 'blue',    isTerminal: false },
-    { stageOrder: 3, stageKey: 'interview',    label: 'Interview',    colorKey: 'amber',   isTerminal: false },
-    { stageOrder: 4, stageKey: 'assessment',   label: 'Assessment',   colorKey: 'primary', isTerminal: false },
-    { stageOrder: 5, stageKey: 'offer',        label: 'Offer',        colorKey: 'green',   isTerminal: false },
-    { stageOrder: 6, stageKey: 'pre_boarding', label: 'Pre-boarding', colorKey: 'emerald', isTerminal: false },
-    { stageOrder: 7, stageKey: 'rejected',     label: 'Rejected',     colorKey: 'red',     isTerminal: true  },
+    { stageOrder: 1, stageKey: 'received',     label: 'Received',     colorKey: 'slate',   isTerminal: false, isFirst: true,  isFinal: false, showInKanban: true  },
+    { stageOrder: 2, stageKey: 'screening',    label: 'Screening',    colorKey: 'blue',    isTerminal: false, isFirst: false, isFinal: false, showInKanban: true  },
+    { stageOrder: 3, stageKey: 'interview',    label: 'Interview',    colorKey: 'amber',   isTerminal: false, isFirst: false, isFinal: false, showInKanban: true  },
+    { stageOrder: 4, stageKey: 'assessment',   label: 'Assessment',   colorKey: 'primary', isTerminal: false, isFirst: false, isFinal: false, showInKanban: true  },
+    { stageOrder: 5, stageKey: 'offer',        label: 'Offer',        colorKey: 'green',   isTerminal: false, isFirst: false, isFinal: false, showInKanban: true  },
+    { stageOrder: 6, stageKey: 'pre_boarding', label: 'Pre-boarding', colorKey: 'emerald', isTerminal: false, isFirst: false, isFinal: false, showInKanban: true  },
+    { stageOrder: 7, stageKey: 'rejected',     label: 'Rejected',     colorKey: 'red',     isTerminal: true,  isFirst: false, isFinal: true,  showInKanban: false },
 ] as const
 
 export type DefaultRecruitmentStage = (typeof DEFAULT_RECRUITMENT_STAGES)[number]
@@ -35,5 +35,8 @@ export function buildDefaultRecruitmentStageRows(tenantId: string) {
         label: s.label,
         colorKey: s.colorKey,
         isTerminal: s.isTerminal,
+        isFirst: s.isFirst,
+        isFinal: s.isFinal,
+        showInKanban: s.showInKanban,
     }))
 }
