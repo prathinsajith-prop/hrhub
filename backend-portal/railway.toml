@@ -13,7 +13,11 @@ startCommand = "sh entrypoint.sh"
 # only reads/writes existing tables.
 preDeploy = ""
 
+# /health is dependency-free (no DB, no auth) and registered BEFORE any plugin in
+# src/index.ts, so the LB probe never depends on the rest of the stack. Timeout
+# is the total window Railway will wait for the first 200 — bcrypt's native
+# binary rebuild on first cold boot can push initial readiness past 60s.
 healthcheckPath = "/health"
-healthcheckTimeout = 30
+healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
+restartPolicyMaxRetries = 5

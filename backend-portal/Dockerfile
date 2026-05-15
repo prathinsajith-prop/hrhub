@@ -51,8 +51,9 @@ RUN chmod +x entrypoint.sh
 USER app
 EXPOSE 4001
 
-# Healthcheck uses the /health endpoint
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD wget -qO- http://localhost:4001/health || exit 1
+# Node 24 has a global fetch() — more reliable than wget/busybox.
+# Honour Railway's injected PORT if present; otherwise fall back to 4001.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["sh", "entrypoint.sh"]
