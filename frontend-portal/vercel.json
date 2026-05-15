@@ -9,7 +9,7 @@
       "source": "/api/:path*",
       "destination": "https://hrhub-employee-manager-production.up.railway.app/api/:path*"
     },
-    { "source": "/((?!api/|favicon\\.svg|manifest\\.webmanifest|assets/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {

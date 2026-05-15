@@ -18,19 +18,10 @@ const ALLOWED_SELF_UPDATE_FIELDS = [
     'homeCountryAddress',
 ] as const
 
-async function getEmployeeById(tenantId: string, id: string) {
-    const [row] = await db
-        .select()
-        .from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.id, id)))
-        .limit(1)
-    return row ?? null
-}
-
 /**
- * Same as getEmployeeById but also resolves the reporting-to manager via a self-join
- * so the manager-detail screen can render "Reports to: Alex Thompson · Director" without
- * a second round-trip. Returns the full employee row plus the four extra fields.
+ * Fetch an employee plus their reporting-to manager via a self-join, so the
+ * manager-detail screen can render "Reports to: Alex Thompson · Director"
+ * without a second round-trip.
  */
 async function getEmployeeWithReportingTo(tenantId: string, id: string) {
     const manager = alias(employees, 'manager') as any

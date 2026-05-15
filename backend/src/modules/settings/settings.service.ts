@@ -6,6 +6,7 @@ import { randomBytes, createHash } from 'crypto'
 import { hash } from 'bcrypt'
 import { sendEmail, inviteUserEmail } from '../../plugins/email.js'
 import { loadEnv } from '../../config/env.js'
+import { log } from '../../lib/logger.js'
 import type { UserRole } from '../../types/index.js'
 
 const COMPANY_SETTINGS_COLS = {
@@ -256,9 +257,24 @@ export async function inviteUser(
 
     const inviteUrl = `${env.APP_URL}/reset-password?token=${rawToken}`
     const emailOpts = inviteUserEmail({ inviteeName: name, workspaceName: 'HRHub', role: data.role, inviteUrl })
-    await sendEmail({ ...emailOpts, to: email })
+    const result = await sendEmail({ ...emailOpts, to: email })
 
-    return { id: user.id, name, email, role: data.role, employeeId: data.employeeId }
+    // Account is already created — surface the email failure so the inviter can
+    // either re-trigger via "Resend invite" or share the link manually. Previously
+    // this silently swallowed transport errors and the recipient never knew.
+    if (!result.ok) {
+        log.warn({ to: email, err: result.error }, 'invite email delivery failed — account was created but no email was sent')
+    }
+
+    return {
+        id: user.id,
+        name,
+        email,
+        role: data.role,
+        employeeId: data.employeeId,
+        emailSent: result.ok,
+        emailError: result.ok ? undefined : result.error,
+    }
 }
 
 /**
@@ -317,5 +333,15 @@ export async function resendInvite(tenantId: string, employeeId: string) {
 
     const inviteUrl = `${env.APP_URL}/reset-password?token=${rawToken}`
     const emailOpts = inviteUserEmail({ inviteeName: user.name, workspaceName: 'HRHub', role: 'employee', inviteUrl })
-    await sendEmail({ ...emailOpts, to: user.email })
+    const result = await sendEmail({ ...emailOpts, to: user.email })
+
+    // sendEmail resolves with { ok: false, error } on SMTP/transport failure — previously
+    // the result was discarded and the API returned "Invite resent" even when nothing
+    // was delivered. Surface the real reason so the UI can show it.
+    if (!result.ok) {
+        throw Object.assign(
+            new Error(`Could not send invite email to ${user.email}: ${result.error ?? 'transport failure'}`),
+            { statusCode: 502 },
+        )
+    }
 }
