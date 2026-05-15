@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Eye, EyeOff, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
@@ -29,10 +29,11 @@ export function EmployeeProfilePage() {
     const [form, setForm] = useState<UpdateMyProfileBody>({})
 
     // State-during-render: re-sync form when the employee record loads or changes externally.
-    // Avoids the setState-in-useEffect pattern (and its extra render).
-    const [lastSyncedEmployeeId, setLastSyncedEmployeeId] = useState<string | null>(null)
-    if (employee && employee.id !== lastSyncedEmployeeId) {
-        setLastSyncedEmployeeId(employee.id)
+    // The "last synced id" tracker is held in a ref because it's only read+written here —
+    // never consumed by render — so it doesn't need to trigger a re-render itself.
+    const lastSyncedEmployeeId = useRef<string | null>(null)
+    if (employee && employee.id !== lastSyncedEmployeeId.current) {
+        lastSyncedEmployeeId.current = employee.id
         setForm({
             phone: employee.phone ?? '',
             mobileNo: employee.mobileNo ?? '',

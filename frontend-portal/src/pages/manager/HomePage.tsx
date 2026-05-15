@@ -551,8 +551,8 @@ function TeamStatusChart({
                         endAngle={-270}
                         stroke="none"
                     >
-                        {data.map((_, i) => (
-                            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                        {data.map((slice, i) => (
+                            <Cell key={slice.name} fill={COLORS[i % COLORS.length]} />
                         ))}
                         <foreignObject x="35%" y="35%" width="30%" height="30%">
                             <div className="flex h-full w-full flex-col items-center justify-center">
