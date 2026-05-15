@@ -276,7 +276,7 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
   function handleCancel() {
     cancelVisa.mutate({ id: v.id }, {
       onSuccess: () => { toast.success('Visa cancelled'); setConfirmCancel(false); setOpen(false) },
-      onError: () => toast.error('Failed to cancel visa'),
+      onError: () => toast.error('Cancel failed', 'Could not cancel this visa application. Please try again.'),
     })
   }
 
@@ -470,7 +470,7 @@ export function VisaPage() {
               className="gap-1.5"
               onClick={() => recalcUrgency.mutate(undefined, {
                 onSuccess: (r) => toast.success(`Urgency updated for ${(r as { data?: { updated?: number } })?.data?.updated ?? 0} visa(s)`),
-                onError: () => toast.error('Recalculation failed'),
+                onError: () => toast.error('Recalculation failed', 'Could not recalculate visa costs. Please try again.'),
               })}
               disabled={recalcUrgency.isPending}
             >

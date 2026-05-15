@@ -56,8 +56,8 @@ export function CreatePerformanceReviewDialog({ open, onOpenChange, lockedEmploy
     }
 
     async function handleSubmit() {
-        if (!form.employeeId) { toast.error('Validation', 'Please select an employee.'); return }
-        if (!form.period) { toast.error('Validation', 'Review period is required.'); return }
+        if (!form.employeeId) { toast.error('Employee required', 'Select an employee to review.'); return }
+        if (!form.period)     { toast.error('Review period required', 'Select the review period.'); return }
         try {
             await createReview.mutateAsync({ ...form, status: 'draft' })
             toast.success('Review created', 'Performance review saved as draft.')

@@ -64,14 +64,8 @@ export function EditCandidateDialog({
     const handleSave = () => {
         const trimmedName = form.name.trim()
         const trimmedEmail = form.email.trim()
-        if (!trimmedName) {
-            toast.error('Name required')
-            return
-        }
-        if (!trimmedEmail) {
-            toast.error('Email required')
-            return
-        }
+        if (!trimmedName)  { toast.error('Name required', 'Enter the candidate name.'); return }
+        if (!trimmedEmail) { toast.error('Email required', 'Enter the candidate email.'); return }
         const payload: Record<string, unknown> = {
             name: trimmedName,
             email: trimmedEmail,
@@ -84,7 +78,7 @@ export function EditCandidateDialog({
         if (form.score !== '') {
             const scoreNum = Number(form.score)
             if (Number.isNaN(scoreNum) || scoreNum < 0 || scoreNum > 100) {
-                toast.error('Score must be between 0 and 100')
+                toast.error('Invalid score', 'Score must be a number between 0 and 100.')
                 return
             }
             payload.score = scoreNum

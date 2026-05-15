@@ -522,7 +522,7 @@ function RunActions({ run, canManage }: { run: PayrollRun; canManage: boolean })
     e.stopPropagation()
     submitWps.mutate(run.id, {
       onSuccess: () => toast.success('WPS submitted', 'Status updated to WPS Submitted.'),
-      onError: () => toast.error('Submission failed'),
+      onError: () => toast.error('WPS submission failed', 'Could not submit this payroll run to WPS. Please try again.'),
     })
   }
 
@@ -530,7 +530,7 @@ function RunActions({ run, canManage }: { run: PayrollRun; canManage: boolean })
     e.stopPropagation()
     markPaid.mutate({ status: 'paid' }, {
       onSuccess: () => toast.success('Payroll marked as paid'),
-      onError: () => toast.error('Update failed'),
+      onError: () => toast.error('Mark-as-paid failed', 'Could not update the payroll status. Please try again.'),
     })
   }
 

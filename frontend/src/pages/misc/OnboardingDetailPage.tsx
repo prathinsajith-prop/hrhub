@@ -648,10 +648,9 @@ function StepDocPanel({
     const expiryRequired = selectedDocDef?.expiryRequired ?? false
 
     const handleUpload = async () => {
-        if (!selectedCategory || !selectedDocType || !file) {
-            toast.warning('Incomplete', 'Please select a category, document type, and file.')
-            return
-        }
+        if (!selectedCategory) { toast.warning('Category required', 'Select a document category.'); return }
+        if (!selectedDocType)  { toast.warning('Document type required', 'Select a document type.'); return }
+        if (!file)             { toast.warning('File required', 'Choose a file to upload.'); return }
         if (expiryRequired && !expiryDate) {
             toast.warning('Expiry date required', `${selectedDocType} requires an expiry date.`)
             return

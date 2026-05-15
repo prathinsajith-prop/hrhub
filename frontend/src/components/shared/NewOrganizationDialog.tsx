@@ -41,7 +41,7 @@ export function NewOrganizationDialog({ open, onOpenChange, onSuccess }: Props) 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (form.name.trim().length < 2) {
-      toast.error('Organization name must be at least 2 characters')
+      toast.error('Organization name too short', 'The organization name must be at least 2 characters.')
       return
     }
     try {
