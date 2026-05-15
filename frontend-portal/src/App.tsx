@@ -11,6 +11,7 @@ import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { NotAuthorizedPage } from '@/pages/NotAuthorizedPage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
 import { AppShell } from '@/components/layout/AppShell'
+import { RouteTitle } from '@/components/RouteTitle'
 
 import { EmployeeHomePage } from '@/pages/employee/HomePage'
 import { EmployeeProfilePage } from '@/pages/employee/ProfilePage'
@@ -51,7 +52,9 @@ function RootRedirect() {
 
 export default function App() {
     return (
-        <Routes>
+        <>
+            <RouteTitle />
+            <Routes>
             <Route path={ROUTES.login} element={<LoginPage />} />
             <Route path={ROUTES.forgotPassword} element={<ForgotPasswordPage />} />
             <Route path={ROUTES.resetPassword} element={<ResetPasswordPage />} />
@@ -118,6 +121,7 @@ export default function App() {
             </Route>
 
             <Route path="*" element={<RootRedirect />} />
-        </Routes>
+            </Routes>
+        </>
     )
 }
