@@ -131,7 +131,7 @@ export function MyProfileContent() {
             await update.mutateAsync(form)
             toast.success('Saved', 'Your profile has been updated.')
             setEditing(false)
-        } catch { toast.error('Error', 'Could not update profile.') }
+        } catch { toast.error('Update failed', 'Could not save your profile changes. Please try again.') }
     }
 
     async function handleFile(file: File) {

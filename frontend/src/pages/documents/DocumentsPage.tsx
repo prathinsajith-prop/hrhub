@@ -458,7 +458,7 @@ export function DocumentsPage() {
           const count = bulkArchiveTarget.length
           Promise.all(bulkArchiveTarget.map((row) => api.delete(`/documents/${row.id}`)))
             .then(() => toast.warning(`${count} document${count === 1 ? '' : 's'} archived`))
-            .catch(() => toast.error('Some documents could not be archived'))
+            .catch(() => toast.error('Bulk archive failed', 'Some documents could not be archived. Please try again.'))
             .finally(() => {
               void qc.invalidateQueries({ queryKey: ['documents'] })
               setBulkArchiveTarget(null)

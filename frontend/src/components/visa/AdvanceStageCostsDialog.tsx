@@ -108,7 +108,7 @@ export function AdvanceStageCostsDialog({
 
     async function submit() {
         if (blockingInvalid) {
-            toast.error('Each cost needs a valid amount and paid date')
+            toast.error('Cost row incomplete', 'Every cost needs both a valid amount and a paid date.')
             return
         }
         try {

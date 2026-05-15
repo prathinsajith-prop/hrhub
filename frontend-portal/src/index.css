@@ -1,0 +1,729 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700;800&family=Cairo:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─── Design Tokens ───────────────────────────────────────────────────────── */
+:root {
+  --font-display: 'Inter Tight', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Surfaces & text */
+  --background: 210 20% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  /* Brand */
+  --primary: 221 83% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 16% 95%;
+  --secondary-foreground: 222 47% 20%;
+  --muted: 220 20% 96%;
+  --muted-foreground: 220 12% 46%;
+  /* Neutral hover/highlight tint — previously orange; now a quiet blue to match brand. */
+  --accent: 221 83% 96%;
+  --accent-foreground: 221 83% 45%;
+
+  /* Status */
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 66% 38%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 95% 50%;
+  --warning-foreground: 222 47% 11%;
+  --info: 199 89% 48%;
+  --info-foreground: 0 0% 100%;
+
+  --border: 220 16% 91%;
+  --input: 220 16% 91%;
+  --ring: 221 83% 53%;
+  --radius: 0.625rem;
+
+  /* Chart palette — blue/teal analogous + neutral amber accent.
+     No purple/violet. */
+  --chart-1: 221 83% 53%;
+  --chart-2: 199 89% 48%;
+  --chart-3: 173 58% 39%;
+  --chart-4: 38 92% 50%;
+  --chart-5: 220 12% 55%;
+
+  /* Sidebar — dark navy matching auth brand panel. Active items pop in primary blue. */
+  --sidebar: 222 47% 11%;
+  --sidebar-foreground: 210 20% 92%;
+  --sidebar-primary: 221 83% 60%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 222 40% 18%;
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-border: 222 40% 18%;
+  --sidebar-ring: 221 83% 60%;
+}
+
+/* ─── Tailwind 4 theme mapping ────────────────────────────────────────────── */
+@theme inline {
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────── */
+@layer base {
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    border-color: hsl(var(--border));
+  }
+
+  html {
+    background-color: hsl(var(--background));
+  }
+
+  body {
+    font-family: var(--font-body);
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-size: 14px;
+    line-height: 1.55;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.018em;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+  }
+}
+
+/* ─── Autofill ───────────────────────────────────────────────────────────── */
+/*
+  Chrome/Edge apply a forced yellow or grey background on autofilled inputs.
+  The only reliable override is a large inset box-shadow that paints over it,
+  plus -webkit-text-fill-color to restore the text colour.
+*/
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 9999px hsl(var(--background)) inset !important;
+  box-shadow: 0 0 0 9999px hsl(var(--background)) inset !important;
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  caret-color: hsl(var(--foreground));
+  transition: background-color 0s 600000s;
+  /* delays Chrome's own fade */
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.4);
+}
+
+/* ── Sidebar (dark navy) gets its own subtle themed scrollbar ── */
+[data-sidebar="content"],
+[data-sidebar="sidebar"] {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--sidebar-border)) transparent;
+}
+
+[data-sidebar="content"]::-webkit-scrollbar,
+[data-sidebar="sidebar"]::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+[data-sidebar="content"]::-webkit-scrollbar-track,
+[data-sidebar="sidebar"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-sidebar="content"]::-webkit-scrollbar-thumb,
+[data-sidebar="sidebar"]::-webkit-scrollbar-thumb {
+  background: hsl(var(--sidebar-accent));
+  border-radius: 999px;
+}
+
+[data-sidebar="content"]::-webkit-scrollbar-thumb:hover,
+[data-sidebar="sidebar"]::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--sidebar-foreground) / 0.35);
+}
+
+.sidebar-scroll {
+  scrollbar-width: none;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInFast {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.28s ease forwards;
+}
+
+.animate-fade-fast {
+  animation: fadeInFast 0.15s ease forwards;
+}
+
+.page-enter {
+  animation: fadeIn 0.25s ease forwards;
+}
+
+/* ─── Card hover utility ──────────────────────────────────────────────────── */
+.card-hover {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 18px -6px hsl(220 40% 20% / 0.1), 0 1px 3px hsl(220 40% 20% / 0.05);
+}
+
+/* ─── Utilities ───────────────────────────────────────────────────────────── */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.022em;
+}
+
+.tabular-figures {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum', 'cv02', 'cv03';
+}
+
+.table-row-hover:hover {
+  background: hsl(var(--muted) / 0.5);
+}
+
+/* ─── Form field validation highlight ────────────────────────────────────── */
+/* When a FormField wrapper is marked data-invalid="true", tint borders on
+   common controls inside it (input, textarea, select trigger, etc.). This
+   covers third-party controls that don't forward aria-invalid. */
+[data-invalid="true"] input,
+[data-invalid="true"] textarea,
+[data-invalid="true"] [role="combobox"],
+[data-invalid="true"] button[data-slot="select-trigger"],
+[data-invalid="true"] .phone-input-trigger {
+  border-color: hsl(var(--destructive)) !important;
+}
+
+[data-invalid="true"] input:focus-visible,
+[data-invalid="true"] textarea:focus-visible,
+[data-invalid="true"] [role="combobox"]:focus-visible {
+  --tw-ring-color: hsl(var(--destructive) / 0.35);
+}
+
+/* ─── RTL & Arabic Language Support ─────────────────────────────────────── */
+:root[lang="ar"],
+html.rtl {
+  --font-display: 'Cairo', 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Cairo', 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+html[dir="rtl"] body {
+  font-family: 'Cairo', 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Numbers, code, monospace stay LTR inside RTL context */
+html[dir="rtl"] .font-mono,
+html[dir="rtl"] [class*="tabular"],
+html[dir="rtl"] kbd,
+html[dir="rtl"] code,
+html[dir="rtl"] pre {
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+/* Charts and recharts remain LTR for axis/legend correctness */
+html[dir="rtl"] .recharts-wrapper,
+html[dir="rtl"] .recharts-surface {
+  direction: ltr;
+}
+
+/* Lucide icons that imply direction (chevrons, arrows) flip in RTL */
+html[dir="rtl"] [data-rtl-flip] {
+  transform: scaleX(-1);
+}
+
+/* ─── FullCalendar theme — modern, flat, brand-aligned ──────────────────── */
+.hrhub-fullcalendar .fc {
+  --fc-border-color: hsl(var(--border));
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: hsl(var(--muted));
+  --fc-list-event-hover-bg-color: hsl(var(--accent));
+  --fc-today-bg-color: hsl(var(--primary) / 0.06);
+  --fc-now-indicator-color: hsl(var(--primary));
+  --fc-event-border-color: transparent;
+  font-family: var(--font-body);
+}
+
+.hrhub-fullcalendar .fc .fc-toolbar-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground));
+}
+
+.hrhub-fullcalendar .fc .fc-button {
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.32rem 0.7rem;
+  text-transform: capitalize;
+  box-shadow: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.hrhub-fullcalendar .fc .fc-button:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  border-color: hsl(var(--accent-foreground) / 0.3);
+}
+
+.hrhub-fullcalendar .fc .fc-button-primary:not(:disabled).fc-button-active,
+.hrhub-fullcalendar .fc .fc-button-primary:not(:disabled):active {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+  box-shadow: none;
+}
+
+.hrhub-fullcalendar .fc .fc-button:focus,
+.hrhub-fullcalendar .fc .fc-button-primary:not(:disabled).fc-button-active:focus {
+  outline: 2px solid hsl(var(--ring) / 0.4);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.hrhub-fullcalendar .fc .fc-col-header-cell {
+  background: hsl(var(--muted) / 0.5);
+  border-color: hsl(var(--border));
+}
+
+.hrhub-fullcalendar .fc .fc-col-header-cell-cushion {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: hsl(var(--muted-foreground));
+  padding: 0.5rem 0.4rem;
+}
+
+.hrhub-fullcalendar .fc .fc-daygrid-day-number {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+  padding: 0.4rem 0.5rem 0;
+}
+
+.hrhub-fullcalendar .fc .fc-day-other .fc-daygrid-day-number {
+  color: hsl(var(--muted-foreground) / 0.55);
+}
+
+.hrhub-fullcalendar .fc .fc-day-today .fc-daygrid-day-number {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-radius: 9999px;
+  width: 1.55rem;
+  height: 1.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0.35rem 0.35rem 0;
+  font-weight: 700;
+  padding: 0;
+}
+
+.hrhub-fullcalendar .fc .fc-daygrid-day {
+  transition: background 0.15s;
+}
+
+.hrhub-fullcalendar .fc .fc-daygrid-day:hover {
+  background: hsl(var(--muted) / 0.6);
+}
+
+.hrhub-fullcalendar .fc-event {
+  border-radius: 6px;
+  padding: 1px 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  border-left: 3px solid;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+
+.hrhub-fullcalendar .fc-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px hsl(var(--foreground) / 0.08);
+}
+
+.hrhub-fullcalendar .fc-daygrid-event-dot {
+  display: none;
+}
+
+.hrhub-fullcalendar .fc-list-day-cushion {
+  background: hsl(var(--muted) / 0.5) !important;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: hsl(var(--muted-foreground));
+}
+
+.hrhub-fullcalendar .fc-list-event-title,
+.hrhub-fullcalendar .fc-list-event-time {
+  font-size: 0.82rem;
+}
+
+.hrhub-fullcalendar .fc-scrollgrid {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.hrhub-fullcalendar .fc-popover {
+  border-radius: 10px;
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 10px 30px hsl(var(--foreground) / 0.12);
+  overflow: hidden;
+}
+
+.hrhub-fullcalendar .fc-popover-header {
+  background: hsl(var(--muted));
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+/* Public holiday day highlight — soft rose tint on the day cell background */
+.hrhub-fullcalendar .fc-day-holiday {
+  background-color: hsl(var(--destructive) / 0.06) !important;
+}
+
+.hrhub-fullcalendar .fc-day-holiday .fc-daygrid-day-number {
+  color: hsl(var(--destructive));
+  font-weight: 600;
+}
+
+/* ─── Modern micro-interactions & advanced UI ───────────────────────────── */
+
+/* Shimmer skeleton — richer than Tailwind's default pulse */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted-foreground) / 0.08) 50%,
+      hsl(var(--muted)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Slide-up page entry — smoother than plain fadeIn */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Notification badge pulse */
+@keyframes badgePulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--destructive) / 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px hsl(var(--destructive) / 0);
+  }
+}
+
+.badge-pulse {
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+/* Glass-morphism surface — for floating panels */
+.glass {
+  background: hsl(var(--card) / 0.85);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid hsl(var(--border) / 0.6);
+}
+
+/* Sticky header backdrop blur */
+.header-blur {
+  background: hsl(var(--background) / 0.88);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border-bottom: 1px solid hsl(var(--border) / 0.7);
+}
+
+/* Gradient text utility (for KPI numbers / hero labels) */
+.gradient-text {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--info)));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Improved focus ring — respects system reduced-motion */
+@media (prefers-reduced-motion: no-preference) {
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    transition: outline-offset 0.1s ease;
+  }
+}
+
+/* DataTable row smooth hover */
+.data-table-row {
+  transition: background-color 0.1s ease;
+}
+
+/* Status indicator dot — used in sidebar nav, user status */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot-success {
+  background: hsl(var(--success));
+}
+
+.status-dot-warning {
+  background: hsl(var(--warning));
+}
+
+.status-dot-error {
+  background: hsl(var(--destructive));
+}
+
+.status-dot-muted {
+  background: hsl(var(--muted-foreground) / 0.4);
+}
+
+/* Smooth sidebar collapse transition */
+[data-sidebar="sidebar"] {
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Dark mode ──────────────────────────────────────────────────────────── */
+.dark {
+  --background: 222 47% 8%;
+  --foreground: 210 20% 94%;
+  --card: 222 45% 11%;
+  --card-foreground: 210 20% 94%;
+  --popover: 222 45% 11%;
+  --popover-foreground: 210 20% 94%;
+  --primary: 221 83% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 222 40% 18%;
+  --secondary-foreground: 210 20% 80%;
+  --muted: 222 40% 15%;
+  --muted-foreground: 220 12% 56%;
+  --accent: 221 83% 18%;
+  --accent-foreground: 221 83% 70%;
+  --destructive: 0 65% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 58% 42%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 90% 52%;
+  --warning-foreground: 222 47% 8%;
+  --info: 199 80% 50%;
+  --info-foreground: 0 0% 100%;
+  --border: 222 40% 20%;
+  --input: 222 40% 20%;
+  --ring: 221 83% 60%;
+  --sidebar: 222 47% 6%;
+  --sidebar-foreground: 210 20% 88%;
+  --sidebar-accent: 222 40% 14%;
+  --sidebar-border: 222 40% 14%;
+}
+
+.dark .glass {
+  background: hsl(var(--card) / 0.75);
+}
+
+.dark .header-blur {
+  background: hsl(var(--background) / 0.82);
+}
+
+/* ─── Rich text editor content styles ────────────────────────────────────── */
+.prose-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  height: 0;
+}
+
+.prose-editor,
+.prose-display {
+  & h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+    margin: 0.9em 0 0.4em;
+    line-height: 1.3;
+  }
+  & h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin: 0.8em 0 0.3em;
+    line-height: 1.3;
+  }
+  & p {
+    margin: 0.4em 0;
+    line-height: 1.6;
+    min-height: 1em;
+  }
+  & strong { font-weight: 700; color: hsl(var(--foreground)); }
+  & em { font-style: italic; }
+  & u { text-decoration: underline; text-underline-offset: 2px; }
+  & s { text-decoration: line-through; }
+  & ul {
+    list-style-type: disc;
+    padding-left: 1.5em;
+    margin: 0.4em 0;
+    & li { margin: 0.15em 0; line-height: 1.5; }
+  }
+  & ol {
+    list-style-type: decimal;
+    padding-left: 1.5em;
+    margin: 0.4em 0;
+    & li { margin: 0.15em 0; line-height: 1.5; }
+  }
+  & a {
+    color: hsl(var(--primary));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    &:hover { opacity: 0.8; }
+  }
+  & > :first-child { margin-top: 0; }
+  & > :last-child { margin-bottom: 0; }
+}

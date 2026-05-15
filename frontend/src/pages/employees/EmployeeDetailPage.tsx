@@ -343,10 +343,8 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!effectiveDate || !newBasic) {
-      toast.error('Missing fields', 'Effective Date and New Basic Salary are required.')
-      return
-    }
+    if (!effectiveDate) { toast.error('Effective date required', 'Enter the date the salary change takes effect.'); return }
+    if (!newBasic)      { toast.error('New basic salary required', 'Enter the new basic salary amount.'); return }
 
     mutation.mutate(
       {
@@ -568,14 +566,8 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!transferDate) {
-      toast.error('Required', 'Transfer date is required.')
-      return
-    }
-    if (!departmentId) {
-      toast.error('Required', 'Please select a department to transfer to.')
-      return
-    }
+    if (!transferDate)  { toast.error('Transfer date required', 'Enter the date the transfer takes effect.'); return }
+    if (!departmentId)  { toast.error('Department required', 'Select the department to transfer to.'); return }
 
     // Derive branch/division IDs from the selected department's parent chain
     const dept = orgUnits.find(u => u.id === departmentId)
@@ -3373,7 +3365,7 @@ function AddWarningDialog({
   }
 
   function handleSubmit() {
-    if (!issueDate) { toast.warning('Issue date required'); return }
+    if (!issueDate) { toast.warning('Issue date required', 'Enter when this document was issued.'); return }
     onSave({
       issueDate,
       expiryDate: expiryDate || undefined,

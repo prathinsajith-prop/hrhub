@@ -647,14 +647,14 @@ export function AddEmployeeDialog({
             dateOfBirth: form.dateOfBirth,
         })
         setErrors(errs)
-        if (!ok) toast.warning('Fix the highlighted fields', 'Please correct the errors before continuing.')
+        if (!ok) toast.warning('Please review', Object.values(errs)[0] ?? 'Fix the highlighted fields.')
         return ok
     }
 
     const validateStep2 = () => {
         const { ok, errors: errs } = zodToFieldErrors(employeeStep2Schema, { joinDate: form.joinDate })
         setErrors(errs)
-        if (!ok) toast.warning('Fix the highlighted fields', 'Please correct the errors before continuing.')
+        if (!ok) toast.warning('Please review', Object.values(errs)[0] ?? 'Fix the highlighted fields.')
         return ok
     }
 
@@ -1155,7 +1155,7 @@ export function EditEmployeeDialog({
         })
         if (Object.keys(result.errors).length) {
             setErrors(result.errors)
-            toast.warning('Fix the highlighted fields', 'Please correct the errors before saving.')
+            toast.warning('Please review', Object.values(result.errors)[0] ?? 'Fix the highlighted fields.')
             return
         }
         const resolvedEmpNo = form.employeeNo.trim() || nextEmpNo.data?.data?.employeeNo || undefined
@@ -1334,7 +1334,7 @@ export function EditEmploymentDialog({
         const result = zodToFieldErrors(employeeStep2Schema, { joinDate: form.joinDate })
         if (Object.keys(result.errors).length) {
             setErrors(result.errors)
-            toast.warning('Fix the highlighted fields', 'Please correct the errors before saving.')
+            toast.warning('Please review', Object.values(result.errors)[0] ?? 'Fix the highlighted fields.')
             return
         }
         if (form.designation) {
@@ -1537,7 +1537,7 @@ export function EditPayrollDialog({
         const result = zodToFieldErrors(employeeSalaryRuleSchema, { basicSalary: basic, totalSalary: total })
         if (Object.keys(result.errors).length) {
             setErrors(result.errors)
-            toast.warning('Fix the highlighted fields', 'Please correct the errors before saving.')
+            toast.warning('Please review', Object.values(result.errors)[0] ?? 'Fix the highlighted fields.')
             return
         }
         updateEmployee.mutate(

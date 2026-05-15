@@ -1,0 +1,176 @@
+{
+  "app": {
+    "name": "HRHub Portal",
+    "tagline": "Your day at work, simplified"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "email": "Email",
+    "password": "Password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "keepSignedIn": "Keep me signed in",
+    "signInButton": "Sign in",
+    "signingIn": "Signing in…",
+    "invalidCredentials": "Invalid email or password",
+    "welcomeBack": "Welcome back",
+    "welcomeBackSub": "Sign in to access your portal",
+    "forgotLink": "Forgot password?",
+    "backToLogin": "Back to sign in",
+    "forgotTitle": "Reset your password",
+    "forgotSub": "Enter your email and we'll send you a reset link.",
+    "forgotSubmit": "Send reset link",
+    "forgotSubmitting": "Sending…",
+    "forgotSentTitle": "Check your inbox",
+    "forgotSentBody": "If an account exists for {{email}}, we've sent a password reset link. The link is valid for 60 minutes.",
+    "resetTitle": "Set a new password",
+    "resetSub": "Choose a new password to finish resetting your account.",
+    "resetSubmit": "Update password",
+    "resetSubmitting": "Updating…",
+    "resetSuccess": "Password updated. Please sign in with your new password.",
+    "passwordsDontMatch": "Passwords do not match",
+    "passwordTooShort": "Password must be at least 8 characters",
+    "missingToken": "This reset link is incomplete. Please request a new one."
+  },
+  "nav": {
+    "home": "Home",
+    "leave": "Leave",
+    "payslips": "Payslips",
+    "profile": "Profile",
+    "attendance": "Attendance",
+    "team": "Team",
+    "approvals": "Approvals",
+    "calendar": "Calendar"
+  },
+  "mode": {
+    "employee": "Employee",
+    "manager": "Manager"
+  },
+  "common": {
+    "loading": "Loading…",
+    "empty": "Nothing here yet",
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "approve": "Approve",
+    "reject": "Reject",
+    "viewAll": "View all",
+    "search": "Search",
+    "filter": "Filter",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "This week",
+    "thisMonth": "This month",
+    "thisYear": "This year"
+  },
+  "home": {
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
+    "leaveBalance": "Leave balance",
+    "available": "Available",
+    "taken": "Taken",
+    "nextPayslip": "Next payslip",
+    "checkInPrompt": "Tap to check in for today",
+    "checkOut": "Check out",
+    "checkedInAt": "Checked in at {{time}}",
+    "quickActions": "Quick actions",
+    "requestLeave": "Request leave",
+    "viewPayslips": "View payslips",
+    "viewProfile": "View profile",
+    "viewAttendance": "View attendance"
+  },
+  "profile": {
+    "personal": "Personal info",
+    "employment": "Employment",
+    "contact": "Contact details",
+    "emergency": "Emergency contact",
+    "address": "Address",
+    "edit": "Edit",
+    "saveChanges": "Save changes",
+    "updated": "Profile updated"
+  },
+  "leave": {
+    "title": "My leave",
+    "newRequest": "Request leave",
+    "type": "Leave type",
+    "from": "From",
+    "to": "To",
+    "reason": "Reason (optional)",
+    "handoverTo": "Handover to (optional)",
+    "handoverNotes": "Handover notes (optional)",
+    "submitRequest": "Submit request",
+    "noRequests": "No leave requests yet",
+    "balance": "Balance for {{year}}",
+    "days": "{{count}} day",
+    "days_plural": "{{count}} days",
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled"
+    }
+  },
+  "payslips": {
+    "title": "Payslips",
+    "noPayslips": "No payslips yet",
+    "month": "Month",
+    "net": "Net salary",
+    "gross": "Gross",
+    "deductions": "Deductions",
+    "view": "View payslip",
+    "viewSlip": "Payslip details",
+    "print": "Print"
+  },
+  "attendance": {
+    "title": "Attendance",
+    "checkIn": "Check in",
+    "checkOut": "Check out",
+    "alreadyCheckedIn": "Already checked in",
+    "noRecords": "No attendance records yet",
+    "hoursWorked": "Hours worked"
+  },
+  "team": {
+    "title": "My team",
+    "members": "Team members",
+    "noTeam": "No team members in your reporting line yet",
+    "pendingApprovals": "Pending approvals",
+    "noApprovals": "Nothing waiting for your approval",
+    "approveLeave": "Approve leave",
+    "rejectLeave": "Reject leave",
+    "approveSuccess": "Leave approved",
+    "rejectSuccess": "Leave rejected",
+    "managerNote": "Manager note (optional)",
+    "calendarTitle": "Who's on leave"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "You're all caught up",
+    "markAllRead": "Mark all as read",
+    "unread": "{{count}} unread",
+    "viewAll": "View all notifications"
+  },
+  "holidays": {
+    "title": "Upcoming holidays",
+    "empty": "No upcoming holidays in the next 90 days"
+  },
+  "security": {
+    "title": "Security",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmNew": "Confirm new password",
+    "passwordChanged": "Password updated",
+    "passwordsDontMatch": "Passwords do not match"
+  },
+  "errors": {
+    "loadFailed": "Could not load data",
+    "saveFailed": "Could not save"
+  },
+  "notAuthorized": {
+    "title": "This portal is for employees and team leads",
+    "body": "Your account uses admin privileges. Please continue in the admin app.",
+    "openAdmin": "Open admin app"
+  }
+}
