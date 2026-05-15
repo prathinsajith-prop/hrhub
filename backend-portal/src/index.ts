@@ -24,7 +24,7 @@ async function bootstrap() {
 
     const app: any = (Fastify as any)({
         logger: {
-            level: env.LOG_LEVEL ?? (env.NODE_ENV === 'production' ? 'warn' : 'info'),
+            level: env.LOG_LEVEL ?? (env.NODE_ENV === 'production' ? 'info' : 'info'),
             ...(env.NODE_ENV !== 'production' && {
                 transport: { target: 'pino-pretty', options: { colorize: true } },
             }),
@@ -32,6 +32,13 @@ async function bootstrap() {
         connectionTimeout: 30_000,
         trustProxy: true,
     })
+
+    // ─── Health & root probes — registered BEFORE every other plugin so they're
+    // available even if a later plugin throws during startup. They MUST stay
+    // dependency-free (no DB, no auth, no async) so Railway's LB always gets a 200.
+    // Fastify auto-mounts HEAD for every GET route, so HEAD /health also works.
+    app.get('/health', () => ({ status: 'ok', service: 'backend-portal', timestamp: new Date().toISOString() }))
+    app.get('/', () => ({ status: 'ok', service: 'backend-portal' }))
 
     await app.register(helmet, {
         contentSecurityPolicy: {
@@ -93,8 +100,9 @@ async function bootstrap() {
     await app.register(notificationsRoutes, { prefix: '/api/v1/notifications' })
     await app.register(holidaysRoutes, { prefix: '/api/v1/holidays' })
 
-    app.get('/health', async () => ({ status: 'ok', service: 'backend-portal', timestamp: new Date().toISOString() }))
-
+    // /health is registered at the top of bootstrap (before plugins) so probes never
+    // depend on the rest of the stack. /health/detailed runs DB+S3 round-trips and
+    // is only suitable for an SRE-facing dashboard, NOT for the Railway LB probe.
     app.get('/health/detailed', async (_req: any, reply: any) => {
         const checks: Record<string, { ok: boolean; latencyMs?: number; error?: string }> = {}
         const dbStart = Date.now()
@@ -113,7 +121,21 @@ async function bootstrap() {
     })
 
     await app.listen({ port: env.PORT, host: env.HOST })
-    app.log.info(`HRHub Portal API running on http://${env.HOST}:${env.PORT}`)
+    app.log.info(`HRHub Portal API listening on ${env.HOST}:${env.PORT}`)
+    app.log.info(
+        {
+            nodeEnv: env.NODE_ENV,
+            port: env.PORT,
+            host: env.HOST,
+            corsOrigins: env.CORS_ORIGINS,
+            hasDatabaseUrl: !!env.DATABASE_URL,
+            jwtSecretLength: env.JWT_SECRET?.length ?? 0,
+            refreshSecretLength: env.REFRESH_TOKEN_SECRET?.length ?? 0,
+            emailProvider: env.EMAIL_PROVIDER,
+            appUrl: env.APP_URL,
+        },
+        '[boot] env summary (secrets redacted) — health probe at GET /health',
+    )
 
     const shutdown = async (signal: string) => {
         app.log.info(`Received ${signal}, shutting down...`)

@@ -1,4 +1,6 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
 
 import { useAuthStore } from '@/store/authStore'
 import { useViewModeStore } from '@/store/viewModeStore'
@@ -9,21 +11,32 @@ import { LoginPage } from '@/pages/LoginPage'
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { NotAuthorizedPage } from '@/pages/NotAuthorizedPage'
-import { NotificationsPage } from '@/pages/NotificationsPage'
 import { AppShell } from '@/components/layout/AppShell'
 import { RouteTitle } from '@/components/RouteTitle'
 
-import { EmployeeHomePage } from '@/pages/employee/HomePage'
-import { EmployeeProfilePage } from '@/pages/employee/ProfilePage'
-import { EmployeeLeavePage } from '@/pages/employee/LeavePage'
-import { EmployeePayslipsPage } from '@/pages/employee/PayslipsPage'
-import { EmployeeAttendancePage } from '@/pages/employee/AttendancePage'
+// Lazy-loaded — each route is its own chunk so the login bundle stays small.
+// Vite splits these into their own JS files automatically; React Router renders
+// the Suspense fallback while a chunk downloads (typically <50ms on a warm cache).
+const NotificationsPage = lazy(() => import('@/pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })))
+const EmployeeHomePage = lazy(() => import('@/pages/employee/HomePage').then((m) => ({ default: m.EmployeeHomePage })))
+const EmployeeProfilePage = lazy(() => import('@/pages/employee/ProfilePage').then((m) => ({ default: m.EmployeeProfilePage })))
+const EmployeeLeavePage = lazy(() => import('@/pages/employee/LeavePage').then((m) => ({ default: m.EmployeeLeavePage })))
+const EmployeePayslipsPage = lazy(() => import('@/pages/employee/PayslipsPage').then((m) => ({ default: m.EmployeePayslipsPage })))
+const EmployeeAttendancePage = lazy(() => import('@/pages/employee/AttendancePage').then((m) => ({ default: m.EmployeeAttendancePage })))
 
-import { ManagerHomePage } from '@/pages/manager/HomePage'
-import { ManagerTeamPage } from '@/pages/manager/TeamPage'
-import { ManagerMemberDetailPage } from '@/pages/manager/MemberDetailPage'
-import { ManagerApprovalsPage } from '@/pages/manager/ApprovalsPage'
-import { ManagerTeamCalendarPage } from '@/pages/manager/TeamCalendarPage'
+const ManagerHomePage = lazy(() => import('@/pages/manager/HomePage').then((m) => ({ default: m.ManagerHomePage })))
+const ManagerTeamPage = lazy(() => import('@/pages/manager/TeamPage').then((m) => ({ default: m.ManagerTeamPage })))
+const ManagerMemberDetailPage = lazy(() => import('@/pages/manager/MemberDetailPage').then((m) => ({ default: m.ManagerMemberDetailPage })))
+const ManagerApprovalsPage = lazy(() => import('@/pages/manager/ApprovalsPage').then((m) => ({ default: m.ManagerApprovalsPage })))
+const ManagerTeamCalendarPage = lazy(() => import('@/pages/manager/TeamCalendarPage').then((m) => ({ default: m.ManagerTeamCalendarPage })))
+
+function PageFallback() {
+    return (
+        <div className="flex h-[50vh] items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+    )
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -63,7 +76,9 @@ export default function App() {
             <Route
                 element={
                     <ProtectedRoute>
-                        <AppShell />
+                        <Suspense fallback={<PageFallback />}>
+                            <AppShell />
+                        </Suspense>
                     </ProtectedRoute>
                 }
             >
