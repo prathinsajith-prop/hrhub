@@ -1,0 +1,19 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Uses the Dockerfile's CMD (sh entrypoint.sh). pnpm is NOT present in the
+# runtime image — deps are baked in via the multi-stage build — so do NOT set
+# a pnpm-based start command in the Railway dashboard. Also clear the
+# dashboard "Start Command" field (Settings → Deploy) so this value takes effect.
+startCommand = "sh entrypoint.sh"
+
+# No pre-deploy step: migrations live in the main backend service. This service
+# only reads/writes existing tables.
+preDeploy = ""
+
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
