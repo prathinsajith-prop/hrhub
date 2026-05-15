@@ -12,6 +12,7 @@ import {
     type CreateLeaveBody,
 } from '@/hooks/useLeave'
 import { useUpcomingHolidays } from '@/hooks/useHolidays'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { GlassCard } from '@/components/shared/GlassCard'
@@ -53,6 +54,7 @@ export function EmployeeLeavePage() {
     const employeeId = user?.employeeId ?? undefined
 
     const [open, setOpen] = useState(false)
+    const [cancelingId, setCancelingId] = useState<string | null>(null)
     const { data: balance } = useLeaveBalance(employeeId)
     const { data: list, isLoading } = useLeaveRequests({ employeeId, limit: 50 })
     const { data: holidays } = useUpcomingHolidays(5)
@@ -158,7 +160,7 @@ export function EmployeeLeavePage() {
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => cancel.mutate(req.id)}
+                                        onClick={() => setCancelingId(req.id)}
                                         disabled={cancel.isPending}
                                         aria-label="Cancel request"
                                     >
@@ -178,6 +180,26 @@ export function EmployeeLeavePage() {
                 onSubmitted={() => {
                     setOpen(false)
                     toast.success(t('leave.submitRequest'))
+                }}
+            />
+
+            <ConfirmDialog
+                open={!!cancelingId}
+                onOpenChange={(v) => !v && setCancelingId(null)}
+                title="Cancel this leave request?"
+                description="This will withdraw the request. Your manager will no longer see it as pending."
+                confirmLabel="Yes, cancel"
+                cancelLabel="Keep request"
+                variant="destructive"
+                loading={cancel.isPending}
+                onConfirm={() => {
+                    if (!cancelingId) return
+                    cancel.mutate(cancelingId, {
+                        onSuccess: () => {
+                            toast.success('Leave request cancelled')
+                            setCancelingId(null)
+                        },
+                    })
                 }}
             />
         </div>

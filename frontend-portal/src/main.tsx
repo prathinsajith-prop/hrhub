@@ -8,6 +8,7 @@ import { Toaster } from 'sonner'
 import App from './App'
 import { queryClient } from './lib/queryClient'
 import { useAuthStore } from './store/authStore'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import './lib/i18n'
 import './index.css'
 
@@ -21,13 +22,15 @@ useAuthStore.subscribe((state) => {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-        <QueryClientProvider client={queryClient}>
-            <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-                <BrowserRouter>
-                    <App />
-                    <Toaster richColors position="top-center" />
-                </BrowserRouter>
-            </ThemeProvider>
-        </QueryClientProvider>
+        <ErrorBoundary>
+            <QueryClientProvider client={queryClient}>
+                <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+                    <BrowserRouter>
+                        <App />
+                        <Toaster richColors position="top-center" />
+                    </BrowserRouter>
+                </ThemeProvider>
+            </QueryClientProvider>
+        </ErrorBoundary>
     </React.StrictMode>,
 )

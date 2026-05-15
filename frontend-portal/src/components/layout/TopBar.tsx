@@ -7,6 +7,7 @@ import { canSwitchToManager } from '@/lib/permissions'
 import { initialsOf } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import { LanguageToggle } from './LanguageToggle'
 import { ModeToggle } from './ModeToggle'
 import { NotificationsBell } from './NotificationsBell'
 
@@ -46,6 +47,7 @@ export function TopBar() {
 
                 <div className="flex items-center gap-1.5">
                     <NotificationsBell />
+                    <LanguageToggle />
                     <Button
                         variant="ghost"
                         size="icon-sm"

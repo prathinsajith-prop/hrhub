@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "HRHub Portal API — curated Fastify service for employee & manager apps",
   "packageManager": "pnpm@10.30.0",
+  "engines": {
+    "node": ">=22 <25"
+  },
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
