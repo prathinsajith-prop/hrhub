@@ -279,16 +279,28 @@ export async function requestPasswordReset(email: string) {
         expiresInMinutes: PASSWORD_RESET_TTL_MINUTES,
     })
 
-    console.info(`[forgot-password] sending reset to ${user.email} via ${env.EMAIL_PROVIDER}…`)
-    const result = await sendEmail({ ...tmpl, to: user.email })
-    if (result.ok) {
-        console.info(`[forgot-password] sent ok (messageId=${result.messageId})`)
-    } else {
-        console.error(`[forgot-password] send FAILED: ${result.error}`)
-    }
+    console.info(`[forgot-password] queued reset for ${user.email} via ${env.EMAIL_PROVIDER}`)
+
+    // Send the email fire-and-forget — we MUST NOT block the HTTP response on SMTP.
+    // Railway has a 30s LB timeout; if SMTP egress is slow (Gmail handshake from a
+    // fresh Railway IP, etc.) the user sees a 502 even though the token was created.
+    // The API contract is "we'll send it if the address exists" — callers can't tell
+    // success from failure anyway (anti-enumeration), so deferring the actual send
+    // is safe and avoids the hang. Failures are logged for operators.
+    sendEmail({ ...tmpl, to: user.email })
+        .then((result) => {
+            if (result.ok) {
+                console.info(`[forgot-password] sent ok (messageId=${result.messageId})`)
+            } else {
+                console.error(`[forgot-password] send FAILED: ${result.error}`)
+            }
+        })
+        .catch((err) => {
+            console.error('[forgot-password] send threw:', err instanceof Error ? err.message : err)
+        })
 
     const devToken = env.NODE_ENV !== 'production' ? rawToken : null
-    return { sent: result.ok, devToken }
+    return { sent: true, devToken }
 }
 
 export async function changePassword(userId: string, currentPassword: string, newPassword: string) {

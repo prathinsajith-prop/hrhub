@@ -5,7 +5,11 @@
   "installCommand": "pnpm install --frozen-lockfile",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/((?!api/|favicon\\.svg|assets/).*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://hrhub-employee-manager-production.up.railway.app/api/:path*"
+    },
+    { "source": "/((?!api/|favicon\\.svg|manifest\\.webmanifest|assets/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
@@ -17,6 +21,13 @@
     {
       "source": "/favicon.svg",
       "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        { "key": "Content-Type", "value": "application/manifest+json" },
         { "key": "Cache-Control", "value": "public, max-age=86400" }
       ]
     }
