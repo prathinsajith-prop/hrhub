@@ -3,6 +3,15 @@ import { loadEnv } from '../env.js'
 
 let transporter: Transporter | null = null
 
+// Aggressive timeouts so a stuck SMTP server (e.g. Railway egress unable to
+// complete TLS to smtp.gmail.com) fails fast instead of leaving the HTTP
+// request hanging until Railway's 30s LB timeout kills it.
+const SMTP_TIMEOUTS = {
+    connectionTimeout: 10_000, // ms to wait for TCP/TLS handshake
+    greetingTimeout: 10_000,   // ms to wait for the server greeting
+    socketTimeout: 15_000,     // ms of idle on the established socket
+} as const
+
 function getTransporter(): Transporter {
     if (transporter) return transporter
     const env = loadEnv()
@@ -13,6 +22,7 @@ function getTransporter(): Transporter {
             port: 465,
             secure: true,
             auth: { user: 'resend', pass: env.RESEND_API_KEY },
+            ...SMTP_TIMEOUTS,
         })
     } else if (env.EMAIL_PROVIDER === 'gmail') {
         if (!env.GMAIL_USER || !env.GMAIL_APP_PASSWORD) {
@@ -23,6 +33,7 @@ function getTransporter(): Transporter {
             port: 465,
             secure: true,
             auth: { user: env.GMAIL_USER, pass: env.GMAIL_APP_PASSWORD },
+            ...SMTP_TIMEOUTS,
         })
     } else {
         transporter = nodemailer.createTransport({
@@ -31,6 +42,7 @@ function getTransporter(): Transporter {
             secure: env.SMTP_PORT === 465,
             auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
             tls: { rejectUnauthorized: env.NODE_ENV === 'production' },
+            ...SMTP_TIMEOUTS,
         })
     }
     return transporter
