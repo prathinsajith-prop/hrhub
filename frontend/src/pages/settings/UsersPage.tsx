@@ -484,9 +484,9 @@ export function UsersPage() {
                 title={deactivateTarget
                     ? t(deactivateTarget.active ? 'settingsDetail.users.deactivateTitle' : 'settingsDetail.users.activateTitle', { name: deactivateTarget.name })
                     : ''}
-                description={deactivateTarget?.active
-                    ? t('settingsDetail.users.deactivateDesc')
-                    : t('settingsDetail.users.activateDesc')}
+                description={deactivateTarget
+                    ? t(deactivateTarget.active ? 'settingsDetail.users.deactivateDesc' : 'settingsDetail.users.activateDesc', { name: deactivateTarget.name })
+                    : ''}
                 confirmLabel={updateUser.isPending
                     ? t('settingsDetail.users.saving')
                     : deactivateTarget?.active

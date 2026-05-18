@@ -1,0 +1,24 @@
+// Schema barrel for backend-portal.
+// All schema files in this folder are mirrors of backend/src/db/schema/* — see the warning
+// header on each file. Keep this barrel in sync if a new table mirror is added.
+
+export * from './tenants.js'
+export * from './users.js'
+export * from './employees.js'
+export * from './orgUnits.js'
+export * from './designations.js'
+export * from './grade_levels.js'
+export * from './sponsoring_entities.js'
+export * from './payroll.js'
+export * from './leave.js'
+export * from './attendance.js'
+export * from './teams.js'
+export * from './audit.js'
+export * from './notifications.js'
+export * from './public_holidays.js'
+export * from './documents.js'
+export * from './shifts.js'
+export * from './assets.js'
+export * from './performance.js'
+export * from './employee_warnings.js'
+export * from './profile_change_requests.js'

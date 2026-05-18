@@ -1,0 +1,99 @@
+// ⚠ DUPLICATED from backend/src/db/schema/users.ts
+// Keep this in sync with the main backend whenever the schema changes.
+// Migrations live in backend/migrations/ only — do not generate migrations here.
+
+import { pgTable, uuid, text, boolean, timestamp, index, integer, uniqueIndex, jsonb } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
+import { tenants } from './tenants.js'
+import { employees } from './employees.js'
+
+export const users = pgTable('users', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    entityId: uuid('entity_id'),
+    // Mandatory 1:1 link to the employees table. Every user must have an
+    // employee record — enforced at DB level (NOT NULL) and at application
+    // level in registerTenant and inviteUser. FK is RESTRICT so an employee
+    // cannot be hard-deleted while a user account references them.
+    // Migration 0018 backfills any pre-existing rows and adds NOT NULL.
+    employeeId: uuid('employee_id').notNull().references(() => employees.id, { onDelete: 'restrict' }),
+    // Email is unique per-tenant (not globally) so the same human can belong
+    // to multiple tenants. Enforced by uq_users_tenant_email_ci in
+    // migration 0011 — case-insensitive on LOWER(email).
+    email: text('email').notNull(),
+    passwordHash: text('password_hash').notNull(),
+    firstName: text('first_name').notNull(),
+    lastName: text('last_name').notNull(),
+    name: text('name').notNull(),
+    role: text('role').notNull().default('employee')
+        .$type<'super_admin' | 'hr_manager' | 'pro_officer' | 'dept_head' | 'employee'>(),
+    roles: text('roles').array().notNull().default(sql`'{employee}'::text[]`),
+    department: text('department'),
+    avatarUrl: text('avatar_url'),
+    isActive: boolean('is_active').notNull().default(true),
+    lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+    // Account lockout — incremented on every failed login, reset on success
+    failedLoginCount: integer('failed_login_count').notNull().default(0),
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    // TOTP two-factor authentication
+    totpSecret: text('totp_secret'),
+    twoFaEnabled: boolean('two_fa_enabled').notNull().default(false),
+    // Hashed (bcrypt) single-use recovery codes for MFA fallback. Empty array when none active.
+    twoFaBackupCodes: text('two_fa_backup_codes').array().notNull().default(sql`ARRAY[]::text[]`),
+    // Per-user notification channel preferences — keys match notification event IDs
+    notifPrefs: jsonb('notif_prefs').$type<Record<string, { email: boolean; push: boolean }>>().notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    tenantIdx: index('idx_users_tenant').on(t.tenantId),
+    // Case-insensitive lookup for login flow.
+    emailLowerIdx: index('idx_users_email_ci').on(sql`LOWER(${t.email})`),
+    // Tenant-scoped unique email (case-insensitive).
+    tenantEmailUq: uniqueIndex('uq_users_tenant_email_ci')
+        .on(t.tenantId, sql`LOWER(${t.email})`),
+    // One user account per employee (within a tenant).
+    employeeUq: uniqueIndex('uq_users_employee_id')
+        .on(t.employeeId)
+        .where(sql`${t.employeeId} IS NOT NULL`),
+    tenantEmployeeIdx: index('idx_users_tenant_employee')
+        .on(t.tenantId, t.employeeId)
+        .where(sql`${t.employeeId} IS NOT NULL`),
+}))
+
+export const refreshTokens = pgTable('refresh_tokens', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').unique().notNull(),
+    /** Tracks which tenant context this refresh token belongs to (set on all new tokens). */
+    tenantId: uuid('tenant_id'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    userIdx: index('idx_refresh_tokens_user').on(t.userId),
+}))
+
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').unique().notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    userIdx: index('idx_password_reset_tokens_user').on(t.userId),
+}))
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+    tenant: one(tenants, { fields: [users.tenantId], references: [tenants.id] }),
+    employee: one(employees, { fields: [users.employeeId], references: [employees.id] }),
+    refreshTokens: many(refreshTokens),
+    passwordResetTokens: many(passwordResetTokens),
+}))
+
+export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
+    user: one(users, { fields: [refreshTokens.userId], references: [users.id] }),
+}))
+
+export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
+    user: one(users, { fields: [passwordResetTokens.userId], references: [users.id] }),
+}))

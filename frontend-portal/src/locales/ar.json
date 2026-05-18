@@ -1,0 +1,179 @@
+{
+  "app": {
+    "name": "بوابة HRHub",
+    "tagline": "يومك في العمل، بشكل أسهل"
+  },
+  "auth": {
+    "signIn": "تسجيل الدخول",
+    "signOut": "تسجيل الخروج",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "newPassword": "كلمة المرور الجديدة",
+    "confirmPassword": "تأكيد كلمة المرور الجديدة",
+    "keepSignedIn": "ابق مسجلاً",
+    "signInButton": "تسجيل الدخول",
+    "signingIn": "جارٍ تسجيل الدخول…",
+    "invalidCredentials": "بريد إلكتروني أو كلمة مرور غير صحيحة",
+    "welcomeBack": "مرحبًا بعودتك",
+    "welcomeBackSub": "سجل الدخول للوصول إلى البوابة",
+    "forgotLink": "نسيت كلمة المرور؟",
+    "backToLogin": "العودة إلى تسجيل الدخول",
+    "forgotTitle": "إعادة تعيين كلمة المرور",
+    "forgotSub": "أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين.",
+    "forgotSubmit": "إرسال رابط إعادة التعيين",
+    "forgotSubmitting": "جارٍ الإرسال…",
+    "forgotSentTitle": "تحقق من بريدك الوارد",
+    "forgotSentBody": "إذا كان هناك حساب مرتبط بـ {{email}}، فقد أرسلنا رابط إعادة تعيين كلمة المرور. الرابط صالح لمدة 60 دقيقة.",
+    "resetTitle": "تعيين كلمة مرور جديدة",
+    "resetSub": "اختر كلمة مرور جديدة لإكمال إعادة تعيين حسابك.",
+    "resetSubmit": "تحديث كلمة المرور",
+    "resetSubmitting": "جارٍ التحديث…",
+    "resetSuccess": "تم تحديث كلمة المرور. يرجى تسجيل الدخول بكلمة المرور الجديدة.",
+    "passwordsDontMatch": "كلمتا المرور غير متطابقتين",
+    "passwordTooShort": "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل",
+    "missingToken": "رابط إعادة التعيين غير مكتمل. يرجى طلب رابط جديد."
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "leave": "الإجازات",
+    "payslips": "كشوف الرواتب",
+    "profile": "الملف الشخصي",
+    "attendance": "الحضور",
+    "documents": "المستندات",
+    "performance": "الأداء",
+    "profileChanges": "تغييرات الملف الشخصي",
+    "team": "الفريق",
+    "approvals": "الموافقات",
+    "calendar": "التقويم"
+  },
+  "mode": {
+    "employee": "موظف",
+    "manager": "مدير"
+  },
+  "common": {
+    "loading": "جارٍ التحميل…",
+    "empty": "لا يوجد شيء هنا بعد",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "submit": "إرسال",
+    "approve": "الموافقة",
+    "reject": "رفض",
+    "viewAll": "عرض الكل",
+    "search": "بحث",
+    "filter": "تصفية",
+    "today": "اليوم",
+    "yesterday": "الأمس",
+    "thisWeek": "هذا الأسبوع",
+    "thisMonth": "هذا الشهر",
+    "thisYear": "هذه السنة"
+  },
+  "home": {
+    "greetingMorning": "صباح الخير",
+    "greetingAfternoon": "مساء الخير",
+    "greetingEvening": "مساء الخير",
+    "leaveBalance": "رصيد الإجازات",
+    "available": "المتاح",
+    "taken": "المستخدم",
+    "nextPayslip": "كشف الراتب القادم",
+    "checkInPrompt": "اضغط لتسجيل الحضور",
+    "checkOut": "تسجيل الانصراف",
+    "checkedInAt": "تم تسجيل الحضور في {{time}}",
+    "quickActions": "إجراءات سريعة",
+    "requestLeave": "طلب إجازة",
+    "viewPayslips": "عرض كشوف الرواتب",
+    "viewProfile": "عرض الملف الشخصي",
+    "viewAttendance": "عرض الحضور"
+  },
+  "profile": {
+    "personal": "البيانات الشخصية",
+    "employment": "بيانات العمل",
+    "contact": "بيانات الاتصال",
+    "emergency": "جهة الاتصال للطوارئ",
+    "address": "العنوان",
+    "edit": "تعديل",
+    "saveChanges": "حفظ التغييرات",
+    "updated": "تم تحديث الملف الشخصي"
+  },
+  "leave": {
+    "title": "إجازاتي",
+    "newRequest": "طلب إجازة",
+    "type": "نوع الإجازة",
+    "from": "من",
+    "to": "إلى",
+    "reason": "السبب (اختياري)",
+    "handoverTo": "تسليم العمل إلى (اختياري)",
+    "handoverNotes": "ملاحظات التسليم (اختياري)",
+    "submitRequest": "إرسال الطلب",
+    "noRequests": "لا توجد طلبات إجازة بعد",
+    "balance": "رصيد {{year}}",
+    "days": "{{count}} يوم",
+    "days_plural": "{{count}} أيام",
+    "status": {
+      "pending": "قيد المراجعة",
+      "approved": "تمت الموافقة",
+      "rejected": "مرفوض",
+      "cancelled": "ملغى"
+    }
+  },
+  "payslips": {
+    "title": "كشوف الرواتب",
+    "noPayslips": "لا توجد كشوف رواتب بعد",
+    "month": "الشهر",
+    "net": "الصافي",
+    "gross": "الإجمالي",
+    "deductions": "الخصومات",
+    "view": "عرض كشف الراتب",
+    "viewSlip": "تفاصيل كشف الراتب",
+    "print": "طباعة"
+  },
+  "attendance": {
+    "title": "الحضور",
+    "checkIn": "تسجيل الحضور",
+    "checkOut": "تسجيل الانصراف",
+    "alreadyCheckedIn": "تم تسجيل الحضور",
+    "noRecords": "لا توجد سجلات حضور بعد",
+    "hoursWorked": "ساعات العمل"
+  },
+  "team": {
+    "title": "فريقي",
+    "members": "أعضاء الفريق",
+    "noTeam": "لا يوجد أعضاء في فريقك بعد",
+    "pendingApprovals": "الموافقات المعلقة",
+    "noApprovals": "لا يوجد ما ينتظر موافقتك",
+    "approveLeave": "الموافقة على الإجازة",
+    "rejectLeave": "رفض الإجازة",
+    "approveSuccess": "تمت الموافقة على الإجازة",
+    "rejectSuccess": "تم رفض الإجازة",
+    "managerNote": "ملاحظة المدير (اختياري)",
+    "calendarTitle": "من في إجازة"
+  },
+  "notifications": {
+    "title": "الإشعارات",
+    "empty": "لقد قمت بالاطلاع على كل شيء",
+    "markAllRead": "تعليم الكل كمقروء",
+    "unread": "{{count}} غير مقروءة",
+    "viewAll": "عرض جميع الإشعارات"
+  },
+  "holidays": {
+    "title": "العطلات القادمة",
+    "empty": "لا توجد عطلات قادمة خلال الـ 90 يومًا القادمة"
+  },
+  "security": {
+    "title": "الأمان",
+    "changePassword": "تغيير كلمة المرور",
+    "currentPassword": "كلمة المرور الحالية",
+    "newPassword": "كلمة المرور الجديدة",
+    "confirmNew": "تأكيد كلمة المرور الجديدة",
+    "passwordChanged": "تم تحديث كلمة المرور",
+    "passwordsDontMatch": "كلمتا المرور غير متطابقتين"
+  },
+  "errors": {
+    "loadFailed": "تعذر تحميل البيانات",
+    "saveFailed": "تعذر الحفظ"
+  },
+  "notAuthorized": {
+    "title": "هذه البوابة للموظفين وقادة الفرق",
+    "body": "حسابك يستخدم صلاحيات إدارية. يرجى المتابعة في تطبيق الإدارة.",
+    "openAdmin": "فتح تطبيق الإدارة"
+  }
+}

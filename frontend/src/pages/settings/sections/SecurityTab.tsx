@@ -542,7 +542,9 @@ export function SecurityTab() {
     const [saving, setSaving] = useState(false)
 
     const handleUpdatePassword = async () => {
-        if (!currentPw || !newPw || !confirmPw) { toast.warning(t('settingsDetail.security.missingFields'), t('settingsDetail.security.missingFieldsDesc')); return }
+        if (!currentPw) { toast.warning('Current password required', 'Enter your current password.'); return }
+        if (!newPw)     { toast.warning('New password required', 'Enter your new password.'); return }
+        if (!confirmPw) { toast.warning('Confirm password required', 'Re-enter the new password to confirm.'); return }
         if (newPw !== confirmPw) { toast.warning(t('settingsDetail.security.passwordMismatch'), t('settingsDetail.security.passwordMismatchDesc')); return }
         if (newPw.length < 8) { toast.warning(t('settingsDetail.security.passwordTooShort'), t('settingsDetail.security.passwordTooShortDesc')); return }
         setSaving(true)

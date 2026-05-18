@@ -11,6 +11,7 @@ import {
     GraduationCap,
     ListOrdered,
     Workflow,
+    Clock,
 } from 'lucide-react'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -29,6 +30,7 @@ import { GradeLevelsTab } from './org-settings/GradeLevelsTab'
 import { LeaveSettingsTab } from './org-settings/LeaveSettingsTab'
 import { OnboardingTemplateTab } from './org-settings/OnboardingTemplateTab'
 import { RecruitmentStagesTab } from './org-settings/RecruitmentStagesTab'
+import { ShiftsTab } from './org-settings/ShiftsTab'
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 // Label/description resolved via `t()` per-render so they react to language changes.
@@ -41,6 +43,7 @@ const TAB_KEYS = [
     { value: 'leave',         i18nKey: 'orgSettings.tabs.leave',         icon: CalendarClock, requires: 'manage_settings' as Permission | null },
     { value: 'onboarding',    i18nKey: 'orgSettings.tabs.onboarding',    icon: ListOrdered,   requires: 'manage_settings' as Permission | null },
     { value: 'recruitment-stages', i18nKey: 'orgSettings.tabs.recruitmentStages', icon: Workflow,  requires: 'manage_settings' as Permission | null },
+    { value: 'shifts',        i18nKey: 'orgSettings.tabs.shifts',        icon: Clock,         requires: 'manage_settings' as Permission | null },
     { value: 'security',      i18nKey: 'orgSettings.tabs.security',      icon: Shield,        requires: 'manage_settings' as Permission | null },
 ]
 
@@ -135,6 +138,7 @@ export function OrganizationSettingsPage() {
                     <TabsContent value="leave"        className="mt-0"><LeaveSettingsTab /></TabsContent>
                     <TabsContent value="onboarding"   className="mt-0"><OnboardingTemplateTab /></TabsContent>
                     <TabsContent value="recruitment-stages" className="mt-0"><RecruitmentStagesTab /></TabsContent>
+                    <TabsContent value="shifts"       className="mt-0"><ShiftsTab /></TabsContent>
                     <TabsContent value="security"     className="mt-0"><SecurityTab /></TabsContent>
                 </div>
             </Tabs>

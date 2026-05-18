@@ -1,10 +1,56 @@
 import { checkIn, checkOut, getAttendance, upsertAttendance, getAttendanceSummary, externalPunch } from './attendance.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
-import { tenants } from '../../db/schema/index.js'
-import { eq } from 'drizzle-orm'
+import {
+    attendanceRecords,
+    employees,
+    leaveRequests,
+    publicHolidays,
+    shifts,
+    tenants,
+} from '../../db/schema/index.js'
+import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { findById } from '../../repositories/employees.repo.js'
-import { e403 } from '../../lib/errors.js'
+import { e400, e403 } from '../../lib/errors.js'
+
+// ─── Calendar helpers (single tenant-scoped read model) ──────────────────
+
+const WEEKDAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
+
+function leaveCode(leaveType: string): string {
+    switch (leaveType) {
+        case 'annual': return 'AL'
+        case 'sick': return 'SL'
+        case 'maternity': return 'ML'
+        case 'paternity': return 'PL'
+        case 'bereavement':
+        case 'compassionate': return 'BL'
+        case 'unpaid': return 'A'
+        case 'emergency': return 'E'
+        case 'hajj': return 'HJ'
+        default: return 'AL'
+    }
+}
+
+function attendanceCode(
+    status: string,
+    checkIn: Date | null,
+    checkOut: Date | null,
+    hoursWorked: string | null,
+): string {
+    if (status === 'on_leave') return 'AL'
+    if (status === 'wfh') return 'WFH'
+    if (status === 'absent') return 'A'
+    if (status === 'half_day') return 'P-short'
+    if (status === 'late') return 'P-late'
+    if (status === 'present' || status === 'half_day') {
+        if (!checkOut && checkIn) return 'A'
+        const h = hoursWorked ? Number(hoursWorked) : null
+        if (h != null && h > 0 && h < 4) return 'P-short'
+        return 'P'
+    }
+    return 'P'
+}
 
 export async function attendanceRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
@@ -46,6 +92,223 @@ export async function attendanceRoutes(fastify: any) {
             parseInt(year ?? String(new Date().getFullYear()))
         )
         return reply.send({ data })
+    })
+
+    // GET /api/v1/attendance/calendar?month=YYYY-MM[&department=Sales]
+    //
+    // Whole-company (HR / super_admin) or dept-scoped (dept_head) attendance grid
+    // for the requested month. Returns an employees×days matrix with each cell
+    // resolved to a status code (P, P-late, P-short, A, AL, SL, ML, PL, BL, BT,
+    // WFH, E, H, WO, N/A) plus check-in/check-out timestamps. Single round-trip
+    // — bulk-loads attendance, approved leaves, public holidays, and per-employee
+    // shifts in parallel and composes cells in JS via O(1) lookups.
+    fastify.get('/attendance/calendar', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
+        const user = request.user
+        const q = (request.query ?? {}) as { month?: string; department?: string; employeeId?: string }
+        const monthStr = q.month && /^\d{4}-\d{2}$/.test(q.month) ? q.month : null
+        if (!monthStr) return reply.code(400).send(e400('month query param required (YYYY-MM)'))
+
+        // ── Date window ─────────────────────────────────────────────────
+        const [yearN, monthN] = monthStr.split('-').map(Number) as [number, number]
+        const firstDay = new Date(Date.UTC(yearN, monthN - 1, 1))
+        const lastDay = new Date(Date.UTC(yearN, monthN, 0))
+        const daysInMonth = lastDay.getUTCDate()
+        const startISO = `${monthStr}-01`
+        const endISO = `${monthStr}-${String(daysInMonth).padStart(2, '0')}`
+
+        // ── Scope ─────────────────────────────────────────────────────
+        // - hr_manager / super_admin: all employees, optional ?department / ?employeeId filter.
+        // - dept_head: limited to their own department (cannot widen via query).
+        // - employee: only their own row, regardless of ?employeeId.
+        const role = user.role
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isDeptHead = role === 'dept_head'
+        const isEmployee = role === 'employee'
+        if (isDeptHead && !user.department) {
+            return reply.code(403).send(e403('Your account has no department assigned. Contact an HR admin.'))
+        }
+        if (isEmployee && !user.employeeId) {
+            return reply.code(403).send(e403('Your account is not linked to an employee record.'))
+        }
+
+        const departmentFilter = isDeptHead ? user.department : (isHrAdmin ? (q.department ?? null) : null)
+        // Employees and the explicit employeeId filter both narrow to a single row.
+        const employeeIdFilter = isEmployee ? user.employeeId : (q.employeeId || null)
+
+        const empConds: any[] = [eq(employees.tenantId, user.tenantId)]
+        if (departmentFilter) empConds.push(eq(employees.department, departmentFilter))
+        if (employeeIdFilter) empConds.push(eq(employees.id, employeeIdFilter))
+
+        // ── Employees + their shift weekly-off days ─────────────────────
+        const empRows = await db
+            .select({
+                id: employees.id,
+                employeeNo: employees.employeeNo,
+                firstName: employees.firstName,
+                lastName: employees.lastName,
+                department: employees.department,
+                designation: employees.designation,
+                avatarUrl: employees.avatarUrl,
+                joinDate: employees.joinDate,
+                shiftWeeklyOffDays: shifts.weeklyOffDays,
+            })
+            .from(employees)
+            .leftJoin(shifts, eq(shifts.id, employees.shiftId))
+            .where(and(...empConds))
+            .orderBy(asc(employees.firstName))
+
+        if (empRows.length === 0) {
+            return reply.send({ month: monthStr, daysInMonth, employees: [], firstWeekday: firstDay.getUTCDay() })
+        }
+
+        const scopedIds = empRows.map((e) => e.id)
+
+        const [attRows, leaveRows, holidayRows] = await Promise.all([
+            db
+                .select({
+                    employeeId: attendanceRecords.employeeId,
+                    date: attendanceRecords.date,
+                    checkIn: attendanceRecords.checkIn,
+                    checkOut: attendanceRecords.checkOut,
+                    hoursWorked: attendanceRecords.hoursWorked,
+                    status: attendanceRecords.status,
+                })
+                .from(attendanceRecords)
+                .where(
+                    and(
+                        eq(attendanceRecords.tenantId, user.tenantId),
+                        inArray(attendanceRecords.employeeId, scopedIds),
+                        gte(attendanceRecords.date, startISO),
+                        lte(attendanceRecords.date, endISO),
+                    ),
+                ),
+            db
+                .select({
+                    employeeId: leaveRequests.employeeId,
+                    leaveType: leaveRequests.leaveType,
+                    startDate: leaveRequests.startDate,
+                    endDate: leaveRequests.endDate,
+                })
+                .from(leaveRequests)
+                .where(
+                    and(
+                        eq(leaveRequests.tenantId, user.tenantId),
+                        inArray(leaveRequests.employeeId, scopedIds),
+                        eq(leaveRequests.status, 'approved'),
+                        lte(leaveRequests.startDate, endISO),
+                        gte(leaveRequests.endDate, startISO),
+                    ),
+                ),
+            db
+                .select({ date: publicHolidays.date, name: publicHolidays.name })
+                .from(publicHolidays)
+                .where(
+                    and(
+                        eq(publicHolidays.tenantId, user.tenantId),
+                        gte(publicHolidays.date, startISO),
+                        lte(publicHolidays.date, endISO),
+                    ),
+                ),
+        ])
+
+        const attByEmpDate = new Map<string, typeof attRows[number]>()
+        for (const r of attRows) attByEmpDate.set(`${r.employeeId}|${r.date}`, r)
+
+        const leavesByEmp = new Map<string, typeof leaveRows>()
+        for (const lr of leaveRows) {
+            const arr = leavesByEmp.get(lr.employeeId) ?? []
+            arr.push(lr)
+            leavesByEmp.set(lr.employeeId, arr)
+        }
+
+        const holidayByDate = new Map<string, string>()
+        for (const h of holidayRows) holidayByDate.set(h.date, h.name)
+
+        const result = empRows.map((emp) => {
+            const weeklyOffSet = new Set((emp.shiftWeeklyOffDays ?? []).map((d) => d.toLowerCase()))
+            const empLeaves = leavesByEmp.get(emp.id) ?? []
+            const joinDate = emp.joinDate ? new Date(emp.joinDate + 'T00:00:00Z') : null
+
+            const cells: Array<{
+                code: string
+                checkIn: string | null
+                checkOut: string | null
+                hoursWorked: string | null
+                leaveType?: string
+                holidayName?: string
+            }> = []
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateObj = new Date(Date.UTC(yearN, monthN - 1, day))
+                const iso = `${monthStr}-${String(day).padStart(2, '0')}`
+
+                if (joinDate && dateObj < joinDate) {
+                    cells.push({ code: 'N/A', checkIn: null, checkOut: null, hoursWorked: null })
+                    continue
+                }
+
+                const holidayName = holidayByDate.get(iso)
+                if (holidayName) {
+                    cells.push({ code: 'H', checkIn: null, checkOut: null, hoursWorked: null, holidayName })
+                    continue
+                }
+
+                const leave = empLeaves.find((l) => iso >= l.startDate && iso <= l.endDate)
+                if (leave) {
+                    cells.push({
+                        code: leaveCode(leave.leaveType),
+                        checkIn: null,
+                        checkOut: null,
+                        hoursWorked: null,
+                        leaveType: leave.leaveType,
+                    })
+                    continue
+                }
+
+                const dayName = WEEKDAY_NAMES[dateObj.getUTCDay()]
+                if (weeklyOffSet.has(dayName)) {
+                    cells.push({ code: 'WO', checkIn: null, checkOut: null, hoursWorked: null })
+                    continue
+                }
+
+                const att = attByEmpDate.get(`${emp.id}|${iso}`)
+                if (att) {
+                    cells.push({
+                        code: attendanceCode(att.status, att.checkIn, att.checkOut, att.hoursWorked),
+                        checkIn: att.checkIn ? new Date(att.checkIn).toISOString() : null,
+                        checkOut: att.checkOut ? new Date(att.checkOut).toISOString() : null,
+                        hoursWorked: att.hoursWorked ?? null,
+                    })
+                    continue
+                }
+
+                const today = new Date()
+                today.setUTCHours(0, 0, 0, 0)
+                if (dateObj < today) {
+                    cells.push({ code: 'A', checkIn: null, checkOut: null, hoursWorked: null })
+                } else {
+                    cells.push({ code: '', checkIn: null, checkOut: null, hoursWorked: null })
+                }
+            }
+
+            return {
+                id: emp.id,
+                employeeNo: emp.employeeNo,
+                name: `${emp.firstName} ${emp.lastName}`,
+                department: emp.department,
+                designation: emp.designation,
+                avatarUrl: emp.avatarUrl,
+                cells,
+            }
+        })
+
+        reply.header('Cache-Control', 'private, max-age=30')
+        return reply.send({
+            month: monthStr,
+            daysInMonth,
+            firstWeekday: firstDay.getUTCDay(),
+            employees: result,
+        })
     })
 
     // POST /api/v1/attendance/check-in

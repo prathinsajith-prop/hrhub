@@ -252,6 +252,7 @@
     "all": "All",
     "active": "Active",
     "inactive": "Inactive",
+    "deactivate": "Deactivate",
     "status": "Status",
     "date": "Date",
     "name": "Name",
@@ -2189,10 +2190,38 @@
         "label": "Recruitment Stages",
         "desc": "Pipeline labels, colours & order"
       },
+      "shifts": {
+        "label": "Shifts",
+        "desc": "Working hours and weekly off-days"
+      },
       "security": {
         "label": "Security",
         "desc": "Policies, IP allowlist & data"
       }
+    },
+    "shifts": {
+      "title": "Shifts",
+      "desc": "Define working-hours templates that employees can be assigned to. Each shift has a start/end time and an optional weekly off-day pattern.",
+      "listTitle": "Shift Templates",
+      "listDesc": "Employees pick one of these in their Employment section. Leaving the assignment empty falls back to the tenant default working week.",
+      "addShift": "Add Shift",
+      "addTitle": "Add Shift",
+      "editTitle": "Edit Shift",
+      "fieldName": "Name",
+      "namePlaceholder": "e.g. 9–6 General, Night Shift",
+      "fieldStart": "Start Time",
+      "fieldEnd": "End Time",
+      "fieldWeeklyOff": "Weekly Off Days",
+      "empty": "No shifts yet. Add one to get started.",
+      "added": "Shift added",
+      "updated": "Shift updated",
+      "deactivated": "Deactivated {{name}}",
+      "nameRequired": "Name required",
+      "nameRequiredDesc": "Please give this shift a name.",
+      "invalidTime": "Invalid time",
+      "invalidTimeDesc": "Times must be in 24-hour HH:MM format.",
+      "deleteConfirmTitle": "Deactivate \"{{name}}\"?",
+      "deleteConfirmDesc": "This shift will be hidden from active pickers. Employees currently assigned to it keep their assignment but won't see it in dropdowns."
     },
     "onboardingTemplate": {
       "title": "Onboarding Steps",
