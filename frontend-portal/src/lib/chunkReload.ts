@@ -36,6 +36,9 @@ export function isChunkLoadError(err: unknown): boolean {
  * Reload the page once. Returns true if a reload was triggered; false if a
  * reload was suppressed (we already reloaded recently and the error is still
  * happening — surface the real error instead of looping).
+ *
+ * Briefly paints an "Updating to the latest version…" overlay before the
+ * reload so the user sees what's happening instead of a blank flash.
  */
 export function tryReloadForChunkError(): boolean {
     try {
@@ -46,8 +49,42 @@ export function tryReloadForChunkError(): boolean {
         // sessionStorage can throw in private mode / sandboxed iframes —
         // fall through to reloading anyway.
     }
-    window.location.reload()
+    showUpdatingOverlay()
+    window.setTimeout(() => window.location.reload(), 600)
     return true
+}
+
+let overlayInstalled = false
+
+/**
+ * Inline overlay so we don't depend on any UI library at recovery time —
+ * the React tree may already be in a broken state when this fires.
+ */
+function showUpdatingOverlay(): void {
+    if (overlayInstalled || typeof document === 'undefined') return
+    overlayInstalled = true
+    const el = document.createElement('div')
+    el.setAttribute('role', 'status')
+    el.setAttribute('aria-live', 'polite')
+    el.style.cssText = [
+        'position:fixed', 'inset:0', 'z-index:2147483647',
+        'display:flex', 'align-items:center', 'justify-content:center',
+        'background:rgba(15,23,42,0.55)',
+        'backdrop-filter:blur(4px)', '-webkit-backdrop-filter:blur(4px)',
+        'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif',
+        'color:#0f172a',
+    ].join(';')
+    el.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px 32px;border-radius:16px;background:rgba(255,255,255,0.95);box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);max-width:320px;text-align:center">
+            <div style="width:32px;height:32px;border:3px solid #6366f1;border-top-color:transparent;border-radius:50%;animation:hrhubChunkSpin 0.8s linear infinite"></div>
+            <div>
+                <div style="font-weight:600;font-size:15px">Updating to the latest version</div>
+                <div style="margin-top:4px;font-size:12px;color:#64748b">We'll bring you back in a moment.</div>
+            </div>
+        </div>
+        <style>@keyframes hrhubChunkSpin{to{transform:rotate(360deg)}}</style>
+    `
+    document.body.appendChild(el)
 }
 
 /**
