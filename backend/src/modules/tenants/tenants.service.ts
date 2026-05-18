@@ -397,7 +397,9 @@ export async function prepareTenantSwitch(actorUserId: string, targetTenantId: s
             name: u.name,
             email: u.email,
             role,
-            roles: u.roles?.length ? u.roles : [role],
+            // Per-tenant role — `users.roles` is the (user-level) initial
+            // signup default and would lie about this tenant's permissions.
+            roles: [role],
             tenantId: targetTenantId,
             entityId: u.entityId,
             employeeId: emp.id,
@@ -574,6 +576,16 @@ export async function changeMemberRole(opts: {
         .set({ role: opts.newRole, updatedAt: new Date() })
         .where(and(eq(tenantMemberships.id, opts.membershipId), eq(tenantMemberships.tenantId, opts.tenantId)))
         .returning()
+
+    // Keep users.role / users.roles in sync for the member's primary tenant —
+    // otherwise the next JWT (issued from the users row) would carry the stale
+    // role and the frontend route guard would deny the new permissions.
+    if (m.userId) {
+        await db.update(users)
+            .set({ role: opts.newRole, roles: [opts.newRole], updatedAt: new Date() })
+            .where(and(eq(users.id, m.userId), eq(users.tenantId, opts.tenantId)))
+    }
+
     return updated
 }
 

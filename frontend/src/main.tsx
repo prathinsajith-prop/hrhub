@@ -6,16 +6,22 @@ import App from './App'
 import { queryClient } from './lib/queryClient'
 import { useAuthStore } from './store/authStore'
 import { ErrorBoundary } from './components/layout/ErrorBoundary'
+import { installChunkReloadListeners } from './lib/chunkReload'
 import './lib/i18n'
 import './index.css'
+
+// After a fresh deploy the user's browser may still hold the old index.html
+// pointing at hashed chunks that no longer exist on the CDN. Detect that and
+// silently reload — see lib/chunkReload.ts for the loop-guard.
+installChunkReloadListeners()
 
 // Clear all cached query data when the user logs out so stale error states
 // from a previous session don't flash on the next login.
 let _wasAuthenticated = useAuthStore.getState().isAuthenticated
 useAuthStore.subscribe((state) => {
-    const now = state.isAuthenticated
-    if (_wasAuthenticated && !now) queryClient.clear()
-    _wasAuthenticated = now
+  const now = state.isAuthenticated
+  if (_wasAuthenticated && !now) queryClient.clear()
+  _wasAuthenticated = now
 })
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { BellIcon, SearchIcon, LogOut, UserIcon, Building2, ChevronRight, Check, SunIcon, MoonIcon, MonitorIcon, Loader2Icon, PlusIcon } from 'lucide-react'
+import { SearchIcon, LogOut, UserIcon, Building2, ChevronRight, Check, SunIcon, MoonIcon, MonitorIcon, Loader2Icon, PlusIcon } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { labelFor, ROLE_BADGE_STYLE, ROLE_LABELS } from '@/lib/enums'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -20,7 +20,7 @@ import {
   DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { useUnreadCount } from '@/hooks/useNotifications'
+import { NotificationsBell } from '@/components/layout/NotificationsBell'
 import { useAuthStore } from '@/store/authStore'
 import { useMyTenants, useSwitchTenant } from '@/hooks/useTenants'
 import { GlobalSearch } from '@/components/shared/GlobalSearch'
@@ -91,7 +91,6 @@ export function SiteHeader() {
   }, [pathname, t])
 
   const { user, tenant, logout } = useAuthStore()
-  const { data: unreadCount = 0 } = useUnreadCount()
   const isAdmin = user?.role === 'super_admin' || user?.role === 'hr_manager'
   const profileRoute = isAdmin ? ROUTES.settings : '/my/account'
   const { data: myTenants } = useMyTenants()
@@ -235,19 +234,10 @@ export function SiteHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Notifications — icon button, navigates to full notifications page */}
-        <Button
-          variant="outline"
-          size="icon"
-          className={cn('relative', iconBtn)}
-          aria-label={t('profile.notifications', { defaultValue: 'Notifications' })}
-          onClick={() => navigate(ROUTES.notifications)}
-        >
-          <BellIcon className="size-4" />
-          {unreadCount > 0 && (
-            <span className="absolute top-1.5 end-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
-          )}
-        </Button>
+        {/* Notifications — popover preview with the same UX as the portal:
+            unread-first ordering, refetch-on-open, mark-read + deep-link
+            from any item. Falls through to /notifications for the full list. */}
+        <NotificationsBell triggerClassName={iconBtn} />
 
         {/* Profile — hidden for now; user menu lives in the sidebar */}
         <DropdownMenu>
