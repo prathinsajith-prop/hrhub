@@ -22,6 +22,18 @@ const MAX_FAILED_ATTEMPTS = 5
 /** Lockout duration in minutes */
 const LOCKOUT_MINUTES = 15
 
+/**
+ * Build the effective roles array for a user. Guarantees the primary `role`
+ * is always present — protects the route guard from accounts whose DB `roles`
+ * column drifted out of sync (e.g. older signups that defaulted to `['employee']`
+ * before the signup flow learned to seed `roles` explicitly).
+ */
+function effectiveRoles(role: string, roles?: string[] | null): string[] {
+    if (!roles?.length) return [role]
+    if (roles.includes(role)) return roles
+    return [role, ...roles]
+}
+
 export interface LoginInput {
     email: string
     password: string
@@ -136,8 +148,10 @@ type UserRow = { id: string; firstName: string; lastName: string; name: string; 
 export async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ipAddress?: string; userAgent?: string }) {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, user.tenantId)).limit(1)
 
+    const roles = effectiveRoles(user.role, user.roles)
+
     const accessToken = fastify.jwt.sign(
-        { sub: user.id, tenantId: user.tenantId, role: user.role, roles: user.roles ?? [user.role], firstName: user.firstName, lastName: user.lastName, name: user.name, email: user.email, employeeId: user.employeeId, department: user.department ?? null },
+        { sub: user.id, tenantId: user.tenantId, role: user.role, roles, firstName: user.firstName, lastName: user.lastName, name: user.name, email: user.email, employeeId: user.employeeId, department: user.department ?? null },
         { expiresIn: '15m' }
     )
     const rawRefreshToken = crypto.randomBytes(48).toString('hex')
@@ -168,7 +182,7 @@ export async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ip
             name: user.name,
             email: user.email,
             role: user.role,
-            roles: user.roles ?? [user.role],
+            roles,
             tenantId: user.tenantId,
             entityId: user.entityId,
             employeeId: user.employeeId,
@@ -336,6 +350,10 @@ export async function registerTenant(input: {
             email: input.email.toLowerCase(),
             passwordHash,
             role: 'super_admin',
+            // Must match `role`. The schema default is `['employee']`, which would
+            // mask super_admin in the frontend route guard (it prefers `roles[]`
+            // over the singular `role`).
+            roles: ['super_admin'],
             employeeId: adminEmployee.id,
         }).returning({ id: users.id })
 

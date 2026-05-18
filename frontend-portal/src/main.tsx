@@ -9,8 +9,15 @@ import App from './App'
 import { queryClient } from './lib/queryClient'
 import { useAuthStore } from './store/authStore'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { installChunkReloadListeners } from './lib/chunkReload'
 import './lib/i18n'
 import './index.css'
+
+// Stale-deploy recovery: when a new build replaces the chunks the old
+// index.html points at, any React.lazy() import would otherwise throw
+// "Failed to fetch dynamically imported module" and trap the user on an
+// error screen. The listener detects that and reloads the page once.
+installChunkReloadListeners()
 
 // Clear React Query cache on logout to prevent stale state for the next sign-in.
 let _wasAuthenticated = useAuthStore.getState().isAuthenticated

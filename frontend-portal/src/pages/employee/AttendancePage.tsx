@@ -98,13 +98,13 @@ export function EmployeeAttendancePage() {
                 </div>
             </GlassCard>
 
-            <Tabs defaultValue="list">
+            <Tabs defaultValue="calendar">
                 <TabsList>
-                    <TabsTrigger value="list" className="gap-1.5">
-                        <List className="size-3.5" /> List
-                    </TabsTrigger>
                     <TabsTrigger value="calendar" className="gap-1.5">
                         <CalendarRange className="size-3.5" /> Calendar
+                    </TabsTrigger>
+                    <TabsTrigger value="list" className="gap-1.5">
+                        <List className="size-3.5" /> List
                     </TabsTrigger>
                 </TabsList>
 
