@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useQueryClient } from '@tanstack/react-query'
 import { Bell, CheckCheck, Info, AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react'
 
 import {
@@ -33,24 +34,49 @@ function timeAgo(iso: string): string {
 }
 
 const TYPE_ICON: Record<Notification['type'], { node: React.ReactNode; tone: string }> = {
-    info: { node: <Info className="h-4 w-4" />, tone: 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300' },
-    success: { node: <CheckCircle2 className="h-4 w-4" />, tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
-    warning: { node: <AlertTriangle className="h-4 w-4" />, tone: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300' },
-    error: { node: <AlertCircle className="h-4 w-4" />, tone: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300' },
+    info: { node: <Info className="size-4" />, tone: 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300' },
+    success: { node: <CheckCircle2 className="size-4" />, tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
+    warning: { node: <AlertTriangle className="size-4" />, tone: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300' },
+    error: { node: <AlertCircle className="size-4" />, tone: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300' },
 }
+
+// Max items rendered inline in the dropdown — keeps the popover compact and
+// pushes anyone who needs more to the full notifications page.
+const POPOVER_LIMIT = 5
 
 export function NotificationsBell() {
     const { t } = useTranslation()
+    const qc = useQueryClient()
     const [open, setOpen] = useState(false)
     const { data: unread = 0 } = useUnreadNotificationsCount()
-    const { data: items = [] } = useNotifications({ limit: 6 })
+    const { data: items = [] } = useNotifications({ limit: POPOVER_LIMIT })
     const markRead = useMarkNotificationRead()
     const markAll = useMarkAllNotificationsRead()
 
+    // Surface unread first, then read — keeps the latest actionable items
+    // at the top of the dropdown regardless of when each arrived.
+    const sortedItems = useMemo(() => {
+        if (items.length === 0) return items
+        return [...items].sort((a, b) => {
+            if (a.isRead !== b.isRead) return a.isRead ? 1 : -1
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        })
+    }, [items])
+
     const displayCount = unread > 99 ? '99+' : String(unread)
 
+    function handleOpenChange(next: boolean) {
+        setOpen(next)
+        // Force a fresh fetch every time the user opens the dropdown so the
+        // list never drifts from the badge. Cheap query — single index hit.
+        if (next) {
+            qc.invalidateQueries({ queryKey: ['portal', 'notifications'] })
+            qc.invalidateQueries({ queryKey: ['portal', 'notifications-unread'] })
+        }
+    }
+
     return (
-        <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenu open={open} onOpenChange={handleOpenChange}>
             <DropdownMenuTrigger asChild>
                 <Button
                     variant="ghost"
@@ -58,7 +84,7 @@ export function NotificationsBell() {
                     aria-label={`${t('notifications.title')}${unread ? ` (${unread})` : ''}`}
                     className="relative"
                 >
-                    <Bell className="h-4 w-4" />
+                    <Bell className="size-4" />
                     {unread > 0 ? (
                         <span
                             aria-hidden
@@ -80,20 +106,20 @@ export function NotificationsBell() {
                             onClick={() => markAll.mutate()}
                             loading={markAll.isPending}
                         >
-                            <CheckCheck className="h-3.5 w-3.5" /> {t('notifications.markAllRead')}
+                            <CheckCheck className="size-3.5" /> {t('notifications.markAllRead')}
                         </Button>
                     ) : null}
                 </div>
 
                 <div className="max-h-[60vh] overflow-y-auto">
-                    {items.length === 0 ? (
+                    {sortedItems.length === 0 ? (
                         <div className="flex flex-col items-center gap-1 px-3 py-10 text-center text-sm text-muted-foreground">
-                            <CheckCircle2 className="h-7 w-7 opacity-50" />
+                            <CheckCircle2 className="size-7 opacity-50" />
                             {t('notifications.empty')}
                         </div>
                     ) : (
                         <ul className="divide-y divide-border">
-                            {items.map((n) => {
+                            {sortedItems.map((n) => {
                                 const tone = TYPE_ICON[n.type]
                                 const onClick = () => {
                                     if (!n.isRead) markRead.mutate(n.id)
@@ -101,7 +127,7 @@ export function NotificationsBell() {
                                 }
                                 const Inner = (
                                     <div className="flex items-start gap-2.5 p-3">
-                                        <span className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full', tone.tone)}>
+                                        <span className={cn('mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full', tone.tone)}>
                                             {tone.node}
                                         </span>
                                         <div className="min-w-0 flex-1">
@@ -109,7 +135,7 @@ export function NotificationsBell() {
                                                 <span className={cn('truncate text-sm font-medium', !n.isRead && 'text-foreground')}>
                                                     {n.title}
                                                 </span>
-                                                {!n.isRead ? <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" /> : null}
+                                                {!n.isRead ? <span className="mt-1 size-1.5 shrink-0 rounded-full bg-rose-500" /> : null}
                                             </div>
                                             <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.message}</p>
                                             <p className="mt-1 text-[11px] text-muted-foreground/70">{timeAgo(n.createdAt)}</p>

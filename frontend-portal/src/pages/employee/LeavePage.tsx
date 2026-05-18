@@ -68,7 +68,7 @@ export function EmployeeLeavePage() {
                 title={t('leave.title')}
                 action={
                     <Button onClick={() => setOpen(true)}>
-                        <Plus className="h-4 w-4" /> {t('leave.newRequest')}
+                        <Plus className="size-4" /> {t('leave.newRequest')}
                     </Button>
                 }
             />
@@ -94,14 +94,14 @@ export function EmployeeLeavePage() {
                             </div>
                         </div>
                     </div>
-                    <Calendar className="h-12 w-12 text-indigo-400/40 dark:text-indigo-500/30" />
+                    <Calendar className="size-12 text-indigo-400/40 dark:text-indigo-500/30" />
                 </div>
             </GlassCard>
 
             {holidays && holidays.length > 0 ? (
                 <section>
                     <div className="mb-3 flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                        <CalendarDays className="size-4 text-muted-foreground" />
                         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             {t('holidays.title')}
                         </h2>
@@ -127,11 +127,11 @@ export function EmployeeLeavePage() {
                 </div>
             ) : !list?.data?.length ? (
                 <EmptyState
-                    icon={<Calendar className="h-8 w-8" />}
+                    icon={<Calendar className="size-8" />}
                     title={t('leave.noRequests')}
                     action={
                         <Button onClick={() => setOpen(true)}>
-                            <Plus className="h-4 w-4" /> {t('leave.newRequest')}
+                            <Plus className="size-4" /> {t('leave.newRequest')}
                         </Button>
                     }
                 />
@@ -164,7 +164,7 @@ export function EmployeeLeavePage() {
                                         disabled={cancel.isPending}
                                         aria-label="Cancel request"
                                     >
-                                        <X className="h-4 w-4" />
+                                        <X className="size-4" />
                                     </Button>
                                 ) : null}
                             </CardContent>

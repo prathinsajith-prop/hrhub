@@ -102,7 +102,7 @@ export function EditCandidateDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[520px]">
+            <DialogContent className="sm:max-w-[640px]">
                 <DialogHeader>
                     <DialogTitle>Edit Candidate</DialogTitle>
                 </DialogHeader>

@@ -14,7 +14,7 @@ export interface ListLeaveParams {
     search?: string
 }
 
-function buildQuery(params: Record<string, string | number | undefined | null>): string {
+function buildQuery(params: Record<string, string | number | undefined | null> | ListLeaveParams): string {
     const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
     if (entries.length === 0) return ''
     return '?' + entries.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
@@ -24,7 +24,7 @@ export function useLeaveRequests(params: ListLeaveParams = {}) {
     const tenantId = useAuthStore((s) => s.user?.tenantId)
     return useQuery({
         queryKey: ['portal', 'leave', tenantId, params],
-        queryFn: () => api.get<PaginatedResponse<LeaveRequest>>(`/leave${buildQuery(params as any)}`),
+        queryFn: () => api.get<PaginatedResponse<LeaveRequest>>(`/leave${buildQuery(params)}`),
         enabled: !!tenantId,
     })
 }

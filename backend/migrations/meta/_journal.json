@@ -232,6 +232,27 @@
       "when": 1779235200000,
       "tag": "0032_recruitment_stage_flags",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1779494400000,
+      "tag": "0033_employee_shift",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1779580800000,
+      "tag": "0034_shifts_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1779667200000,
+      "tag": "0035_profile_change_requests",
+      "breakpoints": true
     }
   ]
 }

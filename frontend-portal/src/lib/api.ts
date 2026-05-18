@@ -20,19 +20,6 @@ export class ApiError extends Error {
     }
 }
 
-export function apiErrorToFieldMap(err: unknown): Record<string, string> {
-    if (!(err instanceof ApiError)) return {}
-    const data = err.data as { validationErrors?: Array<{ path?: (string | number)[]; message?: string }> } | undefined
-    const issues = data?.validationErrors
-    if (!Array.isArray(issues)) return {}
-    const out: Record<string, string> = {}
-    for (const i of issues) {
-        const key = Array.isArray(i.path) && i.path.length > 0 ? i.path.join('.') : '_form'
-        if (!out[key] && i.message) out[key] = i.message
-    }
-    return out
-}
-
 let _refreshPromise: Promise<boolean> | null = null
 function sharedRefresh(): Promise<boolean> {
     if (!_refreshPromise) {

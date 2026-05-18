@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
+
+import { Skeleton } from '@/components/ui/skeleton'
 
 import { useAuthStore } from '@/store/authStore'
 import { useViewModeStore } from '@/store/viewModeStore'
@@ -23,17 +24,43 @@ const EmployeeProfilePage = lazy(() => import('@/pages/employee/ProfilePage').th
 const EmployeeLeavePage = lazy(() => import('@/pages/employee/LeavePage').then((m) => ({ default: m.EmployeeLeavePage })))
 const EmployeePayslipsPage = lazy(() => import('@/pages/employee/PayslipsPage').then((m) => ({ default: m.EmployeePayslipsPage })))
 const EmployeeAttendancePage = lazy(() => import('@/pages/employee/AttendancePage').then((m) => ({ default: m.EmployeeAttendancePage })))
+const EmployeeDocumentsPage = lazy(() => import('@/pages/employee/DocumentsPage').then((m) => ({ default: m.EmployeeDocumentsPage })))
+const EmployeePerformancePage = lazy(() => import('@/pages/employee/PerformancePage').then((m) => ({ default: m.EmployeePerformancePage })))
 
 const ManagerHomePage = lazy(() => import('@/pages/manager/HomePage').then((m) => ({ default: m.ManagerHomePage })))
 const ManagerTeamPage = lazy(() => import('@/pages/manager/TeamPage').then((m) => ({ default: m.ManagerTeamPage })))
 const ManagerMemberDetailPage = lazy(() => import('@/pages/manager/MemberDetailPage').then((m) => ({ default: m.ManagerMemberDetailPage })))
 const ManagerApprovalsPage = lazy(() => import('@/pages/manager/ApprovalsPage').then((m) => ({ default: m.ManagerApprovalsPage })))
+const ManagerDocumentApprovalsPage = lazy(() => import('@/pages/manager/DocumentApprovalsPage').then((m) => ({ default: m.ManagerDocumentApprovalsPage })))
+const ManagerTeamAttendancePage = lazy(() => import('@/pages/manager/TeamAttendancePage').then((m) => ({ default: m.ManagerTeamAttendancePage })))
+const ManagerProfileApprovalsPage = lazy(() => import('@/pages/manager/ProfileApprovalsPage').then((m) => ({ default: m.ManagerProfileApprovalsPage })))
 const ManagerTeamCalendarPage = lazy(() => import('@/pages/manager/TeamCalendarPage').then((m) => ({ default: m.ManagerTeamCalendarPage })))
 
+/**
+ * Suspense fallback shown while a lazy-loaded route chunk downloads. Mirrors the
+ * generic page layout (header + content cards) so the transition reads as
+ * "the page is loading" rather than "the app crashed".
+ */
 function PageFallback() {
     return (
-        <div className="flex h-[50vh] items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="space-y-5 animate-fade-fast">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div className="space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-8 w-48" />
+                </div>
+                <Skeleton className="h-9 w-32" />
+            </div>
+            <Skeleton className="h-32 w-full" />
+            <div className="grid gap-4 sm:grid-cols-2">
+                <Skeleton className="h-28" />
+                <Skeleton className="h-28" />
+            </div>
+            <div className="space-y-2">
+                <Skeleton className="h-16" />
+                <Skeleton className="h-16" />
+                <Skeleton className="h-16" />
+            </div>
         </div>
     )
 }
@@ -88,6 +115,8 @@ export default function App() {
                 <Route path={ROUTES.employeeLeave} element={<EmployeeLeavePage />} />
                 <Route path={ROUTES.employeePayslips} element={<EmployeePayslipsPage />} />
                 <Route path={ROUTES.employeeAttendance} element={<EmployeeAttendancePage />} />
+                <Route path={ROUTES.employeeDocuments} element={<EmployeeDocumentsPage />} />
+                <Route path={ROUTES.employeePerformance} element={<EmployeePerformancePage />} />
 
                 {/* Shared (both modes) */}
                 <Route path={ROUTES.notifications} element={<NotificationsPage />} />
@@ -122,6 +151,30 @@ export default function App() {
                     element={
                         <ManagerGuard>
                             <ManagerApprovalsPage />
+                        </ManagerGuard>
+                    }
+                />
+                <Route
+                    path={ROUTES.managerDocumentApprovals}
+                    element={
+                        <ManagerGuard>
+                            <ManagerDocumentApprovalsPage />
+                        </ManagerGuard>
+                    }
+                />
+                <Route
+                    path={ROUTES.managerProfileApprovals}
+                    element={
+                        <ManagerGuard>
+                            <ManagerProfileApprovalsPage />
+                        </ManagerGuard>
+                    }
+                />
+                <Route
+                    path={ROUTES.managerAttendance}
+                    element={
+                        <ManagerGuard>
+                            <ManagerTeamAttendancePage />
                         </ManagerGuard>
                     }
                 />

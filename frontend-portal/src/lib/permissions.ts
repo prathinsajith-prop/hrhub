@@ -1,6 +1,6 @@
 import type { User, UserRole } from '@/types'
 
-export function getRoles(user: User | null | undefined): UserRole[] {
+function getRoles(user: User | null | undefined): UserRole[] {
     if (!user) return []
     const all = (user.roles && user.roles.length > 0 ? user.roles : [user.role]) as UserRole[]
     return all

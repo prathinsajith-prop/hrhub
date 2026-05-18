@@ -37,8 +37,8 @@ export function TopBar() {
             <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
                 {/* ── Brand ──────────────────────────────────────────────── */}
                 <div className="flex min-w-0 items-center gap-2.5">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-md shadow-indigo-200/60">
-                        <Sparkles className="h-4 w-4" />
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-md shadow-indigo-200/60">
+                        <Sparkles className="size-4" />
                     </div>
                     <div className="min-w-0">
                         <div className="truncate font-display text-sm font-bold leading-tight">
@@ -69,21 +69,21 @@ export function TopBar() {
                                 aria-label="Account menu"
                                 className="relative rounded-full ring-2 ring-transparent transition-all hover:ring-primary/20 focus-visible:outline-none focus-visible:ring-primary/40"
                             >
-                                <Avatar className="h-9 w-9">
+                                <Avatar className="size-9">
                                     <AvatarImage src={user?.avatarUrl ?? undefined} />
                                     <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-sky-100 text-[11px] font-semibold text-indigo-700 dark:from-indigo-950/60 dark:to-sky-950/40 dark:text-indigo-200">
                                         {initialsOf(user?.name)}
                                     </AvatarFallback>
                                 </Avatar>
                                 <span
-                                    className="absolute bottom-0 end-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500"
+                                    className="absolute bottom-0 end-0 size-2.5 rounded-full border-2 border-background bg-emerald-500"
                                     aria-hidden
                                 />
                             </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" sideOffset={8} className="w-64 p-1.5">
                             <div className="flex items-center gap-3 p-2">
-                                <Avatar className="h-10 w-10">
+                                <Avatar className="size-10">
                                     <AvatarImage src={user?.avatarUrl ?? undefined} />
                                     <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-sky-100 text-xs font-semibold text-indigo-700 dark:from-indigo-950/60 dark:to-sky-950/40 dark:text-indigo-200">
                                         {initialsOf(user?.name)}
@@ -104,12 +104,12 @@ export function TopBar() {
                                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                                 className="gap-2.5"
                             >
-                                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                                {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
                                 <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
                             </DropdownMenuItem>
 
                             <DropdownMenuLabel className="flex items-center gap-1.5 px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                <Languages className="h-3 w-3" /> Language
+                                <Languages className="size-3" /> Language
                             </DropdownMenuLabel>
                             {LANGUAGES.map((l) => (
                                 <DropdownMenuItem
@@ -119,7 +119,7 @@ export function TopBar() {
                                 >
                                     <span className="font-medium">{l.label}</span>
                                     {currentLang === l.code ? (
-                                        <Check className="h-3.5 w-3.5 text-primary" />
+                                        <Check className="size-3.5 text-primary" />
                                     ) : (
                                         <span className="text-[10px] tracking-wider text-muted-foreground">
                                             {l.native}
@@ -136,7 +136,7 @@ export function TopBar() {
                                     'dark:text-rose-300 dark:focus:bg-rose-950/40',
                                 )}
                             >
-                                <LogOut className="h-4 w-4" />
+                                <LogOut className="size-4" />
                                 <span>{t('auth.signOut')}</span>
                             </DropdownMenuItem>
                         </DropdownMenuContent>

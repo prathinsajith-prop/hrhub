@@ -51,7 +51,7 @@ export function ManagerApprovalsPage() {
                     <Skeleton className="h-24" />
                 </div>
             ) : !data?.data?.length ? (
-                <EmptyState icon={<ListChecks className="h-8 w-8" />} title={t('team.noApprovals')} />
+                <EmptyState icon={<ListChecks className="size-8" />} title={t('team.noApprovals')} />
             ) : (
                 <div className="space-y-2.5">
                     {data.data.map((req) => (
@@ -80,14 +80,14 @@ export function ManagerApprovalsPage() {
                                             variant="success"
                                             onClick={() => setPending({ id: req.id, approved: true })}
                                         >
-                                            <Check className="h-4 w-4" /> {t('common.approve')}
+                                            <Check className="size-4" /> {t('common.approve')}
                                         </Button>
                                         <Button
                                             size="sm"
                                             variant="outline"
                                             onClick={() => setPending({ id: req.id, approved: false })}
                                         >
-                                            <X className="h-4 w-4" /> {t('common.reject')}
+                                            <X className="size-4" /> {t('common.reject')}
                                         </Button>
                                     </div>
                                 </div>

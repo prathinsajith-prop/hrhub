@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { labelFor } from '@/lib/enums'
-import { Clock, CheckCircle2, Plus, ArrowLeft, Trash2, Mail, Phone, FileText, Activity, Sparkles, Send, Upload, AlertCircle, ChevronDown, ChevronUp, BookOpen } from 'lucide-react'
+import { Clock, CheckCircle2, Plus, ArrowLeft, Trash2, Mail, Phone, FileText, Activity, Sparkles, Send, Upload, ChevronDown, ChevronUp, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, Card, Progress } from '@/components/ui/primitives'
 import { ConfirmDialog, toast, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, DialogClose } from '@/components/ui/overlays'
@@ -17,11 +17,11 @@ import { formatDate, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { useEmployeeChecklist, useUpdateOnboardingStep, useAddOnboardingStep, useDeleteOnboardingStep, useSendOnboardingUploadLink, useStepRequiredDocs, useAddStepRequiredDoc, useDeleteStepRequiredDoc, useChecklistDocSummary, type OnboardingChecklist, type OnboardingStep, type OnboardingStepStatus } from '@/hooks/useOnboarding'
 import { RequiredDocsManager } from '@/components/shared/RequiredDocsManager'
-import { useDocuments, useUploadDocument } from '@/hooks/useDocuments'
-import { useQueryClient } from '@tanstack/react-query'
+import { AddDocumentDialog } from '@/components/shared/AddDocumentDialog'
+import { useDocuments } from '@/hooks/useDocuments'
 import { useActivityLogs } from '@/hooks/useAudit'
 import { InitialsAvatar } from '@/components/shared/Avatar'
-import { DOC_TYPE_CATALOG, CATEGORY_LABELS, docNumberMeta, type DocCategory } from '@/lib/docTypes'
+import { CATEGORY_LABELS, type DocCategory } from '@/lib/docTypes'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
     ONBOARDING_TEMPLATE_STEPS,
@@ -257,7 +257,7 @@ function RequiredDocsDialog({ step, open, onClose }: { step: OnboardingStep; ope
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Required documents — {step.title}</DialogTitle>
                 </DialogHeader>
@@ -492,7 +492,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
 
             {/* Edit step dialog */}
             <Dialog open={!!editing} onOpenChange={(open) => { if (!open) setEditing(null) }}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-xl">
                     <DialogHeader><DialogTitle>Update step</DialogTitle></DialogHeader>
                     <DialogBody className="space-y-4">
                         <p className="text-sm font-semibold">{editing?.title}</p>
@@ -527,7 +527,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
 
             {/* Add step dialog */}
             <Dialog open={adding} onOpenChange={setAdding}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader><DialogTitle>Add step</DialogTitle></DialogHeader>
                     <DialogBody className="space-y-4">
                         <div className="space-y-2">
@@ -633,52 +633,6 @@ function StepDocPanel({
 }) {
     const [expanded, setExpanded] = useState(false)
     const [uploadOpen, setUploadOpen] = useState(false)
-    const [selectedCategory, setSelectedCategory] = useState<DocCategory | ''>('')
-    const [selectedDocType, setSelectedDocType] = useState('')
-    const [docNumber, setDocNumber] = useState('')
-    const [expiryDate, setExpiryDate] = useState('')
-    const [file, setFile] = useState<File | null>(null)
-    const [uploading, setUploading] = useState(false)
-    const fileRef = useRef<HTMLInputElement>(null)
-    const qc = useQueryClient()
-    const uploadDoc = useUploadDocument()
-
-    const categoryDocs = selectedCategory ? DOC_TYPE_CATALOG[selectedCategory] : []
-    const selectedDocDef = categoryDocs.find(d => d.docType === selectedDocType)
-    const expiryRequired = selectedDocDef?.expiryRequired ?? false
-
-    const handleUpload = async () => {
-        if (!selectedCategory) { toast.warning('Category required', 'Select a document category.'); return }
-        if (!selectedDocType)  { toast.warning('Document type required', 'Select a document type.'); return }
-        if (!file)             { toast.warning('File required', 'Choose a file to upload.'); return }
-        if (expiryRequired && !expiryDate) {
-            toast.warning('Expiry date required', `${selectedDocType} requires an expiry date.`)
-            return
-        }
-        setUploading(true)
-        try {
-            await uploadDoc.mutateAsync({
-                file,
-                employeeId,
-                category: selectedCategory,
-                docType: selectedDocType,
-                docNumber: docNumber.trim() || undefined,
-                expiryDate: expiryDate || undefined,
-            })
-            await qc.invalidateQueries({ queryKey: ['documents'] })
-            toast.success('Document uploaded', `${selectedDocType} submitted for review.`)
-            setUploadOpen(false)
-            setFile(null)
-            setSelectedCategory('')
-            setSelectedDocType('')
-            setDocNumber('')
-            setExpiryDate('')
-        } catch {
-            toast.error('Upload failed', 'Could not upload the document.')
-        } finally {
-            setUploading(false)
-        }
-    }
 
     const docCount = stepDocs.length
     const hasOverdue = step.status === 'overdue'
@@ -749,98 +703,19 @@ function StepDocPanel({
                         <p className="text-xs text-muted-foreground py-1">No documents uploaded for this step yet.</p>
                     )}
 
-                    {/* Upload form toggle */}
-                    {!uploadOpen ? (
-                        <Button size="sm" variant="outline" leftIcon={<Upload className="h-3 w-3" />} onClick={() => setUploadOpen(true)}>
-                            Upload document
-                        </Button>
-                    ) : (
-                        <div className="border rounded-xl p-3.5 space-y-3 bg-background">
-                            <p className="text-xs font-semibold text-foreground">Upload for: {step.title}</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-muted-foreground">Category *</label>
-                                    <Select value={selectedCategory || undefined} onValueChange={(v) => { setSelectedCategory(v as DocCategory); setSelectedDocType('') }}>
-                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
-                                        <SelectContent>
-                                            {(Object.entries(CATEGORY_LABELS) as [DocCategory, string][]).map(([key, label]) => (
-                                                <SelectItem key={key} value={key} className="text-xs">{label}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-muted-foreground">Document type *</label>
-                                    <Select value={selectedDocType || undefined} onValueChange={setSelectedDocType} disabled={!selectedCategory}>
-                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
-                                        <SelectContent>
-                                            {categoryDocs.map(d => (
-                                                <SelectItem key={d.docType} value={d.docType} className="text-xs">
-                                                    {d.label}{d.expiryRequired ? ' *' : ''}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-
-                            {selectedDocType && (() => {
-                                const meta = docNumberMeta(selectedDocType)
-                                return (
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-medium text-muted-foreground">
-                                            {meta.label} <span className="text-[10px] font-normal">(optional)</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={docNumber}
-                                            onChange={(e) => setDocNumber(e.target.value)}
-                                            placeholder={meta.placeholder}
-                                            className="w-full h-8 px-2.5 text-xs rounded-md border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40"
-                                        />
-                                    </div>
-                                )
-                            })()}
-
-                            {expiryRequired && (
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-destructive flex items-center gap-1">
-                                        <AlertCircle className="h-3 w-3" />Expiry date required *
-                                    </label>
-                                    <DatePicker value={expiryDate} onChange={setExpiryDate} className="h-8" />
-                                </div>
-                            )}
-
-                            <div className="space-y-1">
-                                <label className="text-[11px] font-medium text-muted-foreground">File *</label>
-                                <div
-                                    className="border-2 border-dashed rounded-lg p-3 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
-                                    onClick={() => fileRef.current?.click()}
-                                >
-                                    {file ? (
-                                        <div className="flex items-center justify-center gap-1.5 text-xs">
-                                            <FileText className="h-3.5 w-3.5 text-primary" />
-                                            <span className="font-medium truncate max-w-[180px]">{file.name}</span>
-                                        </div>
-                                    ) : (
-                                        <p className="text-[11px] text-muted-foreground">Click to choose file (PDF, JPG, PNG, DOCX, XLSX…)</p>
-                                    )}
-                                    <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xlsx" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <Button size="sm" loading={uploading} leftIcon={<Upload className="h-3 w-3" />} onClick={handleUpload}>
-                                    Upload
-                                </Button>
-                                <Button size="sm" variant="ghost" onClick={() => { setUploadOpen(false); setFile(null); setSelectedCategory(''); setSelectedDocType(''); setDocNumber(''); setExpiryDate('') }}>
-                                    Cancel
-                                </Button>
-                            </div>
-                        </div>
-                    )}
+                    <Button size="sm" variant="outline" leftIcon={<Upload className="h-3 w-3" />} onClick={() => setUploadOpen(true)}>
+                        Upload document
+                    </Button>
                 </div>
             )}
+
+            <AddDocumentDialog
+                open={uploadOpen}
+                onOpenChange={setUploadOpen}
+                employeeId={employeeId}
+                stepId={step.id}
+                contextNote={`For step: ${step.title}`}
+            />
         </div>
     )
 }

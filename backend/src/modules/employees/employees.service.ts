@@ -2,7 +2,7 @@ import { eq, and, ilike, desc, asc, getTableColumns, inArray, notInArray, sql, o
 import { withTimestamp, encodeCursor, decodeCursor, extractRows } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { employees, entities, tenants, gradeLevels, sponsoringEntities, employeeNoSequences, orgUnits, users } from '../../db/schema/index.js'
+import { employees, entities, tenants, gradeLevels, sponsoringEntities, employeeNoSequences, orgUnits, users, shifts } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
 import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
 import { resolveAvatarUrl, resolveAvatarUrls } from '../../plugins/s3.js'
@@ -160,11 +160,16 @@ export async function listEmployees(params: ListEmployeesParams) {
             ...getTableColumns(employees),
             gradeLevelName: gradeLevels.name,
             sponsoringEntityName: sponsoringEntities.name,
+            shiftName: shifts.name,
+            shiftStartTime: shifts.startTime,
+            shiftEndTime: shifts.endTime,
+            shiftWeeklyOffDays: shifts.weeklyOffDays,
         })
         .from(employees)
         .leftJoin(gradeLevels, eq(employees.gradeLevelId, gradeLevels.id))
         .leftJoin(sponsoringEntities, eq(employees.sponsoringEntityId, sponsoringEntities.id))
         .leftJoin(deptUnit, eq(employees.departmentId, deptUnit.id))
+        .leftJoin(shifts, eq(employees.shiftId, shifts.id))
         .where(and(...conditions))
         .orderBy(desc(employees.createdAt), desc(employees.id))
         .limit(cursor ? pageSize : limit)
@@ -209,11 +214,16 @@ export async function getEmployee(tenantId: string, id: string) {
             entityName: entities.entityName,
             gradeLevelName: gradeLevels.name,
             sponsoringEntityName: sponsoringEntities.name,
+            shiftName: shifts.name,
+            shiftStartTime: shifts.startTime,
+            shiftEndTime: shifts.endTime,
+            shiftWeeklyOffDays: shifts.weeklyOffDays,
         })
         .from(employees)
         .leftJoin(entities, eq(employees.entityId, entities.id))
         .leftJoin(gradeLevels, eq(employees.gradeLevelId, gradeLevels.id))
         .leftJoin(sponsoringEntities, eq(employees.sponsoringEntityId, sponsoringEntities.id))
+        .leftJoin(shifts, eq(employees.shiftId, shifts.id))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .limit(1)
 

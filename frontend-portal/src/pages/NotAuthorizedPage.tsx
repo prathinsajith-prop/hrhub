@@ -10,8 +10,8 @@ export function NotAuthorizedPage() {
     return (
         <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-indigo-50 px-4 dark:from-slate-950 dark:to-indigo-950/30">
             <div className="w-full max-w-md rounded-3xl border border-white/60 bg-white/80 p-8 text-center shadow-xl backdrop-blur-md dark:border-white/10 dark:bg-card/70">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
-                    <ShieldAlert className="h-7 w-7" />
+                <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                    <ShieldAlert className="size-7" />
                 </div>
                 <h1 className="font-display text-xl font-semibold">{t('notAuthorized.title')}</h1>
                 <p className="mt-2 text-sm text-muted-foreground">{t('notAuthorized.body')}</p>

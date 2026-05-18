@@ -15,6 +15,7 @@ import {
     Phone,
     Smartphone,
     Star,
+    Timer,
     UserCircle2,
 } from 'lucide-react'
 
@@ -28,7 +29,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ROUTES } from '@/lib/routes'
-import { cn, formatDate, initialsOf } from '@/lib/utils'
+import { cn, formatDate, formatShiftRange, initialsOf } from '@/lib/utils'
+import { AssignedAssetsCard } from '@/components/shared/AssignedAssetsCard'
+import { PerformanceCard } from '@/components/shared/PerformanceCard'
 import type { LeaveStatus } from '@/types'
 
 const STATUS_TONE: Record<string, string> = {
@@ -94,14 +97,14 @@ export function ManagerMemberDetailPage() {
         <div className="space-y-6">
             <Button asChild variant="ghost" size="sm" className="-ml-2">
                 <Link to={ROUTES.managerMembers}>
-                    <ArrowLeft className="h-4 w-4" /> {t('common.viewAll')}
+                    <ArrowLeft className="size-4" /> {t('common.viewAll')}
                 </Link>
             </Button>
 
             {/* ── Hero header ─────────────────────────────────────────── */}
             <GlassCard tone="primary" className="overflow-hidden p-6">
                 <div className="flex flex-wrap items-start gap-5">
-                    <Avatar className="h-20 w-20 shrink-0 border-2 border-white/60 dark:border-white/10">
+                    <Avatar className="size-20 shrink-0 border-2 border-white/60 dark:border-white/10">
                         <AvatarImage src={employee.avatarUrl ?? undefined} />
                         <AvatarFallback className="text-lg font-semibold">
                             {initialsOf(`${employee.firstName} ${employee.lastName}`)}
@@ -114,14 +117,14 @@ export function ManagerMemberDetailPage() {
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm text-foreground/80">
                             {employee.designation ? (
                                 <span className="inline-flex items-center gap-1.5">
-                                    <Briefcase className="h-3.5 w-3.5" /> {employee.designation}
+                                    <Briefcase className="size-3.5" /> {employee.designation}
                                 </span>
                             ) : null}
                             {employee.department ? (
                                 <>
                                     {employee.designation ? <span className="opacity-50">·</span> : null}
                                     <span className="inline-flex items-center gap-1.5">
-                                        <Building2 className="h-3.5 w-3.5" /> {employee.department}
+                                        <Building2 className="size-3.5" /> {employee.department}
                                     </span>
                                 </>
                             ) : null}
@@ -139,7 +142,7 @@ export function ManagerMemberDetailPage() {
                                 #{employee.employeeNo}
                             </Badge>
                             <Badge variant="secondary" className="inline-flex items-center gap-1 text-[10px]">
-                                <Clock className="h-3 w-3" /> {tenureLabel(employee.joinDate)}
+                                <Clock className="size-3" /> {tenureLabel(employee.joinDate)}
                             </Badge>
                         </div>
                     </div>
@@ -148,22 +151,38 @@ export function ManagerMemberDetailPage() {
 
             {/* ── Side-by-side info cards ─────────────────────────────── */}
             <div className="grid gap-4 sm:grid-cols-2">
-                <DetailCard title="Employment" icon={<BadgeCheck className="h-4 w-4 text-indigo-500" />}>
-                    <DetailRow label="Department" value={employee.department ?? '—'} icon={<Building2 className="h-3.5 w-3.5" />} />
-                    <DetailRow label="Designation" value={employee.designation ?? '—'} icon={<Briefcase className="h-3.5 w-3.5" />} />
-                    <DetailRow label="Join date" value={formatDate(employee.joinDate)} icon={<CalendarDays className="h-3.5 w-3.5" />} />
-                    <DetailRow label="Tenure" value={tenureLabel(employee.joinDate)} icon={<Clock className="h-3.5 w-3.5" />} />
-                    <DetailRow label="Status" value={employee.status.replace('_', ' ')} icon={<Star className="h-3.5 w-3.5" />} />
+                <DetailCard title="Employment" icon={<BadgeCheck className="size-4 text-indigo-500" />}>
+                    <DetailRow label="Department" value={employee.department ?? '—'} icon={<Building2 className="size-3.5" />} />
+                    <DetailRow label="Designation" value={employee.designation ?? '—'} icon={<Briefcase className="size-3.5" />} />
+                    <DetailRow label="Join date" value={formatDate(employee.joinDate)} icon={<CalendarDays className="size-3.5" />} />
+                    <DetailRow label="Tenure" value={tenureLabel(employee.joinDate)} icon={<Clock className="size-3.5" />} />
+                    <DetailRow label="Status" value={employee.status.replace('_', ' ')} icon={<Star className="size-3.5" />} />
+                    <DetailRow
+                        label="Shift"
+                        value={
+                            employee.shift
+                                ? `${employee.shift.name} · ${formatShiftRange(employee.shift.startTime, employee.shift.endTime) ?? '—'}`
+                                : 'Default'
+                        }
+                        icon={<Timer className="size-3.5" />}
+                    />
+                    {employee.shift?.weeklyOffDays && employee.shift.weeklyOffDays.length > 0 ? (
+                        <DetailRow
+                            label="Weekly off"
+                            value={employee.shift.weeklyOffDays.map((d) => d.slice(0, 3).replace(/^./, (c) => c.toUpperCase())).join(', ')}
+                            icon={<CalendarDays className="size-3.5" />}
+                        />
+                    ) : null}
                     {employee.nationality ? (
-                        <DetailRow label="Nationality" value={employee.nationality} icon={<Flag className="h-3.5 w-3.5" />} />
+                        <DetailRow label="Nationality" value={employee.nationality} icon={<Flag className="size-3.5" />} />
                     ) : null}
                 </DetailCard>
 
-                <DetailCard title="Contact" icon={<Mail className="h-4 w-4 text-sky-500" />}>
-                    {employee.email ? <DetailRow label="Work email" value={employee.email} icon={<Mail className="h-3.5 w-3.5" />} copyable /> : null}
-                    {employee.personalEmail ? <DetailRow label="Personal email" value={employee.personalEmail} icon={<Globe className="h-3.5 w-3.5" />} copyable /> : null}
-                    {employee.phone ? <DetailRow label="Phone" value={employee.phone} icon={<Phone className="h-3.5 w-3.5" />} copyable /> : null}
-                    {employee.mobileNo ? <DetailRow label="Mobile" value={employee.mobileNo} icon={<Smartphone className="h-3.5 w-3.5" />} copyable /> : null}
+                <DetailCard title="Contact" icon={<Mail className="size-4 text-sky-500" />}>
+                    {employee.email ? <DetailRow label="Work email" value={employee.email} icon={<Mail className="size-3.5" />} copyable /> : null}
+                    {employee.personalEmail ? <DetailRow label="Personal email" value={employee.personalEmail} icon={<Globe className="size-3.5" />} copyable /> : null}
+                    {employee.phone ? <DetailRow label="Phone" value={employee.phone} icon={<Phone className="size-3.5" />} copyable /> : null}
+                    {employee.mobileNo ? <DetailRow label="Mobile" value={employee.mobileNo} icon={<Smartphone className="size-3.5" />} copyable /> : null}
                     {!employee.email && !employee.phone && !employee.mobileNo && !employee.personalEmail ? (
                         <p className="py-1 text-xs text-muted-foreground">No contact details on file.</p>
                     ) : null}
@@ -175,8 +194,8 @@ export function ManagerMemberDetailPage() {
                 <Card className="border-border/70">
                     <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
                         <div className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-                                <UserCircle2 className="h-5 w-5" />
+                            <span className="flex size-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                                <UserCircle2 className="size-5" />
                             </span>
                             <div>
                                 <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -191,6 +210,12 @@ export function ManagerMemberDetailPage() {
                     </CardContent>
                 </Card>
             ) : null}
+
+            {/* ── Assigned assets ─────────────────────────────────────── */}
+            <AssignedAssetsCard variant="employee" employeeId={employee.id} />
+
+            {/* ── Performance reviews ─────────────────────────────────── */}
+            <PerformanceCard variant="employee" employeeId={employee.id} />
 
             {/* ── Leave balance + attendance summary ──────────────────── */}
             <div className="grid gap-4 sm:grid-cols-2">
@@ -253,7 +278,7 @@ export function ManagerMemberDetailPage() {
                             to={`${ROUTES.managerApprovals}`}
                             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                         >
-                            {t('common.viewAll')} <ChevronRight className="h-3 w-3" />
+                            {t('common.viewAll')} <ChevronRight className="size-3" />
                         </Link>
                     ) : null}
                 </div>

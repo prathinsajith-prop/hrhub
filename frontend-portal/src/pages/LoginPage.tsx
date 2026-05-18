@@ -43,12 +43,16 @@ export function LoginPage() {
         emailRef.current?.focus()
     }, [])
 
-    // Clear any inline error as soon as the user edits a field — feels more responsive
-    // than waiting until submit to discover the message has gone stale.
-    useEffect(() => {
+    // Clear any inline error as soon as the user edits a field. Done in the
+    // change handlers (not in a useEffect) so we don't fight react-hooks/set-state-in-effect.
+    function onEmailChange(v: string) {
+        setEmail(v)
         if (error) setError(null)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [email, password])
+    }
+    function onPasswordChange(v: string) {
+        setPassword(v)
+        if (error) setError(null)
+    }
 
     function detectCapsLock(e: KeyboardEvent<HTMLInputElement>) {
         const on = typeof e.getModifierState === 'function' ? e.getModifierState('CapsLock') : false
@@ -101,16 +105,16 @@ export function LoginPage() {
         <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/40 to-sky-50 px-4 py-10 dark:from-slate-950 dark:via-indigo-950/30 dark:to-sky-950/20">
             {/* Background atmosphere */}
             <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-                <div className="absolute -left-32 top-10 h-72 w-72 rounded-full bg-indigo-300/40 blur-3xl dark:bg-indigo-500/20" />
-                <div className="absolute right-[-6rem] top-1/2 h-80 w-80 -translate-y-1/2 rounded-full bg-sky-300/40 blur-3xl dark:bg-sky-500/20" />
-                <div className="absolute -bottom-20 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-fuchsia-200/30 blur-3xl dark:bg-fuchsia-500/10" />
+                <div className="absolute -left-32 top-10 size-72 rounded-full bg-indigo-300/40 blur-3xl dark:bg-indigo-500/20" />
+                <div className="absolute right-[-6rem] top-1/2 size-80 -translate-y-1/2 rounded-full bg-sky-300/40 blur-3xl dark:bg-sky-500/20" />
+                <div className="absolute -bottom-20 left-1/2 size-72 -translate-x-1/2 rounded-full bg-fuchsia-200/30 blur-3xl dark:bg-fuchsia-500/10" />
             </div>
 
             <main className="relative w-full max-w-md page-slide-up">
                 {/* Brand mark — sits above the card to feel like an app header */}
                 <div className="mb-6 flex items-center justify-center gap-2.5 text-foreground">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-lg shadow-indigo-300/50">
-                        <Sparkles className="h-5 w-5" />
+                    <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-lg shadow-indigo-300/50">
+                        <Sparkles className="size-5" />
                     </div>
                     <div>
                         <div className="font-display text-base font-bold leading-tight">{t('app.name')}</div>
@@ -133,7 +137,7 @@ export function LoginPage() {
                                 aria-live="polite"
                                 className="flex items-start gap-2.5 rounded-xl border border-rose-200/60 bg-rose-50/70 px-3.5 py-3 text-sm text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200"
                             >
-                                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
                                 <span>{error}</span>
                             </div>
                         ) : null}
@@ -144,7 +148,7 @@ export function LoginPage() {
                             </Label>
                             <div className="relative">
                                 <Mail
-                                    className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                                    className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
                                     aria-hidden
                                 />
                                 <Input
@@ -154,7 +158,7 @@ export function LoginPage() {
                                     type="email"
                                     inputMode="email"
                                     value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    onChange={(e) => onEmailChange(e.target.value)}
                                     placeholder="you@company.com"
                                     autoComplete="email"
                                     autoCapitalize="off"
@@ -184,7 +188,7 @@ export function LoginPage() {
                             </div>
                             <div className="relative">
                                 <Lock
-                                    className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                                    className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
                                     aria-hidden
                                 />
                                 <Input
@@ -192,7 +196,7 @@ export function LoginPage() {
                                     name="password"
                                     type={showPassword ? 'text' : 'password'}
                                     value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    onChange={(e) => onPasswordChange(e.target.value)}
                                     onKeyDown={detectCapsLock}
                                     onKeyUp={detectCapsLock}
                                     placeholder="••••••••"
@@ -209,15 +213,15 @@ export function LoginPage() {
                                     onClick={() => setShowPassword((v) => !v)}
                                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                                     aria-pressed={showPassword}
-                                    className="absolute end-0 top-0 flex h-12 w-12 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    className="absolute end-0 top-0 flex size-12 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                     tabIndex={password ? 0 : -1}
                                 >
-                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                                 </button>
                             </div>
                             {capsLock ? (
                                 <p className="flex items-center gap-1.5 pt-0.5 text-xs text-amber-700 dark:text-amber-300">
-                                    <AlertCircle className="h-3.5 w-3.5" aria-hidden />
+                                    <AlertCircle className="size-3.5" aria-hidden />
                                     Caps Lock is on
                                 </p>
                             ) : null}
@@ -228,7 +232,7 @@ export function LoginPage() {
                                 type="checkbox"
                                 checked={keepSignedIn}
                                 onChange={(e) => setKeepSignedIn(e.target.checked)}
-                                className="h-4 w-4 rounded border-border accent-primary"
+                                className="size-4 rounded border-border accent-primary"
                             />
                             <span>{t('auth.keepSignedIn')}</span>
                         </label>
@@ -240,12 +244,12 @@ export function LoginPage() {
                         >
                             {submitting ? (
                                 <>
-                                    <Loader2 className="h-4 w-4 animate-spin" /> {t('auth.signingIn')}
+                                    <Loader2 className="size-4 animate-spin" /> {t('auth.signingIn')}
                                 </>
                             ) : (
                                 <>
                                     {t('auth.signInButton')}
-                                    <ArrowRight className="h-4 w-4" data-rtl-flip />
+                                    <ArrowRight className="size-4" data-rtl-flip />
                                 </>
                             )}
                         </Button>

@@ -24,6 +24,7 @@ function resolveTitleKey(pathname: string): string | null {
         [ROUTES.employeeLeave]: 'leave.title',
         [ROUTES.employeePayslips]: 'payslips.title',
         [ROUTES.employeeAttendance]: 'attendance.title',
+        [ROUTES.employeeDocuments]: 'nav.documents',
         [ROUTES.managerHome]: 'nav.home',
         [ROUTES.managerMembers]: 'team.title',
         [ROUTES.managerApprovals]: 'team.pendingApprovals',

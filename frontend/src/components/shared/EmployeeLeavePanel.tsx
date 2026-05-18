@@ -108,7 +108,7 @@ function LeaveAdjustmentDialog({ employeeId, onClose }: { employeeId: string; on
 
     return (
         <Dialog open onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[480px]">
+            <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
                     <DialogTitle>{t('leaveAdjustments.adjustment.newAdjustment')}</DialogTitle>
                 </DialogHeader>
@@ -235,7 +235,7 @@ function AirTicketDialog({ employeeId, ticket, onClose }: { employeeId: string; 
 
     return (
         <Dialog open onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[480px]">
+            <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
                     <DialogTitle>
                         {isEdit ? t('leaveAdjustments.airTicket.editTitle') : t('leaveAdjustments.airTicket.newAirTicket')}
@@ -359,7 +359,7 @@ function OffsetDialog({ employeeId, offset, onClose }: { employeeId: string; off
 
     return (
         <Dialog open onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[440px]">
+            <DialogContent className="sm:max-w-[560px]">
                 <DialogHeader>
                     <DialogTitle>
                         {isEdit ? t('leaveAdjustments.offset.editTitle') : t('leaveAdjustments.offset.newOffset')}

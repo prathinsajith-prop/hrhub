@@ -13,6 +13,13 @@ export function useNotifications(params: { limit?: number; unreadOnly?: boolean 
         queryKey: ['portal', 'notifications', tenantId, params],
         queryFn: () => api.get<{ data: Notification[] }>(`/notifications${query}`).then((r) => r.data),
         enabled: !!tenantId,
+        // Keep the popover list in sync with the badge — the bell badge polls
+        // every minute, so the list should too. Without this, a new
+        // notification arrives, the badge ticks up, but the dropdown still
+        // shows stale (or empty) cached items until the page is reloaded.
+        staleTime: 30_000,
+        refetchInterval: 60_000,
+        refetchOnWindowFocus: true,
     })
 }
 

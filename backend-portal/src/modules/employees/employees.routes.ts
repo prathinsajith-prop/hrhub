@@ -2,7 +2,7 @@ import { alias } from 'drizzle-orm/pg-core'
 import { and, eq, ilike, or, sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../db/client.js'
-import { employees } from '../../db/schema/index.js'
+import { employees, shifts } from '../../db/schema/index.js'
 import { e400, e403, e404 } from '../../lib/errors.js'
 import { paginationSchema, parseUuidParam, updateMyProfileSchema, validate } from '../../lib/validation.js'
 import { recordActivity } from '../../lib/audit.js'
@@ -19,9 +19,9 @@ const ALLOWED_SELF_UPDATE_FIELDS = [
 ] as const
 
 /**
- * Fetch an employee plus their reporting-to manager via a self-join, so the
- * manager-detail screen can render "Reports to: Alex Thompson · Director"
- * without a second round-trip.
+ * Fetch an employee plus their reporting-to manager AND assigned shift via two
+ * left-joins, so the profile / manager-detail screens can render the full
+ * record without secondary round-trips.
  */
 async function getEmployeeWithReportingTo(tenantId: string, id: string) {
     const manager = alias(employees, 'manager') as any
@@ -35,9 +35,14 @@ async function getEmployeeWithReportingTo(tenantId: string, id: string) {
             reportingToEmployeeNo: manager.employeeNo,
             reportingToDesignation: manager.designation,
             reportingToDepartment: manager.department,
+            shiftName: shifts.name,
+            shiftStartTime: shifts.startTime,
+            shiftEndTime: shifts.endTime,
+            shiftWeeklyOffDays: shifts.weeklyOffDays,
         })
         .from(employees)
         .leftJoin(manager, eq(employees.reportingTo, manager.id))
+        .leftJoin(shifts, eq(employees.shiftId, shifts.id))
         .where(and(eq(employees.tenantId, tenantId), eq(employees.id, id)))
         .limit(1)
     if (!row) return null
@@ -47,6 +52,16 @@ async function getEmployeeWithReportingTo(tenantId: string, id: string) {
         reportingToEmployeeNo: row.reportingToEmployeeNo,
         reportingToDesignation: row.reportingToDesignation,
         reportingToDepartment: row.reportingToDepartment,
+        // Nested shift object — null when the employee has no assigned shift
+        // (the tenant's default working week applies instead).
+        shift: row.shiftStartTime
+            ? {
+                  name: row.shiftName,
+                  startTime: row.shiftStartTime,
+                  endTime: row.shiftEndTime,
+                  weeklyOffDays: row.shiftWeeklyOffDays ?? [],
+              }
+            : null,
     }
 }
 
@@ -59,6 +74,13 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         if (!employeeId) return reply.code(404).send(e404('No employee record linked to this account'))
         const employee = await getEmployeeWithReportingTo(tenantId, employeeId)
         if (!employee) return reply.code(404).send(e404('Employee not found'))
+        // employees.email is nullable, but the user is definitely signed in with a
+        // work email on `users.email` — surface that as the work email when the
+        // employee record doesn't have its own, so the profile page always shows
+        // a value instead of an em-dash.
+        if (!employee.email && request.user.email) {
+            employee.email = request.user.email
+        }
         return reply.send({ data: employee })
     })
 

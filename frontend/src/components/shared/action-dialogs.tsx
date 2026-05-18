@@ -37,7 +37,8 @@ import {
     EDIT_DOC_CATEGORY_OPTIONS,
     type SelectOption,
 } from '@/lib/options'
-import type { Employee } from '@/types'
+import { useShifts } from '@/hooks/useShifts'
+import type { Employee, Shift } from '@/types'
 
 
 function buildGradeLevelOptions(grades: GradeLevel[]): ComboboxOption[] {
@@ -1309,11 +1310,14 @@ export function EditEmploymentDialog({
         designation: employee.designation ?? '',
         contractType: employee.contractType ?? 'permanent',
         workLocation: employee.workLocation ?? '',
+        shiftId: employee.shiftId ?? '',
         gradeLevelId: employee.gradeLevelId ?? '',
         probationEndDate: employee.probationEndDate ? String(employee.probationEndDate).slice(0, 10) : '',
         contractEndDate: employee.contractEndDate ? String(employee.contractEndDate).slice(0, 10) : '',
         status: employee.status ?? 'active',
     })
+    const { data: shiftList = [] } = useShifts()
+    const shifts = Array.isArray(shiftList) ? shiftList as Shift[] : []
     const [errors, setErrors] = useState<Record<string, string>>({})
     const updateEmployee = useUpdateEmployee(employee.id)
     const { data: orgUnitsRaw = [] } = useOrgUnits()
@@ -1354,6 +1358,7 @@ export function EditEmploymentDialog({
                 designation: form.designation || undefined,
                 contractType: (form.contractType as Employee['contractType']) || undefined,
                 workLocation: form.workLocation || undefined,
+                shiftId: form.shiftId || null,
                 gradeLevelId: form.gradeLevelId || undefined,
                 probationEndDate: form.contractType === 'probation' ? (form.probationEndDate || undefined) : undefined,
                 contractEndDate: form.contractType === 'contract' ? (form.contractEndDate || undefined) : undefined,
@@ -1450,6 +1455,20 @@ export function EditEmploymentDialog({
                                 </Select>
                             </div>
                             <div className="space-y-1.5"><Label>Work Location</Label><Input value={form.workLocation} onChange={set('workLocation')} /></div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Shift <span className="text-muted-foreground font-normal text-xs">(leave empty to use tenant default)</span></Label>
+                            <Combobox
+                                value={form.shiftId}
+                                onValueChange={v => setForm(f => ({ ...f, shiftId: v }))}
+                                options={shifts
+                                    .filter(s => s.isActive || s.id === form.shiftId)
+                                    .map(s => ({ value: s.id, label: `${s.name} (${s.startTime}–${s.endTime})` }))}
+                                placeholder="Select shift…"
+                                searchPlaceholder="Search shifts…"
+                                emptyMessage="No shifts found. Add them in Org Settings → Shifts."
+                                clearable
+                            />
                         </div>
                         {form.contractType === 'probation' && (
                             <div className="space-y-1.5">

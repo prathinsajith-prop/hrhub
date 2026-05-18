@@ -35,15 +35,15 @@ export function ForgotPasswordPage() {
     return (
         <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/40 to-sky-50 px-4 py-10 dark:from-slate-950 dark:via-indigo-950/30 dark:to-sky-950/20">
             <div className="pointer-events-none absolute inset-0">
-                <div className="absolute -left-32 top-10 h-72 w-72 rounded-full bg-indigo-300/40 blur-3xl dark:bg-indigo-500/20" />
-                <div className="absolute right-[-6rem] top-1/2 h-80 w-80 -translate-y-1/2 rounded-full bg-sky-300/40 blur-3xl dark:bg-sky-500/20" />
+                <div className="absolute -left-32 top-10 size-72 rounded-full bg-indigo-300/40 blur-3xl dark:bg-indigo-500/20" />
+                <div className="absolute right-[-6rem] top-1/2 size-80 -translate-y-1/2 rounded-full bg-sky-300/40 blur-3xl dark:bg-sky-500/20" />
             </div>
 
             <div className="relative w-full max-w-md">
                 <div className="rounded-3xl border border-white/60 bg-white/70 p-8 shadow-2xl shadow-indigo-200/40 backdrop-blur-xl dark:border-white/10 dark:bg-card/70">
                     <div className="mb-6 flex items-center gap-2">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-lg shadow-indigo-300/50">
-                            <Sparkles className="h-5 w-5" />
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-lg shadow-indigo-300/50">
+                            <Sparkles className="size-5" />
                         </div>
                         <div>
                             <div className="font-display text-lg font-bold leading-none">{t('app.name')}</div>
@@ -53,8 +53,8 @@ export function ForgotPasswordPage() {
 
                     {sent ? (
                         <div className="space-y-5 text-center">
-                            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-                                <CheckCircle2 className="h-7 w-7" />
+                            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                                <CheckCircle2 className="size-7" />
                             </div>
                             <div>
                                 <h1 className="font-display text-xl font-semibold tracking-tight">
@@ -66,7 +66,7 @@ export function ForgotPasswordPage() {
                             </div>
                             <Button asChild variant="outline" className="w-full">
                                 <Link to={ROUTES.login}>
-                                    <ArrowLeft className="h-4 w-4" /> {t('auth.backToLogin')}
+                                    <ArrowLeft className="size-4" /> {t('auth.backToLogin')}
                                 </Link>
                             </Button>
                         </div>
@@ -81,7 +81,7 @@ export function ForgotPasswordPage() {
                                 <div className="space-y-1.5">
                                     <Label htmlFor="email">{t('auth.email')}</Label>
                                     <div className="relative">
-                                        <Mail className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                        <Mail className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                                         <Input
                                             id="email"
                                             type="email"
@@ -97,7 +97,7 @@ export function ForgotPasswordPage() {
                                 <Button type="submit" className="h-11 w-full text-base" disabled={submitting}>
                                     {submitting ? (
                                         <>
-                                            <Loader2 className="h-4 w-4 animate-spin" /> {t('auth.forgotSubmitting')}
+                                            <Loader2 className="size-4 animate-spin" /> {t('auth.forgotSubmitting')}
                                         </>
                                     ) : (
                                         t('auth.forgotSubmit')
@@ -110,7 +110,7 @@ export function ForgotPasswordPage() {
                                     to={ROUTES.login}
                                     className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
                                 >
-                                    <ArrowLeft className="h-3.5 w-3.5" /> {t('auth.backToLogin')}
+                                    <ArrowLeft className="size-3.5" /> {t('auth.backToLogin')}
                                 </Link>
                             </div>
                         </>

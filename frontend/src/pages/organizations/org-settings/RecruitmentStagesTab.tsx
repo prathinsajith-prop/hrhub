@@ -220,7 +220,7 @@ function StageDialog({
 
     return (
         <Dialog open={mode != null} onOpenChange={(o) => { if (!o) onClose() }}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-lg">
                 <DialogHeader>
                     <DialogTitle>{isEdit ? 'Edit stage' : 'Add stage'}</DialogTitle>
                     {isEdit && stage ? (

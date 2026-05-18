@@ -4,6 +4,7 @@ import { db } from '../../db/client.js'
 import { employees, leaveBalances, leaveRequests } from '../../db/schema/index.js'
 import { e400, e403, e404 } from '../../lib/errors.js'
 import { recordActivity } from '../../lib/audit.js'
+import { notifyRequester, notifyReviewers } from '../../lib/notify.js'
 import {
     canAccessEmployee,
     isDeptHead,
@@ -141,6 +142,14 @@ export default async function leaveRoutes(fastify: FastifyInstance) {
             userAgent: request.headers['user-agent'],
         }).catch(() => {})
 
+        notifyReviewers({
+            tenantId: user.tenantId,
+            actorEmployeeId: body.employeeId,
+            title: `${employee.firstName} ${employee.lastName} requested ${body.leaveType} leave`,
+            message: `${days} day${days === 1 ? '' : 's'}: ${body.startDate} → ${body.endDate}`,
+            actionUrl: '/leave?status=pending',
+        }).catch((err) => request.log?.warn?.({ err }, 'leave submit notification failed'))
+
         return reply.code(201).send({ data: created })
     })
 
@@ -239,6 +248,19 @@ export default async function leaveRoutes(fastify: FastifyInstance) {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => {})
+
+        notifyRequester({
+            tenantId: user.tenantId,
+            employeeId: existing.employeeId,
+            type: body.approved ? 'success' : 'warning',
+            title: body.approved
+                ? `Your ${existing.leaveType} leave was approved`
+                : `Your ${existing.leaveType} leave was rejected`,
+            message: body.approved
+                ? `${existing.days} day${existing.days === 1 ? '' : 's'}: ${existing.startDate} → ${existing.endDate}`
+                : (body.notes ?? 'See the leave page for details.'),
+            actionUrl: '/me/leave',
+        }).catch((err) => request.log?.warn?.({ err }, 'leave decision notification failed'))
 
         return reply.send({ data: updated })
     })

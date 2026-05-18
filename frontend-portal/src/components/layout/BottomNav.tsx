@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Calendar, ClipboardCheck, Home, Receipt, User, Users, Clock, ListChecks } from 'lucide-react'
+import { Calendar, ClipboardCheck, FileCheck2, Home, Receipt, User, Users, Clock, ListChecks } from 'lucide-react'
 import { useViewModeStore } from '@/store/viewModeStore'
 import { ROUTES } from '@/lib/routes'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,7 @@ const MANAGER_ITEMS: NavItem[] = [
     { to: ROUTES.managerHome, label: 'nav.home', icon: Home },
     { to: ROUTES.managerMembers, label: 'nav.team', icon: Users },
     { to: ROUTES.managerApprovals, label: 'nav.approvals', icon: ListChecks },
+    { to: ROUTES.managerDocumentApprovals, label: 'nav.documents', icon: FileCheck2 },
     { to: ROUTES.managerCalendar, label: 'nav.calendar', icon: ClipboardCheck },
 ]
 
@@ -50,11 +51,11 @@ export function BottomNav() {
                                     <>
                                         <span
                                             className={cn(
-                                                'flex h-7 w-7 items-center justify-center rounded-lg transition-all',
+                                                'flex size-7 items-center justify-center rounded-lg transition-all',
                                                 isActive && 'bg-primary/15',
                                             )}
                                         >
-                                            <Icon className="h-[18px] w-[18px]" />
+                                            <Icon className="size-[18px]" />
                                         </span>
                                         <span className="leading-none">{t(item.label)}</span>
                                     </>

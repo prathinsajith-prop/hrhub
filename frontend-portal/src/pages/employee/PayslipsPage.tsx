@@ -3,8 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { Printer, Receipt } from 'lucide-react'
 
 import { useMyPayslips, usePayslipDetail } from '@/hooks/usePayslips'
+import { useMyEmployee } from '@/hooks/useMe'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { BankDetailsCard } from '@/components/shared/BankDetailsCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,11 +22,17 @@ import { formatCurrency, monthName } from '@/lib/utils'
 export function EmployeePayslipsPage() {
     const { t } = useTranslation()
     const { data, isLoading } = useMyPayslips()
+    const { data: employee } = useMyEmployee()
     const [selectedId, setSelectedId] = useState<string | null>(null)
 
     return (
         <div className="space-y-6">
             <PageHeader title={t('payslips.title')} />
+
+            {/* Bank details belong here next to the payslips — that's the
+                account these payments land in. Editing routes through the
+                manager-approval flow. */}
+            {employee ? <BankDetailsCard employee={employee} /> : null}
 
             {isLoading ? (
                 <div className="space-y-3">
@@ -32,7 +40,7 @@ export function EmployeePayslipsPage() {
                     <Skeleton className="h-20" />
                 </div>
             ) : !data?.length ? (
-                <EmptyState icon={<Receipt className="h-8 w-8" />} title={t('payslips.noPayslips')} />
+                <EmptyState icon={<Receipt className="size-8" />} title={t('payslips.noPayslips')} />
             ) : (
                 <div className="space-y-2.5">
                     {data.map((p) => (
@@ -115,7 +123,7 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                 )}
                 <DialogFooter>
                     <Button variant="outline" onClick={() => window.print()}>
-                        <Printer className="h-4 w-4" /> {t('payslips.print')}
+                        <Printer className="size-4" /> {t('payslips.print')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

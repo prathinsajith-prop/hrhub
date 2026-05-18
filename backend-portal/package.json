@@ -4,7 +4,7 @@
   "description": "HRHub Portal API — curated Fastify service for employee & manager apps",
   "packageManager": "pnpm@10.30.0",
   "engines": {
-    "node": ">=22 <25"
+    "node": ">=22"
   },
   "type": "module",
   "scripts": {

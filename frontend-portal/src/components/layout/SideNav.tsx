@@ -3,9 +3,13 @@ import { useTranslation } from 'react-i18next'
 import {
     Calendar,
     ClipboardCheck,
+    FileCheck2,
+    FileText,
     Home,
     ListChecks,
     Receipt,
+    ShieldCheck,
+    Sparkles,
     User,
     Users,
     Clock,
@@ -24,6 +28,8 @@ const PERSONAL_ITEMS: NavItem[] = [
     { to: ROUTES.employeeLeave, label: 'nav.leave', icon: Calendar },
     { to: ROUTES.employeePayslips, label: 'nav.payslips', icon: Receipt },
     { to: ROUTES.employeeAttendance, label: 'nav.attendance', icon: Clock },
+    { to: ROUTES.employeeDocuments, label: 'nav.documents', icon: FileText },
+    { to: ROUTES.employeePerformance, label: 'nav.performance', icon: Sparkles },
     { to: ROUTES.employeeProfile, label: 'nav.profile', icon: User },
 ]
 
@@ -31,6 +37,9 @@ const TEAM_ITEMS: NavItem[] = [
     { to: ROUTES.managerHome, label: 'nav.home', icon: Home, end: true },
     { to: ROUTES.managerMembers, label: 'nav.team', icon: Users },
     { to: ROUTES.managerApprovals, label: 'nav.approvals', icon: ListChecks },
+    { to: ROUTES.managerDocumentApprovals, label: 'nav.documents', icon: FileCheck2 },
+    { to: ROUTES.managerProfileApprovals, label: 'nav.profileChanges', icon: ShieldCheck },
+    { to: ROUTES.managerAttendance, label: 'nav.attendance', icon: Clock },
     { to: ROUTES.managerCalendar, label: 'nav.calendar', icon: ClipboardCheck },
 ]
 
@@ -62,7 +71,7 @@ export function SideNav() {
                                 )
                             }
                         >
-                            <Icon className="h-4 w-4" />
+                            <Icon className="size-4" />
                             <span>{t(item.label)}</span>
                         </NavLink>
                     )
