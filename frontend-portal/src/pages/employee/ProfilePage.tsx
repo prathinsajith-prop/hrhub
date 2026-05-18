@@ -343,6 +343,95 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     )
 }
 
+// Day-name ordering used by the weekly-off chips. Mirrors the
+// backend's WEEKDAY_NAMES table so casing of the saved strings doesn't matter.
+const WEEK_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
+const WEEK_DAY_SHORT: Record<(typeof WEEK_DAYS)[number], string> = {
+    sunday: 'Sun', monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed',
+    thursday: 'Thu', friday: 'Fri', saturday: 'Sat',
+}
+
+interface ShiftInfo {
+    name: string
+    startTime: string
+    endTime: string
+    weeklyOffDays: string[]
+}
+
+/**
+ * Dedicated schedule card — surfaces the shift name, work hours, and which
+ * days of the week are off. When the employee has no shift assigned, falls
+ * back to a short hint about tenant-default hours so the panel isn't blank.
+ */
+function ScheduleCard({ shift }: { shift: ShiftInfo | null }) {
+    const range = shift ? formatShiftRange(shift.startTime, shift.endTime) : null
+    const offSet = new Set((shift?.weeklyOffDays ?? []).map((d) => d.toLowerCase()))
+
+    return (
+        <Card className="overflow-hidden border-border/70">
+            <CardContent className="p-5">
+                <div className="mb-4 flex items-center justify-between">
+                    <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        <Clock className="size-3.5" /> Schedule
+                    </h3>
+                    {shift ? (
+                        <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                            {shift.name}
+                        </span>
+                    ) : (
+                        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                            Default working hours
+                        </span>
+                    )}
+                </div>
+
+                {shift ? (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-sm">
+                            <Clock className="size-4 text-muted-foreground" />
+                            <span className="font-display text-base font-semibold tabular-figures">
+                                {range ?? '—'}
+                            </span>
+                        </div>
+
+                        <div>
+                            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                                <CalendarDays className="size-3" /> Weekly off
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {WEEK_DAYS.map((d) => {
+                                    const isOff = offSet.has(d)
+                                    return (
+                                        <span
+                                            key={d}
+                                            className={
+                                                isOff
+                                                    ? 'inline-flex h-7 min-w-[44px] items-center justify-center rounded-md bg-rose-100 px-2 text-xs font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                                                    : 'inline-flex h-7 min-w-[44px] items-center justify-center rounded-md border border-border bg-card/50 px-2 text-xs text-muted-foreground'
+                                            }
+                                        >
+                                            {WEEK_DAY_SHORT[d]}
+                                        </span>
+                                    )
+                                })}
+                            </div>
+                            {offSet.size === 0 ? (
+                                <p className="mt-2 text-[11px] text-muted-foreground">
+                                    No weekly off days configured for this shift.
+                                </p>
+                            ) : null}
+                        </div>
+                    </div>
+                ) : (
+                    <p className="text-sm text-muted-foreground">
+                        You're on the tenant's default working week. Ask HR if you need a custom shift.
+                    </p>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
 function Field({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
     return (
         <div>
