@@ -28,17 +28,21 @@ interface UnreadCountResponse {
     data: { count: number }
 }
 
-export function useNotificationsList(params?: { limit?: number; offset?: number; unreadOnly?: boolean }) {
-    const { limit = 20, offset = 0, unreadOnly = false } = params ?? {}
+// Single socket → query-cache bridge. Any hook that touches a `['notifications', ...]`
+// key benefits from this, so we wire it up once per consumer rather than per query.
+function useNotificationsSocketInvalidation() {
     const qc = useQueryClient()
-
-    // Mirror useUnreadCount's WebSocket subscription so the list also refreshes
-    // the instant the server pushes a new notification (no waiting for the
-    // 60-second poll tick).
     const onNew = useCallback(() => {
+        // Prefix match: invalidates every ['notifications', ...] key in one call,
+        // covering both the list and the unread-count query.
         qc.invalidateQueries({ queryKey: ['notifications'] })
     }, [qc])
     useSocketEvent('notification:new', onNew)
+}
+
+export function useNotificationsList(params?: { limit?: number; offset?: number; unreadOnly?: boolean }) {
+    const { limit = 20, offset = 0, unreadOnly = false } = params ?? {}
+    useNotificationsSocketInvalidation()
 
     return useQuery({
         queryKey: ['notifications', { limit, offset, unreadOnly }],
@@ -47,27 +51,20 @@ export function useNotificationsList(params?: { limit?: number; offset?: number;
                 `/notifications?limit=${limit}&offset=${offset}&unreadOnly=${unreadOnly}`,
             ),
         staleTime: 30_000,
-        // Belt-and-braces polling for environments where the socket can't connect.
+        // Fallback poll for environments where the socket can't connect.
         refetchInterval: 60_000,
         refetchOnWindowFocus: true,
     })
 }
 
 export function useUnreadCount() {
-    const qc = useQueryClient()
-
-    // Invalidate immediately when the server pushes a new notification via WebSocket
-    const onNotificationNew = useCallback(() => {
-        qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] })
-        qc.invalidateQueries({ queryKey: ['notifications'] })
-    }, [qc])
-    useSocketEvent('notification:new', onNotificationNew)
+    useNotificationsSocketInvalidation()
 
     return useQuery({
         queryKey: ['notifications', 'unread-count'],
         queryFn: () => api.get<UnreadCountResponse>('/notifications/unread-count').then(r => r.data.count),
         staleTime: 30_000,
-        // Keep a 5-minute fallback poll in case the WebSocket is temporarily down
+        // 5-minute fallback poll in case the WebSocket is temporarily down.
         refetchInterval: 5 * 60_000,
     })
 }

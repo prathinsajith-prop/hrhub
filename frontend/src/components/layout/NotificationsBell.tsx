@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -23,8 +23,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ROUTES } from '@/lib/routes'
 import { cn } from '@/lib/utils'
 
-// Cap of items rendered inline — keeps the popover compact; the full page
-// (linked at the bottom) handles deeper history + pagination.
 const POPOVER_LIMIT = 5
 
 const TYPE_TONE: Record<Notification['type'], { Icon: typeof Info; tone: string }> = {
@@ -34,76 +32,104 @@ const TYPE_TONE: Record<Notification['type'], { Icon: typeof Info; tone: string 
     error: { Icon: AlertCircle, tone: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300' },
 }
 
-function timeAgo(iso: string): string {
-    const diff = Date.now() - new Date(iso).getTime()
-    const s = Math.round(diff / 1000)
-    if (s < 60) return 'just now'
-    const m = Math.round(s / 60)
-    if (m < 60) return `${m}m ago`
-    const h = Math.round(m / 60)
-    if (h < 24) return `${h}h ago`
-    const d = Math.round(h / 24)
-    if (d < 7) return `${d}d ago`
-    return new Date(iso).toLocaleDateString()
+// Whitelist: same-origin app paths (single leading `/`) or absolute http(s) URLs.
+// Anything else — `javascript:`, `data:`, protocol-relative `//evil`, etc. — is
+// rejected so a server-supplied actionUrl can't become a script-execution or
+// phishing vector.
+function resolveActionUrl(raw: string): { kind: 'internal' | 'external'; url: string } | null {
+    if (raw.startsWith('/') && !raw.startsWith('//')) {
+        return { kind: 'internal', url: raw }
+    }
+    try {
+        const parsed = new URL(raw)
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+            return { kind: 'external', url: parsed.toString() }
+        }
+    } catch {
+        // Invalid URL — fall through to null.
+    }
+    return null
 }
 
-/**
- * Bell + dropdown popover for the admin app's site header.
- *
- *   - Badge polls every 5 min as a fallback; updates instantly via WebSocket.
- *   - Opening the popover invalidates both queries so the list never trails
- *     the badge.
- *   - Items are sorted unread-first, then newest-first — actionable items
- *     stay at the top regardless of how recently each arrived.
- *   - Each item is a click target. Clicking marks it read AND navigates to
- *     the action URL (if any).
- */
 interface Props {
     triggerClassName?: string
 }
 
+/**
+ * Bell + dropdown popover for the site header.
+ * - Badge updates instantly via WebSocket; polling is the fallback.
+ * - Opening the popover invalidates the queries so the list can't trail the badge.
+ * - Items sort unread-first, then newest-first.
+ * - Clicking marks the item read and follows a whitelisted action URL.
+ */
 export function NotificationsBell({ triggerClassName }: Props) {
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
     const qc = useQueryClient()
     const navigate = useNavigate()
     const [open, setOpen] = useState(false)
 
     const { data: unread = 0 } = useUnreadCount()
     const { data: page } = useNotificationsList({ limit: POPOVER_LIMIT, offset: 0 })
-    const items = page?.data ?? []
+    const items = page?.data
 
     const markRead = useMarkNotificationRead()
     const markAll = useMarkAllRead()
 
+    const rtf = useMemo(
+        () => new Intl.RelativeTimeFormat(i18n.language, { numeric: 'auto' }),
+        [i18n.language],
+    )
+
+    const formatTimeAgo = useCallback(
+        (iso: string) => {
+            const diffSec = Math.round((Date.now() - new Date(iso).getTime()) / 1000)
+            if (diffSec < 60) return rtf.format(-diffSec, 'second')
+            const diffMin = Math.round(diffSec / 60)
+            if (diffMin < 60) return rtf.format(-diffMin, 'minute')
+            const diffHr = Math.round(diffMin / 60)
+            if (diffHr < 24) return rtf.format(-diffHr, 'hour')
+            const diffDay = Math.round(diffHr / 24)
+            if (diffDay < 7) return rtf.format(-diffDay, 'day')
+            return new Date(iso).toLocaleDateString(i18n.language)
+        },
+        [rtf, i18n.language],
+    )
+
     const sortedItems = useMemo(() => {
-        if (items.length === 0) return items
+        if (!items?.length) return []
         return [...items].sort((a, b) => {
             if (a.isRead !== b.isRead) return a.isRead ? 1 : -1
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         })
     }, [items])
 
-    function handleOpenChange(next: boolean) {
-        setOpen(next)
-        if (next) {
-            // Force a refetch on each open so the list can't drift from the badge.
-            qc.invalidateQueries({ queryKey: ['notifications'] })
-        }
-    }
+    const handleOpenChange = useCallback(
+        (next: boolean) => {
+            setOpen(next)
+            // Prefix match invalidates every ['notifications', ...] key in one call.
+            if (next) qc.invalidateQueries({ queryKey: ['notifications'] })
+        },
+        [qc],
+    )
 
-    function handleItemClick(n: Notification) {
-        if (!n.isRead) markRead.mutate(n.id)
-        setOpen(false)
-        if (n.actionUrl) {
-            // Use react-router for in-app paths, full assign for cross-origin.
-            const url = n.actionUrl
-            if (url.startsWith('http://') || url.startsWith('https://')) {
-                window.location.assign(url)
+    const handleItemClick = useCallback(
+        (n: Notification) => {
+            if (!n.isRead) markRead.mutate(n.id)
+            setOpen(false)
+            if (!n.actionUrl) return
+            const resolved = resolveActionUrl(n.actionUrl)
+            if (!resolved) return
+            if (resolved.kind === 'external') {
+                window.open(resolved.url, '_blank', 'noopener,noreferrer')
             } else {
-                navigate(url)
+                navigate(resolved.url)
             }
-        }
-    }
+        },
+        [markRead, navigate],
+    )
+
+    const handleViewAllClick = useCallback(() => setOpen(false), [])
+    const handleMarkAllClick = useCallback(() => markAll.mutate(), [markAll])
 
     const badge = unread > 99 ? '99+' : String(unread)
 
@@ -138,7 +164,7 @@ export function NotificationsBell({ triggerClassName }: Props) {
                             variant="ghost"
                             size="sm"
                             className="h-7 px-2 text-xs"
-                            onClick={() => markAll.mutate()}
+                            onClick={handleMarkAllClick}
                             loading={markAll.isPending}
                         >
                             <CheckCheck className="size-3.5" />
@@ -178,7 +204,7 @@ export function NotificationsBell({ triggerClassName }: Props) {
                                                         ) : null}
                                                     </div>
                                                     <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.message}</p>
-                                                    <p className="mt-1 text-[11px] text-muted-foreground/70">{timeAgo(n.createdAt)}</p>
+                                                    <p className="mt-1 text-[11px] text-muted-foreground/70">{formatTimeAgo(n.createdAt)}</p>
                                                 </div>
                                             </div>
                                         </button>
@@ -192,7 +218,7 @@ export function NotificationsBell({ triggerClassName }: Props) {
                 <div className="border-t p-2">
                     <Link
                         to={ROUTES.notifications}
-                        onClick={() => setOpen(false)}
+                        onClick={handleViewAllClick}
                         className="block rounded-md px-2 py-1.5 text-center text-xs font-medium text-primary hover:bg-muted"
                     >
                         {t('notifications.viewAll', { defaultValue: 'View all notifications' })}
