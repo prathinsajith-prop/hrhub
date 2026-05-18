@@ -1,0 +1,30 @@
+// ⚠ DUPLICATED from backend/src/db/schema/grade_levels.ts
+// Keep this in sync with the main backend whenever the schema changes.
+// Migrations live in backend/migrations/ only — do not generate migrations here.
+
+import { pgTable, uuid, text, boolean, integer, timestamp, index, unique } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
+import { tenants } from './tenants.js'
+
+export const gradeLevels = pgTable('grade_levels', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    code: text('code'),
+    level: integer('level'),
+    hierarchy: text('hierarchy'),
+    salaryMin: integer('salary_min'),
+    salaryMax: integer('salary_max'),
+    description: text('description'),
+    roles: text('roles').array().notNull().default(sql`'{}'::text[]`),
+    isActive: boolean('is_active').notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+    index('idx_grade_levels_tenant').on(t.tenantId),
+    unique('uq_grade_levels_tenant_name').on(t.tenantId, t.name),
+])
+
+export const gradeLevelsRelations = relations(gradeLevels, ({ one }) => ({
+    tenant: one(tenants, { fields: [gradeLevels.tenantId], references: [tenants.id] }),
+}))

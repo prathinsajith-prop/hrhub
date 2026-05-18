@@ -1,7 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { labelFor, VISA_TYPE_LABELS, ROLE_BADGE_STYLE, ROLE_LABELS, DOC_STATUS_BADGE } from '@/lib/enums'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, User, Briefcase, Plane, FileText, CreditCard, Star,
   Phone, Mail, MapPin, Calendar, Building2, Hash, Shield, Edit2,
@@ -45,9 +45,13 @@ import { CreatePerformanceReviewDialog } from '@/components/shared/CreatePerform
 import { AddDocumentDialog } from '@/components/shared/AddDocumentDialog'
 import { EmployeeLeavePanel } from '@/components/shared/EmployeeLeavePanel'
 import { EmployeeLoansPanel } from '@/components/shared/EmployeeLoansPanel'
+import { BankChangeReviewBanner } from '@/components/shared/BankChangeReviewBanner'
 import { ExpiryStatus } from '@/components/shared/ExpiryStatus'
 import { useEmployeeAssets } from '@/hooks/useAssets'
-import { useAttendance } from '@/hooks/useAttendance'
+import { useAttendance, useAttendanceCalendar } from '@/hooks/useAttendance'
+import { AttendanceCalendarGrid } from '@/components/shared/AttendanceCalendarGrid'
+import { MonthSwitcher } from '@/components/shared/MonthSwitcher'
+import { resolveMonthFromOffset } from '@/lib/monthRange'
 import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
 import { useLoans } from '@/hooks/useLoans'
 import { useDependents, useCreateDependent, useUpdateDependent, useDeleteDependent, useEmployeeNotes, useAddEmployeeNote, useDeleteEmployeeNote, type Dependent } from '@/hooks/useEmployeeDependents'
@@ -106,11 +110,6 @@ interface AttendanceRecord {
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'info' | 'destructive' | 'secondary'> = {
   active: 'success', onboarding: 'info',
   suspended: 'destructive', terminated: 'secondary', visa_expired: 'destructive',
-}
-
-const ATTENDANCE_STATUS_VARIANT: Record<string, 'success' | 'destructive' | 'warning' | 'info' | 'secondary'> = {
-  present: 'success', absent: 'destructive', late: 'warning',
-  half_day: 'info', wfh: 'secondary', on_leave: 'secondary',
 }
 
 const REVISION_TYPE_LABELS: Record<string, string> = {
@@ -265,22 +264,42 @@ const StatTile = React.memo(function StatTile({
   )
 })
 
-const AttendanceSummary = React.memo(function AttendanceSummary({ records }: { records: AttendanceRecord[] }) {
-  if (records.length === 0) return null
-  const counts: Record<string, number> = {}
-  let totalHours = 0
-  for (const r of records) {
-    counts[r.status] = (counts[r.status] ?? 0) + 1
-    totalHours += parseFloat(r.hoursWorked ?? '0')
+const AttendanceSummary = React.memo(function AttendanceSummary({
+  records,
+  loading,
+}: { records: AttendanceRecord[]; loading?: boolean }) {
+  const stats = React.useMemo(() => {
+    const counts: Record<string, number> = {}
+    let totalHours = 0
+    for (const r of records) {
+      counts[r.status] = (counts[r.status] ?? 0) + 1
+      totalHours += parseFloat(r.hoursWorked ?? '0')
+    }
+    return [
+      { label: 'Present', value: counts['present'] ?? 0, color: 'text-success' },
+      { label: 'Absent', value: counts['absent'] ?? 0, color: 'text-destructive' },
+      { label: 'Late', value: counts['late'] ?? 0, color: 'text-warning' },
+      { label: 'Half Day', value: counts['half_day'] ?? 0, color: 'text-info' },
+      { label: 'WFH', value: counts['wfh'] ?? 0, color: 'text-muted-foreground' },
+      { label: 'Total Hours', value: `${totalHours.toFixed(1)}h`, color: 'text-foreground' },
+    ]
+  }, [records])
+
+  if (loading && records.length === 0) {
+    return (
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+        {stats.map(s => (
+          <Card key={s.label}>
+            <CardContent className="p-3 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">{s.label}</p>
+              <Skeleton className="h-6 w-12 mx-auto" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    )
   }
-  const stats = [
-    { label: 'Present', value: counts['present'] ?? 0, color: 'text-success' },
-    { label: 'Absent', value: counts['absent'] ?? 0, color: 'text-destructive' },
-    { label: 'Late', value: counts['late'] ?? 0, color: 'text-warning' },
-    { label: 'Half Day', value: counts['half_day'] ?? 0, color: 'text-info' },
-    { label: 'WFH', value: counts['wfh'] ?? 0, color: 'text-muted-foreground' },
-    { label: 'Total Hours', value: `${totalHours.toFixed(1)}h`, color: 'text-foreground' },
-  ]
+
   return (
     <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
       {stats.map(s => (
@@ -343,10 +362,8 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!effectiveDate || !newBasic) {
-      toast.error('Missing fields', 'Effective Date and New Basic Salary are required.')
-      return
-    }
+    if (!effectiveDate) { toast.error('Effective date required', 'Enter the date the salary change takes effect.'); return }
+    if (!newBasic)      { toast.error('New basic salary required', 'Enter the new basic salary amount.'); return }
 
     mutation.mutate(
       {
@@ -568,14 +585,8 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!transferDate) {
-      toast.error('Required', 'Transfer date is required.')
-      return
-    }
-    if (!departmentId) {
-      toast.error('Required', 'Please select a department to transfer to.')
-      return
-    }
+    if (!transferDate)  { toast.error('Transfer date required', 'Enter the date the transfer takes effect.'); return }
+    if (!departmentId)  { toast.error('Department required', 'Select the department to transfer to.'); return }
 
     // Derive branch/division IDs from the selected department's parent chain
     const dept = orgUnits.find(u => u.id === departmentId)
@@ -834,6 +845,8 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
 export function EmployeeDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
+  const reviewRequestId = searchParams.get('review')
   const [nowMs] = React.useState(Date.now)
   const navigate = useNavigate()
   const { can } = usePermissions()
@@ -849,9 +862,21 @@ export function EmployeeDetailPage() {
   const { data: docsResult, isLoading: docsLoading } = useDocuments({ employeeId: id })
   const { data: reviews, isLoading: reviewsLoading } = usePerformanceReviews({ employeeId: id })
   const { data: employeeAssignments, isLoading: assetsLoading } = useEmployeeAssets(id!)
-  const attendanceStart = React.useMemo(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10) }, [])
-  const attendanceEnd = React.useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const { data: attendanceData, isLoading: attendanceLoading } = useAttendance({ employeeId: id, startDate: attendanceStart, endDate: attendanceEnd, limit: 100 })
+  const [attendanceMonthOffset, setAttendanceMonthOffset] = React.useState(0)
+  const { month: attendanceMonth, label: attendanceMonthLabel, start: attendanceStart, end: attendanceEnd } =
+    React.useMemo(() => resolveMonthFromOffset(attendanceMonthOffset), [attendanceMonthOffset])
+  // Calendar grid (employees × days) — backend resolves leave + holiday cells.
+  const { data: attendanceCalendar, isLoading: attendanceCalendarLoading } = useAttendanceCalendar(
+    attendanceMonth,
+    { employeeId: id },
+  )
+  // Raw records for the summary KPI strip.
+  const { data: attendanceData, isLoading: attendanceLoading } = useAttendance({
+    employeeId: id,
+    startDate: attendanceStart,
+    endDate: attendanceEnd,
+    limit: 200,
+  })
 
   const attendanceRecords = React.useMemo<AttendanceRecord[]>(() => {
     if (!attendanceData) return []
@@ -1578,6 +1603,22 @@ export function EmployeeDetailPage() {
                   {(e.contractType === 'contract' || e.contractEndDate) && (
                     <EmpField label="Contract End" icon={Calendar} value={e.contractEndDate ? formatDate(e.contractEndDate) : undefined} />
                   )}
+
+                  {/* Shift schedule — null falls back to tenant default */}
+                  <EmpField
+                    label="Shift"
+                    icon={Clock}
+                    value={e.shiftName && e.shiftStartTime && e.shiftEndTime
+                      ? `${e.shiftName} (${e.shiftStartTime}–${e.shiftEndTime})`
+                      : undefined}
+                  />
+                  <EmpField
+                    label="Weekly Off"
+                    icon={Calendar}
+                    value={e.shiftWeeklyOffDays && e.shiftWeeklyOffDays.length > 0
+                      ? e.shiftWeeklyOffDays.map(d => d[0].toUpperCase() + d.slice(1, 3)).join(', ')
+                      : undefined}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -2258,7 +2299,11 @@ export function EmployeeDetailPage() {
               <CardHeader>
                 <CardTitle className="text-base">Bank Details</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {/* Inline banner — only renders when the employee has a pending
+                    bank-detail change submitted from the portal. Auto-opens
+                    the review dialog if HR arrived via the notification link. */}
+                <BankChangeReviewBanner employeeId={e.id} autoOpenRequestId={reviewRequestId} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
                     <InfoRow label="Account Name" value={e.accountName} icon={User} />
@@ -2635,64 +2680,31 @@ export function EmployeeDetailPage() {
 
           {/* ── Attendance ── */}
           <TabsContent value="attendance" className="mt-4 space-y-4">
-            <AttendanceSummary records={attendanceRecords} />
+            <AttendanceSummary records={attendanceRecords} loading={attendanceLoading} />
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">
-                    Attendance Log — {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
-                  </CardTitle>
-                  <Button size="sm" variant="outline" leftIcon={<ClipboardList className="h-3.5 w-3.5" />} onClick={() => navigate(`/attendance?employeeId=${id}`)}>
-                    Full log
-                  </Button>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <CardTitle className="text-base">Attendance — {attendanceMonthLabel}</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Calendar view with status codes, weekly offs, and approved leaves.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MonthSwitcher offset={attendanceMonthOffset} onChange={setAttendanceMonthOffset} label={attendanceMonthLabel} />
+                    <Button size="sm" variant="outline" leftIcon={<ClipboardList className="h-3.5 w-3.5" />} onClick={() => navigate(`/attendance?employeeId=${id}`)}>
+                      Full log
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent className="p-0">
-                {attendanceLoading ? (
-                  <div className="p-4 space-y-2">{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
-                ) : attendanceRecords.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">
-                    <ClipboardList className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm font-medium">No attendance records this month</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b bg-muted/40">
-                          <th className="text-left font-medium text-muted-foreground px-4 py-2.5">Date</th>
-                          <th className="text-left font-medium text-muted-foreground px-4 py-2.5">Status</th>
-                          <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden sm:table-cell">Check In</th>
-                          <th className="text-left font-medium text-muted-foreground px-4 py-2.5 hidden sm:table-cell">Check Out</th>
-                          <th className="text-right font-medium text-muted-foreground px-4 py-2.5">Hours</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {attendanceRecords
-                          .toSorted((a, b) => b.date.localeCompare(a.date))
-                          .map(r => (
-                            <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                              <td className="px-4 py-2.5 font-medium">{formatDate(r.date)}</td>
-                              <td className="px-4 py-2.5">
-                                <Badge variant={ATTENDANCE_STATUS_VARIANT[r.status] ?? 'secondary'} className="text-[10px] capitalize">
-                                  {labelFor(r.status)}
-                                </Badge>
-                              </td>
-                              <td className="px-4 py-2.5 text-muted-foreground hidden sm:table-cell">
-                                {r.checkIn ? new Date(r.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
-                              </td>
-                              <td className="px-4 py-2.5 text-muted-foreground hidden sm:table-cell">
-                                {r.checkOut ? new Date(r.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
-                              </td>
-                              <td className="px-4 py-2.5 text-right font-medium">
-                                {r.hoursWorked ? `${parseFloat(r.hoursWorked).toFixed(1)}h` : '—'}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+              <CardContent>
+                <AttendanceCalendarGrid
+                  data={attendanceCalendar}
+                  loading={attendanceCalendarLoading}
+                  hideEmployeeColumn
+                  emptyMessage={`No attendance records in ${attendanceMonthLabel}.`}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -3373,7 +3385,7 @@ function AddWarningDialog({
   }
 
   function handleSubmit() {
-    if (!issueDate) { toast.warning('Issue date required'); return }
+    if (!issueDate) { toast.warning('Issue date required', 'Enter when this document was issued.'); return }
     onSave({
       issueDate,
       expiryDate: expiryDate || undefined,

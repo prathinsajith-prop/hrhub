@@ -1,0 +1,11 @@
+{
+  "ignore": {
+    "rules": [
+      "react-doctor/design-no-default-tailwind-palette",
+      "react-doctor/rendering-hydration-mismatch-time"
+    ],
+    "files": [
+      "src/components/ui/**"
+    ]
+  }
+}

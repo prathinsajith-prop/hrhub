@@ -110,7 +110,7 @@ function StepDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-xl">
                 <DialogHeader>
                     <DialogTitle>{isEdit ? t('orgSettings.onboardingTemplate.editStep') : t('orgSettings.onboardingTemplate.newStep')}</DialogTitle>
                 </DialogHeader>
@@ -233,7 +233,7 @@ function TemplateRequiredDocsDialog({ step, onClose }: { step: OnboardingTemplat
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Required documents — {step.title}</DialogTitle>
                 </DialogHeader>

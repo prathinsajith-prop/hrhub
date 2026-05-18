@@ -106,7 +106,7 @@ export function VisaDetailPage() {
         const input = { ...costForm, employeeId: visa.employeeId }
         addCost.mutate(input, {
             onSuccess: () => { toast.success('Cost added'); setShowAddCost(false); setCostForm({ employeeId: '', category: 'govt_fee', amount: 0, paidDate: new Date().toISOString().split('T')[0] }) },
-            onError: () => toast.error('Failed to save cost'),
+            onError: () => toast.error('Save failed', 'Could not save the cost entry. Please try again.'),
         })
     }
 
@@ -596,7 +596,7 @@ export function VisaDetailPage() {
                     if (!deleteCostTarget) return
                     deleteCost.mutate(deleteCostTarget, {
                         onSuccess: () => { toast.success('Cost removed'); setDeleteCostTarget(null) },
-                        onError: () => { toast.error('Failed to remove cost'); setDeleteCostTarget(null) },
+                        onError: () => { toast.error('Remove failed', 'Could not remove this cost entry. Please try again.'); setDeleteCostTarget(null) },
                     })
                 }}
             />

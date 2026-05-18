@@ -65,6 +65,49 @@ export function useCheckOut() {
     })
 }
 
+// ─── Calendar matrix view (HR / dept_head) ───────────────────────────────
+
+export interface CalendarCell {
+    code: string
+    checkIn: string | null
+    checkOut: string | null
+    hoursWorked: string | null
+    leaveType?: string
+    holidayName?: string
+}
+
+export interface CalendarEmployee {
+    id: string
+    employeeNo: string
+    name: string
+    department: string | null
+    designation: string | null
+    avatarUrl: string | null
+    cells: CalendarCell[]
+}
+
+export interface CalendarResponse {
+    month: string
+    daysInMonth: number
+    firstWeekday: number
+    employees: CalendarEmployee[]
+}
+
+export function useAttendanceCalendar(month: string, opts?: { department?: string; employeeId?: string }) {
+    const department = opts?.department
+    const employeeId = opts?.employeeId
+    return useQuery({
+        queryKey: ['attendance-calendar', month, department ?? null, employeeId ?? null],
+        queryFn: () => {
+            const qs = new URLSearchParams({ month })
+            if (department) qs.set('department', department)
+            if (employeeId) qs.set('employeeId', employeeId)
+            return api.get<CalendarResponse>(`/attendance/calendar?${qs}`)
+        },
+        enabled: /^\d{4}-\d{2}$/.test(month),
+    })
+}
+
 export function useUpsertAttendance() {
     const qc = useQueryClient()
     return useMutation({

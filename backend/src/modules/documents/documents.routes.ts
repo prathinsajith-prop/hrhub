@@ -7,7 +7,7 @@ import { recordActivity } from '../audit/audit.service.js'
 import { logDocumentAction, getDocumentAuditLog } from '../onboarding/onboarding.docs.service.js'
 import { sendEmail, documentVerifiedEmail, documentRejectedEmail } from '../../plugins/email.js'
 import { db } from '../../db/index.js'
-import { employees, tenants } from '../../db/schema/index.js'
+import { employees, tenants, onboardingSteps, onboardingChecklists } from '../../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
 
 export default async function (fastify: any): Promise<void> {
@@ -324,7 +324,7 @@ export default async function (fastify: any): Promise<void> {
             return reply.code(415).send({ message: `File type not permitted. Please upload a PDF, image, Word, or Excel document.` })
         }
 
-        const { employeeId, category, expiryDate, issueDate, notes, docType, docNumber } = fields
+        const { employeeId, category, expiryDate, issueDate, notes, docType, docNumber, stepId } = fields
         if (!category) return reply.code(400).send({ message: 'category is required' })
 
         // Verify the supplied employeeId belongs to this tenant
@@ -335,6 +335,24 @@ export default async function (fastify: any): Promise<void> {
                 .where(and(eq(employees.id, employeeId), eq(employees.tenantId, request.user.tenantId)))
                 .limit(1)
             if (!emp) return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Employee does not belong to your organization.' })
+        }
+
+        // Verify the supplied stepId belongs to this employee's checklist (and
+        // therefore this tenant). Rejects cross-tenant / cross-employee tagging.
+        let validatedStepId: string | null = null
+        if (stepId) {
+            const [stepRow] = await db
+                .select({ id: onboardingSteps.id })
+                .from(onboardingSteps)
+                .innerJoin(onboardingChecklists, eq(onboardingChecklists.id, onboardingSteps.checklistId))
+                .where(and(
+                    eq(onboardingSteps.id, stepId),
+                    eq(onboardingChecklists.tenantId, request.user.tenantId),
+                    employeeId ? eq(onboardingChecklists.employeeId, employeeId) : undefined,
+                ))
+                .limit(1)
+            if (!stepRow) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Onboarding step not found for this employee.' })
+            validatedStepId = stepRow.id
         }
 
         const folder = employeeId ? `employees/${employeeId}/documents` : 'documents'
@@ -351,6 +369,7 @@ export default async function (fastify: any): Promise<void> {
 
         const doc = await createDocument(request.user.tenantId, request.user.id, {
             employeeId: employeeId || null,
+            stepId: validatedStepId,
             category: category as any,
             docType: docType || fileMeta.fileName,
             fileName: fileMeta.fileName,
@@ -382,7 +401,7 @@ export default async function (fastify: any): Promise<void> {
             action: 'uploaded',
             actorId: request.user.id,
             actorLabel: request.user.name,
-            details: { stepId: null, category, docType: docType || fileMeta.fileName, fileName: fileMeta.fileName, sizeBytes: fileMeta.size, expiryDate: expiryDate || null },
+            details: { stepId: validatedStepId, category, docType: docType || fileMeta.fileName, fileName: fileMeta.fileName, sizeBytes: fileMeta.size, expiryDate: expiryDate || null },
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'] as string | undefined,
         })

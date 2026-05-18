@@ -57,10 +57,8 @@ export function RequiredDocsManager({
     }
 
     async function handleAdd() {
-        if (!category || !docType) {
-            toast.warning('Incomplete', 'Select a category and document type.')
-            return
-        }
+        if (!category) { toast.warning('Category required', 'Select a document category.'); return }
+        if (!docType)  { toast.warning('Document type required', 'Select a document type.'); return }
         try {
             await onAdd({ category, docType, isMandatory, expiryRequired })
             toast.success('Required doc added', `${docType} added.`)

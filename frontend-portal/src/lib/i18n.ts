@@ -1,0 +1,44 @@
+import i18n from 'i18next'
+import { initReactI18next } from 'react-i18next'
+import LanguageDetector from 'i18next-browser-languagedetector'
+
+import en from '../locales/en.json'
+
+let arLoaded = false
+async function ensureArabicLoaded() {
+    if (arLoaded) return
+    const mod = await import('../locales/ar.json')
+    i18n.addResourceBundle('ar', 'translation', mod.default, true, true)
+    arLoaded = true
+}
+
+i18n
+    .use(LanguageDetector)
+    .use(initReactI18next)
+    .init({
+        resources: { en: { translation: en } },
+        fallbackLng: 'en',
+        supportedLngs: ['en', 'ar'],
+        interpolation: { escapeValue: false },
+        detection: {
+            order: ['localStorage', 'navigator'],
+            caches: ['localStorage'],
+            lookupLocalStorage: 'hrhub-portal-lang',
+        },
+    })
+
+function applyLanguageDirection(lang: string) {
+    const dir = lang === 'ar' ? 'rtl' : 'ltr'
+    document.documentElement.setAttribute('dir', dir)
+    document.documentElement.setAttribute('lang', lang)
+    document.documentElement.classList.toggle('rtl', lang === 'ar')
+}
+
+i18n.on('languageChanged', (lng) => {
+    applyLanguageDirection(lng)
+    if (lng.startsWith('ar')) ensureArabicLoaded()
+})
+
+applyLanguageDirection(i18n.language ?? 'en')
+
+// i18n initialises itself on import — no exports needed.

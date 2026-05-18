@@ -84,7 +84,7 @@ function CreateLoanDialog({ onClose }: { onClose: () => void }) {
 
     return (
         <Dialog open onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[480px]">
+            <DialogContent className="sm:max-w-[640px]">
                 <DialogHeader>
                     <DialogTitle>{t('loans.newLoan')}</DialogTitle>
                 </DialogHeader>

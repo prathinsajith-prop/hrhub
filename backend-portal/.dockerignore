@@ -1,0 +1,32 @@
+# Dependencies — always reinstalled inside the image
+node_modules
+
+# Build output — produced inside the image by pnpm build
+dist
+
+# Environment files — injected at runtime via Railway / Docker env vars
+.env
+.env.*
+!.env.example
+
+# Source control
+.git
+.gitignore
+.gitattributes
+
+# Editor
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# Logs
+*.log
+*.log.*
+
+# Docs / local tooling (not needed at runtime)
+README.md
+*.md
+
+# pnpm cache hint
+.pnpm-store
