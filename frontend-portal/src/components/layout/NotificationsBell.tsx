@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { Bell, CheckCheck, Info, AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react'
@@ -44,9 +44,29 @@ const TYPE_ICON: Record<Notification['type'], { node: React.ReactNode; tone: str
 // pushes anyone who needs more to the full notifications page.
 const POPOVER_LIMIT = 5
 
+// Whitelist for notification actionUrls: same-origin app paths (single leading
+// `/`) or absolute http(s) URLs. Anything else — `javascript:`, `data:`,
+// protocol-relative `//evil`, etc. — is rejected so a server-supplied URL
+// can't become a script-execution or phishing vector.
+function resolveActionUrl(raw: string): { kind: 'internal' | 'external'; url: string } | null {
+    if (raw.startsWith('/') && !raw.startsWith('//')) {
+        return { kind: 'internal', url: raw }
+    }
+    try {
+        const parsed = new URL(raw)
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+            return { kind: 'external', url: parsed.toString() }
+        }
+    } catch {
+        // Invalid URL — fall through to null.
+    }
+    return null
+}
+
 export function NotificationsBell() {
     const { t } = useTranslation()
     const qc = useQueryClient()
+    const navigate = useNavigate()
     const [open, setOpen] = useState(false)
     const { data: unread = 0 } = useUnreadNotificationsCount()
     const { data: items = [] } = useNotifications({ limit: POPOVER_LIMIT })
@@ -72,6 +92,21 @@ export function NotificationsBell() {
         if (next) {
             qc.invalidateQueries({ queryKey: ['portal', 'notifications'] })
             qc.invalidateQueries({ queryKey: ['portal', 'notifications-unread'] })
+        }
+    }
+
+    function handleItemClick(n: Notification) {
+        if (!n.isRead) markRead.mutate(n.id)
+        setOpen(false)
+        if (!n.actionUrl) return
+        const resolved = resolveActionUrl(n.actionUrl)
+        if (!resolved) return
+        if (resolved.kind === 'external') {
+            // noopener prevents the new page from reaching back into our
+            // window via window.opener.
+            window.open(resolved.url, '_blank', 'noopener,noreferrer')
+        } else {
+            navigate(resolved.url)
         }
     }
 
@@ -121,46 +156,29 @@ export function NotificationsBell() {
                         <ul className="divide-y divide-border">
                             {sortedItems.map((n) => {
                                 const tone = TYPE_ICON[n.type]
-                                const onClick = () => {
-                                    if (!n.isRead) markRead.mutate(n.id)
-                                    setOpen(false)
-                                }
-                                const Inner = (
-                                    <div className="flex items-start gap-2.5 p-3">
-                                        <span className={cn('mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full', tone.tone)}>
-                                            {tone.node}
-                                        </span>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-start gap-2">
-                                                <span className={cn('truncate text-sm font-medium', !n.isRead && 'text-foreground')}>
-                                                    {n.title}
-                                                </span>
-                                                {!n.isRead ? <span className="mt-1 size-1.5 shrink-0 rounded-full bg-rose-500" /> : null}
-                                            </div>
-                                            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.message}</p>
-                                            <p className="mt-1 text-[11px] text-muted-foreground/70">{timeAgo(n.createdAt)}</p>
-                                        </div>
-                                    </div>
-                                )
                                 return (
                                     <li key={n.id}>
-                                        {n.actionUrl ? (
-                                            <Link
-                                                to={n.actionUrl}
-                                                onClick={onClick}
-                                                className="block hover:bg-muted/50"
-                                            >
-                                                {Inner}
-                                            </Link>
-                                        ) : (
-                                            <button
-                                                type="button"
-                                                onClick={onClick}
-                                                className="block w-full text-start hover:bg-muted/50"
-                                            >
-                                                {Inner}
-                                            </button>
-                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleItemClick(n)}
+                                            className="block w-full text-start transition-colors hover:bg-muted/50"
+                                        >
+                                            <div className="flex items-start gap-2.5 p-3">
+                                                <span className={cn('mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full', tone.tone)}>
+                                                    {tone.node}
+                                                </span>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-start gap-2">
+                                                        <span className={cn('truncate text-sm font-medium', !n.isRead && 'text-foreground')}>
+                                                            {n.title}
+                                                        </span>
+                                                        {!n.isRead ? <span className="mt-1 size-1.5 shrink-0 rounded-full bg-rose-500" /> : null}
+                                                    </div>
+                                                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.message}</p>
+                                                    <p className="mt-1 text-[11px] text-muted-foreground/70">{timeAgo(n.createdAt)}</p>
+                                                </div>
+                                            </div>
+                                        </button>
                                     </li>
                                 )
                             })}

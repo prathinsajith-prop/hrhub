@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { AlertCircle, RefreshCw } from 'lucide-react'
+import { isChunkLoadError, tryReloadForChunkError } from '@/lib/chunkReload'
 
 interface State {
     error: Error | null
@@ -22,6 +23,11 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     }
 
     componentDidCatch(error: Error, info: ErrorInfo) {
+        // Stale-deploy recovery — a Vite chunk hash referenced by the old
+        // index.html no longer exists on the CDN. Reload once so the new
+        // index.html is fetched.
+        if (isChunkLoadError(error) && tryReloadForChunkError()) return
+
         // Production: send to your error tracker. In v1 we just log to the console.
         console.error('[portal] uncaught render error:', error, info.componentStack)
     }

@@ -253,6 +253,13 @@
       "when": 1779667200000,
       "tag": "0035_profile_change_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1779753600000,
+      "tag": "0036_user_roles_backfill",
+      "breakpoints": true
     }
   ]
 }

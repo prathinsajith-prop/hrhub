@@ -1,4 +1,5 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react'
+import { isChunkLoadError, tryReloadForChunkError } from '@/lib/chunkReload'
 
 interface Props {
     children: ReactNode
@@ -18,6 +19,12 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     componentDidCatch(error: Error, info: ErrorInfo) {
+        // Stale-deploy recovery: when a React.lazy() chunk fetch fails the
+        // user's HTML is pointing at hashes that no longer exist. Reload
+        // (once) so the browser picks up the new index.html. The helper
+        // guards against an infinite reload loop.
+        if (isChunkLoadError(error) && tryReloadForChunkError()) return
+
         // Always surface to the console — in production this feeds into any
         // browser-side monitoring (DataDog RUM, Sentry, etc.) that reads
         // console.error. In dev it gives the full component stack inline.
