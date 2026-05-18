@@ -30,13 +30,26 @@ interface UnreadCountResponse {
 
 export function useNotificationsList(params?: { limit?: number; offset?: number; unreadOnly?: boolean }) {
     const { limit = 20, offset = 0, unreadOnly = false } = params ?? {}
+    const qc = useQueryClient()
+
+    // Mirror useUnreadCount's WebSocket subscription so the list also refreshes
+    // the instant the server pushes a new notification (no waiting for the
+    // 60-second poll tick).
+    const onNew = useCallback(() => {
+        qc.invalidateQueries({ queryKey: ['notifications'] })
+    }, [qc])
+    useSocketEvent('notification:new', onNew)
+
     return useQuery({
         queryKey: ['notifications', { limit, offset, unreadOnly }],
         queryFn: () =>
             api.get<NotificationsResponse>(
                 `/notifications?limit=${limit}&offset=${offset}&unreadOnly=${unreadOnly}`,
             ),
-        staleTime: 60_000,
+        staleTime: 30_000,
+        // Belt-and-braces polling for environments where the socket can't connect.
+        refetchInterval: 60_000,
+        refetchOnWindowFocus: true,
     })
 }
 
