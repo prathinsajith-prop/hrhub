@@ -1,7 +1,7 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Eye, EyeOff, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
+import { CalendarDays, Clock, Eye, EyeOff, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
 
 import { ApiError } from '@/lib/api'
 import { useMyEmployee, useUpdateMyProfile, type UpdateMyProfileBody } from '@/hooks/useMe'
@@ -19,7 +19,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
-import { formatDate } from '@/lib/utils'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { formatDate, formatShiftRange } from '@/lib/utils'
+import { AssignedAssetsCard } from '@/components/shared/AssignedAssetsCard'
 
 export function EmployeeProfilePage() {
     const { t } = useTranslation()
@@ -28,12 +30,13 @@ export function EmployeeProfilePage() {
     const [editing, setEditing] = useState(false)
     const [form, setForm] = useState<UpdateMyProfileBody>({})
 
-    // State-during-render: re-sync form when the employee record loads or changes externally.
-    // The "last synced id" tracker is held in a ref because it's only read+written here —
-    // never consumed by render — so it doesn't need to trigger a re-render itself.
-    const lastSyncedEmployeeId = useRef<string | null>(null)
-    if (employee && employee.id !== lastSyncedEmployeeId.current) {
-        lastSyncedEmployeeId.current = employee.id
+    // State-during-render pattern (React docs): when the server-returned
+    // `employee` changes, push its values into local form state. The state
+    // value itself is consumed by the `!==` check on this very line — that
+    // counts as a render-time read, so this isn't a refs-only situation.
+    const [lastSyncedEmployeeId, setLastSyncedEmployeeId] = useState<string | null>(null)
+    if (employee && employee.id !== lastSyncedEmployeeId) {
+        setLastSyncedEmployeeId(employee.id)
         setForm({
             phone: employee.phone ?? '',
             mobileNo: employee.mobileNo ?? '',
@@ -79,111 +82,126 @@ export function EmployeeProfilePage() {
                     editing ? (
                         <>
                             <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={update.isPending}>
-                                <X className="h-4 w-4" /> {t('common.cancel')}
+                                <X className="size-4" /> {t('common.cancel')}
                             </Button>
                             <Button size="sm" onClick={onSave} loading={update.isPending}>
-                                <Save className="h-4 w-4" /> {t('profile.saveChanges')}
+                                <Save className="size-4" /> {t('profile.saveChanges')}
                             </Button>
                         </>
                     ) : (
                         <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                            <Pencil className="h-3.5 w-3.5" /> {t('profile.edit')}
+                            <Pencil className="size-3.5" /> {t('profile.edit')}
                         </Button>
                     )
                 }
             />
 
-            <Card className="overflow-hidden border-border/70">
-                <CardContent className="p-5">
-                    <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t('profile.employment')}
-                    </h3>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <Field label="Employee No" value={employee.employeeNo} />
-                        <Field label="Status" value={employee.status} />
-                        <Field label="Join date" value={formatDate(employee.joinDate)} />
-                        <Field label="Designation" value={employee.designation ?? '—'} />
-                        <Field label="Department" value={employee.department ?? '—'} />
-                        <Field label="Nationality" value={employee.nationality ?? '—'} />
-                    </div>
-                </CardContent>
-            </Card>
+            <Tabs defaultValue="personal">
+                <TabsList className="grid w-full grid-cols-3 sm:inline-flex sm:w-auto">
+                    <TabsTrigger value="personal">Personal</TabsTrigger>
+                    <TabsTrigger value="emergency">Emergency</TabsTrigger>
+                    <TabsTrigger value="more">More</TabsTrigger>
+                </TabsList>
 
-            <Card className="overflow-hidden border-border/70">
-                <CardContent className="p-5">
-                    <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t('profile.contact')}
-                    </h3>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <Field label="Work email" value={employee.email ?? '—'} icon={<Mail className="h-3.5 w-3.5" />} />
-                        <EditableField
-                            label="Personal email"
-                            value={form.personalEmail ?? employee.personalEmail ?? ''}
-                            editing={editing}
-                            onChange={(v) => onChange('personalEmail', v)}
-                            type="email"
-                        />
-                        <EditableField
-                            label="Phone"
-                            value={form.phone ?? employee.phone ?? ''}
-                            editing={editing}
-                            onChange={(v) => onChange('phone', v)}
-                            icon={<Phone className="h-3.5 w-3.5" />}
-                        />
-                        <EditableField
-                            label="Mobile"
-                            value={form.mobileNo ?? employee.mobileNo ?? ''}
-                            editing={editing}
-                            onChange={(v) => onChange('mobileNo', v)}
-                        />
-                    </div>
-                </CardContent>
-            </Card>
+                {/* ── Personal: Employment basics + Contact + Address ── */}
+                <TabsContent value="personal" className="space-y-4">
+                    <Card className="overflow-hidden border-border/70">
+                        <CardContent className="p-5">
+                            <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                {t('profile.employment')}
+                            </h3>
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                <Field label="Employee No" value={employee.employeeNo} />
+                                <Field label="Status" value={employee.status} />
+                                <Field label="Join date" value={formatDate(employee.joinDate)} />
+                                <Field label="Designation" value={employee.designation ?? '—'} />
+                                <Field label="Department" value={employee.department ?? '—'} />
+                                <Field label="Nationality" value={employee.nationality ?? '—'} />
+                            </div>
+                        </CardContent>
+                    </Card>
 
-            <Card className="overflow-hidden border-border/70">
-                <CardContent className="p-5">
-                    <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t('profile.emergency')}
-                    </h3>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <EditableField
-                            label="Contact name"
-                            value={form.emergencyContactName ?? ''}
-                            editing={editing}
-                            onChange={(v) => onChange('emergencyContactName', v)}
-                        />
-                        <EditableField
-                            label="Contact phone"
-                            value={form.emergencyContactPhone ?? ''}
-                            editing={editing}
-                            onChange={(v) => onChange('emergencyContactPhone', v)}
-                        />
-                        <EditableField
-                            label="Relationship / notes"
-                            value={form.emergencyContact ?? ''}
-                            editing={editing}
-                            onChange={(v) => onChange('emergencyContact', v)}
-                            className="sm:col-span-2"
-                        />
-                    </div>
-                </CardContent>
-            </Card>
+                    <ScheduleCard shift={employee.shift ?? null} />
 
-            <Card className="overflow-hidden border-border/70">
-                <CardContent className="p-5">
-                    <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t('profile.address')}
-                    </h3>
-                    <EditableField
-                        label="Home country address"
-                        value={form.homeCountryAddress ?? ''}
-                        editing={editing}
-                        onChange={(v) => onChange('homeCountryAddress', v)}
-                    />
-                </CardContent>
-            </Card>
+                    <Card className="overflow-hidden border-border/70">
+                        <CardContent className="p-5">
+                            <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                {t('profile.contact')}
+                            </h3>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <Field label="Work email" value={employee.email ?? '—'} icon={<Mail className="size-3.5" />} />
+                                <EditableField
+                                    label="Personal email"
+                                    value={form.personalEmail ?? employee.personalEmail ?? ''}
+                                    editing={editing}
+                                    onChange={(v) => onChange('personalEmail', v)}
+                                    type="email"
+                                />
+                                <EditableField
+                                    label="Phone"
+                                    value={form.phone ?? employee.phone ?? ''}
+                                    editing={editing}
+                                    onChange={(v) => onChange('phone', v)}
+                                    icon={<Phone className="size-3.5" />}
+                                />
+                                <EditableField
+                                    label="Mobile"
+                                    value={form.mobileNo ?? employee.mobileNo ?? ''}
+                                    editing={editing}
+                                    onChange={(v) => onChange('mobileNo', v)}
+                                />
+                            </div>
+                            <h3 className="mb-4 mt-6 border-t border-border/60 pt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                {t('profile.address')}
+                            </h3>
+                            <EditableField
+                                label="Home country address"
+                                value={form.homeCountryAddress ?? ''}
+                                editing={editing}
+                                onChange={(v) => onChange('homeCountryAddress', v)}
+                            />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
 
-            <SecurityCard />
+                {/* ── Emergency contact ── */}
+                <TabsContent value="emergency">
+                    <Card className="overflow-hidden border-border/70">
+                        <CardContent className="p-5">
+                            <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                {t('profile.emergency')}
+                            </h3>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <EditableField
+                                    label="Contact name"
+                                    value={form.emergencyContactName ?? ''}
+                                    editing={editing}
+                                    onChange={(v) => onChange('emergencyContactName', v)}
+                                />
+                                <EditableField
+                                    label="Contact phone"
+                                    value={form.emergencyContactPhone ?? ''}
+                                    editing={editing}
+                                    onChange={(v) => onChange('emergencyContactPhone', v)}
+                                />
+                                <EditableField
+                                    label="Relationship / notes"
+                                    value={form.emergencyContact ?? ''}
+                                    editing={editing}
+                                    onChange={(v) => onChange('emergencyContact', v)}
+                                    className="sm:col-span-2"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* ── More: Assets + Security ── */}
+                <TabsContent value="more" className="space-y-4">
+                    <AssignedAssetsCard variant="me" />
+                    <SecurityCard />
+                </TabsContent>
+            </Tabs>
         </div>
     )
 }
@@ -195,8 +213,8 @@ function SecurityCard() {
         <Card className="overflow-hidden border-border/70">
             <CardContent className="flex flex-wrap items-center justify-between gap-3 p-5">
                 <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-                        <ShieldCheck className="h-5 w-5" />
+                    <span className="flex size-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                        <ShieldCheck className="size-5" />
                     </span>
                     <div>
                         <h3 className="text-sm font-semibold">{t('security.title')}</h3>
@@ -294,9 +312,9 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                 onClick={() => setShow((v) => !v)}
                                 aria-label={show ? 'Hide password' : 'Show password'}
                                 aria-pressed={show}
-                                className="absolute end-0 top-0 flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+                                className="absolute end-0 top-0 flex size-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
                             >
-                                {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                             </button>
                         </div>
                     </div>

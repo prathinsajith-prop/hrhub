@@ -43,6 +43,22 @@ export type IndustryType =
 // Employee
 export type EmployeeStatus = 'active' | 'onboarding' | 'suspended' | 'terminated' | 'visa_expired'
 
+export type WeekDay = 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday'
+
+// Tenant-defined shift template; employees reference one via Employee.shiftId.
+export interface Shift {
+  id: string
+  tenantId: string
+  name: string
+  startTime: string // 'HH:MM'
+  endTime: string   // 'HH:MM'
+  weeklyOffDays: WeekDay[]
+  isActive: boolean
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Employee {
   id: string
   tenantId: string
@@ -106,6 +122,13 @@ export interface Employee {
   homeCountryAddress?: string
   contractType?: 'permanent' | 'contract' | 'part_time' | 'probation'
   workLocation?: string
+  // FK to a tenant-defined shift template; null = use tenant default.
+  shiftId?: string | null
+  // Joined display fields populated by GET /employees and /employees/:id.
+  shiftName?: string | null
+  shiftStartTime?: string | null
+  shiftEndTime?: string | null
+  shiftWeeklyOffDays?: WeekDay[] | null
   probationEndDate?: string
   contractEndDate?: string
   createdAt?: string

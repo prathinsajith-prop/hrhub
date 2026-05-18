@@ -1,0 +1,107 @@
+name: Portal CI
+
+# Runs the same type-check + lint + build sweep that scripts/portal-ci.sh runs locally.
+# Path-filtered so a docs-only or main-app-only change doesn't trigger this pipeline.
+
+on:
+  push:
+    branches: [main, staging, development]
+    paths:
+      - 'backend-portal/**'
+      - 'frontend-portal/**'
+      - '.github/workflows/portal-ci.yml'
+  pull_request:
+    branches: [main, staging, development]
+    paths:
+      - 'backend-portal/**'
+      - 'frontend-portal/**'
+      - '.github/workflows/portal-ci.yml'
+
+concurrency:
+  group: portal-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: '10.30.0'
+  NODE_VERSION: '22'
+
+jobs:
+  # ─── Backend portal ─────────────────────────────────────────────────────────
+  backend-portal:
+    name: Backend portal — Type-check, Lint & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-portal
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: backend-portal/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm exec tsc --noEmit
+
+      - name: Lint (zero errors)
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+        env:
+          # Stubs to satisfy zod env validation during build smoke test.
+          DATABASE_URL: postgresql://stub:stub@localhost:5432/stub
+          JWT_SECRET: ci-stub-secret-at-least-32-characters-long
+          REFRESH_TOKEN_SECRET: ci-stub-refresh-secret-at-least-32-characters-long
+
+  # ─── Frontend portal ────────────────────────────────────────────────────────
+  frontend-portal:
+    name: Frontend portal — Type-check, Lint & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend-portal
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: frontend-portal/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm exec tsc -p tsconfig.app.json --noEmit
+
+      - name: Lint (zero errors)
+        # Warnings are allowed; errors fail the build.
+        run: pnpm exec eslint src --ext .ts,.tsx
+
+      - name: Build
+        run: pnpm build
+
+      - name: Upload build artefact
+        uses: actions/upload-artifact@v5
+        if: github.ref == 'refs/heads/main'
+        with:
+          name: frontend-portal-dist
+          path: frontend-portal/dist
+          retention-days: 7

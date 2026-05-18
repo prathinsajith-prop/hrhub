@@ -530,6 +530,15 @@ html[dir="rtl"] [data-rtl-flip] {
   animation: shimmer 1.6s ease-in-out infinite;
 }
 
+/* Respect prefers-reduced-motion — show a static muted block instead of the
+   moving gradient so users with motion sensitivity don't see flickering. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    background: hsl(var(--muted));
+    animation: none;
+  }
+}
+
 /* Slide-up page entry — smoother than plain fadeIn */
 @keyframes slideUp {
   from {

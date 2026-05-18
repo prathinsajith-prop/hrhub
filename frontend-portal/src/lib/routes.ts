@@ -10,6 +10,8 @@ export const ROUTES = {
     employeeLeave: '/me/leave',
     employeePayslips: '/me/payslips',
     employeeAttendance: '/me/attendance',
+    employeeDocuments: '/me/documents',
+    employeePerformance: '/me/performance',
     notifications: '/notifications',
 
     // Manager mode (dept_head only)
@@ -17,6 +19,9 @@ export const ROUTES = {
     managerMembers: '/team/members',
     managerMemberDetail: (id = ':id') => `/team/members/${id}`,
     managerApprovals: '/team/approvals',
+    managerDocumentApprovals: '/team/documents',
+    managerProfileApprovals: '/team/profile-changes',
+    managerAttendance: '/team/attendance',
     managerCalendar: '/team/calendar',
 } as const
 

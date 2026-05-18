@@ -1,17 +1,25 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Clock, LogIn, LogOut } from 'lucide-react'
+import { CalendarRange, Clock, List, LogIn, LogOut } from 'lucide-react'
 
-import { useAttendance, useCheckIn, useCheckOut } from '@/hooks/useAttendance'
+import { useAttendance, useAttendanceCalendar, useCheckIn, useCheckOut } from '@/hooks/useAttendance'
 import { useAuthStore } from '@/store/authStore'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { GlassCard } from '@/components/shared/GlassCard'
+import { AttendanceMonthCalendar } from '@/components/shared/AttendanceMonthCalendar'
+import { MonthPicker } from '@/components/shared/MonthPicker'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn, formatDate } from '@/lib/utils'
+
+function isoMonth(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
 
 export function EmployeeAttendancePage() {
     const { t } = useTranslation()
@@ -71,7 +79,7 @@ export function EmployeeAttendancePage() {
                             }
                             loading={checkOut.isPending}
                         >
-                            <LogOut className="h-4 w-4" /> {t('attendance.checkOut')}
+                            <LogOut className="size-4" /> {t('attendance.checkOut')}
                         </Button>
                     ) : !todayRecord?.checkIn ? (
                         <Button
@@ -82,7 +90,7 @@ export function EmployeeAttendancePage() {
                             }
                             loading={checkIn.isPending}
                         >
-                            <LogIn className="h-4 w-4" /> {t('attendance.checkIn')}
+                            <LogIn className="size-4" /> {t('attendance.checkIn')}
                         </Button>
                     ) : (
                         <Badge variant="secondary">{t('attendance.alreadyCheckedIn')}</Badge>
@@ -90,50 +98,79 @@ export function EmployeeAttendancePage() {
                 </div>
             </GlassCard>
 
-            {isLoading ? (
-                <div className="space-y-3">
-                    <Skeleton className="h-16" />
-                    <Skeleton className="h-16" />
-                </div>
-            ) : !history?.data?.length ? (
-                <EmptyState icon={<Clock className="h-8 w-8" />} title={t('attendance.noRecords')} />
-            ) : (
-                <div className="space-y-2">
-                    {history.data.map((r) => (
-                        <Card key={r.id} className="border-border/70">
-                            <CardContent className="flex items-center justify-between gap-3 p-3">
-                                <div>
-                                    <div className="text-sm font-medium">{formatDate(r.date)}</div>
-                                    <div className="mt-0.5 text-xs text-muted-foreground">
-                                        {r.checkIn
-                                            ? new Date(r.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                            : '—'}
-                                        {' → '}
-                                        {r.checkOut
-                                            ? new Date(r.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                            : '—'}
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-sm font-medium tabular-figures">{r.hoursWorked ?? '—'}</div>
-                                    <Badge
-                                        className={cn(
-                                            'border-0 text-[10px] uppercase tracking-wider',
-                                            r.status === 'present'
-                                                ? 'bg-emerald-100 text-emerald-800'
-                                                : r.status === 'on_leave'
-                                                  ? 'bg-amber-100 text-amber-800'
-                                                  : 'bg-muted text-muted-foreground',
-                                        )}
-                                    >
-                                        {r.status}
-                                    </Badge>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )}
+            <Tabs defaultValue="list">
+                <TabsList>
+                    <TabsTrigger value="list" className="gap-1.5">
+                        <List className="size-3.5" /> List
+                    </TabsTrigger>
+                    <TabsTrigger value="calendar" className="gap-1.5">
+                        <CalendarRange className="size-3.5" /> Calendar
+                    </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="list">
+                    {isLoading ? (
+                        <div className="space-y-3">
+                            <Skeleton className="h-16" />
+                            <Skeleton className="h-16" />
+                        </div>
+                    ) : !history?.data?.length ? (
+                        <EmptyState icon={<Clock className="size-8" />} title={t('attendance.noRecords')} />
+                    ) : (
+                        <div className="space-y-2">
+                            {history.data.map((r) => (
+                                <Card key={r.id} className="border-border/70">
+                                    <CardContent className="flex items-center justify-between gap-3 p-3">
+                                        <div>
+                                            <div className="text-sm font-medium">{formatDate(r.date)}</div>
+                                            <div className="mt-0.5 text-xs text-muted-foreground">
+                                                {r.checkIn
+                                                    ? new Date(r.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                    : '—'}
+                                                {' → '}
+                                                {r.checkOut
+                                                    ? new Date(r.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                    : '—'}
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-sm font-medium tabular-figures">{r.hoursWorked ?? '—'}</div>
+                                            <Badge
+                                                className={cn(
+                                                    'border-0 text-[10px] uppercase tracking-wider',
+                                                    r.status === 'present'
+                                                        ? 'bg-emerald-100 text-emerald-800'
+                                                        : r.status === 'on_leave'
+                                                          ? 'bg-amber-100 text-amber-800'
+                                                          : 'bg-muted text-muted-foreground',
+                                                )}
+                                            >
+                                                {r.status}
+                                            </Badge>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </TabsContent>
+
+                <TabsContent value="calendar">
+                    <MyMonthGrid />
+                </TabsContent>
+            </Tabs>
+        </div>
+    )
+}
+
+function MyMonthGrid() {
+    const [month, setMonth] = useState(() => isoMonth(new Date()))
+    const { data, isLoading } = useAttendanceCalendar(month, 'me')
+
+    return (
+        <div className="space-y-4">
+            <MonthPicker value={month} onChange={setMonth} />
+            <AttendanceMonthCalendar data={data} loading={isLoading} />
         </div>
     )
 }

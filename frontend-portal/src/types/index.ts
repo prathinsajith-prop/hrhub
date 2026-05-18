@@ -50,7 +50,11 @@ export interface Employee {
     transportAllowance?: string | null
     otherAllowances?: string | null
     bankName?: string | null
+    accountName?: string | null
+    accountNumber?: string | null
     iban?: string | null
+    swiftCode?: string | null
+    bankBranch?: string | null
     avatarUrl?: string | null
     emergencyContact?: string | null
     emergencyContactName?: string | null
@@ -61,6 +65,14 @@ export interface Employee {
     emiratesIdExpiry?: string | null
     contractEndDate?: string | null
     probationEndDate?: string | null
+    // Shift schedule joined from the `shifts` table via employees.shift_id.
+    // null = tenant default working week applies. Times are 'HH:MM' 24-hour strings.
+    shift?: {
+        name: string
+        startTime: string
+        endTime: string
+        weeklyOffDays: string[]
+    } | null
 }
 
 export type LeaveType = 'annual' | 'sick' | 'maternity' | 'paternity' | 'unpaid' | 'compassionate' | 'emergency' | 'bereavement' | 'hajj'
@@ -88,7 +100,7 @@ export interface LeaveRequest {
     employeeDepartment?: string | null
 }
 
-export interface LeaveBalanceEntry {
+interface LeaveBalanceEntry {
     entitled: number
     accrued: number
     carriedForward: number
@@ -149,17 +161,6 @@ export interface AttendanceRecord {
     employeeName?: string
     employeeNo?: string
     employeeDepartment?: string | null
-}
-
-export interface Team {
-    id: string
-    tenantId: string
-    name: string
-    description?: string | null
-    departmentId?: string | null
-    department?: string | null
-    isActive: boolean
-    memberRole?: string
 }
 
 export interface PaginatedResponse<T> {

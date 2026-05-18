@@ -51,9 +51,9 @@ export function ConfirmDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-sm">
                 <DialogHeader>
-                    <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-2xl">
-                        <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${tone.bg} ${tone.icon}`}>
-                            <AlertTriangle className="h-6 w-6" />
+                    <div className="mx-auto mb-1 flex size-12 items-center justify-center rounded-2xl">
+                        <span className={`flex size-12 items-center justify-center rounded-2xl ${tone.bg} ${tone.icon}`}>
+                            <AlertTriangle className="size-6" />
                         </span>
                     </div>
                     <DialogTitle className="text-center">{title}</DialogTitle>

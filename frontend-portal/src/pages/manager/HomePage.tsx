@@ -143,7 +143,7 @@ export function ManagerHomePage() {
                     {(primaryDepartment || departmentBreakdown.length > 1) ? (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-                                <Building2 className="h-3 w-3" />
+                                <Building2 className="size-3" />
                                 {primaryDepartment ?? `${departmentBreakdown.length} departments`}
                             </span>
                             {departmentBreakdown.length > 1 ? (
@@ -171,7 +171,7 @@ export function ManagerHomePage() {
             <div className="grid gap-3 sm:grid-cols-3">
                 <MiniStat
                     tone="warning"
-                    icon={<ListChecks className="h-4 w-4" />}
+                    icon={<ListChecks className="size-4" />}
                     label={t('team.pendingApprovals')}
                     value={pendingTotal}
                     loading={pendingLoading}
@@ -180,7 +180,7 @@ export function ManagerHomePage() {
                 />
                 <MiniStat
                     tone="primary"
-                    icon={<Users className="h-4 w-4" />}
+                    icon={<Users className="size-4" />}
                     label={t('team.members')}
                     value={teamCount}
                     loading={teamLoading}
@@ -189,7 +189,7 @@ export function ManagerHomePage() {
                 />
                 <MiniStat
                     tone="default"
-                    icon={<UserMinus className="h-4 w-4" />}
+                    icon={<UserMinus className="size-4" />}
                     label="On leave today"
                     value={onLeaveTodayCount}
                     href={ROUTES.managerCalendar}
@@ -201,7 +201,7 @@ export function ManagerHomePage() {
             {departmentBreakdown.length > 1 ? (
                 <section>
                     <div className="mb-2 flex items-center gap-2">
-                        <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        <Building2 className="size-3.5 text-muted-foreground" />
                         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                             Team by department
                         </h2>
@@ -244,7 +244,7 @@ export function ManagerHomePage() {
                             to={ROUTES.managerApprovals}
                             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                         >
-                            {t('common.viewAll')} <ChevronRight className="h-3 w-3" />
+                            {t('common.viewAll')} <ChevronRight className="size-3" />
                         </Link>
                     ) : null}
                 </div>
@@ -257,8 +257,8 @@ export function ManagerHomePage() {
                 ) : pendingList.length === 0 ? (
                     <Card className="border-dashed bg-card/40">
                         <CardContent className="flex items-center gap-3 p-5 text-sm text-muted-foreground">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                <Check className="h-5 w-5" />
+                            <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                <Check className="size-5" />
                             </div>
                             {t('team.noApprovals')}
                         </CardContent>
@@ -298,7 +298,7 @@ export function ManagerHomePage() {
                                                 })
                                             }
                                         >
-                                            <X className="h-4 w-4" /> {t('common.reject')}
+                                            <X className="size-4" /> {t('common.reject')}
                                         </Button>
                                         <Button
                                             size="sm"
@@ -311,7 +311,7 @@ export function ManagerHomePage() {
                                                 })
                                             }
                                         >
-                                            <Check className="h-4 w-4" /> {t('common.approve')}
+                                            <Check className="size-4" /> {t('common.approve')}
                                         </Button>
                                     </div>
                                 </CardContent>
@@ -331,15 +331,15 @@ export function ManagerHomePage() {
                         to={ROUTES.managerCalendar}
                         className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                     >
-                        {t('common.viewAll')} <ChevronRight className="h-3 w-3" />
+                        {t('common.viewAll')} <ChevronRight className="size-3" />
                     </Link>
                 </div>
 
                 {onLeaveTodayList.length === 0 ? (
                     <Card className="border-dashed bg-card/40">
                         <CardContent className="flex items-center gap-3 p-5 text-sm text-muted-foreground">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-                                <CalendarDays className="h-5 w-5" />
+                            <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                                <CalendarDays className="size-5" />
                             </div>
                             Everyone is in today.
                         </CardContent>
@@ -351,7 +351,7 @@ export function ManagerHomePage() {
                                 key={r.id}
                                 className="flex items-center gap-2 rounded-full border border-border bg-card/70 px-2.5 py-1 text-xs"
                             >
-                                <Avatar className="h-6 w-6">
+                                <Avatar className="size-6">
                                     <AvatarFallback className="text-[9px] font-semibold">
                                         {initialsOf(r.employeeName ?? '')}
                                     </AvatarFallback>
@@ -380,7 +380,7 @@ export function ManagerHomePage() {
                             to={ROUTES.managerMembers}
                             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                         >
-                            {t('common.viewAll')} <ChevronRight className="h-3 w-3" />
+                            {t('common.viewAll')} <ChevronRight className="size-3" />
                         </Link>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -390,7 +390,7 @@ export function ManagerHomePage() {
                                 to={ROUTES.managerMemberDetail(m.id)}
                                 className="flex items-center gap-3 rounded-xl border border-border bg-card/60 p-2.5 transition-colors hover:border-primary/40 hover:bg-card"
                             >
-                                <Avatar className="h-9 w-9">
+                                <Avatar className="size-9">
                                     <AvatarImage src={m.avatarUrl ?? undefined} />
                                     <AvatarFallback className="text-[10px] font-semibold">
                                         {initialsOf(`${m.firstName} ${m.lastName}`)}
@@ -404,7 +404,7 @@ export function ManagerHomePage() {
                                         {m.designation ?? m.department ?? m.employeeNo}
                                     </div>
                                 </div>
-                                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" data-rtl-flip />
+                                <ArrowRight className="size-3.5 text-muted-foreground" data-rtl-flip />
                             </Link>
                         ))}
                     </div>
@@ -417,9 +417,10 @@ export function ManagerHomePage() {
                     {t('home.quickActions')}
                 </h2>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <ActionLink to={ROUTES.managerApprovals} icon={<ListChecks className="h-5 w-5" />} label={t('nav.approvals')} />
-                    <ActionLink to={ROUTES.managerMembers} icon={<Users className="h-5 w-5" />} label={t('nav.team')} />
-                    <ActionLink to={ROUTES.managerCalendar} icon={<Calendar className="h-5 w-5" />} label={t('nav.calendar')} />
+                    <ActionLink to={ROUTES.managerApprovals} icon={<ListChecks className="size-5" />} label={t('nav.approvals')} />
+                    <ActionLink to={ROUTES.managerMembers} icon={<Users className="size-5" />} label={t('nav.team')} />
+                    <ActionLink to={ROUTES.managerAttendance} icon={<CalendarDays className="size-5" />} label={t('nav.attendance')} />
+                    <ActionLink to={ROUTES.managerCalendar} icon={<Calendar className="size-5" />} label={t('nav.calendar')} />
                 </div>
             </section>
 
@@ -499,7 +500,7 @@ function ActionLink({ to, icon, label }: { to: string; icon: React.ReactNode; la
             to={to}
             className="group flex flex-col items-start gap-2 rounded-xl border border-border bg-card/70 p-4 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
         >
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-50 to-sky-50 text-indigo-600 transition-transform group-hover:scale-110 dark:from-indigo-950/40 dark:to-sky-950/30 dark:text-indigo-300">
+            <span className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-50 to-sky-50 text-indigo-600 transition-transform group-hover:scale-110 dark:from-indigo-950/40 dark:to-sky-950/30 dark:text-indigo-300">
                 {icon}
             </span>
             <span className="text-sm font-medium leading-snug">{label}</span>
@@ -536,7 +537,7 @@ function TeamStatusChart({
         <ChartCard
             title="Today at a glance"
             subtitle={teamCount > 0 ? `${present} of ${teamCount} present` : 'No team data yet'}
-            icon={<PieChart className="h-4 w-4 text-indigo-500" />}
+            icon={<PieChart className="size-4 text-indigo-500" />}
             height={220}
         >
             <ResponsiveContainer width="100%" height="100%">
@@ -555,7 +556,7 @@ function TeamStatusChart({
                             <Cell key={slice.name} fill={COLORS[i % COLORS.length]} />
                         ))}
                         <foreignObject x="35%" y="35%" width="30%" height="30%">
-                            <div className="flex h-full w-full flex-col items-center justify-center">
+                            <div className="flex size-full flex-col items-center justify-center">
                                 <div className="font-display text-3xl font-bold tabular-figures">{teamCount}</div>
                                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">team</div>
                             </div>
@@ -622,7 +623,7 @@ function LeaveActivityChart({ requests }: { requests: LeaveRequest[] }) {
         <ChartCard
             title="Leave activity"
             subtitle={totals > 0 ? `${totals} requests across last 6 months` : 'No leave activity in the last 6 months'}
-            icon={<Activity className="h-4 w-4 text-sky-500" />}
+            icon={<Activity className="size-4 text-sky-500" />}
             height={220}
         >
             {totals === 0 ? (
@@ -674,7 +675,7 @@ function LeaveActivityChart({ requests }: { requests: LeaveRequest[] }) {
 function Legend({ swatch, label, value }: { swatch: string; label: string; value?: number }) {
     return (
         <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: swatch }} />
+            <span className="size-2 rounded-full" style={{ background: swatch }} />
             {label}
             {value !== undefined ? <span className="font-semibold tabular-figures text-foreground">{value}</span> : null}
         </span>

@@ -69,6 +69,20 @@ export const MARITAL_STATUS_OPTIONS: SelectOption[] = toOptions(MARITAL_STATUS_L
 export const GENDER_OPTIONS: SelectOption[] = toOptions(GENDER_LABELS)
 export const EMIRATISATION_OPTIONS: SelectOption[] = toOptions(EMIRATISATION_LABELS)
 
+// ── Calendar / Shift schedule ────────────────────────────────────────────────
+// Sunday-first ordering matches the UAE working-week convention.
+import type { WeekDay } from '@/types'
+
+export const WEEK_DAYS: { value: WeekDay; label: string }[] = [
+    { value: 'sunday', label: 'Sun' },
+    { value: 'monday', label: 'Mon' },
+    { value: 'tuesday', label: 'Tue' },
+    { value: 'wednesday', label: 'Wed' },
+    { value: 'thursday', label: 'Thu' },
+    { value: 'friday', label: 'Fri' },
+    { value: 'saturday', label: 'Sat' },
+]
+
 // ── Visa ─────────────────────────────────────────────────────────────────────
 export const VISA_STATUS_OPTIONS: SelectOption[] = toOptions(VISA_STATUS_LABELS)
 export const VISA_PRIORITY_OPTIONS: SelectOption[] = toOptions(VISA_PRIORITY_LABELS)

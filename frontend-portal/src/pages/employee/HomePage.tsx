@@ -7,6 +7,7 @@ import {
     CheckCircle2,
     ChevronRight,
     Clock,
+    FileText,
     LogIn,
     LogOut,
     PieChart,
@@ -39,7 +40,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ROUTES } from '@/lib/routes'
-import { cn, formatCurrency, formatDate, monthName } from '@/lib/utils'
+import { cn, formatCurrency, formatDate, formatShiftRange, monthName } from '@/lib/utils'
 import type { LeaveStatus, Payslip } from '@/types'
 
 function greetingKey(hour: number): 'greetingMorning' | 'greetingAfternoon' | 'greetingEvening' {
@@ -110,9 +111,20 @@ export function EmployeeHomePage() {
             >
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider opacity-80">
-                            <Clock className="h-3 w-3" />
-                            {t('attendance.title')}
+                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider opacity-80">
+                            <span className="inline-flex items-center gap-1.5">
+                                <Clock className="size-3" />
+                                {t('attendance.title')}
+                            </span>
+                            {/* Show today's scheduled shift inline so the user knows what window they're tracking against. */}
+                            {me?.shift ? (() => {
+                                const range = formatShiftRange(me.shift!.startTime, me.shift!.endTime)
+                                return range ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-white/35 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal opacity-80 dark:bg-white/10">
+                                        {me.shift!.name} · {range}
+                                    </span>
+                                ) : null
+                            })() : null}
                         </div>
                         {todayRecord?.checkIn ? (
                             <div className="mt-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -143,7 +155,7 @@ export function EmployeeHomePage() {
                     <div className="shrink-0">
                         {checkedOutToday ? (
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                <CheckCircle2 className="h-3.5 w-3.5" /> Done for the day
+                                <CheckCircle2 className="size-3.5" /> Done for the day
                             </span>
                         ) : isCheckedIn ? (
                             <Button
@@ -154,7 +166,7 @@ export function EmployeeHomePage() {
                                 }
                                 loading={checkOut.isPending}
                             >
-                                <LogOut className="h-4 w-4" /> {t('attendance.checkOut')}
+                                <LogOut className="size-4" /> {t('attendance.checkOut')}
                             </Button>
                         ) : (
                             <Button
@@ -165,7 +177,7 @@ export function EmployeeHomePage() {
                                 }
                                 loading={checkIn.isPending}
                             >
-                                <LogIn className="h-4 w-4" /> {t('attendance.checkIn')}
+                                <LogIn className="size-4" /> {t('attendance.checkIn')}
                             </Button>
                         )}
                     </div>
@@ -176,7 +188,7 @@ export function EmployeeHomePage() {
             <div className="grid gap-4 sm:grid-cols-2">
                 <StatCard
                     tone="primary"
-                    icon={<Calendar className="h-4 w-4" />}
+                    icon={<Calendar className="size-4" />}
                     label={t('home.leaveBalance')}
                     accent="indigo"
                 >
@@ -204,7 +216,7 @@ export function EmployeeHomePage() {
 
                 <StatCard
                     tone="success"
-                    icon={<Receipt className="h-4 w-4" />}
+                    icon={<Receipt className="size-4" />}
                     label={t('home.nextPayslip')}
                     accent="emerald"
                 >
@@ -243,7 +255,7 @@ export function EmployeeHomePage() {
                             to={ROUTES.employeeLeave}
                             className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                         >
-                            {t('common.viewAll')} <ChevronRight className="h-3 w-3" />
+                            {t('common.viewAll')} <ChevronRight className="size-3" />
                         </Link>
                     </div>
                     <div className="space-y-2">
@@ -279,11 +291,12 @@ export function EmployeeHomePage() {
                 <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     {t('home.quickActions')}
                 </h2>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <ActionLink to={ROUTES.employeeLeave} icon={<Calendar className="h-5 w-5" />} label={t('home.requestLeave')} />
-                    <ActionLink to={ROUTES.employeePayslips} icon={<Receipt className="h-5 w-5" />} label={t('home.viewPayslips')} />
-                    <ActionLink to={ROUTES.employeeAttendance} icon={<Clock className="h-5 w-5" />} label={t('home.viewAttendance')} />
-                    <ActionLink to={ROUTES.employeeProfile} icon={<User className="h-5 w-5" />} label={t('home.viewProfile')} />
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                    <ActionLink to={ROUTES.employeeLeave} icon={<Calendar className="size-5" />} label={t('home.requestLeave')} />
+                    <ActionLink to={ROUTES.employeePayslips} icon={<Receipt className="size-5" />} label={t('home.viewPayslips')} />
+                    <ActionLink to={ROUTES.employeeAttendance} icon={<Clock className="size-5" />} label={t('home.viewAttendance')} />
+                    <ActionLink to={ROUTES.employeeDocuments} icon={<FileText className="size-5" />} label={t('nav.documents')} />
+                    <ActionLink to={ROUTES.employeeProfile} icon={<User className="size-5" />} label={t('home.viewProfile')} />
                 </div>
             </section>
         </div>
@@ -340,7 +353,7 @@ function FooterLink({ to, accent, children }: { to: string; accent: Accent; chil
                 ACCENT_CLASSES[accent].link,
             )}
         >
-            {children} <ArrowRight className="h-3 w-3" data-rtl-flip />
+            {children} <ArrowRight className="size-3" data-rtl-flip />
         </Link>
     )
 }
@@ -351,7 +364,7 @@ function ActionLink({ to, icon, label }: { to: string; icon: React.ReactNode; la
             to={to}
             className="group flex flex-col items-start gap-2 rounded-xl border border-border bg-card/70 p-4 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
         >
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-50 to-sky-50 text-indigo-600 transition-transform group-hover:scale-110 dark:from-indigo-950/40 dark:to-sky-950/30 dark:text-indigo-300">
+            <span className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-50 to-sky-50 text-indigo-600 transition-transform group-hover:scale-110 dark:from-indigo-950/40 dark:to-sky-950/30 dark:text-indigo-300">
                 {icon}
             </span>
             <span className="text-sm font-medium leading-snug">{label}</span>
@@ -385,7 +398,7 @@ function LeaveUsageChart({
         <ChartCard
             title="Leave usage"
             subtitle={total > 0 ? `${taken} taken of ${total} days` : 'No leave records yet'}
-            icon={<PieChart className="h-4 w-4 text-indigo-500" />}
+            icon={<PieChart className="size-4 text-indigo-500" />}
             height={220}
         >
             <ResponsiveContainer width="100%" height="100%">
@@ -404,7 +417,7 @@ function LeaveUsageChart({
                             <Cell key={slice.name} fill={COLORS[i % COLORS.length]} />
                         ))}
                         <foreignObject x="35%" y="35%" width="30%" height="30%">
-                            <div className="flex h-full w-full flex-col items-center justify-center">
+                            <div className="flex size-full flex-col items-center justify-center">
                                 <div className="font-display text-3xl font-bold tabular-figures">{available}</div>
                                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                                     {total > 0 ? 'days left' : '—'}
@@ -452,7 +465,7 @@ function PayslipTrendChart({ payslips }: { payslips: Payslip[] }) {
         <ChartCard
             title="Net pay trend"
             subtitle={data.length ? `Last ${data.length} payslip${data.length === 1 ? '' : 's'}` : 'No payslips yet'}
-            icon={<TrendingUp className="h-4 w-4 text-emerald-500" />}
+            icon={<TrendingUp className="size-4 text-emerald-500" />}
             height={220}
         >
             {data.length === 0 ? (
@@ -511,7 +524,7 @@ function PayslipTrendChart({ payslips }: { payslips: Payslip[] }) {
 function Legend({ swatch, label, value }: { swatch: string; label: string; value: number }) {
     return (
         <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: swatch }} />
+            <span className="size-2 rounded-full" style={{ background: swatch }} />
             {label} <span className="font-semibold tabular-figures text-foreground">{value}</span>
         </span>
     )

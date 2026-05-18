@@ -4,6 +4,7 @@ import { tenants, entities } from './tenants.js'
 import { orgUnits } from './orgUnits.js'
 import { gradeLevels } from './grade_levels.js'
 import { sponsoringEntities } from './sponsoring_entities.js'
+import { shifts } from './shifts.js'
 
 export const employees = pgTable('employees', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -65,6 +66,9 @@ export const employees = pgTable('employees', {
     sponsoringEntityId: uuid('sponsoring_entity_id').references(() => sponsoringEntities.id, { onDelete: 'set null' }),
     contractType: text('contract_type').$type<'permanent' | 'contract' | 'part_time' | 'probation'>(),
     workLocation: text('work_location'),
+    // FK to a tenant-defined shift template. Null = use the tenant default
+    // working week (settings.leave_settings.workingWeek).
+    shiftId: uuid('shift_id').references(() => shifts.id, { onDelete: 'set null' }),
     probationEndDate: date('probation_end_date'),
     contractEndDate: date('contract_end_date'),
     divisionId: uuid('division_id').references(() => orgUnits.id, { onDelete: 'set null' }),
@@ -107,4 +111,5 @@ export const employeesRelations = relations(employees, ({ one }) => ({
     manager: one(employees, { fields: [employees.reportingTo], references: [employees.id], relationName: 'employee_manager' }),
     gradeLevel: one(gradeLevels, { fields: [employees.gradeLevelId], references: [gradeLevels.id] }),
     sponsoringEntity: one(sponsoringEntities, { fields: [employees.sponsoringEntityId], references: [sponsoringEntities.id] }),
+    shift: one(shifts, { fields: [employees.shiftId], references: [shifts.id] }),
 }))

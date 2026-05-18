@@ -41,7 +41,7 @@ export function ManagerTeamCalendarPage() {
                     <Skeleton className="h-16" />
                 </div>
             ) : !data?.data?.length ? (
-                <EmptyState icon={<CalendarDays className="h-8 w-8" />} title={t('common.empty')} />
+                <EmptyState icon={<CalendarDays className="size-8" />} title={t('common.empty')} />
             ) : (
                 <div className="space-y-2">
                     {data.data.map((r) => (

@@ -117,6 +117,8 @@ const employeeBaseSchema = z.object({
     sponsoringEntityId: z.string().uuid().nullable().optional(),
     contractType: z.enum(['permanent', 'contract', 'part_time', 'probation']).optional(),
     workLocation: z.string().max(150).optional(),
+    // FK to a tenant-defined shift; null falls back to the tenant default.
+    shiftId: z.string().uuid().nullable().optional(),
     probationEndDate: dateField,
     contractEndDate: dateField,
     avatarUrl: z.string().max(500).optional(),

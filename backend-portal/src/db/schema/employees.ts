@@ -69,6 +69,10 @@ export const employees = pgTable('employees', {
     sponsoringEntityId: uuid('sponsoring_entity_id').references(() => sponsoringEntities.id, { onDelete: 'set null' }),
     contractType: text('contract_type').$type<'permanent' | 'contract' | 'part_time' | 'probation'>(),
     workLocation: text('work_location'),
+    // FK to a tenant-defined shift template in the `shifts` table. The actual
+    // start/end times + weekly-off days live on the joined `shifts` row.
+    // Null = use the tenant default working week.
+    shiftId: uuid('shift_id'),
     probationEndDate: date('probation_end_date'),
     contractEndDate: date('contract_end_date'),
     divisionId: uuid('division_id').references(() => orgUnits.id, { onDelete: 'set null' }),

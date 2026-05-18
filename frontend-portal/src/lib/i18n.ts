@@ -27,7 +27,7 @@ i18n
         },
     })
 
-export function applyLanguageDirection(lang: string) {
+function applyLanguageDirection(lang: string) {
     const dir = lang === 'ar' ? 'rtl' : 'ltr'
     document.documentElement.setAttribute('dir', dir)
     document.documentElement.setAttribute('lang', lang)
@@ -41,4 +41,4 @@ i18n.on('languageChanged', (lng) => {
 
 applyLanguageDirection(i18n.language ?? 'en')
 
-export default i18n
+// i18n initialises itself on import — no exports needed.

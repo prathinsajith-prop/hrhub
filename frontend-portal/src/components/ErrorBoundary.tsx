@@ -40,8 +40,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
         return (
             <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-rose-50/40 to-amber-50 px-4 py-10 dark:from-slate-950 dark:via-rose-950/20 dark:to-amber-950/20">
                 <div className="w-full max-w-md rounded-3xl border border-white/60 bg-white/85 p-8 text-center shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-card/80">
-                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
-                        <AlertCircle className="h-7 w-7" />
+                    <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                        <AlertCircle className="size-7" />
                     </div>
                     <h1 className="font-display text-xl font-semibold tracking-tight">Something went wrong</h1>
                     <p className="mt-2 text-sm text-muted-foreground">
@@ -67,7 +67,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
                             onClick={this.handleReload}
                             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                         >
-                            <RefreshCw className="h-4 w-4" /> Reload
+                            <RefreshCw className="size-4" /> Reload
                         </button>
                     </div>
                 </div>

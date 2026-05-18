@@ -71,7 +71,7 @@ export function ManagerTeamPage() {
             />
 
             <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -83,7 +83,7 @@ export function ManagerTeamPage() {
             {/* ── Department filter chips ────────────────────────────── */}
             {departments.length > 1 ? (
                 <div className="flex flex-wrap gap-1.5">
-                    <FilterChip active={dept === ALL} onClick={() => pickDept(ALL)} icon={<Building2 className="h-3 w-3" />}>
+                    <FilterChip active={dept === ALL} onClick={() => pickDept(ALL)} icon={<Building2 className="size-3" />}>
                         All <span className="opacity-70">· {allMembers.length}</span>
                     </FilterChip>
                     {departments.map((d) => (
@@ -101,7 +101,7 @@ export function ManagerTeamPage() {
                 </div>
             ) : filteredMembers.length === 0 ? (
                 <EmptyState
-                    icon={<Users className="h-8 w-8" />}
+                    icon={<Users className="size-8" />}
                     title={dept === ALL ? t('team.noTeam') : `No one in ${dept}`}
                 />
             ) : (
@@ -110,7 +110,7 @@ export function ManagerTeamPage() {
                         <Link key={m.id} to={ROUTES.managerMemberDetail(m.id)}>
                             <Card className="border-border/70 transition-all hover:border-primary/40 hover:shadow-md">
                                 <CardContent className="flex items-center gap-3 p-3">
-                                    <Avatar className="h-10 w-10">
+                                    <Avatar className="size-10">
                                         <AvatarImage src={m.avatarUrl ?? undefined} />
                                         <AvatarFallback>{initialsOf(`${m.firstName} ${m.lastName}`)}</AvatarFallback>
                                     </Avatar>
@@ -120,7 +120,7 @@ export function ManagerTeamPage() {
                                             {m.designation ? <span className="truncate">{m.designation}</span> : null}
                                             {m.department ? (
                                                 <span className="inline-flex items-center gap-1 truncate">
-                                                    <Building2 className="h-3 w-3" />
+                                                    <Building2 className="size-3" />
                                                     {m.department}
                                                 </span>
                                             ) : null}

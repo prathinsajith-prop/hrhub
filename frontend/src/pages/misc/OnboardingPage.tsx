@@ -491,7 +491,7 @@ export function OnboardingPage() {
 
             {/* New Onboarding Dialog */}
             <Dialog open={newOpen} onOpenChange={open => { if (!open) closeDialog() }}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-xl">
                     <DialogHeader><DialogTitle>Start Onboarding</DialogTitle></DialogHeader>
                     <DialogBody className="space-y-4">
                         <div className="space-y-1">

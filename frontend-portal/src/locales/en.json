@@ -39,6 +39,9 @@
     "payslips": "Payslips",
     "profile": "Profile",
     "attendance": "Attendance",
+    "documents": "Documents",
+    "performance": "Performance",
+    "profileChanges": "Profile Changes",
     "team": "Team",
     "approvals": "Approvals",
     "calendar": "Calendar"

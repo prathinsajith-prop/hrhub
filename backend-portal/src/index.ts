@@ -18,6 +18,10 @@ import attendanceRoutes from './modules/attendance/attendance.routes.js'
 import teamsRoutes from './modules/teams/teams.routes.js'
 import notificationsRoutes from './modules/notifications/notifications.routes.js'
 import holidaysRoutes from './modules/holidays/holidays.routes.js'
+import documentsRoutes from './modules/documents/documents.routes.js'
+import assetsRoutes from './modules/assets/assets.routes.js'
+import performanceRoutes from './modules/performance/performance.routes.js'
+import profileChangesRoutes from './modules/profile-changes/profile-changes.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -99,6 +103,10 @@ async function bootstrap() {
     await app.register(teamsRoutes, { prefix: '/api/v1/teams' })
     await app.register(notificationsRoutes, { prefix: '/api/v1/notifications' })
     await app.register(holidaysRoutes, { prefix: '/api/v1/holidays' })
+    await app.register(documentsRoutes, { prefix: '/api/v1/documents' })
+    await app.register(assetsRoutes, { prefix: '/api/v1/assets' })
+    await app.register(performanceRoutes, { prefix: '/api/v1/performance' })
+    await app.register(profileChangesRoutes, { prefix: '/api/v1/profile-changes' })
 
     // /health is registered at the top of bootstrap (before plugins) so probes never
     // depend on the rest of the stack. /health/detailed runs DB+S3 round-trips and

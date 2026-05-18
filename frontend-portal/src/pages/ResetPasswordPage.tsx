@@ -53,15 +53,15 @@ export function ResetPasswordPage() {
     return (
         <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/40 to-sky-50 px-4 py-10 dark:from-slate-950 dark:via-indigo-950/30 dark:to-sky-950/20">
             <div className="pointer-events-none absolute inset-0">
-                <div className="absolute -left-32 top-10 h-72 w-72 rounded-full bg-indigo-300/40 blur-3xl dark:bg-indigo-500/20" />
-                <div className="absolute right-[-6rem] top-1/2 h-80 w-80 -translate-y-1/2 rounded-full bg-sky-300/40 blur-3xl dark:bg-sky-500/20" />
+                <div className="absolute -left-32 top-10 size-72 rounded-full bg-indigo-300/40 blur-3xl dark:bg-indigo-500/20" />
+                <div className="absolute right-[-6rem] top-1/2 size-80 -translate-y-1/2 rounded-full bg-sky-300/40 blur-3xl dark:bg-sky-500/20" />
             </div>
 
             <div className="relative w-full max-w-md">
                 <div className="rounded-3xl border border-white/60 bg-white/70 p-8 shadow-2xl shadow-indigo-200/40 backdrop-blur-xl dark:border-white/10 dark:bg-card/70">
                     <div className="mb-6 flex items-center gap-2">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-lg shadow-indigo-300/50">
-                            <Sparkles className="h-5 w-5" />
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-lg shadow-indigo-300/50">
+                            <Sparkles className="size-5" />
                         </div>
                         <div>
                             <div className="font-display text-lg font-bold leading-none">{t('app.name')}</div>
@@ -69,8 +69,8 @@ export function ResetPasswordPage() {
                         </div>
                     </div>
 
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
-                        <ShieldCheck className="h-6 w-6" />
+                    <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+                        <ShieldCheck className="size-6" />
                     </div>
                     <h1 className="font-display text-2xl font-semibold tracking-tight">{t('auth.resetTitle')}</h1>
                     <p className="mt-1 text-sm text-muted-foreground">{t('auth.resetSub')}</p>
@@ -99,9 +99,9 @@ export function ResetPasswordPage() {
                                         onClick={() => setShowPassword((v) => !v)}
                                         aria-label={showPassword ? 'Hide password' : 'Show password'}
                                         aria-pressed={showPassword}
-                                        className="absolute end-0 top-0 flex h-11 w-11 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
+                                        className="absolute end-0 top-0 flex size-11 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
                                     >
-                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                                     </button>
                                 </div>
                             </div>
@@ -123,7 +123,7 @@ export function ResetPasswordPage() {
                             <Button type="submit" className="h-11 w-full text-base" disabled={submitting}>
                                 {submitting ? (
                                     <>
-                                        <Loader2 className="h-4 w-4 animate-spin" /> {t('auth.resetSubmitting')}
+                                        <Loader2 className="size-4 animate-spin" /> {t('auth.resetSubmitting')}
                                     </>
                                 ) : (
                                     t('auth.resetSubmit')
@@ -137,7 +137,7 @@ export function ResetPasswordPage() {
                             to={ROUTES.login}
                             className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
                         >
-                            <ArrowLeft className="h-3.5 w-3.5" /> {t('auth.backToLogin')}
+                            <ArrowLeft className="size-3.5" /> {t('auth.backToLogin')}
                         </Link>
                     </div>
                 </div>

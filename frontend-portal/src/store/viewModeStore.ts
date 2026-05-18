@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type ViewMode = 'employee' | 'manager'
+type ViewMode = 'employee' | 'manager'
 
 interface ViewModeState {
     mode: ViewMode

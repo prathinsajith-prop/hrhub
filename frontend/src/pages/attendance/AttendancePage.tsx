@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
-    ChevronLeft, ChevronRight, CalendarDays, Clock, UserCheck, UserX,
+    CalendarDays, Clock, UserCheck, UserX,
     AlarmClock, Home, CalendarOff, TrendingUp, Edit2, RefreshCcw, Zap,
 } from 'lucide-react'
 import {
@@ -28,7 +28,10 @@ import {
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
-import { useAttendance, useUpsertAttendance, useExternalPunch, type AttendanceRecord } from '@/hooks/useAttendance'
+import { useAttendance, useAttendanceCalendar, useUpsertAttendance, useExternalPunch, type AttendanceRecord } from '@/hooks/useAttendance'
+import { AttendanceCalendarGrid } from '@/components/shared/AttendanceCalendarGrid'
+import { MonthSwitcher } from '@/components/shared/MonthSwitcher'
+import { resolveMonthFromOffset } from '@/lib/monthRange'
 import { useEmployees } from '@/hooks/useEmployees'
 import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
@@ -84,16 +87,6 @@ function fmtTime(ts: string | undefined) {
     return new Date(ts).toLocaleTimeString('en-AE', { hour: '2-digit', minute: '2-digit' })
 }
 
-function getMonthRange(offset = 0) {
-    const d = new Date()
-    d.setMonth(d.getMonth() + offset)
-    const year = d.getFullYear()
-    const month = d.getMonth()
-    const start = new Date(year, month, 1).toISOString().split('T')[0]
-    const end = new Date(year, month + 1, 0).toISOString().split('T')[0]
-    return { start, end, label: d.toLocaleString('en-AE', { month: 'long', year: 'numeric' }) }
-}
-
 // ─────────────────────────── Page ────────────────────────────────────────
 
 export function AttendancePage() {
@@ -110,7 +103,8 @@ export function AttendancePage() {
     const [punchTimestamp, setPunchTimestamp] = useState('')
     const externalPunch = useExternalPunch()
 
-    const { start, end, label } = useMemo(() => getMonthRange(monthOffset), [monthOffset])
+    const { month: calendarMonth, label, start, end } = useMemo(() => resolveMonthFromOffset(monthOffset), [monthOffset])
+    const { data: calendarData, isLoading: calendarLoading } = useAttendanceCalendar(calendarMonth)
 
     const search = useSearchFilters({
         storageKey: 'hrhub.attendance.searchHistory',
@@ -451,30 +445,7 @@ export function AttendancePage() {
                 description={t('attendance.description')}
                 actions={
                     <div className="flex items-center gap-2">
-                        <div className="inline-flex items-center rounded-lg border bg-card h-9 overflow-hidden">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-9 px-2 rounded-none"
-                                onClick={() => setMonthOffset((o) => o - 1)}
-                                aria-label="Previous month"
-                            >
-                                <ChevronLeft className="h-4 w-4" />
-                            </Button>
-                            <div className="px-3 text-xs font-medium min-w-[140px] text-center border-l border-r">
-                                {label}
-                            </div>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-9 px-2 rounded-none"
-                                onClick={() => setMonthOffset((o) => Math.min(0, o + 1))}
-                                disabled={monthOffset === 0}
-                                aria-label="Next month"
-                            >
-                                <ChevronRight className="h-4 w-4" />
-                            </Button>
-                        </div>
+                        <MonthSwitcher offset={monthOffset} onChange={setMonthOffset} label={label} />
                         <Button
                             variant="outline"
                             size="sm"
@@ -720,6 +691,19 @@ export function AttendancePage() {
                 </Card>
             )}
 
+            {/* Monthly calendar grid (HR / dept_head whole-team view) */}
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Calendar view</CardTitle>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                        Day-by-day status for every employee in {label}.
+                    </p>
+                </CardHeader>
+                <CardContent>
+                    <AttendanceCalendarGrid data={calendarData} loading={calendarLoading} />
+                </CardContent>
+            </Card>
+
             {/* Records */}
             <Card>
                 <CardHeader className="flex-row items-start sm:items-center justify-between gap-3 flex-wrap pb-4">
@@ -836,7 +820,7 @@ function EditAttendanceDialog({
 
     return (
         <Dialog open={!!record} onOpenChange={(o) => { if (!o) onClose() }}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-xl">
                 <DialogHeader>
                     <DialogTitle>Edit attendance</DialogTitle>
                     <p className="text-xs text-muted-foreground">

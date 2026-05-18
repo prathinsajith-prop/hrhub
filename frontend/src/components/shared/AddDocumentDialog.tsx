@@ -18,6 +18,10 @@ interface Props {
     onOpenChange: (open: boolean) => void
     /** Pre-set and lock the employee (e.g. from employee detail page) */
     employeeId?: string
+    /** Tag the uploaded document with an onboarding step so it groups under that step on the checklist. */
+    stepId?: string
+    /** Optional small caption rendered under the title (e.g. "For step: Visa & Compliance"). */
+    contextNote?: string
     /** Fires after a successful upload — useful to reset list pagination so the new doc shows on page 1. */
     onUploaded?: () => void
 }
@@ -28,7 +32,7 @@ function addOneYear(dateStr: string): string {
     return d.toISOString().split('T')[0]!
 }
 
-export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmployeeId, onUploaded }: Props) {
+export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmployeeId, stepId, contextNote, onUploaded }: Props) {
     const { mutateAsync, isPending } = useUploadDocument()
 
     const [selectedEmpId, setSelectedEmpId] = useState('')
@@ -139,6 +143,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
             await mutateAsync({
                 file: file!,
                 employeeId: effectiveEmployeeId,
+                stepId: stepId || undefined,
                 category: selectedDef?.category ?? 'identity',
                 docType,
                 docNumber: docNumber.trim() || undefined,
@@ -156,9 +161,12 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-lg p-0 flex flex-col max-h-[90vh]">
+            <DialogContent className="max-w-2xl p-0 flex flex-col max-h-[90vh]">
                 <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
                     <DialogTitle className="text-lg font-semibold">Add Document</DialogTitle>
+                    {contextNote && (
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{contextNote}</p>
+                    )}
                 </DialogHeader>
 
                 <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">

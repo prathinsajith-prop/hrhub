@@ -42,8 +42,8 @@ export function ModeToggle({ className }: { className?: string }) {
                 className,
             )}
         >
-            <ArrowLeftRight className="h-3 w-3 opacity-80" aria-hidden data-rtl-flip />
-            <TargetIcon className="h-3.5 w-3.5" aria-hidden />
+            <ArrowLeftRight className="size-3 opacity-80" aria-hidden data-rtl-flip />
+            <TargetIcon className="size-3.5" aria-hidden />
             <span className="tracking-wide">{targetLabel}</span>
         </button>
     )
