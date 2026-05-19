@@ -29,6 +29,26 @@ export async function complaintsRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
     const hrAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
 
+    // Local helper to keep the trail tight — every complaint mutation goes
+    // through `audit(...)`. Fire-and-forget so an audit failure never breaks
+    // the user-facing operation. The entityName is short on purpose: the
+    // complaint title may be sensitive (harassment, pay disputes) and the
+    // activity log is a wider audience than the complaint itself.
+    type AuditAction = 'create' | 'update' | 'delete' | 'approve' | 'reject' | 'submit'
+    const audit = (req: any, action: AuditAction, entityId: string, meta?: Record<string, unknown>) =>
+        recordActivity({
+            tenantId: req.user.tenantId,
+            userId: req.user.id,
+            actorName: req.user.name,
+            actorRole: req.user.role,
+            entityType: 'complaint',
+            entityId,
+            action,
+            metadata: meta,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        }).catch(() => { })
+
     // ── HR-facing endpoints ───────────────────────────────────────────────────
 
     // GET /api/v1/complaints — all complaints (HR view)
@@ -63,6 +83,7 @@ export async function complaintsRoutes(fastify: any) {
     fastify.post('/complaints/:id/acknowledge', { ...hrAuth, schema: { tags: ['Complaints'] } }, async (req: any, reply: any) => {
         const data = await acknowledgeComplaint(req.user.tenantId, req.params.id)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found or already acknowledged' })
+        audit(req, 'submit', req.params.id, { stage: 'acknowledged' })
         return reply.send({ data })
     })
 
@@ -72,6 +93,7 @@ export async function complaintsRoutes(fastify: any) {
         if (!parsed.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid input' })
         const data = await assignComplaint(req.user.tenantId, req.params.id, parsed.data.assignedToId)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found' })
+        audit(req, 'update', req.params.id, { stage: 'assigned', assignedToId: parsed.data.assignedToId })
         return reply.send({ data })
     })
 
@@ -79,6 +101,7 @@ export async function complaintsRoutes(fastify: any) {
     fastify.post('/complaints/:id/escalate', { ...hrAuth, schema: { tags: ['Complaints'] } }, async (req: any, reply: any) => {
         const data = await escalateComplaint(req.user.tenantId, req.params.id)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found or not in correct state' })
+        audit(req, 'update', req.params.id, { stage: 'escalated' })
         return reply.send({ data })
     })
 
@@ -88,6 +111,7 @@ export async function complaintsRoutes(fastify: any) {
         if (!parsed.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Resolution notes required (min 5 chars)' })
         const data = await resolveComplaint(req.user.tenantId, req.params.id, parsed.data.resolutionNotes)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found or already resolved' })
+        audit(req, 'approve', req.params.id, { stage: 'resolved' })
         return reply.send({ data })
     })
 
@@ -113,6 +137,7 @@ export async function complaintsRoutes(fastify: any) {
         const parsed = createSchema.safeParse(req.body)
         if (!parsed.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid input', validationErrors: parsed.error.issues })
         const data = await createComplaint(req.user.tenantId, { ...parsed.data, submittedByEmployeeId: employeeId })
+        audit(req, 'create', data.id, { category: parsed.data.category, severity: parsed.data.severity })
         return reply.code(201).send({ data })
     })
 
@@ -124,6 +149,9 @@ export async function complaintsRoutes(fastify: any) {
         if (!parsed.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid input' })
         const data = await updateComplaint(req.user.tenantId, req.params.id, parsed.data, employeeId)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found' })
+        // Only log the names of the fields that were changed — values are
+        // intentionally omitted (complaint descriptions can be sensitive).
+        audit(req, 'update', data.id, { fields: Object.keys(parsed.data) })
         return reply.send({ data })
     })
 
@@ -146,6 +174,7 @@ export async function complaintsRoutes(fastify: any) {
         const result = await submitComplaint(req.user.tenantId, req.params.id, employeeId)
         if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found' })
         if ('error' in result) return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Complaint is not in draft state' })
+        audit(req, 'submit', req.params.id, { stage: 'submitted' })
         return reply.send({ data: result })
     })
 

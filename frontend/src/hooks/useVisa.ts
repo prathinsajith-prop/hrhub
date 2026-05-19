@@ -149,7 +149,7 @@ export function useUpdateVisa() {
 }
 
 /**
- * Step label catalogue from the backend. Cached indefinitely — labels are
+ * Step label catalogue from the backend. Cached indefinitely - labels are
  * static constants that don't change between deploys.
  */
 export function useVisaStepLabels() {

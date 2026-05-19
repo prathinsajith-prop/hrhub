@@ -260,6 +260,20 @@
       "when": 1779753600000,
       "tag": "0036_user_roles_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1779840000000,
+      "tag": "0037_payslip_leave_breakdown",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1779926400000,
+      "tag": "0038_payroll_adjustments",
+      "breakpoints": true
     }
   ]
 }

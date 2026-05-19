@@ -32,8 +32,21 @@ const TYPE_TONE: Record<Notification['type'], { Icon: typeof Info; tone: string 
     error: { Icon: AlertCircle, tone: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300' },
 }
 
+// Module-scope cache for Intl.RelativeTimeFormat. Constructing these is
+// expensive; the popover may re-render on every poll/socket tick, so we
+// memoise once per locale and reuse across renders + component instances.
+const RTF_CACHE = new Map<string, Intl.RelativeTimeFormat>()
+function getRelativeTimeFormatter(locale: string): Intl.RelativeTimeFormat {
+    let fmt = RTF_CACHE.get(locale)
+    if (!fmt) {
+        fmt = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+        RTF_CACHE.set(locale, fmt)
+    }
+    return fmt
+}
+
 // Whitelist: same-origin app paths (single leading `/`) or absolute http(s) URLs.
-// Anything else — `javascript:`, `data:`, protocol-relative `//evil`, etc. — is
+// Anything else - `javascript:`, `data:`, protocol-relative `//evil`, etc. - is
 // rejected so a server-supplied actionUrl can't become a script-execution or
 // phishing vector.
 function resolveActionUrl(raw: string): { kind: 'internal' | 'external'; url: string } | null {
@@ -46,7 +59,7 @@ function resolveActionUrl(raw: string): { kind: 'internal' | 'external'; url: st
             return { kind: 'external', url: parsed.toString() }
         }
     } catch {
-        // Invalid URL — fall through to null.
+        // Invalid URL - fall through to null.
     }
     return null
 }
@@ -75,10 +88,7 @@ export function NotificationsBell({ triggerClassName }: Props) {
     const markRead = useMarkNotificationRead()
     const markAll = useMarkAllRead()
 
-    const rtf = useMemo(
-        () => new Intl.RelativeTimeFormat(i18n.language, { numeric: 'auto' }),
-        [i18n.language],
-    )
+    const rtf = useMemo(() => getRelativeTimeFormatter(i18n.language), [i18n.language])
 
     const formatTimeAgo = useCallback(
         (iso: string) => {
@@ -97,7 +107,7 @@ export function NotificationsBell({ triggerClassName }: Props) {
 
     const sortedItems = useMemo(() => {
         if (!items?.length) return []
-        return [...items].sort((a, b) => {
+        return items.toSorted((a, b) => {
             if (a.isRead !== b.isRead) return a.isRead ? 1 : -1
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         })

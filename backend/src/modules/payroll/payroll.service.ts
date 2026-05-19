@@ -1,7 +1,7 @@
-import { eq, and, desc, gte, lte, inArray, sql, getTableColumns } from 'drizzle-orm'
+import { eq, and, desc, inArray, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { payrollRuns, payslips, employees, tenants } from '../../db/schema/index.js'
-import { leaveRequests } from '../../db/schema/leave.js'
+import { syncAdjustmentsForPeriod, getAdjustmentTotalsByEmployee } from './adjustments.service.js'
 import type { InferInsertModel } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
@@ -63,8 +63,16 @@ export async function getPayslipsByEmployee(tenantId: string, employeeId: string
             housingAllowance: payslips.housingAllowance,
             transportAllowance: payslips.transportAllowance,
             otherAllowances: payslips.otherAllowances,
+            overtime: payslips.overtime,
+            commission: payslips.commission,
             grossSalary: payslips.grossSalary,
             deductions: payslips.deductions,
+            unpaidLeaveDays: payslips.unpaidLeaveDays,
+            unpaidLeaveDeduction: payslips.unpaidLeaveDeduction,
+            sickHalfPayDays: payslips.sickHalfPayDays,
+            sickHalfPayDeduction: payslips.sickHalfPayDeduction,
+            loanDeduction: payslips.loanDeduction,
+            otherDeduction: payslips.otherDeduction,
             netSalary: payslips.netSalary,
             daysWorked: payslips.daysWorked,
         })
@@ -74,12 +82,16 @@ export async function getPayslipsByEmployee(tenantId: string, employeeId: string
         .orderBy(desc(payrollRuns.year), desc(payrollRuns.month))
 }
 
-// ─── Payroll Calculation Engine (Tasks 7.1–7.4) ────────────────────────────
-// UAE Labour Law rules applied:
-//   Gross = basic + housing + transport + other allowances
-//   Unpaid leave deduction = (daily rate) × days taken
-//   Sick half-pay deduction = (daily rate × 0.5) × sick days over 15
-//   Net = Gross − deductions
+// ─── Payroll Calculation Engine ─────────────────────────────────────────────
+// UAE Labour Law applied via the payroll_adjustments ledger:
+//   Gross   = (basic + housing + transport + other) × prorate ratio
+//   Net     = Gross + additions − deductions
+//
+// `additions` and `deductions` no longer come from inline computations — they
+// come from the payroll_adjustments table. runPayroll() first calls
+// syncAdjustmentsForPeriod() to refresh the leave-engine + loan-engine rows,
+// then aggregates everything (including HR-created manual rows) and writes
+// per-category totals into the payslip columns. See adjustments.service.ts.
 
 export async function runPayroll(tenantId: string, payrollRunId: string): Promise<boolean> {
     const run = await getPayrollRun(tenantId, payrollRunId)
@@ -118,37 +130,11 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
 
     // Date range for the payroll month
     const daysInMonth = new Date(run.year, run.month, 0).getDate()
-    const monthStart = `${run.year}-${String(run.month).padStart(2, '0')}-01`
-    const monthEnd = `${run.year}-${String(run.month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-    // Fetch approved leave for all these employees in this month
-    const empIds = activeEmps.map(e => e.id)
-    const leaveRows = await db.select({
-        employeeId: leaveRequests.employeeId,
-        leaveType: leaveRequests.leaveType,
-        days: leaveRequests.days,
-    }).from(leaveRequests)
-        .where(and(
-            eq(leaveRequests.tenantId, tenantId),
-            eq(leaveRequests.status, 'approved'),
-            gte(leaveRequests.startDate, monthStart),
-            lte(leaveRequests.startDate, monthEnd),
-            inArray(leaveRequests.employeeId, empIds),
-        ))
-
-    // Group leave by employeeId
-    const leaveByEmp = new Map<string, { unpaid: number; sickOver15: number }>()
-    for (const l of leaveRows) {
-        const existing = leaveByEmp.get(l.employeeId) ?? { unpaid: 0, sickOver15: 0 }
-        if (l.leaveType === 'unpaid') {
-            existing.unpaid += l.days ?? 0
-        } else if (l.leaveType === 'sick') {
-            // First 15 days full pay (no deduction), days 16–45 half-pay
-            const sickDays = l.days ?? 0
-            existing.sickOver15 += Math.max(0, sickDays - 15)
-        }
-        leaveByEmp.set(l.employeeId, existing)
-    }
+    // Refresh auto-imported adjustment rows (LOP / sick / loan), then pull
+    // the per-employee totals — HR-created manual rows are folded in here too.
+    await syncAdjustmentsForPeriod(tenantId, run.year, run.month)
+    const adjustmentTotals = await getAdjustmentTotalsByEmployee(tenantId, run.year, run.month)
 
     // Calculate payslips
     let totalGross = 0
@@ -178,13 +164,23 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
         }
 
         const prorateRatio = workedDays / daysInMonth
-        const gross = (basic + housing + transport + other) * prorateRatio
+        const baseEarnings = (basic + housing + transport + other) * prorateRatio
 
-        const dailyRate = basic / 30
-        const leave = leaveByEmp.get(emp.id)
-        const unpaidDeduction = (leave?.unpaid ?? 0) * dailyRate
-        const sickHalfPayDeduction = (leave?.sickOver15 ?? 0) * dailyRate * 0.5
-        const deductions = unpaidDeduction + sickHalfPayDeduction
+        const adj = adjustmentTotals.get(emp.id)
+        const overtime = adj?.overtime ?? 0
+        const commission = adj?.commission ?? 0
+        const additions = overtime + commission
+
+        const unpaidLeaveDeduction = adj?.unpaidLeaveDeduction ?? 0
+        const sickHalfPayDeduction = adj?.sickHalfPayDeduction ?? 0
+        const loanDeduction = adj?.loanDeduction ?? 0
+        const otherDeduction = adj?.otherDeduction ?? 0
+        const deductions = unpaidLeaveDeduction + sickHalfPayDeduction + loanDeduction + otherDeduction
+
+        // Gross sticks to the conventional definition (earnings + additions);
+        // net subtracts deductions from gross. Keeping gross inclusive of
+        // overtime/commission matches what HR labels these on the payslip.
+        const gross = baseEarnings + additions
         const net = Math.max(0, gross - deductions)
 
         totalGross += gross
@@ -199,12 +195,20 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
             housingAllowance: String((housing * prorateRatio).toFixed(2)),
             transportAllowance: String((transport * prorateRatio).toFixed(2)),
             otherAllowances: String((other * prorateRatio).toFixed(2)),
+            overtime: overtime.toFixed(2),
+            commission: commission.toFixed(2),
             grossSalary: String(gross.toFixed(2)),
             deductions: String(deductions.toFixed(2)),
+            // Itemised deduction columns so the breakdown UI can show each
+            // category as its own line. Sum of these four == deductions.
+            unpaidLeaveDays: adj?.unpaidLeaveDays ?? 0,
+            unpaidLeaveDeduction: unpaidLeaveDeduction.toFixed(2),
+            sickHalfPayDays: adj?.sickHalfPayDays ?? 0,
+            sickHalfPayDeduction: sickHalfPayDeduction.toFixed(2),
+            loanDeduction: loanDeduction.toFixed(2),
+            otherDeduction: otherDeduction.toFixed(2),
             netSalary: String(net.toFixed(2)),
-            daysWorked: workedDays - (leave?.unpaid ?? 0),
-            overtime: '0',
-            commission: '0',
+            daysWorked: workedDays - (adj?.unpaidLeaveDays ?? 0),
         }
     })
 
@@ -270,6 +274,16 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
                     netSalary: String(slip.netSalary ?? '0'),
                     companyName,
                     appUrl,
+                    // Itemised breakdown so the email matches the in-app payslip
+                    // view and the PDF download. Lines only render when > 0.
+                    overtime: String(slip.overtime ?? '0'),
+                    commission: String(slip.commission ?? '0'),
+                    unpaidLeaveDays: slip.unpaidLeaveDays ?? 0,
+                    unpaidLeaveDeduction: String(slip.unpaidLeaveDeduction ?? '0'),
+                    sickHalfPayDays: slip.sickHalfPayDays ?? 0,
+                    sickHalfPayDeduction: String(slip.sickHalfPayDeduction ?? '0'),
+                    loanDeduction: String(slip.loanDeduction ?? '0'),
+                    otherDeduction: String(slip.otherDeduction ?? '0'),
                 })
                 sendEmail({ ...opts, to: emp.email }).catch(() => {})
             }
@@ -291,6 +305,12 @@ export async function getPayslipsWithEmployees(tenantId: string, payrollRunId: s
         otherAllowances: payslips.otherAllowances,
         grossSalary: payslips.grossSalary,
         deductions: payslips.deductions,
+        unpaidLeaveDays: payslips.unpaidLeaveDays,
+        unpaidLeaveDeduction: payslips.unpaidLeaveDeduction,
+        sickHalfPayDays: payslips.sickHalfPayDays,
+        sickHalfPayDeduction: payslips.sickHalfPayDeduction,
+        loanDeduction: payslips.loanDeduction,
+        otherDeduction: payslips.otherDeduction,
         netSalary: payslips.netSalary,
         daysWorked: payslips.daysWorked,
         overtime: payslips.overtime,
@@ -306,10 +326,17 @@ export async function getPayslipsWithEmployees(tenantId: string, payrollRunId: s
         .innerJoin(employees, eq(payslips.employeeId, employees.id))
         .where(and(eq(payslips.payrollRunId, payrollRunId), eq(payslips.tenantId, tenantId)))
 
-    return slips.map(s => ({
-        ...s,
-        fullName: `${s.firstName} ${s.lastName}`,
-    }))
+    return slips.map(s => {
+        const fullName = `${s.firstName} ${s.lastName}`
+        return {
+            ...s,
+            fullName,
+            // Frontend expects `employeeName` on Payslip — alias here so the
+            // sheet doesn't render blanks. Keep `fullName` too for backward
+            // compatibility with any other callers (PDF templates etc.).
+            employeeName: fullName,
+        }
+    })
 }
 
 /** Re-export from exit service so there is a single canonical implementation. */
@@ -424,8 +451,16 @@ export async function getPayslipById(tenantId: string, payslipId: string) {
         housingAllowance: payslips.housingAllowance,
         transportAllowance: payslips.transportAllowance,
         otherAllowances: payslips.otherAllowances,
+        overtime: payslips.overtime,
+        commission: payslips.commission,
         grossSalary: payslips.grossSalary,
         deductions: payslips.deductions,
+        unpaidLeaveDays: payslips.unpaidLeaveDays,
+        unpaidLeaveDeduction: payslips.unpaidLeaveDeduction,
+        sickHalfPayDays: payslips.sickHalfPayDays,
+        sickHalfPayDeduction: payslips.sickHalfPayDeduction,
+        loanDeduction: payslips.loanDeduction,
+        otherDeduction: payslips.otherDeduction,
         netSalary: payslips.netSalary,
         daysWorked: payslips.daysWorked,
         totalDeductions: payslips.deductions,

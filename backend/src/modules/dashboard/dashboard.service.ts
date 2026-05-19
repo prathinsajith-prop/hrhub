@@ -218,6 +218,7 @@ export async function getUpcomingBirthdays(tenantId: string, month?: number) {
             lastName: employees.lastName,
             employeeNo: employees.employeeNo,
             department: employees.department,
+            avatarUrl: employees.avatarUrl,
             dateOfBirth: employees.dateOfBirth,
         })
         .from(employees)
@@ -228,12 +229,90 @@ export async function getUpcomingBirthdays(tenantId: string, month?: number) {
             sql`EXTRACT(MONTH FROM ${employees.dateOfBirth}::date) = ${m}`,
         ))
         .orderBy(sql`EXTRACT(DAY FROM ${employees.dateOfBirth}::date)`)
-    return rows.map(r => ({
+    return rows.map(r => attachBirthdayMeta({
         day: r.dateOfBirth ? new Date(r.dateOfBirth).getUTCDate() : 0,
+        month: m,
         name: `${r.firstName} ${r.lastName}`.trim(),
         employeeNo: r.employeeNo,
         department: r.department ?? '',
+        avatarUrl: r.avatarUrl ?? null,
     }))
+}
+
+/**
+ * Compute `daysUntil` and the boolean `isToday` / `isTomorrow` flags for a
+ * birthday row, so the UI can show "Today!" / "Tomorrow" / "In N days" without
+ * re-deriving from the date on the client. Crosses the year boundary correctly
+ * — a birthday on Jan 3 viewed on Dec 28 returns daysUntil = 6.
+ */
+function attachBirthdayMeta(b: { day: number; month: number; name: string; employeeNo: string; department: string; avatarUrl: string | null }) {
+    const now = new Date()
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    // Build this year's birthday in UTC; if it's already passed, roll to next year.
+    let next = new Date(Date.UTC(now.getUTCFullYear(), b.month - 1, b.day))
+    if (next < today) next = new Date(Date.UTC(now.getUTCFullYear() + 1, b.month - 1, b.day))
+    const daysUntil = Math.round((next.getTime() - today.getTime()) / 86_400_000)
+    return {
+        ...b,
+        daysUntil,
+        isToday: daysUntil === 0,
+        isTomorrow: daysUntil === 1,
+    }
+}
+
+export type UpcomingBirthday = Awaited<ReturnType<typeof getUpcomingBirthdays>>[number]
+
+/**
+ * Birthdays within a rolling window — used by the portal so an employee sees
+ * "whose birthday is in the next 30 days" rather than a calendar-month snapshot.
+ *
+ * `scopeEmployeeIds` lets callers restrict to a manager's subtree or a
+ * department; pass null/undefined to include every active employee in the tenant.
+ */
+export async function getBirthdaysInWindow(
+    tenantId: string,
+    days: number,
+    scopeEmployeeIds: string[] | null,
+) {
+    if (scopeEmployeeIds && scopeEmployeeIds.length === 0) return []
+    const conds = [
+        eq(employees.tenantId, tenantId),
+        eq(employees.isArchived, false),
+        isNotNull(employees.dateOfBirth),
+    ]
+    if (scopeEmployeeIds) {
+        const inList = sql`(${sql.join(scopeEmployeeIds.map(id => sql`${id}`), sql`, `)})`
+        conds.push(sql`${employees.id} IN ${inList}`)
+    }
+
+    const rows = await db
+        .select({
+            firstName: employees.firstName,
+            lastName: employees.lastName,
+            employeeNo: employees.employeeNo,
+            department: employees.department,
+            avatarUrl: employees.avatarUrl,
+            dateOfBirth: employees.dateOfBirth,
+        })
+        .from(employees)
+        .where(and(...conds))
+
+    return rows
+        .map(r => {
+            if (!r.dateOfBirth) return null
+            const d = new Date(r.dateOfBirth)
+            const meta = attachBirthdayMeta({
+                day: d.getUTCDate(),
+                month: d.getUTCMonth() + 1,
+                name: `${r.firstName} ${r.lastName}`.trim(),
+                employeeNo: r.employeeNo,
+                department: r.department ?? '',
+                avatarUrl: r.avatarUrl ?? null,
+            })
+            return meta
+        })
+        .filter((b): b is NonNullable<typeof b> => !!b && b.daysUntil <= days)
+        .sort((a, b) => a.daysUntil - b.daysUntil)
 }
 
 export async function getWorkAnniversaries(tenantId: string, month?: number) {

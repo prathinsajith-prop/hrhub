@@ -14,6 +14,7 @@ import {
 } from '@/hooks/useGradeLevels'
 import { useSponsoringEntities, useCreateSponsoringEntity, useUpdateSponsoringEntity, type SponsoringEntity } from '@/hooks/useSponsoringEntities'
 import { Section } from './_shared'
+import { Label } from '@/components/ui/label'
 
 // ─── Role categories ──────────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ function roleCategoryColor(value: string): string {
     return ROLE_CATEGORY_COLORS[value as RoleCategory] ?? 'bg-muted text-muted-foreground'
 }
 
-// Values accepted by the current backend Zod schema — filter out legacy system-role strings
+// Values accepted by the current backend Zod schema - filter out legacy system-role strings
 const VALID_ROLE_VALUES = new Set(ROLE_CATEGORY_OPTIONS.map(o => o.value))
 
 // ─── Sort helpers ─────────────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
     const [form, setForm] = useState<ModalState>(() => editing ? gradeLevelToModal(editing) : EMPTY_MODAL)
     const [salaryError, setSalaryError] = useState('')
 
-    // Sync form every time the modal opens — handles reopening on the same grade after edits
+    // Sync form every time the modal opens - handles reopening on the same grade after edits
     const [prevOpen, setPrevOpen] = useState(open)
     if (open !== prevOpen) {
         setPrevOpen(open)
@@ -167,9 +168,9 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                 <DialogBody className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">
+                            <Label className="text-sm font-medium">
                                 {t('orgSettings.gradeLevels.levelLabel')} <span className="text-muted-foreground font-normal text-xs">{t('orgSettings.gradeLevels.levelHint')}</span>
-                            </label>
+                            </Label>
                             <NumericInput
                                 decimal={false}
                                 placeholder="e.g. 6"
@@ -178,9 +179,9 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">
+                            <Label className="text-sm font-medium">
                                 {t('orgSettings.gradeLevels.codeLabel')} <span className="text-muted-foreground font-normal text-xs">{t('orgSettings.gradeLevels.codeHint')}</span>
-                            </label>
+                            </Label>
                             <Input
                                 placeholder="e.g. G6"
                                 value={form.code}
@@ -192,9 +193,9 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">
+                        <Label className="text-sm font-medium">
                             {t('orgSettings.gradeLevels.nameLabel')} <span className="text-destructive">*</span>
-                        </label>
+                        </Label>
                         <Input
                             placeholder="e.g. Mid Level 1"
                             value={form.name}
@@ -205,9 +206,9 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">
+                        <Label className="text-sm font-medium">
                             {t('orgSettings.gradeLevels.gradeCategoryLabel')} <span className="text-muted-foreground font-normal text-xs">{t('orgSettings.gradeLevels.gradeCategoryHint')}</span>
-                        </label>
+                        </Label>
                         <div className="flex flex-wrap gap-2">
                             {ROLE_CATEGORY_OPTIONS.map(opt => {
                                 const selected = form.roles.includes(opt.value)
@@ -223,7 +224,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                                                 : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/70 hover:border-foreground/40',
                                         )}
                                     >
-                                        {selected && <Check className="h-3 w-3" />}
+                                        {selected && <Check className="size-3" />}
                                         {t(opt.labelKey)}
                                     </button>
                                 )
@@ -235,9 +236,9 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">
+                        <Label className="text-sm font-medium">
                             {t('orgSettings.gradeLevels.salaryRangeLabel')} <span className="text-muted-foreground font-normal text-xs">{t('orgSettings.gradeLevels.salaryRangeHint')}</span>
-                        </label>
+                        </Label>
                         <div className="grid grid-cols-2 gap-3">
                             <NumericInput
                                 decimal={false}
@@ -256,7 +257,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">{t('orgSettings.gradeLevels.descriptionLabel')}</label>
+                        <Label className="text-sm font-medium">{t('orgSettings.gradeLevels.descriptionLabel')}</Label>
                         <Textarea
                             placeholder={t('orgSettings.gradeLevels.descriptionPlaceholder')}
                             value={form.description}
@@ -368,13 +369,13 @@ function GradeLevelsSection() {
                 description={t('orgSettings.gradeLevels.sectionDescription')}
                 action={
                     <Button size="sm" className="gap-1.5" onClick={openAdd} disabled={isLoading}>
-                        <Plus className="h-3.5 w-3.5" /> {t('orgSettings.gradeLevels.addGradeLevel')}
+                        <Plus className="size-3.5" /> {t('orgSettings.gradeLevels.addGradeLevel')}
                     </Button>
                 }
             >
                 {isLoading ? (
                     <div className="space-y-2">
-                        {[1, 2, 3].map(i => <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />)}
+                        {[1, 2, 3].map(i => <div key={`div-${i}`} className="h-12 rounded-lg bg-muted animate-pulse" />)}
                     </div>
                 ) : levels.length === 0 ? (
                     <div className="rounded-xl border border-dashed bg-muted/30 flex flex-col items-center justify-center py-12 text-center gap-4">
@@ -384,11 +385,11 @@ function GradeLevelsSection() {
                         </div>
                         <div className="flex gap-2">
                             <Button variant="outline" size="sm" className="gap-1.5" onClick={handleSeedDefaults} disabled={seed.isPending}>
-                                <Sparkles className="h-3.5 w-3.5" />
+                                <Sparkles className="size-3.5" />
                                 {seed.isPending ? t('orgSettings.gradeLevels.loading') : t('orgSettings.gradeLevels.loadDefaults')}
                             </Button>
                             <Button size="sm" className="gap-1.5" onClick={openAdd}>
-                                <Plus className="h-3.5 w-3.5" /> {t('orgSettings.gradeLevels.addGradeLevel')}
+                                <Plus className="size-3.5" /> {t('orgSettings.gradeLevels.addGradeLevel')}
                             </Button>
                         </div>
                     </div>
@@ -451,11 +452,11 @@ function GradeLevelsSection() {
                                             <div className="flex items-center justify-end gap-1">
                                                 <Button
                                                     size="sm" variant="ghost"
-                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                                    className="size-7 p-0 text-muted-foreground hover:text-foreground"
                                                     title={t('common.edit')}
                                                     onClick={() => openEdit(g)}
                                                 >
-                                                    <Pencil className="h-3.5 w-3.5" />
+                                                    <Pencil className="size-3.5" />
                                                 </Button>
                                                 <Button
                                                     size="sm" variant="ghost"
@@ -470,11 +471,11 @@ function GradeLevelsSection() {
                                                 </Button>
                                                 <Button
                                                     size="sm" variant="ghost"
-                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                                    className="size-7 p-0 text-muted-foreground hover:text-destructive"
                                                     title={t('common.delete')}
                                                     onClick={() => setDeleteTarget(g)}
                                                 >
-                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                    <Trash2 className="size-3.5" />
                                                 </Button>
                                             </div>
                                         </td>
@@ -559,7 +560,7 @@ function MasterList({
         <div className="space-y-3">
             {isLoading ? (
                 <div className="space-y-2">
-                    {[1, 2, 3].map(i => <div key={i} className="h-10 rounded-lg bg-muted animate-pulse" />)}
+                    {[1, 2, 3].map(i => <div key={`div-${i}`} className="h-10 rounded-lg bg-muted animate-pulse" />)}
                 </div>
             ) : (
                 <div className="rounded-xl border bg-card overflow-hidden">
@@ -607,22 +608,22 @@ function MasterList({
                                             <div className="flex items-center justify-end gap-1">
                                                 {editingId === item.id ? (
                                                     <>
-                                                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => onSaveEdit(item.id)}>
-                                                            <Check className="h-3.5 w-3.5" />
+                                                        <Button size="sm" variant="ghost" className="size-7 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => onSaveEdit(item.id)}>
+                                                            <Check className="size-3.5" />
                                                         </Button>
-                                                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground" onClick={onCancelEdit}>
-                                                            <XCircle className="h-3.5 w-3.5" />
+                                                        <Button size="sm" variant="ghost" className="size-7 p-0 text-muted-foreground" onClick={onCancelEdit}>
+                                                            <XCircle className="size-3.5" />
                                                         </Button>
                                                     </>
                                                 ) : (
                                                     <>
                                                         <Button
                                                             size="sm" variant="ghost"
-                                                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                                            className="size-7 p-0 text-muted-foreground hover:text-foreground"
                                                             title={t('orgSettings.gradeLevels.rename')}
                                                             onClick={() => onStartEdit(item)}
                                                         >
-                                                            <Pencil className="h-3.5 w-3.5" />
+                                                            <Pencil className="size-3.5" />
                                                         </Button>
                                                         <Button
                                                             size="sm" variant="ghost"
@@ -658,8 +659,8 @@ function MasterList({
                                                 <Button size="sm" onClick={onAdd} disabled={!newName.trim() || addPending}>
                                                     {addPending ? '…' : t('common.add')}
                                                 </Button>
-                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground" onClick={onCancelAdd}>
-                                                    <XCircle className="h-4 w-4" />
+                                                <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground" onClick={onCancelAdd}>
+                                                    <XCircle className="size-4" />
                                                 </Button>
                                             </div>
                                         </td>
@@ -673,7 +674,7 @@ function MasterList({
 
             {!addingNew && (
                 <Button variant="ghost" size="sm" className="gap-1.5 text-primary font-medium" onClick={onStartAdd}>
-                    <Plus className="h-3.5 w-3.5" /> {addLabel}
+                    <Plus className="size-3.5" /> {addLabel}
                 </Button>
             )}
         </div>

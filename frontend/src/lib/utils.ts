@@ -36,13 +36,26 @@ export function formatDateTime(date: string | Date | null | undefined): string {
   return `${datePart}, ${timePart}`
 }
 
+// Cache one Intl.NumberFormat per currency code. Constructing these is
+// surprisingly expensive - formatCurrency runs hundreds of times in
+// tables, so memoising by currency saves dozens of allocations per render.
+const CURRENCY_FORMATTERS = new Map<string, Intl.NumberFormat>()
+function getCurrencyFormatter(currency: string): Intl.NumberFormat {
+  let fmt = CURRENCY_FORMATTERS.get(currency)
+  if (!fmt) {
+    fmt = new Intl.NumberFormat('en-AE', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })
+    CURRENCY_FORMATTERS.set(currency, fmt)
+  }
+  return fmt
+}
+
 export function formatCurrency(amount: number, currency = 'AED'): string {
-  return new Intl.NumberFormat('en-AE', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
+  return getCurrencyFormatter(currency).format(amount)
 }
 
 export function getDaysUntilExpiry(expiryDate: string): number {

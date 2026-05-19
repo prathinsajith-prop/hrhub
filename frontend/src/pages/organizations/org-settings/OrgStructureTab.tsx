@@ -171,7 +171,7 @@ function OrgUnitDialog({
                                         return (
                                             <UiSelectItem key={type} value={type}>
                                                 <span className="flex items-center gap-2">
-                                                    <Icon className="h-3.5 w-3.5" />
+                                                    <Icon className="size-3.5" />
                                                     {ORG_TYPE_META[type].label}
                                                 </span>
                                             </UiSelectItem>
@@ -359,7 +359,7 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
             <UiDialogContent className="sm:max-w-xl">
                 <UiDialogHeader>
                     <UiDialogTitle className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-primary" />
+                        <Users className="size-4 text-primary" />
                         {t('orgSettings.structure.manageTeamTitle')}
                     </UiDialogTitle>
                     <UiDialogDescription>{t('orgSettings.structure.manageTeamDesc')}</UiDialogDescription>
@@ -394,17 +394,17 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
                                         : t('orgSettings.structure.teamMembersCount_plural', { count: members.length })}
                                 </p>
                             </div>
-                            <Button size="sm" onClick={onAddMembers} leftIcon={<UserPlus className="h-3.5 w-3.5" />}>
+                            <Button size="sm" onClick={onAddMembers} leftIcon={<UserPlus className="size-3.5" />}>
                                 {t('orgSettings.structure.addMembers')}
                             </Button>
                         </div>
 
                         <div className="rounded-lg border max-h-72 overflow-y-auto">
                             {isLoading ? (
-                                <div className="p-3 space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-9 rounded bg-muted animate-pulse" />)}</div>
+                                <div className="p-3 space-y-2">{[1, 2, 3].map(i => <div key={`div-${i}`} className="h-9 rounded bg-muted animate-pulse" />)}</div>
                             ) : members.length === 0 ? (
                                 <div className="text-center py-8 text-muted-foreground">
-                                    <Users className="h-7 w-7 mx-auto mb-1.5 opacity-30" />
+                                    <Users className="size-7 mx-auto mb-1.5 opacity-30" />
                                     <p className="text-sm font-medium">{t('orgSettings.structure.noMembersYet')}</p>
                                     <p className="text-xs mt-0.5">{t('orgSettings.structure.noMembersHint')}</p>
                                 </div>
@@ -412,7 +412,7 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
                                 <ul className="divide-y">
                                     {members.map(m => (
                                         <li key={m.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40">
-                                            <Avatar className="h-8 w-8 shrink-0">
+                                            <Avatar className="size-8 shrink-0">
                                                 {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
                                                 <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
                                                     {getInitials(`${m.firstName} ${m.lastName}`)}
@@ -437,12 +437,12 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
                                             </UiSelect>
                                             <Button
                                                 size="icon" variant="ghost"
-                                                className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+                                                className="size-7 text-destructive hover:text-destructive shrink-0"
                                                 onClick={() => handleRemove(m.employeeId)}
                                                 disabled={removeMember.isPending}
                                                 title={t('orgSettings.structure.removeFromTeam')}
                                             >
-                                                <XIcon className="h-3.5 w-3.5" />
+                                                <XIcon className="size-3.5" />
                                             </Button>
                                         </li>
                                     ))}
@@ -454,7 +454,7 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
 
                 <UiDialogFooter className="justify-between sm:justify-between">
                     <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(true)}>
-                        <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('orgSettings.structure.deleteTeam')}
+                        <Trash2 className="size-3.5 mr-1.5" /> {t('orgSettings.structure.deleteTeam')}
                     </Button>
                     <Button variant="outline" onClick={onClose}>{t('common.close')}</Button>
                 </UiDialogFooter>
@@ -553,7 +553,7 @@ function HeadAssignDialog({ unit, open, onClose, empList }: {
             <UiDialogContent className="sm:max-w-md">
                 <UiDialogHeader>
                     <UiDialogTitle className="flex items-center gap-2">
-                        <Crown className="h-4 w-4 text-amber-500" />
+                        <Crown className="size-4 text-amber-500" />
                         {unit.headEmployeeId ? t('orgSettings.structure.changeHead') : t('orgSettings.structure.assignHeadTitle')}
                     </UiDialogTitle>
                     <UiDialogDescription>{unit.name}</UiDialogDescription>
@@ -607,16 +607,16 @@ function TeamSubRow({ team, canManage }: { team: TeamRow; canManage: boolean }) 
     return (
         <>
             <div className="relative flex items-center gap-3 rounded-lg border border-dashed border-border/80 px-3 py-2.5 mb-1.5 bg-card/60 transition-colors ms-[4.5rem] hover:bg-muted/40 hover:border-border">
-                {/* Horizontal tree connector — matches the vertical line in the parent container */}
+                {/* Horizontal tree connector - matches the vertical line in the parent container */}
                 <span
                     aria-hidden="true"
                     className="absolute -start-[2.65rem] top-1/2 h-px w-9 bg-border"
                 />
                 <div className="w-3.5 shrink-0" />
 
-                {/* Team type badge — distinct amber tone, same shape as branch/division/department */}
+                {/* Team type badge - distinct amber tone, same shape as branch/division/department */}
                 <div className="flex items-center gap-1.5 shrink-0 px-2 py-0.5 rounded-md border text-xs font-medium text-amber-700 bg-amber-50 border-amber-200">
-                    <Users className="h-3 w-3" />
+                    <Users className="size-3" />
                     {t('orgSettings.structure.team')}
                 </div>
 
@@ -634,12 +634,12 @@ function TeamSubRow({ team, canManage }: { team: TeamRow; canManage: boolean }) 
                         <div className="flex -space-x-2 shrink-0">
                             {members.length === 0
                                 ? [...Array(placeholderCount)].map((_, i) => (
-                                    <div key={i} className="h-6 w-6 rounded-full border-2 border-card bg-muted shrink-0" />
+                                    <div key={i} className="size-6 rounded-full border-2 border-card bg-muted shrink-0" />
                                 ))
                                 : previewMembers.map(m => (
                                     <Tooltip key={m.id}>
                                         <TooltipTrigger asChild>
-                                            <Avatar className="h-6 w-6 border-2 border-card shrink-0 cursor-pointer hover:z-10 hover:scale-110 transition-transform">
+                                            <Avatar className="size-6 border-2 border-card shrink-0 cursor-pointer hover:z-10 hover:scale-110 transition-transform">
                                                 {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
                                                 <AvatarFallback className="text-[8px] font-semibold bg-primary/10 text-primary">
                                                     {getInitials(`${m.firstName} ${m.lastName}`)}
@@ -648,7 +648,7 @@ function TeamSubRow({ team, canManage }: { team: TeamRow; canManage: boolean }) 
                                         </TooltipTrigger>
                                         <TooltipContent side="top" sideOffset={8} className="px-3 py-2.5 max-w-[260px]">
                                             <div className="flex items-start gap-3">
-                                                <Avatar className="h-9 w-9 shrink-0 border border-border">
+                                                <Avatar className="size-9 shrink-0 border border-border">
                                                     {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
                                                     <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
                                                         {getInitials(`${m.firstName} ${m.lastName}`)}
@@ -676,7 +676,7 @@ function TeamSubRow({ team, canManage }: { team: TeamRow; canManage: boolean }) 
                                 ))
                             }
                             {overflow > 0 && (
-                                <div className="h-6 w-6 rounded-full border-2 border-card bg-muted flex items-center justify-center shrink-0">
+                                <div className="size-6 rounded-full border-2 border-card bg-muted flex items-center justify-center shrink-0">
                                     <span className="text-[9px] font-semibold text-muted-foreground tabular-nums">+{overflow}</span>
                                 </div>
                             )}
@@ -688,18 +688,18 @@ function TeamSubRow({ team, canManage }: { team: TeamRow; canManage: boolean }) 
                 {canManage && (
                     <div className="flex gap-1 shrink-0">
                         <Button
-                            size="sm" variant="ghost" className="h-7 w-7 p-0"
+                            size="sm" variant="ghost" className="size-7 p-0"
                             title={t('orgSettings.structure.addMembers')}
                             onClick={() => setAddMembersOpen(true)}
                         >
-                            <UserPlus className="h-3.5 w-3.5" />
+                            <UserPlus className="size-3.5" />
                         </Button>
                         <Button
-                            size="sm" variant="ghost" className="h-7 w-7 p-0"
+                            size="sm" variant="ghost" className="size-7 p-0"
                             title={t('orgSettings.structure.manageTeam')}
                             onClick={() => setManageOpen(true)}
                         >
-                            <Settings2 className="h-3.5 w-3.5" />
+                            <Settings2 className="size-3.5" />
                         </Button>
                     </div>
                 )}
@@ -738,7 +738,7 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
     const [addTeamOpen, setAddTeamOpen] = useState(false)
     const [headDialogOpen, setHeadDialogOpen] = useState(false)
     const isDept = unit.type === 'department'
-    // Departments stay collapsed by default — open on explicit click.
+    // Departments stay collapsed by default - open on explicit click.
     const [expanded, setExpanded] = useState(!isDept)
     const [confirmDelete, setConfirmDelete] = useState(false)
     const meta = ORG_TYPE_META[unit.type]
@@ -761,12 +761,12 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
             >
                 {hasContent ? (
                     <span className="shrink-0 text-muted-foreground">
-                        {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRightIcon className="h-3.5 w-3.5" />}
+                        {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRightIcon className="size-3.5" />}
                     </span>
                 ) : <div className="w-3.5 shrink-0" />}
 
                 <div className={cn('flex items-center gap-1.5 shrink-0 px-2 py-0.5 rounded-md border text-xs font-medium', meta.badge)}>
-                    <Icon className="h-3 w-3" />
+                    <Icon className="size-3" />
                     {meta.label}
                 </div>
 
@@ -780,7 +780,7 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                             className="ml-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground hover:underline transition-colors"
                             title={t('orgSettings.structure.changeHead')}
                         >
-                            <Crown className="h-3 w-3 text-amber-500" />
+                            <Crown className="size-3 text-amber-500" />
                             {unit.headEmployeeName}
                         </button>
                     ) : (
@@ -790,16 +790,16 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                             className="ml-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground/70 hover:text-primary hover:underline transition-colors italic"
                             title={t('orgSettings.structure.assignHead')}
                         >
-                            <UserCog className="h-3 w-3" />
+                            <UserCog className="size-3" />
                             {t('orgSettings.structure.assignHead')}
                         </button>
                     )}
                 </div>
 
-                {/* Team count chip — department only */}
+                {/* Team count chip - department only */}
                 {isDept && deptTeams.length > 0 && (
                     <span className="inline-flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary border border-primary/20">
-                        <Users className="h-3 w-3" />
+                        <Users className="size-3" />
                         {deptTeams.length === 1
                             ? t('orgSettings.structure.team_count', { count: deptTeams.length })
                             : t('orgSettings.structure.teams_count', { count: deptTeams.length })}
@@ -816,21 +816,21 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                             onClick={() => setAddTeamOpen(true)}
                             title={t('orgSettings.structure.addTeam')}
                         >
-                            <Plus className="h-3.5 w-3.5" />
+                            <Plus className="size-3.5" />
                             <span className="text-[11px] font-medium">{t('orgSettings.structure.team')}</span>
                         </Button>
                     )}
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditing(true)} title={t('common.edit')}>
-                        <Pencil className="h-3.5 w-3.5" />
+                    <Button size="sm" variant="ghost" className="size-7 p-0" onClick={() => setEditing(true)} title={t('common.edit')}>
+                        <Pencil className="size-3.5" />
                     </Button>
                     <Button
                         size="sm" variant="ghost"
-                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        className="size-7 p-0 text-destructive hover:text-destructive"
                         disabled={deleteMut.isPending}
                         onClick={() => setConfirmDelete(true)}
                         title={t('common.delete')}
                     >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="size-3.5" />
                     </Button>
                 </div>
             </div>
@@ -843,7 +843,7 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                         .map(child => (
                             <OrgUnitRow key={child.id} unit={child} units={units} empList={empList} teamsByDept={teamsByDept} />
                         ))}
-                    {/* Team rows nested under department — same tree visual as org units */}
+                    {/* Team rows nested under department - same tree visual as org units */}
                     {isDept && deptTeams.length > 0 && deptTeams.map(team => (
                         <TeamSubRow key={team.id} team={team} canManage />
                     ))}
@@ -949,7 +949,7 @@ export function OrgStructureTab() {
                     const Icon = meta.icon
                     return (
                         <Button key={type} size="sm" variant="outline" onClick={() => setAdding(type)}
-                            leftIcon={<Icon className="h-3.5 w-3.5" />}>
+                            leftIcon={<Icon className="size-3.5" />}>
                             {t('orgSettings.structure.addUnit', { type: meta.label })}
                         </Button>
                     )
@@ -958,7 +958,7 @@ export function OrgStructureTab() {
                     size="sm"
                     variant="outline"
                     onClick={() => setAddTeamOpen(true)}
-                    leftIcon={<Users className="h-3.5 w-3.5" />}
+                    leftIcon={<Users className="size-3.5" />}
                     disabled={counts.department === 0}
                     title={counts.department === 0 ? t('orgSettings.structure.createDeptFirst') : undefined}
                 >
@@ -974,14 +974,14 @@ export function OrgStructureTab() {
                 </div>
             ) : roots.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-12 text-center">
-                    <GitBranch className="h-10 w-10 text-muted-foreground" />
+                    <GitBranch className="size-10 text-muted-foreground" />
                     <div>
                         <p className="font-medium text-sm">{t('orgSettings.structure.noStructure')}</p>
                         <p className="text-sm text-muted-foreground mt-1">
                             {t('orgSettings.structure.noStructureHint')}
                         </p>
                     </div>
-                    <Button size="sm" onClick={() => setAdding('branch')} leftIcon={<Plus className="h-3.5 w-3.5" />}>
+                    <Button size="sm" onClick={() => setAdding('branch')} leftIcon={<Plus className="size-3.5" />}>
                         {t('orgSettings.structure.addFirstBranch')}
                     </Button>
                 </div>

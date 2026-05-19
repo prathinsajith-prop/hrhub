@@ -22,7 +22,7 @@ interface OverflowTabsListProps {
 // Approximate width reserved for the "More" button in the available-space calculation.
 const MORE_BTN_MIN_WIDTH = 80
 
-// Shared trigger className — kept in sync with the detail page tab bar.
+// Shared trigger className - kept in sync with the detail page tab bar.
 const TRIGGER_CLS =
     'gap-1.5 text-xs sm:text-sm font-medium px-4 py-3.5 rounded-none border-b-2 border-transparent shadow-none bg-transparent ' +
     'data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary data-[state=active]:border-primary ' +
@@ -47,7 +47,7 @@ export function OverflowTabsList({ tabs, activeTab, onTabChange }: OverflowTabsL
     const [visibleCount, setVisibleCount] = useState(tabs.length)
 
     // State-during-render: reset order when the tab set changes.
-    // (CLAUDE.md pattern — avoids useEffect + extra render cycle)
+    // (CLAUDE.md pattern - avoids useEffect + extra render cycle)
     const tabKey = tabs.map(t => t.value).join(',')
     const [lastTabKey, setLastTabKey] = useState(tabKey)
     if (tabKey !== lastTabKey) {
@@ -60,7 +60,7 @@ export function OverflowTabsList({ tabs, activeTab, onTabChange }: OverflowTabsL
 
     // ── Derive render order ───────────────────────────────────────────────────
     // Ensures the active tab is always in the visible window by computing a
-    // temporary swap — no state mutation, no useEffect needed.
+    // temporary swap - no state mutation, no useEffect needed.
     const renderOrder = useMemo(() => {
         const order = [...orderedValues]
         const activeIdx = order.indexOf(activeTab)
@@ -129,7 +129,7 @@ export function OverflowTabsList({ tabs, activeTab, onTabChange }: OverflowTabsL
 
     return (
         <div ref={containerRef} className="relative w-full overflow-hidden">
-            {/* ── Ghost row (invisible) — used only for width measurements ── */}
+            {/* ── Ghost row (invisible) - used only for width measurements ── */}
             <div
                 ref={ghostRef}
                 aria-hidden
@@ -138,7 +138,7 @@ export function OverflowTabsList({ tabs, activeTab, onTabChange }: OverflowTabsL
             >
                 {tabs.map(tab => (
                     <span key={tab.value} className={cn(TRIGGER_CLS, 'inline-flex items-center')}>
-                        <tab.icon className="h-3.5 w-3.5" />
+                        <tab.icon className="size-3.5" />
                         {tab.label}
                     </span>
                 ))}
@@ -155,7 +155,7 @@ export function OverflowTabsList({ tabs, activeTab, onTabChange }: OverflowTabsL
                             value={tab.value}
                             className={TRIGGER_CLS}
                         >
-                            <tab.icon className="h-3.5 w-3.5" />
+                            <tab.icon className="size-3.5" />
                             {tab.label}
                         </TabsTrigger>
                     )
@@ -176,7 +176,7 @@ export function OverflowTabsList({ tabs, activeTab, onTabChange }: OverflowTabsL
                                 )}
                             >
                                 More
-                                <ChevronDown className="h-3 w-3 opacity-60" />
+                                <ChevronDown className="size-3 opacity-60" />
                             </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="min-w-40">
@@ -193,10 +193,10 @@ export function OverflowTabsList({ tabs, activeTab, onTabChange }: OverflowTabsL
                                             isActive && 'text-primary font-medium bg-primary/5',
                                         )}
                                     >
-                                        <tab.icon className="h-3.5 w-3.5 shrink-0" />
+                                        <tab.icon className="size-3.5 shrink-0" />
                                         {tab.label}
                                         {isActive && (
-                                            <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />
+                                            <span className="ml-auto size-1.5 rounded-full bg-primary" />
                                         )}
                                     </DropdownMenuItem>
                                 )

@@ -41,7 +41,7 @@ export interface RecruitmentStage {
 export interface StageColor {
     /** Column / chip background (with border). */
     bgClass: string
-    /** Filled badge style — heavier than bgClass, used for active pills. */
+    /** Filled badge style - heavier than bgClass, used for active pills. */
     badgeClass: string
     /** Solid dot for stage markers. */
     dotClass: string

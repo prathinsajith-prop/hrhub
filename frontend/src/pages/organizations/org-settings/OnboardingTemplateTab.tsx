@@ -65,7 +65,7 @@ function StepDialog({
 
     const [form, setForm] = useState<StepFormState>(EMPTY_FORM)
     const [errors, setErrors] = useState<Partial<StepFormState>>({})
-    // State-during-render sync (replaces a useEffect→setState) — when the
+    // State-during-render sync (replaces a useEffect→setState) - when the
     // dialog opens for a different step, reset the form once.
     const targetId = open ? (step?.id ?? '__new__') : null
     const [lastTargetId, setLastTargetId] = useState<string | null>(null)
@@ -121,7 +121,6 @@ function StepDialog({
                                 value={form.title}
                                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                                 placeholder={t('orgSettings.onboardingTemplate.titlePlaceholder')}
-                                autoFocus
                             />
                         </FormField>
                         <div className="grid grid-cols-2 gap-3">
@@ -187,7 +186,7 @@ function SortableRow({ step, index, onEdit, onDelete, onRequiredDocs }: Sortable
                 {...attributes}
                 {...listeners}
             >
-                <GripVertical className="h-4 w-4" />
+                <GripVertical className="size-4" />
             </button>
             <span className="font-mono text-xs text-muted-foreground w-6 text-center">{index + 1}</span>
             <div className="flex-1 min-w-0">
@@ -209,15 +208,15 @@ function SortableRow({ step, index, onEdit, onDelete, onRequiredDocs }: Sortable
                 aria-label={t('orgSettings.onboardingTemplate.requiredDocsLabel')}
                 title={t('orgSettings.onboardingTemplate.requiredDocsLabel')}
             >
-                <FileText className="h-3 w-3" />
+                <FileText className="size-3" />
                 {step.requiredDocsCount} {step.requiredDocsCount === 1 ? 'doc' : 'docs'}
             </button>
             <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit} aria-label={t('orgSettings.onboardingTemplate.editLabel')}>
-                    <Pencil className="h-3.5 w-3.5" />
+                <Button type="button" variant="ghost" size="icon" className="size-7" onClick={onEdit} aria-label={t('orgSettings.onboardingTemplate.editLabel')}>
+                    <Pencil className="size-3.5" />
                 </Button>
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={onDelete} aria-label={t('orgSettings.onboardingTemplate.deleteLabel')}>
-                    <Trash2 className="h-3.5 w-3.5" />
+                <Button type="button" variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={onDelete} aria-label={t('orgSettings.onboardingTemplate.deleteLabel')}>
+                    <Trash2 className="size-3.5" />
                 </Button>
             </div>
         </div>
@@ -235,7 +234,7 @@ function TemplateRequiredDocsDialog({ step, onClose }: { step: OnboardingTemplat
         <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Required documents — {step.title}</DialogTitle>
+                    <DialogTitle>Required documents - {step.title}</DialogTitle>
                 </DialogHeader>
                 <DialogBody className="space-y-4">
                     <p className="text-xs text-muted-foreground">
@@ -272,7 +271,7 @@ export function OnboardingTemplateTab() {
     const reset = useResetOnboardingTemplate()
 
     // Local mirror so drag is instant; the server list reconciles on success.
-    // State-during-render sync (replaces a useEffect→setState) — only fires
+    // State-during-render sync (replaces a useEffect→setState) - only fires
     // when the server reference actually changes, not on every render.
     const [lastSynced, setLastSynced] = useState<OnboardingTemplateStep[]>(EMPTY_STEPS)
     const [localSteps, setLocalSteps] = useState<OnboardingTemplateStep[]>(EMPTY_STEPS)
@@ -341,7 +340,7 @@ export function OnboardingTemplateTab() {
                 <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
                     <div className="flex items-start gap-3 min-w-0">
                         <div className="rounded-lg bg-primary/10 p-2 shrink-0">
-                            <ListOrdered className="h-4 w-4 text-primary" />
+                            <ListOrdered className="size-4 text-primary" />
                         </div>
                         <div className="min-w-0">
                             <h2 className="text-base font-semibold">{t('orgSettings.onboardingTemplate.title')}</h2>
@@ -355,13 +354,13 @@ export function OnboardingTemplateTab() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
+                            leftIcon={<RotateCcw className="size-3.5" />}
                             onClick={() => setResetConfirmOpen(true)}
                             disabled={reset.isPending || isLoading}
                         >
                             {t('orgSettings.onboardingTemplate.reset')}
                         </Button>
-                        <Button type="button" size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={openCreate}>
+                        <Button type="button" size="sm" leftIcon={<Plus className="size-3.5" />} onClick={openCreate}>
                             {t('orgSettings.onboardingTemplate.addStep')}
                         </Button>
                     </div>
@@ -369,11 +368,11 @@ export function OnboardingTemplateTab() {
 
                 {isLoading ? (
                     <div className="space-y-2">
-                        {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}
+                        {[0, 1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-12 rounded-lg" />)}
                     </div>
                 ) : localSteps.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 text-center">
-                        <ListOrdered className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                        <ListOrdered className="size-10 text-muted-foreground/40 mb-3" />
                         <p className="text-sm font-medium">{t('orgSettings.onboardingTemplate.noSteps')}</p>
                         <p className="text-xs text-muted-foreground mt-1">{t('orgSettings.onboardingTemplate.noStepsHint')}</p>
                         <Button type="button" size="sm" className="mt-3" onClick={openCreate}>{t('orgSettings.onboardingTemplate.addFirstStep')}</Button>

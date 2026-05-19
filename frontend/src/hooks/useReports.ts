@@ -72,7 +72,7 @@ export function usePayrollSummaryReport() {
     return useQuery({
         queryKey: ['reports', 'payroll-summary'],
         queryFn: () => api.get<{ data: PayrollSummaryReport }>('/reports/payroll-summary').then(r => r.data),
-        staleTime: 5 * 60_000, // 5 minutes — payroll totals change infrequently
+        staleTime: 5 * 60_000, // 5 minutes - payroll totals change infrequently
     })
 }
 

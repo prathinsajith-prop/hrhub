@@ -1,7 +1,22 @@
 import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslipsWithEmployees, getPayslipsByEmployee, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
+import {
+    createAdjustment,
+    deleteAdjustment,
+    isPeriodLocked,
+    listAdjustments,
+    syncAdjustmentsForPeriod,
+    updateAdjustment,
+    type AdjustmentCategory,
+} from './adjustments.service.js'
 import { generatePayslipPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { enqueuePayrollRun, getPayrollQueue, type PayrollJobData } from '../../workers/payroll.worker.js'
+
+const ADJUSTMENT_CATEGORIES: readonly AdjustmentCategory[] = [
+    'overtime', 'commission', 'bonus', 'salary_advance', 'manual',
+    // 'unpaid_leave', 'sick_half_pay', 'loan_repayment' are driven automatically
+    // by syncAdjustmentsForPeriod — HR can't pick them from the manual create form.
+] as const
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -241,11 +256,18 @@ export default async function (fastify: any): Promise<void> {
                 housingAllowance: Number(payslip.housingAllowance ?? 0),
                 transportAllowance: Number(payslip.transportAllowance ?? 0),
                 otherAllowances: Number(payslip.otherAllowances ?? 0),
+                overtime: Number(payslip.overtime ?? 0),
+                commission: Number(payslip.commission ?? 0),
                 grossSalary: Number(payslip.grossSalary ?? 0),
+                unpaidLeaveDays: payslip.unpaidLeaveDays ?? 0,
+                unpaidLeaveDeduction: Number(payslip.unpaidLeaveDeduction ?? 0),
+                sickHalfPayDays: payslip.sickHalfPayDays ?? 0,
+                sickHalfPayDeduction: Number(payslip.sickHalfPayDeduction ?? 0),
+                loanDeduction: Number(payslip.loanDeduction ?? 0),
+                otherDeduction: Number(payslip.otherDeduction ?? 0),
                 totalDeductions: Number(payslip.totalDeductions ?? 0),
                 netSalary: Number(payslip.netSalary ?? 0),
-                daysWorked: payslip.daysWorked,
-                leaveDeduction: Number(payslip.deductions ?? 0),
+                daysWorked: payslip.daysWorked ?? undefined,
             },
         })
         return reply
@@ -271,6 +293,141 @@ export default async function (fastify: any): Promise<void> {
         }
         const state = await job.getState()
         return reply.send({ data: { jobId: job.id, state, payrollRunId: data.payrollRunId, failedReason: job.failedReason ?? null } })
+    })
+
+    // ─── Payroll adjustments ────────────────────────────────────────────────
+    //
+    // HR-only ledger of per-month additions and deductions that runPayroll
+    // consumes. See modules/payroll/adjustments.service.ts for the data model.
+
+    fastify.get('/adjustments', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const { year, month } = request.query as Record<string, string>
+        const y = Number(year), m = Number(month)
+        if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'year and month query params are required (month 1-12)' })
+        }
+        const [rows, locked] = await Promise.all([
+            listAdjustments(request.user.tenantId, y, m),
+            isPeriodLocked(request.user.tenantId, y, m),
+        ])
+        return reply.send({ data: rows, locked })
+    })
+
+    fastify.post('/adjustments', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const body = request.body as Record<string, unknown>
+        const employeeId = String(body.employeeId ?? '')
+        const periodYear = Number(body.periodYear)
+        const periodMonth = Number(body.periodMonth)
+        const category = String(body.category ?? '') as AdjustmentCategory
+        const amount = Number(body.amount)
+        const notes = body.notes != null ? String(body.notes) : null
+
+        if (!employeeId || !Number.isInteger(periodYear) || !Number.isInteger(periodMonth)
+            || periodMonth < 1 || periodMonth > 12) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId + periodYear + periodMonth required' })
+        }
+        if (!ADJUSTMENT_CATEGORIES.includes(category)) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `category must be one of: ${ADJUSTMENT_CATEGORIES.join(', ')}` })
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'amount must be a positive number' })
+        }
+        if (await isPeriodLocked(request.user.tenantId, periodYear, periodMonth)) {
+            return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Payroll for this period has already been processed — adjustments are locked.' })
+        }
+
+        const row = await createAdjustment(
+            request.user.tenantId,
+            { employeeId, periodYear, periodMonth, category, amount, notes },
+            request.user.id,
+        )
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'payroll_adjustment',
+            entityId: row.id,
+            entityName: `${category} ${amount} for ${periodMonth}/${periodYear}`,
+            action: 'create',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(201).send({ data: row })
+    })
+
+    fastify.patch('/adjustments/:id', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const body = request.body as Record<string, unknown>
+        const patch: { amount?: number; notes?: string | null; category?: AdjustmentCategory } = {}
+        if (body.amount !== undefined) {
+            const a = Number(body.amount)
+            if (!Number.isFinite(a) || a <= 0) {
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'amount must be a positive number' })
+            }
+            patch.amount = a
+        }
+        if (body.notes !== undefined) patch.notes = body.notes == null ? null : String(body.notes)
+        if (body.category !== undefined) {
+            const c = String(body.category) as AdjustmentCategory
+            if (!ADJUSTMENT_CATEGORIES.includes(c)) {
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'invalid category' })
+            }
+            patch.category = c
+        }
+        const row = await updateAdjustment(request.user.tenantId, id, patch)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Adjustment not found, locked, or not manual' })
+        if (await isPeriodLocked(request.user.tenantId, row.periodYear, row.periodMonth)) {
+            // We allowed the update through the DB filter but the period is now locked.
+            // Reject by undoing isn't worth it — refuse on the next call instead and log.
+            request.log.warn({ id }, 'adjustment update happened on a now-locked period')
+        }
+        return reply.send({ data: row })
+    })
+
+    fastify.delete('/adjustments/:id', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const row = await deleteAdjustment(request.user.tenantId, id)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Adjustment not found, locked, or not manual' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'payroll_adjustment',
+            entityId: row.id,
+            entityName: `${row.category} ${row.amount}`,
+            action: 'delete',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(204).send()
+    })
+
+    fastify.post('/adjustments/sync', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const body = request.body as Record<string, unknown>
+        const year = Number(body.year), month = Number(body.month)
+        if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'year + month required (month 1-12)' })
+        }
+        if (await isPeriodLocked(request.user.tenantId, year, month)) {
+            return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Payroll for this period has already been processed — sync is locked.' })
+        }
+        const result = await syncAdjustmentsForPeriod(request.user.tenantId, year, month)
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'payroll_adjustment',
+            entityId: `${year}-${month}`,
+            entityName: `Sync ${month}/${year}`,
+            action: 'submit',
+            metadata: result,
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: result })
     })
 }
 

@@ -172,13 +172,13 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     fastify.put('/ip-allowlist', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const { ipAllowlist } = request.body as { ipAllowlist: string[] }
         if (!Array.isArray(ipAllowlist)) {
-            return reply.code(400).send({ error: 'ipAllowlist must be an array' })
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'ipAllowlist must be an array' })
         }
         // Basic CIDR/IP validation
         const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/
         const invalid = ipAllowlist.filter(ip => !cidrRegex.test(ip.trim()))
         if (invalid.length > 0) {
-            return reply.code(400).send({ error: `Invalid IP/CIDR entries: ${invalid.join(', ')}` })
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Invalid IP/CIDR entries: ${invalid.join(', ')}` })
         }
         const [updated] = await db
             .update(tenants)

@@ -66,7 +66,7 @@ export function DesignationsTab() {
             <Section icon={Briefcase} title={t('orgSettings.designations.jobTitlesTitle')} description={t('orgSettings.designations.jobTitlesDesc')}>
                 <div className="space-y-2">
                     {isLoading ? (
-                        <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-9 rounded-lg bg-muted animate-pulse" />)}</div>
+                        <div className="space-y-2">{[1, 2, 3].map(i => <div key={`div-${i}`} className="h-9 rounded-lg bg-muted animate-pulse" />)}</div>
                     ) : designations.length === 0 && !addingNew ? (
                         <p className="text-sm text-muted-foreground text-center py-4">{t('orgSettings.designations.empty')}</p>
                     ) : (
@@ -84,11 +84,11 @@ export function DesignationsTab() {
                                                     if (e.key === 'Escape') setEditingId(null)
                                                 }}
                                             />
-                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => handleUpdate(d.id)}>
-                                                <Check className="h-4 w-4" />
+                                            <Button size="sm" variant="ghost" className="size-7 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => handleUpdate(d.id)}>
+                                                <Check className="size-4" />
                                             </Button>
-                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setEditingId(null)}>
-                                                <XCircle className="h-4 w-4" />
+                                            <Button size="sm" variant="ghost" className="size-7 p-0 text-muted-foreground" onClick={() => setEditingId(null)}>
+                                                <XCircle className="size-4" />
                                             </Button>
                                         </>
                                     ) : (
@@ -99,11 +99,11 @@ export function DesignationsTab() {
                                             )}
                                             <Button
                                                 size="sm" variant="ghost"
-                                                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                                className="size-7 p-0 text-muted-foreground hover:text-foreground"
                                                 title={t('common.edit')}
                                                 onClick={() => { setEditingId(d.id); setEditName(d.name) }}
                                             >
-                                                <Pencil className="h-3.5 w-3.5" />
+                                                <Pencil className="size-3.5" />
                                             </Button>
                                             <Button
                                                 size="sm" variant="outline"
@@ -137,13 +137,13 @@ export function DesignationsTab() {
                             <Button size="sm" onClick={handleAdd} disabled={!newName.trim() || create.isPending}>
                                 {create.isPending ? '…' : t('common.add')}
                             </Button>
-                            <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-muted-foreground" onClick={() => { setAddingNew(false); setNewName('') }}>
-                                <XCircle className="h-4 w-4" />
+                            <Button size="sm" variant="ghost" className="size-9 p-0 text-muted-foreground" onClick={() => { setAddingNew(false); setNewName('') }}>
+                                <XCircle className="size-4" />
                             </Button>
                         </div>
                     ) : (
                         <Button variant="ghost" size="sm" className="gap-1.5 text-primary font-medium mt-1" onClick={() => setAddingNew(true)}>
-                            <Plus className="h-3.5 w-3.5" /> {t('orgSettings.designations.addDesignation')}
+                            <Plus className="size-3.5" /> {t('orgSettings.designations.addDesignation')}
                         </Button>
                     )}
                 </div>

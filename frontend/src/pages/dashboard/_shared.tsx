@@ -45,8 +45,8 @@ export function QuickAction({ icon: Icon, label, onClick }: QuickActionProps) {
       onClick={onClick}
       className="flex flex-col items-center gap-2.5 rounded-xl border border-dashed border-border/70 bg-card p-5 text-center transition-all hover:border-primary/40 hover:bg-accent/40 hover:shadow-sm active:scale-[0.98]"
     >
-      <div className="h-9 w-9 rounded-xl bg-primary/8 flex items-center justify-center">
-        <Icon className="h-4.5 w-4.5 text-primary" />
+      <div className="size-9 rounded-xl bg-primary/8 flex items-center justify-center">
+        <Icon className="size-4.5 text-primary" />
       </div>
       <span className="text-xs font-medium text-foreground">{label}</span>
     </button>
@@ -69,7 +69,7 @@ export function SkeletonRows({ count = 4 }: { count?: number }) {
     <div className="space-y-3">
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="flex items-center gap-3">
-          <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
+          <Skeleton className="size-8 rounded-lg shrink-0" />
           <div className="flex-1 space-y-1.5">
             <Skeleton className="h-3 w-2/3" />
             <Skeleton className="h-2.5 w-1/2" />

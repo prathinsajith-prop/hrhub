@@ -83,7 +83,7 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
     currency: string
 }) {
     const { t } = useTranslation()
-    const [quota, setQuota] = useState(Math.max(1, (currentQuota ?? 0) + 1))
+    const [quota, setQuota] = useState(() => Math.max(1, (currentQuota ?? 0) + 1))
     const checkoutMut = useCheckoutSession()
     const upgradeMut = useUpgradeRequest()
 
@@ -122,7 +122,7 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
             <DialogContent className="sm:max-w-[440px]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-primary" />
+                        <Sparkles className="size-4 text-primary" />
                         {t('subscriptionPage.adjustCapacity')}
                     </DialogTitle>
                     <DialogDescription>
@@ -131,16 +131,16 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
                 </DialogHeader>
 
                 <div className="space-y-5 py-2">
-                    {/* Capacity stepper — pill style */}
+                    {/* Capacity stepper - pill style */}
                     <div className="rounded-2xl border bg-muted/30 p-5">
                         <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t('subscriptionPage.employees')}</Label>
                         <div className="flex items-center gap-3 mt-2">
                             <Button
                                 type="button" variant="outline" size="icon"
                                 onClick={() => adjust(-1)} disabled={quota <= 1}
-                                className="h-10 w-10 shrink-0 rounded-full"
+                                className="size-10 shrink-0 rounded-full"
                             >
-                                <Minus className="h-4 w-4" />
+                                <Minus className="size-4" />
                             </Button>
                             <Input
                                 type="number"
@@ -156,9 +156,9 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
                             <Button
                                 type="button" variant="outline" size="icon"
                                 onClick={() => adjust(1)} disabled={quota >= 10000}
-                                className="h-10 w-10 shrink-0 rounded-full"
+                                className="size-10 shrink-0 rounded-full"
                             >
-                                <Plus className="h-4 w-4" />
+                                <Plus className="size-4" />
                             </Button>
                         </div>
                     </div>
@@ -182,7 +182,7 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
 
                     {!stripeEnabled && (
                         <div className="flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                            <AlertCircle className="size-4 shrink-0 mt-0.5 text-amber-600" />
                             <span>{t('subscriptionPage.noOnlinePayment')}</span>
                         </div>
                     )}
@@ -191,7 +191,7 @@ function UpgradeDialog({ open, onClose, currentQuota, stripeEnabled, pricePerUse
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose} disabled={isPending}>{t('common.cancel')}</Button>
                     <Button onClick={handleSubmit} disabled={isPending}
-                        leftIcon={stripeEnabled ? <CreditCard className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}>
+                        leftIcon={stripeEnabled ? <CreditCard className="size-3.5" /> : <Send className="size-3.5" />}>
                         {isPending ? t('subscriptionPage.processing') : stripeEnabled ? t('subscriptionPage.continueToPayment') : t('subscriptionPage.sendRequest')}
                     </Button>
                 </DialogFooter>
@@ -232,7 +232,7 @@ function EnterpriseDialog({ open, onClose }: { open: boolean; onClose: () => voi
             <DialogContent className="sm:max-w-[460px]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-violet-600" />
+                        <Building2 className="size-4 text-violet-600" />
                         {t('subscriptionPage.talkToEnterprise')}
                     </DialogTitle>
                     <DialogDescription>{t('subscriptionPage.talkToEnterpriseDesc')}</DialogDescription>
@@ -276,7 +276,7 @@ function EnterpriseDialog({ open, onClose }: { open: boolean; onClose: () => voi
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={contactMut.isPending} leftIcon={<Send className="h-3.5 w-3.5" />}>
+                    <Button onClick={handleSubmit} disabled={contactMut.isPending} leftIcon={<Send className="size-3.5" />}>
                         {contactMut.isPending ? 'Sending…' : 'Send enquiry'}
                     </Button>
                 </DialogFooter>
@@ -302,8 +302,8 @@ function StatTile({ label, value, hint, icon: Icon, tone }: {
     }
     return (
         <div className="rounded-xl border bg-card p-4 flex items-start gap-3">
-            <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center shrink-0', toneMap[tone])}>
-                <Icon className="h-4 w-4" />
+            <div className={cn('size-9 rounded-lg flex items-center justify-center shrink-0', toneMap[tone])}>
+                <Icon className="size-4" />
             </div>
             <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
@@ -333,7 +333,7 @@ function PlanCard({ plan, isCurrent, onUpgrade, onEnterprise }: {
         )}>
             {isCurrent && (
                 <span className="absolute -top-2.5 left-5 inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-semibold text-primary-foreground shadow-sm">
-                    <CheckCircle2 className="h-3 w-3" /> Current
+                    <CheckCircle2 className="size-3" /> Current
                 </span>
             )}
             {isMostPopular && (
@@ -344,8 +344,8 @@ function PlanCard({ plan, isCurrent, onUpgrade, onEnterprise }: {
 
             {/* Header */}
             <div className="flex items-start gap-3">
-                <div className={cn('h-10 w-10 rounded-xl flex items-center justify-center shrink-0', meta.iconBg)}>
-                    <Icon className={cn('h-5 w-5', meta.iconColor)} />
+                <div className={cn('size-10 rounded-xl flex items-center justify-center shrink-0', meta.iconBg)}>
+                    <Icon className={cn('size-5', meta.iconColor)} />
                 </div>
                 <div className="min-w-0 flex-1">
                     <h3 className={cn('text-base font-bold', meta.accent)}>{plan.name}</h3>
@@ -362,7 +362,7 @@ function PlanCard({ plan, isCurrent, onUpgrade, onEnterprise }: {
             <ul className="space-y-2 mb-5 flex-1">
                 {plan.features.map(f => (
                     <li key={f} className="flex items-start gap-2 text-sm">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                        <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0 mt-0.5" />
                         <span className="text-foreground/90">{f}</span>
                     </li>
                 ))}
@@ -375,12 +375,12 @@ function PlanCard({ plan, isCurrent, onUpgrade, onEnterprise }: {
                 </Button>
             ) : plan.key === 'enterprise' ? (
                 <Button variant="outline" size="sm" className="w-full" onClick={onEnterprise}
-                    leftIcon={<ArrowUpRight className="h-3.5 w-3.5" />}>
+                    leftIcon={<ArrowUpRight className="size-3.5" />}>
                     Contact sales
                 </Button>
             ) : (
                 <Button size="sm" className="w-full" onClick={onUpgrade}
-                    leftIcon={<Zap className="h-3.5 w-3.5" />}>
+                    leftIcon={<Zap className="size-3.5" />}>
                     Upgrade now
                 </Button>
             )}
@@ -413,8 +413,8 @@ function InvoiceRow({ event }: { event: SubscriptionEvent }) {
     return (
         <div className="flex items-center gap-4 px-4 py-3.5 hover:bg-muted/40 transition-colors group">
             {/* Icon */}
-            <div className="h-9 w-9 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
-                <Receipt className="h-4 w-4 text-primary" />
+            <div className="size-9 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
+                <Receipt className="size-4 text-primary" />
             </div>
 
             {/* Reference + label */}
@@ -430,12 +430,12 @@ function InvoiceRow({ event }: { event: SubscriptionEvent }) {
                 </div>
                 <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
+                        <Calendar className="size-3" />
                         {new Date(event.createdAt).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
                     {event.employeeQuota && (
                         <span className="inline-flex items-center gap-1">
-                            <Users className="h-3 w-3" />
+                            <Users className="size-3" />
                             {event.employeeQuota} {event.employeeQuota === 1 ? 'employee' : 'employees'}
                         </span>
                     )}
@@ -463,7 +463,7 @@ function InvoiceRow({ event }: { event: SubscriptionEvent }) {
                         onClick={handleDownload}
                         disabled={downloading}
                     >
-                        <Download className="h-3.5 w-3.5" />
+                        <Download className="size-3.5" />
                         <span className="hidden sm:inline">{downloading ? 'Downloading…' : 'PDF'}</span>
                     </Button>
                 ) : (
@@ -491,9 +491,9 @@ export function SubscriptionPage() {
     useEffect(() => {
         if (!checkoutResult) return
         const msg = checkoutResult === 'upgraded'
-            ? 'Professional plan activated — payment confirmed.'
+            ? 'Professional plan activated - payment confirmed.'
             : checkoutResult === 'quota'
-                ? 'Employee capacity updated — payment confirmed.'
+                ? 'Employee capacity updated - payment confirmed.'
                 : null
         if (msg) {
             toast.success('Payment confirmed', msg)
@@ -533,15 +533,15 @@ export function SubscriptionPage() {
                             {/* Left: identity + usage */}
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-3 flex-wrap">
-                                    <div className={cn('h-11 w-11 rounded-xl flex items-center justify-center', planMeta.iconBg)}>
-                                        <PlanIcon className={cn('h-5 w-5', planMeta.iconColor)} />
+                                    <div className={cn('size-11 rounded-xl flex items-center justify-center', planMeta.iconBg)}>
+                                        <PlanIcon className={cn('size-5', planMeta.iconColor)} />
                                     </div>
                                     <div>
                                         <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Current plan</p>
                                         <div className="flex items-center gap-2 mt-0.5">
                                             <h2 className={cn('text-2xl font-bold tracking-tight', planMeta.accent)}>{current.planName}</h2>
                                             <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                <span className="size-1.5 rounded-full bg-emerald-500" />
                                                 Active
                                             </Badge>
                                         </div>
@@ -551,7 +551,7 @@ export function SubscriptionPage() {
                                     </div>
                                 </div>
 
-                                {/* Capacity bar — wide and prominent */}
+                                {/* Capacity bar - wide and prominent */}
                                 <div className="mt-6 max-w-xl">
                                     <div className="flex items-baseline justify-between mb-2">
                                         <p className="text-sm font-medium">
@@ -582,7 +582,7 @@ export function SubscriptionPage() {
 
                                     {current.quota && usagePct >= 80 && (
                                         <div className="flex items-center gap-2 mt-3 text-xs text-amber-700">
-                                            <AlertCircle className="h-3.5 w-3.5" />
+                                            <AlertCircle className="size-3.5" />
                                             <span>You're nearing capacity. Increase it to keep adding employees.</span>
                                         </div>
                                     )}
@@ -594,7 +594,7 @@ export function SubscriptionPage() {
                                 <Button
                                     className="flex-1 lg:w-full"
                                     onClick={() => setUpgradeOpen(true)}
-                                    leftIcon={<Sparkles className="h-3.5 w-3.5" />}
+                                    leftIcon={<Sparkles className="size-3.5" />}
                                 >
                                     {current.quota ? 'Adjust capacity' : 'Upgrade plan'}
                                 </Button>
@@ -602,7 +602,7 @@ export function SubscriptionPage() {
                                     variant="outline"
                                     className="flex-1 lg:w-full"
                                     onClick={() => setEnterpriseOpen(true)}
-                                    leftIcon={<Building2 className="h-3.5 w-3.5" />}
+                                    leftIcon={<Building2 className="size-3.5" />}
                                 >
                                     Talk to sales
                                 </Button>
@@ -648,8 +648,8 @@ export function SubscriptionPage() {
             <Card>
                 <CardHeader className="pb-3 flex flex-row items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <FileText className="h-4 w-4 text-primary" />
+                        <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <FileText className="size-4 text-primary" />
                         </div>
                         <div>
                             <CardTitle className="text-base">Billing history</CardTitle>
@@ -659,12 +659,12 @@ export function SubscriptionPage() {
                 </CardHeader>
                 {eventsLoading ? (
                     <CardContent className="space-y-2">
-                        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+                        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-14 rounded-lg" />)}
                     </CardContent>
                 ) : events.length === 0 ? (
                     <CardContent className="py-12 text-center">
-                        <div className="inline-flex h-12 w-12 rounded-2xl bg-muted items-center justify-center mb-3">
-                            <Receipt className="h-5 w-5 text-muted-foreground" />
+                        <div className="inline-flex size-12 rounded-2xl bg-muted items-center justify-center mb-3">
+                            <Receipt className="size-5 text-muted-foreground" />
                         </div>
                         <p className="text-sm font-medium">No billing history yet</p>
                         <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
@@ -691,8 +691,8 @@ export function SubscriptionPage() {
                         variant={comparePlansOpen ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setComparePlansOpen(v => !v)}
-                        leftIcon={<Sparkles className="h-3.5 w-3.5" />}
-                        rightIcon={<ChevronDown className={cn('h-3.5 w-3.5 transition-transform', comparePlansOpen && 'rotate-180')} />}
+                        leftIcon={<Sparkles className="size-3.5" />}
+                        rightIcon={<ChevronDown className={cn('size-3.5 transition-transform', comparePlansOpen && 'rotate-180')} />}
                     >
                         {comparePlansOpen ? 'Hide plans' : 'Compare plans'}
                     </Button>
@@ -701,7 +701,7 @@ export function SubscriptionPage() {
                 {comparePlansOpen && (
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                         {subLoading
-                            ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-80 rounded-2xl" />)
+                            ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-80 rounded-2xl" />)
                             : (sub?.plans ?? []).map(plan => (
                                 <PlanCard
                                     key={plan.key}

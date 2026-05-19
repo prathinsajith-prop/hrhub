@@ -71,8 +71,8 @@ export function ForgotPasswordPage() {
             {!submitted ? (
                 <>
                     <div className="mb-6">
-                        <div className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-primary/10 text-primary mb-4">
-                            <KeyRound className="h-5 w-5" />
+                        <div className="inline-flex items-center justify-center size-10 rounded-xl bg-primary/10 text-primary mb-4">
+                            <KeyRound className="size-5" />
                         </div>
                         <h2 className="text-2xl font-semibold text-foreground font-display tracking-tight">{t('auth.forgotTitle')}</h2>
                         <p className="text-sm text-muted-foreground mt-1.5">
@@ -99,7 +99,7 @@ export function ForgotPasswordPage() {
                             className="w-full gap-2"
                             disabled={loading}
                         >
-                            {loading ? t('auth.sending') : (<>{t('auth.sendResetLinkAction')} <ArrowRight className="h-4 w-4" /></>)}
+                            {loading ? t('auth.sending') : (<>{t('auth.sendResetLinkAction')} <ArrowRight className="size-4" /></>)}
                         </Button>
                     </form>
 
@@ -108,7 +108,7 @@ export function ForgotPasswordPage() {
                             to="/login"
                             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
-                            <ArrowLeft className="h-3.5 w-3.5" />
+                            <ArrowLeft className="size-3.5" />
                             {t('auth.backToSignIn')}
                         </Link>
                     </div>
@@ -116,8 +116,8 @@ export function ForgotPasswordPage() {
             ) : (
                 <>
                     <div className="mb-6">
-                        <div className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-success/10 text-success mb-4">
-                            <MailCheck className="h-5 w-5" />
+                        <div className="inline-flex items-center justify-center size-10 rounded-xl bg-success/10 text-success mb-4">
+                            <MailCheck className="size-5" />
                         </div>
                         <h2 className="text-2xl font-semibold text-foreground font-display tracking-tight">{t('auth.checkInbox')}</h2>
                         <p className="text-sm text-muted-foreground mt-1.5">
@@ -153,7 +153,7 @@ export function ForgotPasswordPage() {
                         </Button>
                         <Link to="/login" className="block">
                             <Button variant="ghost" className="w-full gap-2">
-                                <ArrowLeft className="h-4 w-4" /> {t('auth.backToSignIn')}
+                                <ArrowLeft className="size-4" /> {t('auth.backToSignIn')}
                             </Button>
                         </Link>
                     </div>

@@ -82,7 +82,7 @@ export function DatePicker({
                         className,
                     )}
                 >
-                    <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
+                    <CalendarIcon className="mr-2 size-4 opacity-70" />
                     {selected ? format(selected, 'dd MMM yyyy') : <span>{placeholder}</span>}
                 </Button>
             </PopoverTrigger>

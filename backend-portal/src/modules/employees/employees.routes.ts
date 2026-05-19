@@ -1,5 +1,5 @@
 import { alias } from 'drizzle-orm/pg-core'
-import { and, eq, ilike, or, sql } from 'drizzle-orm'
+import { and, eq, ilike, isNotNull, or, sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../db/client.js'
 import { employees, shifts } from '../../db/schema/index.js'
@@ -7,6 +7,22 @@ import { e400, e403, e404 } from '../../lib/errors.js'
 import { paginationSchema, parseUuidParam, updateMyProfileSchema, validate } from '../../lib/validation.js'
 import { recordActivity } from '../../lib/audit.js'
 import { canAccessEmployee, getReportingSubtreeIds, isDeptHead } from '../../lib/scoping.js'
+
+/**
+ * Compute days-until-next-birthday in UTC, handling the year-end wrap so a
+ * birthday on Jan 3 viewed on Dec 28 returns 6, not -360. Returns -1 for an
+ * invalid date so the caller can filter the row out.
+ */
+function daysUntilBirthday(dob: string | null): number {
+    if (!dob) return -1
+    const d = new Date(dob)
+    if (Number.isNaN(d.getTime())) return -1
+    const now = new Date()
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    let next = new Date(Date.UTC(now.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+    if (next < today) next = new Date(Date.UTC(now.getUTCFullYear() + 1, d.getUTCMonth(), d.getUTCDate()))
+    return Math.round((next.getTime() - today.getTime()) / 86_400_000)
+}
 
 const ALLOWED_SELF_UPDATE_FIELDS = [
     'phone',
@@ -189,6 +205,163 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
             offset: query.offset,
             hasMore: query.offset + data.length < Number(total),
         })
+    })
+
+    // GET /api/v1/employees/colleagues
+    //
+    // Pickable colleagues for forms like the leave-handover Select — every
+    // active employee in the requester's department, excluding themselves.
+    // Returns a slim shape (no salary/passport/bank) and stays in-tenant.
+    //
+    // Department lookup priority (org models drifted over time, so both are valid):
+    //   1. employees.department_id  — the canonical FK to org_units; preferred
+    //   2. employees.department     — the legacy text column; fallback when
+    //                                 the FK isn't set for this user
+    // Falling back lets older tenants whose data never moved to the org-units
+    // model keep working without manual backfill.
+    fastify.get('/colleagues', { ...auth }, async (request: any, reply: any) => {
+        const user = request.user
+        if (!user.employeeId) return reply.send({ data: [] })
+
+        const [me] = await db
+            .select({
+                department: employees.department,
+                departmentId: employees.departmentId,
+            })
+            .from(employees)
+            .where(and(eq(employees.tenantId, user.tenantId), eq(employees.id, user.employeeId)))
+            .limit(1)
+        if (!me) return reply.send({ data: [] })
+
+        const conds = [
+            eq(employees.tenantId, user.tenantId),
+            eq(employees.status, 'active' as any),
+            sql`${employees.id} <> ${user.employeeId}`,
+        ]
+        if (me.departmentId) {
+            conds.push(eq(employees.departmentId, me.departmentId))
+        } else if (me.department) {
+            conds.push(eq(employees.department, me.department))
+        }
+        // If the requester has neither a departmentId nor a department text
+        // value, we still return their whole tenant minus themselves so they
+        // can pick someone to hand over to instead of being blocked.
+
+        const data = await db
+            .select({
+                id: employees.id,
+                employeeNo: employees.employeeNo,
+                firstName: employees.firstName,
+                lastName: employees.lastName,
+                department: employees.department,
+                designation: employees.designation,
+                avatarUrl: employees.avatarUrl,
+            })
+            .from(employees)
+            .where(and(...conds))
+            .orderBy(employees.firstName)
+            .limit(200)
+
+        return reply.send({ data })
+    })
+
+    // GET /api/v1/employees/birthdays?days=30
+    //
+    // Upcoming birthdays inside the user's natural scope:
+    //   - dept_head → entire reporting subtree (everyone they manage transitively)
+    //   - everyone else → their own department (so they see colleagues' birthdays)
+    //
+    // Returns a flat list sorted by daysUntil ascending. Each row includes
+    // `isToday` / `isTomorrow` flags so the UI can label them without
+    // re-deriving from the date. Crosses the year-end correctly.
+    //
+    // IMPORTANT: this is a public-feeling endpoint, but it only exposes name +
+    // employeeNo + department + day-of-year — never the year of birth. Don't
+    // add `dateOfBirth` to the response without a privacy review.
+    fastify.get('/birthdays', { ...auth }, async (request: any, reply: any) => {
+        const user = request.user
+        if (!user.employeeId) return reply.send({ data: [] })
+
+        const daysRaw = Number((request.query as any)?.days ?? 30)
+        const days = Number.isFinite(daysRaw) ? Math.max(1, Math.min(90, daysRaw)) : 30
+
+        // Resolve the employee ID list to query.
+        let scopeIds: string[]
+        if (isDeptHead(user)) {
+            scopeIds = await getReportingSubtreeIds(user.tenantId, user.employeeId, request)
+        } else {
+            // Look up the requester's department and pull everyone in it.
+            const [me] = await db
+                .select({
+                    department: employees.department,
+                    departmentId: employees.departmentId,
+                })
+                .from(employees)
+                .where(and(eq(employees.tenantId, user.tenantId), eq(employees.id, user.employeeId)))
+                .limit(1)
+            if (!me) return reply.send({ data: [] })
+
+            const conds = [
+                eq(employees.tenantId, user.tenantId),
+                eq(employees.status, 'active' as any),
+            ]
+            if (me.departmentId) conds.push(eq(employees.departmentId, me.departmentId))
+            else if (me.department) conds.push(eq(employees.department, me.department))
+            // If the requester has no department at all, still return the
+            // tenant's birthdays so the page isn't blank — better than an
+            // empty card with no explanation.
+
+            const ids = await db
+                .select({ id: employees.id })
+                .from(employees)
+                .where(and(...conds))
+            scopeIds = ids.map(r => r.id)
+        }
+
+        if (scopeIds.length === 0) return reply.send({ data: [] })
+
+        const inList = sql`(${sql.join(scopeIds.map(id => sql`${id}`), sql`, `)})`
+        const rows = await db
+            .select({
+                id: employees.id,
+                firstName: employees.firstName,
+                lastName: employees.lastName,
+                employeeNo: employees.employeeNo,
+                department: employees.department,
+                designation: employees.designation,
+                avatarUrl: employees.avatarUrl,
+                dateOfBirth: employees.dateOfBirth,
+            })
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, user.tenantId),
+                isNotNull(employees.dateOfBirth),
+                sql`${employees.id} IN ${inList}`,
+            ))
+
+        const list = rows
+            .map(r => {
+                const du = daysUntilBirthday(r.dateOfBirth)
+                if (du < 0 || du > days) return null
+                const d = new Date(r.dateOfBirth!)
+                return {
+                    id: r.id,
+                    name: `${r.firstName} ${r.lastName}`.trim(),
+                    employeeNo: r.employeeNo,
+                    department: r.department ?? '',
+                    designation: r.designation ?? '',
+                    avatarUrl: r.avatarUrl ?? null,
+                    day: d.getUTCDate(),
+                    month: d.getUTCMonth() + 1,
+                    daysUntil: du,
+                    isToday: du === 0,
+                    isTomorrow: du === 1,
+                }
+            })
+            .filter((x): x is NonNullable<typeof x> => x !== null)
+            .sort((a, b) => a.daysUntil - b.daysUntil)
+
+        return reply.send({ data: list })
     })
 
     // GET /api/v1/employees/:id — own record or someone in your reporting subtree

@@ -1,5 +1,5 @@
 /**
- * Typed API client — attaches JWT, handles 401 token refresh, consistent error shape.
+ * Typed API client - attaches JWT, handles 401 token refresh, consistent error shape.
  */
 import { useAuthStore } from '@/store/authStore'
 import { socket } from '@/lib/socket'
@@ -37,7 +37,7 @@ export function apiErrorToFieldMap(err: unknown): Record<string, string> {
 }
 
 // Singleton in-flight refresh promise.  When multiple concurrent requests all
-// receive a 401, they must share the SAME refresh call — otherwise the second
+// receive a 401, they must share the SAME refresh call - otherwise the second
 // caller sends the already-rotated refresh token and the backend rejects it,
 // triggering a spurious logout.  The promise is cleared once it settles so the
 // next genuine expiry triggers a fresh refresh.
@@ -67,7 +67,7 @@ async function request<T>(
         ...(init.headers as Record<string, string>),
     }
 
-    // Only set JSON Content-Type when actually sending a body — Fastify rejects
+    // Only set JSON Content-Type when actually sending a body - Fastify rejects
     // empty-body requests that declare application/json (e.g. DELETE without body).
     if (init.body != null && !headers['Content-Type'] && !headers['content-type']) {
         headers['Content-Type'] = 'application/json'
@@ -82,8 +82,8 @@ async function request<T>(
     if (socket.socketId) headers['X-Socket-Id'] = socket.socketId
 
     // Triple-belt cache bypass:
-    //   1. fetch cache: 'no-store' — browser HTTP cache is skipped entirely
-    //   2. Pragma + Cache-Control request headers — pre-HTTP/1.1 proxies
+    //   1. fetch cache: 'no-store' - browser HTTP cache is skipped entirely
+    //   2. Pragma + Cache-Control request headers - pre-HTTP/1.1 proxies
     //   3. NEVER send If-None-Match (we omit it; backend would honour it)
     // This guarantees we never receive a stale cached empty body or a 304.
     if (!headers['Pragma']) headers['Pragma'] = 'no-cache'
@@ -92,7 +92,7 @@ async function request<T>(
     const res = await fetch(`${BASE}${path}`, { ...init, headers, cache: 'no-store' })
 
     if (res.status === 401 && retry) {
-        // Try to refresh the token once — using the shared singleton so
+        // Try to refresh the token once - using the shared singleton so
         // concurrent 401s don't each attempt their own refresh (race condition).
         const ok = await sharedRefresh()
         if (ok) return request<T>(path, init, false, cacheBustRetry)
@@ -187,7 +187,7 @@ export const api = {
         return res.blob()
     },
     upload: async <T>(path: string, formData: FormData, retry = true): Promise<T> => {
-        // Do NOT set Content-Type — browser must set it with the multipart boundary
+        // Do NOT set Content-Type - browser must set it with the multipart boundary
         const { accessToken, refreshTokens } = useAuthStore.getState() as {
             accessToken: string | null
             refreshTokens: () => Promise<boolean>

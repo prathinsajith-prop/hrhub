@@ -143,7 +143,7 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
             <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
                 <DialogHeader className="px-5 pt-5 pb-4 border-b">
                     <DialogTitle className="flex items-center gap-2 text-base">
-                        <UserPlus className="h-4 w-4 text-primary" />
+                        <UserPlus className="size-4 text-primary" />
                         {t('settingsDetail.users.grantAccess')}
                     </DialogTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -158,7 +158,7 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
 
                 <div className="px-5 pt-3 pb-2 space-y-2">
                     <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
                         <Input
                             className="pl-8 h-8 text-sm"
                             placeholder={t('settingsDetail.users.searchPlaceholder')}
@@ -173,10 +173,10 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
                             <div className={cn(
-                                'h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0',
+                                'size-3.5 rounded border flex items-center justify-center shrink-0',
                                 allVisibleSelected ? 'bg-primary border-primary' : 'border-border',
                             )}>
-                                {allVisibleSelected && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                                {allVisibleSelected && <Check className="size-2.5 text-primary-foreground" />}
                             </div>
                             {allVisibleSelected ? t('settingsDetail.users.deselectAll') : t('settingsDetail.users.selectAll')}
                         </button>
@@ -187,7 +187,7 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                     {isLoading ? (
                         [1, 2, 3, 4].map((i) => (
                             <div key={i} className="flex items-center gap-3 py-2.5">
-                                <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                                <Skeleton className="size-8 rounded-full shrink-0" />
                                 <div className="space-y-1.5 flex-1">
                                     <Skeleton className="h-3.5 w-32" />
                                     <Skeleton className="h-3 w-44" />
@@ -217,12 +217,12 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                                     )}
                                 >
                                     <div className={cn(
-                                        'h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors',
+                                        'size-4 rounded border flex items-center justify-center shrink-0 transition-colors',
                                         isSelected ? 'bg-primary border-primary' : 'border-border',
                                     )}>
-                                        {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                                        {isSelected && <Check className="size-3 text-primary-foreground" />}
                                     </div>
-                                    <Avatar className="h-8 w-8 shrink-0">
+                                    <Avatar className="size-8 shrink-0">
                                         {emp.avatarUrl && <AvatarImage src={emp.avatarUrl} alt={emp.fullName} />}
                                         <AvatarFallback className="text-xs bg-primary/10 text-primary font-bold">
                                             {initials(emp.fullName)}
@@ -261,7 +261,7 @@ function GrantAccessModal({ open, onClose }: { open: boolean; onClose: () => voi
                             size="sm"
                             disabled={selectedCount === 0 || inviteBulk.isPending}
                             onClick={handleGrantAccess}
-                            leftIcon={<UserPlus className="h-3.5 w-3.5" />}
+                            leftIcon={<UserPlus className="size-3.5" />}
                         >
                             {inviteBulk.isPending
                                 ? t('settingsDetail.users.sending')
@@ -325,7 +325,7 @@ export function UsersPage() {
                 actions={canManageUsers && (
                     <Button
                         size="sm"
-                        leftIcon={<Plus className="h-3.5 w-3.5" />}
+                        leftIcon={<Plus className="size-3.5" />}
                         onClick={() => setShowInvite(true)}
                     >
                         {t('settingsDetail.users.grantAccess')}
@@ -345,7 +345,7 @@ export function UsersPage() {
                         <div className="divide-y border rounded-lg">
                             {[1, 2, 3].map((i) => (
                                 <div key={i} className="flex items-center gap-3 px-4 py-3.5">
-                                    <Skeleton className="h-9 w-9 rounded-full" />
+                                    <Skeleton className="size-9 rounded-full" />
                                     <div className="space-y-1 flex-1">
                                         <Skeleton className="h-4 w-32" />
                                         <Skeleton className="h-3 w-48" />
@@ -355,7 +355,7 @@ export function UsersPage() {
                         </div>
                     ) : (tenantUsers ?? []).length === 0 ? (
                         <div className="text-center py-10 text-muted-foreground border rounded-lg">
-                            <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                            <Users className="size-10 mx-auto mb-3 opacity-30" />
                             <p className="text-sm">{t('settingsDetail.users.noUsersFound')}</p>
                         </div>
                     ) : (
@@ -368,7 +368,7 @@ export function UsersPage() {
                                         u.isActive ? 'hover:bg-muted/30' : 'bg-muted/20 opacity-60',
                                     )}>
                                         <div className="flex items-center gap-3 min-w-0">
-                                            <Avatar className="h-9 w-9 shrink-0">
+                                            <Avatar className="size-9 shrink-0">
                                                 {u.avatarUrl && <AvatarImage src={u.avatarUrl} alt={u.name} />}
                                                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                                                     {initials(u.name)}
@@ -416,7 +416,7 @@ export function UsersPage() {
                                                     onClick={() => handleResendInvite(u.employeeId, u.name)}
                                                     disabled={resendInvite.isPending}
                                                 >
-                                                    <MailCheck className="h-3.5 w-3.5" />
+                                                    <MailCheck className="size-3.5" />
                                                 </Button>
                                             )}
 
@@ -431,8 +431,8 @@ export function UsersPage() {
                                                     onClick={() => setDeactivateTarget({ id: u.id, name: u.name, active: u.isActive })}
                                                 >
                                                     {u.isActive
-                                                        ? <XCircle className="h-3.5 w-3.5" />
-                                                        : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                                        ? <XCircle className="size-3.5" />
+                                                        : <CheckCircle2 className="size-3.5" />}
                                                 </Button>
                                             )}
                                         </div>
@@ -446,7 +446,7 @@ export function UsersPage() {
                 {/* ── Roles & Permissions ───────────────────────────────── */}
                 <section className="space-y-3">
                     <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-muted-foreground" />
+                        <Shield className="size-4 text-muted-foreground" />
                         <div>
                             <h2 className="text-sm font-semibold">{t('settingsDetail.users.rolesPermissionsTitle')}</h2>
                             <p className="text-xs text-muted-foreground">{t('settingsDetail.users.rolesPermissionsDesc')}</p>
@@ -456,8 +456,8 @@ export function UsersPage() {
                         {ROLES_INFO.map((role) => (
                             <div key={role.id} className="rounded-lg border p-4 hover:border-primary/30 hover:bg-muted/20 transition-colors">
                                 <div className="flex items-center gap-2.5 mb-3">
-                                    <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', role.color)}>
-                                        <UserCircle className="h-4 w-4" />
+                                    <div className={cn('size-8 rounded-lg flex items-center justify-center shrink-0', role.color)}>
+                                        <UserCircle className="size-4" />
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold leading-tight">{t(role.labelKey)}</p>

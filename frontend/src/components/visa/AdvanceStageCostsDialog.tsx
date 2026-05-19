@@ -159,7 +159,7 @@ export function AdvanceStageCostsDialog({
             <DialogContent size="lg">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Receipt className="h-4 w-4 text-primary" />
+                        <Receipt className="size-4 text-primary" />
                         Complete stage &amp; record costs
                     </DialogTitle>
                 </DialogHeader>
@@ -171,10 +171,10 @@ export function AdvanceStageCostsDialog({
                         </div>
                         <div className="mt-1 flex items-center gap-2 flex-wrap">
                             <span className="font-semibold text-sm">{stageLabel}</span>
-                            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                            <ArrowRight className="size-3.5 text-muted-foreground" />
                             {isFinal ? (
                                 <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                                    <CheckCircle2 className="h-3 w-3 mr-1" /> Activate visa
+                                    <CheckCircle2 className="size-3 mr-1" /> Activate visa
                                 </Badge>
                             ) : (
                                 <span className="text-sm text-muted-foreground">{nextStageLabel ?? 'Next step'}</span>
@@ -208,12 +208,12 @@ export function AdvanceStageCostsDialog({
                                             type="button"
                                             size="sm"
                                             variant="ghost"
-                                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                            className="size-7 p-0 text-muted-foreground hover:text-destructive"
                                             onClick={() => removeRow(idx)}
                                             disabled={busy || !removable}
                                             aria-label="Remove cost row"
                                         >
-                                            <Trash2 className="h-3.5 w-3.5" />
+                                            <Trash2 className="size-3.5" />
                                         </Button>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -305,7 +305,7 @@ export function AdvanceStageCostsDialog({
                             onClick={addRow}
                             disabled={busy}
                         >
-                            <Plus className="h-3.5 w-3.5 mr-1.5" /> Add cost
+                            <Plus className="size-3.5 mr-1.5" /> Add cost
                         </Button>
                         {validRows.length > 0 && (
                             <div className="text-xs">

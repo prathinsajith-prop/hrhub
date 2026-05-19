@@ -106,7 +106,7 @@ export function LoginHistoryPage() {
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-                            <RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+                            <RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />
                         </Button>
                         <Select value={filter} onValueChange={setFilter}>
                         <SelectTrigger className="w-48">

@@ -31,7 +31,7 @@ const DASHBOARD_STALE = 2 * 60 * 1000 // 2 min
 
 // Chart/analytic data changes even less frequently
 const ANALYTICS_STALE = 5 * 60 * 1000 // 5 min
-const ANALYTICS_GC = 30 * 60 * 1000 // 30 min — keep chart data in memory between tab switches
+const ANALYTICS_GC = 30 * 60 * 1000 // 30 min - keep chart data in memory between tab switches
 
 export function useDashboardKPIs() {
     return useQuery({

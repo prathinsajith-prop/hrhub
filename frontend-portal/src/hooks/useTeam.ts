@@ -25,3 +25,28 @@ export function useTeamMember(id: string | undefined) {
         enabled: !!id && !!tenantId,
     })
 }
+
+export interface Colleague {
+    id: string
+    employeeNo: string
+    firstName: string
+    lastName: string
+    department: string | null
+    designation: string | null
+    avatarUrl: string | null
+}
+
+/**
+ * Pickable colleagues for forms like the leave-handover Select. Returns
+ * active employees in the requester's department, excluding the requester.
+ */
+export function useColleagues() {
+    const tenantId = useAuthStore((s) => s.user?.tenantId)
+    return useQuery({
+        queryKey: ['portal', 'colleagues', tenantId],
+        queryFn: () => api.get<{ data: Colleague[] }>('/employees/colleagues').then((r) => r.data),
+        enabled: !!tenantId,
+        // Department membership doesn't change minute-to-minute; cache 5 min.
+        staleTime: 5 * 60_000,
+    })
+}

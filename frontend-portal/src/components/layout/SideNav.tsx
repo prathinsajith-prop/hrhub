@@ -10,7 +10,6 @@ import {
     Receipt,
     ShieldCheck,
     Sparkles,
-    User,
     Users,
     Clock,
 } from 'lucide-react'
@@ -30,7 +29,8 @@ const PERSONAL_ITEMS: NavItem[] = [
     { to: ROUTES.employeeAttendance, label: 'nav.attendance', icon: Clock },
     { to: ROUTES.employeeDocuments, label: 'nav.documents', icon: FileText },
     { to: ROUTES.employeePerformance, label: 'nav.performance', icon: Sparkles },
-    { to: ROUTES.employeeProfile, label: 'nav.profile', icon: User },
+    // Profile lives in the TopBar avatar dropdown — single source of truth
+    // for personal/account screens. Don't surface it here too.
 ]
 
 const TEAM_ITEMS: NavItem[] = [

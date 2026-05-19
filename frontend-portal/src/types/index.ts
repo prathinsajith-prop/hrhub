@@ -98,6 +98,9 @@ export interface LeaveRequest {
     employeeName?: string
     employeeNo?: string
     employeeDepartment?: string | null
+    /** Resolved on the list response via a left-join in /leave (backend-portal). */
+    handoverToName?: string | null
+    handoverToDesignation?: string | null
 }
 
 interface LeaveBalanceEntry {
@@ -127,8 +130,18 @@ export interface Payslip {
     housingAllowance: string
     transportAllowance: string
     otherAllowances: string
+    overtime?: string
+    commission?: string
     grossSalary: string
     deductions: string
+    // Itemised leave-driven deductions — see migration 0037 and the
+    // PayslipBreakdown component on the admin frontend for the same fields.
+    unpaidLeaveDays?: number | null
+    unpaidLeaveDeduction?: string | null
+    sickHalfPayDays?: number | null
+    sickHalfPayDeduction?: string | null
+    loanDeduction?: string | null
+    otherDeduction?: string | null
     netSalary: string
     daysWorked: number | null
 }

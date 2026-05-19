@@ -133,7 +133,7 @@ function ApplyDialog({ employeeId, currentEmployeeId, onClose }: { employeeId: s
 
                     <div className="border-t pt-3 space-y-3">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                            <ArrowRightLeft className="h-3 w-3" /> Work Handover <span className="font-normal normal-case">(optional)</span>
+                            <ArrowRightLeft className="size-3" /> Work Handover <span className="font-normal normal-case">(optional)</span>
                         </p>
                         <div className="space-y-1.5">
                             <Label>Handover To</Label>
@@ -174,7 +174,7 @@ function BalanceSummary({ employeeId }: { employeeId: string }) {
     const { data: balanceData, isLoading } = useLeaveBalance(employeeId, year)
     const balance = balanceData?.balance
 
-    if (isLoading) return <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+    if (isLoading) return <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[1, 2, 3, 4].map(i => <Skeleton key={`skeleton-${i}`} className="h-20 rounded-xl" />)}</div>
     if (!balance) return null
 
     return (
@@ -208,11 +208,11 @@ export function MyLeaveContent() {
     return (
         <div>
             <div className="flex items-center justify-end gap-2 mb-4">
-                <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                     Refresh
                 </Button>
                 {employeeId && (
-                    <Button onClick={() => setApplying(true)} leftIcon={<Plus className="h-4 w-4" />}>
+                    <Button onClick={() => setApplying(true)} leftIcon={<Plus className="size-4" />}>
                         Apply for Leave
                     </Button>
                 )}
@@ -221,17 +221,17 @@ export function MyLeaveContent() {
             {employeeId && (
                 <div className="space-y-6">
                     <div>
-                        <p className="text-sm font-semibold mb-3">Leave Balance — {new Date().getFullYear()}</p>
+                        <p className="text-sm font-semibold mb-3">Leave Balance - {new Date().getFullYear()}</p>
                         <BalanceSummary employeeId={employeeId} />
                     </div>
 
                     <div>
                         <p className="text-sm font-semibold mb-3">My Requests</p>
                         {isLoading ? (
-                            <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+                            <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-14 rounded-xl" />)}</div>
                         ) : leaves.length === 0 ? (
                             <div className="flex flex-col items-center gap-2 py-12 text-center">
-                                <Calendar className="h-9 w-9 text-muted-foreground" />
+                                <Calendar className="size-9 text-muted-foreground" />
                                 <p className="text-sm text-muted-foreground">No leave requests yet. Apply for leave to get started.</p>
                             </div>
                         ) : (
@@ -246,13 +246,13 @@ export function MyLeaveContent() {
                                                 </span>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-sm font-medium">
-                                                        {formatDate(req.startDate)} — {formatDate(req.endDate)}
+                                                        {formatDate(req.startDate)} - {formatDate(req.endDate)}
                                                         <span className="ml-2 text-muted-foreground text-xs">{req.days} day{req.days !== 1 ? 's' : ''}</span>
                                                     </p>
                                                     {req.reason && <p className="text-xs text-muted-foreground truncate">{req.reason}</p>}
                                                 </div>
                                                 <Badge variant={STATUS_VARIANT[req.status] as 'warning' | 'success' | 'destructive' | 'secondary'} className="gap-1 shrink-0">
-                                                    <StatusIcon className="h-3 w-3" />
+                                                    <StatusIcon className="size-3" />
                                                     {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
                                                 </Badge>
                                                 {req.status === 'pending' && (
@@ -263,13 +263,13 @@ export function MyLeaveContent() {
                                                         onClick={() => setCancelTarget(req.id)}
                                                         aria-label="Cancel request"
                                                     >
-                                                        <X className="h-3.5 w-3.5" />
+                                                        <X className="size-3.5" />
                                                     </Button>
                                                 )}
                                             </div>
                                             {req.handoverToName && (
                                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground border-t pt-2">
-                                                    <ArrowRightLeft className="h-3 w-3 shrink-0" />
+                                                    <ArrowRightLeft className="size-3 shrink-0" />
                                                     <span>Handed over to <span className="font-medium text-foreground">{req.handoverToName}</span></span>
                                                     {req.handoverNotes && <span className="truncate">· {req.handoverNotes}</span>}
                                                 </div>
@@ -285,7 +285,7 @@ export function MyLeaveContent() {
 
             {!employeeId && (
                 <div className="flex flex-col items-center gap-3 py-16 text-center">
-                    <Calendar className="h-10 w-10 text-muted-foreground" />
+                    <Calendar className="size-10 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">Your account is not linked to an employee record.</p>
                 </div>
             )}

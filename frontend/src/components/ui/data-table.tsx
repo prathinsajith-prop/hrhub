@@ -107,7 +107,7 @@ function PaginationBar({ currentPage, totalPages, from, to, total, loading, onPa
         {' '}results
       </p>
 
-      {/* Navigation — only when more than one page */}
+      {/* Navigation - only when more than one page */}
       {multiPage && (
         <div className="flex items-center gap-1">
           {/* Previous */}
@@ -116,7 +116,7 @@ function PaginationBar({ currentPage, totalPages, from, to, total, loading, onPa
             disabled={!canPrev || loading}
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
           >
-            <ChevronLeft className="h-3.5 w-3.5" />
+            <ChevronLeft className="size-3.5" />
             Previous
           </button>
 
@@ -124,7 +124,7 @@ function PaginationBar({ currentPage, totalPages, from, to, total, loading, onPa
           <div className="flex items-center gap-0.5">
             {pages.map((p, i) =>
               p === '...' ? (
-                <span key={`ellipsis-${i}`} className="flex h-8 w-8 items-center justify-center text-xs text-muted-foreground">
+                <span key={`ellipsis-${i}`} className="flex size-8 items-center justify-center text-xs text-muted-foreground">
                   ···
                 </span>
               ) : (
@@ -152,7 +152,7 @@ function PaginationBar({ currentPage, totalPages, from, to, total, loading, onPa
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
           >
             Next
-            <ChevronRight className="h-3.5 w-3.5" />
+            <ChevronRight className="size-3.5" />
           </button>
         </div>
       )}
@@ -289,7 +289,7 @@ export function DataTable<TData, TValue>({
               className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={() => table.resetRowSelection()}
             >
-              <X className="h-3 w-3 mr-1" /> Clear
+              <X className="size-3 mr-1" /> Clear
             </Button>
           </div>
           <div className="flex items-center gap-2">
@@ -321,11 +321,11 @@ export function DataTable<TData, TValue>({
                             {header.column.getCanSort() && (
                               <span className="ml-0.5">
                                 {header.column.getIsSorted() === 'asc' ? (
-                                  <ChevronUp className="h-3 w-3" />
+                                  <ChevronUp className="size-3" />
                                 ) : header.column.getIsSorted() === 'desc' ? (
-                                  <ChevronDown className="h-3 w-3" />
+                                  <ChevronDown className="size-3" />
                                 ) : (
-                                  <ChevronsUpDown className="h-3 w-3 opacity-40" />
+                                  <ChevronsUpDown className="size-3 opacity-40" />
                                 )}
                               </span>
                             )}
@@ -341,7 +341,7 @@ export function DataTable<TData, TValue>({
                                 currentValue={appliedColumnFilters?.[meta.filterKey]}
                                 onApply={(key, filter) => onColumnFilterChange?.(key, filter)}
                               >
-                                <Filter className="h-3 w-3" />
+                                <Filter className="size-3" />
                               </QuickColumnFilter>
                             )
                           })()}
@@ -398,7 +398,7 @@ export function DataTable<TData, TValue>({
 
       {/* Pagination */}
       {serverPagination ? (
-        // Server-side: DataTable holds exactly one internal "page" — pagination is driven
+        // Server-side: DataTable holds exactly one internal "page" - pagination is driven
         // by serverPagination props so the parent doesn't need a separate TablePagination.
         (() => {
           const { total, offset, limit, onPageChange, loading } = serverPagination

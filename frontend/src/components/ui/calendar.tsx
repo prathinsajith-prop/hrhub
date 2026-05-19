@@ -30,7 +30,7 @@ function Calendar({
                 dropdowns: 'flex items-center justify-center gap-2 w-full',
                 dropdown_root: 'relative inline-flex items-center',
                 dropdown:
-                    'absolute inset-0 z-10 w-full h-full opacity-0 cursor-pointer',
+                    'absolute inset-0 z-10 size-full opacity-0 cursor-pointer',
                 months_dropdown: '',
                 years_dropdown: '',
                 nav: 'flex items-center gap-1',

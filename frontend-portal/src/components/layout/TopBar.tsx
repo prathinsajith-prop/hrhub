@@ -1,9 +1,11 @@
 import { useTranslation } from 'react-i18next'
-import { Check, Languages, LogOut, Moon, Sparkles, Sun } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { LogOut, Moon, Sparkles, Sun, User } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 import { useAuthStore } from '@/store/authStore'
 import { canSwitchToManager } from '@/lib/permissions'
+import { ROUTES } from '@/lib/routes'
 import { cn, initialsOf } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -17,19 +19,14 @@ import {
 import { ModeToggle } from './ModeToggle'
 import { NotificationsBell } from './NotificationsBell'
 
-const LANGUAGES: { code: 'en' | 'ar'; label: string; native: string }[] = [
-    { code: 'en', label: 'English', native: 'EN' },
-    { code: 'ar', label: 'العربية', native: 'AR' },
-]
-
 export function TopBar() {
-    const { t, i18n } = useTranslation()
+    const { t } = useTranslation()
+    const navigate = useNavigate()
     const user = useAuthStore((s) => s.user)
     const tenant = useAuthStore((s) => s.tenant)
     const logout = useAuthStore((s) => s.logout)
     const { theme, setTheme } = useTheme()
 
-    const currentLang = (i18n.language?.slice(0, 2) ?? 'en') as 'en' | 'ar'
     const canManage = canSwitchToManager(user)
 
     return (
@@ -97,6 +94,16 @@ export function TopBar() {
 
                             <DropdownMenuSeparator />
 
+                            <DropdownMenuItem
+                                onSelect={() => navigate(ROUTES.employeeProfile)}
+                                className="gap-2.5"
+                            >
+                                <User className="size-4" />
+                                <span>{t('nav.profile')}</span>
+                            </DropdownMenuItem>
+
+                            <DropdownMenuSeparator />
+
                             <DropdownMenuLabel className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                                 Appearance
                             </DropdownMenuLabel>
@@ -108,25 +115,7 @@ export function TopBar() {
                                 <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
                             </DropdownMenuItem>
 
-                            <DropdownMenuLabel className="flex items-center gap-1.5 px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                <Languages className="size-3" /> Language
-                            </DropdownMenuLabel>
-                            {LANGUAGES.map((l) => (
-                                <DropdownMenuItem
-                                    key={l.code}
-                                    onClick={() => i18n.changeLanguage(l.code)}
-                                    className="justify-between gap-2"
-                                >
-                                    <span className="font-medium">{l.label}</span>
-                                    {currentLang === l.code ? (
-                                        <Check className="size-3.5 text-primary" />
-                                    ) : (
-                                        <span className="text-[10px] tracking-wider text-muted-foreground">
-                                            {l.native}
-                                        </span>
-                                    )}
-                                </DropdownMenuItem>
-                            ))}
+                            {/* Language switching moved to Profile → Settings — single home for it. */}
 
                             <DropdownMenuSeparator />
                             <DropdownMenuItem

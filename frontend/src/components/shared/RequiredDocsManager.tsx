@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { DOC_TYPE_CATALOG, CATEGORY_LABELS, type DocCategory } from '@/lib/docTypes'
 import type { StepRequiredDoc } from '@/hooks/useOnboarding'
+import { Label } from '@/components/ui/label'
 
 /**
  * Shared required-docs editor. Renders the list + inline add form + per-row
@@ -66,7 +67,7 @@ export function RequiredDocsManager({
             resetForm()
         } catch {
             // Error toast is shown by the global MutationCache with the
-            // actual server message — don't double-up here.
+            // actual server message - don't double-up here.
         }
     }
 
@@ -76,21 +77,21 @@ export function RequiredDocsManager({
             toast.success('Removed', `${doc.docType} removed.`)
             setConfirmDelete(null)
         } catch {
-            // See handleAdd — global MutationCache handles the error toast.
+            // See handleAdd - global MutationCache handles the error toast.
         }
     }
 
     return (
         <div className="space-y-4">
             {isLoading ? (
-                <div className="space-y-2">{[1, 2].map(i => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}</div>
+                <div className="space-y-2">{[1, 2].map(i => <Skeleton key={`skeleton-${i}`} className="h-10 w-full rounded-lg" />)}</div>
             ) : requiredDocs.length === 0 ? (
                 <p className="text-xs text-muted-foreground py-2 text-center">{emptyHint}</p>
             ) : (
                 <div className="space-y-1.5">
                     {requiredDocs.map((doc) => (
                         <div key={doc.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-card">
-                            <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                            <FileText className="size-3.5 text-blue-500 shrink-0" />
                             <div className="flex-1 min-w-0">
                                 <p className="text-xs font-semibold truncate">{doc.docType}</p>
                                 <p className="text-[10px] text-muted-foreground truncate">
@@ -106,7 +107,7 @@ export function RequiredDocsManager({
                                 aria-label="Remove"
                                 disabled={isDeleting}
                             >
-                                <X className="h-3.5 w-3.5" />
+                                <X className="size-3.5" />
                             </button>
                         </div>
                     ))}
@@ -118,7 +119,7 @@ export function RequiredDocsManager({
                     <p className="text-xs font-semibold">Add required document</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div className="space-y-1">
-                            <label className="text-[11px] font-medium text-muted-foreground">Category *</label>
+                            <span className="text-[11px] font-medium text-muted-foreground">Category *</span>
                             <Select
                                 value={category || undefined}
                                 onValueChange={(v) => { setCategory(v as DocCategory); setDocType('') }}
@@ -132,7 +133,7 @@ export function RequiredDocsManager({
                             </Select>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[11px] font-medium text-muted-foreground">Document type *</label>
+                            <span className="text-[11px] font-medium text-muted-foreground">Document type *</span>
                             <Select value={docType || undefined} onValueChange={setDocType} disabled={!category}>
                                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
                                 <SelectContent>
@@ -144,7 +145,7 @@ export function RequiredDocsManager({
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <Label className="flex items-center gap-1.5 text-xs cursor-pointer">
                             <input
                                 type="checkbox"
                                 checked={isMandatory}
@@ -152,8 +153,8 @@ export function RequiredDocsManager({
                                 className="rounded"
                             />
                             Mandatory
-                        </label>
-                        <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        </Label>
+                        <Label className="flex items-center gap-1.5 text-xs cursor-pointer">
                             <input
                                 type="checkbox"
                                 checked={expiryRequired}
@@ -161,7 +162,7 @@ export function RequiredDocsManager({
                                 className="rounded"
                             />
                             Expiry required
-                        </label>
+                        </Label>
                     </div>
                     <div className="flex items-center gap-2">
                         <Button size="sm" loading={isAdding} onClick={handleAdd}>Add</Button>
@@ -169,7 +170,7 @@ export function RequiredDocsManager({
                     </div>
                 </div>
             ) : (
-                <Button size="sm" variant="outline" leftIcon={<Plus className="h-3 w-3" />} onClick={() => setAddOpen(true)}>
+                <Button size="sm" variant="outline" leftIcon={<Plus className="size-3" />} onClick={() => setAddOpen(true)}>
                     Add required document
                 </Button>
             )}

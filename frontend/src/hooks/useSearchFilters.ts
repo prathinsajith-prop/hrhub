@@ -1,5 +1,5 @@
 /**
- * useSearchFilters — page-level state hook that holds the search text +
+ * useSearchFilters - page-level state hook that holds the search text +
  * applied filter map and persists a small history into localStorage.
  *
  * Compatible with `runSearch()` from `@/lib/filters/transport` so the same

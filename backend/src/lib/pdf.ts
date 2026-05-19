@@ -16,15 +16,26 @@ interface PayslipData {
     payslip: {
         month: number
         year: number
+        // Earnings (base, all prorated)
         basicSalary: number
         housingAllowance: number
         transportAllowance: number
         otherAllowances: number
+        // Additions — fed by the payroll_adjustments engine
+        overtime?: number
+        commission?: number
+        // Gross = base earnings + additions
         grossSalary: number
+        // Itemised deductions — sum equals totalDeductions
+        unpaidLeaveDays?: number
+        unpaidLeaveDeduction?: number
+        sickHalfPayDays?: number
+        sickHalfPayDeduction?: number
+        loanDeduction?: number
+        otherDeduction?: number
         totalDeductions: number
         netSalary: number
         daysWorked?: number
-        leaveDeduction?: number
     }
 }
 
@@ -55,6 +66,7 @@ export async function generatePayslipPdf(data: PayslipData): Promise<Buffer> {
         doc.moveTo(50, 116).lineTo(doc.page.width - 50, 116).strokeColor('#e2e8f0').stroke()
 
         const leftCol = 50, rightCol = 320
+        const pageRight = doc.page.width - 50
         let y = 125
 
         const infoRow = (label: string, value: string, col: number) => {
@@ -71,67 +83,138 @@ export async function generatePayslipPdf(data: PayslipData): Promise<Buffer> {
         infoRow('Pay Period', period, leftCol)
         infoRow('Days Worked', data.payslip.daysWorked ? String(data.payslip.daysWorked) : '—', rightCol)
 
-        // ─── Earnings Table ──────────────────────────────────────────────────
-        y += 45
-        doc.fontSize(11).font('Helvetica-Bold').fillColor('#0f172a').text('Earnings', leftCol, y)
-        doc.moveTo(50, y + 16).lineTo(doc.page.width - 50, y + 16).strokeColor('#e2e8f0').stroke()
-        y += 25
-
-        const tableRow = (label: string, amount: number, isTotal = false) => {
-            if (isTotal) {
-                doc.rect(50, y - 4, doc.page.width - 100, 22).fill('#f1f5f9')
+        // Shared row renderer for the breakdown tables.
+        //
+        // `tone` paints subtotal lines: 'neutral' for earnings, 'positive' for
+        // additions, 'negative' for deductions. A subtle pill-shaped band lets
+        // the eye stop at each subtotal without dominating the page.
+        const tableRow = (
+            label: string,
+            amount: number,
+            opts: { isSubtotal?: boolean; tone?: 'neutral' | 'positive' | 'negative'; sign?: '+' | '-' } = {},
+        ) => {
+            const { isSubtotal = false, tone = 'neutral', sign } = opts
+            if (isSubtotal) {
+                const bg = tone === 'positive' ? '#ecfdf5' : tone === 'negative' ? '#fef2f2' : '#f1f5f9'
+                doc.rect(50, y - 4, doc.page.width - 100, 22).fill(bg)
                 doc.fillColor('#0f172a')
             } else {
                 doc.fillColor('#475569')
             }
-            doc.font(isTotal ? 'Helvetica-Bold' : 'Helvetica').fontSize(10)
-                .text(label, leftCol, y, { width: 250 })
-                .text(`AED ${formatCurrency(amount)}`, 0, y, { align: 'right', width: doc.page.width - 50 })
+            const prefix = sign ? `${sign} ` : ''
+            doc.font(isSubtotal ? 'Helvetica-Bold' : 'Helvetica').fontSize(10)
+                .text(label, leftCol, y, { width: 320 })
+                .text(`${prefix}AED ${formatCurrency(amount)}`, 0, y, { align: 'right', width: pageRight })
             y += 22
         }
+
+        const sectionHeader = (label: string) => {
+            y += 18
+            doc.fontSize(11).font('Helvetica-Bold').fillColor('#0f172a').text(label, leftCol, y)
+            doc.moveTo(50, y + 16).lineTo(pageRight, y + 16).strokeColor('#e2e8f0').stroke()
+            y += 25
+        }
+
+        // ─── Earnings ────────────────────────────────────────────────────────
+        y += 18
+        doc.fontSize(11).font('Helvetica-Bold').fillColor('#0f172a').text('Earnings', leftCol, y)
+        doc.moveTo(50, y + 16).lineTo(pageRight, y + 16).strokeColor('#e2e8f0').stroke()
+        y += 25
+
+        const overtime = data.payslip.overtime ?? 0
+        const commission = data.payslip.commission ?? 0
+        const additions = overtime + commission
+        // Earnings subtotal = gross minus the additions already folded into gross.
+        // Keeps the math transparent: Earnings + Additions − Deductions = Net.
+        const earningsSubtotal = Math.max(0, data.payslip.grossSalary - additions)
 
         tableRow('Basic Salary', data.payslip.basicSalary)
         if (data.payslip.housingAllowance > 0) tableRow('Housing Allowance', data.payslip.housingAllowance)
         if (data.payslip.transportAllowance > 0) tableRow('Transport Allowance', data.payslip.transportAllowance)
         if (data.payslip.otherAllowances > 0) tableRow('Other Allowances', data.payslip.otherAllowances)
-        tableRow('Gross Salary', data.payslip.grossSalary, true)
+        tableRow('Earnings Subtotal', earningsSubtotal, { isSubtotal: true })
 
-        // ─── Deductions Table ────────────────────────────────────────────────
-        y += 20
-        doc.fontSize(11).font('Helvetica-Bold').fillColor('#0f172a').text('Deductions', leftCol, y)
-        doc.moveTo(50, y + 16).lineTo(doc.page.width - 50, y + 16).strokeColor('#e2e8f0').stroke()
-        y += 25
-
-        if (data.payslip.leaveDeduction && data.payslip.leaveDeduction > 0) {
-            tableRow('Leave Deduction', data.payslip.leaveDeduction)
+        // ─── Additions ───────────────────────────────────────────────────────
+        // Only render the section when there's something to show — keeps the
+        // PDF short for the common case (no overtime / no commission).
+        if (additions > 0) {
+            sectionHeader('Additions')
+            if (overtime > 0) tableRow('Overtime', overtime, { sign: '+' })
+            if (commission > 0) tableRow('Commission / Bonus', commission, { sign: '+' })
+            tableRow('Additions Subtotal', additions, { isSubtotal: true, tone: 'positive' })
         }
-        if (data.payslip.totalDeductions > 0) {
-            tableRow('Total Deductions', data.payslip.totalDeductions, true)
-        } else {
+
+        // ─── Gross ───────────────────────────────────────────────────────────
+        y += 6
+        tableRow('Gross Salary (Earnings + Additions)', data.payslip.grossSalary, { isSubtotal: true })
+
+        // ─── Deductions ──────────────────────────────────────────────────────
+        const lopDays = data.payslip.unpaidLeaveDays ?? 0
+        const lopAmount = data.payslip.unpaidLeaveDeduction ?? 0
+        const sickDays = data.payslip.sickHalfPayDays ?? 0
+        const sickAmount = data.payslip.sickHalfPayDeduction ?? 0
+        const loanAmount = data.payslip.loanDeduction ?? 0
+        const otherAmount = data.payslip.otherDeduction ?? 0
+        const itemised = lopAmount + sickAmount + loanAmount + otherAmount
+        // For payslips generated before the adjustments engine, deductions may
+        // be a single opaque total. Surface the difference as an "Uncategorised"
+        // line so the math still balances.
+        const residual = Math.max(0, data.payslip.totalDeductions - itemised)
+
+        sectionHeader('Deductions')
+
+        if (data.payslip.totalDeductions === 0) {
             doc.fillColor('#64748b').font('Helvetica').fontSize(9).text('No deductions this period', leftCol, y)
             y += 22
+        } else {
+            if (lopAmount > 0) {
+                tableRow(
+                    `Loss of Pay (${lopDays} day${lopDays === 1 ? '' : 's'} unpaid leave)`,
+                    lopAmount,
+                    { sign: '-' },
+                )
+            }
+            if (sickAmount > 0) {
+                tableRow(
+                    `Sick Leave Half-Pay (${sickDays} day${sickDays === 1 ? '' : 's'} beyond first 15)`,
+                    sickAmount,
+                    { sign: '-' },
+                )
+            }
+            if (loanAmount > 0) tableRow('Loan Repayment', loanAmount, { sign: '-' })
+            if (otherAmount > 0) tableRow('Other Manual Deductions', otherAmount, { sign: '-' })
+            if (residual > 0) tableRow('Uncategorised', residual, { sign: '-' })
+            tableRow('Total Deductions', data.payslip.totalDeductions, { isSubtotal: true, tone: 'negative' })
         }
 
         // ─── Net Pay Box ─────────────────────────────────────────────────────
         y += 20
-        doc.rect(50, y, doc.page.width - 100, 50).fill('#1e293b')
+        doc.rect(50, y, doc.page.width - 100, 56).fill('#1e293b')
         doc.fillColor('#94a3b8').fontSize(9).font('Helvetica')
             .text('NET PAY', 65, y + 8)
         doc.fillColor('#ffffff').fontSize(18).font('Helvetica-Bold')
             .text(`AED ${formatCurrency(data.payslip.netSalary)}`, 65, y + 20)
+        // Tiny formula line so the recipient can re-derive net without guessing.
+        doc.fillColor('#94a3b8').fontSize(8).font('Helvetica')
+            .text(
+                `Earnings ${formatCurrency(earningsSubtotal)} + Additions ${formatCurrency(additions)} − Deductions ${formatCurrency(data.payslip.totalDeductions)} = Net ${formatCurrency(data.payslip.netSalary)}`,
+                65, y + 44,
+                { width: doc.page.width - 130 },
+            )
+        y += 70
 
         // ─── Bank Details ────────────────────────────────────────────────────
         if (data.employee.bankName || data.employee.iban) {
-            y += 65
-            doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold').text('Bank Details', leftCol, y)
-            doc.moveTo(50, y + 16).lineTo(doc.page.width - 50, y + 16).strokeColor('#e2e8f0').stroke()
-            y += 25
-            if (data.employee.bankName) {
-                infoRow('Bank Name', data.employee.bankName, leftCol)
-            }
+            sectionHeader('Bank Details')
+            // Use infoRow's two-column layout — drop y back so the labels and
+            // values align under the section header.
+            const baseY = y
+            if (data.employee.bankName) infoRow('Bank Name', data.employee.bankName, leftCol)
             if (data.employee.iban) {
                 const maskedIban = data.employee.iban.slice(0, 6) + '****' + data.employee.iban.slice(-4)
+                y = baseY
                 infoRow('IBAN', maskedIban, rightCol)
+                y = baseY + 30
             }
         }
 

@@ -146,8 +146,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               className="hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
             >
               <NavLink to="/dashboard">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shrink-0">
-                  <BuildingIcon className="h-4 w-4 text-white" />
+                <div className="flex size-8 items-center justify-center rounded-lg bg-primary shrink-0">
+                  <BuildingIcon className="size-4 text-white" />
                 </div>
                 <div className="flex flex-col leading-tight min-w-0 group-data-[collapsible=icon]:hidden">
                   <span className="text-sm font-bold text-sidebar-foreground truncate">
@@ -186,7 +186,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       className="transition-all duration-150"
                     >
                       <NavLink to={item.url}>
-                        <item.icon className="h-4 w-4" />
+                        <item.icon className="size-4" />
                         <span>{item.title}</span>
                       </NavLink>
                     </SidebarMenuButton>

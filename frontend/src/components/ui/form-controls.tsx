@@ -22,7 +22,7 @@ const SelectTrigger = React.forwardRef<
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-50" />
+      <ChevronDown className="size-4 opacity-50" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ))
@@ -71,9 +71,9 @@ const SelectItem = React.forwardRef<
     )}
     {...props}
   >
-    <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
+    <span className="absolute right-2 flex size-3.5 items-center justify-center">
       <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4 text-primary" />
+        <Check className="size-4 text-primary" />
       </SelectPrimitive.ItemIndicator>
     </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
@@ -118,7 +118,7 @@ function ImageUpload({
     setFileName(file.name)
     const isImage = file.type.startsWith('image/')
     if (!isImage) {
-      // For non-image files (PDFs, etc.) skip data URL conversion — just pass the file.
+      // For non-image files (PDFs, etc.) skip data URL conversion - just pass the file.
       setPreview(null)
       onChange?.(file, null)
       return
@@ -154,18 +154,18 @@ function ImageUpload({
     return (
       <div className={cn('relative inline-block', className)}>
         <div
-          className="h-20 w-20 rounded-full border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer overflow-hidden hover:border-blue-400 transition-colors"
+          className="size-20 rounded-full border-2 border-dashed border-border bg-muted flex items-center justify-center cursor-pointer overflow-hidden hover:border-blue-400 transition-colors"
           onClick={() => inputRef.current?.click()}
         >
           {preview ? (
-            <img src={preview} alt="Avatar" className="h-full w-full object-cover" />
+            <img src={preview} alt="Avatar" className="size-full object-cover" />
           ) : (
-            <ImageIcon className="h-8 w-8 text-muted-foreground" />
+            <ImageIcon className="size-8 text-muted-foreground" />
           )}
         </div>
         {preview && (
-          <button onClick={clear} className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors">
-            <X className="h-3 w-3" />
+          <button onClick={clear} className="absolute -top-1 -right-1 size-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors">
+            <X className="size-3" />
           </button>
         )}
         <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
@@ -186,14 +186,14 @@ function ImageUpload({
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
         >
-          <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-            <File className="h-5 w-5 text-blue-600" />
+          <div className="size-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+            <File className="size-5 text-blue-600" />
           </div>
           <div className="flex-1 min-w-0">
             {fileName ? (
               <>
                 <p className="text-sm font-medium text-foreground truncate">{fileName}</p>
-                <p className="text-xs text-muted-foreground">Ready to upload — click to replace</p>
+                <p className="text-xs text-muted-foreground">Ready to upload - click to replace</p>
               </>
             ) : (
               <>
@@ -203,8 +203,8 @@ function ImageUpload({
             )}
           </div>
           {fileName && (
-            <button onClick={clear} className="shrink-0 h-6 w-6 rounded-full hover:bg-red-100 flex items-center justify-center transition-colors">
-              <X className="h-3.5 w-3.5 text-red-500" />
+            <button onClick={clear} className="shrink-0 size-6 rounded-full hover:bg-red-100 flex items-center justify-center transition-colors">
+              <X className="size-3.5 text-red-500" />
             </button>
           )}
         </div>
@@ -232,15 +232,15 @@ function ImageUpload({
             <img src={preview} alt="Preview" className="w-full h-48 object-cover" />
             <button
               onClick={clear}
-              className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+              className="absolute top-2 right-2 size-7 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
             >
-              <X className="h-4 w-4" />
+              <X className="size-4" />
             </button>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 py-10 px-6 text-center">
-            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-              <Upload className="h-6 w-6 text-muted-foreground" />
+            <div className="size-12 rounded-full bg-muted flex items-center justify-center">
+              <Upload className="size-6 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">{label}</p>

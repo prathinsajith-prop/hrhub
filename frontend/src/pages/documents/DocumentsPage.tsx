@@ -67,10 +67,10 @@ const columns = (
         return (
           <div className="flex items-center gap-2.5">
             <div className={cn(
-              'h-8 w-8 rounded-lg flex items-center justify-center shrink-0',
+              'size-8 rounded-lg flex items-center justify-center shrink-0',
               expired ? 'bg-red-50' : 'bg-blue-50',
             )}>
-              <FileText className={cn('h-4 w-4', expired ? 'text-red-600' : 'text-blue-600')} />
+              <FileText className={cn('size-4', expired ? 'text-red-600' : 'text-blue-600')} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
@@ -132,14 +132,14 @@ const columns = (
       cell: ({ row: { original: d } }) => d.verified ? (
         <div>
           <div className="flex items-center gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" />
             {d.verifiedByName && <span className="text-[11px] text-muted-foreground truncate max-w-[100px]">{d.verifiedByName}</span>}
           </div>
           {d.verifiedAt && <p className="text-[10px] text-muted-foreground mt-0.5">{formatDate(d.verifiedAt)}</p>}
         </div>
       ) : (
         <div className="flex items-center gap-1">
-          <Clock className="h-3.5 w-3.5 text-amber-400" />
+          <Clock className="size-3.5 text-amber-400" />
           <span className="text-[11px] text-muted-foreground">Pending</span>
         </div>
       ),
@@ -168,7 +168,7 @@ const columns = (
             aria-label="View / download document"
             onClick={() => onView(d)}
           >
-            <Eye className="h-3.5 w-3.5" />
+            <Eye className="size-3.5" />
           </Button>
           <Button
             size="icon-sm"
@@ -176,7 +176,7 @@ const columns = (
             aria-label="Download document"
             onClick={() => onDownload(d)}
           >
-            <Download className="h-3.5 w-3.5" />
+            <Download className="size-3.5" />
           </Button>
           {canManage && (
             <Button
@@ -186,12 +186,12 @@ const columns = (
               className="text-muted-foreground hover:text-foreground"
               onClick={() => onEdit(d)}
             >
-              <Edit2 className="h-3.5 w-3.5" />
+              <Edit2 className="size-3.5" />
             </Button>
           )}
           {canManage
             && (d.status === 'under_review' || d.status === 'pending_upload' || d.status === 'rejected')
-            // Hide Approve when the document is already expired — only Reject is appropriate.
+            // Hide Approve when the document is already expired - only Reject is appropriate.
             && !(d.expiryDate && new Date(d.expiryDate) < new Date()) && (
             <Button
               size="icon-sm"
@@ -199,7 +199,7 @@ const columns = (
               aria-label="Verify document"
               onClick={() => onVerify(d)}
             >
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              <ShieldCheck className="size-3.5 text-emerald-600" />
             </Button>
           )}
           {canManage && (
@@ -210,7 +210,7 @@ const columns = (
               className="text-destructive hover:text-destructive"
               onClick={() => onDelete(d)}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="size-3.5" />
             </Button>
           )}
         </div>
@@ -248,10 +248,10 @@ export function DocumentsPage() {
   }
 
   const { data: docsData, isLoading, isFetching, refetch } = useDocuments({ limit: PAGE_SIZE, offset, q: search.searchInput || undefined, filters: search.appliedFilters })
-  // LIFO — newest upload first. Use timestamp comparison for robustness.
+  // LIFO - newest upload first. Use timestamp comparison for robustness.
   const documents = useMemo<Document[]>(() => {
     const arr = (docsData?.data as Document[]) ?? []
-    return [...arr].sort((a, b) => {
+    return arr.toSorted((a, b) => {
       const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
       const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
       return tb - ta
@@ -316,11 +316,11 @@ export function DocumentsPage() {
         description={t('documents.description')}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
               Refresh
             </Button>
             {canManage && (
-              <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setUploadOpen(true)}>
+              <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={() => setUploadOpen(true)}>
                 Upload Document
               </Button>
             )}
@@ -331,9 +331,9 @@ export function DocumentsPage() {
       {/* Alert */}
       {(expiring + expired) > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
-          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+          <AlertTriangle className="size-4 text-amber-600 shrink-0" />
           <p className="text-sm text-amber-800">
-            <span className="font-semibold">{expired} expired</span> and <span className="font-semibold">{expiring} expiring soon</span> — action required.
+            <span className="font-semibold">{expired} expired</span> and <span className="font-semibold">{expiring} expiring soon</span> - action required.
           </p>
         </div>
       )}
@@ -345,7 +345,7 @@ export function DocumentsPage() {
             <div key={i} className="rounded-xl border p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <Skeleton className="h-3 w-28" />
-                <Skeleton className="h-7 w-7 rounded-lg" />
+                <Skeleton className="size-7 rounded-lg" />
               </div>
               <Skeleton className="h-7 w-10" />
             </div>
@@ -378,7 +378,7 @@ export function DocumentsPage() {
             <Button
               variant="outline"
               size="sm"
-              leftIcon={<Upload className="h-3.5 w-3.5" />}
+              leftIcon={<Upload className="size-3.5" />}
               onClick={() => setUploadOpen(true)}
             >
               Bulk Upload
@@ -386,7 +386,7 @@ export function DocumentsPage() {
           }
           bulkActions={(selected) => (
             <>
-              <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}
+              <Button variant="outline" size="sm" leftIcon={<Download className="size-3.5" />}
                 onClick={async () => {
                   await Promise.all((selected as Document[]).map(async (row) => {
                     try {
@@ -406,7 +406,7 @@ export function DocumentsPage() {
                 }}>
                 Download
               </Button>
-              <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+              <Button variant="destructive" size="sm" leftIcon={<Trash2 className="size-3.5" />}
                 onClick={() => setBulkArchiveTarget(selected as Document[])}>
                 Archive
               </Button>

@@ -11,7 +11,7 @@ export interface EmployeeLoan {
     employeeName?: string | null
     employeeNo?: string | null
     employeeDepartment?: string | null
-    /** Employee's current basic salary — surfaced so HR can sanity-check loan affordability. */
+    /** Employee's current basic salary - surfaced so HR can sanity-check loan affordability. */
     employeeBasicSalary?: string | null
     /** Employee's current total/gross salary. */
     employeeTotalSalary?: string | null

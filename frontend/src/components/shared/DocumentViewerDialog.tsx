@@ -12,7 +12,7 @@ interface DocumentViewerDialogProps {
 }
 
 /**
- * Inline document viewer modal — fetches a presigned download URL for the
+ * Inline document viewer modal - fetches a presigned download URL for the
  * document and renders it inside the dialog.
  *  - PDFs render in an embedded <iframe>.
  *  - Images render as an <img>.
@@ -79,16 +79,16 @@ export function DocumentViewerDialog({ open, onOpenChange, documentId, fileName 
                 <DialogHeader>
                     <div className="flex items-center justify-between gap-3 pe-8">
                         <DialogTitle className="flex items-center gap-2 min-w-0">
-                            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <FileText className="size-4 text-muted-foreground shrink-0" />
                             <span className="truncate">{fileName ?? 'Document'}</span>
                         </DialogTitle>
                         <div className="flex items-center gap-2 shrink-0">
                             {url && (
                                 <>
-                                    <Button size="sm" variant="outline" leftIcon={<ExternalLink className="h-3.5 w-3.5" />} onClick={() => window.open(url, '_blank')}>
+                                    <Button size="sm" variant="outline" leftIcon={<ExternalLink className="size-3.5" />} onClick={() => window.open(url, '_blank')}>
                                         Open
                                     </Button>
-                                    <Button size="sm" variant="outline" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={handleDownload}>
+                                    <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />} onClick={handleDownload}>
                                         Download
                                     </Button>
                                 </>
@@ -100,7 +100,7 @@ export function DocumentViewerDialog({ open, onOpenChange, documentId, fileName 
                     <div className="bg-muted/30 min-h-[60vh] flex items-center justify-center">
                         {loading && (
                             <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                                <Loader2 className="h-6 w-6 animate-spin" />
+                                <Loader2 className="size-6 animate-spin" />
                                 <span className="text-sm">Loading document…</span>
                             </div>
                         )}
@@ -116,15 +116,15 @@ export function DocumentViewerDialog({ open, onOpenChange, documentId, fileName 
                         )}
                         {!loading && url && !isPdf && !isImage && (
                             <div className="text-center p-10 space-y-3">
-                                <FileText className="h-12 w-12 mx-auto text-muted-foreground/40" />
+                                <FileText className="size-12 mx-auto text-muted-foreground/40" />
                                 <p className="text-sm text-muted-foreground">
                                     This file type can't be previewed in the browser.
                                 </p>
                                 <div className="flex items-center justify-center gap-2">
-                                    <Button size="sm" variant="outline" leftIcon={<ExternalLink className="h-3.5 w-3.5" />} onClick={() => window.open(url, '_blank')}>
+                                    <Button size="sm" variant="outline" leftIcon={<ExternalLink className="size-3.5" />} onClick={() => window.open(url, '_blank')}>
                                         Open in new tab
                                     </Button>
-                                    <Button size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={handleDownload}>
+                                    <Button size="sm" leftIcon={<Download className="size-3.5" />} onClick={handleDownload}>
                                         Download
                                     </Button>
                                 </div>

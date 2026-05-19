@@ -117,7 +117,7 @@ describe('useDocuments', () => {
 
 describe('usePerformanceReviews', () => {
     beforeEach(() => {
-        // This hook unwraps to res.data — return that shape.
+        // This hook unwraps to res.data - return that shape.
         apiMock.get.mockResolvedValue({ data: [] })
     })
 

@@ -94,7 +94,7 @@ function CategoriesPanel({ canManage }: { canManage: boolean }) {
                 className="flex items-center gap-2 w-full text-left"
                 onClick={() => setCollapsed(c => !c)}
             >
-                <Tags className="h-4 w-4 text-muted-foreground" />
+                <Tags className="size-4 text-muted-foreground" />
                 <span className="text-sm font-medium">{t('assets.categories')}</span>
                 <span className="ml-auto text-xs text-muted-foreground">{collapsed ? t('assets.show') : t('assets.hide')}</span>
             </button>
@@ -125,7 +125,7 @@ function CategoriesPanel({ canManage }: { canManage: boolean }) {
                                             onClick={() => handleDelete(c.id, c.name)}
                                             disabled={deleteCategory.isPending}
                                         >
-                                            <Trash2 className="h-3 w-3" />
+                                            <Trash2 className="size-3" />
                                         </button>
                                     )}
                                 </div>
@@ -220,7 +220,7 @@ function AssetFormDialog({
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
                     <DialogBody className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Asset Code — read-only display when editing, hidden on create */}
+                        {/* Asset Code - read-only display when editing, hidden on create */}
                         {isEdit && asset?.assetCode && (
                             <div className="space-y-1.5">
                                 <Label>{t('assets.assetCode')}</Label>
@@ -704,27 +704,27 @@ export function AssetsPage() {
                 const asset = row.original
                 return (
                     <div className="flex items-center gap-1 justify-end">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title={t('common.edit')} onClick={() => setEditTarget(asset)}>
-                            <Edit2 className="h-3.5 w-3.5" />
+                        <Button size="sm" variant="ghost" className="size-7 p-0" title={t('common.edit')} onClick={() => setEditTarget(asset)}>
+                            <Edit2 className="size-3.5" />
                         </Button>
                         {asset.status === 'available' && (
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-blue-600" title={t('assets.assignAsset')} onClick={() => setAssignTarget(asset)}>
-                                <UserPlus className="h-3.5 w-3.5" />
+                            <Button size="sm" variant="ghost" className="size-7 p-0 text-blue-600" title={t('assets.assignAsset')} onClick={() => setAssignTarget(asset)}>
+                                <UserPlus className="size-3.5" />
                             </Button>
                         )}
                         {asset.status === 'assigned' && (
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-600" title={t('assets.returnAsset')} onClick={() => setReturnTarget(asset)}>
-                                <RotateCcw className="h-3.5 w-3.5" />
+                            <Button size="sm" variant="ghost" className="size-7 p-0 text-green-600" title={t('assets.returnAsset')} onClick={() => setReturnTarget(asset)}>
+                                <RotateCcw className="size-3.5" />
                             </Button>
                         )}
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-amber-600" title={t('assets.logMaintenance')} onClick={() => setMaintenanceTarget(asset)}>
-                            <Wrench className="h-3.5 w-3.5" />
+                        <Button size="sm" variant="ghost" className="size-7 p-0 text-amber-600" title={t('assets.logMaintenance')} onClick={() => setMaintenanceTarget(asset)}>
+                            <Wrench className="size-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title={t('assets.viewHistory')} onClick={() => setHistoryTarget(asset)}>
-                            <History className="h-3.5 w-3.5" />
+                        <Button size="sm" variant="ghost" className="size-7 p-0" title={t('assets.viewHistory')} onClick={() => setHistoryTarget(asset)}>
+                            <History className="size-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" title={t('common.delete')} onClick={() => setDeleteTarget(asset)}>
-                            <Trash2 className="h-3.5 w-3.5" />
+                        <Button size="sm" variant="ghost" className="size-7 p-0 text-red-500" title={t('common.delete')} onClick={() => setDeleteTarget(asset)}>
+                            <Trash2 className="size-3.5" />
                         </Button>
                     </div>
                 )
@@ -740,7 +740,7 @@ export function AssetsPage() {
                 description={t('assets.pageDescription')}
                 actions={
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             {t('assets.refresh')}
                         </Button>
                         <ExportDropdown
@@ -749,7 +749,7 @@ export function AssetsPage() {
                         />
                         {canManageAssets && (
                             <Button onClick={() => setCreateOpen(true)}>
-                                <Plus className="h-4 w-4 mr-1.5" />
+                                <Plus className="size-4 mr-1.5" />
                                 {t('assets.newAsset')}
                             </Button>
                         )}
@@ -843,7 +843,7 @@ export function AssetsPage() {
             {/* Table */}
             {isLoading ? (
                 <div className="space-y-2">
-                    {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+                    {Array.from({ length: 6 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-12 w-full" />)}
                 </div>
             ) : (
                 <DataTable

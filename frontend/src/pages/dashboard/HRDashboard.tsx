@@ -57,7 +57,7 @@ function DemoPieCard({ title, data, loading }: { title: string; data: BreakdownP
         {loading ? (
           <div className="space-y-3">
             <Skeleton className="h-[140px] w-full rounded-xl" />
-            {[1, 2, 3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+            {[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-3 w-full" />)}
           </div>
         ) : (
           <>
@@ -71,7 +71,7 @@ function DemoPieCard({ title, data, loading }: { title: string; data: BreakdownP
                   <Legend
                     iconType="circle"
                     iconSize={8}
-                    formatter={(value) => <span style={{ fontSize: 11 }}>{value}</span>}
+                    formatter={(value) => <span style={{ fontSize: 12 }}>{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -79,7 +79,7 @@ function DemoPieCard({ title, data, loading }: { title: string; data: BreakdownP
             <ul className="space-y-2">
               {data.map(d => (
                 <li key={d.name} className="flex items-center gap-2 text-xs">
-                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: d.color }} />
+                  <span className="size-2.5 rounded-full shrink-0" style={{ background: d.color }} />
                   <span className="flex-1 text-foreground">{d.name}</span>
                   <span className="font-semibold">{d.value}</span>
                   {total > 0 && <span className="text-muted-foreground w-9 text-right">{Math.round((d.value / total) * 100)}%</span>}
@@ -156,7 +156,7 @@ export function HRDashboard() {
       {/* Urgent alerts */}
       {urgentAlerts.length > 0 && (
         <div role="status" className="flex items-center gap-3 px-4 py-3 rounded-xl border border-warning/30 bg-warning/10 animate-fade-fast">
-          <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+          <AlertTriangle className="size-4 text-warning shrink-0" />
           <p className="text-sm text-warning-foreground flex-1" dir="auto">
             <span className="font-semibold">
               {t('dashboard.alertsRequired', { count: urgentAlerts.length, defaultValue: `${urgentAlerts.length} action${urgentAlerts.length > 1 ? 's' : ''} required:` })}
@@ -206,7 +206,7 @@ export function HRDashboard() {
                   </p>
                 )}
                 <p className="text-[11px] text-success font-medium flex items-center gap-1 justify-end">
-                  <TrendingUp className="h-3 w-3" /> {t('dashboard.latestMonth', { defaultValue: 'Latest month' })}
+                  <TrendingUp className="size-3" /> {t('dashboard.latestMonth', { defaultValue: 'Latest month' })}
                 </p>
               </div>
             </div>
@@ -214,7 +214,7 @@ export function HRDashboard() {
           <CardContent className="pt-0">
             {trendLoading ? (
               <div className="h-[220px] flex flex-col gap-3 pt-4">
-                {[100, 83, 67, 83, 100, 67].map((w, i) => <Skeleton key={i} className="h-3 rounded" style={{ width: `${w}%` }} />)}
+                {[100, 83, 67, 83, 100, 67].map((w, i) => <Skeleton key={`skeleton-${i}`} className="h-3 rounded" style={{ width: `${w}%` }} />)}
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
@@ -246,7 +246,7 @@ export function HRDashboard() {
             {natLoading ? (
               <div className="space-y-3">
                 <Skeleton className="h-[140px] w-full rounded-xl" />
-                {[1, 2, 3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+                {[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-3 w-full" />)}
               </div>
             ) : (
               <>
@@ -254,7 +254,7 @@ export function HRDashboard() {
                   <ResponsiveContainer width="100%" height={140}>
                     <PieChart>
                       <Pie data={nationalityData} cx="50%" cy="50%" innerRadius={42} outerRadius={64} paddingAngle={3} dataKey="value">
-                        {nationalityData.map((entry, i) => <Cell key={i} fill={entry.fill} stroke="none" />)}
+                        {nationalityData.map((entry, i) => <Cell key={`cell-${i}`} fill={entry.fill} stroke="none" />)}
                       </Pie>
                       <Tooltip formatter={(v: string | number | readonly (string | number)[] | undefined) => [v, 'Employees']} contentStyle={tooltipStyle} />
                     </PieChart>
@@ -263,7 +263,7 @@ export function HRDashboard() {
                 <ul className="space-y-2">
                   {nationalityData.map(d => (
                     <li key={d.name} className="flex items-center gap-2 text-xs">
-                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: d.fill }} />
+                      <span className="size-2.5 rounded-full shrink-0" style={{ background: d.fill }} />
                       <span className="flex-1 text-foreground">{d.name}</span>
                       <span className="font-semibold">{d.value}</span>
                       <span className="text-muted-foreground w-8 text-right">{Math.round((d.value / totalNat) * 100)}%</span>
@@ -300,7 +300,7 @@ export function HRDashboard() {
                   <YAxis dataKey="dept" type="category" tick={{ fontSize: 11, fill: CHART_COLORS.axis }} axisLine={false} tickLine={false} width={72} />
                   <Tooltip contentStyle={tooltipStyle} />
                   <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={14}>
-                    {departmentData.map((_, i) => <Cell key={i} fill={i === 0 ? CHART_COLORS.primary : 'hsl(var(--primary) / 0.25)'} />)}
+                    {departmentData.map((_, i) => <Cell key={`cell-${i}`} fill={i === 0 ? CHART_COLORS.primary : 'hsl(var(--primary) / 0.25)'} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -317,7 +317,7 @@ export function HRDashboard() {
                 <CardDescription>{t('dashboard.currentProcessingStatus', { defaultValue: 'Current processing status' })}</CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/visa')}>
-                View all <ArrowUpRight className="h-3 w-3 ml-1" />
+                View all <ArrowUpRight className="size-3 ml-1" />
               </Button>
             </div>
           </CardHeader>
@@ -376,7 +376,7 @@ export function HRDashboard() {
               <div className="space-y-4">
                 <Skeleton className="h-12 w-24 mx-auto rounded-xl" />
                 <Skeleton className="h-2 w-full rounded-full" />
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">{[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-16 rounded-xl" />)}</div>
               </div>
             ) : (
               <>
@@ -414,7 +414,7 @@ export function HRDashboard() {
                 </div>
                 {emiratisation && emiratisation.gap < 0 && (
                   <div className="flex items-start gap-2 bg-warning/10 border border-warning/20 rounded-xl p-3">
-                    <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
+                    <AlertTriangle className="size-3.5 text-warning shrink-0 mt-0.5" />
                     <p className="text-[11px] text-warning-foreground leading-relaxed">
                       Below {emiratisation.targetRatio}% target.{' '}
                       {emiratisation.required > 0 && `Hire ${emiratisation.required} more Emirati${emiratisation.required > 1 ? 's' : ''} to comply.`}{' '}
@@ -437,7 +437,7 @@ export function HRDashboard() {
               <CardDescription>{t('dashboard.onboardingDesc', { defaultValue: 'Employee onboarding status' })}</CardDescription>
             </div>
             <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/onboarding')}>
-              View all <ArrowUpRight className="h-3 w-3 ml-1" />
+              View all <ArrowUpRight className="size-3 ml-1" />
             </Button>
           </div>
         </CardHeader>
@@ -468,7 +468,7 @@ export function HRDashboard() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
-                <Cake className="h-4 w-4 text-pink-500" />
+                <Cake className="size-4 text-pink-500" />
                 <CardTitle>{t('dashboard.upcomingBirthdays', { defaultValue: 'Birthdays' })}</CardTitle>
               </div>
               <Select value={String(birthdayMonth)} onValueChange={v => setBirthdayMonth(Number(v))}>
@@ -485,7 +485,7 @@ export function HRDashboard() {
           </CardHeader>
           <CardContent className="pt-0">
             {bdLoadingFinal ? (
-              <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-lg" />)}</div>
+              <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-9 w-full rounded-lg" />)}</div>
             ) : birthdayData.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-8">{t('dashboard.noBirthdays', { defaultValue: 'No birthdays this month' })}</p>
             ) : (
@@ -502,7 +502,7 @@ export function HRDashboard() {
                     {birthdayData.map((b, i) => (
                       <tr key={i} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                         <td className="py-2.5 pr-3">
-                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-pink-50 text-pink-600 font-bold text-xs ring-1 ring-pink-200">
+                          <span className="inline-flex size-7 items-center justify-center rounded-full bg-pink-50 text-pink-600 font-bold text-xs ring-1 ring-pink-200">
                             {b.day}
                           </span>
                         </td>
@@ -522,7 +522,7 @@ export function HRDashboard() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
-                <Award className="h-4 w-4 text-amber-500" />
+                <Award className="size-4 text-amber-500" />
                 <CardTitle>{t('dashboard.workAnniversaries', { defaultValue: 'Years Completed' })}</CardTitle>
               </div>
               <Select value={String(anniversaryMonth)} onValueChange={v => setAnniversaryMonth(Number(v))}>
@@ -539,7 +539,7 @@ export function HRDashboard() {
           </CardHeader>
           <CardContent className="pt-0">
             {annivLoadingFinal ? (
-              <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-lg" />)}</div>
+              <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-9 w-full rounded-lg" />)}</div>
             ) : anniversaryData.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-8">{t('dashboard.noAnniversaries', { defaultValue: 'No anniversaries this month' })}</p>
             ) : (

@@ -21,8 +21,8 @@ function EmptyStateBase({
     size = 'md',
 }: EmptyStateProps) {
     const padding = size === 'sm' ? 'py-8' : size === 'lg' ? 'py-24' : 'py-14'
-    const iconSize = size === 'sm' ? 'h-8 w-8' : size === 'lg' ? 'h-16 w-16' : 'h-11 w-11'
-    const iconInner = size === 'sm' ? 'h-4 w-4' : size === 'lg' ? 'h-8 w-8' : 'h-5 w-5'
+    const iconSize = size === 'sm' ? 'size-8' : size === 'lg' ? 'size-16' : 'size-11'
+    const iconInner = size === 'sm' ? 'size-4' : size === 'lg' ? 'size-8' : 'size-5'
 
     const inner = (
         <div className={cn('flex flex-col items-center gap-3 text-center px-4 animate-fade-fast', padding)}>

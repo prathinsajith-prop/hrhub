@@ -6,14 +6,14 @@
  * sees changes immediately.
  *
  * Events handled:
- *   recruitment:stage-changed    — card moved between columns
- *   recruitment:candidate-added  — new candidate appears in Received column
- *   recruitment:candidate-removed — candidate deleted / converted to employee
- *   recruitment:candidate-updated — candidate profile (notes, score…) edited
- *   recruitment:job-changed      — job created / updated / deleted
+ *   recruitment:stage-changed    - card moved between columns
+ *   recruitment:candidate-added  - new candidate appears in Received column
+ *   recruitment:candidate-removed - candidate deleted / converted to employee
+ *   recruitment:candidate-updated - candidate profile (notes, score…) edited
+ *   recruitment:job-changed      - job created / updated / deleted
  *
  * The actorSocketId in every payload is compared with this tab's socket.socketId.
- * Same-tab actions are skipped — the local optimistic update already handled them.
+ * Same-tab actions are skipped - the local optimistic update already handled them.
  * This correctly handles same-user-multiple-tabs scenarios (userId-based guards
  * would block all tabs for the same user account).
  *
@@ -70,11 +70,11 @@ interface JobChangedPayload {
 export function useRecruitmentSocket() {
     const qc = useQueryClient()
 
-    // Prefix key — invalidateQueries uses fuzzy/prefix matching so this correctly
+    // Prefix key - invalidateQueries uses fuzzy/prefix matching so this correctly
     // invalidates ['applications-kanban', stage, q, filter, jobId] for all q/filter combos.
     const stageKey = (stage: string) => ['applications-kanban', stage] as const
 
-    /** Returns true when this tab triggered the action (skip — already handled optimistically) */
+    /** Returns true when this tab triggered the action (skip - already handled optimistically) */
     const isOwnAction = (actorSocketId?: string | null) =>
         actorSocketId != null && actorSocketId === socket.socketId
 
