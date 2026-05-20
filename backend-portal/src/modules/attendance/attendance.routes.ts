@@ -5,6 +5,7 @@ import {
     attendanceRecords,
     employees,
     leaveRequests,
+    orgUnits,
     publicHolidays,
     shifts,
 } from '../../db/schema/index.js'
@@ -94,11 +95,19 @@ export default async function attendanceRoutes(fastify: FastifyInstance) {
                 employeeFirstName: employees.firstName,
                 employeeLastName: employees.lastName,
                 employeeNo: employees.employeeNo,
-                employeeDepartment: employees.department,
+                // Resolved department via org_units (consistent with /employees/*).
+                employeeDepartment: sql<string | null>`COALESCE(${orgUnits.name}, ${employees.department})`,
                 total: sql<number>`COUNT(*) OVER()`,
             })
             .from(attendanceRecords)
-            .innerJoin(employees, eq(attendanceRecords.employeeId, employees.id))
+            .innerJoin(employees, and(
+                eq(attendanceRecords.employeeId, employees.id),
+                eq(employees.tenantId, user.tenantId),
+            ))
+            .leftJoin(orgUnits, and(
+                eq(employees.departmentId, orgUnits.id),
+                eq(orgUnits.tenantId, user.tenantId),
+            ))
             .where(and(...conditions))
             .orderBy(desc(attendanceRecords.date))
             .limit(query.limit)
@@ -169,7 +178,7 @@ export default async function attendanceRoutes(fastify: FastifyInstance) {
                 employeeNo: employees.employeeNo,
                 firstName: employees.firstName,
                 lastName: employees.lastName,
-                department: employees.department,
+                department: sql<string | null>`COALESCE(${orgUnits.name}, ${employees.department})`,
                 designation: employees.designation,
                 avatarUrl: employees.avatarUrl,
                 joinDate: employees.joinDate,
@@ -177,6 +186,10 @@ export default async function attendanceRoutes(fastify: FastifyInstance) {
             })
             .from(employees)
             .leftJoin(shifts, eq(shifts.id, employees.shiftId))
+            .leftJoin(orgUnits, and(
+                eq(employees.departmentId, orgUnits.id),
+                eq(orgUnits.tenantId, user.tenantId),
+            ))
             .where(and(eq(employees.tenantId, user.tenantId), employeeCond))
             .orderBy(asc(employees.firstName))
 

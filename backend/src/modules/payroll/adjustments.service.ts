@@ -191,7 +191,8 @@ export async function syncAdjustmentsForPeriod(
     const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-    // Fetch active + probation employees with their daily rate basis.
+    // Fetch payable employees ('active' + 'onboarding' — see PAYABLE_STATUSES
+    // in payroll.service.ts) with their daily rate basis.
     const emps = await db
         .select({
             id: employees.id,
@@ -201,7 +202,8 @@ export async function syncAdjustmentsForPeriod(
         .where(and(
             eq(employees.tenantId, tenantId),
             eq(employees.isArchived, false),
-            inArray(employees.status, ['active', 'probation']),
+            // Match the payroll-run eligibility filter — see comment in payroll.service.ts.
+            inArray(employees.status, ['active', 'onboarding']),
         ))
 
     const dailyRateByEmp = new Map<string, number>()
@@ -354,21 +356,39 @@ export async function getAdjustmentTotalsByEmployee(
     year: number,
     month: number,
 ): Promise<Map<string, EmployeeAdjustmentTotals>> {
-    // Sum amount per (employee, category). Also count source rows so we can
-    // resolve "days" for leave categories by joining back to leave_requests.
-    const rows = await db
-        .select({
-            employeeId: payrollAdjustments.employeeId,
-            category: payrollAdjustments.category,
-            total: sql<string>`SUM(${payrollAdjustments.amount})`,
-        })
-        .from(payrollAdjustments)
-        .where(and(
-            eq(payrollAdjustments.tenantId, tenantId),
-            eq(payrollAdjustments.periodYear, year),
-            eq(payrollAdjustments.periodMonth, month),
-        ))
-        .groupBy(payrollAdjustments.employeeId, payrollAdjustments.category)
+    // Two independent queries — the sums query doesn't need the leave_requests
+    // join, the day-count query does. Run them in parallel so we pay one
+    // round-trip not two (matters on remote DBs like Neon).
+    const [rows, dayRows] = await Promise.all([
+        db
+            .select({
+                employeeId: payrollAdjustments.employeeId,
+                category: payrollAdjustments.category,
+                total: sql<string>`SUM(${payrollAdjustments.amount})`,
+            })
+            .from(payrollAdjustments)
+            .where(and(
+                eq(payrollAdjustments.tenantId, tenantId),
+                eq(payrollAdjustments.periodYear, year),
+                eq(payrollAdjustments.periodMonth, month),
+            ))
+            .groupBy(payrollAdjustments.employeeId, payrollAdjustments.category),
+        db
+            .select({
+                employeeId: payrollAdjustments.employeeId,
+                category: payrollAdjustments.category,
+                days: sql<number>`COALESCE(SUM(${leaveRequests.days}), 0)::int`,
+            })
+            .from(payrollAdjustments)
+            .innerJoin(leaveRequests, eq(payrollAdjustments.sourceRef, leaveRequests.id))
+            .where(and(
+                eq(payrollAdjustments.tenantId, tenantId),
+                eq(payrollAdjustments.periodYear, year),
+                eq(payrollAdjustments.periodMonth, month),
+                eq(payrollAdjustments.source, 'leave_engine'),
+            ))
+            .groupBy(payrollAdjustments.employeeId, payrollAdjustments.category),
+    ])
 
     const totals = new Map<string, EmployeeAdjustmentTotals>()
     const blank = (employeeId: string): EmployeeAdjustmentTotals => ({
@@ -398,23 +418,6 @@ export async function getAdjustmentTotalsByEmployee(
         }
         totals.set(r.employeeId, t)
     }
-
-    // Day counts come from the source leave_requests, summed via the auto rows.
-    const dayRows = await db
-        .select({
-            employeeId: payrollAdjustments.employeeId,
-            category: payrollAdjustments.category,
-            days: sql<number>`COALESCE(SUM(${leaveRequests.days}), 0)::int`,
-        })
-        .from(payrollAdjustments)
-        .innerJoin(leaveRequests, eq(payrollAdjustments.sourceRef, leaveRequests.id))
-        .where(and(
-            eq(payrollAdjustments.tenantId, tenantId),
-            eq(payrollAdjustments.periodYear, year),
-            eq(payrollAdjustments.periodMonth, month),
-            eq(payrollAdjustments.source, 'leave_engine'),
-        ))
-        .groupBy(payrollAdjustments.employeeId, payrollAdjustments.category)
 
     for (const r of dayRows) {
         const t = totals.get(r.employeeId) ?? blank(r.employeeId)

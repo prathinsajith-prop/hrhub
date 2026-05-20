@@ -1,4 +1,4 @@
-import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, getPayslipsWithEmployees, getPayslipsByEmployee, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
+import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, deletePayrollRun, getPayrollReadiness, getPayslipsWithEmployees, getPayslipsByEmployee, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
 import {
     createAdjustment,
     deleteAdjustment,
@@ -154,6 +154,60 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data: updated })
     })
 
+    // DELETE /api/v1/payroll/:id — only drafts can be deleted.
+    // Once a run leaves draft it's the historical record; deleting would
+    // orphan payslip downloads, WPS references, and audit traces.
+    fastify.delete('/:id', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        // Look up first so we can return a precise message (404 vs 409) and
+        // record the period in the audit trail.
+        const existing = await getPayrollRun(request.user.tenantId, id)
+        if (!existing) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Payroll run not found' })
+        }
+        if (existing.status !== 'draft') {
+            return reply.code(409).send({
+                statusCode: 409,
+                error: 'Conflict',
+                message: 'Only draft payroll runs can be deleted. Processed runs are the historical record.',
+            })
+        }
+        const removed = await deletePayrollRun(request.user.tenantId, id)
+        if (!removed) {
+            // Race condition: someone else processed it between our SELECT
+            // and DELETE. Refuse cleanly.
+            return reply.code(409).send({
+                statusCode: 409,
+                error: 'Conflict',
+                message: 'Payroll run is no longer in draft state.',
+            })
+        }
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'payroll_run',
+            entityId: id,
+            entityName: `Payroll ${removed.month}/${removed.year}`,
+            action: 'delete',
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(204).send()
+    })
+
+    // GET /api/v1/payroll/:id/readiness — pre-processing checklist for a draft.
+    // Returns blockers (must fix) and warnings (should know) so the
+    // dashboard can disable the Process button + surface what needs attention.
+    // Non-draft runs return 204 — there's nothing left to check.
+    fastify.get('/:id/readiness', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const data = await getPayrollReadiness(request.user.tenantId, id)
+        if (!data) return reply.code(204).send()
+        return reply.send({ data })
+    })
+
     // GET /api/v1/payroll/gratuity-calc?basicSalary=10000&yearsOfService=3
     fastify.get('/gratuity-calc', {
         ...auth,
@@ -230,8 +284,18 @@ export default async function (fastify: any): Promise<void> {
     // HR roles see any payslip; employees can only download their own.
     fastify.get('/payslips/:payslipId/download', { ...auth, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const { payslipId } = request.params as { payslipId: string }
+        // Reject the synthetic draft ids early. Hitting Postgres with a
+        // non-UUID string would throw InvalidTextRepresentation → 500;
+        // this gives the user a clean message and protects the next call.
+        if (payslipId.startsWith('draft:')) {
+            return reply.code(409).send({
+                statusCode: 409,
+                error: 'Conflict',
+                message: 'Process the payroll run before downloading payslips.',
+            })
+        }
         const payslip = await getPayslipById(request.user.tenantId, payslipId)
-        if (!payslip) return reply.code(404).send({ message: 'Payslip not found' })
+        if (!payslip) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Payslip not found' })
         const isElevated = ['hr_manager', 'super_admin'].includes(request.user.role)
         if (!isElevated && payslip.employeeId !== request.user.employeeId) {
             return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only download your own payslip.' })

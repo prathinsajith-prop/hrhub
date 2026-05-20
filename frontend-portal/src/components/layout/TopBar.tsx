@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { LogOut, Moon, Sparkles, Sun, User } from 'lucide-react'
@@ -29,9 +30,34 @@ export function TopBar() {
 
     const canManage = canSwitchToManager(user)
 
+    // Track scroll past the first ~8px so the header can drop its border and
+    // sit cleanly over the page when at the top, then snap a subtle border
+    // and shadow on scroll. Cheap listener (passive, scoped to window).
+    const [scrolled, setScrolled] = useState(false)
+    useEffect(() => {
+        const onScroll = () => setScrolled(window.scrollY > 8)
+        onScroll()
+        window.addEventListener('scroll', onScroll, { passive: true })
+        return () => window.removeEventListener('scroll', onScroll)
+    }, [])
+
     return (
-        <header className="sticky top-0 z-30 header-blur">
-            <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
+        <header
+            className={cn(
+                'sticky top-0 z-30 header-blur transition-[box-shadow,border-color,background-color] duration-200',
+                scrolled
+                    ? 'shadow-sm border-b border-border/70'
+                    : 'border-b border-transparent',
+            )}
+        >
+            <div
+                className={cn(
+                    'mx-auto flex max-w-6xl items-center gap-3 px-4 transition-[height] duration-200 sm:px-6',
+                    // Slight compression on scroll so the header feels lighter
+                    // and gives more space to page content.
+                    scrolled ? 'h-12' : 'h-14',
+                )}
+            >
                 {/* ── Brand ──────────────────────────────────────────────── */}
                 <div className="flex min-w-0 items-center gap-2.5">
                     <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-md shadow-indigo-200/60">
@@ -49,15 +75,23 @@ export function TopBar() {
                     </div>
                 </div>
 
-                {/* ── Mode toggle (centered on sm+, dept_heads only) ───── */}
-                <div className="hidden flex-1 justify-center sm:flex">
-                    {canManage ? <ModeToggle /> : null}
-                </div>
-                <div className="flex-1 sm:hidden" aria-hidden />
+                {/* ── Spacer ─────────────────────────────────────────────── */}
+                <div className="flex-1" aria-hidden />
 
-                {/* ── Right rail: bell + account menu ───────────────────── */}
+                {/* ── Right rail: bell · mode toggle · account menu ──────
+                    Mode toggle sits inline just to the left of the avatar so
+                    `dept_head` users can flip context without leaving the
+                    header's right cluster. Hidden on mobile (the toggle has
+                    its own discoverable row below the header instead — see
+                    the sm:hidden block at the bottom of this file). */}
                 <div className="flex items-center gap-1.5">
                     <NotificationsBell />
+
+                    {canManage ? (
+                        <div className="hidden sm:block">
+                            <ModeToggle />
+                        </div>
+                    ) : null}
 
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>

@@ -275,6 +275,13 @@ export interface Payslip {
   employeeName: string
   employeeNo?: string | null
   department?: string | null
+  /**
+   * `true` when this row came from the draft preview rather than a persisted
+   * payslip. The PDF download button is hidden for previews — there's no
+   * payslip row to PDF-ify until runPayroll is processed. The `id` will
+   * look like `draft:<runId>:<employeeId>` instead of a UUID.
+   */
+  isDraft?: boolean
   month: number
   year: number
   basicSalary: number

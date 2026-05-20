@@ -5,7 +5,7 @@ import {
   CreditCard, CheckCircle2, Clock, Play, FileDown, Send,
   TrendingUp, RefreshCcw, Plus, Calculator, DollarSign,
   CircleDot, ArrowRight, Banknote, Users, BarChart3,
-  Sparkles, Trash2, Lock,
+  Sparkles, Trash2, Lock, AlertTriangle, AlertCircle,
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -35,6 +35,7 @@ import {
   usePayrollRuns, useRunPayroll, useSubmitWps,
   useCreatePayrollRun, useUpdatePayrollRun, usePayslips, useGratuityCalc,
   useAdjustments, useCreateAdjustment, useDeleteAdjustment, useSyncAdjustments,
+  useDeletePayrollRun, useReadiness,
 } from '@/hooks/usePayroll'
 import { useEmployees } from '@/hooks/useEmployees'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -401,6 +402,9 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
   const [expanded, setExpanded] = useState<string | null>(null)
   const rawData = data
   const payslips = useMemo(() => (rawData ?? []) as Payslip[], [rawData])
+  // Draft preview vs. real payslips: rows are marked `isDraft` server-side.
+  // Used to hide download + show a banner explaining "Process the run to lock in".
+  const isDraftPreview = run?.status === 'draft'
 
   const chartData = useMemo(() => payslips.slice(0, 10).map(ps => ({
     name: (ps.employeeName ?? '').split(' ')[0],
@@ -452,11 +456,29 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
               </div>
               <div>
                 <p className="text-sm font-medium">No payslips yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Process the payroll run to generate payslips.</p>
+                <p className="text-xs text-muted-foreground mt-1">No payable employees for this period.</p>
               </div>
             </div>
           ) : (
             <>
+              {/* Draft preview banner — explains why downloads aren't available
+                  yet and what the user needs to do to lock the numbers in. */}
+              {isDraftPreview && (
+                <div className="border-b border-amber-200/70 bg-amber-50/70 px-5 py-3 text-xs dark:border-amber-900/40 dark:bg-amber-950/30">
+                  <div className="flex items-start gap-2">
+                    <Clock className="mt-0.5 size-3.5 shrink-0 text-amber-700 dark:text-amber-300" />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-amber-900 dark:text-amber-200">
+                        Draft preview — numbers are live, payslips not generated yet
+                      </p>
+                      <p className="mt-0.5 text-amber-800/80 dark:text-amber-300/80">
+                        Process the run to finalise totals and unlock PDF download.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Mini bar chart inside sheet */}
               {chartData.length > 0 && (
                 <div className="px-5 py-4 bg-muted/20">
@@ -505,16 +527,26 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
                               {typeof ps.daysWorked === 'number' ? ` · ${ps.daysWorked} days worked` : ''}
                             </p>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs"
-                            loading={downloading === ps.id}
-                            leftIcon={<FileDown className="size-3" />}
-                            onClick={() => handleDownload(ps)}
-                          >
-                            Download PDF
-                          </Button>
+                          {ps.isDraft ? (
+                            <span
+                              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-amber-300/70 bg-amber-50 px-2 text-[11px] font-medium text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200"
+                              title="Process the run to enable download"
+                            >
+                              <Clock className="size-3" />
+                              Preview only
+                            </span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              loading={downloading === ps.id}
+                              leftIcon={<FileDown className="size-3" />}
+                              onClick={() => handleDownload(ps)}
+                            >
+                              Download PDF
+                            </Button>
+                          )}
                         </div>
 
                         <div className="px-5 pb-5">
@@ -1237,6 +1269,10 @@ export function PayrollPage() {
   }, [createYear, currentYear, payrollRuns, prevYearRuns])
 
   const draftRun = payrollRuns.find(r => r.status === 'draft')
+  // Readiness checklist for the draft (returns null for non-draft, gated by hook)
+  const { data: readiness } = useReadiness(draftRun?.id)
+  const deleteDraft = useDeletePayrollRun()
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const latestPaidRun = payrollRuns.find(r => r.status === 'paid' || r.status === 'wps_submitted')
   const ytdNet = payrollRuns
     .filter(r => r.status === 'paid' || r.status === 'wps_submitted')
@@ -1325,6 +1361,17 @@ export function PayrollPage() {
     })
   }
 
+  const handleDeleteDraft = () => {
+    if (!draftRun) return
+    deleteDraft.mutate(draftRun.id, {
+      onSuccess: () => {
+        toast.success('Draft deleted', `${draftLabel} payroll draft removed.`)
+        setDeleteConfirmOpen(false)
+      },
+      onError: () => setDeleteConfirmOpen(false),
+    })
+  }
+
   return (
     <PageWrapper>
       <PageHeader
@@ -1377,11 +1424,56 @@ export function PayrollPage() {
                 </div>
               </div>
               {canManagePayroll && (
-                <Button leftIcon={<Play className="size-4" />} onClick={() => setRunConfirmOpen(true)} className="shrink-0">
-                  Process Payroll
-                </Button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<Trash2 className="size-3.5" />}
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/40"
+                  >
+                    Delete
+                  </Button>
+                  <Button
+                    leftIcon={<Play className="size-4" />}
+                    onClick={() => setRunConfirmOpen(true)}
+                    // Server-side validation runs anyway; this prevents the
+                    // obvious "no payable employees / no basic salary" mistakes
+                    // so HR sees the checklist banner before they click.
+                    disabled={readiness ? !readiness.canProcess : false}
+                    title={readiness && !readiness.canProcess ? 'Resolve blockers before processing' : undefined}
+                  >
+                    Process Payroll
+                  </Button>
+                </div>
               )}
             </div>
+
+            {/* Row 1.5: readiness checklist — only renders when there's at
+                least one finding. Blockers (rose) gate the Process button;
+                warnings (amber) are informational. */}
+            {readiness && (readiness.blockers.length > 0 || readiness.warnings.length > 0) && (
+              <div className="mb-5 space-y-2">
+                {readiness.blockers.map((msg, i) => (
+                  <div
+                    key={`b-${i}`}
+                    className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200"
+                  >
+                    <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                    <span>{msg}</span>
+                  </div>
+                ))}
+                {readiness.warnings.map((msg, i) => (
+                  <div
+                    key={`w-${i}`}
+                    className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+                  >
+                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                    <span>{msg}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Row 2: stepper */}
             <WorkflowBar status={draftRun.status} />
@@ -1584,6 +1676,22 @@ export function PayrollPage() {
         cancelLabel="Cancel"
         onConfirm={handleRunPayroll}
         variant="warning"
+      />
+
+      {/* Delete-draft confirmation. Only fired for draft runs (the button is
+          hidden otherwise) and the server enforces the same rule — this dialog
+          is for the obvious "I clicked the wrong month" recovery flow. */}
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={(o) => { if (!deleteDraft.isPending) setDeleteConfirmOpen(o) }}
+        title={`Delete ${draftLabel} draft?`}
+        description={draftRun
+          ? `This removes the draft payroll run for ${draftLabel}. Manual adjustments (overtime, bonuses) you entered for this period stay — they'll apply when you create a new run for the same period.`
+          : 'No draft run to delete.'}
+        confirmLabel={deleteDraft.isPending ? 'Deleting…' : 'Delete draft'}
+        cancelLabel="Cancel"
+        onConfirm={handleDeleteDraft}
+        variant="destructive"
       />
     </PageWrapper>
   )

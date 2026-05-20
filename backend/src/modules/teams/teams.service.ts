@@ -173,20 +173,33 @@ export async function addTeamMembers(
     const team = await getTeam(tenantId, teamId)
     if (!team) throw Object.assign(new Error('Team not found'), { statusCode: 404 })
 
-    // Validate department membership when team is scoped to a department
+    // Tenant-isolation validation runs first, BEFORE the department check.
+    // Previously this only ran when the team had a departmentId, so a team
+    // without a department could accept employee IDs from any tenant — which
+    // is how a few cross-tenant team_members rows ended up in the DB.
+    // Now every employeeId is verified to belong to (tenantId, non-archived)
+    // regardless of whether the team is department-scoped.
+    const validEmployees = await db
+        .select({ id: employees.id, departmentId: employees.departmentId })
+        .from(employees)
+        .where(and(
+            eq(employees.tenantId, tenantId),
+            eq(employees.isArchived, false),
+            inArray(employees.id, employeeIds),
+        ))
+    const validIds = new Set(validEmployees.map(e => e.id))
+    const foreign = employeeIds.filter(id => !validIds.has(id))
+    if (foreign.length > 0) {
+        throw Object.assign(
+            new Error('One or more employees do not belong to this tenant'),
+            { statusCode: 422 }
+        )
+    }
+
+    // Department-scoped teams additionally require employees be in that department
     if (team.departmentId) {
-        const eligible = await db
-            .select({ id: employees.id })
-            .from(employees)
-            .where(and(
-                eq(employees.tenantId, tenantId),
-                eq(employees.departmentId, team.departmentId),
-                eq(employees.isArchived, false),
-                inArray(employees.id, employeeIds),
-            ))
-        const eligibleIds = new Set(eligible.map(e => e.id))
-        const ineligible = employeeIds.filter(id => !eligibleIds.has(id))
-        if (ineligible.length > 0) {
+        const wrongDept = validEmployees.filter(e => e.departmentId !== team.departmentId)
+        if (wrongDept.length > 0) {
             throw Object.assign(
                 new Error('One or more employees are not in this team\'s department'),
                 { statusCode: 422 }

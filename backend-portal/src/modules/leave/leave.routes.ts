@@ -2,7 +2,7 @@ import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../db/client.js'
-import { employees, leaveBalances, leaveRequests } from '../../db/schema/index.js'
+import { employees, leaveBalances, leaveRequests, orgUnits } from '../../db/schema/index.js'
 import { e400, e403, e404 } from '../../lib/errors.js'
 import { recordActivity } from '../../lib/audit.js'
 import { notifyRequester, notifyReviewers } from '../../lib/notify.js'
@@ -63,6 +63,9 @@ export default async function leaveRoutes(fastify: FastifyInstance) {
 
         // Self-join on employees via handoverTo so the manager sees the
         // chosen handover person by name (not just the FK uuid) when reviewing.
+        // Every join is also tenant-bound — defence in depth so a stray FK
+        // can't leak a name from another tenant. Department is resolved via
+        // org_units (FK) with the legacy text column as fallback.
         const handover = alias(employees, 'handover') as any
         const rows = await db
             .select({
@@ -70,15 +73,25 @@ export default async function leaveRoutes(fastify: FastifyInstance) {
                 employeeFirstName: employees.firstName,
                 employeeLastName: employees.lastName,
                 employeeNo: employees.employeeNo,
-                employeeDepartment: employees.department,
+                employeeDepartment: sql<string | null>`COALESCE(${orgUnits.name}, ${employees.department})`,
                 handoverFirstName: handover.firstName,
                 handoverLastName: handover.lastName,
                 handoverDesignation: handover.designation,
                 total: sql<number>`COUNT(*) OVER()`,
             })
             .from(leaveRequests)
-            .innerJoin(employees, eq(leaveRequests.employeeId, employees.id))
-            .leftJoin(handover, eq(leaveRequests.handoverTo, handover.id))
+            .innerJoin(employees, and(
+                eq(leaveRequests.employeeId, employees.id),
+                eq(employees.tenantId, user.tenantId),
+            ))
+            .leftJoin(orgUnits, and(
+                eq(employees.departmentId, orgUnits.id),
+                eq(orgUnits.tenantId, user.tenantId),
+            ))
+            .leftJoin(handover, and(
+                eq(leaveRequests.handoverTo, handover.id),
+                eq(handover.tenantId, user.tenantId),
+            ))
             .where(and(...conditions))
             .orderBy(desc(leaveRequests.createdAt))
             .limit(query.limit)

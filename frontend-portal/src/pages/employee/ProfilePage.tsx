@@ -76,7 +76,7 @@ export function EmployeeProfilePage() {
         <div className="space-y-6">
             <PageHeader
                 title={`${employee.firstName} ${employee.lastName}`}
-                subtitle={[employee.designation, employee.department].filter(Boolean).join(' · ') || undefined}
+                subtitle={[employee.designation, employee.departmentName ?? employee.department].filter(Boolean).join(' · ') || undefined}
                 action={
                     editing ? (
                         <>
@@ -113,8 +113,21 @@ export function EmployeeProfilePage() {
                                 <Field label="Status" value={employee.status} />
                                 <Field label="Join date" value={formatDate(employee.joinDate)} />
                                 <Field label="Designation" value={employee.designation ?? '—'} />
-                                <Field label="Department" value={employee.department ?? '—'} />
                                 <Field label="Nationality" value={employee.nationality ?? '—'} />
+                                {/* Branch → Division → Department triad — joined
+                                    from org_units server-side. We hide rows that
+                                    have no value so a flat-org tenant (just one
+                                    branch) doesn't show three em-dashes. */}
+                                {employee.branchName ? (
+                                    <Field label="Branch" value={employee.branchName} />
+                                ) : null}
+                                {employee.divisionName ? (
+                                    <Field label="Division" value={employee.divisionName} />
+                                ) : null}
+                                <Field
+                                    label="Department"
+                                    value={employee.departmentName ?? employee.department ?? '—'}
+                                />
                             </div>
                         </CardContent>
                     </Card>

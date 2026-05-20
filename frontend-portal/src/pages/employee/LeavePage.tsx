@@ -20,6 +20,7 @@ import { GlassCard } from '@/components/shared/GlassCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -321,28 +322,25 @@ function NewLeaveDialog({
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label htmlFor="leave-from">{t('leave.from')}</Label>
-                            <Input
+                            <DatePicker
                                 id="leave-from"
-                                type="date"
                                 value={startDate}
                                 min={todayISO}
-                                onChange={(e) => handleStartChange(e.target.value)}
-                                required
+                                onChange={handleStartChange}
+                                placeholder={t('leave.from')}
                             />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="leave-to">{t('leave.to')}</Label>
-                            <Input
+                            <DatePicker
                                 id="leave-to"
-                                type="date"
                                 value={endDate}
-                                // End picker can't go earlier than the chosen start — the
-                                // browser disables dates below `min`. Falls back to today
-                                // when start isn't picked yet.
+                                // End picker can't go earlier than the chosen start.
+                                // Falls back to today when start isn't picked yet.
                                 min={startDate || todayISO}
-                                onChange={(e) => setEndDate(e.target.value)}
+                                onChange={setEndDate}
                                 disabled={!startDate}
-                                required
+                                placeholder={t('leave.to')}
                             />
                         </div>
                     </div>

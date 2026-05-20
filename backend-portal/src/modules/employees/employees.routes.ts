@@ -1,12 +1,17 @@
 import { alias } from 'drizzle-orm/pg-core'
-import { and, eq, ilike, isNotNull, or, sql } from 'drizzle-orm'
+import { and, eq, ilike, inArray, isNotNull, or, sql } from 'drizzle-orm'
+
+// Statuses that represent "currently employed". Anyone in onboarding still
+// shows up in the colleagues picker and birthday lists — they're real people
+// on the payroll, just mid-paperwork. Mirrors backend/src/modules/dashboard.
+const WORKING_STATUSES = ['active', 'onboarding'] as const
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../db/client.js'
-import { employees, shifts } from '../../db/schema/index.js'
+import { employees, orgUnits, shifts } from '../../db/schema/index.js'
 import { e400, e403, e404 } from '../../lib/errors.js'
 import { paginationSchema, parseUuidParam, updateMyProfileSchema, validate } from '../../lib/validation.js'
 import { recordActivity } from '../../lib/audit.js'
-import { canAccessEmployee, getReportingSubtreeIds, isDeptHead } from '../../lib/scoping.js'
+import { buildTeammateScopeWhere, canViewTeammate, getReportingSubtreeIds, isDeptHead } from '../../lib/scoping.js'
 
 /**
  * Compute days-until-next-birthday in UTC, handling the year-end wrap so a
@@ -35,12 +40,23 @@ const ALLOWED_SELF_UPDATE_FIELDS = [
 ] as const
 
 /**
- * Fetch an employee plus their reporting-to manager AND assigned shift via two
- * left-joins, so the profile / manager-detail screens can render the full
- * record without secondary round-trips.
+ * Fetch an employee plus their reporting-to manager, assigned shift, AND the
+ * three org-unit names (branch, division, department). Five left-joins keeps
+ * the profile screen on a single round-trip.
+ *
+ * Why org-unit joins here: the legacy `employees.department` text column was
+ * loaded with faker placeholder text in seed data ("Nostrum consequuntur ...")
+ * for many tenants, while the actual department lives on the `org_units` row
+ * referenced by `employees.department_id`. We prefer the org-unit name and
+ * only fall back to the text column if the FK isn't set — matches the
+ * priority used in the colleagues lookup.
  */
 async function getEmployeeWithReportingTo(tenantId: string, id: string) {
     const manager = alias(employees, 'manager') as any
+    const managerDeptUnit = alias(orgUnits, 'managerDeptUnit') as any
+    const branchUnit = alias(orgUnits, 'branchUnit') as any
+    const divisionUnit = alias(orgUnits, 'divisionUnit') as any
+    const departmentUnit = alias(orgUnits, 'departmentUnit') as any
     const [row] = await db
         .select({
             employee: employees,
@@ -50,20 +66,43 @@ async function getEmployeeWithReportingTo(tenantId: string, id: string) {
             END`,
             reportingToEmployeeNo: manager.employeeNo,
             reportingToDesignation: manager.designation,
-            reportingToDepartment: manager.department,
+            // Resolve via org_units first, fall back to the legacy text column —
+            // same priority used for the employee's own department so the
+            // "Reports to" card can't show garbage seed text while the rest of
+            // the page shows the proper org-unit name.
+            reportingToDepartment: sql<string | null>`COALESCE(${managerDeptUnit.name}, ${manager.department})`,
             shiftName: shifts.name,
             shiftStartTime: shifts.startTime,
             shiftEndTime: shifts.endTime,
             shiftWeeklyOffDays: shifts.weeklyOffDays,
+            branchName: branchUnit.name,
+            divisionName: divisionUnit.name,
+            departmentName: departmentUnit.name,
         })
         .from(employees)
         .leftJoin(manager, eq(employees.reportingTo, manager.id))
+        .leftJoin(managerDeptUnit, eq(manager.departmentId, managerDeptUnit.id))
         .leftJoin(shifts, eq(employees.shiftId, shifts.id))
+        .leftJoin(branchUnit, eq(employees.branchId, branchUnit.id))
+        .leftJoin(divisionUnit, eq(employees.divisionId, divisionUnit.id))
+        .leftJoin(departmentUnit, eq(employees.departmentId, departmentUnit.id))
         .where(and(eq(employees.tenantId, tenantId), eq(employees.id, id)))
         .limit(1)
     if (!row) return null
+
+    // Prefer the canonical org-unit name; fall back to the legacy text column
+    // only if no FK is set. This is what fixes "Nostrum consequuntur" garbage
+    // showing instead of "Account Management Department".
+    const department = row.departmentName ?? row.employee.department ?? null
+
     return {
         ...row.employee,
+        // Overwrite the raw text column with the resolved name so every
+        // consumer (profile card, leave dialog header, etc.) shows the same value.
+        department,
+        branchName: row.branchName ?? null,
+        divisionName: row.divisionName ?? null,
+        departmentName: row.departmentName ?? null,
         reportingToName: row.reportingToName,
         reportingToEmployeeNo: row.reportingToEmployeeNo,
         reportingToDesignation: row.reportingToDesignation,
@@ -137,31 +176,32 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         return reply.send({ data: updated })
     })
 
-    // GET /api/v1/employees — manager-scoped list (dept_head sees own subtree; everyone else sees only themselves)
+    // GET /api/v1/employees
+    //
+    // The "My Team" page on the portal — returns everyone the requester can
+    // see, namely:
+    //   - HR / super_admin: every employee in the tenant
+    //   - dept_head:        same-department peers ∪ reporting subtree ∪ self
+    //   - everyone else:    same-department peers ∪ self
+    //
+    // Same-department membership prefers the `department_id` FK and falls
+    // back to the legacy text column, matching the priority used in the
+    // colleagues lookup. The narrower scope (only reporting subtree / only
+    // self) used to leave regular employees staring at a list with just
+    // themselves on it.
     fastify.get('/', { ...auth }, async (request: any, reply: any) => {
         const query = validate(paginationSchema, request.query ?? {})
         const search = ((request.query as any)?.search as string | undefined)?.trim() || undefined
 
         const user = request.user
-        const allowedIds: string[] =
-            isDeptHead(user) && user.employeeId
-                ? await getReportingSubtreeIds(user.tenantId, user.employeeId, request)
-                : user.employeeId
-                  ? [user.employeeId]
-                  : []
-
-        if (allowedIds.length === 0) {
-            return reply.send({ data: [], total: 0, limit: query.limit, offset: query.offset, hasMore: false })
-        }
-
-        const inList = sql`(${sql.join(
-            allowedIds.map((id) => sql`${id}`),
-            sql`, `,
-        )})`
+        // `null` from buildTeammateScopeWhere means HR/super_admin — no scope
+        // restriction. Drizzle's `and()` treats `undefined` clauses as no-ops,
+        // so we coerce.
+        const scope = await buildTeammateScopeWhere(user, request)
 
         const whereExpr = and(
             eq(employees.tenantId, user.tenantId),
-            sql`${employees.id} IN ${inList}`,
+            scope ?? undefined,
             search
                 ? or(
                       ilike(employees.firstName, `%${search}%`),
@@ -173,6 +213,13 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
 
         // Project only the fields the team/list views actually render — keeps the
         // wire payload small (no salary/passport/bank fields leaking into a list response).
+        //
+        // `department` is resolved via the org_units FK (canonical source) with a
+        // fallback to the legacy text column. This is why a teammate whose seed
+        // data left `employees.department` as "Nostrum consequuntur" still shows
+        // "Account Management Department" here — same value the employee sees on
+        // their own profile, no UI mismatch between manager view and profile view.
+        const departmentUnit = alias(orgUnits, 'departmentUnit') as any
         const rows = await db
             .select({
                 id: employees.id,
@@ -182,7 +229,8 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
                 email: employees.email,
                 phone: employees.phone,
                 mobileNo: employees.mobileNo,
-                department: employees.department,
+                department: sql<string | null>`COALESCE(${departmentUnit.name}, ${employees.department})`,
+                departmentId: employees.departmentId,
                 designation: employees.designation,
                 avatarUrl: employees.avatarUrl,
                 status: employees.status,
@@ -191,6 +239,7 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
                 total: sql<number>`COUNT(*) OVER()`,
             })
             .from(employees)
+            .leftJoin(departmentUnit, eq(employees.departmentId, departmentUnit.id))
             .where(whereExpr)
             .orderBy(employees.firstName)
             .limit(query.limit)
@@ -235,7 +284,7 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
 
         const conds = [
             eq(employees.tenantId, user.tenantId),
-            eq(employees.status, 'active' as any),
+            inArray(employees.status, WORKING_STATUSES as unknown as string[]),
             sql`${employees.id} <> ${user.employeeId}`,
         ]
         if (me.departmentId) {
@@ -247,17 +296,23 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         // value, we still return their whole tenant minus themselves so they
         // can pick someone to hand over to instead of being blocked.
 
+        // Resolve department name via the org-unit FK so the picker shows the
+        // canonical name ("Account Management Department") rather than whatever
+        // text is on the legacy column ("Nostrum consequuntur" in seed data).
+        const colleagueDeptUnit = alias(orgUnits, 'colleagueDeptUnit') as any
         const data = await db
             .select({
                 id: employees.id,
                 employeeNo: employees.employeeNo,
                 firstName: employees.firstName,
                 lastName: employees.lastName,
-                department: employees.department,
+                department: sql<string | null>`COALESCE(${colleagueDeptUnit.name}, ${employees.department})`,
+                departmentId: employees.departmentId,
                 designation: employees.designation,
                 avatarUrl: employees.avatarUrl,
             })
             .from(employees)
+            .leftJoin(colleagueDeptUnit, eq(employees.departmentId, colleagueDeptUnit.id))
             .where(and(...conds))
             .orderBy(employees.firstName)
             .limit(200)
@@ -303,7 +358,7 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
 
             const conds = [
                 eq(employees.tenantId, user.tenantId),
-                eq(employees.status, 'active' as any),
+                inArray(employees.status, WORKING_STATUSES as unknown as string[]),
             ]
             if (me.departmentId) conds.push(eq(employees.departmentId, me.departmentId))
             else if (me.department) conds.push(eq(employees.department, me.department))
@@ -321,18 +376,20 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         if (scopeIds.length === 0) return reply.send({ data: [] })
 
         const inList = sql`(${sql.join(scopeIds.map(id => sql`${id}`), sql`, `)})`
+        const birthdayDeptUnit = alias(orgUnits, 'birthdayDeptUnit') as any
         const rows = await db
             .select({
                 id: employees.id,
                 firstName: employees.firstName,
                 lastName: employees.lastName,
                 employeeNo: employees.employeeNo,
-                department: employees.department,
+                department: sql<string | null>`COALESCE(${birthdayDeptUnit.name}, ${employees.department})`,
                 designation: employees.designation,
                 avatarUrl: employees.avatarUrl,
                 dateOfBirth: employees.dateOfBirth,
             })
             .from(employees)
+            .leftJoin(birthdayDeptUnit, eq(employees.departmentId, birthdayDeptUnit.id))
             .where(and(
                 eq(employees.tenantId, user.tenantId),
                 isNotNull(employees.dateOfBirth),
@@ -364,7 +421,10 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         return reply.send({ data: list })
     })
 
-    // GET /api/v1/employees/:id — own record or someone in your reporting subtree
+    // GET /api/v1/employees/:id — basic profile for self, manager-subtree, or
+    // a same-department peer. Sensitive endpoints (documents, leave history,
+    // attendance, salary) keep using the stricter `canAccessEmployee` so peers
+    // can see each other's name/contact/role without exposing payroll or PII.
     fastify.get('/:id', { ...auth }, async (request: any, reply: any) => {
         const id = parseUuidParam(request.params, 'id', reply)
         if (!id) return
@@ -373,7 +433,7 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         const employee = await getEmployeeWithReportingTo(user.tenantId, id)
         if (!employee) return reply.code(404).send(e404('Employee not found'))
 
-        if (!(await canAccessEmployee(user, employee.id, request))) {
+        if (!(await canViewTeammate(user, employee.id, request))) {
             return reply.code(403).send(e403('Not authorized to view this employee'))
         }
         return reply.send({ data: employee })

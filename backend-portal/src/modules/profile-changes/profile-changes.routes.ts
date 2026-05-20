@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify'
 import { db } from '../../db/client.js'
 import {
     employees,
+    orgUnits,
     profileChangeRequests,
     users,
 } from '../../db/schema/index.js'
@@ -221,12 +222,20 @@ export default async function profileChangesRoutes(fastify: FastifyInstance) {
                 request: profileChangeRequests,
                 employeeName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
                 employeeNo: employees.employeeNo,
-                employeeDepartment: employees.department,
+                // Resolved via org_units FK; legacy text column as fallback.
+                employeeDepartment: sql<string | null>`COALESCE(${orgUnits.name}, ${employees.department})`,
                 employeeAvatarUrl: employees.avatarUrl,
                 requestedByName: users.name,
             })
             .from(profileChangeRequests)
-            .leftJoin(employees, eq(employees.id, profileChangeRequests.employeeId))
+            .leftJoin(employees, and(
+                eq(employees.id, profileChangeRequests.employeeId),
+                eq(employees.tenantId, user.tenantId),
+            ))
+            .leftJoin(orgUnits, and(
+                eq(employees.departmentId, orgUnits.id),
+                eq(orgUnits.tenantId, user.tenantId),
+            ))
             .leftJoin(users, eq(users.id, profileChangeRequests.requestedBy))
             .where(
                 and(

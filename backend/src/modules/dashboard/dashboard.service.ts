@@ -1,7 +1,14 @@
-import { eq, and, count, desc, gte, lte, sql, or, isNull, isNotNull } from 'drizzle-orm'
+import { eq, and, count, desc, gte, lte, sql, or, isNull, isNotNull, inArray } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, recruitmentJobs, visaApplications, leaveRequests, notifications, payrollRuns, onboardingChecklists, onboardingSteps } from '../../db/schema/index.js'
 import { cacheGet, cacheSet } from '../../lib/redis.js'
+
+// Statuses that represent "currently employed" — i.e. on the payroll today.
+// 'active' is the steady state; 'onboarding' covers the period between
+// joining and paperwork completion. Anyone with these statuses is counted
+// in headcount KPIs, dashboard breakdowns, and compliance ratios. (Earlier
+// code only counted 'active' and silently undercounted new hires by ~40%.)
+const WORKING_STATUSES = ['active', 'onboarding'] as const
 
 const KPI_TTL_SECONDS = 120 // 2-minute TTL
 
@@ -23,8 +30,18 @@ export async function getDashboardKPIs(tenantId: string) {
         [{ pendingLeave }],
         [{ expiringVisas }],
     ] = await Promise.all([
+        // Headcount KPI matches the dashboard breakdowns (gender / dept / marital
+        // / emiratisation / anniversaries / birthdays), which all filter by
+        // WORKING_STATUSES. Previously this counted every non-archived employee
+        // including terminated, so the KPI tile and the breakdown totals disagreed
+        // for any tenant with terminated-but-not-archived records — a confusing
+        // mismatch HR couldn't explain.
         db.select({ totalEmployees: count() }).from(employees)
-            .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false))),
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                inArray(employees.status, WORKING_STATUSES as unknown as string[]),
+            )),
         db.select({ openJobs: count() }).from(recruitmentJobs)
             .where(and(eq(recruitmentJobs.tenantId, tenantId), eq(recruitmentJobs.status, 'open'))),
         db.select({ activeVisas: count() }).from(visaApplications)
@@ -123,7 +140,7 @@ export async function getDeptHeadcount(tenantId: string) {
             and(
                 eq(employees.tenantId, tenantId),
                 eq(employees.isArchived, false),
-                eq(employees.status, 'active'),
+                inArray(employees.status, WORKING_STATUSES as unknown as string[]),
             ),
         )
         .groupBy(employees.department)
@@ -142,12 +159,12 @@ export async function getEmiratisationStatus(tenantId: string) {
 
     const [[{ total }], [{ emiratis }]] = await Promise.all([
         db.select({ total: count() }).from(employees)
-            .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), eq(employees.status, 'active'))),
+            .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), inArray(employees.status, WORKING_STATUSES as unknown as string[]))),
         db.select({ emiratis: count() }).from(employees)
             .where(and(
                 eq(employees.tenantId, tenantId),
                 eq(employees.isArchived, false),
-                eq(employees.status, 'active'),
+                inArray(employees.status, WORKING_STATUSES as unknown as string[]),
                 eq(employees.emiratisationCategory, 'emirati'),
             )),
     ])
@@ -188,7 +205,7 @@ export async function getGenderBreakdown(tenantId: string) {
     const rows = await db
         .select({ gender: employees.gender, count: count() })
         .from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), eq(employees.status, 'active')))
+        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), inArray(employees.status, WORKING_STATUSES as unknown as string[])))
         .groupBy(employees.gender)
     return rows.map(r => ({
         name: r.gender ?? '',
@@ -201,7 +218,7 @@ export async function getMaritalStatusBreakdown(tenantId: string) {
     const rows = await db
         .select({ status: employees.maritalStatus, count: count() })
         .from(employees)
-        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), eq(employees.status, 'active')))
+        .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), inArray(employees.status, WORKING_STATUSES as unknown as string[])))
         .groupBy(employees.maritalStatus)
     return rows.map(r => ({
         name: r.status ?? '',
@@ -225,6 +242,10 @@ export async function getUpcomingBirthdays(tenantId: string, month?: number) {
         .where(and(
             eq(employees.tenantId, tenantId),
             eq(employees.isArchived, false),
+            // Skip terminated employees — you don't celebrate someone who left.
+            // Onboarding is included alongside active because they're real
+            // colleagues from day one of paperwork.
+            inArray(employees.status, WORKING_STATUSES as unknown as string[]),
             isNotNull(employees.dateOfBirth),
             sql`EXTRACT(MONTH FROM ${employees.dateOfBirth}::date) = ${m}`,
         ))
@@ -330,7 +351,7 @@ export async function getWorkAnniversaries(tenantId: string, month?: number) {
         .where(and(
             eq(employees.tenantId, tenantId),
             eq(employees.isArchived, false),
-            eq(employees.status, 'active'),
+            inArray(employees.status, WORKING_STATUSES as unknown as string[]),
             isNotNull(employees.joinDate),
             sql`EXTRACT(MONTH FROM ${employees.joinDate}::date) = ${m}`,
             sql`EXTRACT(YEAR FROM ${employees.joinDate}::date) < ${currentYear}`,

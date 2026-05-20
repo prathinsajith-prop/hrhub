@@ -31,9 +31,12 @@ import {
 
 import { useAuthStore } from '@/store/authStore'
 import { useApproveLeave, useLeaveRequests } from '@/hooks/useLeave'
+import { useMyEmployee } from '@/hooks/useMe'
 import { useTeam } from '@/hooks/useTeam'
 import { GlassCard } from '@/components/shared/GlassCard'
 import { ChartCard } from '@/components/shared/ChartCard'
+import { BirthdaysCard } from '@/components/shared/BirthdaysCard'
+import { MyTeamsCard } from '@/components/shared/MyTeamsCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -64,6 +67,11 @@ function greetingKey(hour: number): 'greetingMorning' | 'greetingAfternoon' | 'g
 export function ManagerHomePage() {
     const { t } = useTranslation()
     const user = useAuthStore((s) => s.user)
+    // `user.department` from the JWT is the legacy text column (often
+    // outdated faker data). The /employees/me endpoint resolves the canonical
+    // org-unit name via the FK — that's what we want to show on the greeting
+    // badge so it matches the profile page.
+    const { data: me } = useMyEmployee()
 
     const { data: team, isLoading: teamLoading } = useTeam({ limit: 100 })
     const { data: pending, isLoading: pendingLoading } = useLeaveRequests({ status: 'pending', limit: 5 })
@@ -107,8 +115,11 @@ export function ManagerHomePage() {
             .sort((a, b) => b.count - a.count)
     }, [teamMembers])
 
+    // Prefer the FK-resolved name from /employees/me. Only fall back to the
+    // single-dept breakdown when we genuinely don't have a department on the
+    // manager's own record (e.g. cross-functional manager with no home dept).
     const primaryDepartment =
-        user?.department ?? (departmentBreakdown.length === 1 ? departmentBreakdown[0].name : null)
+        me?.departmentName ?? me?.department ?? (departmentBreakdown.length === 1 ? departmentBreakdown[0].name : null)
 
     const approve = useApproveLeave()
     const [decision, setDecision] = useState<{ id: string; approved: boolean; employeeName: string } | null>(null)
@@ -320,6 +331,12 @@ export function ManagerHomePage() {
                     </div>
                 )}
             </section>
+
+            {/* ── My teams + today's birthdays ──────────────────────────── */}
+            <div className="grid gap-4 lg:grid-cols-2">
+                <MyTeamsCard variant="me" />
+                <BirthdaysCard title="Team birthdays today" />
+            </div>
 
             {/* ── Who's on leave today ───────────────────────────────────── */}
             <section>

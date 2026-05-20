@@ -35,7 +35,18 @@ export interface Employee {
     mobileNo?: string | null
     personalEmail?: string | null
     nationality?: string | null
+    /**
+     * Resolved department name. Server prefers the org_units.name joined via
+     * `departmentId` FK; falls back to the legacy `department` text column.
+     * That fallback exists so older tenants whose data never migrated to the
+     * org-units model still see something — but new code should never write
+     * to the text column.
+     */
     department?: string | null
+    /** Org-unit joined names — populated by /employees/me + /employees/:id. */
+    branchName?: string | null
+    divisionName?: string | null
+    departmentName?: string | null
     designation?: string | null
     reportingTo?: string | null
     /** Joined from the manager's record on the /:id endpoint (see backend `getEmployeeWithReportingTo`). */

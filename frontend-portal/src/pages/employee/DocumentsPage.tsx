@@ -42,6 +42,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -493,11 +494,11 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                 <Label htmlFor="doc-issue" className="text-sm font-medium text-muted-foreground">
                                     Issue Date <span className="text-xs font-normal">(optional)</span>
                                 </Label>
-                                <Input
+                                <DatePicker
                                     id="doc-issue"
-                                    type="date"
                                     value={issueDate}
-                                    onChange={(e) => handleIssueDateChange(e.target.value)}
+                                    onChange={handleIssueDateChange}
+                                    placeholder="Issue date"
                                 />
                             </div>
                             <div className="space-y-1.5">
@@ -512,13 +513,13 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                         <span className="ml-1 text-xs font-normal">(optional)</span>
                                     )}
                                 </Label>
-                                <Input
+                                <DatePicker
                                     id="doc-expiry"
-                                    type="date"
                                     value={expiryDate}
-                                    onChange={(e) => handleExpiryDateChange(e.target.value)}
-                                    aria-invalid={errors.expiryDate ? 'true' : 'false'}
+                                    onChange={handleExpiryDateChange}
+                                    aria-invalid={!!errors.expiryDate}
                                     className={cn(errors.expiryDate && 'border-destructive')}
+                                    placeholder="Expiry date"
                                 />
                                 {errors.expiryDate ? (
                                     <p className="text-xs text-destructive">{errors.expiryDate}</p>

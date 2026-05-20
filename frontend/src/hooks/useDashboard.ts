@@ -117,9 +117,16 @@ export interface BreakdownPoint {
 
 export interface BirthdayEntry {
     day: number
+    /** 1-12; the month the birthday falls in. */
+    month?: number
     name: string
     employeeNo: string
     department: string
+    avatarUrl?: string | null
+    /** Days until next birthday — 0 = today, 1 = tomorrow. Only present from /birthdays endpoint. */
+    daysUntil?: number
+    isToday?: boolean
+    isTomorrow?: boolean
 }
 
 export interface AnniversaryEntry {

@@ -63,6 +63,49 @@ export function useRunPayroll() {
     })
 }
 
+/** Delete a draft payroll run. Server returns 409 if the run has left draft. */
+export function useDeletePayrollRun() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (runId: string) => api.delete(`/payroll/${runId}`),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['payroll'] }),
+        onError: (err: Error) => toast.error('Could not delete draft', err?.message ?? 'Unexpected error'),
+    })
+}
+
+export interface PayrollReadiness {
+    employeeCount: number
+    missingIban: number
+    missingSalary: number
+    pendingLeaveInPeriod: number
+    blockers: string[]
+    warnings: string[]
+    canProcess: boolean
+}
+
+/**
+ * Pre-processing readiness checklist for a draft run. Server returns 204 for
+ * non-draft runs (nothing to check) — we treat that as `undefined` so the
+ * checklist card simply doesn't render on processed/approved runs.
+ */
+export function useReadiness(runId: string | undefined) {
+    return useQuery({
+        queryKey: ['payroll', runId, 'readiness'],
+        queryFn: async () => {
+            // 204 returns no body; api.get would throw on JSON.parse. Use a
+            // small fetch shim that handles the empty-body case.
+            try {
+                const res = await api.get<{ data: PayrollReadiness }>(`/payroll/${runId}/readiness`)
+                return res?.data ?? null
+            } catch {
+                return null
+            }
+        },
+        enabled: !!runId,
+        staleTime: 30_000,
+    })
+}
+
 export function usePayslips(runId: string) {
     return useQuery({
         queryKey: ['payroll', runId, 'payslips'],
