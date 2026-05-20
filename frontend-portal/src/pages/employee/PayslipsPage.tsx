@@ -106,18 +106,39 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                             employee can see at a glance where each Dirham came from.
                             Matches the admin payslip breakdown layout (PayrollPage). */}
                         <dl className="space-y-2 text-sm">
-                            {/* Earnings */}
+                            {/* Earnings — dynamic from the catalog breakdown
+                                snapshot when present, otherwise the four
+                                named columns (legacy payslips). */}
                             <SectionLabel tone="neutral">Earnings</SectionLabel>
-                            <Row label="Basic" value={formatCurrency(data.basicSalary)} />
-                            {Number(data.housingAllowance) > 0 && (
-                                <Row label="Housing" value={formatCurrency(data.housingAllowance)} />
-                            )}
-                            {Number(data.transportAllowance) > 0 && (
-                                <Row label="Transport" value={formatCurrency(data.transportAllowance)} />
-                            )}
-                            {Number(data.otherAllowances) > 0 && (
-                                <Row label="Other allowances" value={formatCurrency(data.otherAllowances)} />
-                            )}
+                            {(() => {
+                                const breakdown = (data.earningsBreakdown ?? [])
+                                    .map((b) => ({ ...b, amount: Number(b.amount) }))
+                                    .filter((b) => b.amount > 0)
+                                    .sort((a, b) => {
+                                        const order = (cat: string) =>
+                                            ({ basic: 0, housing: 1, transport: 2 }[cat] ?? 3)
+                                        return order(a.category) - order(b.category)
+                                    })
+                                if (breakdown.length > 0) {
+                                    return breakdown.map((b) => (
+                                        <Row key={b.componentId} label={b.name} value={formatCurrency(b.amount)} />
+                                    ))
+                                }
+                                return (
+                                    <>
+                                        <Row label="Basic" value={formatCurrency(data.basicSalary)} />
+                                        {Number(data.housingAllowance) > 0 && (
+                                            <Row label="Housing" value={formatCurrency(data.housingAllowance)} />
+                                        )}
+                                        {Number(data.transportAllowance) > 0 && (
+                                            <Row label="Transport" value={formatCurrency(data.transportAllowance)} />
+                                        )}
+                                        {Number(data.otherAllowances) > 0 && (
+                                            <Row label="Other allowances" value={formatCurrency(data.otherAllowances)} />
+                                        )}
+                                    </>
+                                )
+                            })()}
 
                             {/* Additions — only render when there's anything */}
                             {(Number(data.overtime ?? 0) > 0 || Number(data.commission ?? 0) > 0) && (

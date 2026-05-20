@@ -91,6 +91,10 @@ export interface Employee {
   housingAllowance?: number
   transportAllowance?: number
   otherAllowances?: number
+  // Catalog-driven assignments sent on create/update. The backend
+  // writes these into employee_salary_components and keeps the legacy
+  // columns above in sync. Read paths do not echo this field.
+  salaryComponents?: { componentId: string; amount: number }[]
   paymentMethod?: 'bank_transfer' | 'cash' | 'cheque'
   bankName?: string
   accountName?: string
@@ -288,6 +292,10 @@ export interface Payslip {
   housingAllowance: number
   transportAllowance: number
   otherAllowances: number
+  // Catalog-driven per-component snapshot the payroll engine resolved at
+  // run time. Empty for legacy payslips generated before migration 0048 —
+  // the UI must fall back to the four named columns above in that case.
+  earningsBreakdown?: Array<{ componentId: string; category: string; name: string; amount: number | string }>
   overtime: number
   commission?: number
   deductions: number

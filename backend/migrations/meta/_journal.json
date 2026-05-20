@@ -337,6 +337,13 @@
       "when": 1780704000000,
       "tag": "0047_seed_catalog_existing_tenants",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1780790400000,
+      "tag": "0048_payslip_earnings_breakdown",
+      "breakpoints": true
     }
   ]
 }

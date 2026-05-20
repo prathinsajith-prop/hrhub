@@ -1,5 +1,5 @@
 import { db } from '../../db/index.js'
-import { salaryRevisions, employees, users } from '../../db/schema/index.js'
+import { salaryRevisions, employees, employeeSalaryComponents, salaryComponents, users } from '../../db/schema/index.js'
 import { eq, and, desc, sql, gte, lte } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
 import { z } from 'zod'
@@ -113,10 +113,45 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
         const effTransport = newTransportAllowance ?? (emp.transportAllowance != null ? parseFloat(emp.transportAllowance) : 0)
         const effOther = newOtherAllowances ?? (emp.otherAllowances != null ? parseFloat(emp.otherAllowances) : 0)
 
-        // Auto-calculate total if not provided: basic + housing + transport + other
+        // Auto-calculate total if not provided. The 4 legacy fields the
+        // revision input accepts (basic/housing/transport/other) only cover
+        // the standard UAE WPS allowances. Tenants may also have custom
+        // catalog components (e.g. "Communication Allowance") that the
+        // employee is paid each month — those have to be included in the
+        // total so the new total reflects what's actually owed.
+        let extraCatalogTotal = 0
+        if (newTotalSalary == null) {
+            const extras = await db
+                .select({
+                    category: salaryComponents.category,
+                    calcType: salaryComponents.calculationType,
+                    catalogAmount: salaryComponents.amount,
+                    assignmentAmount: employeeSalaryComponents.amount,
+                })
+                .from(employeeSalaryComponents)
+                .innerJoin(salaryComponents, eq(salaryComponents.id, employeeSalaryComponents.componentId))
+                .where(and(
+                    eq(employeeSalaryComponents.tenantId, request.user.tenantId),
+                    eq(employeeSalaryComponents.employeeId, id),
+                    eq(employeeSalaryComponents.isActive, true),
+                    eq(salaryComponents.isActive, true),
+                    eq(salaryComponents.kind, 'earning'),
+                ))
+            for (const r of extras) {
+                // Skip categories already represented by the 4 legacy inputs —
+                // those are summed explicitly below.
+                if (['basic', 'housing', 'transport'].includes(r.category)) continue
+                if (['custom_allowance', 'cost_of_living'].includes(r.category)) continue
+                const raw = Number(r.assignmentAmount ?? r.catalogAmount ?? 0)
+                extraCatalogTotal += r.calcType === 'percentage_of_basic'
+                    ? (newBasicSalary * raw) / 100
+                    : raw
+            }
+        }
+
         const effectiveTotal = newTotalSalary != null
             ? newTotalSalary
-            : newBasicSalary + effHousing + effTransport + effOther
+            : newBasicSalary + effHousing + effTransport + effOther + extraCatalogTotal
 
         const [revision] = await db.insert(salaryRevisions).values({
             tenantId: request.user.tenantId,
@@ -148,6 +183,52 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
                 otherAllowances: String(effOther),
                 updatedAt: new Date(),
             }).where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
+
+            // Sync the catalog assignments so payroll's resolver sees the new
+            // amounts. Maps by category — basic/housing/transport go to their
+            // first matching active component; everything legacy-"other"
+            // goes to the tenant's custom_allowance component (or
+            // cost_of_living as a fallback if HR replaced the seed).
+            const components = await db
+                .select({ id: salaryComponents.id, category: salaryComponents.category })
+                .from(salaryComponents)
+                .where(and(
+                    eq(salaryComponents.tenantId, request.user.tenantId),
+                    eq(salaryComponents.kind, 'earning'),
+                    eq(salaryComponents.isActive, true),
+                ))
+            const firstByCategory = (cat: string) => components.find(c => c.category === cat)
+            const targets: { category: string; amount: number }[] = [
+                { category: 'basic', amount: newBasicSalary },
+                { category: 'housing', amount: effHousing },
+                { category: 'transport', amount: effTransport },
+            ]
+            const otherTarget = firstByCategory('custom_allowance') ?? firstByCategory('cost_of_living')
+            const upserts = targets
+                .map(t => ({ comp: firstByCategory(t.category), amount: t.amount }))
+                .concat(otherTarget ? [{ comp: otherTarget, amount: effOther }] : [])
+                .filter(x => !!x.comp)
+                .map(x => ({
+                    tenantId: request.user.tenantId,
+                    employeeId: id,
+                    componentId: x.comp!.id,
+                    amount: String(x.amount.toFixed(2)),
+                    isActive: true,
+                    updatedAt: new Date(),
+                }))
+            if (upserts.length > 0) {
+                await db
+                    .insert(employeeSalaryComponents)
+                    .values(upserts)
+                    .onConflictDoUpdate({
+                        target: [employeeSalaryComponents.employeeId, employeeSalaryComponents.componentId],
+                        set: {
+                            amount: sql`excluded.amount`,
+                            isActive: sql`excluded.is_active`,
+                            updatedAt: sql`excluded.updated_at`,
+                        },
+                    })
+            }
         }
 
         recordActivity({

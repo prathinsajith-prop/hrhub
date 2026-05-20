@@ -14,7 +14,8 @@ import { useAssets, useAssignAsset, type Asset } from '@/hooks/useAssets'
 import { useCreateJob, useUpdateJob } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
-import { useCreateEmployee, useUpdateEmployee, useNextEmployeeNo } from '@/hooks/useEmployees'
+import { useCreateEmployee, useUpdateEmployee, useNextEmployeeNo, useEmployeeSalaryComponents } from '@/hooks/useEmployees'
+import { useSalaryComponents } from '@/hooks/useSalaryComponents'
 import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
@@ -495,11 +496,17 @@ export interface EmpForm {
     contractEndDate: string
     status: string
     teamId: string
-    // Step 3 - Salary
+    // Step 3 - Salary. Legacy fields are derived from componentAmounts at
+    // submit time (basic/housing/transport mapped by catalog category,
+    // everything else summed into otherAllowances) so the rest of the app —
+    // WPS, gratuity, salary-revision history — keeps reading what it always
+    // did. The new componentAmounts map is what payroll's catalog engine
+    // actually consumes (writes employee_salary_components rows).
     basicSalary: string
     housingAllowance: string
     transportAllowance: string
     otherAllowances: string
+    componentAmounts: Record<string, string>
     paymentMethod: string
     bankName: string
     accountName: string
@@ -517,6 +524,7 @@ const EMPTY_FORM: EmpForm = {
     joinDate: new Date().toISOString().split('T')[0],
     contractType: 'permanent', workLocation: '', managerName: '', reportingTo: '', gradeLevelId: '', probationEndDate: '', contractEndDate: '', status: 'onboarding', teamId: '',
     basicSalary: '', housingAllowance: '', transportAllowance: '', otherAllowances: '',
+    componentAmounts: {},
     paymentMethod: 'bank_transfer', bankName: '', accountName: '', accountNumber: '', swiftCode: '', bankBranch: '', iban: '', emiratisationCategory: 'expat',
 }
 
@@ -582,6 +590,15 @@ export function AddEmployeeDialog({
     const [form, setForm] = useState<EmpForm>(() => ({ ...EMPTY_FORM, ...initialValues }))
     const [errors, setErrors] = useState<Record<string, string>>({})
     const createEmployee = useCreateEmployee()
+    // Catalog of active earning components — drives Step 3's salary inputs.
+    // If a tenant deactivates a component in Org Settings → Salary Components,
+    // it disappears from this form too. Inactive components are still kept
+    // in the catalog but excluded here.
+    const { data: salaryEarningsResp } = useSalaryComponents('earning')
+    const earningsCatalog = useMemo(
+        () => (salaryEarningsResp ?? []).filter((c) => c.isActive),
+        [salaryEarningsResp],
+    )
 
     // State-during-render sync: re-seed the form when either `open` toggles or
     // `initialValues` changes content. JSON.stringify gives a stable fingerprint
@@ -595,6 +612,49 @@ export function AddEmployeeDialog({
             setForm({ ...EMPTY_FORM, ...initialValues })
             setStep(1)
             setErrors({})
+        }
+    }
+
+    // Seed Step 3 inputs whenever the catalog is loaded and we don't already
+    // have amounts in form state. Precedence (highest first):
+    //   1. Explicit initialValues.componentAmounts from the caller
+    //   2. Legacy initialValues fields (basicSalary, housingAllowance, …)
+    //      mapped by catalog category — handles edit-of-old-employee
+    //   3. Catalog defaults (component.amount in Org Settings → Salary Components)
+    //      — handles the "I configured a default in the catalog, why didn't it
+    //      pre-fill?" case
+    const [catalogSeeded, setCatalogSeeded] = useState<string | null>(null)
+    const catalogSeedKey = open && earningsCatalog.length > 0 ? `${seedKey}:${earningsCatalog.length}` : null
+    if (catalogSeedKey && catalogSeedKey !== catalogSeeded) {
+        setCatalogSeeded(catalogSeedKey)
+        const hasComponentAmounts = Object.keys(form.componentAmounts).length > 0
+        if (!hasComponentAmounts) {
+            const hasLegacy = !!(initialValues?.basicSalary || initialValues?.housingAllowance || initialValues?.transportAllowance || initialValues?.otherAllowances)
+            const next: Record<string, string> = {}
+            if (hasLegacy) {
+                // Edit/convert flow — map legacy fields to catalog by category.
+                const firstByCategory = (cat: string) => earningsCatalog.find((c) => c.category === cat)
+                const basic = firstByCategory('basic')
+                const housing = firstByCategory('housing')
+                const transport = firstByCategory('transport')
+                const other = firstByCategory('custom_allowance') ?? firstByCategory('cost_of_living')
+                if (basic && initialValues?.basicSalary) next[basic.id] = String(initialValues.basicSalary)
+                if (housing && initialValues?.housingAllowance) next[housing.id] = String(initialValues.housingAllowance)
+                if (transport && initialValues?.transportAllowance) next[transport.id] = String(initialValues.transportAllowance)
+                if (other && initialValues?.otherAllowances) next[other.id] = String(initialValues.otherAllowances)
+            } else {
+                // Fresh Add — pre-populate from catalog defaults. Only include
+                // components with a non-null default; an empty input is fine
+                // for components where HR didn't set a tenant-wide amount.
+                for (const c of earningsCatalog) {
+                    if (c.amount != null && c.amount !== '') {
+                        next[c.id] = String(c.amount)
+                    }
+                }
+            }
+            if (Object.keys(next).length > 0) {
+                setForm((f) => ({ ...f, componentAmounts: next }))
+            }
         }
     }
 
@@ -661,10 +721,26 @@ export function AddEmployeeDialog({
 
     const submit = async () => {
         const empNo = form.employeeNo || undefined
-        const basic = parseFloat(form.basicSalary) || 0
-        const housing = parseFloat(form.housingAllowance) || 0
-        const transport = parseFloat(form.transportAllowance) || 0
-        const other = parseFloat(form.otherAllowances) || 0
+        // Derive the legacy columns from the catalog-driven componentAmounts:
+        //   * basic/housing/transport — sum any active component in that category
+        //   * other — everything else (cost_of_living, social, custom_allowance, …)
+        // This keeps payslip / WPS / gratuity code paths reading the same fields
+        // they always did while the new payroll engine reads assignments.
+        const activeEarnings = (earningsCatalog ?? []).filter((c) => c.isActive)
+        const amountByCategory = (cat: string) =>
+            activeEarnings
+                .filter((c) => c.category === cat)
+                .reduce((s, c) => s + (parseFloat(form.componentAmounts[c.id] || '0') || 0), 0)
+        const basic = amountByCategory('basic')
+        const housing = amountByCategory('housing')
+        const transport = amountByCategory('transport')
+        const other = activeEarnings
+            .filter((c) => !['basic', 'housing', 'transport'].includes(c.category))
+            .reduce((s, c) => s + (parseFloat(form.componentAmounts[c.id] || '0') || 0), 0)
+        // Assignment payload for the salary_components table.
+        const salaryComponents = activeEarnings
+            .map((c) => ({ componentId: c.id, amount: parseFloat(form.componentAmounts[c.id] || '0') || 0 }))
+            .filter((a) => a.amount > 0)
         try {
             // Auto-create designation if it's a new name not in the existing list
             if (form.designation) {
@@ -706,6 +782,11 @@ export function AddEmployeeDialog({
                 transportAllowance: transport || undefined,
                 otherAllowances: other || undefined,
                 totalSalary: basic + housing + transport + other || undefined,
+                // Per-employee catalog assignments — backend writes these into
+                // employee_salary_components. Optional: when omitted, the
+                // legacy columns alone still drive payroll via the resolver's
+                // fallback path.
+                salaryComponents: salaryComponents.length > 0 ? salaryComponents : undefined,
                 paymentMethod: (form.paymentMethod as Employee['paymentMethod']) || undefined,
                 bankName: form.bankName || undefined,
                 accountName: form.accountName || undefined,
@@ -1009,32 +1090,62 @@ export function AddEmployeeDialog({
 
                     {step === 3 && (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Basic Salary (AED)</Label>
-                                    <NumericInput value={form.basicSalary} onChange={set('basicSalary')} placeholder="0.00" />
+                            {/* Catalog-driven salary structure.
+                                Each row corresponds to one active earning component
+                                defined in Org Settings → Salary Components. HR
+                                edits the catalog there; this form just renders
+                                inputs for whatever's active. */}
+                            {earningsCatalog.length === 0 ? (
+                                <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+                                    No active earning components found.
+                                    <br />
+                                    <span className="text-xs">
+                                        Add or activate components in Organization Settings → Salary Components, then refresh.
+                                    </span>
                                 </div>
-                                <div className="space-y-1.5">
-                                    <Label>Housing Allowance (AED)</Label>
-                                    <NumericInput value={form.housingAllowance} onChange={set('housingAllowance')} placeholder="0.00" />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Transport Allowance (AED)</Label>
-                                    <NumericInput value={form.transportAllowance} onChange={set('transportAllowance')} placeholder="0.00" />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label>Other Allowances (AED)</Label>
-                                    <NumericInput value={form.otherAllowances} onChange={set('otherAllowances')} placeholder="0.00" />
-                                </div>
-                            </div>
-                            {(parseFloat(form.basicSalary) || 0) + (parseFloat(form.housingAllowance) || 0) + (parseFloat(form.transportAllowance) || 0) + (parseFloat(form.otherAllowances) || 0) > 0 && (
-                                <div className="flex justify-between items-center px-3 py-2 bg-muted rounded-lg text-sm">
-                                    <span className="text-muted-foreground">Total Package</span>
-                                    <span className="font-bold">AED {((parseFloat(form.basicSalary) || 0) + (parseFloat(form.housingAllowance) || 0) + (parseFloat(form.transportAllowance) || 0) + (parseFloat(form.otherAllowances) || 0)).toLocaleString()}</span>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {earningsCatalog.map((c) => (
+                                        <div key={c.id} className="space-y-1.5">
+                                            <Label>
+                                                {c.name} (AED)
+                                                {c.calculationType === 'percentage_of_basic' && (
+                                                    <span className="ms-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                                        % of basic
+                                                    </span>
+                                                )}
+                                            </Label>
+                                            <NumericInput
+                                                value={form.componentAmounts[c.id] ?? ''}
+                                                onChange={(e) =>
+                                                    setForm((f) => ({
+                                                        ...f,
+                                                        componentAmounts: {
+                                                            ...f.componentAmounts,
+                                                            [c.id]: e.target.value,
+                                                        },
+                                                    }))
+                                                }
+                                                placeholder={c.calculationType === 'percentage_of_basic' ? '0' : '0.00'}
+                                            />
+                                        </div>
+                                    ))}
                                 </div>
                             )}
+                            {(() => {
+                                // Total package preview — sums whatever the
+                                // user has typed across all components.
+                                const total = earningsCatalog.reduce(
+                                    (s, c) => s + (parseFloat(form.componentAmounts[c.id] || '0') || 0),
+                                    0,
+                                )
+                                return total > 0 ? (
+                                    <div className="flex justify-between items-center px-3 py-2 bg-muted rounded-lg text-sm">
+                                        <span className="text-muted-foreground">Total Package</span>
+                                        <span className="font-bold">AED {total.toLocaleString()}</span>
+                                    </div>
+                                ) : null
+                            })()}
                             <div className="space-y-1.5">
                                 <Label>Payment Method</Label>
                                 <Select value={form.paymentMethod} onValueChange={v => setForm(f => ({ ...f, paymentMethod: v }))}>
@@ -1524,10 +1635,6 @@ export function EditPayrollDialog({
     open, onOpenChange, employee,
 }: { open: boolean; onOpenChange: (o: boolean) => void; employee: Employee }) {
     const [form, setForm] = useState({
-        basicSalary: String(employee.basicSalary ?? ''),
-        housingAllowance: String(employee.housingAllowance ?? ''),
-        transportAllowance: String(employee.transportAllowance ?? ''),
-        otherAllowances: String(employee.otherAllowances ?? ''),
         paymentMethod: employee.paymentMethod ?? 'bank_transfer',
         bankName: employee.bankName ?? '',
         accountName: employee.accountName ?? '',
@@ -1537,22 +1644,82 @@ export function EditPayrollDialog({
         iban: employee.iban ?? '',
         emiratisationCategory: employee.emiratisationCategory ?? 'expat',
     })
+    const [componentAmounts, setComponentAmounts] = useState<Record<string, string>>({})
     const [errors, setErrors] = useState<Record<string, string>>({})
     const updateEmployee = useUpdateEmployee(employee.id)
+
+    // Catalog of active earning components — drives the salary inputs.
+    const { data: salaryEarningsResp } = useSalaryComponents('earning')
+    const earningsCatalog = useMemo(
+        () => (salaryEarningsResp ?? []).filter((c) => c.isActive),
+        [salaryEarningsResp],
+    )
+    // Existing per-employee assignments — pre-fills the inputs on edit so HR
+    // sees the amounts already on file rather than starting blank.
+    const { data: assignments } = useEmployeeSalaryComponents(employee.id)
+
+    // Seed inputs from the employee's real per-component assignments only.
+    // We deliberately do NOT fill from legacy basicSalary / catalog defaults —
+    // a blank field means "no amount saved for this component", which is the
+    // honest signal HR needs. Mapping the legacy `otherAllowances` column into
+    // a brand-new custom component (or substituting the catalog default) would
+    // show a number the employee was never actually paid.
+    const hasAssignments = (assignments?.length ?? 0) > 0
+    const seedKey = open && earningsCatalog.length > 0 ? `${earningsCatalog.length}:${assignments?.length ?? 0}` : null
+    const [lastSeed, setLastSeed] = useState<string | null>(null)
+    if (seedKey && seedKey !== lastSeed) {
+        setLastSeed(seedKey)
+        const next: Record<string, string> = {}
+        for (const a of assignments ?? []) {
+            if (a.amount != null) next[a.componentId] = String(a.amount)
+        }
+        // Legacy-only fallback: when the employee has zero assignments (pre-
+        // catalog data), map the four legacy columns by category exactly once
+        // so HR doesn't have to retype everything. Skipped the moment any
+        // assignment exists — at that point the assignments are the truth.
+        if (!hasAssignments) {
+            const firstByCategory = (cat: string) => earningsCatalog.find((c) => c.category === cat)
+            const fillLegacy = (cat: string | string[], legacyVal: number | string | null | undefined) => {
+                if (legacyVal == null || legacyVal === '') return
+                const cats = Array.isArray(cat) ? cat : [cat]
+                for (const k of cats) {
+                    const c = firstByCategory(k)
+                    if (c && next[c.id] == null) { next[c.id] = String(legacyVal); return }
+                }
+            }
+            fillLegacy('basic', employee.basicSalary)
+            fillLegacy('housing', employee.housingAllowance)
+            fillLegacy('transport', employee.transportAllowance)
+            fillLegacy(['custom_allowance', 'cost_of_living'], employee.otherAllowances)
+        }
+        setComponentAmounts(next)
+    }
 
     const set = (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement>) => {
         setForm(f => ({ ...f, [field]: e.target.value }))
         if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n })
     }
 
-    const close = () => { onOpenChange(false); setErrors({}) }
+    const close = () => { onOpenChange(false); setErrors({}); setLastSeed(null) }
 
     const submit = () => {
-        const basic = parseFloat(form.basicSalary) || 0
-        const housing = parseFloat(form.housingAllowance) || 0
-        const transport = parseFloat(form.transportAllowance) || 0
-        const other = parseFloat(form.otherAllowances) || 0
+        // Derive legacy columns from the catalog-driven inputs (mirrors
+        // AddEmployeeDialog Step 3): sum any active component in each
+        // category; everything else collapses into `other`.
+        const amountByCategory = (cat: string) =>
+            earningsCatalog
+                .filter((c) => c.category === cat)
+                .reduce((s, c) => s + (parseFloat(componentAmounts[c.id] || '0') || 0), 0)
+        const basic = amountByCategory('basic')
+        const housing = amountByCategory('housing')
+        const transport = amountByCategory('transport')
+        const other = earningsCatalog
+            .filter((c) => !['basic', 'housing', 'transport'].includes(c.category))
+            .reduce((s, c) => s + (parseFloat(componentAmounts[c.id] || '0') || 0), 0)
         const total = basic + housing + transport + other
+        const salaryComponents = earningsCatalog
+            .map((c) => ({ componentId: c.id, amount: parseFloat(componentAmounts[c.id] || '0') || 0 }))
+            .filter((a) => a.amount > 0)
         const result = zodToFieldErrors(employeeSalaryRuleSchema, { basicSalary: basic, totalSalary: total })
         if (Object.keys(result.errors).length) {
             setErrors(result.errors)
@@ -1566,6 +1733,7 @@ export function EditPayrollDialog({
                 transportAllowance: transport || undefined,
                 otherAllowances: other || undefined,
                 totalSalary: total || undefined,
+                salaryComponents: salaryComponents.length > 0 ? salaryComponents : undefined,
                 paymentMethod: (form.paymentMethod as Employee['paymentMethod']) || undefined,
                 bankName: form.bankName || undefined,
                 accountName: form.accountName || undefined,
@@ -1586,7 +1754,10 @@ export function EditPayrollDialog({
         )
     }
 
-    const totalPackage = (parseFloat(form.basicSalary) || 0) + (parseFloat(form.housingAllowance) || 0) + (parseFloat(form.transportAllowance) || 0) + (parseFloat(form.otherAllowances) || 0)
+    const totalPackage = earningsCatalog.reduce(
+        (s, c) => s + (parseFloat(componentAmounts[c.id] || '0') || 0),
+        0,
+    )
 
     return (
         <Dialog open={open} onOpenChange={close}>
@@ -1596,16 +1767,53 @@ export function EditPayrollDialog({
                 </DialogHeader>
                 <DialogBody>
                     <div className="space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <FormField label="Basic Salary (AED)" error={errors.basicSalary}>
-                                <NumericInput value={form.basicSalary} onChange={set('basicSalary')} aria-invalid={!!errors.basicSalary} className={errors.basicSalary ? 'border-destructive' : ''} />
-                            </FormField>
-                            <div className="space-y-1.5"><Label>Housing Allowance (AED)</Label><NumericInput value={form.housingAllowance} onChange={set('housingAllowance')} /></div>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="space-y-1.5"><Label>Transport Allowance (AED)</Label><NumericInput value={form.transportAllowance} onChange={set('transportAllowance')} /></div>
-                            <div className="space-y-1.5"><Label>Other Allowances (AED)</Label><NumericInput value={form.otherAllowances} onChange={set('otherAllowances')} /></div>
-                        </div>
+                        {earningsCatalog.length === 0 ? (
+                            <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+                                No active earning components found.
+                                <br />
+                                <span className="text-xs">
+                                    Add or activate components in Organization Settings → Salary Components, then refresh.
+                                </span>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {earningsCatalog.map((c) => {
+                                    const isBasic = c.category === 'basic'
+                                    const fieldError = isBasic ? errors.basicSalary : undefined
+                                    const input = (
+                                        <NumericInput
+                                            value={componentAmounts[c.id] ?? ''}
+                                            onChange={(e) =>
+                                                setComponentAmounts((prev) => ({ ...prev, [c.id]: e.target.value }))
+                                            }
+                                            placeholder={c.calculationType === 'percentage_of_basic' ? '0' : '0.00'}
+                                            aria-invalid={!!fieldError}
+                                            className={fieldError ? 'border-destructive' : ''}
+                                        />
+                                    )
+                                    const label = (
+                                        <>
+                                            {c.name} (AED)
+                                            {c.calculationType === 'percentage_of_basic' && (
+                                                <span className="ms-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                                    % of basic
+                                                </span>
+                                            )}
+                                        </>
+                                    )
+                                    return isBasic ? (
+                                        <FormField key={c.id} label={label} error={fieldError}>
+                                            {input}
+                                        </FormField>
+                                    ) : (
+                                        <div key={c.id} className="space-y-1.5">
+                                            <Label>{label}</Label>
+                                            {input}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
                         {totalPackage > 0 && (
                             <div className="flex justify-between items-center px-3 py-2 bg-muted rounded-lg text-sm">
                                 <span className="text-muted-foreground">Total Package</span>

@@ -291,6 +291,16 @@ function PayslipBreakdown({ ps }: { ps: Payslip }) {
   const housing = Number(ps.housingAllowance)
   const transport = Number(ps.transportAllowance)
   const other = Number(ps.otherAllowances)
+  // Catalog snapshot persisted alongside the payslip — when present, every
+  // earning line gets its real component name. Legacy payslips (pre-0048)
+  // have an empty array and fall through to the 4 named columns below.
+  const breakdown = (ps.earningsBreakdown ?? [])
+      .map((b) => ({ ...b, amount: Number(b.amount) }))
+      .filter((b) => b.amount > 0)
+      .sort((a, b) => {
+          const order = (cat: string) => ({ basic: 0, housing: 1, transport: 2 }[cat] ?? 3)
+          return order(a.category) - order(b.category)
+      })
   const overtime = Number(ps.overtime)
   const commission = Number(ps.commission ?? 0)
   const additions = overtime + commission
@@ -324,10 +334,18 @@ function PayslipBreakdown({ ps }: { ps: Payslip }) {
           Earnings
         </p>
         <div className="px-3 pb-1">
-          {basic > 0 && <PayslipRow label="Basic Salary" value={basic} sub />}
-          {housing > 0 && <PayslipRow label="Housing Allowance" value={housing} sub />}
-          {transport > 0 && <PayslipRow label="Transport Allowance" value={transport} sub />}
-          {other > 0 && <PayslipRow label="Other Allowances" value={other} sub />}
+          {breakdown.length > 0 ? (
+            breakdown.map((b) => (
+              <PayslipRow key={b.componentId} label={b.name} value={b.amount} sub />
+            ))
+          ) : (
+            <>
+              {basic > 0 && <PayslipRow label="Basic Salary" value={basic} sub />}
+              {housing > 0 && <PayslipRow label="Housing Allowance" value={housing} sub />}
+              {transport > 0 && <PayslipRow label="Transport Allowance" value={transport} sub />}
+              {other > 0 && <PayslipRow label="Other Allowances" value={other} sub />}
+            </>
+          )}
           <PayslipRow label="Earnings subtotal" value={earningsSubtotal} bold />
         </div>
       </div>

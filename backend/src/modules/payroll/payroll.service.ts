@@ -275,6 +275,7 @@ export async function getPayslipsByEmployee(tenantId: string, employeeId: string
             housingAllowance: payslips.housingAllowance,
             transportAllowance: payslips.transportAllowance,
             otherAllowances: payslips.otherAllowances,
+            earningsBreakdown: payslips.earningsBreakdown,
             overtime: payslips.overtime,
             commission: payslips.commission,
             grossSalary: payslips.grossSalary,
@@ -359,12 +360,15 @@ function parseLocalDate(s: string | null | undefined): Date | null {
 interface ResolvedEarning {
     componentId: string
     category: string
+    /** Human-readable component name from the catalog (e.g. "Communication
+        Allowance"). Used to label rows in the payslip breakdown UI. */
+    name: string
     /** AED amount for this earning before proration. Percentage-of-basic
         components are already converted to absolute AED here. */
     amount: number
 }
 
-interface ResolvedEarnings {
+export interface ResolvedEarnings {
     basic: number
     /** True when the employee has a basic earning assignment. Used to gate
         the catalog path — a partial set of assignments (e.g. only an "Other
@@ -391,7 +395,7 @@ interface ResolvedEarnings {
  * employees in the tenant — O(N + M) where N = employees and M = total
  * assignments. Way better than per-employee fetches inside the math loop.
  */
-async function resolveEmployeeEarnings(
+export async function resolveEmployeeEarnings(
     tenantId: string,
     empIds: string[],
 ): Promise<Map<string, ResolvedEarnings>> {
@@ -406,6 +410,7 @@ async function resolveEmployeeEarnings(
         .select({
             employeeId: employeeSalaryComponents.employeeId,
             componentId: salaryComponents.id,
+            name: salaryComponents.name,
             category: salaryComponents.category,
             calculationType: salaryComponents.calculationType,
             componentAmount: salaryComponents.amount,
@@ -421,15 +426,21 @@ async function resolveEmployeeEarnings(
             inArray(employeeSalaryComponents.employeeId, empIds),
         ))
 
-    // First pass: compute the Basic for each employee. Percentage-of-basic
-    // components need this as their multiplier in the second pass.
+    // First pass: compute the Basic for each employee — SUMMING every
+    // assignment whose catalog row sits in the `basic` category. Tenants
+    // may legitimately split basic across multiple catalog rows (e.g. a
+    // "Basic" + "Probation Basic" structure), and we previously overwrote
+    // here, which meant one of them silently dropped out of the Basic
+    // figure used for gratuity, WPS, and as the % multiplier below.
+    //
+    // Percentage-of-basic components in this category are still treated as
+    // flat AED — the resolver's contract is that whatever HR put under
+    // `basic` is what gets paid as basic, no conversion.
     const basicByEmp = new Map<string, number>()
     for (const r of rows) {
         if (r.category !== 'basic') continue
-        // Basic is always flat AED — even if catalog says percentage we treat
-        // the assignment's amount as the AED value.
         const amt = Number(r.assignmentAmount ?? r.componentAmount ?? 0)
-        basicByEmp.set(r.employeeId, amt)
+        basicByEmp.set(r.employeeId, (basicByEmp.get(r.employeeId) ?? 0) + amt)
     }
 
     // Second pass: resolve every earning, converting percentage-of-basic
@@ -443,7 +454,7 @@ async function resolveEmployeeEarnings(
             : rawAmount
 
         const entry = result.get(r.employeeId) ?? { basic, hasBasic, earnings: [] }
-        entry.earnings.push({ componentId: r.componentId, category: r.category, amount })
+        entry.earnings.push({ componentId: r.componentId, category: r.category, name: r.name, amount })
         result.set(r.employeeId, entry)
     }
 
@@ -515,6 +526,11 @@ function buildPayslipsAndTotals(
             transport = Number(emp.transportAllowance ?? 0)
             other = Number(emp.otherAllowances ?? 0)
         }
+        // Snapshot of every catalog earning that fed into this payslip. The
+        // amounts here are pre-prorated; the UI applies the proration ratio
+        // already baked into the row totals — actually no, we DO prorate
+        // them here so the breakdown sums exactly to the persisted column
+        // totals. Empty when the employee was on the legacy fallback path.
 
         let workedDays = daysInMonth
         const joinDate = parseLocalDate(emp.joinDate)
@@ -545,6 +561,15 @@ function buildPayslipsAndTotals(
         totalDeductions += deductions
         totalNet += net
 
+        const earningsBreakdown = resolved && resolved.hasBasic
+            ? resolved.earnings.map(e => ({
+                componentId: e.componentId,
+                category: e.category,
+                name: e.name,
+                amount: Number((e.amount * prorateRatio).toFixed(2)),
+            }))
+            : []
+
         return {
             payrollRunId,
             employeeId: emp.id,
@@ -553,6 +578,7 @@ function buildPayslipsAndTotals(
             housingAllowance: String((housing * prorateRatio).toFixed(2)),
             transportAllowance: String((transport * prorateRatio).toFixed(2)),
             otherAllowances: String((other * prorateRatio).toFixed(2)),
+            earningsBreakdown,
             overtime: overtime.toFixed(2),
             commission: commission.toFixed(2),
             grossSalary: String(gross.toFixed(2)),
@@ -778,6 +804,7 @@ export async function getPayslipsWithEmployees(tenantId: string, payrollRunId: s
         housingAllowance: payslips.housingAllowance,
         transportAllowance: payslips.transportAllowance,
         otherAllowances: payslips.otherAllowances,
+        earningsBreakdown: payslips.earningsBreakdown,
         grossSalary: payslips.grossSalary,
         deductions: payslips.deductions,
         unpaidLeaveDays: payslips.unpaidLeaveDays,
@@ -890,6 +917,7 @@ async function getDraftPayslipsPreview(tenantId: string, run: { id: string; year
                 housingAllowance: v.housingAllowance,
                 transportAllowance: v.transportAllowance,
                 otherAllowances: v.otherAllowances,
+                earningsBreakdown: v.earningsBreakdown,
                 grossSalary: v.grossSalary,
                 deductions: v.deductions,
                 unpaidLeaveDays: v.unpaidLeaveDays,
@@ -1029,6 +1057,7 @@ export async function getPayslipById(tenantId: string, payslipId: string) {
         housingAllowance: payslips.housingAllowance,
         transportAllowance: payslips.transportAllowance,
         otherAllowances: payslips.otherAllowances,
+        earningsBreakdown: payslips.earningsBreakdown,
         overtime: payslips.overtime,
         commission: payslips.commission,
         grossSalary: payslips.grossSalary,

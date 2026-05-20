@@ -61,7 +61,7 @@ describe('buildPayslipsAndTotals', () => {
             const partial: PayslipResolvedEarnings = {
                 basic: 0,
                 hasBasic: false,
-                earnings: [{ componentId: 'c-other', category: 'custom_allowance', amount: 500 }],
+                earnings: [{ componentId: 'c-other', category: 'custom_allowance', name: 'Other Allowance', amount: 500 }],
             }
             const result = buildPayslipsAndTotals(
                 'tenant-1', 'run-1', 2026, 5,
@@ -81,9 +81,9 @@ describe('buildPayslipsAndTotals', () => {
                 basic: 12_000,
                 hasBasic: true,
                 earnings: [
-                    { componentId: 'c-basic',   category: 'basic',   amount: 12_000 },
-                    { componentId: 'c-housing', category: 'housing', amount: 4_000 },
-                    { componentId: 'c-transport', category: 'transport', amount: 700 },
+                    { componentId: 'c-basic',   category: 'basic',   name: 'Basic',   amount: 12_000 },
+                    { componentId: 'c-housing', category: 'housing', name: 'Housing', amount: 4_000 },
+                    { componentId: 'c-transport', category: 'transport', name: 'Transport', amount: 700 },
                 ],
             }
             const result = buildPayslipsAndTotals(
@@ -99,14 +99,44 @@ describe('buildPayslipsAndTotals', () => {
             expect(result.payslipValues[0]?.transportAllowance).toBe('700.00')
         })
 
+        it('sums multiple basic-category components into the persisted basic + breakdown', () => {
+            // Regression: a tenant with two catalog rows in the `basic`
+            // category (e.g. "Basic" + a custom "Probation Basic") used to
+            // see one of them silently dropped from gross — the breakdown
+            // showed both lines but the persisted basic column held only
+            // the last one, so the numbers didn't tie out.
+            const resolved: PayslipResolvedEarnings = {
+                basic: 13_000,
+                hasBasic: true,
+                earnings: [
+                    { componentId: 'c-basic', category: 'basic', name: 'Basic', amount: 6_500 },
+                    { componentId: 'c-test',  category: 'basic', name: 'test',  amount: 6_500 },
+                    { componentId: 'c-housing', category: 'housing', name: 'Housing', amount: 2_000 },
+                ],
+            }
+            const result = buildPayslipsAndTotals(
+                'tenant-1', 'run-1', 2026, 5,
+                [emp() as any],
+                noAdjustments,
+                new Map([['emp-1', resolved]]),
+            )
+            expect(result.payslipValues[0]?.basicSalary).toBe('13000.00')
+            expect(result.payslipValues[0]?.housingAllowance).toBe('2000.00')
+            expect(result.totalGross).toBeCloseTo(15_000, 2) // 6500 + 6500 + 2000
+            // Breakdown sum must equal the persisted gross — no orphaned earnings.
+            const breakdownSum = (result.payslipValues[0]?.earningsBreakdown ?? [])
+                .reduce((s, e) => s + Number(e.amount), 0)
+            expect(breakdownSum).toBeCloseTo(15_000, 2)
+        })
+
         it('rolls non-housing / non-transport earnings into "other"', () => {
             const resolved: PayslipResolvedEarnings = {
                 basic: 10_000,
                 hasBasic: true,
                 earnings: [
-                    { componentId: 'c-basic',  category: 'basic',          amount: 10_000 },
-                    { componentId: 'c-col',    category: 'cost_of_living', amount: 800 },
-                    { componentId: 'c-custom', category: 'custom_allowance', amount: 250 },
+                    { componentId: 'c-basic',  category: 'basic',          name: 'Basic', amount: 10_000 },
+                    { componentId: 'c-col',    category: 'cost_of_living', name: 'Cost of Living', amount: 800 },
+                    { componentId: 'c-custom', category: 'custom_allowance', name: 'Custom Allowance', amount: 250 },
                 ],
             }
             const result = buildPayslipsAndTotals(
@@ -125,7 +155,7 @@ describe('buildPayslipsAndTotals', () => {
             const resolved: PayslipResolvedEarnings = {
                 basic: 31_000,
                 hasBasic: true,
-                earnings: [{ componentId: 'c-basic', category: 'basic', amount: 31_000 }],
+                earnings: [{ componentId: 'c-basic', category: 'basic', name: 'Basic', amount: 31_000 }],
             }
             const result = buildPayslipsAndTotals(
                 'tenant-1', 'run-1', 2026, 5, // May 2026 (31 days)
