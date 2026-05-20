@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js'
 import { salaryRevisions, employees, employeeSalaryComponents, salaryComponents, users } from '../../db/schema/index.js'
-import { eq, and, desc, sql, gte, lte } from 'drizzle-orm'
+import { eq, and, desc, sql, gte, lte, inArray } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
 import { z } from 'zod'
 
@@ -185,10 +185,17 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
             }).where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
 
             // Sync the catalog assignments so payroll's resolver sees the new
-            // amounts. Maps by category — basic/housing/transport go to their
-            // first matching active component; everything legacy-"other"
-            // goes to the tenant's custom_allowance component (or
-            // cost_of_living as a fallback if HR replaced the seed).
+            // amounts. The 4 legacy fields (basic/housing/transport/other) map
+            // to the catalog as follows:
+            //   - basic → first active 'basic' component
+            //   - housing → first active 'housing' component
+            //   - transport → first active 'transport' component
+            //   - other → ONE assignment in custom_allowance/cost_of_living
+            //     (preferring an existing employee assignment so we don't
+            //     orphan one HR set up earlier). Any sibling "other-bucket"
+            //     assignments on this employee are zeroed so the resolved
+            //     gross matches `effOther` exactly — otherwise multiple
+            //     custom-allowance rows would silently inflate it.
             const components = await db
                 .select({ id: salaryComponents.id, category: salaryComponents.category })
                 .from(salaryComponents)
@@ -198,21 +205,42 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
                     eq(salaryComponents.isActive, true),
                 ))
             const firstByCategory = (cat: string) => components.find(c => c.category === cat)
-            const targets: { category: string; amount: number }[] = [
-                { category: 'basic', amount: newBasicSalary },
-                { category: 'housing', amount: effHousing },
-                { category: 'transport', amount: effTransport },
+            const OTHER_CATEGORIES = ['custom_allowance', 'cost_of_living']
+            const otherCatalogIds = new Set(
+                components.filter(c => OTHER_CATEGORIES.includes(c.category)).map(c => c.id),
+            )
+
+            // Pick the canonical "other" target: prefer an assignment the
+            // employee already has so HR doesn't see a different bucket
+            // appear out of nowhere; otherwise fall back to the catalog's
+            // first custom_allowance, then cost_of_living.
+            const existingOtherAssignments = otherCatalogIds.size > 0
+                ? await db
+                    .select({ componentId: employeeSalaryComponents.componentId })
+                    .from(employeeSalaryComponents)
+                    .where(and(
+                        eq(employeeSalaryComponents.tenantId, request.user.tenantId),
+                        eq(employeeSalaryComponents.employeeId, id),
+                        inArray(employeeSalaryComponents.componentId, Array.from(otherCatalogIds)),
+                    ))
+                : []
+            const otherTargetId = existingOtherAssignments[0]?.componentId
+                ?? firstByCategory('custom_allowance')?.id
+                ?? firstByCategory('cost_of_living')?.id
+
+            const targets: { componentId: string | undefined; amount: number }[] = [
+                { componentId: firstByCategory('basic')?.id, amount: newBasicSalary },
+                { componentId: firstByCategory('housing')?.id, amount: effHousing },
+                { componentId: firstByCategory('transport')?.id, amount: effTransport },
+                { componentId: otherTargetId, amount: effOther },
             ]
-            const otherTarget = firstByCategory('custom_allowance') ?? firstByCategory('cost_of_living')
             const upserts = targets
-                .map(t => ({ comp: firstByCategory(t.category), amount: t.amount }))
-                .concat(otherTarget ? [{ comp: otherTarget, amount: effOther }] : [])
-                .filter(x => !!x.comp)
-                .map(x => ({
+                .filter((t): t is { componentId: string; amount: number } => !!t.componentId)
+                .map(t => ({
                     tenantId: request.user.tenantId,
                     employeeId: id,
-                    componentId: x.comp!.id,
-                    amount: String(x.amount.toFixed(2)),
+                    componentId: t.componentId,
+                    amount: String(t.amount.toFixed(2)),
                     isActive: true,
                     updatedAt: new Date(),
                 }))
@@ -228,6 +256,21 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
                             updatedAt: sql`excluded.updated_at`,
                         },
                     })
+            }
+
+            // Zero out any sibling "other-bucket" assignments so the catalog
+            // gross can't drift above the legacy `effOther` value. A single
+            // UPDATE keeps this cheap — only touches existing rows.
+            const siblingIds = Array.from(otherCatalogIds).filter(cid => cid !== otherTargetId)
+            if (siblingIds.length > 0) {
+                await db
+                    .update(employeeSalaryComponents)
+                    .set({ amount: '0.00', updatedAt: new Date() })
+                    .where(and(
+                        eq(employeeSalaryComponents.tenantId, request.user.tenantId),
+                        eq(employeeSalaryComponents.employeeId, id),
+                        inArray(employeeSalaryComponents.componentId, siblingIds),
+                    ))
             }
         }
 

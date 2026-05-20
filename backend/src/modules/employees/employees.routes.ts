@@ -8,7 +8,7 @@ import { recordActivity } from '../audit/audit.service.js'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { db } from '../../db/index.js'
 import { entities, employees, employeeSalaryComponents, salaryComponents, tenants, users } from '../../db/schema/index.js'
-import { eq, and, sql } from 'drizzle-orm'
+import { eq, and, sql, inArray } from 'drizzle-orm'
 import { inviteUser, resendInvite } from '../settings/settings.service.js'
 import { fileTypeFromBuffer } from 'file-type'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
@@ -339,9 +339,9 @@ export default async function (fastify: any): Promise<void> {
                     .from(salaryComponents)
                     .where(and(
                         eq(salaryComponents.tenantId, request.user.tenantId),
-                        // inArray uses the schema's id column; small N so a plain IN is fine.
+                        inArray(salaryComponents.id, ids),
                     ))
-                const validSet = new Set(valid.filter(v => ids.includes(v.id)).map(v => v.id))
+                const validSet = new Set(valid.map(v => v.id))
                 const rows = assignmentInputs
                     .filter(a => validSet.has(a.componentId))
                     .map(a => ({
@@ -422,8 +422,11 @@ export default async function (fastify: any): Promise<void> {
             const valid = await db
                 .select({ id: salaryComponents.id })
                 .from(salaryComponents)
-                .where(eq(salaryComponents.tenantId, request.user.tenantId))
-            const validSet = new Set(valid.filter(v => ids.includes(v.id)).map(v => v.id))
+                .where(and(
+                    eq(salaryComponents.tenantId, request.user.tenantId),
+                    inArray(salaryComponents.id, ids),
+                ))
+            const validSet = new Set(valid.map(v => v.id))
             const rows = assignmentInputs
                 .filter(a => validSet.has(a.componentId))
                 .map(a => ({
