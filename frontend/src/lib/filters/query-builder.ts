@@ -1,5 +1,5 @@
 /**
- * Query builder — serialises AppliedFilter map into the
+ * Query builder - serialises AppliedFilter map into the
  *   "field:OPERATOR(value);…"
  * compact format documented in FilterSystem.md, OR into a normalised
  * JSON payload for POST /search.
@@ -125,7 +125,7 @@ export function buildSearchQuery(
     if (q && q.trim()) params.set('q', q.trim())
     const f = buildFilterQueryString(filters)
     if (f) params.set('filter', f)
-    // Emit limit/offset — the canonical params the backend reads.
+    // Emit limit/offset - the canonical params the backend reads.
     // Support legacy page/pageSize by converting them.
     const limit = pagination?.limit ?? pagination?.pageSize
     const offset = pagination?.offset ?? (

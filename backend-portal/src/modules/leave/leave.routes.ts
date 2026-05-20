@@ -1,7 +1,8 @@
 import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../db/client.js'
-import { employees, leaveBalances, leaveRequests } from '../../db/schema/index.js'
+import { employees, leaveBalances, leaveRequests, orgUnits } from '../../db/schema/index.js'
 import { e400, e403, e404 } from '../../lib/errors.js'
 import { recordActivity } from '../../lib/audit.js'
 import { notifyRequester, notifyReviewers } from '../../lib/notify.js'
@@ -60,17 +61,37 @@ export default async function leaveRoutes(fastify: FastifyInstance) {
             )
         }
 
+        // Self-join on employees via handoverTo so the manager sees the
+        // chosen handover person by name (not just the FK uuid) when reviewing.
+        // Every join is also tenant-bound — defence in depth so a stray FK
+        // can't leak a name from another tenant. Department is resolved via
+        // org_units (FK) with the legacy text column as fallback.
+        const handover = alias(employees, 'handover') as any
         const rows = await db
             .select({
                 request: leaveRequests,
                 employeeFirstName: employees.firstName,
                 employeeLastName: employees.lastName,
                 employeeNo: employees.employeeNo,
-                employeeDepartment: employees.department,
+                employeeDepartment: sql<string | null>`COALESCE(${orgUnits.name}, ${employees.department})`,
+                handoverFirstName: handover.firstName,
+                handoverLastName: handover.lastName,
+                handoverDesignation: handover.designation,
                 total: sql<number>`COUNT(*) OVER()`,
             })
             .from(leaveRequests)
-            .innerJoin(employees, eq(leaveRequests.employeeId, employees.id))
+            .innerJoin(employees, and(
+                eq(leaveRequests.employeeId, employees.id),
+                eq(employees.tenantId, user.tenantId),
+            ))
+            .leftJoin(orgUnits, and(
+                eq(employees.departmentId, orgUnits.id),
+                eq(orgUnits.tenantId, user.tenantId),
+            ))
+            .leftJoin(handover, and(
+                eq(leaveRequests.handoverTo, handover.id),
+                eq(handover.tenantId, user.tenantId),
+            ))
             .where(and(...conditions))
             .orderBy(desc(leaveRequests.createdAt))
             .limit(query.limit)
@@ -82,6 +103,10 @@ export default async function leaveRoutes(fastify: FastifyInstance) {
             employeeName: `${r.employeeFirstName} ${r.employeeLastName}`,
             employeeNo: r.employeeNo,
             employeeDepartment: r.employeeDepartment,
+            handoverToName: r.handoverFirstName
+                ? `${r.handoverFirstName} ${r.handoverLastName ?? ''}`.trim()
+                : null,
+            handoverToDesignation: r.handoverDesignation ?? null,
         }))
 
         return reply.send({
@@ -249,6 +274,10 @@ export default async function leaveRoutes(fastify: FastifyInstance) {
             userAgent: request.headers['user-agent'],
         }).catch(() => {})
 
+        const dateRange = `${existing.startDate} → ${existing.endDate}`
+        const dayLabel = `${existing.days} day${existing.days === 1 ? '' : 's'}`
+
+        // ── Notify the requester ─────────────────────────────────────────
         notifyRequester({
             tenantId: user.tenantId,
             employeeId: existing.employeeId,
@@ -257,10 +286,45 @@ export default async function leaveRoutes(fastify: FastifyInstance) {
                 ? `Your ${existing.leaveType} leave was approved`
                 : `Your ${existing.leaveType} leave was rejected`,
             message: body.approved
-                ? `${existing.days} day${existing.days === 1 ? '' : 's'}: ${existing.startDate} → ${existing.endDate}`
+                ? `${dayLabel}: ${dateRange}`
                 : (body.notes ?? 'See the leave page for details.'),
             actionUrl: '/me/leave',
         }).catch((err) => request.log?.warn?.({ err }, 'leave decision notification failed'))
+
+        // ── Notify the handover person — only on approval, so we don't
+        // bother them with a heads-up that may still be rejected. We resolve
+        // the requester's name in one round-trip so the message reads naturally.
+        if (body.approved && existing.handoverTo) {
+            db
+                .select({
+                    firstName: employees.firstName,
+                    lastName: employees.lastName,
+                })
+                .from(employees)
+                .where(
+                    and(
+                        eq(employees.tenantId, user.tenantId),
+                        eq(employees.id, existing.employeeId),
+                    ),
+                )
+                .limit(1)
+                .then(([requester]) => {
+                    const requesterName = requester
+                        ? `${requester.firstName} ${requester.lastName ?? ''}`.trim()
+                        : 'A colleague'
+                    return notifyRequester({
+                        tenantId: user.tenantId,
+                        employeeId: existing.handoverTo!,
+                        type: 'info',
+                        title: `You're covering for ${requesterName}`,
+                        message: existing.handoverNotes
+                            ? `${dayLabel}: ${dateRange} — "${existing.handoverNotes}"`
+                            : `${dayLabel}: ${dateRange}`,
+                        actionUrl: '/me/leave',
+                    })
+                })
+                .catch((err) => request.log?.warn?.({ err }, 'handover notification failed'))
+        }
 
         return reply.send({ data: updated })
     })

@@ -9,9 +9,9 @@ interface InitialsAvatarProps {
 }
 
 const SIZE: Record<NonNullable<InitialsAvatarProps['size']>, string> = {
-    sm: 'h-7 w-7 text-[10px]',
-    md: 'h-9 w-9 text-xs',
-    lg: 'h-11 w-11 text-sm',
+    sm: 'size-7 text-[10px]',
+    md: 'size-9 text-xs',
+    lg: 'size-11 text-sm',
 }
 
 const PALETTE = [

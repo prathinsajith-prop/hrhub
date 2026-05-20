@@ -46,7 +46,7 @@ function RatingStars({ rating }: { rating?: number }) {
     return (
         <div className="flex gap-0.5">
             {[1, 2, 3, 4, 5].map(i => (
-                <Star key={i} className={`h-3.5 w-3.5 ${i <= rating ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
+                <Star key={i} className={`size-3.5 ${i <= rating ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
             ))}
         </div>
     )
@@ -130,7 +130,7 @@ export function PerformancePage() {
                 description={t('performance.description')}
                 actions={
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
                         <ExportDropdown
@@ -138,7 +138,7 @@ export function PerformancePage() {
                             onExportPdf={() => exportPerformance({ format: 'pdf' })}
                         />
                         <Button onClick={() => setShowDialog(true)}>
-                            <Plus className="h-4 w-4 mr-2" /> New Review
+                            <Plus className="size-4 mr-2" /> New Review
                         </Button>
                     </div>
                 }
@@ -161,7 +161,7 @@ export function PerformancePage() {
                                     <Skeleton className="h-4 w-40" />
                                     <Skeleton className="h-3 w-32" />
                                     <div className="flex gap-1 mt-2">
-                                        {Array.from({ length: 5 }).map((_, j) => <Skeleton key={j} className="h-4 w-4 rounded" />)}
+                                        {Array.from({ length: 5 }).map((_, j) => <Skeleton key={`skeleton-${j}`} className="size-4 rounded" />)}
                                     </div>
                                 </div>
                                 <Skeleton className="h-5 w-20 rounded-full" />
@@ -179,7 +179,7 @@ export function PerformancePage() {
 
             {!isLoading && filtered.length === 0 && (
                 <div className="flex flex-col items-center gap-3 py-16">
-                    <TrendingUp className="h-10 w-10 text-muted-foreground" />
+                    <TrendingUp className="size-10 text-muted-foreground" />
                     <p className="text-muted-foreground text-sm">No reviews found.</p>
                 </div>
             )}

@@ -38,7 +38,7 @@ interface LeaveRequest {
 
 import type { AttendanceSummary } from '@/hooks/useAttendance'
 
-// ─── Attendance rows config — maps AttendanceSummary fields → display ─────────
+// ─── Attendance rows config - maps AttendanceSummary fields → display ─────────
 const ATTENDANCE_ROWS: Array<{ field: keyof AttendanceSummary; labelKey: string; cls: string }> = [
   { field: 'totalPresent',  labelKey: 'dashboard.present',     cls: 'bg-success' },
   { field: 'totalAbsent',   labelKey: 'dashboard.absent',      cls: 'bg-destructive' },
@@ -116,12 +116,12 @@ export function ManagerDashboard() {
       {/* Overdue onboarding warning */}
       {!onboardingLoading && (onboarding?.overdue ?? 0) > 0 && (
         <div className="flex items-center gap-3 rounded-xl border border-warning/30 bg-warning/8 px-4 py-3 animate-fade-fast">
-          <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+          <AlertTriangle className="size-4 text-warning shrink-0" />
           <p className="text-sm text-warning-foreground flex-1">
             {t('dashboard.overdueOnboardingWarning', { count: onboarding!.overdue })}
           </p>
           <Button size="sm" variant="ghost" className="text-warning-foreground h-auto px-2 py-1 text-xs shrink-0" onClick={() => navigate('/onboarding')}>
-            {t('dashboard.review')} <ArrowUpRight className="h-3 w-3 ml-1" />
+            {t('dashboard.review')} <ArrowUpRight className="size-3 ml-1" />
           </Button>
         </div>
       )}
@@ -138,7 +138,7 @@ export function ManagerDashboard() {
                 <CardDescription>{t('dashboard.pendingYourApproval')}</CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/leave')}>
-                {t('dashboard.viewAll')} <ArrowUpRight className="h-3 w-3 ml-1" />
+                {t('dashboard.viewAll')} <ArrowUpRight className="size-3 ml-1" />
               </Button>
             </div>
           </CardHeader>
@@ -147,7 +147,7 @@ export function ManagerDashboard() {
               <SkeletonRows count={4} />
             ) : pendingLeave.length === 0 ? (
               <div className="py-10 text-center">
-                <CheckCircle2 className="h-8 w-8 text-success/60 mx-auto mb-2" />
+                <CheckCircle2 className="size-8 text-success/60 mx-auto mb-2" />
                 <p className="text-sm font-medium text-foreground">{t('dashboard.allCaughtUp')}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{t('dashboard.noLeaveRequestsPending')}</p>
               </div>
@@ -160,7 +160,7 @@ export function ManagerDashboard() {
                   return (
                     <div key={req.id} className="flex items-start gap-3 py-3.5">
                       {/* Avatar placeholder */}
-                      <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0">
+                      <div className="size-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0">
                         {name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -182,7 +182,7 @@ export function ManagerDashboard() {
                           onClick={() => approveLeave.mutate({ id: req.id, approved: true })}
                           disabled={approveLeave.isPending}
                         >
-                          <CheckCircle2 className="h-3 w-3 mr-1" /> {t('dashboard.approve')}
+                          <CheckCircle2 className="size-3 mr-1" /> {t('dashboard.approve')}
                         </Button>
                         <Button
                           size="sm"
@@ -191,7 +191,7 @@ export function ManagerDashboard() {
                           onClick={() => approveLeave.mutate({ id: req.id, approved: false })}
                           disabled={approveLeave.isPending}
                         >
-                          <XCircle className="h-3 w-3 mr-1" /> {t('dashboard.decline')}
+                          <XCircle className="size-3 mr-1" /> {t('dashboard.decline')}
                         </Button>
                       </div>
                     </div>
@@ -213,7 +213,7 @@ export function ManagerDashboard() {
                 </CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/attendance')}>
-                {t('dashboard.fullReport')} <ArrowUpRight className="h-3 w-3 ml-1" />
+                {t('dashboard.fullReport')} <ArrowUpRight className="size-3 ml-1" />
               </Button>
             </div>
           </CardHeader>

@@ -23,6 +23,7 @@ import { useActivityLogs } from '@/hooks/useAudit'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { CATEGORY_LABELS, type DocCategory } from '@/lib/docTypes'
 import { usePermissions } from '@/hooks/usePermissions'
+import { Label } from '@/components/ui/label'
 import {
     ONBOARDING_TEMPLATE_STEPS,
     ONBOARDING_STATUS_LABEL,
@@ -33,10 +34,10 @@ import {
 } from './onboarding-helpers'
 
 export function OnboardingDetailPage() {
-    // Steps tab is intentionally hidden in the UI for now — keep the
-    // RequiredDocsDialog + StepsTab implementations below intact so we can
-    // re-enable by restoring the <TabsTrigger value="steps"> + matching
-    // <TabsContent> below.
+    // Steps tab is hidden - HR drives step status from the completion icon on
+    // each row in the Documents tab. The full StepsTab implementation is kept
+    // around (used by ESLint as `void StepsTab` below) for the rare case it
+    // needs to be re-enabled.
     void StepsTab
     const { employeeId = '' } = useParams<{ employeeId: string }>()
     const navigate = useNavigate()
@@ -63,10 +64,10 @@ export function OnboardingDetailPage() {
         return (
             <PageWrapper>
                 <Card className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                    <Clock className="h-10 w-10 text-muted-foreground" />
+                    <Clock className="size-10 text-muted-foreground" />
                     <p className="text-sm font-medium">Onboarding checklist not found</p>
                     <Button variant="outline" size="sm" onClick={() => navigate('/onboarding')}>
-                        <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />Back to onboarding
+                        <ArrowLeft className="size-3.5 mr-1.5" />Back to onboarding
                     </Button>
                 </Card>
             </PageWrapper>
@@ -74,6 +75,7 @@ export function OnboardingDetailPage() {
     }
 
     const tone = progressTone(checklist.progress)
+    const isComplete = checklist.progress >= 100 && checklist.totalCount > 0
 
     const handleSendUploadLink = () => {
         sendLink.mutate({ checklistId: checklist.id! }, {
@@ -92,7 +94,7 @@ export function OnboardingDetailPage() {
         <PageWrapper>
             <div className="flex items-center gap-2 mb-3">
                 <Button variant="ghost" size="sm" onClick={() => navigate('/onboarding')}>
-                    <ArrowLeft className="h-4 w-4 mr-1.5" />Onboarding
+                    <ArrowLeft className="size-4 mr-1.5" />Onboarding
                 </Button>
             </div>
 
@@ -102,14 +104,22 @@ export function OnboardingDetailPage() {
                     <div className="flex items-center gap-4 min-w-0">
                         <InitialsAvatar name={checklist.employeeName} src={checklist.avatarUrl ?? undefined} size="lg" />
                         <div className="min-w-0">
-                            <h1 className="text-lg font-semibold truncate">{checklist.employeeName}</h1>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h1 className="text-lg font-semibold truncate">{checklist.employeeName}</h1>
+                                {isComplete && (
+                                    <Badge variant="success" className="gap-1">
+                                        <CheckCircle2 className="size-3" />
+                                        Completed
+                                    </Badge>
+                                )}
+                            </div>
                             <p className="text-sm text-muted-foreground truncate">
                                 {checklist.designation ?? '—'}{checklist.department ? ` · ${checklist.department}` : ''}
                             </p>
                             <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground mt-1">
                                 {checklist.employeeNo && <span>#{checklist.employeeNo}</span>}
-                                {checklist.email && <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" />{checklist.email}</span>}
-                                {checklist.phone && <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{checklist.phone}</span>}
+                                {checklist.email && <span className="inline-flex items-center gap-1"><Mail className="size-3" />{checklist.email}</span>}
+                                {checklist.phone && <span className="inline-flex items-center gap-1"><Phone className="size-3" />{checklist.phone}</span>}
                             </div>
                         </div>
                     </div>
@@ -119,17 +129,19 @@ export function OnboardingDetailPage() {
                             <p className="text-xs text-muted-foreground">{tone.label} · {checklist.completedCount}/{checklist.totalCount} steps</p>
                         </div>
                         <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                leftIcon={<Send className="h-3.5 w-3.5" />}
-                                loading={sendLink.isPending}
-                                onClick={handleSendUploadLink}
-                                title={checklist.email ? `Send upload link to ${checklist.email}` : 'No email address on record'}
-                                disabled={!checklist.email}
-                            >
-                                Send Upload Link
-                            </Button>
+                            {!isComplete && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    leftIcon={<Send className="size-3.5" />}
+                                    loading={sendLink.isPending}
+                                    onClick={handleSendUploadLink}
+                                    title={checklist.email ? `Send upload link to ${checklist.email}` : 'No email address on record'}
+                                    disabled={!checklist.email}
+                                >
+                                    Send Upload Link
+                                </Button>
+                            )}
                             <Button asChild variant="outline" size="sm">
                                 <Link to={`/employees/${checklist.employeeId}`}>View employee</Link>
                             </Button>
@@ -219,7 +231,7 @@ function OverviewTab({ checklist }: { checklist: OnboardingChecklist }) {
             {stepsWithDocs.length > 0 && (
                 <Card className="p-4">
                     <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                        <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                        <BookOpen className="size-3.5 text-muted-foreground" />
                         Document checklist
                     </h3>
                     <div className="space-y-2">
@@ -247,7 +259,7 @@ function OverviewTab({ checklist }: { checklist: OnboardingChecklist }) {
 }
 
 // ── Required docs management dialog ──────────────────────────────────────────
-// Thin wrapper around the shared RequiredDocsManager — this dialog is the
+// Thin wrapper around the shared RequiredDocsManager - this dialog is the
 // per-employee (instance-level) entry point. The Organization Settings →
 // Onboarding Steps tab uses a parallel wrapper pointed at the template hooks.
 function RequiredDocsDialog({ step, open, onClose }: { step: OnboardingStep; open: boolean; onClose: () => void }) {
@@ -259,7 +271,7 @@ function RequiredDocsDialog({ step, open, onClose }: { step: OnboardingStep; ope
         <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Required documents — {step.title}</DialogTitle>
+                    <DialogTitle>Required documents - {step.title}</DialogTitle>
                 </DialogHeader>
                 <DialogBody className="space-y-4">
                     <p className="text-xs text-muted-foreground">
@@ -396,7 +408,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
             <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                 <h3 className="text-sm font-semibold">Checklist steps</h3>
                 <Button size="sm" onClick={() => setAdding(true)}>
-                    <Plus className="h-3.5 w-3.5 mr-1.5" />Add step
+                    <Plus className="size-3.5 mr-1.5" />Add step
                 </Button>
             </div>
 
@@ -452,7 +464,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                             <button
                                 type="button"
                                 className={cn(
-                                    'h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
+                                    'size-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
                                     step.status === 'completed' ? 'bg-success text-success-foreground' :
                                         step.status === 'in_progress' ? 'bg-info text-info-foreground' :
                                             step.status === 'overdue' ? 'bg-destructive text-destructive-foreground' :
@@ -479,11 +491,11 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                             <StatusPill status={step.status} />
                             {canManage && (
                                 <Button variant="ghost" size="sm" onClick={() => setRequiredDocsStep(step)} aria-label="Required docs" title="Configure required documents">
-                                    <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <BookOpen className="size-3.5 text-muted-foreground" />
                                 </Button>
                             )}
                             <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(step)} aria-label="Delete step">
-                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                <Trash2 className="size-3.5 text-destructive" />
                             </Button>
                         </div>
                     ))}
@@ -497,7 +509,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                     <DialogBody className="space-y-4">
                         <p className="text-sm font-semibold">{editing?.title}</p>
                         <div className="space-y-1">
-                            <label className="text-xs font-medium text-muted-foreground">Status</label>
+                            <Label className="text-xs font-medium text-muted-foreground">Status</Label>
                             <Select value={stepStatus} onValueChange={(v) => setStepStatus(v as OnboardingStepStatus)}>
                                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                                 <SelectContent>
@@ -509,12 +521,12 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                         </div>
                         {stepStatus === 'completed' && (
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-muted-foreground">Completion date</label>
+                                <Label className="text-xs font-medium text-muted-foreground">Completion date</Label>
                                 <DatePicker value={stepDate} onChange={setStepDate} className="h-9" />
                             </div>
                         )}
                         <div className="space-y-1">
-                            <label className="text-xs font-medium text-muted-foreground">Notes (optional)</label>
+                            <Label className="text-xs font-medium text-muted-foreground">Notes (optional)</Label>
                             <Textarea value={stepNotes} onChange={(e) => setStepNotes(e.target.value)} rows={3} placeholder="Add any relevant notes…" />
                         </div>
                     </DialogBody>
@@ -532,14 +544,14 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                     <DialogBody className="space-y-4">
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <label className="text-xs font-medium text-muted-foreground">Title *</label>
+                                <Label className="text-xs font-medium text-muted-foreground">Title *</Label>
                                 <Button
                                     size="sm"
                                     variant="ghost"
                                     className="h-6 px-2 text-[11px] text-primary"
                                     onClick={() => setShowTemplates(!showTemplates)}
                                 >
-                                    <Sparkles className="h-3 w-3 mr-1" />
+                                    <Sparkles className="size-3 mr-1" />
                                     {showTemplates ? 'Hide templates' : 'From template'}
                                 </Button>
                             </div>
@@ -568,7 +580,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-muted-foreground">Owner</label>
+                                <Label className="text-xs font-medium text-muted-foreground">Owner</Label>
                                 <input
                                     type="text"
                                     value={newOwner}
@@ -578,7 +590,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                                 />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-muted-foreground">SLA days</label>
+                                <Label className="text-xs font-medium text-muted-foreground">SLA days</Label>
                                 <NumericInput
                                     decimal={false}
                                     value={newSlaDays}
@@ -589,7 +601,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-xs font-medium text-muted-foreground">Due date</label>
+                            <Label className="text-xs font-medium text-muted-foreground">Due date</Label>
                             <DatePicker value={newDue} onChange={setNewDue} className="h-9" />
                         </div>
                     </DialogBody>
@@ -626,16 +638,58 @@ function StepDocPanel({
     step,
     stepDocs,
     employeeId,
+    checklistId,
 }: {
     step: OnboardingStep
     stepDocs: Array<{ id: string; docType: string; fileName?: string; category?: string; status?: string; expiryDate?: string | null; stepId?: string | null }>
     employeeId: string
+    checklistId: string | null
 }) {
     const [expanded, setExpanded] = useState(false)
     const [uploadOpen, setUploadOpen] = useState(false)
+    const [editOpen, setEditOpen] = useState(false)
+    const [stepStatus, setStepStatus] = useState<OnboardingStepStatus>(step.status === 'overdue' ? 'in_progress' : step.status)
+    const [stepNotes, setStepNotes] = useState(step.notes ?? '')
+    const [stepDate, setStepDate] = useState(step.completedDate ?? new Date().toISOString().split('T')[0])
+    const { can } = usePermissions()
+    const canManage = can('manage_employees')
+    const updateStep = useUpdateOnboardingStep()
 
     const docCount = stepDocs.length
     const hasOverdue = step.status === 'overdue'
+
+    const openEdit = () => {
+        // Seed dialog state from the current step every time it opens so a
+        // mid-flight update from auto-advance doesn't leave the form stale.
+        setStepStatus(step.status === 'overdue' ? 'in_progress' : step.status)
+        setStepNotes(step.notes ?? '')
+        setStepDate(step.completedDate ?? new Date().toISOString().split('T')[0])
+        setEditOpen(true)
+    }
+
+    const saveEdit = () => {
+        if (!checklistId) return
+        updateStep.mutate(
+            {
+                checklistId,
+                stepId: step.id,
+                data: {
+                    status: stepStatus,
+                    notes: stepNotes || undefined,
+                    completedDate: stepStatus === 'completed'
+                        ? (stepDate || new Date().toISOString().split('T')[0])
+                        : undefined,
+                },
+            },
+            {
+                onSuccess: () => {
+                    toast.success('Step updated', `"${step.title}" marked as ${ONBOARDING_STATUS_LABEL[stepStatus]}.`)
+                    setEditOpen(false)
+                },
+                onError: () => toast.error('Update failed', 'Could not update the step.'),
+            },
+        )
+    }
 
     return (
         <div className={cn(
@@ -650,7 +704,7 @@ function StepDocPanel({
                 className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-black/5 transition-colors text-left"
             >
                 <div className={cn(
-                    'h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0',
+                    'size-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0',
                     step.status === 'completed' ? 'bg-success text-success-foreground' :
                         hasOverdue ? 'bg-destructive text-destructive-foreground' :
                             'bg-muted text-muted-foreground',
@@ -661,7 +715,11 @@ function StepDocPanel({
                     <p className="text-sm font-medium truncate">{step.title}</p>
                     <p className="text-[11px] text-muted-foreground truncate">
                         {step.owner ?? 'Unassigned'}
-                        {step.dueDate ? ` · Due ${formatDate(step.dueDate)}` : ''}
+                        {step.status === 'completed' && step.completedDate
+                            ? ` · Completed ${formatDate(step.completedDate)}`
+                            : step.dueDate
+                                ? ` · Due ${formatDate(step.dueDate)}`
+                                : ''}
                     </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -671,7 +729,22 @@ function StepDocPanel({
                         </span>
                     )}
                     <StatusPill status={step.status} />
-                    {expanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                    {canManage && checklistId && (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className={cn(
+                                'size-7 p-0',
+                                step.status === 'completed' ? 'text-success hover:text-success' : 'text-muted-foreground hover:text-success',
+                            )}
+                            aria-label={step.status === 'completed' ? 'Step completed - change status' : 'Mark step complete or change status'}
+                            title={step.status === 'completed' ? 'Step completed - click to change' : 'Mark complete or change status'}
+                            onClick={(e) => { e.stopPropagation(); openEdit() }}
+                        >
+                            <CheckCircle2 className="size-3.5" />
+                        </Button>
+                    )}
+                    {expanded ? <ChevronUp className="size-3.5 text-muted-foreground" /> : <ChevronDown className="size-3.5 text-muted-foreground" />}
                 </div>
             </button>
 
@@ -682,7 +755,7 @@ function StepDocPanel({
                         <div className="space-y-1.5">
                             {stepDocs.map((d) => (
                                 <div key={d.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-card border">
-                                    <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                    <FileText className="size-3.5 text-blue-500 shrink-0" />
                                     <div className="flex-1 min-w-0">
                                         <p className="text-xs font-semibold text-foreground truncate">{d.docType}</p>
                                         <p className="text-[10px] text-muted-foreground truncate">
@@ -703,7 +776,7 @@ function StepDocPanel({
                         <p className="text-xs text-muted-foreground py-1">No documents uploaded for this step yet.</p>
                     )}
 
-                    <Button size="sm" variant="outline" leftIcon={<Upload className="h-3 w-3" />} onClick={() => setUploadOpen(true)}>
+                    <Button size="sm" variant="outline" leftIcon={<Upload className="size-3" />} onClick={() => setUploadOpen(true)}>
                         Upload document
                     </Button>
                 </div>
@@ -716,6 +789,43 @@ function StepDocPanel({
                 stepId={step.id}
                 contextNote={`For step: ${step.title}`}
             />
+
+            {/* Update-status dialog - mirrors the StepsTab edit dialog so HR
+                has the same controls (status, completion date, notes) without
+                tab-switching. */}
+            <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                <DialogContent className="max-w-xl">
+                    <DialogHeader><DialogTitle>Update step</DialogTitle></DialogHeader>
+                    <DialogBody className="space-y-4">
+                        <p className="text-sm font-semibold">{step.title}</p>
+                        <div className="space-y-1">
+                            <Label className="text-xs font-medium text-muted-foreground">Status</Label>
+                            <Select value={stepStatus} onValueChange={(v) => setStepStatus(v as OnboardingStepStatus)}>
+                                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="pending">{ONBOARDING_STATUS_LABEL.pending}</SelectItem>
+                                    <SelectItem value="in_progress">{ONBOARDING_STATUS_LABEL.in_progress}</SelectItem>
+                                    <SelectItem value="completed">{ONBOARDING_STATUS_LABEL.completed}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {stepStatus === 'completed' && (
+                            <div className="space-y-1">
+                                <Label className="text-xs font-medium text-muted-foreground">Completion date</Label>
+                                <DatePicker value={stepDate} onChange={setStepDate} className="h-9" />
+                            </div>
+                        )}
+                        <div className="space-y-1">
+                            <Label className="text-xs font-medium text-muted-foreground">Notes (optional)</Label>
+                            <Textarea value={stepNotes} onChange={(e) => setStepNotes(e.target.value)} rows={3} placeholder="Add any relevant notes…" />
+                        </div>
+                    </DialogBody>
+                    <DialogFooter>
+                        <DialogClose asChild><Button variant="outline" size="sm">Cancel</Button></DialogClose>
+                        <Button size="sm" loading={updateStep.isPending} onClick={saveEdit}>Save</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
@@ -756,7 +866,7 @@ function DocumentsTab({ checklist }: { checklist: OnboardingChecklist }) {
                     <h3 className="text-sm font-semibold">Documents by onboarding step</h3>
                     <p className="text-[11px] text-muted-foreground mt-0.5">Upload documents against each step. Expiry dates are required for time-sensitive documents.</p>
                 </div>
-                <Button asChild size="sm" variant="outline" leftIcon={<Plus className="h-3.5 w-3.5" />}>
+                <Button asChild size="sm" variant="outline" leftIcon={<Plus className="size-3.5" />}>
                     <Link to={`/documents?employeeId=${checklist.employeeId}`}>All documents</Link>
                 </Button>
             </div>
@@ -764,7 +874,7 @@ function DocumentsTab({ checklist }: { checklist: OnboardingChecklist }) {
             {/* Per-step panels */}
             {checklist.steps.length === 0 ? (
                 <Card className="flex flex-col items-center justify-center py-10 text-center gap-2">
-                    <FileText className="h-8 w-8 text-muted-foreground" />
+                    <FileText className="size-8 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">No onboarding steps yet. Add steps first, then upload documents against each one.</p>
                 </Card>
             ) : (
@@ -775,6 +885,7 @@ function DocumentsTab({ checklist }: { checklist: OnboardingChecklist }) {
                             step={step}
                             stepDocs={docsByStep.get(step.id) ?? []}
                             employeeId={checklist.employeeId}
+                            checklistId={checklist.id}
                         />
                     ))}
                 </div>
@@ -787,7 +898,7 @@ function DocumentsTab({ checklist }: { checklist: OnboardingChecklist }) {
                     <div className="space-y-1.5">
                         {unattachedDocs.map((d) => (
                             <div key={d.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg border bg-card">
-                                <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <FileText className="size-3.5 text-muted-foreground shrink-0" />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-xs font-medium truncate">{d.docType}</p>
                                     <p className="text-[10px] text-muted-foreground truncate">
@@ -822,14 +933,14 @@ function ActivityTab({ employeeId }: { employeeId: string }) {
             <h3 className="text-sm font-semibold mb-3">Recent activity</h3>
             {logs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
-                    <Activity className="h-8 w-8 text-muted-foreground" />
+                    <Activity className="size-8 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">No activity recorded yet.</p>
                 </div>
             ) : (
                 <div className="space-y-2">
                     {logs.map((log) => (
                         <div key={log.id} className="flex items-start gap-3 p-2.5 rounded-lg border bg-card">
-                            <Activity className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <Activity className="size-4 text-muted-foreground shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <span className="text-sm font-medium">{log.actorName ?? 'System'}</span>

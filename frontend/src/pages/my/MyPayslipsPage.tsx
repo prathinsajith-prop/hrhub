@@ -40,29 +40,29 @@ export function MyPayslipsContent() {
     return (
         <div>
             <div className="flex justify-end mb-4">
-                <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                     {t('common.refresh')}
                 </Button>
             </div>
 
             {!employeeId ? (
                 <div className="flex flex-col items-center gap-3 py-16 text-center">
-                    <Receipt className="h-10 w-10 text-muted-foreground" />
+                    <Receipt className="size-10 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">{t('myPayslips.notLinked')}</p>
                 </div>
             ) : isLoading ? (
-                <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+                <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={`skeleton-${i}`} className="h-16 rounded-xl" />)}</div>
             ) : payslips.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-16 text-center">
-                    <Receipt className="h-10 w-10 text-muted-foreground" />
+                    <Receipt className="size-10 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">{t('myPayslips.noneYet')}</p>
                 </div>
             ) : (
                 <div className="space-y-2">
                     {payslips.map(p => (
                         <div key={p.id} className="flex items-center gap-4 rounded-xl border px-4 py-3.5 bg-card">
-                            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                <Receipt className="h-5 w-5 text-primary" />
+                            <div className="size-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                <Receipt className="size-5 text-primary" />
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold">{months[p.month - 1]} {p.year}</p>
@@ -85,7 +85,7 @@ export function MyPayslipsContent() {
                                         onClick={() => download.mutate(p.id)}
                                         disabled={download.isPending}
                                     >
-                                        <Download className="h-3.5 w-3.5" />
+                                        <Download className="size-3.5" />
                                         <span className="hidden sm:inline">PDF</span>
                                     </Button>
                                 )}

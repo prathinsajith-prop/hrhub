@@ -12,7 +12,7 @@ function preferLocalStorage() {
   try { return localStorage.getItem(KEEP_SIGNED_IN_KEY) === 'true' } catch { return false }
 }
 
-// Dynamic storage proxy — re-evaluates the preference on every operation so that a
+// Dynamic storage proxy - re-evaluates the preference on every operation so that a
 // login with a different keepSignedIn value takes effect immediately without a page reload.
 // On setItem it also evicts the other storage to prevent stale persisted state.
 const dynamicStorage = {
@@ -98,7 +98,7 @@ export const useAuthStore = create<AuthState>()(
           if (!res.ok) return false
           const { data } = await res.json()
           // Also sync employeeId onto the user object if the refresh response
-          // returns it (backend now includes it) — fixes stale persisted state.
+          // returns it (backend now includes it) - fixes stale persisted state.
           const currentUser = get().user
           if (currentUser && !currentUser.employeeId && data.employeeId) {
             set({ accessToken: data.accessToken, refreshToken: data.refreshToken, user: { ...currentUser, employeeId: data.employeeId } })

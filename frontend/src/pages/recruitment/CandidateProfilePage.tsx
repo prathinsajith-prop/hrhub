@@ -70,7 +70,7 @@ function ScoreBadge({ score }: { score: number }) {
     const color = score >= 80 ? 'text-success' : score >= 60 ? 'text-warning' : 'text-muted-foreground'
     return (
         <div className="flex items-center gap-1.5">
-            <Star className={cn('h-3.5 w-3.5 fill-current', color)} />
+            <Star className={cn('size-3.5 fill-current', color)} />
             <span className={cn('font-semibold tabular-nums', color)}>{score}</span>
             <span className="text-muted-foreground text-xs">/ 100</span>
         </div>
@@ -164,10 +164,10 @@ export function CandidateProfilePage() {
         return (
             <PageWrapper>
                 <div className="flex flex-col items-center gap-4 py-24">
-                    <XCircle className="h-12 w-12 text-muted-foreground/40" />
+                    <XCircle className="size-12 text-muted-foreground/40" />
                     <p className="text-sm text-muted-foreground">{t('recruitment.candidateProfile.notFound')}</p>
                     <Button variant="outline" size="sm" onClick={() => navigate('/recruitment')}>
-                        <ArrowLeft className="h-4 w-4 mr-2" /> {t('recruitment.candidateProfile.backToRecruitment')}
+                        <ArrowLeft className="size-4 mr-2" /> {t('recruitment.candidateProfile.backToRecruitment')}
                     </Button>
                 </div>
             </PageWrapper>
@@ -275,14 +275,14 @@ export function CandidateProfilePage() {
             {/* ── Page header ── */}
             <div className="flex items-start justify-between gap-4 mb-6">
                 <div className="flex items-center gap-4">
-                    <Avatar className="h-12 w-12 border border-border shrink-0">
+                    <Avatar className="size-12 border border-border shrink-0">
                         {candidate.avatar && <img src={candidate.avatar} alt={candidate.name} className="object-cover" />}
                         <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
                             {getInitials(candidate.name)}
                         </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                        <h1 className="text-xl font-bold truncate">{candidate.name}</h1>
+                        <h1 className="text-xl font-semibold truncate">{candidate.name}</h1>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             {candidate.jobTitle && (
                                 <span className="text-sm text-muted-foreground">{candidate.jobTitle}</span>
@@ -299,10 +299,10 @@ export function CandidateProfilePage() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-                        <Edit2 className="h-3.5 w-3.5 mr-1.5" /> {t('common.edit')}
+                        <Edit2 className="size-3.5 mr-1.5" /> {t('common.edit')}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => navigate('/recruitment')}>
-                        <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> {t('common.back')}
+                        <ArrowLeft className="size-3.5 mr-1.5" /> {t('common.back')}
                     </Button>
                 </div>
             </div>
@@ -319,18 +319,18 @@ export function CandidateProfilePage() {
                         </CardHeader>
                         <CardContent className="space-y-3 pt-0">
                             <div className="flex items-start gap-2 text-sm">
-                                <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                                <Mail className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
                                 <CopyableEmail email={candidate.email} className="text-muted-foreground truncate" />
                             </div>
                             {candidate.phone && (
                                 <div className="flex items-center gap-2 text-sm">
-                                    <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <Phone className="size-3.5 text-muted-foreground shrink-0" />
                                     <CopyablePhone phone={candidate.phone} className="text-muted-foreground" />
                                 </div>
                             )}
                             {candidate.nationality && (
                                 <div className="flex items-center gap-2 text-sm">
-                                    <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <Globe className="size-3.5 text-muted-foreground shrink-0" />
                                     <div className="flex items-center gap-1.5">
                                         <FlagImg iso2={resolveCountryIso(candidate.nationality) ?? ''} size={14} className="shrink-0" />
                                         <span className="text-muted-foreground">{candidate.nationality}</span>
@@ -339,7 +339,7 @@ export function CandidateProfilePage() {
                             )}
                             {candidate.experience !== undefined && (
                                 <div className="flex items-center gap-2 text-sm">
-                                    <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <Briefcase className="size-3.5 text-muted-foreground shrink-0" />
                                     <span className="text-muted-foreground">{t('recruitment.candidateProfile.experience', { count: candidate.experience })}</span>
                                 </div>
                             )}
@@ -382,13 +382,13 @@ export function CandidateProfilePage() {
                                     rel="noreferrer"
                                     className="flex items-center gap-2 text-sm text-primary hover:underline"
                                 >
-                                    <FileText className="h-3.5 w-3.5 shrink-0" />
+                                    <FileText className="size-3.5 shrink-0" />
                                     {t('recruitment.candidateProfile.viewDownloadResume')}
                                 </a>
                             ) : (
                                 <p className="text-sm text-muted-foreground">{t('recruitment.candidateProfile.noResume')}</p>
                             )}
-                            <label>
+                            <Label>
                                 <span className="sr-only">{t('recruitment.candidateProfile.uploadResumeLabel')}</span>
                                 <input
                                     id="resume-upload"
@@ -416,10 +416,10 @@ export function CandidateProfilePage() {
                                     onClick={() => document.getElementById('resume-upload')?.click()}
                                     type="button"
                                 >
-                                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                                    <Upload className="size-3.5 mr-1.5" />
                                     {uploadResume.isPending ? t('recruitment.candidateProfile.uploading') : effectiveResumeUrl ? t('recruitment.candidateProfile.replaceResume') : t('recruitment.candidateProfile.uploadResume')}
                                 </Button>
-                            </label>
+                            </Label>
                         </CardContent>
                     </Card>
 
@@ -428,12 +428,12 @@ export function CandidateProfilePage() {
                         <div className="space-y-2">
                             {candidate.stage === 'pre_boarding' ? (
                                 <Button className="w-full" onClick={() => setConvertOpen(true)} disabled={convertToEmployee.isPending}>
-                                    <UserPlus className="h-4 w-4 mr-2" />
+                                    <UserPlus className="size-4 mr-2" />
                                     {t('recruitment.candidateProfile.convertToEmployee')}
                                 </Button>
                             ) : !isLastStage ? (
                                 <Button className="w-full" onClick={handleAdvanceStage} disabled={updateStage.isPending}>
-                                    <ChevronRight className="h-4 w-4 mr-1.5" />
+                                    <ChevronRight className="size-4 mr-1.5" />
                                     {t('recruitment.candidateProfile.moveTo', { stage: nextStageEntry?.label ?? '' })}
                                 </Button>
                             ) : null}
@@ -464,8 +464,8 @@ export function CandidateProfilePage() {
                             <Card className={cn('border', isRejected ? 'border-destructive/30 bg-destructive/5' : 'border-primary/20 bg-primary/5')}>
                                 <CardContent className="p-4">
                                     <div className="flex items-center gap-3">
-                                        <div className={cn('h-9 w-9 rounded-full flex items-center justify-center shrink-0 text-white', stageColor.dotClass)}>
-                                            {isRejected ? <XCircle className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+                                        <div className={cn('size-9 rounded-full flex items-center justify-center shrink-0 text-white', stageColor.dotClass)}>
+                                            {isRejected ? <XCircle className="size-4" /> : <Clock className="size-4" />}
                                         </div>
                                         <div>
                                             <p className="font-semibold text-sm">
@@ -485,10 +485,10 @@ export function CandidateProfilePage() {
 
                             {/* Quick stats */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                <StatCard label={t('recruitment.candidateProfile.overview.statScore')} value={candidate.score !== undefined ? `${candidate.score}/100` : '—'} icon={<Star className="h-4 w-4 text-warning" />} />
-                                <StatCard label={t('recruitment.candidateProfile.overview.statExperience')} value={candidate.experience !== undefined ? `${candidate.experience} yr${candidate.experience !== 1 ? 's' : ''}` : '—'} icon={<Briefcase className="h-4 w-4 text-primary" />} />
-                                <StatCard label={t('recruitment.candidateProfile.overview.statExpected')} value={candidate.expectedSalary ? formatCurrency(candidate.expectedSalary) : '—'} icon={<DollarSign className="h-4 w-4 text-success" />} />
-                                <StatCard label={t('recruitment.candidateProfile.overview.statApplied')} value={candidate.appliedDate ? formatDate(candidate.appliedDate) : '—'} icon={<CheckCircle2 className="h-4 w-4 text-muted-foreground" />} />
+                                <StatCard label={t('recruitment.candidateProfile.overview.statScore')} value={candidate.score !== undefined ? `${candidate.score}/100` : '—'} icon={<Star className="size-4 text-warning" />} />
+                                <StatCard label={t('recruitment.candidateProfile.overview.statExperience')} value={candidate.experience !== undefined ? `${candidate.experience} yr${candidate.experience !== 1 ? 's' : ''}` : '—'} icon={<Briefcase className="size-4 text-primary" />} />
+                                <StatCard label={t('recruitment.candidateProfile.overview.statExpected')} value={candidate.expectedSalary ? formatCurrency(candidate.expectedSalary) : '—'} icon={<DollarSign className="size-4 text-success" />} />
+                                <StatCard label={t('recruitment.candidateProfile.overview.statApplied')} value={candidate.appliedDate ? formatDate(candidate.appliedDate) : '—'} icon={<CheckCircle2 className="size-4 text-muted-foreground" />} />
                             </div>
 
                             {/* Latest note preview */}
@@ -526,7 +526,7 @@ export function CandidateProfilePage() {
                                             <div key={stage.id} className="flex gap-4">
                                                 <div className="flex flex-col items-center">
                                                     <div className={cn(
-                                                        'h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2 text-white',
+                                                        'size-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2 text-white',
                                                         done || current ? cfg.dotClass : 'bg-card border-border text-muted-foreground',
                                                     )}>
                                                         {done ? '✓' : i + 1}
@@ -555,7 +555,7 @@ export function CandidateProfilePage() {
                                     })}
                                     {isRejected && (
                                         <div className="flex gap-4">
-                                            <div className={cn('h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2 text-white', rejectedColor.dotClass)}>
+                                            <div className={cn('size-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2 text-white', rejectedColor.dotClass)}>
                                                 ✕
                                             </div>
                                             <div className="flex-1 pb-2">
@@ -587,7 +587,7 @@ export function CandidateProfilePage() {
                                             onClick={handleAppendNote}
                                             disabled={updateApplication.isPending || !newNote.trim()}
                                         >
-                                            <Save className="h-3.5 w-3.5 mr-1.5" />
+                                            <Save className="size-3.5 mr-1.5" />
                                             {updateApplication.isPending ? t('recruitment.candidateProfile.notes.saving') : t('recruitment.candidateProfile.notes.addNoteButton')}
                                         </Button>
                                     </div>
@@ -712,7 +712,7 @@ export function CandidateProfilePage() {
                             loading={convertToEmployee.isPending || updateApplication.isPending}
                             disabled={!convertForm.note.trim()}
                         >
-                            <UserPlus className="h-4 w-4 mr-2" /> {t('recruitment.candidateProfile.convertDialog.createEmployee')}
+                            <UserPlus className="size-4 mr-2" /> {t('recruitment.candidateProfile.convertDialog.createEmployee')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

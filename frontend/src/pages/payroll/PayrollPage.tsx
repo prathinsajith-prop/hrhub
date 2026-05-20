@@ -5,6 +5,7 @@ import {
   CreditCard, CheckCircle2, Clock, Play, FileDown, Send,
   TrendingUp, RefreshCcw, Plus, Calculator, DollarSign,
   CircleDot, ArrowRight, Banknote, Users, BarChart3,
+  Sparkles, Trash2, Lock, AlertTriangle, AlertCircle,
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -33,13 +34,16 @@ import { formatCurrency, cn } from '@/lib/utils'
 import {
   usePayrollRuns, useRunPayroll, useSubmitWps,
   useCreatePayrollRun, useUpdatePayrollRun, usePayslips, useGratuityCalc,
+  useAdjustments, useCreateAdjustment, useDeleteAdjustment, useSyncAdjustments,
+  useDeletePayrollRun, useReadiness,
 } from '@/hooks/usePayroll'
+import { useEmployees } from '@/hooks/useEmployees'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/store/authStore'
 import { useLoans, LOAN_STATUS_STYLE, type EmployeeLoan } from '@/hooks/useLoans'
 import { labelFor } from '@/lib/enums'
 import { Link } from 'react-router-dom'
-import type { PayrollRun, Payslip } from '@/types'
+import type { PayrollRun, Payslip, PayrollAdjustment, PayrollAdjustmentCategory } from '@/types'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -94,13 +98,13 @@ function WorkflowBar({ status }: { status: string }) {
           <div key={step} className={cn('flex items-center', !isLast && 'flex-1 min-w-0')}>
             <div className="flex flex-col items-center gap-1 shrink-0">
               <div className={cn(
-                'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all text-xs font-semibold',
+                'size-7 rounded-full flex items-center justify-center border-2 transition-all text-xs font-semibold',
                 done  ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' :
                 active ? 'border-primary bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/20' :
                          'border-border bg-background text-muted-foreground',
               )}>
-                {done   ? <CheckCircle2 className="h-3.5 w-3.5" /> :
-                 active ? <CircleDot className="h-3.5 w-3.5" /> :
+                {done   ? <CheckCircle2 className="size-3.5" /> :
+                 active ? <CircleDot className="size-3.5" /> :
                           <span>{i + 1}</span>}
               </div>
               <span className={cn(
@@ -214,7 +218,7 @@ function PayrollCharts({ runs }: { runs: PayrollRun[] }) {
               {statusData.map((d, i) => (
                 <div key={d.name} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1.5">
-                    <div className="h-2.5 w-2.5 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    <div className="size-2.5 rounded-full" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
                     <span className="text-muted-foreground">{d.name}</span>
                   </div>
                   <span className="font-semibold">{d.value}</span>
@@ -266,6 +270,131 @@ function PayslipRow({ label, value, sub, bold, red, green }: {
   )
 }
 
+/**
+ * Grouped payslip breakdown: Earnings → Additions → Deductions → Net.
+ *
+ *   - Earnings: contractual base + the three allowance lines that are part of
+ *     the monthly gross.
+ *   - Additions: overtime + commission. These are the variable positive
+ *     adjustments; rendered in green and as a subtotal so the user can tell
+ *     at a glance how much extra was added on top of the base.
+ *   - Deductions: leave-based deductions + any future manual deductions —
+ *     today this is the single `deductions` total from the schema.
+ *   - Net: the formula explainer line + the bold total at the bottom.
+ *
+ * Lines stay visible at 0 only for the section subtotals (so the user can
+ * confirm "no overtime this month" rather than wondering if the row is hidden).
+ * Per-line items hide at 0 to keep things tight.
+ */
+function PayslipBreakdown({ ps }: { ps: Payslip }) {
+  const basic = Number(ps.basicSalary)
+  const housing = Number(ps.housingAllowance)
+  const transport = Number(ps.transportAllowance)
+  const other = Number(ps.otherAllowances)
+  const overtime = Number(ps.overtime)
+  const commission = Number(ps.commission ?? 0)
+  const additions = overtime + commission
+  const gross = Number(ps.grossSalary)
+  const deductions = Number(ps.deductions)
+  const net = Number(ps.netSalary)
+  // Itemised leave-driven deduction lines. `lopAmount + sickAmount` should
+  // equal `deductions` for any payslip generated after migration 0037; for
+  // older payslips the itemised columns default to 0 and we surface the
+  // entire amount on a fallback "Other deductions" row so net math still
+  // matches what was paid.
+  const lopDays = Number(ps.unpaidLeaveDays ?? 0)
+  const lopAmount = Number(ps.unpaidLeaveDeduction ?? 0)
+  const sickDays = Number(ps.sickHalfPayDays ?? 0)
+  const sickAmount = Number(ps.sickHalfPayDeduction ?? 0)
+  const loanAmount = Number(ps.loanDeduction ?? 0)
+  const otherAmount = Number(ps.otherDeduction ?? 0)
+  const itemisedDeductions = lopAmount + sickAmount + loanAmount + otherAmount
+  // Residual catches deductions that pre-date the per-category columns (older
+  // payslips before the adjustments engine landed). For new payslips the
+  // categories sum to `deductions` exactly and residual is 0.
+  const residualDeductions = Math.max(0, deductions - itemisedDeductions)
+  // Earnings subtotal: gross minus any additions already folded in. Keeps
+  // the math transparent: Earnings + Additions − Deductions = Net.
+  const earningsSubtotal = Math.max(0, gross - additions)
+
+  return (
+    <div className="space-y-4 pt-3">
+      <div className="rounded-lg border bg-card/60">
+        <p className="px-3 pt-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          Earnings
+        </p>
+        <div className="px-3 pb-1">
+          {basic > 0 && <PayslipRow label="Basic Salary" value={basic} sub />}
+          {housing > 0 && <PayslipRow label="Housing Allowance" value={housing} sub />}
+          {transport > 0 && <PayslipRow label="Transport Allowance" value={transport} sub />}
+          {other > 0 && <PayslipRow label="Other Allowances" value={other} sub />}
+          <PayslipRow label="Earnings subtotal" value={earningsSubtotal} bold />
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-emerald-50/40 dark:bg-emerald-950/15">
+        <p className="px-3 pt-3 text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+          Additions
+        </p>
+        <div className="px-3 pb-1">
+          <PayslipRow label="Overtime" value={overtime} sub green={overtime > 0} />
+          <PayslipRow label="Commission / Bonus" value={commission} sub green={commission > 0} />
+          <PayslipRow label="Additions subtotal" value={additions} bold green={additions > 0} />
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-rose-50/40 dark:bg-rose-950/15">
+        <p className="px-3 pt-3 text-[10px] font-bold uppercase tracking-widest text-rose-700 dark:text-rose-300">
+          Deductions
+        </p>
+        <div className="px-3 pb-1">
+          {lopAmount > 0 && (
+            <PayslipRow
+              label={`Loss of pay (${lopDays} day${lopDays === 1 ? '' : 's'} unpaid leave)`}
+              value={lopAmount}
+              sub
+              red
+            />
+          )}
+          {sickAmount > 0 && (
+            <PayslipRow
+              label={`Sick leave half-pay (${sickDays} day${sickDays === 1 ? '' : 's'} after first 15)`}
+              value={sickAmount}
+              sub
+              red
+            />
+          )}
+          {loanAmount > 0 && (
+            <PayslipRow label="Loan repayment" value={loanAmount} sub red />
+          )}
+          {otherAmount > 0 && (
+            <PayslipRow label="Other manual deductions" value={otherAmount} sub red />
+          )}
+          {residualDeductions > 0 && (
+            <PayslipRow label="Uncategorised (pre-migration)" value={residualDeductions} sub red />
+          )}
+          {deductions === 0 && (
+            <PayslipRow label="No deductions this month" value={0} sub />
+          )}
+          <PayslipRow label="Deductions subtotal" value={deductions} bold red={deductions > 0} />
+        </div>
+      </div>
+
+      <div className="rounded-lg border-2 border-emerald-500/40 bg-emerald-50 px-4 py-3 dark:bg-emerald-950/30">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold">Net Salary</span>
+          <span className="text-lg font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">
+            {formatCurrency(net)}
+          </span>
+        </div>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Earnings {formatCurrency(earningsSubtotal)} + Additions {formatCurrency(additions)} − Deductions {formatCurrency(deductions)} = Net {formatCurrency(net)}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: boolean; onClose: () => void }) {
   const { accessToken } = useAuthStore()
   const { data, isLoading } = usePayslips(run?.id ?? '')
@@ -273,6 +402,9 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
   const [expanded, setExpanded] = useState<string | null>(null)
   const rawData = data
   const payslips = useMemo(() => (rawData ?? []) as Payslip[], [rawData])
+  // Draft preview vs. real payslips: rows are marked `isDraft` server-side.
+  // Used to hide download + show a banner explaining "Process the run to lock in".
+  const isDraftPreview = run?.status === 'draft'
 
   const chartData = useMemo(() => payslips.slice(0, 10).map(ps => ({
     name: (ps.employeeName ?? '').split(' ')[0],
@@ -294,13 +426,15 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <SheetContent className="w-full sm:max-w-lg flex flex-col p-0">
+      {/* Full-screen on every viewport - the previous sm:max-w-lg cap felt
+          cramped for the side-by-side payslip breakdown. */}
+      <SheetContent className="w-screen sm:max-w-none flex flex-col p-0">
         <SheetHeader className="px-6 py-5 border-b shrink-0">
-          <SheetTitle>{run ? `${periodLabel(run.month, run.year)} — Payslips` : 'Payslips'}</SheetTitle>
+          <SheetTitle>{run ? `${periodLabel(run.month, run.year)} - Payslips` : 'Payslips'}</SheetTitle>
           {run && (
             <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1"><Users className="h-3 w-3" />{run.totalEmployees ?? 0} employees</span>
-              <span className="flex items-center gap-1 text-emerald-600 font-medium"><Banknote className="h-3 w-3" />Net {formatCurrency(Number(run.totalNet ?? 0))}</span>
+              <span className="flex items-center gap-1"><Users className="size-3" />{run.totalEmployees ?? 0} employees</span>
+              <span className="flex items-center gap-1 text-emerald-600 font-medium"><Banknote className="size-3" />Net {formatCurrency(Number(run.totalNet ?? 0))}</span>
             </div>
           )}
         </SheetHeader>
@@ -317,16 +451,34 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
             </div>
           ) : payslips.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-24 text-center">
-              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-muted-foreground/50" />
+              <div className="size-12 rounded-xl bg-muted flex items-center justify-center">
+                <DollarSign className="size-5 text-muted-foreground/50" />
               </div>
               <div>
                 <p className="text-sm font-medium">No payslips yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Process the payroll run to generate payslips.</p>
+                <p className="text-xs text-muted-foreground mt-1">No payable employees for this period.</p>
               </div>
             </div>
           ) : (
             <>
+              {/* Draft preview banner — explains why downloads aren't available
+                  yet and what the user needs to do to lock the numbers in. */}
+              {isDraftPreview && (
+                <div className="border-b border-amber-200/70 bg-amber-50/70 px-5 py-3 text-xs dark:border-amber-900/40 dark:bg-amber-950/30">
+                  <div className="flex items-start gap-2">
+                    <Clock className="mt-0.5 size-3.5 shrink-0 text-amber-700 dark:text-amber-300" />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-amber-900 dark:text-amber-200">
+                        Draft preview — numbers are live, payslips not generated yet
+                      </p>
+                      <p className="mt-0.5 text-amber-800/80 dark:text-amber-300/80">
+                        Process the run to finalise totals and unlock PDF download.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Mini bar chart inside sheet */}
               {chartData.length > 0 && (
                 <div className="px-5 py-4 bg-muted/20">
@@ -358,40 +510,48 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
                           Gross {formatCurrency(Number(ps.grossSalary))} · Net <span className="text-emerald-600 font-semibold">{formatCurrency(Number(ps.netSalary))}</span>
                         </p>
                       </div>
-                      <ArrowRight className={cn('h-3.5 w-3.5 text-muted-foreground shrink-0 ml-3 transition-transform', isExp && 'rotate-90')} />
+                      <ArrowRight className={cn('size-3.5 text-muted-foreground shrink-0 ml-3 transition-transform', isExp && 'rotate-90')} />
                     </button>
 
                     {isExp && (
-                      <div className="px-5 pb-4 bg-muted/10 border-t">
-                        <div className="divide-y divide-border/60">
-                          <div className="py-1">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pt-2 pb-1">Earnings</p>
-                            {Number(ps.basicSalary) > 0 && <PayslipRow label="Basic Salary" value={Number(ps.basicSalary)} sub />}
-                            {Number(ps.housingAllowance) > 0 && <PayslipRow label="Housing Allowance" value={Number(ps.housingAllowance)} sub />}
-                            {Number(ps.transportAllowance) > 0 && <PayslipRow label="Transport Allowance" value={Number(ps.transportAllowance)} sub />}
-                            {Number(ps.otherAllowances) > 0 && <PayslipRow label="Other Allowances" value={Number(ps.otherAllowances)} sub />}
-                            {Number(ps.overtime) > 0 && <PayslipRow label="Overtime" value={Number(ps.overtime)} sub />}
-                            <PayslipRow label="Total Gross" value={Number(ps.grossSalary)} bold />
+                      <div className="bg-muted/10 border-t">
+                        {/* Sticky identifier strip - keeps the employee name +
+                            number visible while the user scrolls a long breakdown.
+                            Previously the name was only in the collapsed row above. */}
+                        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-border/60 bg-background/95 px-5 py-2.5 backdrop-blur">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold">{ps.employeeName}</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {ps.employeeNo ? `#${ps.employeeNo}` : ''}
+                              {ps.department ? ` · ${ps.department}` : ''}
+                              {typeof ps.daysWorked === 'number' ? ` · ${ps.daysWorked} days worked` : ''}
+                            </p>
                           </div>
-                          {Number(ps.deductions) > 0 && (
-                            <div className="py-1">
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pt-2 pb-1">Deductions</p>
-                              <PayslipRow label="Total Deductions" value={Number(ps.deductions)} red sub />
-                            </div>
+                          {ps.isDraft ? (
+                            <span
+                              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-amber-300/70 bg-amber-50 px-2 text-[11px] font-medium text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200"
+                              title="Process the run to enable download"
+                            >
+                              <Clock className="size-3" />
+                              Preview only
+                            </span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              loading={downloading === ps.id}
+                              leftIcon={<FileDown className="size-3" />}
+                              onClick={() => handleDownload(ps)}
+                            >
+                              Download PDF
+                            </Button>
                           )}
-                          <div className="flex justify-between items-center py-3">
-                            <span className="text-sm font-bold">Net Salary</span>
-                            <span className="text-base font-bold text-emerald-600">{formatCurrency(Number(ps.netSalary))}</span>
-                          </div>
                         </div>
-                        <Button
-                          size="sm" variant="outline" className="w-full mt-2 h-8 text-xs"
-                          loading={downloading === ps.id}
-                          leftIcon={<FileDown className="h-3 w-3" />}
-                          onClick={() => handleDownload(ps)}
-                        >
-                          Download PDF Payslip
-                        </Button>
+
+                        <div className="px-5 pb-5">
+                          <PayslipBreakdown ps={ps} />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -434,11 +594,11 @@ function GratuityCalculator() {
     <div className="space-y-5 max-w-xl">
       <div>
         <h3 className="text-sm font-semibold flex items-center gap-2">
-          <Calculator className="h-4 w-4 text-muted-foreground" />
+          <Calculator className="size-4 text-muted-foreground" />
           End-of-Service Gratuity Calculator
         </h3>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Based on UAE Labour Law — 21 days/year for first 5 years, 30 days/year thereafter.
+          Based on UAE Labour Law - 21 days/year for first 5 years, 30 days/year thereafter.
         </p>
       </div>
 
@@ -490,7 +650,7 @@ function GratuityCalculator() {
         </div>
       ) : (
         <div className="rounded-xl border border-dashed p-6 text-center">
-          <Calculator className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+          <Calculator className="size-8 text-muted-foreground/30 mx-auto mb-2" />
           <p className="text-sm text-muted-foreground">Enter basic salary and years of service to calculate.</p>
           <p className="text-xs text-muted-foreground/60 mt-1">Minimum 1 year service required for gratuity.</p>
         </div>
@@ -538,21 +698,21 @@ function RunActions({ run, canManage }: { run: PayrollRun; canManage: boolean })
     <div className="flex items-center gap-1 justify-end">
       {['approved', 'wps_submitted', 'paid'].includes(run.status) && (
         <Button size="sm" variant="ghost" loading={sifLoading}
-          leftIcon={<FileDown className="h-3 w-3" />} className="h-7 text-xs"
+          leftIcon={<FileDown className="size-3" />} className="h-7 text-xs"
           onClick={handleSif}>
           SIF
         </Button>
       )}
       {run.status === 'approved' && canManage && (
         <Button size="sm" variant="ghost" loading={submitWps.isPending}
-          leftIcon={<Send className="h-3 w-3" />} className="h-7 text-xs"
+          leftIcon={<Send className="size-3" />} className="h-7 text-xs"
           onClick={handleSubmitWps}>
           Submit WPS
         </Button>
       )}
       {run.status === 'wps_submitted' && canManage && (
         <Button size="sm" variant="ghost" loading={markPaid.isPending}
-          leftIcon={<CheckCircle2 className="h-3 w-3 text-emerald-600" />}
+          leftIcon={<CheckCircle2 className="size-3 text-emerald-600" />}
           className="h-7 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
           onClick={handleMarkPaid}>
           Mark Paid
@@ -569,7 +729,7 @@ function firstAvailableMonth(runs: PayrollRun[], maxMonth: number): number {
   return Array.from({ length: maxMonth }, (_, i) => i + 1).find(m => !taken.has(m)) ?? 1
 }
 
-// ─── Loans tab — organisation-wide loan visibility for payroll managers ───────
+// ─── Loans tab - organisation-wide loan visibility for payroll managers ───────
 
 function LoansSection() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'completed'>('all')
@@ -723,6 +883,356 @@ function LoansSection() {
   )
 }
 
+// ─── Adjustments section ──────────────────────────────────────────────────────
+//
+// Ledger of per-month additions (overtime, commission, bonus) and deductions
+// (salary advance, manual) that runPayroll consumes. Leave-driven (LOP /
+// sick-half-pay) and loan-installment rows are imported automatically by the
+// Sync button. See backend/src/modules/payroll/adjustments.service.ts.
+
+const ADJUSTMENT_PICKABLE_CATEGORIES: { value: PayrollAdjustmentCategory; label: string; kind: 'addition' | 'deduction' }[] = [
+  { value: 'overtime', label: 'Overtime', kind: 'addition' },
+  { value: 'commission', label: 'Commission', kind: 'addition' },
+  { value: 'bonus', label: 'Bonus', kind: 'addition' },
+  { value: 'salary_advance', label: 'Salary advance', kind: 'deduction' },
+  { value: 'manual', label: 'Manual deduction', kind: 'deduction' },
+]
+
+const CATEGORY_LABELS: Record<PayrollAdjustmentCategory, string> = {
+  overtime: 'Overtime',
+  commission: 'Commission',
+  bonus: 'Bonus',
+  loan_repayment: 'Loan repayment',
+  salary_advance: 'Salary advance',
+  unpaid_leave: 'Loss of pay',
+  sick_half_pay: 'Sick half-pay',
+  manual: 'Manual deduction',
+}
+
+function AdjustmentsSection() {
+  const currentYear = new Date().getFullYear()
+  const [year, setYear] = useState(() => currentYear)
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1)
+  const [addOpen, setAddOpen] = useState(false)
+
+  const { data, isLoading } = useAdjustments(year, month)
+  // Stable identity for the array so useMemo doesn't re-compute every render.
+  const adjustments = useMemo(() => data?.data ?? [], [data])
+  const locked = data?.locked ?? false
+
+  const sync = useSyncAdjustments()
+  const del = useDeleteAdjustment(year, month)
+
+  const additions = useMemo(() => adjustments.filter((a) => a.kind === 'addition'), [adjustments])
+  const deductions = useMemo(() => adjustments.filter((a) => a.kind === 'deduction'), [adjustments])
+  const totalAdditions = useMemo(() => additions.reduce((sum, a) => sum + Number(a.amount), 0), [additions])
+  const totalDeductions = useMemo(() => deductions.reduce((sum, a) => sum + Number(a.amount), 0), [deductions])
+
+  const handleSync = () => {
+    sync.mutate({ year, month }, {
+      onSuccess: (res) => {
+        toast.success('Sync complete', `${res.leaveRows} leave + ${res.loanRows} loan rows refreshed.`)
+      },
+    })
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Period picker + actions */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle className="text-sm font-semibold">Payroll adjustments - {MONTH_NAMES[month - 1]} {year}</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Itemised additions and deductions. Leave & loan rows are imported by the Sync button; everything else is HR-entered.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+                <SelectTrigger className="h-9 w-[100px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[currentYear - 1, currentYear].map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
+                <SelectTrigger className="h-9 w-[130px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MONTH_NAMES.map((name, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSync}
+                disabled={locked || sync.isPending}
+                loading={sync.isPending}
+              >
+                <Sparkles className="size-3.5" />
+                Auto-sync leave & loans
+              </Button>
+              <Button size="sm" onClick={() => setAddOpen(true)} disabled={locked}>
+                <Plus className="size-3.5" />
+                Add adjustment
+              </Button>
+            </div>
+          </div>
+          {locked && (
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-200">
+              <Lock className="size-3.5" />
+              Payroll for this period has been processed - adjustments are locked.
+            </div>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <KpiCardCompact
+              label="Total additions"
+              value={formatCurrency(totalAdditions)}
+              icon={TrendingUp}
+              color="green"
+            />
+            <KpiCardCompact
+              label="Total deductions"
+              value={formatCurrency(totalDeductions)}
+              icon={DollarSign}
+              color="red"
+            />
+          </div>
+
+          {/* Additions table */}
+          <AdjustmentsTable
+            title="Additions"
+            tone="emerald"
+            rows={additions}
+            isLoading={isLoading}
+            emptyMsg="No additions for this month yet."
+            locked={locked}
+            onDelete={(id) => del.mutate(id)}
+          />
+
+          {/* Deductions table */}
+          <AdjustmentsTable
+            title="Deductions"
+            tone="rose"
+            rows={deductions}
+            isLoading={isLoading}
+            emptyMsg="No deductions for this month yet. Use Auto-sync to import leave & loan deductions."
+            locked={locked}
+            onDelete={(id) => del.mutate(id)}
+          />
+        </CardContent>
+      </Card>
+
+      <AddAdjustmentDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        year={year}
+        month={month}
+      />
+    </div>
+  )
+}
+
+function AdjustmentsTable({
+  title, tone, rows, isLoading, emptyMsg, locked, onDelete,
+}: {
+  title: string
+  tone: 'emerald' | 'rose'
+  rows: PayrollAdjustment[]
+  isLoading: boolean
+  emptyMsg: string
+  locked: boolean
+  onDelete: (id: string) => void
+}) {
+  const accent =
+    tone === 'emerald'
+      ? 'border-emerald-200/60 bg-emerald-50/30 dark:border-emerald-900/40 dark:bg-emerald-950/15'
+      : 'border-rose-200/60 bg-rose-50/30 dark:border-rose-900/40 dark:bg-rose-950/15'
+  const labelColor = tone === 'emerald' ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'
+
+  return (
+    <div className={cn('rounded-lg border', accent)}>
+      <div className={cn('px-3 py-2 border-b text-[10px] font-bold uppercase tracking-widest', labelColor)}>
+        {title}
+        <span className="ms-1 font-normal text-muted-foreground normal-case tracking-normal">({rows.length})</span>
+      </div>
+      {isLoading ? (
+        <div className="space-y-1 p-3">
+          {Array.from({ length: 2 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-10 w-full" />)}
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="px-3 py-6 text-center text-xs text-muted-foreground">{emptyMsg}</p>
+      ) : (
+        <ul className="divide-y">
+          {rows.map((row) => (
+            <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">
+                  {row.firstName} {row.lastName}
+                  <span className="ms-1.5 text-[11px] text-muted-foreground">{row.employeeNo ?? ''}</span>
+                </p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <Badge variant="outline" className="text-[10px]">
+                    {CATEGORY_LABELS[row.category]}
+                  </Badge>
+                  {row.source !== 'manual' && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      auto · {row.source.replace('_engine', '')}
+                    </Badge>
+                  )}
+                  {row.notes && <span className="truncate">— {row.notes}</span>}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={cn('text-sm font-bold tabular-nums', tone === 'emerald' ? 'text-emerald-700' : 'text-rose-700')}>
+                  {tone === 'rose' && '-'}{formatCurrency(Number(row.amount))}
+                </span>
+                {row.source === 'manual' && !locked && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-7 text-muted-foreground hover:text-rose-600"
+                    onClick={() => onDelete(row.id)}
+                    aria-label="Delete adjustment"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function AddAdjustmentDialog({
+  open, onOpenChange, year, month,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  year: number
+  month: number
+}) {
+  const [employeeId, setEmployeeId] = useState('')
+  const [category, setCategory] = useState<PayrollAdjustmentCategory>('overtime')
+  const [amount, setAmount] = useState<number | ''>('' as const)
+  const [notes, setNotes] = useState('')
+
+  const { data: empList } = useEmployees({ limit: 200 })
+  const employees = empList?.data ?? []
+  const create = useCreateAdjustment()
+
+  const reset = () => {
+    setEmployeeId('')
+    setCategory('overtime')
+    setAmount('' as const)
+    setNotes('')
+  }
+
+  const handleSubmit = () => {
+    if (!employeeId || !amount || Number(amount) <= 0) return
+    create.mutate(
+      { employeeId, periodYear: year, periodMonth: month, category, amount: Number(amount), notes: notes || null },
+      {
+        onSuccess: () => {
+          toast.success('Adjustment added')
+          reset()
+          onOpenChange(false)
+        },
+      },
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!create.isPending) { onOpenChange(v); if (!v) reset() } }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>New adjustment - {MONTH_NAMES[month - 1]} {year}</DialogTitle>
+          <DialogDescription>
+            Add an addition or deduction line that will be applied when payroll runs for this period.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 pt-1">
+          <div className="space-y-1.5">
+            <Label>Employee</Label>
+            <Select value={employeeId} onValueChange={setEmployeeId}>
+              <SelectTrigger><SelectValue placeholder="Pick an employee" /></SelectTrigger>
+              <SelectContent>
+                {employees.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.firstName} {e.lastName} {e.employeeNo ? `(${e.employeeNo})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Category</Label>
+            <Select value={category} onValueChange={(v) => setCategory(v as PayrollAdjustmentCategory)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ADJUSTMENT_PICKABLE_CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                    <span className="ms-1.5 text-[10px] text-muted-foreground">
+                      ({c.kind})
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Amount (AED)</Label>
+            <NumericInput
+              value={amount === '' ? '' : String(amount)}
+              onChange={(e) => {
+                const raw = e.target.value
+                setAmount(raw === '' ? '' : Number(raw))
+              }}
+              placeholder="0.00"
+              maxDecimals={2}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Notes (optional)</Label>
+            <input
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Q2 sales commission"
+            />
+          </div>
+
+          <Separator />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => { onOpenChange(false); reset() }} disabled={create.isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              loading={create.isPending}
+              disabled={!employeeId || !amount || Number(amount) <= 0}
+            >
+              Save adjustment
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export function PayrollPage() {
@@ -759,6 +1269,10 @@ export function PayrollPage() {
   }, [createYear, currentYear, payrollRuns, prevYearRuns])
 
   const draftRun = payrollRuns.find(r => r.status === 'draft')
+  // Readiness checklist for the draft (returns null for non-draft, gated by hook)
+  const { data: readiness } = useReadiness(draftRun?.id)
+  const deleteDraft = useDeletePayrollRun()
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const latestPaidRun = payrollRuns.find(r => r.status === 'paid' || r.status === 'wps_submitted')
   const ytdNet = payrollRuns
     .filter(r => r.status === 'paid' || r.status === 'wps_submitted')
@@ -847,6 +1361,17 @@ export function PayrollPage() {
     })
   }
 
+  const handleDeleteDraft = () => {
+    if (!draftRun) return
+    deleteDraft.mutate(draftRun.id, {
+      onSuccess: () => {
+        toast.success('Draft deleted', `${draftLabel} payroll draft removed.`)
+        setDeleteConfirmOpen(false)
+      },
+      onError: () => setDeleteConfirmOpen(false),
+    })
+  }
+
   return (
     <PageWrapper>
       <PageHeader
@@ -855,12 +1380,12 @@ export function PayrollPage() {
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm"
-              leftIcon={<RefreshCcw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />}
+              leftIcon={<RefreshCcw className={cn('size-3.5', isFetching && 'animate-spin')} />}
               onClick={() => refetch()} disabled={isFetching}>
               Refresh
             </Button>
             {canManagePayroll && (
-              <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}
+              <Button size="sm" leftIcon={<Plus className="size-3.5" />}
                 onClick={() => setCreateOpen(true)} disabled={!!draftRun}>
                 New Payroll Run
               </Button>
@@ -879,14 +1404,14 @@ export function PayrollPage() {
 
       {/* Draft run action banner */}
       {draftRun && !isLoading && (
-        <Card className="border-l-4 border-l-amber-400 border border-amber-200 bg-gradient-to-r from-amber-50/70 to-background overflow-hidden">
+        <Card className="border border-amber-200 bg-gradient-to-r from-amber-50/70 to-background overflow-hidden">
           <CardContent className="p-5">
 
             {/* Row 1: identity + action */}
             <div className="flex items-start justify-between gap-4 mb-5">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
-                  <Banknote className="h-4.5 w-4.5 text-amber-600" />
+                <div className="size-9 rounded-lg bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
+                  <Banknote className="size-4.5 text-amber-600" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -894,16 +1419,61 @@ export function PayrollPage() {
                     <Badge variant="warning" className="text-[10px]">Draft</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    Ready to process — review employee records before running
+                    Ready to process - review employee records before running
                   </p>
                 </div>
               </div>
               {canManagePayroll && (
-                <Button leftIcon={<Play className="h-4 w-4" />} onClick={() => setRunConfirmOpen(true)} className="shrink-0">
-                  Process Payroll
-                </Button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<Trash2 className="size-3.5" />}
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/40"
+                  >
+                    Delete
+                  </Button>
+                  <Button
+                    leftIcon={<Play className="size-4" />}
+                    onClick={() => setRunConfirmOpen(true)}
+                    // Server-side validation runs anyway; this prevents the
+                    // obvious "no payable employees / no basic salary" mistakes
+                    // so HR sees the checklist banner before they click.
+                    disabled={readiness ? !readiness.canProcess : false}
+                    title={readiness && !readiness.canProcess ? 'Resolve blockers before processing' : undefined}
+                  >
+                    Process Payroll
+                  </Button>
+                </div>
               )}
             </div>
+
+            {/* Row 1.5: readiness checklist — only renders when there's at
+                least one finding. Blockers (rose) gate the Process button;
+                warnings (amber) are informational. */}
+            {readiness && (readiness.blockers.length > 0 || readiness.warnings.length > 0) && (
+              <div className="mb-5 space-y-2">
+                {readiness.blockers.map((msg, i) => (
+                  <div
+                    key={`b-${i}`}
+                    className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200"
+                  >
+                    <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                    <span>{msg}</span>
+                  </div>
+                ))}
+                {readiness.warnings.map((msg, i) => (
+                  <div
+                    key={`w-${i}`}
+                    className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
+                  >
+                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                    <span>{msg}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Row 2: stepper */}
             <WorkflowBar status={draftRun.status} />
@@ -911,7 +1481,7 @@ export function PayrollPage() {
             {/* Row 3: stats */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 mt-5 pt-4 border-t border-amber-100 w-full">
               <div className="flex items-center gap-2 px-5 first:pl-0 border-r border-border">
-                <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Users className="size-4 text-muted-foreground shrink-0" />
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-none mb-0.5">Employees</p>
                   <p className="text-sm font-semibold">{draftRun.totalEmployees ?? 0}</p>
@@ -939,24 +1509,28 @@ export function PayrollPage() {
       <Tabs defaultValue="overview">
         <TabsList className="bg-muted/60">
           <TabsTrigger value="overview" className="gap-1.5 text-sm">
-            <TrendingUp className="h-3.5 w-3.5" />
+            <TrendingUp className="size-3.5" />
             Overview
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5 text-sm">
-            <BarChart3 className="h-3.5 w-3.5" />
+            <BarChart3 className="size-3.5" />
             History
           </TabsTrigger>
+          <TabsTrigger value="adjustments" className="gap-1.5 text-sm">
+            <Sparkles className="size-3.5" />
+            Adjustments
+          </TabsTrigger>
           <TabsTrigger value="loans" className="gap-1.5 text-sm">
-            <DollarSign className="h-3.5 w-3.5" />
+            <DollarSign className="size-3.5" />
             Loans
           </TabsTrigger>
           <TabsTrigger value="tools" className="gap-1.5 text-sm">
-            <Calculator className="h-3.5 w-3.5" />
+            <Calculator className="size-3.5" />
             Gratuity Calculator
           </TabsTrigger>
         </TabsList>
 
-        {/* Overview tab — charts */}
+        {/* Overview tab - charts */}
         <TabsContent value="overview" className="mt-4">
           {isLoading ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -969,7 +1543,7 @@ export function PayrollPage() {
             </div>
           ) : payrollRuns.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <BarChart3 className="h-10 w-10 text-muted-foreground/30" />
+              <BarChart3 className="size-10 text-muted-foreground/30" />
               <p className="text-sm font-medium text-muted-foreground">No payroll data yet</p>
               <p className="text-xs text-muted-foreground/70">Create and process a payroll run to see charts here.</p>
             </div>
@@ -981,7 +1555,7 @@ export function PayrollPage() {
         <TabsContent value="history" className="mt-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Payroll Runs — {currentYear}</CardTitle>
+              <CardTitle className="text-sm font-semibold">Payroll Runs - {currentYear}</CardTitle>
               <p className="text-xs text-muted-foreground">Click any row to view individual payslips.</p>
             </CardHeader>
             <CardContent className="p-0">
@@ -995,6 +1569,10 @@ export function PayrollPage() {
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="adjustments" className="mt-4">
+          <AdjustmentsSection />
         </TabsContent>
 
         <TabsContent value="loans" className="mt-4">
@@ -1098,6 +1676,22 @@ export function PayrollPage() {
         cancelLabel="Cancel"
         onConfirm={handleRunPayroll}
         variant="warning"
+      />
+
+      {/* Delete-draft confirmation. Only fired for draft runs (the button is
+          hidden otherwise) and the server enforces the same rule — this dialog
+          is for the obvious "I clicked the wrong month" recovery flow. */}
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={(o) => { if (!deleteDraft.isPending) setDeleteConfirmOpen(o) }}
+        title={`Delete ${draftLabel} draft?`}
+        description={draftRun
+          ? `This removes the draft payroll run for ${draftLabel}. Manual adjustments (overtime, bonuses) you entered for this period stay — they'll apply when you create a new run for the same period.`
+          : 'No draft run to delete.'}
+        confirmLabel={deleteDraft.isPending ? 'Deleting…' : 'Delete draft'}
+        cancelLabel="Cancel"
+        onConfirm={handleDeleteDraft}
+        variant="destructive"
       />
     </PageWrapper>
   )

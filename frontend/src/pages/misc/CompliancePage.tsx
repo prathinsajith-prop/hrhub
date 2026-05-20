@@ -19,9 +19,9 @@ const CHECK_ICONS: Record<string, React.FC<{ className?: string }>> = {
 }
 
 function statusIcon(status: 'pass' | 'warning' | 'fail') {
-    if (status === 'pass') return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-    if (status === 'warning') return <AlertTriangle className="h-4 w-4 text-amber-500" />
-    return <XCircle className="h-4 w-4 text-red-500" />
+    if (status === 'pass') return <CheckCircle2 className="size-4 text-emerald-500" />
+    if (status === 'warning') return <AlertTriangle className="size-4 text-amber-500" />
+    return <XCircle className="size-4 text-red-500" />
 }
 
 function CheckDetailCounts({ label, counts }: { label: string; counts?: Record<string, number> }) {
@@ -114,7 +114,7 @@ function ComplianceCheckCard({ check, onClick }: { check: ComplianceCheck; onCli
                         check.status === 'warning' ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' :
                             'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
                 )}>
-                    <Icon className="h-4 w-4" />
+                    <Icon className="size-4" />
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
@@ -126,7 +126,7 @@ function ComplianceCheckCard({ check, onClick }: { check: ComplianceCheck; onCli
                                 check.score >= 98 ? 'text-emerald-600' : check.score >= 80 ? 'text-amber-600' : 'text-red-600'
                             )}>{check.score}%</span>
                             {isClickable && (
-                                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                <ArrowRight className="size-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
                             )}
                         </div>
                     </div>
@@ -159,7 +159,7 @@ export function CompliancePage() {
                 title={t('compliance.title')}
                 description={t('compliance.description')}
                 actions={
-                    <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                    <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                         Refresh
                     </Button>
                 }
@@ -205,7 +205,7 @@ export function CompliancePage() {
                         <Skeleton className="h-8 w-16" />
                     ) : failingChecks.length === 0 ? (
                         <div className="flex items-center gap-2">
-                            <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                            <CheckCircle2 className="size-6 text-emerald-500" />
                             <span className="text-sm font-medium text-emerald-700">All checks passed</span>
                         </div>
                     ) : (

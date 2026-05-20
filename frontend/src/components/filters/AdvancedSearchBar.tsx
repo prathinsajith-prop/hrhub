@@ -1,5 +1,5 @@
 /**
- * AdvancedSearchBar — single search input with a Filters popover that exposes
+ * AdvancedSearchBar - single search input with a Filters popover that exposes
  * every available filter, applied chips, history, and a clear-all action.
  *
  * Usage (controlled):
@@ -78,7 +78,7 @@ export function AdvancedSearchBar({
         <div className={cn('space-y-2', className)}>
             <div className="flex items-center gap-2">
                 <div className="relative flex-1">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
                     <Input
                         value={search.searchInput}
                         onChange={(e) => search.setSearchInput(e.target.value)}
@@ -93,7 +93,7 @@ export function AdvancedSearchBar({
                             aria-label="Clear search"
                             className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         >
-                            <X className="h-3.5 w-3.5" />
+                            <X className="size-3.5" />
                         </button>
                     )}
                 </div>
@@ -101,10 +101,10 @@ export function AdvancedSearchBar({
                 <Popover open={open} onOpenChange={setOpen}>
                     <PopoverTrigger asChild>
                         <Button variant="outline" size="sm" className="h-9 gap-1.5 relative">
-                            <SlidersHorizontal className="h-3.5 w-3.5" />
+                            <SlidersHorizontal className="size-3.5" />
                             Filters
                             {search.appliedCount > 0 && (
-                                <span className="ml-0.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[10px] font-semibold bg-primary text-primary-foreground">
+                                <span className="ml-0.5 inline-flex items-center justify-center min-size-5 px-1.5 rounded-full text-[10px] font-semibold bg-primary text-primary-foreground">
                                     {search.appliedCount}
                                 </span>
                             )}
@@ -142,10 +142,10 @@ export function AdvancedSearchBar({
                                     type="button"
                                     onClick={() => setShowHistory(true)}
                                     className={cn('px-2 py-1 rounded text-xs font-medium inline-flex items-center gap-1', showHistory ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground')}
-                                ><History className="h-3 w-3" />History {search.history.length > 0 && `(${search.history.length})`}</button>
+                                ><History className="size-3" />History {search.history.length > 0 && `(${search.history.length})`}</button>
                             </div>
                             <button type="button" onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close">
-                                <X className="h-3.5 w-3.5" />
+                                <X className="size-3.5" />
                             </button>
                         </div>
 
@@ -166,7 +166,7 @@ export function AdvancedSearchBar({
                                                     <p className="text-[10px] text-muted-foreground">{new Date(h.timestamp).toLocaleString()}</p>
                                                 </button>
                                                 <button type="button" onClick={() => search.deleteHistoryItem(h.id)} aria-label="Remove" className="text-muted-foreground hover:text-destructive">
-                                                    <X className="h-3.5 w-3.5" />
+                                                    <X className="size-3.5" />
                                                 </button>
                                             </li>
                                         ))}
@@ -175,7 +175,7 @@ export function AdvancedSearchBar({
                                 {search.history.length > 0 && (
                                     <div className="px-3 py-2 border-t flex justify-end">
                                         <Button variant="ghost" size="sm" onClick={search.clearHistory} className="h-7 text-xs gap-1">
-                                            <Trash2 className="h-3 w-3" />Clear history
+                                            <Trash2 className="size-3" />Clear history
                                         </Button>
                                     </div>
                                 )}
@@ -194,7 +194,7 @@ export function AdvancedSearchBar({
                                                     onClick={() => { search.setAppliedFilters(q.filter); apply() }}
                                                     className="text-[11px] px-2 h-6 rounded-full border hover:border-primary hover:text-primary"
                                                 >
-                                                    {q.icon ? <q.icon className="h-3 w-3 inline mr-1" /> : null}{q.label}
+                                                    {q.icon ? <q.icon className="size-3 inline mr-1" /> : null}{q.label}
                                                 </button>
                                             ))}
                                         </div>
@@ -216,7 +216,7 @@ export function AdvancedSearchBar({
                                                 return (
                                                     <div className="space-y-2">
                                                         <div className="flex items-center gap-1.5">
-                                                            {cfg.icon ? <cfg.icon className="h-3.5 w-3.5 text-muted-foreground" /> : null}
+                                                            {cfg.icon ? <cfg.icon className="size-3.5 text-muted-foreground" /> : null}
                                                             <p className="text-sm font-semibold">{cfg.label}</p>
                                                         </div>
                                                         <FilterPrimitive
@@ -241,7 +241,7 @@ export function AdvancedSearchBar({
                                                             className="w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-muted/50 text-left"
                                                         >
                                                             <span className="flex items-center gap-2 min-w-0">
-                                                                {f.icon ? <f.icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : null}
+                                                                {f.icon ? <f.icon className="size-3.5 text-muted-foreground shrink-0" /> : null}
                                                                 <span className="text-sm truncate">{f.label}</span>
                                                             </span>
                                                             {value ? (
@@ -261,7 +261,7 @@ export function AdvancedSearchBar({
                                 <div className="flex items-center justify-between px-3 py-2 border-t bg-muted/30">
                                     <Button variant="ghost" size="sm" onClick={reset} className="h-7 text-xs">Clear all</Button>
                                     <Button size="sm" onClick={apply} className="h-7 text-xs gap-1">
-                                        <Check className="h-3 w-3" />Apply
+                                        <Check className="size-3" />Apply
                                     </Button>
                                 </div>
                             </div>
@@ -284,7 +284,7 @@ export function AdvancedSearchBar({
                                 <span className="font-semibold">{label}:</span>
                                 <span className="truncate max-w-[180px]">{value}</span>
                                 <button type="button" onClick={() => removeOne(name)} aria-label={`Remove ${label}`}>
-                                    <X className="h-3 w-3" />
+                                    <X className="size-3" />
                                 </button>
                             </Badge>
                         )

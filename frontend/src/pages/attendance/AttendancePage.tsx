@@ -428,7 +428,7 @@ export function AttendancePage() {
                         className="h-7 px-2 text-xs gap-1.5"
                         onClick={() => handleEdit(row.original)}
                     >
-                        <Edit2 className="h-3 w-3" />
+                        <Edit2 className="size-3" />
                         Edit
                     </Button>
                 </div>
@@ -449,7 +449,7 @@ export function AttendancePage() {
                         <Button
                             variant="outline"
                             size="sm"
-                            leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />}
+                            leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />}
                             onClick={() => refetch()}
                             disabled={isFetching}
                         >
@@ -463,7 +463,7 @@ export function AttendancePage() {
                 }
             />
 
-            {/* KPI strip — 8 tiles */}
+            {/* KPI strip - 8 tiles */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
                 <KpiCardCompact
                     label={STATUS_LABEL.present}
@@ -621,12 +621,12 @@ export function AttendancePage() {
                 </Card>
             )}
 
-            {/* External punch — HR only */}
+            {/* External punch - HR only */}
             {canManage && (
                 <Card>
                     <CardHeader className="pb-3">
                         <CardTitle className="text-sm flex items-center gap-1.5">
-                            <Zap className="h-3.5 w-3.5 text-amber-500" />
+                            <Zap className="size-3.5 text-amber-500" />
                             External Punch
                         </CardTitle>
                         <p className="text-xs text-muted-foreground">Manually record a punch-in or punch-out for an employee (biometric / device integration).</p>
@@ -683,7 +683,7 @@ export function AttendancePage() {
                                     )
                                 }}
                             >
-                                <Zap className="h-3.5 w-3.5 mr-1.5" />
+                                <Zap className="size-3.5 mr-1.5" />
                                 Record punch
                             </Button>
                         </div>

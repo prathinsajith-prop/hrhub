@@ -18,7 +18,7 @@ import { labelFor } from '@/lib/enums'
 import { Card, Section } from './_shared'
 import { useTranslation } from 'react-i18next'
 
-// ─── Profile Tab — company identity + regional settings ───────────────────────
+// ─── Profile Tab - company identity + regional settings ───────────────────────
 export function ProfileTab() {
     const { t } = useTranslation()
     const { tenant } = useAuthStore()
@@ -33,7 +33,7 @@ export function ProfileTab() {
     // Hydrate the form from server data when (and only when) the source row identity
     // changes. Tracked via a "previous" sentinel so we don't clobber in-progress
     // edits on every re-render. (React docs pattern: "Storing information from
-    // previous renders" — preferred over useEffect for sync.)
+    // previous renders" - preferred over useEffect for sync.)
     const companyId = company?.id
     const [prevCompanyId, setPrevCompanyId] = useState<string | undefined>(undefined)
     if (companyId !== undefined && companyId !== prevCompanyId) {
@@ -78,7 +78,7 @@ export function ProfileTab() {
             {/* Identity strip */}
             <Card>
                 <div className="flex items-center gap-4 pb-5 border-b">
-                    <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center text-primary-foreground text-base font-semibold shrink-0">
+                    <div className="size-12 rounded-xl bg-primary flex items-center justify-center text-primary-foreground text-base font-semibold shrink-0">
                         {(company?.name ?? tenant?.name ?? 'HR').slice(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -139,7 +139,7 @@ export function ProfileTab() {
             <Section icon={Globe} title={t('settingsDetail.company.regionalSettings')} description={t('settingsDetail.company.regionalSettingsDesc')}>
                 {regionalLoading ? (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {[1, 2, 3].map(n => <Skeleton key={n} className="h-10 w-full" />)}
+                        {[1, 2, 3].map(n => <Skeleton key={`skeleton-${n}`} className="h-10 w-full" />)}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -163,7 +163,7 @@ export function ProfileTab() {
                 <Button
                     onClick={handleSave}
                     loading={updateCompany.isPending || updateRegional.isPending}
-                    leftIcon={saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+                    leftIcon={saved ? <CheckCircle2 className="size-4" /> : <Save className="size-4" />}
                     variant={saved ? 'success' : 'default'}
                 >
                     {saved ? t('settingsDetail.profile.saved') : t('settingsDetail.profile.saveChanges')}

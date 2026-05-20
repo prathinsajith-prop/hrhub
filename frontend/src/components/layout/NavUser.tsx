@@ -100,7 +100,7 @@ export function NavUser({
   }
 
   const myTenants = tenants ?? []
-  // Use role directly from auth store — always available without waiting for the tenants fetch
+  // Use role directly from auth store - always available without waiting for the tenants fetch
   const currentRole = authUser?.role
 
   return (
@@ -113,7 +113,7 @@ export function NavUser({
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-sidebar-accent/60 rounded-lg"
             >
-              <Avatar className="h-9 w-9 rounded-full ring-2 ring-primary/20">
+              <Avatar className="size-9 rounded-full ring-2 ring-primary/20">
                 <AvatarImage src={user.avatar} alt={user.name} />
                 <AvatarFallback className="rounded-full bg-primary text-primary-foreground text-xs font-bold">
                   {initials}
@@ -140,7 +140,7 @@ export function NavUser({
             {/* ── Identity card ─────────────────────────────────── */}
             <div className="px-5 pt-5 pb-4 bg-gradient-to-b from-muted/50 to-muted/20 border-b border-border shrink-0">
               <div className="flex items-start gap-3">
-                <Avatar className="h-12 w-12 rounded-full border-2 border-background shadow-sm shrink-0">
+                <Avatar className="size-12 rounded-full border-2 border-background shadow-sm shrink-0">
                   <AvatarImage src={user.avatar} alt={user.name} />
                   <AvatarFallback className="rounded-full bg-primary text-primary-foreground text-sm font-bold">
                     {initials}
@@ -162,7 +162,7 @@ export function NavUser({
                   {/* Row 2: Email */}
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</p>
 
-                  {/* Row 3: Company name — hover to switch (sub-menu opens automatically) */}
+                  {/* Row 3: Company name - hover to switch (sub-menu opens automatically) */}
                   {tenant && (
                     myTenants.length > 1 ? (
                       <DropdownMenuSub>
@@ -175,11 +175,11 @@ export function NavUser({
                           aria-label={t('organizations.switch')}
                           title={t('organizations.switch')}
                         >
-                          <Building2Icon className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                          <Building2Icon className="size-3.5 shrink-0 text-blue-600" />
                           <span className="text-xs font-bold text-foreground truncate flex-1 text-start">{tenant.name}</span>
                           {switchingId
-                            ? <Loader2Icon className="h-3 w-3 shrink-0 animate-spin text-blue-700" strokeWidth={2.5} />
-                            : <ChevronRightIcon className="h-3.5 w-3.5 shrink-0 text-blue-700" strokeWidth={2.5} data-rtl-flip />}
+                            ? <Loader2Icon className="size-3 shrink-0 animate-spin text-blue-700" strokeWidth={2.5} />
+                            : <ChevronRightIcon className="size-3.5 shrink-0 text-blue-700" strokeWidth={2.5} data-rtl-flip />}
                         </DropdownMenuSubTrigger>
                         <DropdownMenuPortal>
                           <DropdownMenuSubContent className="min-w-56 rounded-xl p-1.5 shadow-lg">
@@ -197,7 +197,7 @@ export function NavUser({
                                   )}
                                 >
                                   <div className={cn(
-                                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white text-xs font-bold',
+                                    'flex size-7 shrink-0 items-center justify-center rounded-md text-white text-xs font-bold',
                                     orgColor(org.tenantName ?? 'X'),
                                   )}>
                                     {(org.tenantName ?? '?')[0].toUpperCase()}
@@ -231,7 +231,7 @@ export function NavUser({
                       </DropdownMenuSub>
                     ) : (
                       <div className="mt-2 flex items-center gap-1.5 min-w-0">
-                        <Building2Icon className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                        <Building2Icon className="size-3.5 shrink-0 text-blue-600" />
                         <span className="text-xs font-bold text-foreground truncate flex-1">{tenant.name}</span>
                       </div>
                     )
@@ -242,7 +242,7 @@ export function NavUser({
 
             <div className="p-1.5 space-y-0.5 overflow-y-auto overscroll-contain min-h-0">
 
-              {/* ── My Account — single grouped section ───────── */}
+              {/* ── My Account - single grouped section ───────── */}
               <SectionLabel>{t('myAccount.title')}</SectionLabel>
               <DropdownMenuGroup>
                 <DropdownMenuItem onClick={() => navigate('/my/account')} className="gap-2.5 rounded-lg h-9 px-2.5 cursor-pointer font-medium">

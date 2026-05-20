@@ -199,7 +199,7 @@ export function LeaveSettingsTab() {
                                         )}
                                     >
                                         <span>{getDayShort(id)}</span>
-                                        {selected && <span className="h-1 w-1 rounded-full bg-rose-500" />}
+                                        {selected && <span className="size-1 rounded-full bg-rose-500" />}
                                     </button>
                                 )
                             })}
@@ -255,12 +255,12 @@ export function LeaveSettingsTab() {
             >
                 {policyDraft.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 text-center">
-                        <CalendarDays className="h-8 w-8 text-muted-foreground/20 mb-2" />
+                        <CalendarDays className="size-8 text-muted-foreground/20 mb-2" />
                         <p className="text-sm text-muted-foreground">{t('orgSettings.leave.noLeaveTypes')}</p>
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {/* Column headers — desktop only */}
+                        {/* Column headers - desktop only */}
                         <div className="hidden sm:grid sm:grid-cols-[1fr_100px_180px_90px_90px] gap-3 px-1 pb-1 border-b">
                             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t('orgSettings.leave.leaveTypeCol')}</span>
                             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-center">{t('orgSettings.leave.daysYearCol')}</span>
@@ -271,7 +271,7 @@ export function LeaveSettingsTab() {
                                 <TooltipProvider>
                                     <Tooltip>
                                         <TooltipTrigger>
-                                            <Info className="h-3 w-3 text-muted-foreground/60" />
+                                            <Info className="size-3 text-muted-foreground/60" />
                                         </TooltipTrigger>
                                         <TooltipContent>{t('orgSettings.leave.carryExpTooltip')}</TooltipContent>
                                     </Tooltip>
@@ -407,12 +407,12 @@ export function LeaveSettingsTab() {
                 action={
                     isRolloverLocked ? (
                         <Badge variant="destructive" className="gap-1.5">
-                            <LockKeyhole className="h-3 w-3" />
+                            <LockKeyhole className="size-3" />
                             {t('orgSettings.leave.lockedUntil', { date: settingsData?.rolloverEnabledFrom })}
                         </Badge>
                     ) : (
                         <Badge variant="secondary" className="gap-1.5 text-emerald-700 bg-emerald-50 border-emerald-200">
-                            <UnlockKeyhole className="h-3 w-3" />
+                            <UnlockKeyhole className="size-3" />
                             {settingsData?.rolloverEnabledFrom
                                 ? t('orgSettings.leave.unlockedSince', { date: settingsData.rolloverEnabledFrom })
                                 : t('orgSettings.leave.noGateSet')}
@@ -437,7 +437,7 @@ export function LeaveSettingsTab() {
                             )}
                         </div>
                         <p className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
-                            <CalendarDays className="h-3 w-3" />
+                            <CalendarDays className="size-3" />
                             {t('orgSettings.leave.rolloverTip')}
                         </p>
                     </div>
@@ -462,8 +462,8 @@ export function LeaveSettingsTab() {
                                                 className="shrink-0"
                                             >
                                                 {isRolloverLocked
-                                                    ? <LockKeyhole className="h-3.5 w-3.5 mr-1.5" />
-                                                    : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                                                    ? <LockKeyhole className="size-3.5 mr-1.5" />
+                                                    : <RotateCcw className="size-3.5 mr-1.5" />
                                                 }
                                                 {t('orgSettings.leave.runRollover')}
                                             </Button>
@@ -491,7 +491,7 @@ export function LeaveSettingsTab() {
                         onClick={handleSave}
                         loading={isSaving}
                         disabled={!dirty}
-                        leftIcon={saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+                        leftIcon={saved ? <CheckCircle2 className="size-4" /> : <Save className="size-4" />}
                         variant={saved ? 'success' : 'default'}
                     >
                         {saved ? t('orgSettings.leave.saved') : t('orgSettings.leave.saveChanges')}

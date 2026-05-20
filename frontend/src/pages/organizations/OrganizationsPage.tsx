@@ -41,10 +41,10 @@ export function OrganizationsPage() {
                 description={t('organizations.description')}
                 actions={
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
-                        <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setNewOrgOpen(true)}>
+                        <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={() => setNewOrgOpen(true)}>
                             {t('organizations.new')}
                         </Button>
                     </div>
@@ -77,10 +77,10 @@ export function OrganizationsPage() {
                                         className="flex items-start justify-between gap-3 rounded-lg border bg-card p-4 hover:border-primary/40 transition-colors"
                                     >
                                         <div className="flex items-start gap-3 min-w-0">
-                                            <div className="h-10 w-10 shrink-0 rounded-md bg-muted flex items-center justify-center overflow-hidden">
+                                            <div className="size-10 shrink-0 rounded-md bg-muted flex items-center justify-center overflow-hidden">
                                                 {m.logoUrl
-                                                    ? <img src={m.logoUrl} alt={m.tenantName} className="h-full w-full object-cover" />
-                                                    : <Building2 className="h-5 w-5 text-muted-foreground" />}
+                                                    ? <img src={m.logoUrl} alt={m.tenantName} className="size-full object-cover" />
+                                                    : <Building2 className="size-5 text-muted-foreground" />}
                                             </div>
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
@@ -95,14 +95,14 @@ export function OrganizationsPage() {
                                             </div>
                                         </div>
                                         {isActive ? (
-                                            <Button variant="ghost" size="sm" disabled leftIcon={<Check className="h-3.5 w-3.5" />}>
+                                            <Button variant="ghost" size="sm" disabled leftIcon={<Check className="size-3.5" />}>
                                                 {t('organizations.active')}
                                             </Button>
                                         ) : (
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                leftIcon={<ArrowRightLeft className="h-3.5 w-3.5" />}
+                                                leftIcon={<ArrowRightLeft className="size-3.5" />}
                                                 onClick={() => handleSwitch(m.tenantId, m.tenantName)}
                                                 disabled={switchMut.isPending}
                                             >

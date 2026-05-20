@@ -1,6 +1,6 @@
 /**
  * Unit tests for the frontend permissions helpers.
- * Pure logic — no React, no network.
+ * Pure logic - no React, no network.
  */
 import { describe, it, expect } from 'vitest'
 import {

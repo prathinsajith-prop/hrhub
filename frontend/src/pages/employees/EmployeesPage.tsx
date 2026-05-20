@@ -109,17 +109,17 @@ const ActionMenu = memo(function ActionMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={(e) => e.stopPropagation()}>
-          <MoreHorizontal className="h-4 w-4" />
+          <MoreHorizontal className="size-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52" onClick={e => e.stopPropagation()}>
         <DropdownMenuItem onClick={() => navigate(`/employees/${employee.id}`)}>
-          <Eye className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+          <Eye className="size-3.5 mr-2 text-muted-foreground" />
           View Profile
         </DropdownMenuItem>
         {canManage && (
           <DropdownMenuItem onClick={() => onEdit(employee)}>
-            <Edit2 className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+            <Edit2 className="size-3.5 mr-2 text-muted-foreground" />
             Edit Details
           </DropdownMenuItem>
         )}
@@ -130,14 +130,14 @@ const ActionMenu = memo(function ActionMenu({
             if (em) window.open(`mailto:${em}`, '_self')
           }}
         >
-          <Mail className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+          <Mail className="size-3.5 mr-2 text-muted-foreground" />
           Send Email
         </DropdownMenuItem>
         {canManage && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onInvite(employee)}>
-              <UserCheck className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+              <UserCheck className="size-3.5 mr-2 text-muted-foreground" />
               Manage Login Access
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -146,7 +146,7 @@ const ActionMenu = memo(function ActionMenu({
                 onClick={() => onStatusChange(employee, 'active')}
                 className="text-success focus:text-success focus:bg-success/10"
               >
-                <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
+                <CheckCircle2 className="size-3.5 mr-2" />
                 Activate
               </DropdownMenuItem>
             )}
@@ -155,7 +155,7 @@ const ActionMenu = memo(function ActionMenu({
                 onClick={() => onStatusChange(employee, 'suspended')}
                 className="text-amber-600 focus:text-amber-600 focus:bg-amber-50"
               >
-                <Ban className="h-3.5 w-3.5 mr-2" />
+                <Ban className="size-3.5 mr-2" />
                 Suspend
               </DropdownMenuItem>
             )}
@@ -164,7 +164,7 @@ const ActionMenu = memo(function ActionMenu({
                 onClick={() => onStatusChange(employee, 'terminated')}
                 className="text-destructive focus:text-destructive focus:bg-destructive/10"
               >
-                <UserX className="h-3.5 w-3.5 mr-2" />
+                <UserX className="size-3.5 mr-2" />
                 Terminate
               </DropdownMenuItem>
             )}
@@ -173,7 +173,7 @@ const ActionMenu = memo(function ActionMenu({
               onClick={() => onDelete(employee)}
               className="text-muted-foreground focus:text-destructive focus:bg-destructive/10"
             >
-              <Trash2 className="h-3.5 w-3.5 mr-2" />
+              <Trash2 className="size-3.5 mr-2" />
               Archive Record
             </DropdownMenuItem>
           </>
@@ -290,7 +290,7 @@ export function EmployeesPage() {
       header: 'Employee',
       cell: ({ row: { original: e } }) => (
         <div className="flex items-center gap-3 text-left">
-          <Avatar className="h-8 w-8 shrink-0">
+          <Avatar className="size-8 shrink-0">
             {e.avatarUrl && <AvatarImage src={e.avatarUrl} alt={e.fullName} />}
             <AvatarFallback className="text-[10px] font-semibold bg-primary text-primary-foreground">
               {getInitials(e.fullName)}
@@ -438,7 +438,7 @@ export function EmployeesPage() {
         description={t('employees.description')}
         actions={
           <>
-            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
               Refresh
             </Button>
             <ExportDropdown
@@ -446,7 +446,7 @@ export function EmployeesPage() {
               onExportPdf={() => exportEmployees({ format: 'pdf' }).catch(() => toast.error('Export failed', 'Could not download PDF.'))}
             />
             {canManage && (
-              <Button size="sm" leftIcon={<UserPlus className="h-3.5 w-3.5" />} onClick={() => setAddOpen(true)}>
+              <Button size="sm" leftIcon={<UserPlus className="size-3.5" />} onClick={() => setAddOpen(true)}>
                 Add Employee
               </Button>
             )}
@@ -504,7 +504,7 @@ export function EmployeesPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  leftIcon={<Download className="h-3.5 w-3.5" />}
+                  leftIcon={<Download className="size-3.5" />}
                   onClick={() => toast.success(`Exported ${selected.length} employees to CSV`)}
                 >
                   Export
@@ -512,7 +512,7 @@ export function EmployeesPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  leftIcon={<Mail className="h-3.5 w-3.5" />}
+                  leftIcon={<Mail className="size-3.5" />}
                   onClick={() => toast.info(`Email composed to ${selected.length} recipients`)}
                 >
                   Email
@@ -520,7 +520,7 @@ export function EmployeesPage() {
                 <Button
                   variant="destructive"
                   size="sm"
-                  leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                  leftIcon={<Trash2 className="size-3.5" />}
                   onClick={() => toast.warning(`${selected.length} employees queued for termination review`)}
                 >
                   Terminate

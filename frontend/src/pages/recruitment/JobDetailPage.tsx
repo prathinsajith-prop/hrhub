@@ -35,7 +35,7 @@ function CandidateRow({ c, stage, onView }: { c: Candidate; stage: RecruitmentSt
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4 rounded-lg hover:bg-muted/40 transition-colors group">
       <div className="flex items-center gap-3 flex-1 min-w-0">
-        <Avatar className="h-9 w-9 shrink-0 border border-border/60">
+        <Avatar className="size-9 shrink-0 border border-border/60">
           {c.avatar && <img src={c.avatar} alt={c.name} className="object-cover" />}
           <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
             {getInitials(c.name)}
@@ -63,7 +63,7 @@ function CandidateRow({ c, stage, onView }: { c: Candidate; stage: RecruitmentSt
         </Badge>
         {c.score > 0 && (
           <div className="flex items-center gap-0.5 text-[11px] text-amber-600 shrink-0">
-            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+            <Star className="size-3 fill-amber-400 text-amber-400" />
             <span className="font-medium">{c.score}</span>
           </div>
         )}
@@ -80,7 +80,7 @@ function CandidateRow({ c, stage, onView }: { c: Candidate; stage: RecruitmentSt
             onClick={e => e.stopPropagation()}
           >
             <Button size="icon-sm" variant="ghost" aria-label={t('recruitment.jobDetail.downloadResume')}>
-              <Download className="h-3.5 w-3.5" />
+              <Download className="size-3.5" />
             </Button>
           </a>
         )}
@@ -90,9 +90,9 @@ function CandidateRow({ c, stage, onView }: { c: Candidate; stage: RecruitmentSt
           aria-label={t('recruitment.jobDetail.viewCandidate')}
           onClick={() => onView(c.id)}
         >
-          <Eye className="h-3.5 w-3.5" />
+          <Eye className="size-3.5" />
         </Button>
-        <ChevronRight className="h-4 w-4 text-muted-foreground/40" />
+        <ChevronRight className="size-4 text-muted-foreground/40" />
       </div>
     </div>
   )
@@ -151,10 +151,10 @@ export function JobDetailPage() {
     return (
       <PageWrapper>
         <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <XCircle className="h-12 w-12 text-muted-foreground/30" />
+          <XCircle className="size-12 text-muted-foreground/30" />
           <p className="text-muted-foreground">{t('recruitment.jobDetail.jobNotFound')}</p>
           <Button variant="outline" onClick={() => navigate('/recruitment')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />{t('recruitment.candidateProfile.backToRecruitment')}
+            <ArrowLeft className="size-4 mr-2" />{t('recruitment.candidateProfile.backToRecruitment')}
           </Button>
         </div>
       </PageWrapper>
@@ -173,7 +173,7 @@ export function JobDetailPage() {
         onClick={() => navigate('/recruitment')}
         className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
-        <ArrowLeft className="h-4 w-4" />
+        <ArrowLeft className="size-4" />
         {t('recruitment.jobDetail.backToRecruitment')}
       </button>
 
@@ -183,7 +183,7 @@ export function JobDetailPage() {
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
-                  <h1 className="text-xl font-bold text-foreground leading-tight">{job.title}</h1>
+                  <h1 className="text-xl font-semibold text-foreground leading-tight">{job.title}</h1>
                   <Badge variant="outline" className={cn('text-xs capitalize', statusStyle)}>
                     {labelFor(job.status)}
                   </Badge>
@@ -191,18 +191,18 @@ export function JobDetailPage() {
                 <div className="flex items-center gap-4 flex-wrap text-sm text-muted-foreground">
                   {job.department && (
                     <span className="flex items-center gap-1.5">
-                      <Briefcase className="h-3.5 w-3.5" />
+                      <Briefcase className="size-3.5" />
                       {job.department}
                     </span>
                   )}
                   {job.location && (
                     <span className="flex items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5" />
+                      <MapPin className="size-3.5" />
                       {job.location}
                     </span>
                   )}
                   <span className="flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5" />
+                    <Clock className="size-3.5" />
                     {labelFor(job.type)}
                   </span>
                 </div>
@@ -210,7 +210,7 @@ export function JobDetailPage() {
               <Button
                 size="sm"
                 variant="outline"
-                leftIcon={<Edit2 className="h-3.5 w-3.5" />}
+                leftIcon={<Edit2 className="size-3.5" />}
                 onClick={() => setEditOpen(true)}
               >
                 {t('recruitment.jobDetail.editJob')}
@@ -277,7 +277,7 @@ export function JobDetailPage() {
                   <ul className="space-y-1.5">
                     {job.requirements.map((r, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-success mt-0.5 shrink-0" />
+                        <CheckCircle2 className="size-3.5 text-success mt-0.5 shrink-0" />
                         <span>{r}</span>
                       </li>
                     ))}
@@ -288,7 +288,7 @@ export function JobDetailPage() {
             {!job.description && (!job.requirements || job.requirements.length === 0) && (
               <Card>
                 <CardContent className="py-10 text-center">
-                  <FileText className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+                  <FileText className="size-8 text-muted-foreground/20 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">{t('recruitment.jobDetail.noDescription')}</p>
                   <Button size="sm" variant="outline" className="mt-3" onClick={() => setEditOpen(true)}>
                     {t('recruitment.jobDetail.addDetails')}
@@ -310,7 +310,7 @@ export function JobDetailPage() {
                   )}
                 </div>
                 <Button size="sm" variant="outline" onClick={() => navigate('/recruitment')}>
-                  <Users className="h-3.5 w-3.5 mr-1.5" />
+                  <Users className="size-3.5 mr-1.5" />
                   {t('recruitment.jobDetail.pipeline')}
                 </Button>
               </div>
@@ -353,20 +353,20 @@ export function JobDetailPage() {
 
               <CardContent className="p-0">
                 {appsLoading ? (
-                  <div className="px-4 py-4 space-y-2">
-                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 rounded-lg" />)}
+                  <div className="p-4 space-y-2">
+                    {[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-14 rounded-lg" />)}
                   </div>
                 ) : allCandidates.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                    <div className="h-12 w-12 rounded-xl bg-muted/60 border flex items-center justify-center mb-3">
-                      <Users className="h-6 w-6 text-muted-foreground/30" />
+                    <div className="size-12 rounded-xl bg-muted/60 border flex items-center justify-center mb-3">
+                      <Users className="size-6 text-muted-foreground/30" />
                     </div>
                     <p className="text-sm font-semibold">{t('recruitment.jobDetail.noCandidatesYet')}</p>
                     <p className="text-xs text-muted-foreground mt-1">{t('recruitment.jobDetail.candidatesWillAppear')}</p>
                   </div>
                 ) : candidates.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-                    <AlertCircle className="h-8 w-8 text-muted-foreground/20 mb-2" />
+                    <AlertCircle className="size-8 text-muted-foreground/20 mb-2" />
                     <p className="text-sm text-muted-foreground">{t('recruitment.jobDetail.noCandidatesInStage')}</p>
                     <button
                       type="button"
@@ -390,7 +390,7 @@ export function JobDetailPage() {
                     </div>
                     {candidates.length > visibleCount && (
                       <div ref={sentinelRef} className="py-3 flex justify-center">
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
                       </div>
                     )}
                   </>

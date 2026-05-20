@@ -44,6 +44,16 @@ export const payslips = pgTable('payslips', {
     commission: numeric('commission', { precision: 12, scale: 2 }).notNull().default('0'),
     grossSalary: numeric('gross_salary', { precision: 12, scale: 2 }).notNull().default('0'),
     deductions: numeric('deductions', { precision: 12, scale: 2 }).notNull().default('0'),
+    // ⚠ Kept in sync with backend/src/db/schema/payroll.ts — itemised leave-driven
+    // deductions so the portal payslip view can explain *why* money was withheld.
+    unpaidLeaveDays: integer('unpaid_leave_days').notNull().default(0),
+    unpaidLeaveDeduction: numeric('unpaid_leave_deduction', { precision: 12, scale: 2 }).notNull().default('0'),
+    sickHalfPayDays: integer('sick_half_pay_days').notNull().default(0),
+    sickHalfPayDeduction: numeric('sick_half_pay_deduction', { precision: 12, scale: 2 }).notNull().default('0'),
+    // ⚠ Kept in sync with backend/src/db/schema/payroll.ts — loan + other deduction
+    // buckets so the breakdown UI can itemise each category.
+    loanDeduction: numeric('loan_deduction', { precision: 12, scale: 2 }).notNull().default('0'),
+    otherDeduction: numeric('other_deduction', { precision: 12, scale: 2 }).notNull().default('0'),
     netSalary: numeric('net_salary', { precision: 12, scale: 2 }).notNull().default('0'),
     daysWorked: integer('days_worked'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

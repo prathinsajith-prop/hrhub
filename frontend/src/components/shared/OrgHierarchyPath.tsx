@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 
 interface OrgHierarchyPathProps {
-    /** Array of [branchName, divisionName, deptName] — nulls are skipped in compact mode */
+    /** Array of [branchName, divisionName, deptName] - nulls are skipped in compact mode */
     parts: (string | null | undefined)[]
     className?: string
     /** When true every null level renders as '—' instead of being hidden */

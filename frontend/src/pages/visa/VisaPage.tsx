@@ -117,7 +117,7 @@ function VisaTimeline({ application }: { application: VisaApplication }) {
           return (
             <div key={i} className="flex items-center gap-3">
               <div className={cn(
-                'h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold border-2',
+                'size-6 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold border-2',
                 done ? 'bg-success border-success text-success-foreground' :
                   current ? 'bg-primary border-primary text-primary-foreground animate-pulse' :
                     'bg-card border-border text-muted-foreground'
@@ -239,11 +239,11 @@ function VisaRowActions({ visa: v }: { visa: VisaApplication }) {
       <Button
         size="icon"
         variant="ghost"
-        className="h-8 w-8"
+        className="size-8"
         aria-label="Edit visa application"
         onClick={(e) => { e.stopPropagation(); navigate(`/visa/${v.id}`) }}
       >
-        <Edit2 className="h-3.5 w-3.5" />
+        <Edit2 className="size-3.5" />
       </Button>
     </div>
   )
@@ -285,11 +285,11 @@ function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
       <Button
         size="icon"
         variant="ghost"
-        className="h-8 w-8"
+        className="size-8"
         aria-label="View visa details"
         onClick={(e) => { e.stopPropagation(); setOpen(true) }}
       >
-        <Eye className="h-3.5 w-3.5" />
+        <Eye className="size-3.5" />
       </Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
@@ -457,7 +457,7 @@ export function VisaPage() {
         description={t('visa.description')}
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
               Refresh
             </Button>
             <ExportDropdown
@@ -474,11 +474,11 @@ export function VisaPage() {
               })}
               disabled={recalcUrgency.isPending}
             >
-              <RefreshCw className={cn('h-3.5 w-3.5', recalcUrgency.isPending && 'animate-spin')} />
+              <RefreshCw className={cn('size-3.5', recalcUrgency.isPending && 'animate-spin')} />
               <span className="hidden sm:inline">Recalc Urgency</span>
             </Button>
             <Button className="gap-2" onClick={() => setNewAppOpen(true)}>
-              <Plus className="h-4 w-4" />
+              <Plus className="size-4" />
               <span className="hidden sm:inline">New Application</span>
               <span className="sm:hidden">Add</span>
             </Button>
@@ -509,7 +509,7 @@ export function VisaPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {visaApplications.length === 0 ? (
             <Card className="col-span-full p-8 text-center">
-              <Plane className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
+              <Plane className="size-12 mx-auto mb-3 text-muted-foreground/50" />
               <p className="text-muted-foreground">No visa applications found</p>
             </Card>
           ) : (
@@ -533,7 +533,7 @@ export function VisaPage() {
             getRowId={(row) => String(row.id)}
             bulkActions={(selected) => (
               <>
-                <Button variant="outline" size="sm" leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
+                <Button variant="outline" size="sm" leftIcon={<RefreshCw className="size-3.5" />}
                   onClick={() => handleBulkRenew(selected as VisaApplication[])}
                   disabled={updateVisa.isPending}>
                   Renew
@@ -548,11 +548,11 @@ export function VisaPage() {
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="gap-1.5"
                   onClick={() => toast.info('Syncing portals...', 'Checking MOHRE & GDRFA for updates.')}>
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <RefreshCw className="size-3.5" />
                   <span className="hidden sm:inline">Sync Portals</span>
                 </Button>
                 <Button size="sm" className="gap-1.5" onClick={() => setNewAppOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="size-3.5" />
                   <span className="hidden sm:inline">New Application</span>
                 </Button>
               </div>

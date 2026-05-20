@@ -72,7 +72,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 // Stage list comes from the backend per-tenant settings via useRecruitmentStages.
 // While the API is loading we render the DEFAULT_STAGES fallback so the kanban
 // doesn't flash empty columns. Terminal stages (e.g. rejected) are filtered
-// out of the kanban — rejection is reached from the candidate profile page
+// out of the kanban - rejection is reached from the candidate profile page
 // (it requires a reason).
 
 const CandidateCard = memo(function CandidateCard({
@@ -113,7 +113,7 @@ const CandidateCard = memo(function CandidateCard({
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Avatar className="h-8 w-8 shrink-0">
+          <Avatar className="size-8 shrink-0">
             <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">{getInitials(candidate.name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
@@ -124,7 +124,7 @@ const CandidateCard = memo(function CandidateCard({
           </div>
         </div>
         <div className="flex items-center gap-0.5 shrink-0 pt-0.5">
-          <Star className="h-3 w-3 text-warning fill-warning" />
+          <Star className="size-3 text-warning fill-warning" />
           <span className="text-[10px] font-semibold text-foreground">{candidate.score}</span>
           {!isDragOverlay && (
             <button
@@ -134,7 +134,7 @@ const CandidateCard = memo(function CandidateCard({
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); navigate(`/recruitment/candidates/${candidate.id}`) }}
             >
-              <Eye className="h-3 w-3" />
+              <Eye className="size-3" />
             </button>
           )}
           {onEdit && !isDragOverlay && (
@@ -145,7 +145,7 @@ const CandidateCard = memo(function CandidateCard({
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onEdit(candidate) }}
             >
-              <Edit2 className="h-3 w-3" />
+              <Edit2 className="size-3" />
             </button>
           )}
         </div>
@@ -153,13 +153,13 @@ const CandidateCard = memo(function CandidateCard({
 
       {(candidate.jobTitle || candidate.experience !== undefined) && (
         <div className="flex items-center gap-1.5 mb-2 px-0.5">
-          <Briefcase className="h-3 w-3 text-muted-foreground shrink-0" />
+          <Briefcase className="size-3 text-muted-foreground shrink-0" />
           <p className="text-[10px] text-foreground/80 font-medium truncate flex-1">
             {candidate.jobTitle ?? 'Open Position'}
           </p>
           {candidate.experience !== undefined && (
             <span className="text-[10px] text-muted-foreground shrink-0 flex items-center gap-0.5">
-              <Clock className="h-2.5 w-2.5" />{candidate.experience}y
+              <Clock className="size-2.5" />{candidate.experience}y
             </span>
           )}
         </div>
@@ -167,12 +167,12 @@ const CandidateCard = memo(function CandidateCard({
 
       <div className="space-y-1 mb-3 bg-muted/40 rounded-lg p-2">
         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground min-w-0">
-          <Mail className="h-3 w-3 shrink-0" />
+          <Mail className="size-3 shrink-0" />
           <span className="truncate">{candidate.email}</span>
         </div>
         {candidate.phone && (
           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-            <Phone className="h-3 w-3 shrink-0" />
+            <Phone className="size-3 shrink-0" />
             <span>{candidate.phone}</span>
           </div>
         )}
@@ -196,7 +196,7 @@ const CandidateCard = memo(function CandidateCard({
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); onConvert(candidate) }}
         >
-          <UserCheck className="h-3 w-3 mr-1" /> Convert to Employee
+          <UserCheck className="size-3 mr-1" /> Convert to Employee
         </Button>
       )}
     </div>
@@ -257,7 +257,7 @@ function StageColumn({
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <div className={cn('h-2 w-2 rounded-full shrink-0', color.dotClass)} />
+          <div className={cn('size-2 rounded-full shrink-0', color.dotClass)} />
           <p className="text-xs font-semibold text-foreground">{stage.label}</p>
         </div>
         <div className="flex items-center gap-1">
@@ -265,15 +265,15 @@ function StageColumn({
             <Button
               variant="ghost"
               size="icon"
-              className="h-5 w-5"
+              className="size-5"
               aria-label="Add candidate"
               onClick={onAdd}
               disabled={addDisabled}
             >
-              <Plus className="h-3 w-3" />
+              <Plus className="size-3" />
             </Button>
           )}
-          <span className="h-5 w-5 rounded-full bg-background text-[10px] font-bold flex items-center justify-center border border-border shadow-sm">
+          <span className="size-5 rounded-full bg-background text-[10px] font-bold flex items-center justify-center border border-border shadow-sm">
             {isLoading ? '…' : total}
           </span>
         </div>
@@ -283,7 +283,7 @@ function StageColumn({
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="rounded-xl border border-border p-3 space-y-2 animate-pulse">
               <div className="flex items-center gap-2">
-                <Skeleton className="h-7 w-7 rounded-full shrink-0" />
+                <Skeleton className="size-7 rounded-full shrink-0" />
                 <div className="flex-1 space-y-1">
                   <Skeleton className="h-2.5 w-3/4" />
                   <Skeleton className="h-2 w-1/2" />
@@ -309,7 +309,7 @@ function StageColumn({
             {hasNextPage && (
               <div ref={sentinelRef} className="py-2 flex justify-center">
                 {isFetchingNextPage
-                  ? <div className="flex gap-1">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-1.5 w-1.5 rounded-full" />)}</div>
+                  ? <div className="flex gap-1">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="size-1.5 rounded-full" />)}</div>
                   : <span className="text-[10px] text-muted-foreground">Scroll for more</span>
                 }
               </div>
@@ -375,7 +375,7 @@ const buildJobColumns = (onEdit: (job: Job) => void): ColumnDef<Job>[] => [
         className="text-muted-foreground hover:text-foreground"
         onClick={(e) => { e.stopPropagation(); onEdit(j) }}
       >
-        <Edit2 className="h-3.5 w-3.5" />
+        <Edit2 className="size-3.5" />
       </Button>
     ),
     size: 60,
@@ -497,7 +497,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           </div>
           <div className="space-y-1.5">
             <Label>Resume</Label>
-            <label className={cn(
+            <Label className={cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-lg border border-dashed border-border cursor-pointer transition-colors',
               'hover:border-primary/50 hover:bg-primary/5',
               resumeFile && 'border-primary/40 bg-primary/5',
@@ -508,7 +508,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
                 className="sr-only"
                 onChange={e => setResumeFile(e.target.files?.[0] ?? null)}
               />
-              <FileText className={cn('h-4 w-4 shrink-0', resumeFile ? 'text-primary' : 'text-muted-foreground')} />
+              <FileText className={cn('size-4 shrink-0', resumeFile ? 'text-primary' : 'text-muted-foreground')} />
               <span className={cn('text-sm truncate', resumeFile ? 'text-foreground' : 'text-muted-foreground')}>
                 {resumeFile ? resumeFile.name : 'Attach resume (PDF, DOC, DOCX)'}
               </span>
@@ -519,15 +519,15 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
                   className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
                   aria-label="Remove resume"
                 >
-                  <XCircle className="h-4 w-4" />
+                  <XCircle className="size-4" />
                 </button>
               )}
-            </label>
+            </Label>
           </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} loading={createApp.isPending || uploadResume.isPending} leftIcon={<Plus className="h-3.5 w-3.5" />}>
+          <Button onClick={handleSave} loading={createApp.isPending || uploadResume.isPending} leftIcon={<Plus className="size-3.5" />}>
             Add to pipeline
           </Button>
         </DialogFooter>
@@ -601,9 +601,9 @@ const CandidateListRow = memo(function CandidateListRow({
       className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4 hover:bg-muted/40 transition-colors group cursor-pointer"
       onClick={() => onView(candidate.id)}
     >
-      {/* Candidate info — flex-1 matches header */}
+      {/* Candidate info - flex-1 matches header */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
-        <Avatar className="h-9 w-9 shrink-0 border border-border/60">
+        <Avatar className="size-9 shrink-0 border border-border/60">
           <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
             {getInitials(candidate.name)}
           </AvatarFallback>
@@ -615,25 +615,25 @@ const CandidateListRow = memo(function CandidateListRow({
             {candidate.experience > 0 && <span className="text-[11px] text-muted-foreground">{candidate.experience}y exp</span>}
             {candidate.jobTitle && (
               <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                <Briefcase className="h-3 w-3 shrink-0" />{candidate.jobTitle}
+                <Briefcase className="size-3 shrink-0" />{candidate.jobTitle}
               </span>
             )}
           </div>
         </div>
       </div>
-      {/* Fixed-width data columns — match sticky header widths */}
+      {/* Fixed-width data columns - match sticky header widths */}
       <div className="hidden sm:flex items-center gap-3 shrink-0">
         <div className="w-[90px]">
           {stage && (
             <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border max-w-full', color.bgClass)}>
-              <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', color.dotClass)} />
+              <span className={cn('size-1.5 rounded-full shrink-0', color.dotClass)} />
               <span className="truncate">{stage.label}</span>
             </span>
           )}
         </div>
         <div className="w-10 flex justify-center">
           {candidate.score > 0
-            ? <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="h-3 w-3 fill-amber-400 text-amber-400" /><span className="font-medium">{candidate.score}</span></div>
+            ? <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="size-3 fill-amber-400 text-amber-400" /><span className="font-medium">{candidate.score}</span></div>
             : <span className="text-[11px] text-muted-foreground/30">—</span>
           }
         </div>
@@ -647,21 +647,21 @@ const CandidateListRow = memo(function CandidateListRow({
       <div className="flex sm:hidden items-center gap-2 flex-wrap">
         {stage && (
           <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border', color.bgClass)}>
-            <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', color.dotClass)} />{stage.label}
+            <span className={cn('size-1.5 rounded-full shrink-0', color.dotClass)} />{stage.label}
           </span>
         )}
-        {candidate.score > 0 && <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="h-3 w-3 fill-amber-400 text-amber-400" /><span>{candidate.score}</span></div>}
+        {candidate.score > 0 && <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="size-3 fill-amber-400 text-amber-400" /><span>{candidate.score}</span></div>}
         {candidate.expectedSalary != null && <span className="text-[11px] text-muted-foreground">{formatCurrency(candidate.expectedSalary)}</span>}
         <span className="text-[11px] text-muted-foreground">{formatDate(candidate.appliedDate)}</span>
       </div>
-      {/* Actions — w-8 matches header spacer */}
+      {/* Actions - w-8 matches header spacer */}
       <div
         className="w-8 shrink-0 flex items-center justify-end sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
         onClick={e => e.stopPropagation()}
       >
         {onEdit
-          ? <Button size="icon-sm" variant="ghost" aria-label="Edit candidate" onClick={() => onEdit(candidate)}><Edit2 className="h-3.5 w-3.5" /></Button>
-          : <ChevronRight className="h-4 w-4 text-muted-foreground/40" />
+          ? <Button size="icon-sm" variant="ghost" aria-label="Edit candidate" onClick={() => onEdit(candidate)}><Edit2 className="size-3.5" /></Button>
+          : <ChevronRight className="size-4 text-muted-foreground/40" />
         }
       </div>
     </div>
@@ -748,7 +748,7 @@ export function RecruitmentPage() {
   const jobsTotal = jobsData?.total ?? 0
   // Minimal query just to get the grand total for the KPI card.
   const { data: appsTotalData } = useApplications({ limit: 1 })
-  // Per-stage queries for KPI cards — TanStack deduplicates with StageColumn's own calls.
+  // Per-stage queries for KPI cards - TanStack deduplicates with StageColumn's own calls.
   const { data: interviewData } = useKanbanStage('interview', candidateParams)
   const { data: offerData } = useKanbanStage('offer', candidateParams)
   const { data: preBoardingData } = useKanbanStage('pre_boarding', candidateParams)
@@ -796,7 +796,7 @@ export function RecruitmentPage() {
     )
   }
 
-  // Drag and drop — 3px activation lets buttons still receive clicks.
+  // Drag and drop - 3px activation lets buttons still receive clicks.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }))
   const [activeDragCandidate, setActiveDragCandidate] = useState<Candidate | null>(null)
   const [dragCardWidth, setDragCardWidth] = useState<number>(200)
@@ -831,7 +831,7 @@ export function RecruitmentPage() {
         description={t('recruitment.description')}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={jobsFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => { void refetchJobs(); qc.invalidateQueries({ queryKey: ['applications-kanban'] }) }} disabled={jobsFetching}>
+            <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={jobsFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => { void refetchJobs(); qc.invalidateQueries({ queryKey: ['applications-kanban'] }) }} disabled={jobsFetching}>
               Refresh
             </Button>
             <ExportDropdown
@@ -839,11 +839,11 @@ export function RecruitmentPage() {
               onExportPdf={() => exportRecruitment({ format: 'pdf' })}
             />
             <Button variant="outline" className="gap-2" onClick={() => setAddCandidateOpen(true)} disabled={jobs.filter((j) => j.status === 'open').length === 0}>
-              <Plus className="h-4 w-4" />
+              <Plus className="size-4" />
               <span className="hidden sm:inline">Add Candidate</span>
             </Button>
             <Button className="gap-2" onClick={() => setJobDialogOpen(true)}>
-              <Plus className="h-4 w-4" />
+              <Plus className="size-4" />
               <span className="hidden sm:inline">New Job</span>
               <span className="sm:hidden">Add</span>
             </Button>
@@ -890,7 +890,7 @@ export function RecruitmentPage() {
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                <LayoutGrid className="h-4 w-4" />
+                <LayoutGrid className="size-4" />
               </button>
               <button
                 type="button"
@@ -903,7 +903,7 @@ export function RecruitmentPage() {
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                <LayoutList className="h-4 w-4" />
+                <LayoutList className="size-4" />
               </button>
             </div>
           </div>
@@ -975,12 +975,12 @@ export function RecruitmentPage() {
               <Card>
                 <CardContent className="p-0">
                   {listAppsLoading ? (
-                    <div className="px-4 py-4 space-y-2">
-                      {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-14 rounded-lg bg-muted/50 animate-pulse" />)}
+                    <div className="p-4 space-y-2">
+                      {[1, 2, 3, 4, 5].map(i => <div key={`div-${i}`} className="h-14 rounded-lg bg-muted/50 animate-pulse" />)}
                     </div>
                   ) : filteredListCandidates.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                      <AlertCircle className="h-8 w-8 text-muted-foreground/20 mb-2" />
+                      <AlertCircle className="size-8 text-muted-foreground/20 mb-2" />
                       <p className="text-sm font-semibold">
                         {allListCandidates.length === 0 ? 'No candidates yet' : 'No candidates in this stage'}
                       </p>
@@ -1015,7 +1015,7 @@ export function RecruitmentPage() {
                       </div>
                       {filteredListCandidates.length > listVisibleCount && (
                         <div ref={listSentinelRef} className="py-3 flex justify-center">
-                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          <Loader2 className="size-4 animate-spin text-muted-foreground" />
                         </div>
                       )}
                     </>
@@ -1043,7 +1043,7 @@ export function RecruitmentPage() {
             getRowId={(row) => String(row.id)}
             toolbar={
               <Button size="sm" className="gap-1.5" onClick={() => setJobDialogOpen(true)}>
-                <Plus className="h-3.5 w-3.5" />
+                <Plus className="size-3.5" />
                 New Job
               </Button>
             }

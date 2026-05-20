@@ -1,6 +1,6 @@
 /**
  * Shared Zod schemas used for client-side form validation.
- * Keep messages short — they render inline under each field.
+ * Keep messages short - they render inline under each field.
  */
 import { z } from 'zod'
 

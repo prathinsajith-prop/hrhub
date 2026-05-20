@@ -41,7 +41,7 @@ export function NotificationsTab() {
     const { data: savedPrefs, isLoading } = useNotifPrefs()
     const updatePrefs = useUpdateNotifPrefs()
 
-    // Local state mirrors the server — initialised from API, changes are local until Save
+    // Local state mirrors the server - initialised from API, changes are local until Save
     const [settings, setSettings] = useState<Record<string, boolean>>({})
 
     useEffect(() => {
@@ -106,14 +106,14 @@ export function NotificationsTab() {
                                             <Switch
                                                 checked={settings[`${item.id}_email`] ?? item.email}
                                                 onCheckedChange={() => toggle(`${item.id}_email`)}
-                                                aria-label={`${t(item.labelKey)} — ${t('settingsDetail.notifications.emailLabel')}`}
+                                                aria-label={`${t(item.labelKey)} - ${t('settingsDetail.notifications.emailLabel')}`}
                                             />
                                         </div>
                                         <div className="w-12 flex justify-center">
                                             <Switch
                                                 checked={settings[`${item.id}_push`] ?? item.push}
                                                 onCheckedChange={() => toggle(`${item.id}_push`)}
-                                                aria-label={`${t(item.labelKey)} — ${t('settingsDetail.notifications.pushLabel')}`}
+                                                aria-label={`${t(item.labelKey)} - ${t('settingsDetail.notifications.pushLabel')}`}
                                             />
                                         </div>
                                     </div>
@@ -124,7 +124,7 @@ export function NotificationsTab() {
                 </SettingsCard>
             ))}
             <div className="flex justify-end pt-2">
-                <Button onClick={handleSave} loading={updatePrefs.isPending} leftIcon={<Save className="h-4 w-4" />}>
+                <Button onClick={handleSave} loading={updatePrefs.isPending} leftIcon={<Save className="size-4" />}>
                     {t('settingsDetail.notifications.savePrefs')}
                 </Button>
             </div>

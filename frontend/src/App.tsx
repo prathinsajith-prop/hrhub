@@ -10,7 +10,7 @@ import { canAccessRouteForRoles, type RouteKey } from '@/lib/permissions'
 import type { UserRole } from '@/types'
 import { socket } from '@/lib/socket'
 
-// Code-split all pages — only loaded when navigated to
+// Code-split all pages - only loaded when navigated to
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage').then(m => ({ default: m.LoginPage })))
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage').then(m => ({ default: m.RegisterPage })))
 const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })))
@@ -66,7 +66,7 @@ const LeaveAdjustmentsPage = lazy(() => import('@/pages/leave/LeaveAdjustmentsPa
 function PageLoader() {
   return (
     <div className="flex items-center justify-center h-32">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
     </div>
   )
 }
@@ -134,7 +134,7 @@ function TitleManager() {
  * Redirects to /login if not authenticated.
  * Connects the WebSocket on mount (covers page-refresh with persisted token)
  * and whenever the access token rotates after a silent refresh.
- * Disconnect is handled by authStore.logout() — not here — so navigation
+ * Disconnect is handled by authStore.logout() - not here - so navigation
  * between protected pages never tears down the connection.
  */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -221,7 +221,7 @@ export default function App() {
               <Route path="my/loans" element={<RoleRoute routeKey="my/loans"><MyLoansPage /></RoleRoute>} />
               <Route path="leave-adjustments" element={<RoleRoute routeKey="leave-adjustments"><LeaveAdjustmentsPage /></RoleRoute>} />
             </Route>
-            {/* Public onboarding upload — no auth, no AppLayout */}
+            {/* Public onboarding upload - no auth, no AppLayout */}
             <Route path="onboarding/upload/:token" element={<OnboardingUploadPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

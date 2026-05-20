@@ -391,7 +391,7 @@ export const DEVICE_TYPE_LABELS: Record<string, string> = {
 }
 
 /**
- * Master flat lookup — merges all enum maps above.
+ * Master flat lookup - merges all enum maps above.
  * When the same key exists in multiple maps the value is always the same label,
  * so there are no conflicts.
  */

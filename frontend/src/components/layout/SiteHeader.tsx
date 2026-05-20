@@ -118,7 +118,7 @@ export function SiteHeader() {
 
   const hasMultipleOrgs = (myTenants?.length ?? 0) > 1
 
-  const iconBtn = 'h-9 w-9 border-border bg-background hover:bg-muted'
+  const iconBtn = 'size-9 border-border bg-background hover:bg-muted'
 
   return (
     <>
@@ -144,7 +144,7 @@ export function SiteHeader() {
             <li key={c.href} className="flex items-center gap-1.5 min-w-0">
               {idx > 0 && (
                 <ChevronRight
-                  className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0"
+                  className="size-3.5 text-muted-foreground/60 shrink-0"
                   data-rtl-flip
                   aria-hidden="true"
                 />
@@ -173,7 +173,7 @@ export function SiteHeader() {
 
       {/* Right: actions */}
       <div className="ms-auto flex items-center gap-2">
-        {/* Search — desktop pill */}
+        {/* Search - desktop pill */}
         <Button
           variant="outline"
           size="sm"
@@ -189,7 +189,7 @@ export function SiteHeader() {
           </kbd>
         </Button>
 
-        {/* Search — mobile icon */}
+        {/* Search - mobile icon */}
         <Button
           variant="outline"
           size="icon"
@@ -197,7 +197,7 @@ export function SiteHeader() {
           aria-label={t('search.placeholder', { defaultValue: 'Search' })}
           onClick={() => setSearchOpen(true)}
         >
-          <SearchIcon className="h-4 w-4" />
+          <SearchIcon className="size-4" />
         </Button>
 
         <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
@@ -211,35 +211,35 @@ export function SiteHeader() {
               className={iconBtn}
               aria-label={t('common.toggleTheme')}
             >
-              <SunIcon className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <MoonIcon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+              <SunIcon className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <MoonIcon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" sideOffset={8} className="w-36">
             <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setTheme('light')}>
-              <SunIcon className="h-4 w-4 text-muted-foreground" />
+              <SunIcon className="size-4 text-muted-foreground" />
               <span className="text-sm">{t('common.themeLight')}</span>
-              {theme === 'light' && <Check className="ms-auto h-3.5 w-3.5 text-primary" />}
+              {theme === 'light' && <Check className="ms-auto size-3.5 text-primary" />}
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setTheme('dark')}>
-              <MoonIcon className="h-4 w-4 text-muted-foreground" />
+              <MoonIcon className="size-4 text-muted-foreground" />
               <span className="text-sm">{t('common.themeDark')}</span>
-              {theme === 'dark' && <Check className="ms-auto h-3.5 w-3.5 text-primary" />}
+              {theme === 'dark' && <Check className="ms-auto size-3.5 text-primary" />}
             </DropdownMenuItem>
             <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={() => setTheme('system')}>
-              <MonitorIcon className="h-4 w-4 text-muted-foreground" />
+              <MonitorIcon className="size-4 text-muted-foreground" />
               <span className="text-sm">{t('common.themeSystem')}</span>
-              {theme === 'system' && <Check className="ms-auto h-3.5 w-3.5 text-primary" />}
+              {theme === 'system' && <Check className="ms-auto size-3.5 text-primary" />}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Notifications — popover preview with the same UX as the portal:
+        {/* Notifications - popover preview with the same UX as the portal:
             unread-first ordering, refetch-on-open, mark-read + deep-link
             from any item. Falls through to /notifications for the full list. */}
         <NotificationsBell triggerClassName={iconBtn} />
 
-        {/* Profile — hidden for now; user menu lives in the sidebar */}
+        {/* Profile - hidden for now; user menu lives in the sidebar */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -247,7 +247,7 @@ export function SiteHeader() {
               className="hidden flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ms-1"
               aria-label={t('common.userMenu', { defaultValue: 'User menu' })}
             >
-              <Avatar className="h-9 w-9 border border-border">
+              <Avatar className="size-9 border border-border">
                 {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                   {initials}
@@ -260,7 +260,7 @@ export function SiteHeader() {
             {/* Identity card */}
             <div className="px-5 pt-5 pb-4 bg-gradient-to-b from-muted/50 to-muted/20 border-b border-border">
               <div className="flex items-start gap-3">
-                <Avatar className="h-12 w-12 border-2 border-background shadow-sm shrink-0">
+                <Avatar className="size-12 border-2 border-background shadow-sm shrink-0">
                   {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
                   <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">
                     {initials}
@@ -282,7 +282,7 @@ export function SiteHeader() {
                   {/* Row 2: Email */}
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{user?.email}</p>
 
-                  {/* Row 3: Company name — hover to switch (sub-menu opens automatically) */}
+                  {/* Row 3: Company name - hover to switch (sub-menu opens automatically) */}
                   {tenant && (
                     hasMultipleOrgs ? (
                       <DropdownMenuSub>
@@ -295,11 +295,11 @@ export function SiteHeader() {
                           aria-label={t('common.switchOrganization')}
                           title={t('common.switchOrganization')}
                         >
-                          <Building2 className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                          <Building2 className="size-3.5 shrink-0 text-blue-600" />
                           <span className="text-xs font-bold text-foreground truncate flex-1 text-start">{tenant.name}</span>
                           {switchingId
-                            ? <Loader2Icon className="h-3 w-3 shrink-0 animate-spin text-blue-700" strokeWidth={2.5} />
-                            : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-blue-700" strokeWidth={2.5} data-rtl-flip />}
+                            ? <Loader2Icon className="size-3 shrink-0 animate-spin text-blue-700" strokeWidth={2.5} />
+                            : <ChevronRight className="size-3.5 shrink-0 text-blue-700" strokeWidth={2.5} data-rtl-flip />}
                         </DropdownMenuSubTrigger>
                         <DropdownMenuPortal>
                           <DropdownMenuSubContent className="min-w-56 rounded-xl p-1.5 shadow-lg">
@@ -311,11 +311,11 @@ export function SiteHeader() {
                                 disabled={m.tenantId === tenant?.id || !!switchingId}
                               >
                                 <div className={cn(
-                                  'h-7 w-7 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 overflow-hidden',
+                                  'size-7 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 overflow-hidden',
                                   m.logoUrl ? 'bg-muted text-muted-foreground' : cn(orgColor(m.tenantName ?? '?'), 'text-white'),
                                 )}>
                                   {m.logoUrl
-                                    ? <img src={m.logoUrl} alt="" className="h-full w-full object-cover" />
+                                    ? <img src={m.logoUrl} alt="" className="size-full object-cover" />
                                     : (m.tenantName ?? '?').slice(0, 2).toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -346,7 +346,7 @@ export function SiteHeader() {
                       </DropdownMenuSub>
                     ) : (
                       <div className="mt-2 flex items-center gap-1.5 min-w-0">
-                        <Building2 className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                        <Building2 className="size-3.5 shrink-0 text-blue-600" />
                         <span className="text-xs font-bold text-foreground truncate flex-1">{tenant.name}</span>
                       </div>
                     )
@@ -355,10 +355,10 @@ export function SiteHeader() {
               </div>
             </div>
 
-            {/* Menu actions — Organization Settings removed by design (use sidebar) */}
+            {/* Menu actions - Organization Settings removed by design (use sidebar) */}
             <div className="p-1.5">
               <DropdownMenuItem onClick={() => navigate(profileRoute)} className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md">
-                <UserIcon className="h-4 w-4 text-muted-foreground" />
+                <UserIcon className="size-4 text-muted-foreground" />
                 <span className="text-sm">{t('profile.myAccount', { defaultValue: 'My Account' })}</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator className="my-1.5" />
@@ -366,7 +366,7 @@ export function SiteHeader() {
                 onClick={handleLogout}
                 className="gap-2.5 cursor-pointer h-9 px-2.5 rounded-md text-destructive focus:text-destructive focus:bg-destructive/10"
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="size-4" />
                 <span className="text-sm font-medium">{t('auth.signOut', { defaultValue: 'Sign Out' })}</span>
               </DropdownMenuItem>
             </div>

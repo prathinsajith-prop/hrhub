@@ -111,7 +111,7 @@ function GratuityBreakdown({ preview }: { preview: NonNullable<ReturnType<typeof
     return (
         <div className="rounded-lg border bg-muted/20 p-3 space-y-1.5 text-xs">
             <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px] flex items-center gap-1">
-                <Scale className="h-3 w-3" /> Gratuity Calculation (UAE Labour Law 2022)
+                <Scale className="size-3" /> Gratuity Calculation (UAE Labour Law 2022)
             </p>
             <div className="space-y-1 text-muted-foreground">
                 <p>Daily wage: <span className="font-medium text-foreground">{fmt(dailyWage)}</span> (basic ÷ 30)</p>
@@ -262,7 +262,7 @@ export function ExitPage() {
                     <p className="text-sm font-semibold text-primary">{fmt(e.totalSettlement)}</p>
                     {e.settlementPaid && (
                         <p className="text-[10px] text-emerald-600 flex items-center gap-1 mt-0.5">
-                            <CheckCircle2 className="h-3 w-3" /> Paid
+                            <CheckCircle2 className="size-3" /> Paid
                         </p>
                     )}
                 </div>
@@ -290,11 +290,11 @@ export function ExitPage() {
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 w-7 p-0"
+                        className="size-7 p-0"
                         onClick={(ev) => { ev.stopPropagation(); setViewingExit(e) }}
                         title="View details"
                     >
-                        <Eye className="h-3.5 w-3.5" />
+                        <Eye className="size-3.5" />
                     </Button>
                     {canManage && e.status === 'pending' && (
                         <>
@@ -340,7 +340,7 @@ export function ExitPage() {
                             }}
                             disabled={markPaid.isPending}
                         >
-                            <DollarSign className="h-3 w-3 mr-1" /> Mark Paid
+                            <DollarSign className="size-3 mr-1" /> Mark Paid
                         </Button>
                     )}
                 </div>
@@ -356,11 +356,11 @@ export function ExitPage() {
                 description={t('exit.description')}
                 actions={
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
                         {canManage && (
-                            <Button size="sm" leftIcon={<UserMinus className="h-3.5 w-3.5" />} onClick={() => { setShowDialog(true); setStep('form') }}>
+                            <Button size="sm" leftIcon={<UserMinus className="size-3.5" />} onClick={() => { setShowDialog(true); setStep('form') }}>
                                 Initiate Exit
                             </Button>
                         )}
@@ -405,7 +405,7 @@ export function ExitPage() {
                 <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <FileText className="h-4 w-4" /> Exit Request Details
+                            <FileText className="size-4" /> Exit Request Details
                         </DialogTitle>
                         <DialogDescription>Full details and settlement breakdown.</DialogDescription>
                     </DialogHeader>
@@ -431,7 +431,7 @@ export function ExitPage() {
 
                             <div className="rounded-lg border divide-y text-sm">
                                 <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30">
-                                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <CalendarDays className="size-3.5 text-muted-foreground" />
                                     <span className="font-medium text-xs uppercase tracking-wide text-muted-foreground">Exit Information</span>
                                 </div>
                                 <div className="px-4">
@@ -451,7 +451,7 @@ export function ExitPage() {
                             {viewingExit.totalSettlement && (
                                 <div className="rounded-lg border divide-y text-sm overflow-hidden">
                                     <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30">
-                                        <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <DollarSign className="size-3.5 text-muted-foreground" />
                                         <span className="font-medium text-xs uppercase tracking-wide text-muted-foreground">Settlement Breakdown</span>
                                         {viewingExit.settlementPaid && (
                                             <Badge variant="success" className="ml-auto text-[10px]">Paid</Badge>
@@ -507,7 +507,7 @@ export function ExitPage() {
                                         setViewingExit(null)
                                     }}
                                 >
-                                    <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
+                                    <XCircle className="size-3.5 mr-1" /> Reject
                                 </Button>
                             </>
                         )}
@@ -527,7 +527,7 @@ export function ExitPage() {
                                 }}
                                 disabled={markPaid.isPending}
                             >
-                                <DollarSign className="h-3.5 w-3.5 mr-1" /> Mark Settlement Paid
+                                <DollarSign className="size-3.5 mr-1" /> Mark Settlement Paid
                             </Button>
                         )}
                         <Button variant="outline" onClick={() => setViewingExit(null)}>Close</Button>
@@ -540,7 +540,7 @@ export function ExitPage() {
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-destructive">
-                            <AlertTriangle className="h-4 w-4" /> Reject Exit Request
+                            <AlertTriangle className="size-4" /> Reject Exit Request
                         </DialogTitle>
                         <DialogDescription>
                             Rejecting this request will keep the employee active. Add a reason for the record.
@@ -644,7 +644,7 @@ export function ExitPage() {
 
                     {step === 'preview' && previewLoading && (
                         <div className="py-10 text-center text-sm text-muted-foreground">
-                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-3" />
+                            <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-3" />
                             Calculating settlement…
                         </div>
                     )}
@@ -684,8 +684,8 @@ export function ExitPage() {
 
                             {preview.yearsOfService < 1 && (
                                 <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2.5 text-xs text-amber-700">
-                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                                    <span>Employee has less than 1 year of service — gratuity is not payable under UAE Labour Law.</span>
+                                    <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+                                    <span>Employee has less than 1 year of service - gratuity is not payable under UAE Labour Law.</span>
                                 </div>
                             )}
                         </div>

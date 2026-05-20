@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button'
 import { ROUTES } from '@/lib/routes'
 import { cn, formatDate, formatShiftRange, initialsOf } from '@/lib/utils'
 import { AssignedAssetsCard } from '@/components/shared/AssignedAssetsCard'
+import { MyTeamsCard } from '@/components/shared/MyTeamsCard'
 import { PerformanceCard } from '@/components/shared/PerformanceCard'
 import type { LeaveStatus } from '@/types'
 
@@ -210,6 +211,9 @@ export function ManagerMemberDetailPage() {
                     </CardContent>
                 </Card>
             ) : null}
+
+            {/* ── Team memberships ────────────────────────────────────── */}
+            <MyTeamsCard variant="employee" employeeId={employee.id} title="Team memberships" />
 
             {/* ── Assigned assets ─────────────────────────────────────── */}
             <AssignedAssetsCard variant="employee" employeeId={employee.id} />

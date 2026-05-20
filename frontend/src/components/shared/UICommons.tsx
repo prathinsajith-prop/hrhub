@@ -39,7 +39,7 @@ interface StatCellProps {
  * Compact "label + value" cell used in dashboard hero strips and detail headers.
  *
  * Returns `null` when value is empty/null/'—' so empty data doesn't clutter
- * the layout — pass `keepEmpty` to opt out of that behaviour.
+ * the layout - pass `keepEmpty` to opt out of that behaviour.
  */
 export const StatCell = React.memo(function StatCell({
     icon: Icon, label, value, trailing, valueClass, tone = 'slate', keepEmpty = false,
@@ -54,7 +54,7 @@ export const StatCell = React.memo(function StatCell({
     return (
         <div className="bg-card hover:bg-muted/30 px-3.5 py-2.5 min-w-0 transition-colors">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                {Icon && <Icon className={cn('h-3 w-3 shrink-0', STAT_ICON_TONE[tone])} />}
+                {Icon && <Icon className={cn('size-3 shrink-0', STAT_ICON_TONE[tone])} />}
                 <span className="truncate">{label}</span>
             </div>
             <div className="flex items-center justify-between gap-2 mt-1">
@@ -77,13 +77,13 @@ interface MetaItemProps {
 }
 
 /**
- * "ICON · LABEL · value" inline meta strip — used in the account snapshot
+ * "ICON · LABEL · value" inline meta strip - used in the account snapshot
  * row and any "summary footer" of cards.
  */
 export const MetaItem = React.memo(function MetaItem({ icon: Icon, label, value, className }: MetaItemProps) {
     return (
         <div className={cn('flex items-center gap-2 text-[11px] text-muted-foreground', className)}>
-            {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
+            {Icon && <Icon className="size-3.5 shrink-0" />}
             <span className="uppercase tracking-wider font-semibold">{label}</span>
             <span className="text-foreground/90 font-medium tabular-nums">{value}</span>
         </div>
@@ -108,7 +108,7 @@ export const InfoRow = React.memo(function InfoRow({ icon: Icon, label, value, t
     if (!hasValue && !trailing) return null
     return (
         <div className="flex items-center gap-3 py-3 border-b border-border/40 last:border-0">
-            {Icon && <Icon className="h-4 w-4 text-muted-foreground shrink-0" />}
+            {Icon && <Icon className="size-4 text-muted-foreground shrink-0" />}
             <span className="text-sm text-muted-foreground w-36 shrink-0">{label}</span>
             <span className="text-sm font-medium text-foreground truncate flex-1">{hasValue ? value : ''}</span>
             {trailing && <span className="shrink-0">{trailing}</span>}
@@ -144,7 +144,7 @@ export function Chip({ tone = 'neutral', icon: Icon, children, className }: Chip
             CHIP_TONE[tone],
             className,
         )}>
-            {Icon && <Icon className="h-2.5 w-2.5" />}
+            {Icon && <Icon className="size-2.5" />}
             {children}
         </span>
     )
@@ -165,7 +165,7 @@ export function SectionHeader({ title, description, icon: Icon, actions, classNa
     return (
         <div className={cn('flex items-start justify-between gap-3 flex-wrap', className)}>
             <div className="min-w-0 flex items-center gap-2">
-                {Icon && <Icon className="h-4 w-4 text-muted-foreground shrink-0" />}
+                {Icon && <Icon className="size-4 text-muted-foreground shrink-0" />}
                 <div className="min-w-0">
                     <h3 className="text-sm font-semibold leading-tight truncate">{title}</h3>
                     {description && (
@@ -226,7 +226,7 @@ interface ListSkeletonProps {
     className?: string
 }
 
-/** N skeleton rows — replaces the inline `[...Array(n)].map(...)` pattern. */
+/** N skeleton rows - replaces the inline `[...Array(n)].map(...)` pattern. */
 export function ListSkeleton({ count = 4, rowHeight = 'h-10', className }: ListSkeletonProps) {
     return (
         <div className={cn('space-y-2', className)}>

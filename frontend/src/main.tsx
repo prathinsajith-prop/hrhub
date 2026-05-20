@@ -12,7 +12,7 @@ import './index.css'
 
 // After a fresh deploy the user's browser may still hold the old index.html
 // pointing at hashed chunks that no longer exist on the CDN. Detect that and
-// silently reload — see lib/chunkReload.ts for the loop-guard.
+// silently reload - see lib/chunkReload.ts for the loop-guard.
 installChunkReloadListeners()
 
 // Clear all cached query data when the user logs out so stale error states

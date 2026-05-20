@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'
 import { UserCircle, CalendarDays, Receipt } from 'lucide-react'
 
-// Tab content — imported from existing pages stripped of their outer wrapper
+// Tab content - imported from existing pages stripped of their outer wrapper
 import { MyProfileContent } from './MyProfilePage'
 import { MyLeaveContent } from './MyLeavePage'
 import { MyPayslipsContent } from './MyPayslipsPage'
@@ -54,7 +54,7 @@ export function MyAccountPage() {
                                 : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border',
                         )}
                     >
-                        <Icon className="h-4 w-4" />
+                        <Icon className="size-4" />
                         {label}
                     </button>
                 ))}

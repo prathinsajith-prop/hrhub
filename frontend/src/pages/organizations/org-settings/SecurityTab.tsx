@@ -52,7 +52,7 @@ export function SecurityTab() {
             toast.success(t('orgSettings.security.orgDeleted'), t('orgSettings.security.orgDeletedDesc', { name: tenant.name }))
             setDeleteOpen(false)
             setConfirmName('')
-            // Sign the user out — their JWT now points to a deleted tenant
+            // Sign the user out - their JWT now points to a deleted tenant
             logout()
             navigate('/login', { replace: true })
         } catch (err) {
@@ -60,7 +60,7 @@ export function SecurityTab() {
         }
     }
 
-    // Sync IP list when data loads from server — track previous value in state to avoid
+    // Sync IP list when data loads from server - track previous value in state to avoid
     // overwriting user edits on every re-render.
     const [prevIpList, setPrevIpList] = useState<string[] | undefined>(undefined)
     if (ipList?.ipAllowlist && ipList.ipAllowlist !== prevIpList) {
@@ -158,12 +158,12 @@ export function SecurityTab() {
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                            className="size-7 text-muted-foreground hover:text-destructive"
                                             onClick={() => handleRemoveIp(ip)}
                                             disabled={updateList.isPending}
                                             aria-label={t('settingsDetail.security.removeIp', { ip })}
                                         >
-                                            <Trash2 className="h-3.5 w-3.5" />
+                                            <Trash2 className="size-3.5" />
                                         </Button>
                                     </div>
                                 ))}
@@ -177,7 +177,7 @@ export function SecurityTab() {
                                 onKeyDown={e => { if (e.key === 'Enter') handleAddIp() }}
                                 className="font-mono"
                             />
-                            <Button size="sm" onClick={handleAddIp} loading={updateList.isPending} leftIcon={<Plus className="h-3.5 w-3.5" />}>
+                            <Button size="sm" onClick={handleAddIp} loading={updateList.isPending} leftIcon={<Plus className="size-3.5" />}>
                                 {t('common.add')}
                             </Button>
                         </div>
@@ -192,7 +192,7 @@ export function SecurityTab() {
                             <p className="text-sm font-medium">{t('settingsDetail.security.exportAllData')}</p>
                             <p className="text-xs text-muted-foreground">{t('orgSettings.security.exportOrgDataDesc')}</p>
                         </div>
-                        <Button variant="outline" size="sm" leftIcon={<FileText className="h-3.5 w-3.5" />} className="shrink-0">{t('common.export')}</Button>
+                        <Button variant="outline" size="sm" leftIcon={<FileText className="size-3.5" />} className="shrink-0">{t('common.export')}</Button>
                     </div>
                     <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20 bg-destructive/5">
                         <div className="min-w-0">
@@ -206,7 +206,7 @@ export function SecurityTab() {
                         <Button
                             variant="destructive"
                             size="sm"
-                            leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                            leftIcon={<Trash2 className="size-3.5" />}
                             className="shrink-0"
                             disabled={!canDelete}
                             onClick={() => { setConfirmName(''); setDeleteOpen(true) }}
@@ -221,7 +221,7 @@ export function SecurityTab() {
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-destructive">
-                            <AlertCircle className="h-4 w-4" />
+                            <AlertCircle className="size-4" />
                             {t('orgSettings.security.deleteOrgTitle')}
                         </DialogTitle>
                         <DialogDescription>
@@ -260,7 +260,7 @@ export function SecurityTab() {
                                 || !tenant?.name
                                 || confirmName.trim().toLowerCase() !== tenant.name.trim().toLowerCase()
                             }
-                            leftIcon={deleteTenant.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                            leftIcon={deleteTenant.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                         >
                             {deleteTenant.isPending ? t('orgSettings.security.deleting') : t('orgSettings.security.deleteForever')}
                         </Button>

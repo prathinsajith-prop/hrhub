@@ -1,5 +1,5 @@
 /**
- * Task 6.9 — Frontend utility function tests.
+ * Task 6.9 - Frontend utility function tests.
  * Tests for formatDate, formatCurrency, getInitials, getExpiryStatus.
  */
 import { describe, it, expect } from 'vitest'

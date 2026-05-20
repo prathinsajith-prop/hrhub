@@ -82,7 +82,7 @@ export function ProDashboard() {
       {/* Critical alert banner */}
       {criticalVisas.length > 0 && (
         <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-3 animate-fade-fast">
-          <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+          <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-destructive">
               {t('dashboard.criticalVisaAlert', { count: criticalVisas.length })}
@@ -98,7 +98,7 @@ export function ProDashboard() {
             </p>
           </div>
           <Button size="sm" variant="ghost" className="text-destructive h-auto px-2 py-1 text-xs shrink-0" onClick={() => navigate('/visa')}>
-            {t('dashboard.view')} <ArrowUpRight className="h-3 w-3 ml-1" />
+            {t('dashboard.view')} <ArrowUpRight className="size-3 ml-1" />
           </Button>
         </div>
       )}
@@ -151,7 +151,7 @@ export function ProDashboard() {
                 <CardDescription>{t('dashboard.activeCasesByUrgency')}</CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/visa')}>
-                {t('dashboard.allCases')} <ArrowUpRight className="h-3 w-3 ml-1" />
+                {t('dashboard.allCases')} <ArrowUpRight className="size-3 ml-1" />
               </Button>
             </div>
           </CardHeader>
@@ -160,7 +160,7 @@ export function ProDashboard() {
               <SkeletonRows count={5} />
             ) : pipeline.length === 0 ? (
               <div className="py-10 text-center">
-                <CheckCircle2 className="h-8 w-8 text-success/60 mx-auto mb-2" />
+                <CheckCircle2 className="size-8 text-success/60 mx-auto mb-2" />
                 <p className="text-sm font-medium">{t('dashboard.noActiveVisaCases')}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{t('dashboard.allVisasProcessed')}</p>
               </div>
@@ -189,10 +189,10 @@ export function ProDashboard() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
+                            className="size-6 p-0 text-muted-foreground hover:text-primary"
                             onClick={() => navigate(`/visa/${v.id}`)}
                           >
-                            <Eye className="h-3.5 w-3.5" />
+                            <Eye className="size-3.5" />
                           </Button>
                         </div>
                       </div>
@@ -222,7 +222,7 @@ export function ProDashboard() {
                   <CardDescription>{t('dashboard.pendingReview')}</CardDescription>
                 </div>
                 <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/documents')}>
-                  {t('common.all')} <ArrowUpRight className="h-3 w-3 ml-1" />
+                  {t('common.all')} <ArrowUpRight className="size-3 ml-1" />
                 </Button>
               </div>
             </CardHeader>
@@ -231,15 +231,15 @@ export function ProDashboard() {
                 <SkeletonRows count={3} />
               ) : pendingDocList.length === 0 ? (
                 <div className="py-8 text-center">
-                  <ClipboardCheck className="h-7 w-7 text-success/60 mx-auto mb-2" />
+                  <ClipboardCheck className="size-7 text-success/60 mx-auto mb-2" />
                   <p className="text-xs text-muted-foreground">{t('dashboard.noDocsPendingReview')}</p>
                 </div>
               ) : (
                 <div className="divide-y divide-border/50">
                   {pendingDocList.slice(0, 5).map((doc) => (
                     <div key={doc.id} className="flex items-start gap-2.5 py-2.5">
-                      <div className="h-7 w-7 rounded-lg bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center shrink-0">
-                        <FileText className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                      <div className="size-7 rounded-lg bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center shrink-0">
+                        <FileText className="size-3.5 text-amber-600 dark:text-amber-400" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{doc.fileName ?? doc.docType ?? 'Document'}</p>
@@ -264,7 +264,7 @@ export function ProDashboard() {
             <CardContent>
               {expDocsLoading ? (
                 <div className="space-y-2">
-                  {[1, 2, 3].map(i => <div key={i} className="flex gap-2"><div className="skeleton-shimmer h-3 flex-1 rounded-full" /></div>)}
+                  {[1, 2, 3].map(i => <div key={`div-${i}`} className="flex gap-2"><div className="skeleton-shimmer h-3 flex-1 rounded-full" /></div>)}
                 </div>
               ) : expiringDocList.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-4">{t('dashboard.noExpiringDocs')}</p>

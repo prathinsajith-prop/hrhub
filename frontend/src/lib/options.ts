@@ -5,10 +5,10 @@
  *   import { LEAVE_TYPE_OPTIONS, toOptions } from '@/lib/options'
  *
  * Rules:
- *   • Label maps live in lib/enums.ts  — single source for display strings.
- *   • Option arrays live here          — derived with toOptions() so labels
+ *   • Label maps live in lib/enums.ts  - single source for display strings.
+ *   • Option arrays live here          - derived with toOptions() so labels
  *     stay in sync automatically.
- *   • Styling / badge-variant maps     — stay local to each component.
+ *   • Styling / badge-variant maps     - stay local to each component.
  */
 
 import {
@@ -48,7 +48,7 @@ export function toOptions(map: Record<string, string>): SelectOption[] {
 }
 
 // ── Leave ────────────────────────────────────────────────────────────────────
-// Excludes public_holiday — employees cannot request it directly.
+// Excludes public_holiday - employees cannot request it directly.
 export const LEAVE_TYPE_OPTIONS: SelectOption[] = toOptions(LEAVE_TYPE_LABELS).filter(o => o.value !== 'public_holiday')
 export const LEAVE_STATUS_OPTIONS: SelectOption[] = toOptions(APPROVAL_STATUS_LABELS)
 export const LEAVE_POLICY_TYPE_OPTIONS: SelectOption[] = toOptions(LEAVE_POLICY_TYPE_LABELS)
@@ -59,7 +59,7 @@ export const EMPLOYEE_STATUS_OPTIONS: SelectOption[] = toOptions(EMPLOYEE_STATUS
 export const NEW_EMPLOYEE_STATUS_OPTIONS: SelectOption[] = EMPLOYEE_STATUS_OPTIONS.filter(o =>
     ['onboarding', 'active'].includes(o.value),
 )
-// All editable statuses (excludes visa_expired — set automatically)
+// All editable statuses (excludes visa_expired - set automatically)
 export const EDIT_EMPLOYEE_STATUS_OPTIONS: SelectOption[] = EMPLOYEE_STATUS_OPTIONS.filter(o =>
     o.value !== 'visa_expired',
 )
@@ -165,7 +165,7 @@ export const ROLE_OPTIONS: SelectOption[] = toOptions(ROLE_LABELS)
 export const JURISDICTION_OPTIONS: SelectOption[] = toOptions(JURISDICTION_LABELS)
 export const PLAN_OPTIONS: SelectOption[] = toOptions(PLAN_LABELS)
 
-// NewOrganizationPage stores jurisdiction as title-case strings — kept separate
+// NewOrganizationPage stores jurisdiction as title-case strings - kept separate
 // to avoid a data migration.
 export const ORG_JURISDICTION_OPTIONS: SelectOption[] = [
     { value: 'Mainland', label: 'Mainland' },

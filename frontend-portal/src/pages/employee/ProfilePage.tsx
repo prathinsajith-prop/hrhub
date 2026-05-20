@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { CalendarDays, Clock, Eye, EyeOff, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
+import { CalendarDays, Check, Clock, Eye, EyeOff, Languages, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
 
 import { ApiError } from '@/lib/api'
 import { useMyEmployee, useUpdateMyProfile, type UpdateMyProfileBody } from '@/hooks/useMe'
@@ -20,8 +20,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { formatDate, formatShiftRange } from '@/lib/utils'
-import { AssignedAssetsCard } from '@/components/shared/AssignedAssetsCard'
+import { cn, formatDate, formatShiftRange } from '@/lib/utils'
 
 export function EmployeeProfilePage() {
     const { t } = useTranslation()
@@ -77,7 +76,7 @@ export function EmployeeProfilePage() {
         <div className="space-y-6">
             <PageHeader
                 title={`${employee.firstName} ${employee.lastName}`}
-                subtitle={[employee.designation, employee.department].filter(Boolean).join(' · ') || undefined}
+                subtitle={[employee.designation, employee.departmentName ?? employee.department].filter(Boolean).join(' · ') || undefined}
                 action={
                     editing ? (
                         <>
@@ -97,13 +96,12 @@ export function EmployeeProfilePage() {
             />
 
             <Tabs defaultValue="personal">
-                <TabsList className="grid w-full grid-cols-3 sm:inline-flex sm:w-auto">
+                <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
                     <TabsTrigger value="personal">Personal</TabsTrigger>
-                    <TabsTrigger value="emergency">Emergency</TabsTrigger>
-                    <TabsTrigger value="more">More</TabsTrigger>
+                    <TabsTrigger value="settings">Settings</TabsTrigger>
                 </TabsList>
 
-                {/* ── Personal: Employment basics + Contact + Address ── */}
+                {/* ── Personal: Employment basics + Schedule + Contact + Address + Emergency ── */}
                 <TabsContent value="personal" className="space-y-4">
                     <Card className="overflow-hidden border-border/70">
                         <CardContent className="p-5">
@@ -115,8 +113,21 @@ export function EmployeeProfilePage() {
                                 <Field label="Status" value={employee.status} />
                                 <Field label="Join date" value={formatDate(employee.joinDate)} />
                                 <Field label="Designation" value={employee.designation ?? '—'} />
-                                <Field label="Department" value={employee.department ?? '—'} />
                                 <Field label="Nationality" value={employee.nationality ?? '—'} />
+                                {/* Branch → Division → Department triad — joined
+                                    from org_units server-side. We hide rows that
+                                    have no value so a flat-org tenant (just one
+                                    branch) doesn't show three em-dashes. */}
+                                {employee.branchName ? (
+                                    <Field label="Branch" value={employee.branchName} />
+                                ) : null}
+                                {employee.divisionName ? (
+                                    <Field label="Division" value={employee.divisionName} />
+                                ) : null}
+                                <Field
+                                    label="Department"
+                                    value={employee.departmentName ?? employee.department ?? '—'}
+                                />
                             </div>
                         </CardContent>
                     </Card>
@@ -151,6 +162,7 @@ export function EmployeeProfilePage() {
                                     onChange={(v) => onChange('mobileNo', v)}
                                 />
                             </div>
+
                             <h3 className="mb-4 mt-6 border-t border-border/60 pt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 {t('profile.address')}
                             </h3>
@@ -160,15 +172,11 @@ export function EmployeeProfilePage() {
                                 editing={editing}
                                 onChange={(v) => onChange('homeCountryAddress', v)}
                             />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
 
-                {/* ── Emergency contact ── */}
-                <TabsContent value="emergency">
-                    <Card className="overflow-hidden border-border/70">
-                        <CardContent className="p-5">
-                            <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            {/* Emergency contact merged in here — it's part of the
+                                employee's personal record, not a separate tab worth
+                                of content. */}
+                            <h3 className="mb-4 mt-6 border-t border-border/60 pt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 {t('profile.emergency')}
                             </h3>
                             <div className="grid gap-4 sm:grid-cols-2">
@@ -196,13 +204,61 @@ export function EmployeeProfilePage() {
                     </Card>
                 </TabsContent>
 
-                {/* ── More: Assets + Security ── */}
-                <TabsContent value="more" className="space-y-4">
-                    <AssignedAssetsCard variant="me" />
+                {/* ── Settings: Language + Security ── */}
+                <TabsContent value="settings" className="space-y-4">
+                    <LanguageCard />
                     <SecurityCard />
                 </TabsContent>
             </Tabs>
         </div>
+    )
+}
+
+const LANGUAGES: { code: 'en' | 'ar'; label: string; native: string }[] = [
+    { code: 'en', label: 'English', native: 'EN' },
+    { code: 'ar', label: 'العربية', native: 'AR' },
+]
+
+function LanguageCard() {
+    const { i18n } = useTranslation()
+    const current = (i18n.language?.slice(0, 2) ?? 'en') as 'en' | 'ar'
+    return (
+        <Card className="overflow-hidden border-border/70">
+            <CardContent className="p-5">
+                <div className="mb-3 flex items-center gap-2">
+                    <span className="flex size-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                        <Languages className="size-5" />
+                    </span>
+                    <div>
+                        <h3 className="text-sm font-semibold">Language</h3>
+                        <p className="text-xs text-muted-foreground">Choose the interface language.</p>
+                    </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {LANGUAGES.map((l) => {
+                        const active = current === l.code
+                        return (
+                            <button
+                                key={l.code}
+                                type="button"
+                                onClick={() => i18n.changeLanguage(l.code)}
+                                className={cn(
+                                    'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                                    active
+                                        ? 'border-primary bg-primary/10 text-primary'
+                                        : 'border-border hover:border-primary/40 hover:bg-muted',
+                                )}
+                                aria-pressed={active}
+                            >
+                                {active ? <Check className="size-3.5" /> : null}
+                                <span>{l.label}</span>
+                                <span className="text-[10px] tracking-wider text-muted-foreground">{l.native}</span>
+                            </button>
+                        )
+                    })}
+                </div>
+            </CardContent>
+        </Card>
     )
 }
 
