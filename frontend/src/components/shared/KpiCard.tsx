@@ -29,7 +29,7 @@ const TONE_STYLES: Record<Tone, { bar: string; iconBg: string; iconFg: string; t
 }
 
 /**
- * Primary KPI tile — large card with colored top accent bar, icon tile,
+ * Primary KPI tile - large card with colored top accent bar, icon tile,
  * metric + secondary hint + optional trend. Matches the reference design.
  */
 function KpiCardBase({ label, value, hint, trend, icon, tone = 'primary', className }: KpiCardProps) {
@@ -49,7 +49,7 @@ function KpiCardBase({ label, value, hint, trend, icon, tone = 'primary', classN
             <span className={cn('absolute left-4 top-0 h-[3px] w-12 rounded-b-full', s.bar)} aria-hidden="true" />
             <div className="flex items-start gap-3 p-4 pt-5">
                 {icon && (
-                    <div className={cn('h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ring-1 ring-black/5', s.iconBg, s.iconFg)}>
+                    <div className={cn('size-10 rounded-xl flex items-center justify-center shrink-0 ring-1 ring-black/5', s.iconBg, s.iconFg)}>
                         {icon}
                     </div>
                 )}
@@ -109,7 +109,7 @@ function KpiCardCompactBase({ label, value, icon: Icon, color = 'blue', loading 
             label={label}
             value={value ?? '—'}
             hint={hint}
-            icon={<Icon className="h-5 w-5" />}
+            icon={<Icon className="size-5" />}
             tone={colorToTone[color] ?? 'primary'}
             className={className}
         />

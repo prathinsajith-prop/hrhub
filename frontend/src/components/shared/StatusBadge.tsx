@@ -36,7 +36,7 @@ function StatusBadgeBase({ tone = 'neutral', children, className, dot }: StatusB
                 className,
             )}
         >
-            {dot && <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />}
+            {dot && <span className="size-1.5 rounded-full bg-current opacity-70" />}
             {children}
         </span>
     )

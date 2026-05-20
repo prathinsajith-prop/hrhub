@@ -29,7 +29,7 @@ function ToolBtn({
       disabled={disabled}
       title={title}
       className={cn(
-        'inline-flex items-center justify-center h-7 w-7 rounded-md text-sm transition-colors',
+        'inline-flex items-center justify-center size-7 rounded-md text-sm transition-colors',
         'hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
         active
           ? 'bg-foreground text-background'
@@ -125,14 +125,14 @@ export function RichTextEditor({
           disabled={!editor.can().undo()}
           title="Undo"
         >
-          <Undo2 className="h-3.5 w-3.5" />
+          <Undo2 className="size-3.5" />
         </ToolBtn>
         <ToolBtn
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!editor.can().redo()}
           title="Redo"
         >
-          <Redo2 className="h-3.5 w-3.5" />
+          <Redo2 className="size-3.5" />
         </ToolBtn>
 
         <Sep />
@@ -143,21 +143,21 @@ export function RichTextEditor({
           active={editor.isActive('paragraph')}
           title="Paragraph"
         >
-          <Pilcrow className="h-3.5 w-3.5" />
+          <Pilcrow className="size-3.5" />
         </ToolBtn>
         <ToolBtn
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
           active={editor.isActive('heading', { level: 2 })}
           title="Heading 2"
         >
-          <Heading2 className="h-3.5 w-3.5" />
+          <Heading2 className="size-3.5" />
         </ToolBtn>
         <ToolBtn
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
           active={editor.isActive('heading', { level: 3 })}
           title="Heading 3"
         >
-          <Heading3 className="h-3.5 w-3.5" />
+          <Heading3 className="size-3.5" />
         </ToolBtn>
 
         <Sep />
@@ -168,28 +168,28 @@ export function RichTextEditor({
           active={editor.isActive('bold')}
           title="Bold"
         >
-          <Bold className="h-3.5 w-3.5" />
+          <Bold className="size-3.5" />
         </ToolBtn>
         <ToolBtn
           onClick={() => editor.chain().focus().toggleItalic().run()}
           active={editor.isActive('italic')}
           title="Italic"
         >
-          <Italic className="h-3.5 w-3.5" />
+          <Italic className="size-3.5" />
         </ToolBtn>
         <ToolBtn
           onClick={() => editor.chain().focus().toggleUnderline().run()}
           active={editor.isActive('underline')}
           title="Underline"
         >
-          <UnderlineIcon className="h-3.5 w-3.5" />
+          <UnderlineIcon className="size-3.5" />
         </ToolBtn>
         <ToolBtn
           onClick={() => editor.chain().focus().toggleStrike().run()}
           active={editor.isActive('strike')}
           title="Strikethrough"
         >
-          <Strikethrough className="h-3.5 w-3.5" />
+          <Strikethrough className="size-3.5" />
         </ToolBtn>
         <ToolBtn
           onClick={handleLinkToggle}
@@ -197,8 +197,8 @@ export function RichTextEditor({
           title={editor.isActive('link') ? 'Remove link' : 'Add link'}
         >
           {editor.isActive('link')
-            ? <Link2Off className="h-3.5 w-3.5" />
-            : <LinkIcon className="h-3.5 w-3.5" />}
+            ? <Link2Off className="size-3.5" />
+            : <LinkIcon className="size-3.5" />}
         </ToolBtn>
 
         <Sep />
@@ -209,14 +209,14 @@ export function RichTextEditor({
           active={editor.isActive('bulletList')}
           title="Bullet list"
         >
-          <List className="h-3.5 w-3.5" />
+          <List className="size-3.5" />
         </ToolBtn>
         <ToolBtn
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
           active={editor.isActive('orderedList')}
           title="Numbered list"
         >
-          <ListOrdered className="h-3.5 w-3.5" />
+          <ListOrdered className="size-3.5" />
         </ToolBtn>
 
         <Sep />
@@ -226,7 +226,7 @@ export function RichTextEditor({
           onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
           title="Clear formatting"
         >
-          <RemoveFormatting className="h-3.5 w-3.5" />
+          <RemoveFormatting className="size-3.5" />
         </ToolBtn>
       </div>
 

@@ -44,10 +44,10 @@ export function NotificationsPage() {
         <PageWrapper>
             <PageHeader
                 title={t('profile.notifications', 'Notifications')}
-                description={`${total} total — ${unreadCount} unread`}
+                description={`${total} total - ${unreadCount} unread`}
                 actions={
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
                         <Button
@@ -79,14 +79,14 @@ export function NotificationsPage() {
                     <div className="divide-y">
                         {Array.from({ length: 5 }).map((_, i) => (
                             <div key={i} className="flex gap-4 p-4">
-                                <Skeleton className="h-5 w-5 rounded-full mt-0.5 shrink-0" />
+                                <Skeleton className="size-5 rounded-full mt-0.5 shrink-0" />
                                 <div className="flex-1 space-y-2">
                                     <div className="flex items-center gap-2">
                                         <Skeleton className="h-4 w-48" />
                                         <Skeleton className="h-4 w-16 rounded-full" />
                                     </div>
                                     <Skeleton className="h-3 w-full" />
-                                    <Skeleton className="h-3 w-3/4" />
+                                    <Skeleton className="size-3/4" />
                                     <Skeleton className="h-2.5 w-24" />
                                 </div>
                             </div>
@@ -127,7 +127,7 @@ export function NotificationsPage() {
                                         {n.type}
                                     </Badge>
                                     {!n.isRead && (
-                                        <span className="ml-auto h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />
+                                        <span className="ml-auto size-2 rounded-full bg-primary shrink-0 mt-1" />
                                     )}
                                 </div>
                                 <p className="text-xs text-muted-foreground leading-relaxed">{n.message}</p>
@@ -143,7 +143,7 @@ export function NotificationsPage() {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="shrink-0 mt-0.5 h-7 w-7"
+                                    className="shrink-0 mt-0.5 size-7"
                                     title="Mark as read"
                                     aria-label="Mark as read"
                                     onClick={e => { e.stopPropagation(); markRead.mutate(n.id) }}

@@ -139,6 +139,11 @@
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* `overflow-x: clip` clips horizontal overflow WITHOUT creating a scroll
+       container — which means descendant `position: sticky` (the TopBar,
+       SideNav) keeps working. Using `overflow-x: hidden` here (or on any
+       ancestor) would silently break both. */
+    overflow-x: clip;
     text-rendering: optimizeLegibility;
   }
 
@@ -581,12 +586,14 @@ html[dir="rtl"] [data-rtl-flip] {
   border: 1px solid hsl(var(--border) / 0.6);
 }
 
-/* Sticky header backdrop blur */
+/* Sticky header backdrop blur.
+   Border-bottom is now controlled by the TopBar component so it only appears
+   once the page is scrolled — keeps the header weightless at the top of
+   the document. */
 .header-blur {
   background: hsl(var(--background) / 0.88);
   backdrop-filter: blur(12px) saturate(150%);
   -webkit-backdrop-filter: blur(12px) saturate(150%);
-  border-bottom: 1px solid hsl(var(--border) / 0.7);
 }
 
 /* Gradient text utility (for KPI numbers / hero labels) */

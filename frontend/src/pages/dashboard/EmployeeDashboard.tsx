@@ -40,7 +40,7 @@ export function EmployeeDashboard() {
       {/* Profile completeness banner */}
       {!empLoading && completeness < 100 && (
         <div className="flex items-start gap-4 rounded-xl border border-info/20 bg-info/5 px-5 py-4">
-          <Info className="h-5 w-5 text-info shrink-0 mt-0.5" />
+          <Info className="size-5 text-info shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium">{t('dashboard.completeProfile', { percent: completeness })}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -61,7 +61,7 @@ export function EmployeeDashboard() {
         <SectionHeading title={t('dashboard.leaveBalanceYear', { year: new Date().getFullYear() })} />
         {leaveLoading || empLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+            {[1, 2, 3, 4].map(i => <Skeleton key={`skeleton-${i}`} className="h-24 rounded-xl" />)}
           </div>
         ) : leaveEntries.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('dashboard.noLeaveBalance')}</p>
@@ -123,7 +123,7 @@ export function EmployeeDashboard() {
           </CardHeader>
           <CardContent>
             {payslipsLoading ? (
-              <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
+              <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-12 rounded-lg" />)}</div>
             ) : (
               <div className="divide-y divide-border/50">
                 {recentPayslips.map(p => (

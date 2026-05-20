@@ -89,8 +89,8 @@ export function ResetPasswordPage() {
                 heroSubtitle={t('auth.resetMissingSubtitle')}
             >
                 <div className="text-center space-y-5">
-                    <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-destructive/10 text-destructive mx-auto">
-                        <AlertTriangle className="h-6 w-6" />
+                    <div className="inline-flex items-center justify-center size-12 rounded-2xl bg-destructive/10 text-destructive mx-auto">
+                        <AlertTriangle className="size-6" />
                     </div>
                     <div>
                         <h2 className="text-2xl font-semibold text-foreground font-display">{t('auth.invalidResetLink')}</h2>
@@ -99,7 +99,7 @@ export function ResetPasswordPage() {
                         </p>
                     </div>
                     <Link to="/forgot-password">
-                        <Button className="w-full gap-2">{t('auth.requestNewLink')} <ArrowRight className="h-4 w-4" /></Button>
+                        <Button className="w-full gap-2">{t('auth.requestNewLink')} <ArrowRight className="size-4" /></Button>
                     </Link>
                 </div>
             </AuthLayout>
@@ -120,7 +120,7 @@ export function ResetPasswordPage() {
                         t('auth.resetTip4'),
                     ].map(tip => (
                         <li key={tip} className="flex items-start gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                            <CheckCircle2 className="size-4 text-success shrink-0 mt-0.5" />
                             <span>{tip}</span>
                         </li>
                     ))}
@@ -129,8 +129,8 @@ export function ResetPasswordPage() {
         >
             {done ? (
                 <div className="text-center space-y-5">
-                    <div className="inline-flex items-center justify-center h-12 w-12 rounded-2xl bg-success/10 text-success mx-auto">
-                        <CheckCircle2 className="h-6 w-6" />
+                    <div className="inline-flex items-center justify-center size-12 rounded-2xl bg-success/10 text-success mx-auto">
+                        <CheckCircle2 className="size-6" />
                     </div>
                     <div>
                         <h2 className="text-2xl font-semibold text-foreground font-display">{t('auth.passwordUpdatedTitle')}</h2>
@@ -142,8 +142,8 @@ export function ResetPasswordPage() {
             ) : (
                 <>
                     <div className="mb-6">
-                        <div className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-primary/10 text-primary mb-4">
-                            <ShieldCheck className="h-5 w-5" />
+                        <div className="inline-flex items-center justify-center size-10 rounded-xl bg-primary/10 text-primary mb-4">
+                            <ShieldCheck className="size-5" />
                         </div>
                         <h2 className="text-2xl font-semibold text-foreground font-display tracking-tight">{t('auth.chooseNewPassword')}</h2>
                         <p className="text-sm text-muted-foreground mt-1.5">
@@ -167,10 +167,10 @@ export function ResetPasswordPage() {
                                 <button
                                     type="button"
                                     onClick={() => setShowPw(v => !v)}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 size-7 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
                                     aria-label={showPw ? t('auth.hidePassword') : t('auth.showPassword')}
                                 >
-                                    {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                                 </button>
                             </div>
                             {pw && (
@@ -206,7 +206,7 @@ export function ResetPasswordPage() {
                         </div>
 
                         <Button type="submit" className="w-full gap-2" disabled={loading}>
-                            {loading ? t('auth.updating') : (<>{t('auth.resetPasswordAction')} <ArrowRight className="h-4 w-4" /></>)}
+                            {loading ? t('auth.updating') : (<>{t('auth.resetPasswordAction')} <ArrowRight className="size-4" /></>)}
                         </Button>
                     </form>
 
@@ -215,7 +215,7 @@ export function ResetPasswordPage() {
                             to="/login"
                             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
-                            <ArrowLeft className="h-3.5 w-3.5" />
+                            <ArrowLeft className="size-3.5" />
                             {t('auth.cancelReturn')}
                         </Link>
                     </div>

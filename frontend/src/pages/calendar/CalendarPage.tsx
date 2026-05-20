@@ -66,9 +66,9 @@ export function CalendarPage() {
 
     const { data: calendarData, isFetching } = useCalendarEvents(visibleRange)
     // Show skeleton overlay only until the first successful data fetch.
-    // Never conditionally unmount FullCalendar — that resets initialView.
+    // Never conditionally unmount FullCalendar - that resets initialView.
     const [calReady, setCalReady] = useState(false)
-    // Flip calReady to true once the first data arrives — use setState during render
+    // Flip calReady to true once the first data arrives - use setState during render
     // (React 18+ supported pattern, avoids setState-in-effect).
     if (calendarData && !calReady) {
         setCalReady(true)
@@ -89,7 +89,7 @@ export function CalendarPage() {
                 const c = KIND_META.visa
                 out.push({
                     id: `visa-${str(v.id)}`,
-                    title: `Visa expires — ${str(v.employeeName) ?? 'Employee'}`,
+                    title: `Visa expires - ${str(v.employeeName) ?? 'Employee'}`,
                     start: date,
                     allDay: true,
                     backgroundColor: c.bg,
@@ -136,7 +136,7 @@ export function CalendarPage() {
                 const c = KIND_META.leave
                 out.push({
                     id: `leave-${str(l.id)}`,
-                    title: `${str(l.employeeName) ?? 'Employee'} — ${str(l.leaveType) ?? 'leave'}`,
+                    title: `${str(l.employeeName) ?? 'Employee'} - ${str(l.leaveType) ?? 'leave'}`,
                     start,
                     end: endExclusive,
                     allDay: true,
@@ -156,7 +156,7 @@ export function CalendarPage() {
                 const c = KIND_META.review
                 out.push({
                     id: `review-${str(r.id)}`,
-                    title: `Review — ${str(r.period) ?? ''}`,
+                    title: `Review - ${str(r.period) ?? ''}`,
                     start: date,
                     allDay: true,
                     backgroundColor: c.bg,
@@ -181,7 +181,7 @@ export function CalendarPage() {
                     backgroundColor: c.bg,
                     borderColor: c.border,
                     textColor: c.text,
-                    // Holidays are not clickable links — show info via display only
+                    // Holidays are not clickable links - show info via display only
                     extendedProps: { kind: 'holiday' as EventKind, href: null, sub: h.isRecurring ? 'Annual' : undefined },
                 })
             }
@@ -200,7 +200,7 @@ export function CalendarPage() {
     const handleDatesSet = (arg: DatesSetArg) => {
         setCurrentTitle(arg.view.title)
         const from = arg.start.toISOString().slice(0, 10)
-        // arg.end is exclusive in FullCalendar — subtract one day for inclusive upper bound.
+        // arg.end is exclusive in FullCalendar - subtract one day for inclusive upper bound.
         const endInclusive = new Date(arg.end.getTime() - 86_400_000)
         const to = endInclusive.toISOString().slice(0, 10)
         setVisibleRange(prev => (prev?.from === from && prev?.to === to ? prev : { from, to }))
@@ -234,7 +234,7 @@ export function CalendarPage() {
         const isHoliday = kind === 'holiday'
         return (
             <div className={`flex items-center gap-1 px-1 py-0.5 overflow-hidden w-full ${isHoliday ? 'font-medium' : ''}`}>
-                <Icon className="h-3 w-3 shrink-0" style={{ color: KIND_META[kind].border }} />
+                <Icon className="size-3 shrink-0" style={{ color: KIND_META[kind].border }} />
                 <span className="truncate text-[11px] leading-tight">{arg.event.title}</span>
             </div>
         )
@@ -245,11 +245,11 @@ export function CalendarPage() {
             <PageHeader
                 title={t('nav.calendar', { defaultValue: 'Calendar' })}
                 description={t('calendar.description', {
-                    defaultValue: 'Visas, documents, leave, reviews and public holidays — unified.',
+                    defaultValue: 'Visas, documents, leave, reviews and public holidays - unified.',
                 })}
                 actions={
                     <Badge variant="outline" className="text-xs">
-                        <CalendarDays className="h-3 w-3 mr-1" />
+                        <CalendarDays className="size-3 mr-1" />
                         {events.length} events
                     </Badge>
                 }
@@ -269,10 +269,10 @@ export function CalendarPage() {
                         >
                             <CardContent className="p-3 flex items-center gap-3">
                                 <div
-                                    className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0"
+                                    className="size-9 rounded-lg flex items-center justify-center shrink-0"
                                     style={{ backgroundColor: m.bg, color: m.border }}
                                 >
-                                    <Icon className="h-4 w-4" />
+                                    <Icon className="size-4" />
                                 </div>
                                 <div className="min-w-0">
                                     <p className="text-xs text-muted-foreground truncate">{m.label}</p>
@@ -289,24 +289,24 @@ export function CalendarPage() {
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-1">
                         <Button variant="outline" size="icon-sm" onClick={goPrev} aria-label="Previous">
-                            <ChevronLeft className="h-4 w-4" />
+                            <ChevronLeft className="size-4" />
                         </Button>
                         <Button variant="outline" size="sm" onClick={goToday} className="h-8 text-xs">
                             Today
                         </Button>
                         <Button variant="outline" size="icon-sm" onClick={goNext} aria-label="Next">
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="size-4" />
                         </Button>
                         <h2 className="text-sm font-semibold ml-2 font-display">{currentTitle}</h2>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant="secondary" className="text-[10px]">
-                            <Filter className="h-2.5 w-2.5 mr-1" />
+                            <Filter className="size-2.5 mr-1" />
                             {upcomingThisWeek} this week
                         </Badge>
                         {isFetching && calReady && (
-                            <div className="h-3.5 w-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                            <div className="size-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
                         )}
                         <div className="inline-flex rounded-md border bg-secondary p-0.5">
                             {(['dayGridMonth', 'timeGridWeek', 'listWeek'] as ViewKey[]).map(v => (
@@ -325,10 +325,10 @@ export function CalendarPage() {
             </Card>
 
             <Card className="p-3 hrhub-fullcalendar relative">
-                {/* Skeleton shown only until first data load — FullCalendar always stays mounted */}
+                {/* Skeleton shown only until first data load - FullCalendar always stays mounted */}
                 {!calReady && (
                     <div className="absolute inset-3 z-10 rounded-md overflow-hidden">
-                        <Skeleton className="h-full w-full" />
+                        <Skeleton className="size-full" />
                     </div>
                 )}
                 <div className={calReady ? undefined : 'invisible'}>

@@ -40,6 +40,20 @@ export const payslips = pgTable('payslips', {
     commission: numeric('commission', { precision: 12, scale: 2 }).notNull().default('0'),
     grossSalary: numeric('gross_salary', { precision: 12, scale: 2 }).notNull().default('0'),
     deductions: numeric('deductions', { precision: 12, scale: 2 }).notNull().default('0'),
+    // Itemised leave-driven deductions. The aggregate `deductions` column
+    // still holds the canonical total (unpaidLeaveDeduction + sickHalfPayDeduction
+    // + any future deduction lines), but these per-line fields let the UI
+    // explain *why* money was withheld instead of showing a single opaque sum.
+    unpaidLeaveDays: integer('unpaid_leave_days').notNull().default(0),
+    unpaidLeaveDeduction: numeric('unpaid_leave_deduction', { precision: 12, scale: 2 }).notNull().default('0'),
+    sickHalfPayDays: integer('sick_half_pay_days').notNull().default(0),
+    sickHalfPayDeduction: numeric('sick_half_pay_deduction', { precision: 12, scale: 2 }).notNull().default('0'),
+    // Loan installments collected via the adjustments engine. Tracked separately
+    // so the breakdown UI can label them explicitly instead of folding into "Other".
+    loanDeduction: numeric('loan_deduction', { precision: 12, scale: 2 }).notNull().default('0'),
+    // Catch-all bucket: salary advances, ad-hoc manual deductions, anything that
+    // isn't leave-driven or loan-driven. Keeps the column list bounded.
+    otherDeduction: numeric('other_deduction', { precision: 12, scale: 2 }).notNull().default('0'),
     netSalary: numeric('net_salary', { precision: 12, scale: 2 }).notNull().default('0'),
     daysWorked: integer('days_worked'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

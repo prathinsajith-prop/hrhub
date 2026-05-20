@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Building2, Search, Users } from 'lucide-react'
+import { Briefcase, Building2, CalendarDays, ChevronRight, Mail, Phone, Search, Users } from 'lucide-react'
 
 import { useTeam } from '@/hooks/useTeam'
 import { useAuthStore } from '@/store/authStore'
@@ -13,7 +13,18 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { ROUTES } from '@/lib/routes'
-import { cn, initialsOf } from '@/lib/utils'
+import { cn, formatDate, initialsOf } from '@/lib/utils'
+
+// Status pill colours kept local to the team page. Mirrors the palette used
+// on the MemberDetailPage hero so the visual identity is consistent
+// between the list and the detail view.
+const STATUS_TONE: Record<string, string> = {
+    active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+    onboarding: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+    suspended: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
+    terminated: 'bg-muted text-muted-foreground',
+    visa_expired: 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
+}
 
 const ALL = 'All' as const
 
@@ -106,37 +117,90 @@ export function ManagerTeamPage() {
                 />
             ) : (
                 <div className="space-y-2">
-                    {filteredMembers.map((m) => (
-                        <Link key={m.id} to={ROUTES.managerMemberDetail(m.id)}>
-                            <Card className="border-border/70 transition-all hover:border-primary/40 hover:shadow-md">
-                                <CardContent className="flex items-center gap-3 p-3">
-                                    <Avatar className="size-10">
-                                        <AvatarImage src={m.avatarUrl ?? undefined} />
-                                        <AvatarFallback>{initialsOf(`${m.firstName} ${m.lastName}`)}</AvatarFallback>
-                                    </Avatar>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="truncate font-medium">{m.firstName} {m.lastName}</div>
-                                        <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                                            {m.designation ? <span className="truncate">{m.designation}</span> : null}
-                                            {m.department ? (
-                                                <span className="inline-flex items-center gap-1 truncate">
-                                                    <Building2 className="size-3" />
-                                                    {m.department}
+                    {filteredMembers.map((m) => {
+                        // Show the most useful contact + role detail in one
+                        // tidy card. Empty rows hide automatically so we never
+                        // render a stretch of em-dashes.
+                        const phone = m.mobileNo || m.phone || null
+                        return (
+                            <Link key={m.id} to={ROUTES.managerMemberDetail(m.id)} className="block">
+                                <Card className="border-border/70 transition-all hover:border-primary/40 hover:shadow-md">
+                                    <CardContent className="flex items-center gap-3 p-3.5 sm:gap-4">
+                                        <Avatar className="size-12 shrink-0">
+                                            <AvatarImage src={m.avatarUrl ?? undefined} />
+                                            <AvatarFallback>{initialsOf(`${m.firstName} ${m.lastName}`)}</AvatarFallback>
+                                        </Avatar>
+
+                                        <div className="min-w-0 flex-1 space-y-1">
+                                            {/* Row 1 — name + status pill */}
+                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                <span className="truncate font-semibold leading-tight">
+                                                    {m.firstName} {m.lastName}
                                                 </span>
+                                                <Badge
+                                                    className={cn(
+                                                        'border-0 text-[10px] uppercase tracking-wider',
+                                                        STATUS_TONE[m.status] ?? STATUS_TONE.terminated,
+                                                    )}
+                                                >
+                                                    {m.status.replace('_', ' ')}
+                                                </Badge>
+                                                {m.employeeNo ? (
+                                                    <span className="text-[11px] text-muted-foreground tabular-figures">
+                                                        #{m.employeeNo}
+                                                    </span>
+                                                ) : null}
+                                            </div>
+
+                                            {/* Row 2 — designation + department */}
+                                            {(m.designation || m.department) ? (
+                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                                    {m.designation ? (
+                                                        <span className="inline-flex items-center gap-1 truncate">
+                                                            <Briefcase className="size-3" />
+                                                            {m.designation}
+                                                        </span>
+                                                    ) : null}
+                                                    {m.department ? (
+                                                        <span className="inline-flex items-center gap-1 truncate">
+                                                            <Building2 className="size-3" />
+                                                            {m.department}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
                                             ) : null}
-                                            {!m.designation && !m.department ? <span>#{m.employeeNo}</span> : null}
+
+                                            {/* Row 3 — contact + join date.
+                                                Hidden on the narrowest viewport (extra rows would
+                                                wrap awkwardly); shown from sm+ where there's room. */}
+                                            <div className="hidden flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground sm:flex">
+                                                {m.email ? (
+                                                    <span className="inline-flex items-center gap-1 truncate">
+                                                        <Mail className="size-3" />
+                                                        {m.email}
+                                                    </span>
+                                                ) : null}
+                                                {phone ? (
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <Phone className="size-3" />
+                                                        {phone}
+                                                    </span>
+                                                ) : null}
+                                                {m.joinDate ? (
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <CalendarDays className="size-3" />
+                                                        Joined {formatDate(m.joinDate, { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                    </span>
+                                                ) : null}
+                                            </div>
                                         </div>
-                                    </div>
-                                    <Badge
-                                        variant="secondary"
-                                        className="hidden sm:inline-flex text-[10px] uppercase tracking-wider"
-                                    >
-                                        {m.status}
-                                    </Badge>
-                                </CardContent>
-                            </Card>
-                        </Link>
-                    ))}
+
+                                        <ChevronRight className="hidden size-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 sm:block" />
+                                    </CardContent>
+                                </Card>
+                            </Link>
+                        )
+                    })}
                 </div>
             )}
         </div>

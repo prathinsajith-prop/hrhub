@@ -42,7 +42,7 @@ export function EditCandidateDialog({
         if (!candidate) return
         // Helpers: coerce nullable scalars to safe input values.
         // The API may return `null` for optional fields, and `String(null)` is "null"
-        // — which would render literally inside the inputs. Treat null/undefined as empty.
+        // - which would render literally inside the inputs. Treat null/undefined as empty.
         const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
         const num = (v: unknown): string =>
             v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? '' : String(v)
@@ -154,7 +154,7 @@ export function EditCandidateDialog({
                 </DialogBody>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={updateApplication.isPending}>Cancel</Button>
-                    <Button onClick={handleSave} loading={updateApplication.isPending} leftIcon={<Save className="h-3.5 w-3.5" />}>
+                    <Button onClick={handleSave} loading={updateApplication.isPending} leftIcon={<Save className="size-3.5" />}>
                         Save changes
                     </Button>
                 </DialogFooter>

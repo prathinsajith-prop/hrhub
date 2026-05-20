@@ -162,7 +162,7 @@ export function LoginPage() {
         }
         return
       }
-      // 2FA challenge — show TOTP input
+      // 2FA challenge - show TOTP input
       if (json.data?.requiresMfa) {
         setMfaToken(json.data.mfaToken)
         setMfaStep(true)
@@ -250,8 +250,8 @@ export function LoginPage() {
                 key={s.label}
                 className="rounded-xl p-4 bg-white/[0.04] border border-white/10 backdrop-blur-sm hover:bg-white/[0.07] transition-colors"
               >
-                <div className="h-8 w-8 rounded-lg flex items-center justify-center mb-2.5 bg-primary/20 text-primary ring-1 ring-primary/30">
-                  <s.icon className="h-4 w-4" />
+                <div className="size-8 rounded-lg flex items-center justify-center mb-2.5 bg-primary/20 text-primary ring-1 ring-primary/30">
+                  <s.icon className="size-4" />
                 </div>
                 <p className="text-2xl font-bold font-display text-white">
                   {s.value}
@@ -268,8 +268,8 @@ export function LoginPage() {
                 key={f.title}
                 className="flex items-start gap-3 rounded-xl p-3.5 bg-white/[0.03] border border-white/10 backdrop-blur-sm hover:bg-white/[0.06] hover:border-white/15 transition-colors"
               >
-                <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 bg-primary/20 text-primary ring-1 ring-primary/30">
-                  <f.icon className="h-4 w-4" />
+                <div className="size-8 rounded-lg flex items-center justify-center shrink-0 bg-primary/20 text-primary ring-1 ring-primary/30">
+                  <f.icon className="size-4" />
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-white">{f.title}</p>
@@ -285,8 +285,8 @@ export function LoginPage() {
     >
       {/* Heading */}
       <div className="mb-6 text-center">
-        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4 ring-1 ring-primary/15 shadow-inner">
-          {mfaStep ? <ShieldCheck className="h-8 w-8" /> : <Lock className="h-8 w-8" />}
+        <div className="inline-flex size-16 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4 ring-1 ring-primary/15 shadow-inner">
+          {mfaStep ? <ShieldCheck className="size-8" /> : <Lock className="size-8" />}
         </div>
         <h2 className="text-2xl font-semibold text-foreground tracking-tight font-display">
           {mfaStep ? t('auth.verifyIdentity') : t('auth.welcomeBack')}
@@ -306,11 +306,11 @@ export function LoginPage() {
           {/* Icon badge */}
           <div className="flex flex-col items-center gap-3 py-2">
             <div className="relative">
-              <div className="h-16 w-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-inner">
-                <ShieldCheck className="h-8 w-8 text-primary" />
+              <div className="size-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-inner">
+                <ShieldCheck className="size-8 text-primary" />
               </div>
-              <span className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-background border-2 border-border flex items-center justify-center">
-                <span className="block h-2 w-2 rounded-full bg-green-500" />
+              <span className="absolute -bottom-1 -right-1 size-5 rounded-full bg-background border-2 border-border flex items-center justify-center">
+                <span className="block size-2 rounded-full bg-green-500" />
               </span>
             </div>
             <p className="text-xs text-muted-foreground text-center max-w-[220px] leading-relaxed">
@@ -347,7 +347,7 @@ export function LoginPage() {
           {/* Loading / verifying indicator */}
           {!useBackupCode && mfaLoading && (
             <div className="flex items-center justify-center gap-2 text-sm text-primary">
-              <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+              <div className="size-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
               {t('auth.verifying')}
             </div>
           )}
@@ -382,7 +382,7 @@ export function LoginPage() {
           <div className="space-y-1.5">
             <Label htmlFor="email">{t('auth.workEmail')}</Label>
             <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 id="email"
                 type="email"
@@ -409,7 +409,7 @@ export function LoginPage() {
               </Link>
             </div>
             <div className="relative">
-              <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
@@ -429,7 +429,7 @@ export function LoginPage() {
                 tabIndex={-1}
                 aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
             </div>
             {errors.password && (
@@ -438,7 +438,7 @@ export function LoginPage() {
           </div>
 
           {/* Remember me */}
-          <label
+          <Label
             htmlFor="rememberMe"
             className="flex items-center gap-2.5 cursor-pointer select-none group"
             onClick={(e) => { e.preventDefault(); setRememberMe(v => !v) }}
@@ -452,11 +452,11 @@ export function LoginPage() {
                 className="peer sr-only"
               />
               <div className={cn(
-                'h-4 w-4 rounded border-2 flex items-center justify-center transition-colors',
+                'size-4 rounded border-2 flex items-center justify-center transition-colors',
                 rememberMe ? 'bg-primary border-primary' : 'border-input bg-background group-hover:border-primary/60'
               )}>
                 {rememberMe && (
-                  <svg className="h-2.5 w-2.5 text-primary-foreground" viewBox="0 0 12 12" fill="none">
+                  <svg className="size-2.5 text-primary-foreground" viewBox="0 0 12 12" fill="none">
                     <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
@@ -465,13 +465,13 @@ export function LoginPage() {
             <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
               {t('auth.keepMeSignedIn')}
             </span>
-          </label>
+          </Label>
 
           <Button
             type="submit"
             className="w-full font-semibold"
             loading={loading}
-            rightIcon={!loading ? <ArrowRight className="h-4 w-4" /> : undefined}
+            rightIcon={!loading ? <ArrowRight className="size-4" /> : undefined}
           >
             {t('auth.signIn')}
           </Button>
@@ -492,7 +492,7 @@ export function LoginPage() {
             className="w-full font-medium gap-2"
             onClick={() => toast.info(t('auth.ssoLogin'), t('auth.ssoInfo'))}
           >
-            <Building2 className="h-4 w-4" />
+            <Building2 className="size-4" />
             {t('auth.signInWithSso')}
           </Button>
 

@@ -266,7 +266,7 @@ export function TrainingPage() {
                 description={t('training.pageDesc')}
                 actions={canManage ? (
                     <Button onClick={() => { setEditRecord(null); setFormOpen(true) }}>
-                        <Plus className="h-4 w-4 mr-1.5" />
+                        <Plus className="size-4 mr-1.5" />
                         {t('training.addRecord')}
                     </Button>
                 ) : undefined}
@@ -275,7 +275,7 @@ export function TrainingPage() {
             {/* KPI Strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {isLoading ? (
-                    Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)
+                    Array.from({ length: 4 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-20 rounded-xl" />)
                 ) : (
                     <>
                         <KpiCardCompact label={t('training.kpi.total')} value={summary?.total ?? 0} icon={GraduationCap} />
@@ -326,7 +326,7 @@ export function TrainingPage() {
                             ) : records.length === 0 ? (
                                 <tr>
                                     <td colSpan={canManage ? 7 : 6} className="px-4 py-12 text-center text-muted-foreground">
-                                        <GraduationCap className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                                        <GraduationCap className="size-10 mx-auto mb-2 opacity-30" />
                                         <p>{t('training.noRecords')}</p>
                                     </td>
                                 </tr>
@@ -368,16 +368,16 @@ export function TrainingPage() {
                                                 <div className="flex items-center gap-1 justify-end">
                                                     {r.certificateUrl && (
                                                         <a href={r.certificateUrl} target="_blank" rel="noreferrer">
-                                                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                                                                <ExternalLink className="h-3.5 w-3.5" />
+                                                            <Button variant="ghost" size="icon" className="size-7">
+                                                                <ExternalLink className="size-3.5" />
                                                             </Button>
                                                         </a>
                                                     )}
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditRecord(r); setFormOpen(true) }}>
-                                                        <Pencil className="h-3.5 w-3.5" />
+                                                    <Button variant="ghost" size="icon" className="size-7" onClick={() => { setEditRecord(r); setFormOpen(true) }}>
+                                                        <Pencil className="size-3.5" />
                                                     </Button>
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(r)}>
-                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(r)}>
+                                                        <Trash2 className="size-3.5" />
                                                     </Button>
                                                 </div>
                                             </td>

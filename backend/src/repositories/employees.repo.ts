@@ -3,9 +3,15 @@
  * employees table. Service code should depend on these functions, never on
  * `db.select().from(employees)` directly.
  */
-import { and, desc, eq, ilike, sql } from 'drizzle-orm'
+import { aliasedTable, and, desc, eq, ilike, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { employees } from '../db/schema/employees.js'
+import { orgUnits } from '../db/schema/orgUnits.js'
+
+// Joined-name department fallback. All employee reads in this repo project
+// `COALESCE(deptUnit.name, employees.department)` so callers see the canonical
+// org-unit name when an FK is set, with the legacy text column as fallback.
+const deptUnit = aliasedTable(orgUnits, 'dept_unit')
 import {
     applyKeyset,
     buildKeysetResult,
@@ -85,11 +91,12 @@ export async function listDirectReports(tenantId: string, managerId: string) {
             firstName: employees.firstName,
             lastName: employees.lastName,
             employeeNo: employees.employeeNo,
-            department: employees.department,
+            department: sql<string | null>`COALESCE(${deptUnit.name}, ${employees.department})`,
             designation: employees.designation,
             avatarUrl: employees.avatarUrl,
         })
         .from(employees)
+        .leftJoin(deptUnit, eq(employees.departmentId, deptUnit.id))
         .where(and(
             eq(employees.tenantId, tenantId),
             eq(employees.reportingTo, managerId),

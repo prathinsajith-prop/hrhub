@@ -76,7 +76,8 @@ async function authenticatePlugin(fastify: any): Promise<void> {
                 employeeId: payload.employeeId ?? null,
                 department: payload.department ?? null,
             }
-        } catch {
+        } catch (err: any) {
+            request.log.warn({ err: err?.message, name: err?.name }, 'jwt verify failed')
             return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid or expired token' })
         }
     })

@@ -33,8 +33,8 @@ export function CopyableEmail({ email, className }: CopyableEmailProps) {
             <span className="truncate">{email}</span>
             <span className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                 {copied
-                    ? <Check className="h-3 w-3 text-emerald-600" />
-                    : <Copy className="h-3 w-3 text-muted-foreground" />
+                    ? <Check className="size-3 text-emerald-600" />
+                    : <Copy className="size-3 text-muted-foreground" />
                 }
             </span>
         </button>

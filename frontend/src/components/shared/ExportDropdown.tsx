@@ -49,11 +49,11 @@ export function ExportDropdown({
                     className="gap-1.5 font-medium"
                 >
                     {busy
-                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        : <Download className="h-3.5 w-3.5" />
+                        ? <Loader2 className="size-3.5 animate-spin" />
+                        : <Download className="size-3.5" />
                     }
                     {busy ? (loading === 'csv' ? 'Exporting…' : 'Exporting…') : label}
-                    <ChevronDown className="h-3 w-3 opacity-50" />
+                    <ChevronDown className="size-3 opacity-50" />
                 </Button>
             </DropdownMenuTrigger>
 
@@ -71,10 +71,10 @@ export function ExportDropdown({
                         loading === 'csv' && 'opacity-60 pointer-events-none'
                     )}
                 >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 border border-emerald-100 group-hover:bg-emerald-100 transition-colors">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 border border-emerald-100 group-hover:bg-emerald-100 transition-colors">
                         {loading === 'csv'
-                            ? <Loader2 className="h-4 w-4 text-emerald-600 animate-spin" />
-                            : <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                            ? <Loader2 className="size-4 text-emerald-600 animate-spin" />
+                            : <FileSpreadsheet className="size-4 text-emerald-600" />
                         }
                     </div>
                     <div className="flex flex-col min-w-0">
@@ -91,10 +91,10 @@ export function ExportDropdown({
                         loading === 'pdf' && 'opacity-60 pointer-events-none'
                     )}
                 >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-rose-50 border border-rose-100 group-hover:bg-rose-100 transition-colors">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-rose-50 border border-rose-100 group-hover:bg-rose-100 transition-colors">
                         {loading === 'pdf'
-                            ? <Loader2 className="h-4 w-4 text-rose-600 animate-spin" />
-                            : <FileText className="h-4 w-4 text-rose-600" />
+                            ? <Loader2 className="size-4 text-rose-600 animate-spin" />
+                            : <FileText className="size-4 text-rose-600" />
                         }
                     </div>
                     <div className="flex flex-col min-w-0">

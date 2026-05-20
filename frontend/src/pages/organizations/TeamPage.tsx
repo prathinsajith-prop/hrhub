@@ -265,7 +265,7 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
                     </div>
 
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
                         <Input
                             className="pl-8 h-8 text-sm"
                             placeholder={t('team.searchEmployees')}
@@ -274,7 +274,7 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
                         />
                         {search && (
                             <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                                <X className="size-3.5 text-muted-foreground hover:text-foreground" />
                             </button>
                         )}
                     </div>
@@ -286,9 +286,9 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
                                 checked={selected.size === filtered.length}
                                 onCheckedChange={toggleAll}
                             />
-                            <label htmlFor="select-all" className="text-xs text-muted-foreground cursor-pointer select-none">
+                            <Label htmlFor="select-all" className="text-xs text-muted-foreground cursor-pointer select-none">
                                 {t('team.selectAll', { count: filtered.length })}
-                            </label>
+                            </Label>
                         </div>
                     )}
 
@@ -302,7 +302,7 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
                         ) : (
                             <div className="divide-y">
                                 {filtered.map(emp => (
-                                    <label
+                                    <Label
                                         key={emp.id}
                                         htmlFor={`emp-${emp.id}`}
                                         className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer"
@@ -312,7 +312,7 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
                                             checked={selected.has(emp.id)}
                                             onCheckedChange={() => toggle(emp.id)}
                                         />
-                                        <Avatar className="h-7 w-7 shrink-0">
+                                        <Avatar className="size-7 shrink-0">
                                             {emp.avatarUrl && <AvatarImage src={emp.avatarUrl} />}
                                             <AvatarFallback className="text-[10px]">{getInitials(`${emp.firstName} ${emp.lastName}`)}</AvatarFallback>
                                         </Avatar>
@@ -320,7 +320,7 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
                                             <p className="text-sm font-medium leading-tight">{emp.firstName} {emp.lastName}</p>
                                             {emp.designation && <p className="text-xs text-muted-foreground truncate">{emp.designation}</p>}
                                         </div>
-                                    </label>
+                                    </Label>
                                 ))}
                             </div>
                         )}
@@ -401,7 +401,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
 
                     {/* Row 1: avatar + name + department + menu */}
                     <div className="flex items-start gap-3">
-                        <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary/10 text-primary text-sm font-semibold shrink-0 select-none">
+                        <div className="flex items-center justify-center size-10 rounded-lg bg-primary/10 text-primary text-sm font-semibold shrink-0 select-none">
                             {initials}
                         </div>
                         <div className="flex-1 min-w-0 pt-0.5">
@@ -410,7 +410,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                             </h3>
                             {(team.departmentId || team.department) && (
                                 <div className="flex items-center gap-1 mt-0.5">
-                                    <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    <Building2 className="size-3 text-muted-foreground shrink-0" />
                                     <OrgHierarchyPath parts={orgParts.some(Boolean) ? orgParts : [null, null, team.department]} />
                                 </div>
                             )}
@@ -418,17 +418,17 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                         {canManage && onEdit && onDelete && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 -mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <MoreHorizontal className="h-4 w-4" />
+                                    <Button variant="ghost" size="icon" className="size-7 shrink-0 -mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <MoreHorizontal className="size-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={onEdit}>
-                                        <Pencil className="h-3.5 w-3.5 mr-2" /> {t('team.editTeam')}
+                                        <Pencil className="size-3.5 mr-2" /> {t('team.editTeam')}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
-                                        <Trash2 className="h-3.5 w-3.5 mr-2" /> {t('team.deleteTeam')}
+                                        <Trash2 className="size-3.5 mr-2" /> {t('team.deleteTeam')}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -442,7 +442,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                         </p>
                     )}
 
-                    {/* Row 3: member avatar stack — always visible */}
+                    {/* Row 3: member avatar stack - always visible */}
                     <div className="flex items-center justify-between pt-3 border-t border-border/50">
                         <div className="flex items-center gap-2">
                             {team.memberCount === 0 ? (
@@ -455,7 +455,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                                 ? previewMembers.map(m => (
                                                     <Tooltip key={m.id}>
                                                         <TooltipTrigger asChild>
-                                                            <Avatar className="h-7 w-7 border-2 border-background shrink-0 cursor-default">
+                                                            <Avatar className="size-7 border-2 border-background shrink-0 cursor-default">
                                                                 {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
                                                                 <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">
                                                                     {getInitials(`${m.firstName} ${m.lastName}`)}
@@ -469,11 +469,11 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                                     </Tooltip>
                                                 ))
                                                 : [...Array(previewCount)].map((_, i) => (
-                                                    <div key={i} className="h-7 w-7 rounded-full border-2 border-background bg-muted shrink-0" />
+                                                    <div key={i} className="size-7 rounded-full border-2 border-background bg-muted shrink-0" />
                                                 ))
                                             }
                                             {overflow > 0 && (
-                                                <div className="h-7 w-7 rounded-full border-2 border-background bg-muted flex items-center justify-center shrink-0">
+                                                <div className="size-7 rounded-full border-2 border-background bg-muted flex items-center justify-center shrink-0">
                                                     <span className="text-[9px] font-semibold text-muted-foreground">+{overflow}</span>
                                                 </div>
                                             )}
@@ -499,7 +499,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                     )}
                 >
                     {expanded ? t('team.hideMembers') : t('team.members')}
-                    <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', expanded && 'rotate-180')} />
+                    <ChevronDown className={cn('size-3.5 transition-transform duration-200', expanded && 'rotate-180')} />
                 </button>
 
                 {/* ── Collapsible members panel ── */}
@@ -508,7 +508,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                         {/* Search + Add button */}
                         <div className="flex items-center gap-2 p-3 pb-2">
                             <div className="relative flex-1">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
                                 <Input
                                     className="pl-8 h-8 text-xs bg-background"
                                     placeholder={t('team.searchMembers')}
@@ -521,7 +521,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                         onClick={e => { e.stopPropagation(); setSearch('') }}
                                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                     >
-                                        <X className="h-3.5 w-3.5" />
+                                        <X className="size-3.5" />
                                     </button>
                                 )}
                             </div>
@@ -529,7 +529,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                 <Button
                                     size="sm"
                                     className="h-8 shrink-0 text-xs"
-                                    leftIcon={<UserPlus className="h-3.5 w-3.5" />}
+                                    leftIcon={<UserPlus className="size-3.5" />}
                                     onClick={e => { e.stopPropagation(); setAddOpen(true) }}
                                 >
                                     Add
@@ -542,7 +542,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                             <div className="px-3 pb-3 space-y-0.5">
                                 {[...Array(3)].map((_, i) => (
                                     <div key={i} className="flex items-center gap-3 py-2.5 px-2 animate-pulse">
-                                        <div className="h-8 w-8 rounded-full bg-muted shrink-0" />
+                                        <div className="size-8 rounded-full bg-muted shrink-0" />
                                         <div className="flex-1 space-y-1.5">
                                             <div className="h-2.5 bg-muted rounded w-32" />
                                             <div className="h-2 bg-muted rounded w-20" />
@@ -553,8 +553,8 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                             </div>
                         ) : filtered.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-8 gap-2 text-center px-4 pb-4">
-                                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                                    <Users className="h-5 w-5 text-muted-foreground/40" />
+                                <div className="size-10 rounded-full bg-muted flex items-center justify-center">
+                                    <Users className="size-5 text-muted-foreground/40" />
                                 </div>
                                 <p className="text-xs text-muted-foreground font-medium">
                                     {search ? t('team.noMembersMatch') : t('team.noMembersYet')}
@@ -564,7 +564,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                         size="sm"
                                         variant="outline"
                                         className="h-7 text-xs mt-1"
-                                        leftIcon={<UserPlus className="h-3 w-3" />}
+                                        leftIcon={<UserPlus className="size-3" />}
                                         onClick={e => { e.stopPropagation(); setAddOpen(true) }}
                                     >
                                         {t('team.addMembers')}
@@ -578,9 +578,9 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                         {filtered.map(m => (
                                             <div
                                                 key={m.id}
-                                                className="flex items-center gap-2.5 py-2 px-2 rounded-lg hover:bg-background transition-colors group/row cursor-default"
+                                                className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-background transition-colors group/row cursor-default"
                                             >
-                                                <Avatar className="h-8 w-8 shrink-0">
+                                                <Avatar className="size-8 shrink-0">
                                                     {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
                                                     <AvatarFallback className="text-[10px] font-semibold bg-muted">
                                                         {getInitials(`${m.firstName} ${m.lastName}`)}
@@ -598,13 +598,13 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                                     )}
                                                 </div>
 
-                                                {/* Role badge — clickable dropdown for managers */}
+                                                {/* Role badge - clickable dropdown for managers */}
                                                 {canManage ? (
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
                                                             <button className="flex items-center gap-0.5 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0">
                                                                 <RoleBadge role={m.role ?? 'member'} />
-                                                                <ChevronDown className="h-2.5 w-2.5 text-muted-foreground opacity-0 group-hover/row:opacity-100 transition-opacity" />
+                                                                <ChevronDown className="size-2.5 text-muted-foreground opacity-0 group-hover/row:opacity-100 transition-opacity" />
                                                             </button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end" className="w-44" onClick={e => e.stopPropagation()}>
@@ -637,7 +637,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                                                 className="text-destructive focus:text-destructive text-xs gap-2"
                                                                 onClick={e => { e.stopPropagation(); setRemoveTarget(m.employeeId) }}
                                                             >
-                                                                <UserMinus className="h-3 w-3" /> {t('team.removeFromTeam')}
+                                                                <UserMinus className="size-3" /> {t('team.removeFromTeam')}
                                                             </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
@@ -698,7 +698,7 @@ function TeamGridSkeletonRow() {
     return (
         <div className="rounded-xl border border-border/60 bg-card p-4 animate-pulse">
             <div className="flex items-start gap-3">
-                <div className="h-10 w-10 rounded-lg bg-muted shrink-0" />
+                <div className="size-10 rounded-lg bg-muted shrink-0" />
                 <div className="flex-1 space-y-2 pt-0.5">
                     <div className="h-3.5 bg-muted rounded w-2/3" />
                     <div className="h-2.5 bg-muted rounded w-1/2" />
@@ -706,7 +706,7 @@ function TeamGridSkeletonRow() {
             </div>
             <div className="mt-4 pt-3 border-t border-border/50 flex items-center gap-2">
                 <div className="flex -space-x-2">
-                    {[0, 1, 2].map(i => <div key={i} className="h-7 w-7 rounded-full border-2 border-background bg-muted" />)}
+                    {[0, 1, 2].map(i => <div key={`div-${i}`} className="size-7 rounded-full border-2 border-background bg-muted" />)}
                 </div>
                 <div className="h-2.5 bg-muted rounded w-16" />
             </div>
@@ -819,7 +819,7 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
         <>
             {canManage && (
                 <div className="flex justify-end mb-4">
-                    <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => { setEditTarget(null); setFormOpen(true) }}>
+                    <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={() => { setEditTarget(null); setFormOpen(true) }}>
                         {t('team.createTeam')}
                     </Button>
                 </div>
@@ -836,7 +836,7 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
                             <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                         ) : allTeams.length === 0 ? (
                             <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                                <Users className="h-8 w-8 text-muted-foreground/40" />
+                                <Users className="size-8 text-muted-foreground/40" />
                                 <p className="text-sm text-muted-foreground">{t('team.noTeamsYet')}</p>
                                 {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>{t('team.createTeam')}</Button>}
                             </CardContent></Card>
@@ -847,7 +847,7 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
                             <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                         ) : myTeams.length === 0 ? (
                             <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                                <Users className="h-8 w-8 text-muted-foreground/40" />
+                                <Users className="size-8 text-muted-foreground/40" />
                                 <p className="text-sm text-muted-foreground">{t('team.notAssignedToTeams')}</p>
                             </CardContent></Card>
                         ) : teamGrid(myTeams, false)}
@@ -860,7 +860,7 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
                         <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                     ) : myTeams.length === 0 ? (
                         <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                            <Users className="h-8 w-8 text-muted-foreground/40" />
+                            <Users className="size-8 text-muted-foreground/40" />
                             <p className="text-sm text-muted-foreground">
                                 {canManage ? t('team.createToGetStarted') : t('team.notAssignedToTeams')}
                             </p>
@@ -902,7 +902,7 @@ export function TeamPage() {
                 description={t('team.orgDescription')}
             />
 
-            {/* Teams tab hidden for now — manage teams via the Org Structure tree. */}
+            {/* Teams tab hidden for now - manage teams via the Org Structure tree. */}
             {canManageOrg ? (
                 <OrgStructureTab />
             ) : (

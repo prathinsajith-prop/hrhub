@@ -404,33 +404,80 @@ export function payslipEmail(params: {
     netSalary: string
     companyName: string
     appUrl: string
+    // Itemised breakdown — matches the adjustments-engine columns on payslips.
+    // All optional so legacy call-sites (or pre-0038 payslips) still work; lines
+    // are only rendered when the value is > 0.
+    overtime?: string | number
+    commission?: string | number
+    unpaidLeaveDays?: number
+    unpaidLeaveDeduction?: string | number
+    sickHalfPayDays?: number
+    sickHalfPayDeduction?: string | number
+    loanDeduction?: string | number
+    otherDeduction?: string | number
 }): EmailOptions {
-    const { employeeName, month, basicSalary, grossSalary, deductions, netSalary, companyName, appUrl } = params
+    const {
+        employeeName, month, basicSalary, grossSalary, deductions, netSalary, companyName, appUrl,
+        overtime, commission, unpaidLeaveDays, unpaidLeaveDeduction,
+        sickHalfPayDays, sickHalfPayDeduction, loanDeduction, otherDeduction,
+    } = params
+
+    // Cell helper — keeps the inline-styled table rows from drifting visually
+    // between additions and deductions. The colour argument is the value cell;
+    // the label cell stays neutral.
+    const row = (label: string, value: string, opts: { striped?: boolean; valueColor?: string } = {}) => {
+        const bg = opts.striped ? 'background-color:#f8fafc;' : ''
+        const valColor = opts.valueColor ?? '#0f172a'
+        return `
+        <tr style="${bg}">
+          <td style="font-family:Arial,Helvetica,sans-serif;padding:10px 16px;font-size:13px;color:#64748b;">${label}</td>
+          <td style="font-family:Arial,Helvetica,sans-serif;padding:10px 16px;font-size:13px;color:${valColor};text-align:right;">${value}</td>
+        </tr>`
+    }
+
+    const num = (v: unknown) => Number(v ?? 0)
+    const fmt = (v: unknown) => h(String(v ?? '0'))
+
+    const overtimeNum = num(overtime)
+    const commissionNum = num(commission)
+    const lopNum = num(unpaidLeaveDeduction)
+    const sickNum = num(sickHalfPayDeduction)
+    const loanNum = num(loanDeduction)
+    const otherNum = num(otherDeduction)
+
+    const additionsRows = (overtimeNum + commissionNum) > 0 ? `
+      <tr><td colspan="2" style="font-family:Arial,Helvetica,sans-serif;padding:10px 16px 4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#047857;">Additions</td></tr>
+      ${overtimeNum > 0 ? row('Overtime', `+ AED ${fmt(overtime)}`, { valueColor: '#047857' }) : ''}
+      ${commissionNum > 0 ? row('Commission / Bonus', `+ AED ${fmt(commission)}`, { striped: overtimeNum > 0, valueColor: '#047857' }) : ''}
+    ` : ''
+
+    const deductionsRows = num(deductions) > 0 ? `
+      <tr><td colspan="2" style="font-family:Arial,Helvetica,sans-serif;padding:10px 16px 4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#b91c1c;">Deductions</td></tr>
+      ${lopNum > 0 ? row(`Loss of pay (${unpaidLeaveDays ?? 0} day${(unpaidLeaveDays ?? 0) === 1 ? '' : 's'})`, `- AED ${fmt(unpaidLeaveDeduction)}`, { valueColor: '#dc2626' }) : ''}
+      ${sickNum > 0 ? row(`Sick half-pay (${sickHalfPayDays ?? 0} day${(sickHalfPayDays ?? 0) === 1 ? '' : 's'})`, `- AED ${fmt(sickHalfPayDeduction)}`, { striped: lopNum > 0, valueColor: '#dc2626' }) : ''}
+      ${loanNum > 0 ? row('Loan repayment', `- AED ${fmt(loanDeduction)}`, { striped: (lopNum + sickNum) > 0 && ((lopNum > 0 ? 1 : 0) + (sickNum > 0 ? 1 : 0)) % 2 === 0, valueColor: '#dc2626' }) : ''}
+      ${otherNum > 0 ? row('Other manual deductions', `- AED ${fmt(otherDeduction)}`, { valueColor: '#dc2626' }) : ''}
+      ${row('Total deductions', `- AED ${h(deductions)}`, { striped: true, valueColor: '#dc2626' })}
+    ` : ''
+
     const content = `
       ${heading(`Payslip for ${h(month)}`)}
       ${p(`Hi ${h(employeeName)},`)}
       ${p(`Your payslip for <strong>${h(month)}</strong> has been processed by <strong>${h(companyName)}</strong> and is now available to view.`, true)}
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin:20px 0;">
-        <tr style="background-color:#f8fafc;">
-          <td style="font-family:Arial,Helvetica,sans-serif;padding:10px 16px;font-size:13px;color:#64748b;">Basic Salary</td>
-          <td style="font-family:Arial,Helvetica,sans-serif;padding:10px 16px;font-size:13px;color:#0f172a;text-align:right;">AED ${h(basicSalary)}</td>
-        </tr>
-        <tr>
-          <td style="font-family:Arial,Helvetica,sans-serif;padding:10px 16px;font-size:13px;color:#64748b;">Gross Salary</td>
-          <td style="font-family:Arial,Helvetica,sans-serif;padding:10px 16px;font-size:13px;color:#0f172a;text-align:right;">AED ${h(grossSalary)}</td>
-        </tr>
-        <tr style="background-color:#f8fafc;">
-          <td style="font-family:Arial,Helvetica,sans-serif;padding:10px 16px;font-size:13px;color:#64748b;">Deductions</td>
-          <td style="font-family:Arial,Helvetica,sans-serif;padding:10px 16px;font-size:13px;color:#dc2626;text-align:right;">- AED ${h(deductions)}</td>
-        </tr>
+        <tr><td colspan="2" style="font-family:Arial,Helvetica,sans-serif;padding:10px 16px 4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#475569;">Earnings</td></tr>
+        ${row('Basic salary', `AED ${h(basicSalary)}`, { striped: true })}
+        ${additionsRows}
+        ${row('Gross salary', `AED ${h(grossSalary)}`, { striped: (overtimeNum + commissionNum) === 0 })}
+        ${deductionsRows}
         <tr style="background-color:#f0fdf4;">
-          <td style="font-family:Arial,Helvetica,sans-serif;padding:13px 16px;font-size:15px;font-weight:700;color:#0f172a;border-top:2px solid #e2e8f0;">Net Salary</td>
+          <td style="font-family:Arial,Helvetica,sans-serif;padding:13px 16px;font-size:15px;font-weight:700;color:#0f172a;border-top:2px solid #e2e8f0;">Net salary</td>
           <td style="font-family:Arial,Helvetica,sans-serif;padding:13px 16px;font-size:15px;font-weight:700;color:#059669;text-align:right;border-top:2px solid #e2e8f0;">AED ${h(netSalary)}</td>
         </tr>
       </table>
-      ${btn('View Full Payslip', `${appUrl}/my/payslips`)}
+      ${btn('View full payslip', `${appUrl}/my/payslips`)}
     `
-    return { to: '', subject: `Your Payslip for ${h(month)} — ${h(companyName)}`, html: layout(content, '#2563eb', companyName, `Your ${month} payslip from ${companyName} is ready`) }
+    return { to: '', subject: `Your payslip for ${h(month)} — ${h(companyName)}`, html: layout(content, '#2563eb', companyName, `Your ${month} payslip from ${companyName} is ready`) }
 }
 
 export function mailTestEmail(params: { recipientName: string }): EmailOptions {

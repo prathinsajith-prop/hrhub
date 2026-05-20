@@ -20,7 +20,7 @@ import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'
-import { useDashboardSummary, useNotifications, useBirthdays, useAnniversaries } from '@/hooks/useDashboard'
+import { useDashboardSummary, useNotifications, useAnniversaries } from '@/hooks/useDashboard'
 import type { BirthdayEntry, AnniversaryEntry, BreakdownPoint } from '@/hooks/useDashboard'
 import { useVisas } from '@/hooks/useVisa'
 import { useNavigate } from 'react-router-dom'
@@ -57,7 +57,7 @@ function DemoPieCard({ title, data, loading }: { title: string; data: BreakdownP
         {loading ? (
           <div className="space-y-3">
             <Skeleton className="h-[140px] w-full rounded-xl" />
-            {[1, 2, 3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+            {[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-3 w-full" />)}
           </div>
         ) : (
           <>
@@ -71,7 +71,7 @@ function DemoPieCard({ title, data, loading }: { title: string; data: BreakdownP
                   <Legend
                     iconType="circle"
                     iconSize={8}
-                    formatter={(value) => <span style={{ fontSize: 11 }}>{value}</span>}
+                    formatter={(value) => <span style={{ fontSize: 12 }}>{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -79,7 +79,7 @@ function DemoPieCard({ title, data, loading }: { title: string; data: BreakdownP
             <ul className="space-y-2">
               {data.map(d => (
                 <li key={d.name} className="flex items-center gap-2 text-xs">
-                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: d.color }} />
+                  <span className="size-2.5 rounded-full shrink-0" style={{ background: d.color }} />
                   <span className="flex-1 text-foreground">{d.name}</span>
                   <span className="font-semibold">{d.value}</span>
                   {total > 0 && <span className="text-muted-foreground w-9 text-right">{Math.round((d.value / total) * 100)}%</span>}
@@ -102,14 +102,13 @@ export function HRDashboard() {
   const { data: visaData, isLoading: visasLoading } = useVisas({ limit: 10 })
 
   const currentMonth = new Date().getMonth() + 1
-  const [birthdayMonth, setBirthdayMonth] = useState(currentMonth)
+  // Birthday picker was removed (we only show today's). Anniversary still
+  // supports month selection.
   const [anniversaryMonth, setAnniversaryMonth] = useState(currentMonth)
   const monthNames = buildMonthNames(i18n.language)
 
-  // Only fetch from dedicated endpoints when the month differs from the BFF summary (current month)
-  const useBirthdayDedicated = birthdayMonth !== currentMonth
+  // Anniversary's dedicated endpoint is still needed when HR picks a non-current month.
   const useAnniversaryDedicated = anniversaryMonth !== currentMonth
-  const { data: birthdaysDedicated, isLoading: bdLoading } = useBirthdays(useBirthdayDedicated ? birthdayMonth : undefined)
   const { data: anniversariesDedicated, isLoading: annivLoading } = useAnniversaries(useAnniversaryDedicated ? anniversaryMonth : undefined)
 
   const kpis = summary?.kpis
@@ -137,9 +136,11 @@ export function HRDashboard() {
     ...d,
     name: t(`employee.maritalValues.${d.name || 'unknown'}`, { defaultValue: d.name || 'Not specified' }),
   }))
-  const birthdayData: BirthdayEntry[] = useBirthdayDedicated ? (birthdaysDedicated ?? []) : (summary?.birthdays ?? [])
+  // Birthdays always come from the BFF summary (current month) — we filter
+  // client-side to today's only in the render block below.
+  const birthdayData: BirthdayEntry[] = summary?.birthdays ?? []
   const anniversaryData: AnniversaryEntry[] = useAnniversaryDedicated ? (anniversariesDedicated ?? []) : (summary?.anniversaries ?? [])
-  const bdLoadingFinal = useBirthdayDedicated ? bdLoading : dashLoading
+  const bdLoadingFinal = dashLoading
   const annivLoadingFinal = useAnniversaryDedicated ? annivLoading : dashLoading
 
   type NotifItem = { isRead?: boolean; type?: string; title?: string }
@@ -156,7 +157,7 @@ export function HRDashboard() {
       {/* Urgent alerts */}
       {urgentAlerts.length > 0 && (
         <div role="status" className="flex items-center gap-3 px-4 py-3 rounded-xl border border-warning/30 bg-warning/10 animate-fade-fast">
-          <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+          <AlertTriangle className="size-4 text-warning shrink-0" />
           <p className="text-sm text-warning-foreground flex-1" dir="auto">
             <span className="font-semibold">
               {t('dashboard.alertsRequired', { count: urgentAlerts.length, defaultValue: `${urgentAlerts.length} action${urgentAlerts.length > 1 ? 's' : ''} required:` })}
@@ -206,7 +207,7 @@ export function HRDashboard() {
                   </p>
                 )}
                 <p className="text-[11px] text-success font-medium flex items-center gap-1 justify-end">
-                  <TrendingUp className="h-3 w-3" /> {t('dashboard.latestMonth', { defaultValue: 'Latest month' })}
+                  <TrendingUp className="size-3" /> {t('dashboard.latestMonth', { defaultValue: 'Latest month' })}
                 </p>
               </div>
             </div>
@@ -214,7 +215,7 @@ export function HRDashboard() {
           <CardContent className="pt-0">
             {trendLoading ? (
               <div className="h-[220px] flex flex-col gap-3 pt-4">
-                {[100, 83, 67, 83, 100, 67].map((w, i) => <Skeleton key={i} className="h-3 rounded" style={{ width: `${w}%` }} />)}
+                {[100, 83, 67, 83, 100, 67].map((w, i) => <Skeleton key={`skeleton-${i}`} className="h-3 rounded" style={{ width: `${w}%` }} />)}
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
@@ -246,7 +247,7 @@ export function HRDashboard() {
             {natLoading ? (
               <div className="space-y-3">
                 <Skeleton className="h-[140px] w-full rounded-xl" />
-                {[1, 2, 3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+                {[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-3 w-full" />)}
               </div>
             ) : (
               <>
@@ -254,7 +255,7 @@ export function HRDashboard() {
                   <ResponsiveContainer width="100%" height={140}>
                     <PieChart>
                       <Pie data={nationalityData} cx="50%" cy="50%" innerRadius={42} outerRadius={64} paddingAngle={3} dataKey="value">
-                        {nationalityData.map((entry, i) => <Cell key={i} fill={entry.fill} stroke="none" />)}
+                        {nationalityData.map((entry, i) => <Cell key={`cell-${i}`} fill={entry.fill} stroke="none" />)}
                       </Pie>
                       <Tooltip formatter={(v: string | number | readonly (string | number)[] | undefined) => [v, 'Employees']} contentStyle={tooltipStyle} />
                     </PieChart>
@@ -263,7 +264,7 @@ export function HRDashboard() {
                 <ul className="space-y-2">
                   {nationalityData.map(d => (
                     <li key={d.name} className="flex items-center gap-2 text-xs">
-                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: d.fill }} />
+                      <span className="size-2.5 rounded-full shrink-0" style={{ background: d.fill }} />
                       <span className="flex-1 text-foreground">{d.name}</span>
                       <span className="font-semibold">{d.value}</span>
                       <span className="text-muted-foreground w-8 text-right">{Math.round((d.value / totalNat) * 100)}%</span>
@@ -300,7 +301,7 @@ export function HRDashboard() {
                   <YAxis dataKey="dept" type="category" tick={{ fontSize: 11, fill: CHART_COLORS.axis }} axisLine={false} tickLine={false} width={72} />
                   <Tooltip contentStyle={tooltipStyle} />
                   <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={14}>
-                    {departmentData.map((_, i) => <Cell key={i} fill={i === 0 ? CHART_COLORS.primary : 'hsl(var(--primary) / 0.25)'} />)}
+                    {departmentData.map((_, i) => <Cell key={`cell-${i}`} fill={i === 0 ? CHART_COLORS.primary : 'hsl(var(--primary) / 0.25)'} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -317,7 +318,7 @@ export function HRDashboard() {
                 <CardDescription>{t('dashboard.currentProcessingStatus', { defaultValue: 'Current processing status' })}</CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/visa')}>
-                View all <ArrowUpRight className="h-3 w-3 ml-1" />
+                View all <ArrowUpRight className="size-3 ml-1" />
               </Button>
             </div>
           </CardHeader>
@@ -376,7 +377,7 @@ export function HRDashboard() {
               <div className="space-y-4">
                 <Skeleton className="h-12 w-24 mx-auto rounded-xl" />
                 <Skeleton className="h-2 w-full rounded-full" />
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">{[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-16 rounded-xl" />)}</div>
               </div>
             ) : (
               <>
@@ -414,7 +415,7 @@ export function HRDashboard() {
                 </div>
                 {emiratisation && emiratisation.gap < 0 && (
                   <div className="flex items-start gap-2 bg-warning/10 border border-warning/20 rounded-xl p-3">
-                    <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
+                    <AlertTriangle className="size-3.5 text-warning shrink-0 mt-0.5" />
                     <p className="text-[11px] text-warning-foreground leading-relaxed">
                       Below {emiratisation.targetRatio}% target.{' '}
                       {emiratisation.required > 0 && `Hire ${emiratisation.required} more Emirati${emiratisation.required > 1 ? 's' : ''} to comply.`}{' '}
@@ -437,7 +438,7 @@ export function HRDashboard() {
               <CardDescription>{t('dashboard.onboardingDesc', { defaultValue: 'Employee onboarding status' })}</CardDescription>
             </div>
             <Button variant="ghost" size="sm" className="text-primary h-auto px-2 py-1 text-xs" onClick={() => navigate('/onboarding')}>
-              View all <ArrowUpRight className="h-3 w-3 ml-1" />
+              View all <ArrowUpRight className="size-3 ml-1" />
             </Button>
           </div>
         </CardHeader>
@@ -463,66 +464,88 @@ export function HRDashboard() {
 
       {/* Birthdays & Work Anniversaries */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Birthdays */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Cake className="h-4 w-4 text-pink-500" />
-                <CardTitle>{t('dashboard.upcomingBirthdays', { defaultValue: 'Birthdays' })}</CardTitle>
-              </div>
-              <Select value={String(birthdayMonth)} onValueChange={v => setBirthdayMonth(Number(v))}>
-                <SelectTrigger className="h-7 w-32 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {monthNames.map((m, i) => (
-                    <SelectItem key={i + 1} value={String(i + 1)} className="text-xs">{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {bdLoadingFinal ? (
-              <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-lg" />)}</div>
-            ) : birthdayData.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">{t('dashboard.noBirthdays', { defaultValue: 'No birthdays this month' })}</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 pr-3 font-medium text-muted-foreground w-12">{t('dashboard.birthdayDay', { defaultValue: 'Day' })}</th>
-                      <th className="text-left py-2 font-medium text-muted-foreground">{t('dashboard.birthdayName', { defaultValue: 'Name' })}</th>
-                      <th className="text-left py-2 pl-3 font-medium text-muted-foreground hidden sm:table-cell">{t('common.department', { defaultValue: 'Department' })}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {birthdayData.map((b, i) => (
-                      <tr key={i} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                        <td className="py-2.5 pr-3">
-                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-pink-50 text-pink-600 font-bold text-xs ring-1 ring-pink-200">
-                            {b.day}
+        {/* Birthdays — today only.
+            The dashboard summary endpoint returns the whole current month, so
+            we filter client-side rather than re-fetching. The month picker
+            was removed: HR asked for "today only" so a calendar picker is
+            misleading. If they ever need a historical view, restore the
+            picker + the dedicated /dashboard/birthdays?month=X path. */}
+        {(() => {
+          const todays = birthdayData.filter((b) => b.isToday)
+          return (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Cake className="size-4 text-pink-500" />
+                    <CardTitle>{t('dashboard.birthdaysToday', { defaultValue: "Today's birthdays" })}</CardTitle>
+                  </div>
+                  {todays.length > 0 && (
+                    <span className="rounded-full bg-pink-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+                      {todays.length} {todays.length === 1 ? 'person' : 'people'}
+                    </span>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {bdLoadingFinal ? (
+                  <div className="space-y-2">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-9 w-full rounded-lg" />)}</div>
+                ) : todays.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-8">
+                    {t('dashboard.noBirthdaysToday', { defaultValue: 'No birthdays today — check back tomorrow.' })}
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {todays.map((b, i) => {
+                      // Initials fallback when no avatar is on file. Two chars,
+                      // first letters of first + last name.
+                      const initials = b.name
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((s) => s[0]?.toUpperCase() ?? '')
+                        .join('')
+                      return (
+                        <li
+                          key={i}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-pink-200 bg-pink-50 px-3 py-2 dark:border-pink-900/60 dark:bg-pink-950/30"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            {b.avatarUrl ? (
+                              <img
+                                src={b.avatarUrl}
+                                alt={b.name}
+                                className="size-10 shrink-0 rounded-full object-cover ring-2 ring-pink-300 dark:ring-pink-700"
+                              />
+                            ) : (
+                              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-300 to-rose-300 text-sm font-bold text-pink-800 ring-2 ring-pink-200 dark:from-pink-900 dark:to-rose-900 dark:text-pink-100">
+                                {initials || '?'}
+                              </span>
+                            )}
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{b.name}</p>
+                              <p className="truncate text-[11px] text-muted-foreground">{b.department || '—'}</p>
+                            </div>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-pink-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+                            Today
                           </span>
-                        </td>
-                        <td className="py-2.5 font-medium">{b.name}</td>
-                        <td className="py-2.5 pl-3 text-muted-foreground hidden sm:table-cell">{b.department || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })()}
 
         {/* Work Anniversaries */}
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
-                <Award className="h-4 w-4 text-amber-500" />
+                <Award className="size-4 text-amber-500" />
                 <CardTitle>{t('dashboard.workAnniversaries', { defaultValue: 'Years Completed' })}</CardTitle>
               </div>
               <Select value={String(anniversaryMonth)} onValueChange={v => setAnniversaryMonth(Number(v))}>
@@ -539,7 +562,7 @@ export function HRDashboard() {
           </CardHeader>
           <CardContent className="pt-0">
             {annivLoadingFinal ? (
-              <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-lg" />)}</div>
+              <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-9 w-full rounded-lg" />)}</div>
             ) : anniversaryData.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-8">{t('dashboard.noAnniversaries', { defaultValue: 'No anniversaries this month' })}</p>
             ) : (

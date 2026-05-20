@@ -57,8 +57,8 @@ function StatCard({
                         <p className="text-2xl font-bold leading-none tracking-tight">{value}</p>
                         {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
                     </div>
-                    <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', iconColor ?? 'bg-muted/60')}>
-                        <Icon className="h-4 w-4" />
+                    <div className={cn('flex size-9 shrink-0 items-center justify-center rounded-lg', iconColor ?? 'bg-muted/60')}>
+                        <Icon className="size-4" />
                     </div>
                 </div>
             </CardContent>
@@ -69,7 +69,7 @@ function StatCard({
 function EmptyChart({ label, sub }: { label: string; sub?: string }) {
     return (
         <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
-            <BarChart2 className="h-6 w-6 mb-2 opacity-30" />
+            <BarChart2 className="size-6 mb-2 opacity-30" />
             <p className="text-sm">{label}</p>
             {sub && <p className="text-xs opacity-60 mt-0.5">{sub}</p>}
         </div>
@@ -116,11 +116,11 @@ function CodeBlock({ code, onCopy }: { code: string; onCopy: (s: string) => void
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-white hover:bg-zinc-700"
+                className="absolute top-2 right-2 size-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-white hover:bg-zinc-700"
                 aria-label="Copy code"
                 onClick={() => onCopy(code)}
             >
-                <Copy className="h-3 w-3" />
+                <Copy className="size-3" />
             </Button>
         </div>
     )
@@ -149,7 +149,7 @@ function ApiDocsTab({
             <Card>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-sm flex items-center gap-2">
-                        <Terminal className="h-4 w-4 text-muted-foreground" /> Quick Start
+                        <Terminal className="size-4 text-muted-foreground" /> Quick Start
                     </CardTitle>
                     <CardDescription className="text-xs">
                         Your app key is embedded in the URL. Pass your secret in the <code className="text-[11px] bg-muted px-1 rounded">X-API-Secret</code> header.
@@ -162,7 +162,7 @@ function ApiDocsTab({
                             <div className="flex gap-2">
                                 <code className="flex-1 text-xs bg-muted rounded px-3 py-2 font-mono truncate">{appUrl}</code>
                                 <Button type="button" size="sm" variant="outline" onClick={() => copyText(appUrl)}>
-                                    <Copy className="h-3.5 w-3.5" />
+                                    <Copy className="size-3.5" />
                                 </Button>
                             </div>
                         </div>
@@ -171,13 +171,13 @@ function ApiDocsTab({
                             <div className="flex gap-2">
                                 <code className="flex-1 text-xs bg-muted rounded px-3 py-2 font-mono truncate">X-API-Secret: &lt;your-secret&gt;</code>
                                 <Button type="button" size="sm" variant="outline" onClick={() => copyText('X-API-Secret: <your-secret>')}>
-                                    <Copy className="h-3.5 w-3.5" />
+                                    <Copy className="size-3.5" />
                                 </Button>
                             </div>
                         </div>
                     </div>
                     <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">Verify your credentials — GET app info</p>
+                        <p className="text-xs font-medium text-muted-foreground">Verify your credentials - GET app info</p>
                         <CodeBlock code={authSnippet} onCopy={copyText} />
                     </div>
                     <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-300 space-y-0.5">
@@ -193,14 +193,14 @@ function ApiDocsTab({
                     <div className="flex items-start justify-between gap-2">
                         <div>
                             <CardTitle className="text-sm flex items-center gap-2">
-                                <BookOpen className="h-4 w-4 text-muted-foreground" /> Endpoint Reference
+                                <BookOpen className="size-4 text-muted-foreground" /> Endpoint Reference
                             </CardTitle>
                             <CardDescription className="text-xs mt-0.5">
                                 Endpoints available based on this app's granted permissions.
                             </CardDescription>
                         </div>
                         {canManage && (
-                            <Button variant="outline" size="sm" leftIcon={<ShieldCheck className="h-3.5 w-3.5" />} onClick={onEditScopes}>
+                            <Button variant="outline" size="sm" leftIcon={<ShieldCheck className="size-3.5" />} onClick={onEditScopes}>
                                 Edit Permissions
                             </Button>
                         )}
@@ -209,7 +209,7 @@ function ApiDocsTab({
                 <CardContent className="space-y-6">
                     {app.scopes.length === 0 && (
                         <p className="text-sm text-muted-foreground italic">
-                            No permissions granted — this app cannot access any endpoints.
+                            No permissions granted - this app cannot access any endpoints.
                             {canManage && ' Click "Edit Permissions" to add scopes.'}
                         </p>
                     )}
@@ -220,7 +220,7 @@ function ApiDocsTab({
                             <div key={scope} className="space-y-3">
                                 <div className="flex items-center gap-2">
                                     <Badge variant="outline" className="text-xs font-mono">{scope}</Badge>
-                                    <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                    <ChevronRight className="size-3 text-muted-foreground" />
                                     <span className="text-xs text-muted-foreground">{endpoints.length} endpoint{endpoints.length > 1 ? 's' : ''}</span>
                                 </div>
                                 <div className="space-y-3 pl-2 border-l-2 border-muted ml-1">
@@ -423,7 +423,7 @@ export function AppDetailPage() {
                     <Skeleton className="h-8 w-48" />
                     <Skeleton className="h-24 w-full" />
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+                        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-24" />)}
                     </div>
                 </div>
             </PageWrapper>
@@ -434,7 +434,7 @@ export function AppDetailPage() {
         return (
             <PageWrapper>
                 <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
-                    <AlertCircle className="h-8 w-8" />
+                    <AlertCircle className="size-8" />
                     <p>App not found</p>
                     <Button variant="outline" size="sm" onClick={() => navigate('/apps')}>Back to Apps</Button>
                 </div>
@@ -450,7 +450,7 @@ export function AppDetailPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
                 <div className="flex items-start gap-3">
                     <Button variant="ghost" size="icon" className="mt-0.5 shrink-0" aria-label="Back to apps" onClick={() => navigate('/apps')}>
-                        <ArrowLeft className="h-4 w-4" />
+                        <ArrowLeft className="size-4" />
                     </Button>
                     <div className="min-w-0">
                         <div className="flex items-center gap-2.5 flex-wrap">
@@ -465,36 +465,36 @@ export function AppDetailPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                    <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Refresh" onClick={handleRefresh}>
-                        <RefreshCw className="h-4 w-4" />
+                    <Button variant="outline" size="icon" className="size-8" aria-label="Refresh" onClick={handleRefresh}>
+                        <RefreshCw className="size-4" />
                     </Button>
                     {canManage && (
                         <>
-                            <Button variant="outline" size="sm" leftIcon={<KeyRound className="h-3.5 w-3.5" />} onClick={() => setRegenConfirm(true)}>
+                            <Button variant="outline" size="sm" leftIcon={<KeyRound className="size-3.5" />} onClick={() => setRegenConfirm(true)}>
                                 Regenerate Secret
                             </Button>
-                            <Button variant="outline" size="sm" leftIcon={<ShieldCheck className="h-3.5 w-3.5" />} onClick={openScopeEdit}>
+                            <Button variant="outline" size="sm" leftIcon={<ShieldCheck className="size-3.5" />} onClick={openScopeEdit}>
                                 Permissions
                             </Button>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="icon" className="h-8 w-8">
-                                        <MoreHorizontal className="h-4 w-4" />
+                                    <Button variant="outline" size="icon" className="size-8">
+                                        <MoreHorizontal className="size-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48">
                                     <DropdownMenuItem onClick={openEdit}>
-                                        <Edit2 className="h-3.5 w-3.5 mr-2" /> Edit
+                                        <Edit2 className="size-3.5 mr-2" /> Edit
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => setRevokeConfirm(true)}>
                                         {isActive
-                                            ? <><ShieldOff className="h-3.5 w-3.5 mr-2" /> Revoke access</>
-                                            : <><ShieldCheck className="h-3.5 w-3.5 mr-2" /> Reactivate app</>}
+                                            ? <><ShieldOff className="size-3.5 mr-2" /> Revoke access</>
+                                            : <><ShieldCheck className="size-3.5 mr-2" /> Reactivate app</>}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem className="text-destructive" onClick={() => setDeleteConfirm(true)}>
-                                        <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete app
+                                        <Trash2 className="size-3.5 mr-2" /> Delete app
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -511,10 +511,10 @@ export function AppDetailPage() {
                             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">App Key</p>
                             <div className="flex items-center gap-1.5 mt-1">
                                 <code className="text-xs font-mono truncate">{app.appKey}</code>
-                                <Button type="button" variant="ghost" size="icon" className="h-5 w-5 shrink-0"
+                                <Button type="button" variant="ghost" size="icon" className="size-5 shrink-0"
                                     aria-label="Copy app key"
                                     onClick={() => { navigator.clipboard.writeText(app.appKey); toast.success(t('apps.copied')) }}>
-                                    <Copy className="h-3 w-3" />
+                                    <Copy className="size-3" />
                                 </Button>
                             </div>
                         </div>
@@ -605,7 +605,7 @@ export function AppDetailPage() {
                     <Card>
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm flex items-center gap-2">
-                                <BarChart2 className="h-4 w-4 text-muted-foreground" /> Traffic Over Time
+                                <BarChart2 className="size-4 text-muted-foreground" /> Traffic Over Time
                             </CardTitle>
                             <CardDescription className="text-xs">Daily request volume (last 30 days)</CardDescription>
                         </CardHeader>
@@ -625,7 +625,7 @@ export function AppDetailPage() {
                                     </BarChart>
                                 </ResponsiveContainer>
                             ) : (
-                                <EmptyChart label="No data yet — make some API calls to see traffic trends." />
+                                <EmptyChart label="No data yet - make some API calls to see traffic trends." />
                             )}
                         </CardContent>
                     </Card>
@@ -634,7 +634,7 @@ export function AppDetailPage() {
                         {/* By Path */}
                         <Card>
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-sm flex items-center gap-2"><Layers className="h-3.5 w-3.5 text-muted-foreground" /> Top Paths</CardTitle>
+                                <CardTitle className="text-sm flex items-center gap-2"><Layers className="size-3.5 text-muted-foreground" /> Top Paths</CardTitle>
                                 <CardDescription className="text-xs">Most-called endpoints</CardDescription>
                             </CardHeader>
                             <CardContent>
@@ -666,7 +666,7 @@ export function AppDetailPage() {
                         {/* Status Codes */}
                         <Card>
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-sm flex items-center gap-2"><PieChart className="h-3.5 w-3.5 text-muted-foreground" /> Status Codes</CardTitle>
+                                <CardTitle className="text-sm flex items-center gap-2"><PieChart className="size-3.5 text-muted-foreground" /> Status Codes</CardTitle>
                                 <CardDescription className="text-xs">Response code distribution</CardDescription>
                             </CardHeader>
                             <CardContent>
@@ -681,13 +681,13 @@ export function AppDetailPage() {
                                         <div className="flex items-center gap-4">
                                             <RechartsPie width={100} height={100}>
                                                 <Pie data={pieData} dataKey="value" cx={45} cy={45} innerRadius={25} outerRadius={45}>
-                                                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                                                    {pieData.map((entry, i) => <Cell key={`cell-${i}`} fill={entry.color} />)}
                                                 </Pie>
                                             </RechartsPie>
                                             <div className="space-y-1.5 flex-1">
                                                 {pieData.map((entry) => (
                                                     <div key={entry.name} className="flex items-center gap-2">
-                                                        <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: entry.color }} />
+                                                        <div className="size-2.5 rounded-full shrink-0" style={{ background: entry.color }} />
                                                         <span className="text-xs font-mono">{entry.name}</span>
                                                         <span className="text-xs text-muted-foreground ml-auto">{entry.value}</span>
                                                     </div>
@@ -735,7 +735,7 @@ export function AppDetailPage() {
             {activeTab === 'request-logs' && (
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2"><Hash className="h-4 w-4 text-muted-foreground" /> Request Logs</CardTitle>
+                        <CardTitle className="text-sm flex items-center gap-2"><Hash className="size-4 text-muted-foreground" /> Request Logs</CardTitle>
                         <CardDescription className="text-xs">Last 50 API requests from this app</CardDescription>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -776,7 +776,7 @@ export function AppDetailPage() {
                             </div>
                         ) : (
                             <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
-                                <Hash className="h-8 w-8 opacity-30" />
+                                <Hash className="size-8 opacity-30" />
                                 <p className="text-sm">No request logs yet</p>
                                 <p className="text-xs opacity-70">Logs will appear once this app starts making API calls.</p>
                             </div>
@@ -788,7 +788,7 @@ export function AppDetailPage() {
             {activeTab === 'errors' && (
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-muted-foreground" /> Errors</CardTitle>
+                        <CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="size-4 text-muted-foreground" /> Errors</CardTitle>
                         <CardDescription className="text-xs">Requests with status 400+</CardDescription>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -828,7 +828,7 @@ export function AppDetailPage() {
                             </div>
                         ) : (
                             <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
-                                <CheckCircle2 className="h-8 w-8 opacity-30" />
+                                <CheckCircle2 className="size-8 opacity-30" />
                                 <p className="text-sm">No errors recorded</p>
                                 <p className="text-xs opacity-70">Error details will appear when API calls fail.</p>
                             </div>
@@ -844,7 +844,7 @@ export function AppDetailPage() {
                             <div className="flex items-start justify-between gap-2">
                                 <CardTitle className="text-sm">App Details</CardTitle>
                                 {canManage && (
-                                    <Button variant="ghost" size="sm" className="h-7 text-xs" leftIcon={<Edit2 className="h-3 w-3" />} onClick={openEdit}>
+                                    <Button variant="ghost" size="sm" className="h-7 text-xs" leftIcon={<Edit2 className="size-3" />} onClick={openEdit}>
                                         Edit
                                     </Button>
                                 )}
@@ -864,10 +864,10 @@ export function AppDetailPage() {
                                     <Label className="text-xs text-muted-foreground">App Key</Label>
                                     <div className="flex items-center gap-2">
                                         <code className="text-xs font-mono truncate max-w-[180px]">{app.appKey}</code>
-                                        <Button type="button" variant="ghost" size="icon" className="h-5 w-5 shrink-0"
+                                        <Button type="button" variant="ghost" size="icon" className="size-5 shrink-0"
                                             aria-label="Copy app key"
                                             onClick={() => { navigator.clipboard.writeText(app.appKey); toast.success(t('apps.copied')) }}>
-                                            <Copy className="h-3 w-3" />
+                                            <Copy className="size-3" />
                                         </Button>
                                     </div>
                                 </div>
@@ -893,7 +893,7 @@ export function AppDetailPage() {
                                     <CardDescription className="text-xs mt-0.5">{app.scopes.length} permission{app.scopes.length !== 1 ? 's' : ''} granted</CardDescription>
                                 </div>
                                 {canManage && (
-                                    <Button variant="outline" size="sm" leftIcon={<ShieldCheck className="h-3.5 w-3.5" />} onClick={openScopeEdit}>
+                                    <Button variant="outline" size="sm" leftIcon={<ShieldCheck className="size-3.5" />} onClick={openScopeEdit}>
                                         Edit Permissions
                                     </Button>
                                 )}
@@ -901,7 +901,7 @@ export function AppDetailPage() {
                         </CardHeader>
                         <CardContent>
                             {app.scopes.length === 0 ? (
-                                <p className="text-sm text-muted-foreground italic">No permissions granted — this app cannot access any API endpoints.</p>
+                                <p className="text-sm text-muted-foreground italic">No permissions granted - this app cannot access any API endpoints.</p>
                             ) : (
                                 <div className="flex flex-wrap gap-1.5">
                                     {app.scopes.map((s) => <Badge key={s} variant="outline" className="text-xs font-mono">{s}</Badge>)}
@@ -917,7 +917,7 @@ export function AppDetailPage() {
                         </CardHeader>
                         <CardContent>
                             {(app.ipAllowlist ?? []).length === 0 ? (
-                                <p className="text-sm text-muted-foreground italic">No restrictions — requests are accepted from any IP address.</p>
+                                <p className="text-sm text-muted-foreground italic">No restrictions - requests are accepted from any IP address.</p>
                             ) : (
                                 <div className="flex flex-wrap gap-1.5">
                                     {app.ipAllowlist.map((ip) => (
@@ -935,12 +935,12 @@ export function AppDetailPage() {
                             </CardHeader>
                             <CardContent className="flex flex-col sm:flex-row gap-3">
                                 <Button variant="outline" size="sm" className="border-destructive/40 text-destructive hover:bg-destructive/10"
-                                    leftIcon={<KeyRound className="h-3.5 w-3.5" />}
+                                    leftIcon={<KeyRound className="size-3.5" />}
                                     onClick={() => setRegenConfirm(true)}>
                                     Regenerate Secret
                                 </Button>
                                 <Button variant="outline" size="sm" className="border-destructive/40 text-destructive hover:bg-destructive/10"
-                                    leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                                    leftIcon={<Trash2 className="size-3.5" />}
                                     onClick={() => setDeleteConfirm(true)}>
                                     Delete App
                                 </Button>
@@ -955,7 +955,7 @@ export function AppDetailPage() {
                 <DialogContent className="sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <ShieldCheck className="h-4 w-4" /> Edit API Permissions
+                            <ShieldCheck className="size-4" /> Edit API Permissions
                         </DialogTitle>
                         <DialogDescription>
                             Choose which modules and operations this app can access. Changes take effect immediately.
@@ -1004,7 +1004,7 @@ export function AppDetailPage() {
                 <DialogContent className="sm:max-w-xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="h-4 w-4 text-amber-500" /> {t('apps.secretRevealedTitle')}
+                            <AlertTriangle className="size-4 text-amber-500" /> {t('apps.secretRevealedTitle')}
                         </DialogTitle>
                         <DialogDescription>{t('apps.secretRevealedDesc')}</DialogDescription>
                     </DialogHeader>
@@ -1013,18 +1013,18 @@ export function AppDetailPage() {
                             <div className="space-y-1">
                                 <Label className="text-xs">{t('apps.appKey')}</Label>
                                 <div className="flex gap-2">
-                                    <code className="flex-1 text-xs bg-muted rounded px-2 py-2 break-all">{revealedSecret.key}</code>
+                                    <code className="flex-1 text-xs bg-muted rounded p-2 break-all">{revealedSecret.key}</code>
                                     <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(revealedSecret.key); toast.success(t('apps.copied')) }}>
-                                        <Copy className="h-3.5 w-3.5" />
+                                        <Copy className="size-3.5" />
                                     </Button>
                                 </div>
                             </div>
                             <div className="space-y-1">
                                 <Label className="text-xs">{t('apps.appSecret')}</Label>
                                 <div className="flex gap-2">
-                                    <code className="flex-1 text-xs bg-muted rounded px-2 py-2 break-all">{revealedSecret.secret}</code>
+                                    <code className="flex-1 text-xs bg-muted rounded p-2 break-all">{revealedSecret.secret}</code>
                                     <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(revealedSecret.secret); toast.success(t('apps.copied')) }}>
-                                        <Copy className="h-3.5 w-3.5" />
+                                        <Copy className="size-3.5" />
                                     </Button>
                                 </div>
                             </div>

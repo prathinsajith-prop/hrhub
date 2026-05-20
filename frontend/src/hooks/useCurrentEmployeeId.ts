@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useAuthStore } from '@/store/authStore'
 
 /**
- * Decode a JWT payload without verification (we trust the token here — the
+ * Decode a JWT payload without verification (we trust the token here - the
  * backend re-validates on every request). Returns `null` on any failure so
  * callers can safely fall back.
  */

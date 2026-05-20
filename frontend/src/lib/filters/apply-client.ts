@@ -1,5 +1,5 @@
 /**
- * applyClientFilters — generic client-side application of `useSearchFilters` state
+ * applyClientFilters - generic client-side application of `useSearchFilters` state
  * to a row array. Use when the data is already loaded in memory and you don't need
  * to round-trip to the backend. For server-side, use `runSearch()` from transport.ts.
  */

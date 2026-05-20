@@ -60,7 +60,7 @@ const EmpCard = memo(function EmpCard({ node, currentEmployeeId }: { node: OrgNo
                     </div>
                 )}
                 <div className={cn(
-                    'relative w-12 h-12 rounded-full flex items-center justify-center mb-3 text-sm font-bold',
+                    'relative size-12 rounded-full flex items-center justify-center mb-3 text-sm font-bold',
                     isAncestor
                         ? 'bg-muted text-muted-foreground'
                         : isMe
@@ -68,7 +68,7 @@ const EmpCard = memo(function EmpCard({ node, currentEmployeeId }: { node: OrgNo
                             : 'bg-muted text-foreground',
                 )}>
                     {initials}
-                    <span className={cn('absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card', dot)} />
+                    <span className={cn('absolute bottom-0.5 right-0.5 size-2.5 rounded-full border-2 border-card', dot)} />
                 </div>
                 <p className={cn('text-xs font-semibold leading-snug truncate w-full', isAncestor && 'text-muted-foreground')}>
                     {node.fullName}
@@ -120,7 +120,7 @@ function ReportingChart() {
         <div className="flex gap-8 justify-center py-12">
             {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="rounded-2xl border bg-card p-4 w-48 space-y-3 shadow-sm">
-                    <Skeleton className="h-12 w-12 rounded-full mx-auto" />
+                    <Skeleton className="size-12 rounded-full mx-auto" />
                     <Skeleton className="h-3.5 w-28 mx-auto" />
                     <Skeleton className="h-3 w-20 mx-auto" />
                 </div>
@@ -130,8 +130,8 @@ function ReportingChart() {
 
     if (list.length === 0) return (
         <div className="flex flex-col items-center gap-3 py-24 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
-                <Users className="h-6 w-6 text-muted-foreground" />
+            <div className="size-14 rounded-2xl bg-muted flex items-center justify-center">
+                <Users className="size-6 text-muted-foreground" />
             </div>
             <p className="font-semibold text-sm">No reporting structure yet</p>
             <p className="text-sm text-muted-foreground max-w-xs">
@@ -174,7 +174,7 @@ export function OrgChartPage() {
                 <p className="text-sm text-muted-foreground mt-1">{description}</p>
             </div>
 
-            {/* Org Structure tab is temporarily hidden — show Reporting Lines only. */}
+            {/* Org Structure tab is temporarily hidden - show Reporting Lines only. */}
             <ReportingChart />
         </PageWrapper>
     )

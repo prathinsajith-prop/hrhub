@@ -57,7 +57,7 @@ function buildGradeLevelOptions(grades: GradeLevel[]): ComboboxOption[] {
         .map(toOption)
 }
 
-// Searchable reporting-manager picker — server-side search, limit 20.
+// Searchable reporting-manager picker - server-side search, limit 20.
 function ManagerPicker({
     value, onChange, excludeId,
 }: {
@@ -187,12 +187,12 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                     <div className="md:w-[42%] shrink-0 overflow-y-auto p-5 space-y-4">
 
                         <div className="space-y-1.5">
-                            <Label required className="flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 text-muted-foreground" />Job Title</Label>
+                            <Label required className="flex items-center gap-1.5"><Briefcase className="size-3.5 text-muted-foreground" />Job Title</Label>
                             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Property Consultant" />
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label required className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-muted-foreground" />Department</Label>
+                            <Label required className="flex items-center gap-1.5"><Users className="size-3.5 text-muted-foreground" />Department</Label>
                             <Combobox
                                 value={departmentId}
                                 onValueChange={(id) => {
@@ -207,7 +207,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-muted-foreground" />Location</Label>
+                            <Label className="flex items-center gap-1.5"><MapPin className="size-3.5 text-muted-foreground" />Location</Label>
                             <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Dubai Marina" />
                         </div>
 
@@ -228,7 +228,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5 text-muted-foreground" />Salary Range (AED)</Label>
+                            <Label className="flex items-center gap-1.5"><DollarSign className="size-3.5 text-muted-foreground" />Salary Range (AED)</Label>
                             <div className="flex items-center gap-2">
                                 <NumericInput value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} placeholder="Min" className="flex-1" />
                                 <span className="text-muted-foreground text-sm shrink-0">–</span>
@@ -237,7 +237,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
                             <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
                         </div>
                     </div>
@@ -255,14 +255,14 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5 text-muted-foreground" />Requirements <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            <Label className="flex items-center gap-1.5"><Tag className="size-3.5 text-muted-foreground" />Requirements <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
                             {requirements.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5" role="list" aria-label="Requirements">
                                     {requirements.map(r => (
                                         <span key={r} role="listitem" className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
                                             {r}
                                             <button type="button" aria-label={`Remove "${r}"`} onClick={() => setRequirements(prev => prev.filter(x => x !== r))} className="ml-0.5 text-primary/60 hover:text-primary">
-                                                <XIcon className="h-3 w-3" />
+                                                <XIcon className="size-3" />
                                             </button>
                                         </span>
                                     ))}
@@ -278,7 +278,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                                     className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 />
                                 <Button type="button" variant="outline" size="sm" onClick={addRequirement} disabled={!reqInput.trim()}>
-                                    <Plus className="h-3.5 w-3.5" />
+                                    <Plus className="size-3.5" />
                                 </Button>
                             </div>
                         </div>
@@ -463,7 +463,7 @@ export function ApplyLeaveDialog({ open, onOpenChange }: { open: boolean; onOpen
 type Step = 1 | 2 | 3
 
 export interface EmpForm {
-    // Step 1 — Personal
+    // Step 1 - Personal
     firstName: string
     lastName: string
     dateOfBirth: string
@@ -477,7 +477,7 @@ export interface EmpForm {
     emergencyContactName: string
     emergencyContactPhone: string
     homeCountryAddress: string
-    // Step 2 — Employment
+    // Step 2 - Employment
     employeeNo: string
     workEmail: string
     divisionId: string
@@ -495,7 +495,7 @@ export interface EmpForm {
     contractEndDate: string
     status: string
     teamId: string
-    // Step 3 — Salary
+    // Step 3 - Salary
     basicSalary: string
     housingAllowance: string
     transportAllowance: string
@@ -531,7 +531,7 @@ function StepIndicator({ step }: { step: Step }) {
                 return (
                     <div key={label} className="flex items-center flex-1 last:flex-none">
                         <div className="flex flex-col items-center gap-1">
-                            <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors
+                            <div className={`size-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors
                                 ${isDone ? 'bg-success text-white' : isActive ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>
                                 {isDone ? '✓' : idx}
                             </div>
@@ -558,9 +558,9 @@ export interface AddEmployeeDialogProps {
      * Should throw to signal failure; the dialog will close on success.
      */
     onSubmit?: (payload: Record<string, unknown>) => Promise<{ id?: string } | void>
-    /** Dialog title — defaults to "Add New Employee". */
+    /** Dialog title - defaults to "Add New Employee". */
     title?: string
-    /** Submit-button label — defaults to "Add Employee". */
+    /** Submit-button label - defaults to "Add Employee". */
     submitLabel?: string
     /** External pending state when `onSubmit` is provided. */
     externalPending?: boolean
@@ -722,7 +722,7 @@ export function AddEmployeeDialog({
                 newEmp = await createEmployee.mutateAsync(payload)
             }
             const newId = (newEmp as { id?: string } | undefined)?.id
-            // Assign to team if selected (best-effort — doesn't fail the whole create)
+            // Assign to team if selected (best-effort - doesn't fail the whole create)
             if (form.teamId && newId) {
                 api.post(`/teams/${form.teamId}/members`, { employeeIds: [newId] }).catch(() => {})
             }
@@ -744,7 +744,7 @@ export function AddEmployeeDialog({
                 setStep(2)
                 return
             }
-            // DB unique constraint — backend returns { field: 'camelCaseFieldName' }
+            // DB unique constraint - backend returns { field: 'camelCaseFieldName' }
             const dupField = e instanceof ApiError ? e.field : undefined
             if (dupField) {
                 setErrors({ [dupField]: e.message ?? 'Already in use' })
@@ -874,7 +874,7 @@ export function AddEmployeeDialog({
                             <FormField label="Work Email" error={errors.workEmail} hint="Used for login invites and official communications">
                                 <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
                             </FormField>
-                            {/* Department picker — Branch and Division auto-assigned */}
+                            {/* Department picker - Branch and Division auto-assigned */}
                             <div className="space-y-1.5">
                                 <Label>Department</Label>
                                 <Combobox
@@ -912,7 +912,7 @@ export function AddEmployeeDialog({
                                     </div>
                                 </div>
                             </div>
-                            {/* Reporting Manager — auto-fills from department head, can be overridden */}
+                            {/* Reporting Manager - auto-fills from department head, can be overridden */}
                             <div className="space-y-1.5">
                                 <Label>
                                     Reporting Manager
@@ -928,7 +928,7 @@ export function AddEmployeeDialog({
                                     </p>
                                 )}
                             </div>
-                            {/* Team — filtered to the selected department */}
+                            {/* Team - filtered to the selected department */}
                             {teamOptions.length > 0 && (
                                 <div className="space-y-1.5">
                                     <Label>Team <span className="text-muted-foreground font-normal">(optional)</span></Label>
@@ -1200,7 +1200,7 @@ export function EditEmployeeDialog({
         <Dialog open={open} onOpenChange={close}>
             <DialogContent size="lg">
                 <DialogHeader>
-                    <DialogTitle>Edit Profile — {employee.fullName}</DialogTitle>
+                    <DialogTitle>Edit Profile - {employee.fullName}</DialogTitle>
                 </DialogHeader>
                 <DialogBody>
                     <div className="space-y-3">
@@ -1382,7 +1382,7 @@ export function EditEmploymentDialog({
         <Dialog open={open} onOpenChange={close}>
             <DialogContent size="lg">
                 <DialogHeader>
-                    <DialogTitle>Edit Employment — {employee.fullName}</DialogTitle>
+                    <DialogTitle>Edit Employment - {employee.fullName}</DialogTitle>
                 </DialogHeader>
                 <DialogBody>
                     <div className="space-y-3">
@@ -1592,7 +1592,7 @@ export function EditPayrollDialog({
         <Dialog open={open} onOpenChange={close}>
             <DialogContent size="lg">
                 <DialogHeader>
-                    <DialogTitle>Edit Payroll — {employee.fullName}</DialogTitle>
+                    <DialogTitle>Edit Payroll - {employee.fullName}</DialogTitle>
                 </DialogHeader>
                 <DialogBody>
                     <div className="space-y-3">
@@ -1755,12 +1755,12 @@ export function EditJobDialog({
                     <div className="md:w-[42%] shrink-0 overflow-y-auto p-5 space-y-4">
 
                         <div className="space-y-1.5">
-                            <Label required className="flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5 text-muted-foreground" />Job Title</Label>
+                            <Label required className="flex items-center gap-1.5"><Briefcase className="size-3.5 text-muted-foreground" />Job Title</Label>
                             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label required className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-muted-foreground" />Department</Label>
+                            <Label required className="flex items-center gap-1.5"><Users className="size-3.5 text-muted-foreground" />Department</Label>
                             <Combobox
                                 value={departmentId}
                                 onValueChange={(id) => {
@@ -1775,7 +1775,7 @@ export function EditJobDialog({
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-muted-foreground" />Location</Label>
+                            <Label className="flex items-center gap-1.5"><MapPin className="size-3.5 text-muted-foreground" />Location</Label>
                             <Input value={location ?? ''} onChange={(e) => setLocation(e.target.value)} />
                         </div>
 
@@ -1796,7 +1796,7 @@ export function EditJobDialog({
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5 text-muted-foreground" />Salary Range (AED)</Label>
+                            <Label className="flex items-center gap-1.5"><DollarSign className="size-3.5 text-muted-foreground" />Salary Range (AED)</Label>
                             <div className="flex items-center gap-2">
                                 <NumericInput value={minSalary} onChange={(e) => setMinSalary(Number(e.target.value))} placeholder="Min" className="flex-1" />
                                 <span className="text-muted-foreground text-sm shrink-0">–</span>
@@ -1805,7 +1805,7 @@ export function EditJobDialog({
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
                             <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
                         </div>
                     </div>
@@ -1823,14 +1823,14 @@ export function EditJobDialog({
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="flex items-center gap-1.5"><Tag className="h-3.5 w-3.5 text-muted-foreground" />Requirements <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            <Label className="flex items-center gap-1.5"><Tag className="size-3.5 text-muted-foreground" />Requirements <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
                             {requirements.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5" role="list" aria-label="Requirements">
                                     {requirements.map(r => (
                                         <span key={r} role="listitem" className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
                                             {r}
                                             <button type="button" aria-label={`Remove "${r}"`} onClick={() => setRequirements(prev => prev.filter(x => x !== r))} className="ml-0.5 text-primary/60 hover:text-primary">
-                                                <XIcon className="h-3 w-3" />
+                                                <XIcon className="size-3" />
                                             </button>
                                         </span>
                                     ))}
@@ -1846,7 +1846,7 @@ export function EditJobDialog({
                                     className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 />
                                 <Button type="button" variant="outline" size="sm" onClick={addEditRequirement} disabled={!reqInput.trim()}>
-                                    <Plus className="h-3.5 w-3.5" />
+                                    <Plus className="size-3.5" />
                                 </Button>
                             </div>
                         </div>
@@ -2019,7 +2019,7 @@ export function AssignAssetToEmployeeDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent size="sm">
                 <DialogHeader>
-                    <DialogTitle>Assign Asset — {employee.firstName} {employee.lastName}</DialogTitle>
+                    <DialogTitle>Assign Asset - {employee.firstName} {employee.lastName}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit}>
                     <DialogBody className="space-y-4">

@@ -216,7 +216,7 @@ describe('useUpdateRegionalSettings', () => {
 
 // ─── Behavioural regression: settings hooks must not wrap or re-shape payloads ─
 describe('useUpdateNotifPrefs payload shape (regression)', () => {
-    it('does NOT wrap prefs in { prefs: ... } — backend expects the object at the body root', async () => {
+    it('does NOT wrap prefs in { prefs: ... } - backend expects the object at the body root', async () => {
         apiMock.put.mockResolvedValue({ data: {} })
         const { result } = renderHook(() => useUpdateNotifPrefs(), { wrapper: makeWrapper() })
         await act(async () => { await result.current.mutateAsync({ a: { email: true, push: false } }) })

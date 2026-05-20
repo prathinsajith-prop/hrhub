@@ -75,14 +75,14 @@ export function CompanyTab() {
         <div className="space-y-5">
             {!canEdit && (
                 <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
-                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <AlertCircle className="size-4 shrink-0 mt-0.5" />
                     <span>{t('settingsDetail.company.viewOnlyAccess')}</span>
                 </div>
             )}
             {/* Card 1: Identity strip + Company Profile */}
             <SettingsCard>
                 <div className="flex items-center gap-4 pb-5 border-b">
-                    <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center text-primary-foreground text-base font-semibold shrink-0">
+                    <div className="size-12 rounded-xl bg-primary flex items-center justify-center text-primary-foreground text-base font-semibold shrink-0">
                         {(company?.name ?? tenant?.name ?? 'HR').slice(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -132,14 +132,14 @@ export function CompanyTab() {
                 <div className="space-y-4">
                     <div>
                         <h3 className="text-sm font-semibold flex items-center gap-2">
-                            <Globe className="h-4 w-4 text-muted-foreground" />
+                            <Globe className="size-4 text-muted-foreground" />
                             {t('settingsDetail.company.regionalSettings')}
                         </h3>
                         <p className="text-xs text-muted-foreground mt-0.5">{t('settingsDetail.company.regionalSettingsDesc')}</p>
                     </div>
                     {regionalLoading ? (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+                            {[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-10 w-full" />)}
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -160,10 +160,10 @@ export function CompanyTab() {
                 </div>
             </SettingsCard>
 
-            {/* Save bar — outside the cards */}
+            {/* Save bar - outside the cards */}
             {canEdit && (
                 <div className="flex justify-end pt-2">
-                    <Button onClick={handleSave} loading={updateCompany.isPending} leftIcon={saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />} variant={saved ? 'success' : 'default'}>
+                    <Button onClick={handleSave} loading={updateCompany.isPending} leftIcon={saved ? <CheckCircle2 className="size-4" /> : <Save className="size-4" />} variant={saved ? 'success' : 'default'}>
                         {saved ? t('settingsDetail.profile.saved') : t('settingsDetail.profile.saveChanges')}
                     </Button>
                 </div>

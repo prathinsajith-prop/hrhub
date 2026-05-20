@@ -25,7 +25,7 @@ export function MonthSwitcher({
                 onClick={() => onChange(offset - 1)}
                 aria-label="Previous month"
             >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="size-4" />
             </Button>
             <div className="px-3 text-xs font-medium min-w-[140px] text-center border-l border-r">
                 {label}
@@ -38,7 +38,7 @@ export function MonthSwitcher({
                 disabled={offset === 0}
                 aria-label="Next month"
             >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="size-4" />
             </Button>
         </div>
     )

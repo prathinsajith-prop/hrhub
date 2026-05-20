@@ -258,7 +258,7 @@ export function AuditLogPage() {
                 description={t('audit.description')}
                 actions={
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
+                        <Button variant="outline" size="sm" leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />} onClick={() => refetch()} disabled={isFetching}>
                             Refresh
                         </Button>
                         <ExportDropdown
@@ -285,7 +285,7 @@ export function AuditLogPage() {
                     rightSlot={
                         <>
                             <Button variant="outline" size="sm" className="h-9 gap-1" onClick={exportCsv}>
-                                <Download className="h-3.5 w-3.5" /> Export
+                                <Download className="size-3.5" /> Export
                             </Button>
                             {hasFilters && (
                                 <Button
@@ -294,7 +294,7 @@ export function AuditLogPage() {
                                     className="h-9 px-2 text-xs gap-1"
                                     onClick={clearAll}
                                 >
-                                    <X className="h-3.5 w-3.5" /> Clear
+                                    <X className="size-3.5" /> Clear
                                 </Button>
                             )}
                         </>
@@ -329,8 +329,8 @@ export function AuditLogPage() {
             ) : filtered.length === 0 ? (
                 <div className="rounded-xl border bg-card shadow-sm">
                     <div className="flex flex-col items-center gap-3 py-16">
-                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                            <ClipboardList className="h-6 w-6 text-muted-foreground" />
+                        <div className="size-12 rounded-full bg-muted flex items-center justify-center">
+                            <ClipboardList className="size-6 text-muted-foreground" />
                         </div>
                         <div className="text-center">
                             <p className="font-medium text-sm">No activity yet</p>
@@ -390,8 +390,8 @@ function ActivityRow({ log }: { log: ActivityLog }) {
     return (
         <div className="px-4 py-3.5 hover:bg-muted/30 transition-colors">
             <div className="flex items-start gap-3">
-                <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5', meta.tile)}>
-                    <Icon className="h-4 w-4" />
+                <div className={cn('size-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5', meta.tile)}>
+                    <Icon className="size-4" />
                 </div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -413,7 +413,7 @@ function ActivityRow({ log }: { log: ActivityLog }) {
                                 </span>
                                 {log.actorRole && (
                                     <span className="inline-flex items-center gap-1">
-                                        <UserIcon className="h-3 w-3" />
+                                        <UserIcon className="size-3" />
                                         <span className="capitalize">{labelFor(log.actorRole)}</span>
                                     </span>
                                 )}
@@ -423,7 +423,7 @@ function ActivityRow({ log }: { log: ActivityLog }) {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                            <div className="hidden sm:flex h-8 w-8 rounded-full bg-primary/10 text-primary text-[11px] font-semibold items-center justify-center shrink-0">
+                            <div className="hidden sm:flex size-8 rounded-full bg-primary/10 text-primary text-[11px] font-semibold items-center justify-center shrink-0">
                                 {getInitials(log.actorName)}
                             </div>
                             <div className="text-right">

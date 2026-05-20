@@ -23,7 +23,7 @@ export function useDesignations() {
 /**
  * Active designations as `{ value, label }` pairs for the Combobox / Select
  * primitives. Used by the Add/Edit Employee dialogs, the Convert-to-Employee
- * flow, the Transfer dialog, etc. — collapses the duplicated filter+map idiom.
+ * flow, the Transfer dialog, etc. - collapses the duplicated filter+map idiom.
  */
 export function useDesignationOptions() {
     const { data = [] } = useDesignations()

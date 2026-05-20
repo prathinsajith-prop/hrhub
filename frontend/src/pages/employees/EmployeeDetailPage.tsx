@@ -133,12 +133,12 @@ const REVISION_TYPE_VARIANT: Record<string, 'success' | 'destructive' | 'info' |
 // ─── Small components ─────────────────────────────────────────────────────────
 
 const InfoRow = React.memo(function InfoRow({ label, value, icon: Icon, trailing }: { label: string; value?: string | null; icon?: React.ElementType; trailing?: React.ReactNode }) {
-  // Hide rows that have no real value — keeps the layout tight and free of "—" filler.
+  // Hide rows that have no real value - keeps the layout tight and free of "—" filler.
   const hasValue = value !== undefined && value !== null && String(value).trim() !== ''
   if (!hasValue && !trailing) return null
   return (
     <div className="flex items-center gap-3 py-3 border-b border-border/40 last:border-0">
-      {Icon && <Icon className="h-4 w-4 text-muted-foreground shrink-0" />}
+      {Icon && <Icon className="size-4 text-muted-foreground shrink-0" />}
       <span className="text-sm text-muted-foreground w-36 shrink-0">{label}</span>
       <span className="text-sm font-medium text-foreground truncate flex-1">{hasValue ? value : ''}</span>
       {trailing && <span className="shrink-0">{trailing}</span>}
@@ -165,7 +165,7 @@ const DocLink = React.memo(function DocLink({
         onClick={onView}
         className="inline-flex items-center gap-1 text-[10px] font-medium text-primary hover:underline px-2 py-0.5 rounded-md hover:bg-primary/5 transition-colors"
       >
-        <Eye className="h-3 w-3" />View file
+        <Eye className="size-3" />View file
       </button>
       <button
         type="button"
@@ -174,7 +174,7 @@ const DocLink = React.memo(function DocLink({
         onClick={onDownload}
         className="inline-flex items-center p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
       >
-        <Download className="h-3 w-3" />
+        <Download className="size-3" />
       </button>
     </div>
   )
@@ -187,7 +187,7 @@ const EmpField = React.memo(function EmpField({
   return (
     <div className="space-y-1 min-w-0">
       <div className="flex items-center gap-1.5">
-        {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+        {Icon && <Icon className="size-3.5 text-muted-foreground shrink-0" />}
         <p className="text-xs text-muted-foreground leading-none">{label}</p>
       </div>
       {children
@@ -207,7 +207,7 @@ const EmployeeStatusBadge = React.memo(function EmployeeStatusBadge({ status }: 
 
 type StatTone = 'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'teal' | 'slate' | 'indigo'
 
-/** Icon-only colour accent — keeps the tile background flat & professional. */
+/** Icon-only colour accent - keeps the tile background flat & professional. */
 const STAT_ICON_TONE: Record<StatTone, string> = {
   blue:    'text-blue-600',
   emerald: 'text-emerald-600',
@@ -223,10 +223,10 @@ const STAT_ICON_TONE: Record<StatTone, string> = {
 const DOC_PAGE_SIZE = 5
 
 /** Inline loading indicator used across the page (Account timeline cells, etc.). */
-const INLINE_SPINNER = <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+const INLINE_SPINNER = <Loader2 className="size-3 animate-spin text-muted-foreground" />
 
 
-/** Compact stat tile — flat background, colour signal lives only on the icon. */
+/** Compact stat tile - flat background, colour signal lives only on the icon. */
 const StatTile = React.memo(function StatTile({
   icon: Icon, label, value, trailing, valueClass, tone = 'slate',
 }: {
@@ -247,7 +247,7 @@ const StatTile = React.memo(function StatTile({
   return (
     <div className="px-3.5 py-2.5 min-w-0">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-        {Icon && <Icon className={cn('h-3 w-3 shrink-0', STAT_ICON_TONE[tone])} />}
+        {Icon && <Icon className={cn('size-3 shrink-0', STAT_ICON_TONE[tone])} />}
         <span className="truncate">{label}</span>
       </div>
       <div className="flex items-center justify-between gap-2 mt-1">
@@ -460,7 +460,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
               <NumericInput id="cs-basic" placeholder="0.00" value={newBasic} onChange={e => setNewBasic(e.target.value)} className="h-9" />
             </div>
 
-            {/* Allowances — 3 equal columns */}
+            {/* Allowances - 3 equal columns */}
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-2">Allowances <span className="font-normal">(optional)</span></p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -479,7 +479,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
               </div>
             </div>
 
-            {/* Total package — always visible */}
+            {/* Total package - always visible */}
             <div className="rounded-lg border bg-primary/5 border-primary/20 px-4 py-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -522,7 +522,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
             </Button>
             <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending
-                ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Saving…</>
+                ? <><Loader2 className="size-3.5 animate-spin mr-1.5" />Saving…</>
                 : 'Save Revision'}
             </Button>
           </DialogFooter>
@@ -686,7 +686,7 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
             </Button>
             <Button type="submit" disabled={mutation.isPending || !transferDate || !departmentId}>
               {mutation.isPending
-                ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Saving…</>
+                ? <><Loader2 className="size-3.5 animate-spin mr-1.5" />Saving…</>
                 : 'Record Transfer'}
             </Button>
           </DialogFooter>
@@ -738,7 +738,7 @@ async function downloadDoc(doc: DocRecord) {
   }
 }
 
-// ─── Document category/status config (static — outside component) ─────────────
+// ─── Document category/status config (static - outside component) ─────────────
 
 const DOC_CATEGORY_CONFIG: Record<string, { label: string; Icon: React.ComponentType<{ className?: string }>; iconCls: string; bgCls: string }> = {
   identity:      { label: 'Identity',      Icon: CreditCard,     iconCls: 'text-blue-600',   bgCls: 'bg-blue-50 border-blue-200' },
@@ -779,8 +779,8 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/30 transition-colors min-w-0">
       {/* Team icon */}
-      <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-        <Users className="h-3.5 w-3.5 text-primary" />
+      <div className="size-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+        <Users className="size-3.5 text-primary" />
       </div>
 
       {/* Team name + org breadcrumb */}
@@ -796,7 +796,7 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
         </div>
         {orgPath.length > 0 && (
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5 truncate">
-            <Building2 className="h-2.5 w-2.5 shrink-0" />
+            <Building2 className="size-2.5 shrink-0" />
             {orgPath.map((p, i) => (
               <span key={i} className="flex items-center gap-1">
                 {i > 0 && <span className="opacity-40">›</span>}
@@ -812,10 +812,10 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
         <div className="hidden sm:flex -space-x-2 shrink-0">
           {members.length === 0
             ? [...Array(previewCount)].map((_, i) => (
-              <div key={i} className="h-7 w-7 rounded-full border-2 border-card bg-muted shrink-0" />
+              <div key={i} className="size-7 rounded-full border-2 border-card bg-muted shrink-0" />
             ))
             : previewMembers.map(m => (
-              <Avatar key={m.id} className="h-7 w-7 border-2 border-card shrink-0" title={`${m.firstName} ${m.lastName}`}>
+              <Avatar key={m.id} className="size-7 border-2 border-card shrink-0" title={`${m.firstName} ${m.lastName}`}>
                 {m.avatarUrl && <AvatarImage src={m.avatarUrl} />}
                 <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">
                   {getInitials(`${m.firstName} ${m.lastName}`)}
@@ -824,7 +824,7 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
             ))
           }
           {overflow > 0 && (
-            <div className="h-7 w-7 rounded-full border-2 border-card bg-muted flex items-center justify-center shrink-0">
+            <div className="size-7 rounded-full border-2 border-card bg-muted flex items-center justify-center shrink-0">
               <span className="text-[9px] font-semibold text-muted-foreground tabular-nums">+{overflow}</span>
             </div>
           )}
@@ -833,7 +833,7 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
 
       {/* Joined date */}
       <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums shrink-0 hidden md:flex">
-        <Calendar className="h-3 w-3" />
+        <Calendar className="size-3" />
         {formatDate(team.joinedAt)}
       </span>
     </div>
@@ -865,7 +865,7 @@ export function EmployeeDetailPage() {
   const [attendanceMonthOffset, setAttendanceMonthOffset] = React.useState(0)
   const { month: attendanceMonth, label: attendanceMonthLabel, start: attendanceStart, end: attendanceEnd } =
     React.useMemo(() => resolveMonthFromOffset(attendanceMonthOffset), [attendanceMonthOffset])
-  // Calendar grid (employees × days) — backend resolves leave + holiday cells.
+  // Calendar grid (employees × days) - backend resolves leave + holiday cells.
   const { data: attendanceCalendar, isLoading: attendanceCalendarLoading } = useAttendanceCalendar(
     attendanceMonth,
     { employeeId: id },
@@ -893,7 +893,7 @@ export function EmployeeDetailPage() {
   const { data: accountData, isLoading: accountLoading } = useEmployeeAccount(canManage ? id : undefined)
   const { data: employeeTeams = [] } = useEmployeeTeams(id)
 
-  // Salary history — filter state must be declared before the hook call to avoid TDZ
+  // Salary history - filter state must be declared before the hook call to avoid TDZ
   const [salaryHistoryFilters, setSalaryHistoryFilters] = React.useState<SalaryHistoryFilters>({})
   const { data: salaryHistoryData, isLoading: salaryHistoryLoading } = useSalaryHistory(
     canManage ? (id ?? '') : '',
@@ -903,7 +903,7 @@ export function EmployeeDetailPage() {
   // Transfer history
   const { data: transfersData, isLoading: transfersLoading } = useEmployeeTransfers(id)
 
-  // Active/pending loans for this employee — drives the hero "Loans" tile.
+  // Active/pending loans for this employee - drives the hero "Loans" tile.
   const { data: employeeLoansData } = useLoans(canManage && id ? { employeeId: id, limit: 25 } : undefined)
   const employeeLoanSummary = (() => {
     if (!employeeLoansData?.data) return null
@@ -993,8 +993,8 @@ export function EmployeeDetailPage() {
 
   const docsByCategory = React.useMemo(() => {
     const CATEGORY_ORDER = ['identity', 'visa', 'employment', 'company', 'insurance', 'qualification', 'financial', 'compliance']
-    // LIFO — newest upload first within each category.
-    const sorted = [...filteredDocs].sort((a, b) => {
+    // LIFO - newest upload first within each category.
+    const sorted = filteredDocs.toSorted((a, b) => {
       const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0
       const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0
       return tb - ta
@@ -1099,8 +1099,8 @@ export function EmployeeDetailPage() {
     <PageWrapper>
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm">
-        <Button variant="ghost" size="icon-sm" onClick={() => navigate('/employees')} aria-label="Back" className="h-7 w-7 shrink-0">
-          <ArrowLeft className="h-4 w-4" />
+        <Button variant="ghost" size="icon-sm" onClick={() => navigate('/employees')} aria-label="Back" className="size-7 shrink-0">
+          <ArrowLeft className="size-4" />
         </Button>
         <button type="button" onClick={() => navigate('/employees')} className="text-muted-foreground hover:text-foreground transition-colors">
           Employees
@@ -1116,7 +1116,7 @@ export function EmployeeDetailPage() {
           <div className="flex flex-col sm:flex-row gap-4 p-4 sm:p-5">
             {/* Avatar */}
             <div className="relative shrink-0 self-start">
-              <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
+              <Avatar className="size-20 sm:h-24 sm:w-24">
                 {e.avatarUrl && <AvatarImage src={e.avatarUrl} alt={e.fullName} />}
                 <AvatarFallback className="text-xl font-bold bg-primary text-primary-foreground">
                   {getInitials(e.fullName)}
@@ -1126,10 +1126,10 @@ export function EmployeeDetailPage() {
                 type="button"
                 onClick={() => avatarInputRef.current?.click()}
                 disabled={uploadAvatar.isPending}
-                className="absolute bottom-0 right-0 h-7 w-7 rounded-full bg-background border-2 border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary transition disabled:opacity-50"
+                className="absolute bottom-0 right-0 size-7 rounded-full bg-background border-2 border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary transition disabled:opacity-50"
                 aria-label="Change profile image"
               >
-                {uploadAvatar.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+                {uploadAvatar.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
               </button>
             </div>
 
@@ -1153,13 +1153,13 @@ export function EmployeeDetailPage() {
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
                   {(e.mobileNo ?? e.phone) && (
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Phone className="h-3.5 w-3.5 shrink-0" />
+                      <Phone className="size-3.5 shrink-0" />
                       <CopyablePhone phone={e.mobileNo ?? e.phone ?? ''} className="text-xs text-muted-foreground" />
                     </span>
                   )}
                   {(e.workEmail ?? e.email) && (
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Mail className="h-3.5 w-3.5 shrink-0" />
+                      <Mail className="size-3.5 shrink-0" />
                       <CopyableEmail email={e.workEmail ?? e.email ?? ''} className="text-xs text-muted-foreground" />
                     </span>
                   )}
@@ -1173,7 +1173,7 @@ export function EmployeeDetailPage() {
                   ].filter(Boolean) as string[]
                   return parts.length > 0 ? (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1.5">
-                      <Building2 className="h-3.5 w-3.5 shrink-0" />
+                      <Building2 className="size-3.5 shrink-0" />
                       <span className="flex items-center gap-1 min-w-0 truncate">
                         {parts.map((p, i) => (
                           <span key={i} className="flex items-center gap-1">
@@ -1188,38 +1188,38 @@ export function EmployeeDetailPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-                <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => exportCSV(e as unknown as Record<string, unknown>)}>
+                <Button variant="outline" size="sm" leftIcon={<Download className="size-3.5" />} onClick={() => exportCSV(e as unknown as Record<string, unknown>)}>
                   Export
                 </Button>
                 {canManage && !accountLoading && !isAccessRestricted && (() => {
                   if (!accountData?.hasAccount) {
                     return (
-                      <Button variant="success" size="sm" leftIcon={<UserCheck className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
+                      <Button variant="success" size="sm" leftIcon={<UserCheck className="size-3.5" />} onClick={() => setInviteOpen(true)}>
                         Grant Access
                       </Button>
                     )
                   }
                   if (!accountData?.account?.isActive) {
                     return (
-                      <Button variant="warning" size="sm" leftIcon={<Clock className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
+                      <Button variant="warning" size="sm" leftIcon={<Clock className="size-3.5" />} onClick={() => setInviteOpen(true)}>
                         Invite Pending
                       </Button>
                     )
                   }
                   return (
-                    <Button variant="info" size="sm" leftIcon={<Shield className="h-3.5 w-3.5" />} onClick={() => setInviteOpen(true)}>
+                    <Button variant="info" size="sm" leftIcon={<Shield className="size-3.5" />} onClick={() => setInviteOpen(true)}>
                       Manage Access
                     </Button>
                   )
                 })()}
-                <Button size="sm" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditOpen(true)}>
+                <Button size="sm" leftIcon={<Edit2 className="size-3.5" />} onClick={() => setEditOpen(true)}>
                   Edit Profile
                 </Button>
                 {canManage && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="sm" aria-label="More actions">
-                        <MoreHorizontal className="h-4 w-4" />
+                        <MoreHorizontal className="size-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-52">
@@ -1228,7 +1228,7 @@ export function EmployeeDetailPage() {
                           onClick={() => setStatusTarget({ status: 'active' })}
                           className="text-success focus:text-success focus:bg-success/10"
                         >
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
+                          <CheckCircle2 className="size-3.5 mr-2" />
                           Activate
                           </DropdownMenuItem>
                         )}
@@ -1237,7 +1237,7 @@ export function EmployeeDetailPage() {
                             onClick={() => setStatusTarget({ status: 'suspended' })}
                             className="text-amber-600 focus:text-amber-600 focus:bg-amber-50"
                           >
-                            <Ban className="h-3.5 w-3.5 mr-2" />
+                            <Ban className="size-3.5 mr-2" />
                             Suspend
                           </DropdownMenuItem>
                         )}
@@ -1246,7 +1246,7 @@ export function EmployeeDetailPage() {
                             onClick={() => setTerminateOpen(true)}
                             className="text-destructive focus:text-destructive focus:bg-destructive/10"
                           >
-                            <UserX className="h-3.5 w-3.5 mr-2" />
+                            <UserX className="size-3.5 mr-2" />
                             Terminate
                           </DropdownMenuItem>
                         )}
@@ -1255,7 +1255,7 @@ export function EmployeeDetailPage() {
                           onClick={() => setArchiveConfirm(true)}
                           className="text-muted-foreground focus:text-destructive focus:bg-destructive/10"
                         >
-                          <Trash2 className="h-3.5 w-3.5 mr-2" />
+                          <Trash2 className="size-3.5 mr-2" />
                           Archive Record
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -1289,7 +1289,7 @@ export function EmployeeDetailPage() {
                 <StatTile tone="teal"    icon={Clock}      label="Tenure"       value={tenureLabel ?? '—'} />
                 <StatTile tone="emerald" icon={DollarSign} label="Total Salary" value={e.totalSalary != null ? formatCurrency(e.totalSalary) : '—'} />
 
-                {/* User role — colour-coded badge (only when an account exists) */}
+                {/* User role - colour-coded badge (only when an account exists) */}
                 {canManage && accountRole && (
                   <StatTile
                     tone="indigo"
@@ -1361,7 +1361,7 @@ export function EmployeeDetailPage() {
                 <StatTile tone="indigo" icon={UserCheck} label="Manager"    value={e.managerName ?? '—'} />
                 <StatTile tone="violet" icon={Star}      label="Grade"      value={e.gradeLevelName ?? '—'} />
 
-                {/* Active loans — only shown when there's an outstanding balance */}
+                {/* Active loans - only shown when there's an outstanding balance */}
                 {employeeLoanSummary && (
                   <StatTile
                     tone="amber"
@@ -1481,13 +1481,13 @@ export function EmployeeDetailPage() {
               </CardContent>
             </Card>
 
-            {/* ── Dependents — nested under Personal ─────────────────────── */}
+            {/* ── Dependents - nested under Personal ─────────────────────── */}
             {canManage && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <Heart className="h-4 w-4 text-rose-500" />
+                      <Heart className="size-4 text-rose-500" />
                       <CardTitle className="text-base">Dependents</CardTitle>
                       {dependentsData?.length ? (
                         <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
@@ -1496,16 +1496,16 @@ export function EmployeeDetailPage() {
                       ) : null}
                     </div>
                     <Button size="sm" onClick={() => { setEditingDependent(null); setDependentDialogOpen(true) }}>
-                      <Plus className="h-3.5 w-3.5 mr-1.5" />Add Dependent
+                      <Plus className="size-3.5 mr-1.5" />Add Dependent
                     </Button>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   {dependentsLoading ? (
-                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
+                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={`div-${i}`} className="h-10 rounded bg-muted animate-pulse" />)}</div>
                   ) : !dependentsData?.length ? (
                     <div className="text-center py-12 text-muted-foreground">
-                      <Heart className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <Heart className="size-8 mx-auto mb-2 opacity-30" />
                       <p className="text-sm font-medium">No dependents on file</p>
                       <p className="text-xs mt-1">Add a spouse, child, or other family member.</p>
                     </div>
@@ -1533,13 +1533,13 @@ export function EmployeeDetailPage() {
                               <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(dep.createdAt)}</td>
                               <td className="px-4 py-2.5">
                                 <div className="flex gap-1">
-                                  <Button size="icon" variant="ghost" className="h-6 w-6"
+                                  <Button size="icon" variant="ghost" className="size-6"
                                     onClick={() => { setEditingDependent(dep); setDependentDialogOpen(true) }}>
-                                    <Edit2 className="h-3 w-3" />
+                                    <Edit2 className="size-3" />
                                   </Button>
-                                  <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive"
+                                  <Button size="icon" variant="ghost" className="size-6 text-destructive hover:text-destructive"
                                     onClick={() => deleteDependent.mutate(dep.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
-                                    <Trash2 className="h-3 w-3" />
+                                    <Trash2 className="size-3" />
                                   </Button>
                                 </div>
                               </td>
@@ -1562,10 +1562,10 @@ export function EmployeeDetailPage() {
                   <CardTitle className="text-base">Employment Details</CardTitle>
                   {canManage && (
                     <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditEmploymentOpen(true)}>
+                      <Button size="sm" variant="outline" leftIcon={<Edit2 className="size-3.5" />} onClick={() => setEditEmploymentOpen(true)}>
                         Edit
                       </Button>
-                      <Button size="sm" variant="outline" leftIcon={<ArrowRightLeft className="h-3.5 w-3.5" />} onClick={() => setTransferOpen(true)}>
+                      <Button size="sm" variant="outline" leftIcon={<ArrowRightLeft className="size-3.5" />} onClick={() => setTransferOpen(true)}>
                         Transfer
                       </Button>
                     </div>
@@ -1574,24 +1574,24 @@ export function EmployeeDetailPage() {
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5">
-                  {/* Row 1 — Identity */}
+                  {/* Row 1 - Identity */}
                   <EmpField label="Employee No." icon={Hash} value={e.employeeNo} />
                   <EmpField label="Join Date" icon={Calendar} value={formatDate(e.joinDate)} />
                   <EmpField label="Status" icon={Shield}>
                     <EmployeeStatusBadge status={e.status} />
                   </EmpField>
 
-                  {/* Row 2 — Role */}
+                  {/* Row 2 - Role */}
                   <EmpField label="Designation" icon={Briefcase} value={e.designation} />
                   <EmpField label="Employment Type" icon={Briefcase} value={labelFor(e.contractType)} />
                   <EmpField label="Grade Level" icon={GraduationCap} value={e.gradeLevelName} />
 
-                  {/* Row 3 — Org */}
+                  {/* Row 3 - Org */}
                   <EmpField label="Company" icon={Building2} value={e.entityName ?? undefined} />
                   <EmpField label="Branch" icon={Building2} value={orgUnitName(e.branchId) ?? undefined} />
                   <EmpField label="Division" icon={Building2} value={orgUnitName(e.divisionId) ?? undefined} />
 
-                  {/* Row 4 — Location / Manager */}
+                  {/* Row 4 - Location / Manager */}
                   <EmpField label="Department" icon={Building2} value={orgUnitName(e.departmentId) ?? undefined} />
                   <EmpField label="Work Location" icon={MapPin} value={e.workLocation ?? undefined} />
                   <EmpField label="Direct Manager" icon={User} value={e.managerName ?? undefined} />
@@ -1604,7 +1604,7 @@ export function EmployeeDetailPage() {
                     <EmpField label="Contract End" icon={Calendar} value={e.contractEndDate ? formatDate(e.contractEndDate) : undefined} />
                   )}
 
-                  {/* Shift schedule — null falls back to tenant default */}
+                  {/* Shift schedule - null falls back to tenant default */}
                   <EmpField
                     label="Shift"
                     icon={Clock}
@@ -1627,7 +1627,7 @@ export function EmployeeDetailPage() {
             <Card>
               <CardHeader className="px-4 py-3 border-b">
                 <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <Users className="size-4 text-muted-foreground" />
                   <CardTitle className="text-sm font-semibold">Team Memberships</CardTitle>
                   {employeeTeams.length > 0 && (
                     <Badge variant="secondary" className="text-[10px] ml-auto">
@@ -1639,7 +1639,7 @@ export function EmployeeDetailPage() {
               <CardContent className="p-3">
                 {employeeTeams.length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground">
-                    <Users className="h-7 w-7 mx-auto mb-1.5 opacity-25" />
+                    <Users className="size-7 mx-auto mb-1.5 opacity-25" />
                     <p className="text-sm font-medium">Not assigned to any team</p>
                     <p className="text-[11px] mt-0.5">Team assignments are managed from the Teams page.</p>
                   </div>
@@ -1671,16 +1671,16 @@ export function EmployeeDetailPage() {
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
+                  <ArrowRightLeft className="size-4 text-muted-foreground" />
                   <CardTitle className="text-base">Transfer History</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
                 {transfersLoading ? (
-                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-12 w-full" />)}</div>
                 ) : !transfersData || transfersData.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <ArrowRightLeft className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <ArrowRightLeft className="size-8 mx-auto mb-2 opacity-30" />
                     <p className="text-sm font-medium">No transfers recorded</p>
                   </div>
                 ) : (
@@ -1719,7 +1719,7 @@ export function EmployeeDetailPage() {
                                 <div key={row.label} className="grid grid-cols-[80px_1fr_20px_1fr] items-center gap-2 px-4 py-2.5">
                                   <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{row.label}</span>
                                   <span className="text-xs text-muted-foreground truncate">{row.from ?? '—'}</span>
-                                  <ArrowRightLeft className="h-3 w-3 text-muted-foreground/40 justify-self-center shrink-0" />
+                                  <ArrowRightLeft className="size-3 text-muted-foreground/40 justify-self-center shrink-0" />
                                   <span className="text-xs font-medium text-foreground truncate">{row.to ?? '—'}</span>
                                 </div>
                               ))}
@@ -1753,14 +1753,14 @@ export function EmployeeDetailPage() {
                         variant={visaDays < 30 ? 'destructive' : visaDays < 90 ? 'warning' : 'success'}
                         className="text-xs"
                       >
-                        {visaDays < 0 ? 'Visa Expired' : visaDays < 30 ? `Expiring in ${visaDays}d` : `Valid — ${visaDays}d left`}
+                        {visaDays < 0 ? 'Visa Expired' : visaDays < 30 ? `Expiring in ${visaDays}d` : `Valid - ${visaDays}d left`}
                       </Badge>
                     )}
                   </div>
                   {canManage && !visaEditOpen && (
                     <Button
                       size="sm" variant="outline"
-                      leftIcon={<Edit2 className="h-3.5 w-3.5" />}
+                      leftIcon={<Edit2 className="size-3.5" />}
                       onClick={() => {
                         setVisaForm({
                           visaType: e.visaType ?? '',
@@ -1960,7 +1960,7 @@ export function EmployeeDetailPage() {
                       <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">{docs.length}</span>
                     )}
                   </div>
-                  <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAddDocOpen(true)}>
+                  <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={() => setAddDocOpen(true)}>
                     Add Document
                   </Button>
                 </div>
@@ -1972,32 +1972,32 @@ export function EmployeeDetailPage() {
                   <div className="flex flex-wrap gap-2">
                     {docStats.valid > 0 && (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-medium">
-                        <CheckCircle2 className="h-3 w-3" />{docStats.valid} Valid
+                        <CheckCircle2 className="size-3" />{docStats.valid} Valid
                       </span>
                     )}
                     {docStats.expiring > 0 && (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium">
-                        <Clock className="h-3 w-3" />{docStats.expiring} Expiring Soon
+                        <Clock className="size-3" />{docStats.expiring} Expiring Soon
                       </span>
                     )}
                     {docStats.expired > 0 && (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-medium">
-                        <AlertTriangle className="h-3 w-3" />{docStats.expired} Expired
+                        <AlertTriangle className="size-3" />{docStats.expired} Expired
                       </span>
                     )}
                     {docStats.pending > 0 && (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-medium">
-                        <Clock className="h-3 w-3" />{docStats.pending} Pending Review
+                        <Clock className="size-3" />{docStats.pending} Pending Review
                       </span>
                     )}
                     {docStats.rejected > 0 && (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-medium">
-                        <Ban className="h-3 w-3" />{docStats.rejected} Rejected
+                        <Ban className="size-3" />{docStats.rejected} Rejected
                       </span>
                     )}
                   </div>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
                     <input
                       type="text"
                       value={docSearch}
@@ -2007,7 +2007,7 @@ export function EmployeeDetailPage() {
                     />
                     {docSearch && (
                       <button onClick={() => setDocSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                        <XIcon className="h-3.5 w-3.5" />
+                        <XIcon className="size-3.5" />
                       </button>
                     )}
                   </div>
@@ -2017,10 +2017,10 @@ export function EmployeeDetailPage() {
               {/* ── Content ── */}
               <CardContent className="p-0">
                 {docsLoading ? (
-                  <div className="px-6 py-6 space-y-4">
+                  <div className="p-6 space-y-4">
                     {[1, 2, 3].map(i => (
                       <div key={i} className="flex gap-4 p-4 rounded-xl border border-border/60">
-                        <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
+                        <Skeleton className="size-11 rounded-xl shrink-0" />
                         <div className="flex-1 space-y-2.5 pt-0.5">
                           <Skeleton className="h-4 w-1/2" />
                           <Skeleton className="h-3 w-1/3" />
@@ -2032,26 +2032,26 @@ export function EmployeeDetailPage() {
 
                 ) : docs.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-                    <div className="h-14 w-14 rounded-2xl bg-muted/60 border border-border flex items-center justify-center mb-4">
-                      <FolderOpen className="h-7 w-7 text-muted-foreground/40" />
+                    <div className="size-14 rounded-2xl bg-muted/60 border border-border flex items-center justify-center mb-4">
+                      <FolderOpen className="size-7 text-muted-foreground/40" />
                     </div>
                     <p className="text-sm font-semibold text-foreground">No documents yet</p>
                     <p className="text-xs text-muted-foreground mt-1 max-w-xs">Upload passports, visas, contracts, qualifications and other compliance files for this employee.</p>
-                    <Button size="sm" variant="outline" className="mt-5" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAddDocOpen(true)}>
+                    <Button size="sm" variant="outline" className="mt-5" leftIcon={<Plus className="size-3.5" />} onClick={() => setAddDocOpen(true)}>
                       Add First Document
                     </Button>
                   </div>
 
                 ) : filteredDocs.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-14 px-6 text-center">
-                    <Search className="h-9 w-9 text-muted-foreground/25 mb-3" />
+                    <Search className="size-9 text-muted-foreground/25 mb-3" />
                     <p className="text-sm font-medium text-foreground">No results for "{docSearch}"</p>
                     <p className="text-xs text-muted-foreground mt-1">Try a different name or category</p>
                     <button onClick={() => setDocSearch('')} className="text-xs text-primary mt-3 hover:underline font-medium">Clear search</button>
                   </div>
 
                 ) : (
-                  <div className="px-6 py-6 space-y-8">
+                  <div className="p-6 space-y-8">
                     {docsByCategory.map(([category, categoryDocs]) => {
                       const catCfg = DOC_CATEGORY_CONFIG[category] ?? { label: category, Icon: FileText, iconCls: 'text-muted-foreground', bgCls: 'bg-muted border-border' }
                       const { Icon: CatIcon } = catCfg
@@ -2060,15 +2060,15 @@ export function EmployeeDetailPage() {
 
                           {/* Category label */}
                           <div className="flex items-center gap-2">
-                            <div className={cn('h-6 w-6 rounded-md flex items-center justify-center border shrink-0', catCfg.bgCls)}>
-                              <CatIcon className={cn('h-3.5 w-3.5', catCfg.iconCls)} />
+                            <div className={cn('size-6 rounded-md flex items-center justify-center border shrink-0', catCfg.bgCls)}>
+                              <CatIcon className={cn('size-3.5', catCfg.iconCls)} />
                             </div>
                             <span className="text-xs font-semibold text-foreground tracking-wide uppercase">{catCfg.label}</span>
                             <span className="text-[11px] text-muted-foreground font-normal normal-case">· {categoryDocs.length} {categoryDocs.length === 1 ? 'file' : 'files'}</span>
                             <div className="flex-1 h-px bg-border/60 ml-1" />
                           </div>
 
-                          {/* Document cards — same shape as loan card: single block, status-tinted bg, structured rows */}
+                          {/* Document cards - same shape as loan card: single block, status-tinted bg, structured rows */}
                           <div className="space-y-2">
                             {categoryDocs.slice(0, docVisibleByCategory.get(category) ?? DOC_PAGE_SIZE).map(doc => {
                               const { variant: statusVariant, label: statusLabel } = DOC_STATUS_BADGE[doc.status] ?? { variant: 'secondary' as const, label: labelFor(doc.status) }
@@ -2092,8 +2092,8 @@ export function EmployeeDetailPage() {
                                   {/* Top: icon + title + status + actions (mirrors loan card) */}
                                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
                                     <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                                      <div className={cn('shrink-0 h-8 w-8 rounded-md flex items-center justify-center', catCfg.bgCls)}>
-                                        <CatIcon className={cn('h-4 w-4', catCfg.iconCls)} />
+                                      <div className={cn('shrink-0 size-8 rounded-md flex items-center justify-center', catCfg.bgCls)}>
+                                        <CatIcon className={cn('size-4', catCfg.iconCls)} />
                                       </div>
                                       <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2 flex-wrap">
@@ -2102,7 +2102,7 @@ export function EmployeeDetailPage() {
                                           </p>
                                           {isExpired ? (
                                             <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800">
-                                              <AlertCircle className="h-2.5 w-2.5" />Expired
+                                              <AlertCircle className="size-2.5" />Expired
                                             </span>
                                           ) : doc.expiryDate ? (
                                             <ExpiryStatus date={doc.expiryDate} />
@@ -2130,7 +2130,7 @@ export function EmployeeDetailPage() {
                                             onError: (err: Error) => toast.error('Failed to approve', err?.message),
                                           })}
                                         >
-                                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Approve
+                                          <CheckCircle2 className="size-3.5 mr-1" />Approve
                                         </Button>
                                       )}
                                       {needsReview && (
@@ -2138,14 +2138,14 @@ export function EmployeeDetailPage() {
                                           variant="destructive" size="sm" className="h-7 text-xs"
                                           onClick={() => { setRejectDocId(doc.id); setRejectDocReason('') }}
                                         >
-                                          <Ban className="h-3.5 w-3.5 mr-1" />Reject
+                                          <Ban className="size-3.5 mr-1" />Reject
                                         </Button>
                                       )}
                                       <Button variant="ghost" size="icon-sm" aria-label="View" onClick={() => setViewDoc({ id: doc.id, fileName: doc.fileName ?? doc.docType })}>
-                                        <Eye className="h-3.5 w-3.5" />
+                                        <Eye className="size-3.5" />
                                       </Button>
                                       <Button variant="ghost" size="icon-sm" aria-label="Download" onClick={() => downloadDoc(doc)}>
-                                        <Download className="h-3.5 w-3.5" />
+                                        <Download className="size-3.5" />
                                       </Button>
                                     </div>
                                   </div>
@@ -2220,10 +2220,10 @@ export function EmployeeDetailPage() {
                       </div>
                       {canManage && (
                         <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline" leftIcon={<Edit2 className="h-3.5 w-3.5" />} onClick={() => setEditPayrollOpen(true)}>
+                          <Button size="sm" variant="outline" leftIcon={<Edit2 className="size-3.5" />} onClick={() => setEditPayrollOpen(true)}>
                             Edit
                           </Button>
-                          <Button size="sm" variant="outline" leftIcon={<CreditCard className="h-3.5 w-3.5" />} onClick={() => setChangeSalaryOpen(true)}>
+                          <Button size="sm" variant="outline" leftIcon={<CreditCard className="size-3.5" />} onClick={() => setChangeSalaryOpen(true)}>
                             Change Salary
                           </Button>
                         </div>
@@ -2254,9 +2254,9 @@ export function EmployeeDetailPage() {
                     {upcoming && (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 space-y-2.5">
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-amber-600 shrink-0" />
+                          <Clock className="size-4 text-amber-600 shrink-0" />
                           <p className="text-sm font-semibold text-amber-900">
-                            Upcoming Salary Change — effective {formatDate(upcoming.effectiveDate)}
+                            Upcoming Salary Change - effective {formatDate(upcoming.effectiveDate)}
                           </p>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -2267,7 +2267,7 @@ export function EmployeeDetailPage() {
                             { label: 'Other', cur: e.otherAllowances, nxt: upcoming.newOtherAllowances },
                           ].map(({ label, cur, nxt }) => {
                             const curVal = cur != null ? parseFloat(String(cur)) : 0
-                            // null nxt means the field wasn't touched in the revision — treat as same as cur
+                            // null nxt means the field wasn't touched in the revision - treat as same as cur
                             const nxtVal = nxt != null ? parseFloat(String(nxt)) : curVal
                             const diff = nxtVal - curVal
                             return (
@@ -2300,7 +2300,7 @@ export function EmployeeDetailPage() {
                 <CardTitle className="text-base">Bank Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Inline banner — only renders when the employee has a pending
+                {/* Inline banner - only renders when the employee has a pending
                     bank-detail change submitted from the portal. Auto-opens
                     the review dialog if HR arrived via the notification link. */}
                 <BankChangeReviewBanner employeeId={e.id} autoOpenRequestId={reviewRequestId} />
@@ -2324,7 +2324,7 @@ export function EmployeeDetailPage() {
               <CardHeader>
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <History className="h-4 w-4 text-muted-foreground" />
+                    <History className="size-4 text-muted-foreground" />
                     <CardTitle className="text-base">Salary History</CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2357,10 +2357,10 @@ export function EmployeeDetailPage() {
               </CardHeader>
               <CardContent>
                 {salaryHistoryLoading ? (
-                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
+                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-14 w-full" />)}</div>
                 ) : !salaryHistoryData || salaryHistoryData.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <History className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <History className="size-8 mx-auto mb-2 opacity-30" />
                     <p className="text-sm font-medium">No salary revisions recorded</p>
                   </div>
                 ) : (
@@ -2382,10 +2382,10 @@ export function EmployeeDetailPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-start gap-3 min-w-0">
                               <div className={cn(
-                                'h-8 w-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
+                                'size-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
                                 delta == null || delta >= 0 ? 'bg-green-100' : 'bg-red-100',
                               )}>
-                                <CreditCard className={cn('h-3.5 w-3.5', delta == null || delta >= 0 ? 'text-green-600' : 'text-red-600')} />
+                                <CreditCard className={cn('size-3.5', delta == null || delta >= 0 ? 'text-green-600' : 'text-red-600')} />
                               </div>
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-1.5">
@@ -2402,14 +2402,14 @@ export function EmployeeDetailPage() {
                                 </div>
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
                                   <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <Calendar className="h-2.5 w-2.5" />{formatDate(rev.effectiveDate)}
+                                    <Calendar className="size-2.5" />{formatDate(rev.effectiveDate)}
                                   </span>
                                   {rev.newTotalSalary && (
                                     <span className="text-xs text-muted-foreground">Total: {formatCurrency(parseFloat(rev.newTotalSalary))}</span>
                                   )}
                                   {rev.approvedByName && (
                                     <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                      <User className="h-2.5 w-2.5" />{rev.approvedByName}
+                                      <User className="size-2.5" />{rev.approvedByName}
                                     </span>
                                   )}
                                 </div>
@@ -2419,11 +2419,11 @@ export function EmployeeDetailPage() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 w-7 p-0 shrink-0"
+                              className="size-7 p-0 shrink-0"
                               onClick={() => setViewRevision(rev)}
                               title="View full details"
                             >
-                              <Eye className="h-3.5 w-3.5" />
+                              <Eye className="size-3.5" />
                             </Button>
                           </div>
                         </div>
@@ -2442,14 +2442,14 @@ export function EmployeeDetailPage() {
 
           {/* ── Performance (with Warnings & Notes) ── */}
           <TabsContent value="performance" className="mt-4 space-y-4">
-            {/* Performance + Warnings — 6/6 grid on desktop, stacked on mobile */}
+            {/* Performance + Warnings - 6/6 grid on desktop, stacked on mobile */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Performance Reviews */}
               <Card className="flex flex-col">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Star className="h-4 w-4 text-amber-500" />
+                      <Star className="size-4 text-amber-500" />
                       <CardTitle className="text-base">Performance Reviews</CardTitle>
                       {reviews?.length ? (
                         <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
@@ -2458,7 +2458,7 @@ export function EmployeeDetailPage() {
                       ) : null}
                     </div>
                     {canManage && (
-                      <Button size="sm" variant="outline" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setCreateReviewOpen(true)}>
+                      <Button size="sm" variant="outline" leftIcon={<Plus className="size-3.5" />} onClick={() => setCreateReviewOpen(true)}>
                         New
                       </Button>
                     )}
@@ -2466,10 +2466,10 @@ export function EmployeeDetailPage() {
                 </CardHeader>
                 <CardContent className="flex-1">
                   {reviewsLoading ? (
-                    <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
+                    <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-14 w-full" />)}</div>
                   ) : !reviews || reviews.length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground">
-                      <Star className="h-9 w-9 mx-auto mb-2 opacity-30" />
+                      <Star className="size-9 mx-auto mb-2 opacity-30" />
                       <p className="text-sm font-medium">No performance records yet</p>
                       <p className="text-xs mt-1">Reviews will appear here</p>
                     </div>
@@ -2501,7 +2501,7 @@ export function EmployeeDetailPage() {
                   <CardHeader>
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-rose-500" />
+                        <AlertTriangle className="size-4 text-rose-500" />
                         <CardTitle className="text-base">Warnings</CardTitle>
                         {warningsData?.length ? (
                           <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
@@ -2509,17 +2509,17 @@ export function EmployeeDetailPage() {
                           </span>
                         ) : null}
                       </div>
-                      <Button size="sm" variant="outline" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setWarningDialogOpen(true)}>
+                      <Button size="sm" variant="outline" leftIcon={<Plus className="size-3.5" />} onClick={() => setWarningDialogOpen(true)}>
                         New
                       </Button>
                     </div>
                   </CardHeader>
                   <CardContent className="flex-1">
                     {warningsLoading ? (
-                      <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
+                      <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-14 w-full" />)}</div>
                     ) : !warningsData?.length ? (
                       <div className="text-center py-10 text-muted-foreground">
-                        <AlertTriangle className="h-9 w-9 mx-auto mb-2 opacity-30" />
+                        <AlertTriangle className="size-9 mx-auto mb-2 opacity-30" />
                         <p className="text-sm font-medium">No warnings on record</p>
                         <p className="text-xs mt-1">Disciplinary actions will appear here</p>
                       </div>
@@ -2547,13 +2547,13 @@ export function EmployeeDetailPage() {
                                     onError: (err: Error) => toast.error('Download failed', err.message),
                                   })}
                                 >
-                                  <Download className="h-3 w-3" />{w.documentFileName}
+                                  <Download className="size-3" />{w.documentFileName}
                                 </button>
                               )}
                             </div>
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive shrink-0"
+                            <Button size="icon" variant="ghost" className="size-6 text-destructive hover:text-destructive shrink-0"
                               onClick={() => deleteWarning.mutate(w.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
-                              <Trash2 className="h-3 w-3" />
+                              <Trash2 className="size-3" />
                             </Button>
                           </div>
                         ))}
@@ -2564,12 +2564,12 @@ export function EmployeeDetailPage() {
               )}
             </div>
 
-            {/* ── HR Notes — nested ──────────────────────────────────────── */}
+            {/* ── HR Notes - nested ──────────────────────────────────────── */}
             {canManage && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center gap-2">
-                    <StickyNote className="h-4 w-4 text-blue-500" />
+                    <StickyNote className="size-4 text-blue-500" />
                     <CardTitle className="text-base">HR Notes</CardTitle>
                   </div>
                 </CardHeader>
@@ -2591,14 +2591,14 @@ export function EmployeeDetailPage() {
                           onError: (err: Error) => toast.error('Failed', err.message),
                         })
                       }}>
-                      {addNote.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add'}
+                      {addNote.isPending ? <Loader2 className="size-3.5 animate-spin" /> : 'Add'}
                     </Button>
                   </div>
                   {notesLoading ? (
-                    <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-16 rounded bg-muted animate-pulse" />)}</div>
+                    <div className="space-y-2">{[1, 2, 3].map(i => <div key={`div-${i}`} className="h-16 rounded bg-muted animate-pulse" />)}</div>
                   ) : !notesData?.length ? (
                     <div className="text-center py-8 text-muted-foreground">
-                      <StickyNote className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <StickyNote className="size-8 mx-auto mb-2 opacity-30" />
                       <p className="text-sm font-medium">No notes yet</p>
                     </div>
                   ) : (
@@ -2611,9 +2611,9 @@ export function EmployeeDetailPage() {
                               {note.createdByName ?? 'Unknown'} · {formatDate(note.createdAt)}
                             </p>
                           </div>
-                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive shrink-0"
+                          <Button size="icon" variant="ghost" className="size-6 text-destructive hover:text-destructive shrink-0"
                             onClick={() => deleteNote.mutate(note.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="size-3" />
                           </Button>
                         </div>
                       ))}
@@ -2630,20 +2630,20 @@ export function EmployeeDetailPage() {
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base">Assigned Assets</CardTitle>
                 {canManage && (
-                  <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAssignAssetOpen(true)}>
+                  <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={() => setAssignAssetOpen(true)}>
                     Assign Asset
                   </Button>
                 )}
               </CardHeader>
               <CardContent>
                 {assetsLoading ? (
-                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                  <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-12 w-full" />)}</div>
                 ) : !employeeAssignments || employeeAssignments.length === 0 ? (
                   <div className="text-center py-10 text-muted-foreground">
-                    <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                    <Package className="size-10 mx-auto mb-3 opacity-30" />
                     <p className="text-sm font-medium">No assets assigned</p>
                     {canManage && (
-                      <Button size="sm" variant="outline" className="mt-3" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAssignAssetOpen(true)}>
+                      <Button size="sm" variant="outline" className="mt-3" leftIcon={<Plus className="size-3.5" />} onClick={() => setAssignAssetOpen(true)}>
                         Assign First Asset
                       </Button>
                     )}
@@ -2653,7 +2653,7 @@ export function EmployeeDetailPage() {
                     {employeeAssignments.map(a => (
                       <div key={a.id} className="flex items-center justify-between py-3">
                         <div className="flex items-center gap-3">
-                          <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <Package className="size-4 text-muted-foreground shrink-0" />
                           <div>
                             <p className="text-sm font-medium">{a.assetName}</p>
                             <p className="text-xs text-muted-foreground">
@@ -2685,14 +2685,14 @@ export function EmployeeDetailPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
-                    <CardTitle className="text-base">Attendance — {attendanceMonthLabel}</CardTitle>
+                    <CardTitle className="text-base">Attendance - {attendanceMonthLabel}</CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Calendar view with status codes, weekly offs, and approved leaves.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <MonthSwitcher offset={attendanceMonthOffset} onChange={setAttendanceMonthOffset} label={attendanceMonthLabel} />
-                    <Button size="sm" variant="outline" leftIcon={<ClipboardList className="h-3.5 w-3.5" />} onClick={() => navigate(`/attendance?employeeId=${id}`)}>
+                    <Button size="sm" variant="outline" leftIcon={<ClipboardList className="size-3.5" />} onClick={() => navigate(`/attendance?employeeId=${id}`)}>
                       Full log
                     </Button>
                   </div>
@@ -2720,10 +2720,10 @@ export function EmployeeDetailPage() {
                 </CardHeader>
                 <CardContent className="p-0">
                   {trainingLoading ? (
-                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
+                    <div className="p-4 space-y-2">{[1, 2, 3].map(i => <div key={`div-${i}`} className="h-10 rounded bg-muted animate-pulse" />)}</div>
                   ) : !trainingData?.data?.length ? (
                     <div className="text-center py-12 text-muted-foreground">
-                      <GraduationCap className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <GraduationCap className="size-8 mx-auto mb-2 opacity-30" />
                       <p className="text-sm font-medium">No training records</p>
                     </div>
                   ) : (
@@ -2768,10 +2768,10 @@ export function EmployeeDetailPage() {
                 <CardHeader><CardTitle className="text-base">Activity History</CardTitle></CardHeader>
                 <CardContent className="p-0">
                   {auditLoading ? (
-                    <div className="p-4 space-y-2">{[1, 2, 3, 4, 5].map(i => <div key={i} className="h-10 rounded bg-muted animate-pulse" />)}</div>
+                    <div className="p-4 space-y-2">{[1, 2, 3, 4, 5].map(i => <div key={`div-${i}`} className="h-10 rounded bg-muted animate-pulse" />)}</div>
                   ) : !auditData?.length ? (
                     <div className="text-center py-12 text-muted-foreground">
-                      <History className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                      <History className="size-8 mx-auto mb-2 opacity-30" />
                       <p className="text-sm font-medium">No activity recorded</p>
                     </div>
                   ) : (
@@ -2903,7 +2903,7 @@ export function EmployeeDetailPage() {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <History className="h-4 w-4" />
+                <History className="size-4" />
                 Salary Revision Details
               </DialogTitle>
             </DialogHeader>
@@ -3124,7 +3124,7 @@ function TerminateDialog({
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
-            <UserX className="h-4 w-4" />
+            <UserX className="size-4" />
             {step === 'form' ? 'Terminate Employee' : 'Settlement Preview'}
           </DialogTitle>
         </DialogHeader>
@@ -3133,7 +3133,7 @@ function TerminateDialog({
           <div className="space-y-4 py-1">
             {/* Employee summary */}
             <div className="flex items-center gap-3 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
-              <Avatar className="h-10 w-10 shrink-0">
+              <Avatar className="size-10 shrink-0">
                 {employee.avatarUrl && <AvatarImage src={employee.avatarUrl} alt={employee.fullName} />}
                 <AvatarFallback className="text-xs font-semibold bg-destructive/10 text-destructive">
                   {getInitials(employee.fullName)}
@@ -3182,7 +3182,7 @@ function TerminateDialog({
 
         {step === 'preview' && previewLoading && (
           <div className="py-12 text-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto mb-3" />
+            <Loader2 className="size-6 animate-spin text-muted-foreground mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">Calculating settlement…</p>
           </div>
         )}
@@ -3214,7 +3214,7 @@ function TerminateDialog({
             </div>
 
             <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-              <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+              <AlertTriangle className="size-3 text-amber-500 shrink-0" />
               This exit request will go through the approval workflow before the employee is formally terminated.
             </p>
           </div>
@@ -3317,7 +3317,7 @@ function DependentFormDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button disabled={!form.name.trim() || isSaving} onClick={() => onSave(form)}>
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            {isSaving ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
             {dependent ? 'Save Changes' : 'Add Dependent'}
           </Button>
         </DialogFooter>
@@ -3351,7 +3351,7 @@ function AddWarningDialog({
   } else if (open && !prevWarnOpen) {
     setPrevWarnOpen(true)
   }
-  // Reset the ref in a cleanup effect — ref mutation during render is not allowed.
+  // Reset the ref in a cleanup effect - ref mutation during render is not allowed.
   React.useEffect(() => { if (!open) autoExpiryRef.current = '' }, [open])
 
   function handleIssueDateChange(date: string) {
@@ -3429,16 +3429,16 @@ function AddWarningDialog({
           >
             {file ? (
               <div className="flex items-center gap-2 text-sm">
-                <FileText className="h-4 w-4 text-primary shrink-0" />
+                <FileText className="size-4 text-primary shrink-0" />
                 <span className="truncate max-w-[240px]">{file.name}</span>
                 <button className="shrink-0 text-muted-foreground hover:text-destructive"
                   onClick={e => { e.stopPropagation(); setFile(null) }}>
-                  <XIcon className="h-3.5 w-3.5" />
+                  <XIcon className="size-3.5" />
                 </button>
               </div>
             ) : (
               <>
-                <Upload className="h-6 w-6 text-muted-foreground" />
+                <Upload className="size-6 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">Upload supporting document</p>
                 <p className="text-xs text-muted-foreground">PDF, image or Word · max 10 MB</p>
               </>
@@ -3451,7 +3451,7 @@ function AddWarningDialog({
         <DialogFooter className="px-6 py-4 border-t bg-muted/30">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button disabled={!issueDate || isSaving} onClick={handleSubmit}>
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}Submit
+            {isSaving ? <Loader2 className="size-4 animate-spin mr-2" /> : null}Submit
           </Button>
         </DialogFooter>
       </DialogContent>

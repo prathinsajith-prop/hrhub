@@ -44,7 +44,7 @@ export function MyTrainingPage() {
                             ) : records.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                                        <GraduationCap className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                                        <GraduationCap className="size-10 mx-auto mb-2 opacity-30" />
                                         <p>{t('training.noMyRecords')}</p>
                                     </td>
                                 </tr>
@@ -70,7 +70,7 @@ export function MyTrainingPage() {
                                             {r.certificateUrl ? (
                                                 <a href={r.certificateUrl} target="_blank" rel="noreferrer">
                                                     <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs">
-                                                        <ExternalLink className="h-3 w-3" />
+                                                        <ExternalLink className="size-3" />
                                                         {t('training.viewCert')}
                                                     </Button>
                                                 </a>

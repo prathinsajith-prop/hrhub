@@ -3,7 +3,7 @@
  *
  * Features:
  *  - JWT auth via query param (browsers cannot set custom headers on WS upgrades)
- *  - Same-token guard — calling connect() with the same token when already
+ *  - Same-token guard - calling connect() with the same token when already
  *    connected is a no-op; a new token triggers a clean reconnect
  *  - Exponential back-off reconnect: 1 s → 2 s → 4 s … capped at 30 s
  *  - Application-level ping every 25 s; expects a JSON { type: 'pong' } reply
@@ -15,13 +15,13 @@
  *  - Connection state observable via onStateChange / offStateChange
  *
  * Public API:
- *   socket.connect(accessToken)        — call after login / token refresh
- *   socket.disconnect()                — call after logout
- *   socket.on('notification:new', fn)  — subscribe to a server event
- *   socket.off('notification:new', fn) — unsubscribe
- *   socket.state                       — 'connecting' | 'connected' | 'disconnected'
- *   socket.onStateChange(fn)           — watch connection state
- *   socket.offStateChange(fn)          — stop watching
+ *   socket.connect(accessToken)        - call after login / token refresh
+ *   socket.disconnect()                - call after logout
+ *   socket.on('notification:new', fn)  - subscribe to a server event
+ *   socket.off('notification:new', fn) - unsubscribe
+ *   socket.state                       - 'connecting' | 'connected' | 'disconnected'
+ *   socket.onStateChange(fn)           - watch connection state
+ *   socket.offStateChange(fn)          - stop watching
  */
 
 export type SocketState = 'connecting' | 'connected' | 'disconnected'
@@ -136,7 +136,7 @@ class HRHubSocket {
         this.ws = ws
 
         ws.onopen = () => {
-            if (this.wsId !== id) return   // stale — a newer socket won the race
+            if (this.wsId !== id) return   // stale - a newer socket won the race
             this.setState('connected')
             this.backoff = 1000
             this.startHeartbeat(id)
@@ -161,7 +161,7 @@ class HRHubSocket {
         }
 
         ws.onclose = (evt) => {
-            if (this.wsId !== id) return   // already replaced — ignore
+            if (this.wsId !== id) return   // already replaced - ignore
             this.ws = null
             this.stopHeartbeat()
 
@@ -205,7 +205,7 @@ class HRHubSocket {
             }
             this.pongTimer = setTimeout(() => {
                 if (this.wsId !== id) return
-                // Pong not received — connection is dead
+                // Pong not received - connection is dead
                 this.detachAndClose()
                 if (!this.intentionalClose) {
                     this.setState('disconnected')

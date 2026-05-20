@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Printer, Receipt } from 'lucide-react'
 
@@ -102,14 +102,93 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                             <div className="text-xs text-muted-foreground">{t('payslips.net')}</div>
                         </div>
 
+                        {/* Grouped Earnings → Additions → Deductions → Net so the
+                            employee can see at a glance where each Dirham came from.
+                            Matches the admin payslip breakdown layout (PayrollPage). */}
                         <dl className="space-y-2 text-sm">
+                            {/* Earnings */}
+                            <SectionLabel tone="neutral">Earnings</SectionLabel>
                             <Row label="Basic" value={formatCurrency(data.basicSalary)} />
-                            <Row label="Housing" value={formatCurrency(data.housingAllowance)} />
-                            <Row label="Transport" value={formatCurrency(data.transportAllowance)} />
-                            <Row label="Other allowances" value={formatCurrency(data.otherAllowances)} />
-                            <div className="my-2 border-t border-border" />
+                            {Number(data.housingAllowance) > 0 && (
+                                <Row label="Housing" value={formatCurrency(data.housingAllowance)} />
+                            )}
+                            {Number(data.transportAllowance) > 0 && (
+                                <Row label="Transport" value={formatCurrency(data.transportAllowance)} />
+                            )}
+                            {Number(data.otherAllowances) > 0 && (
+                                <Row label="Other allowances" value={formatCurrency(data.otherAllowances)} />
+                            )}
+
+                            {/* Additions — only render when there's anything */}
+                            {(Number(data.overtime ?? 0) > 0 || Number(data.commission ?? 0) > 0) && (
+                                <>
+                                    <SectionLabel tone="positive">Additions</SectionLabel>
+                                    {Number(data.overtime ?? 0) > 0 && (
+                                        <Row
+                                            label="Overtime"
+                                            value={`+ ${formatCurrency(data.overtime ?? '0')}`}
+                                            tone="positive"
+                                        />
+                                    )}
+                                    {Number(data.commission ?? 0) > 0 && (
+                                        <Row
+                                            label="Commission / Bonus"
+                                            value={`+ ${formatCurrency(data.commission ?? '0')}`}
+                                            tone="positive"
+                                        />
+                                    )}
+                                </>
+                            )}
+
+                            <div className="my-1 border-t border-border" />
                             <Row label={t('payslips.gross')} value={formatCurrency(data.grossSalary)} bold />
-                            <Row label={t('payslips.deductions')} value={`- ${formatCurrency(data.deductions)}`} />
+
+                            {/* Deductions — itemised so the total isn't an opaque sum */}
+                            {Number(data.deductions) > 0 && (
+                                <>
+                                    <SectionLabel tone="negative">Deductions</SectionLabel>
+                                    {Number(data.unpaidLeaveDeduction ?? 0) > 0 && (
+                                        <Row
+                                            label={`Loss of pay (${data.unpaidLeaveDays ?? 0} day${
+                                                (data.unpaidLeaveDays ?? 0) === 1 ? '' : 's'
+                                            })`}
+                                            value={`- ${formatCurrency(data.unpaidLeaveDeduction ?? '0')}`}
+                                            tone="negative"
+                                        />
+                                    )}
+                                    {Number(data.sickHalfPayDeduction ?? 0) > 0 && (
+                                        <Row
+                                            label={`Sick half-pay (${data.sickHalfPayDays ?? 0} day${
+                                                (data.sickHalfPayDays ?? 0) === 1 ? '' : 's'
+                                            })`}
+                                            value={`- ${formatCurrency(data.sickHalfPayDeduction ?? '0')}`}
+                                            tone="negative"
+                                        />
+                                    )}
+                                    {Number(data.loanDeduction ?? 0) > 0 && (
+                                        <Row
+                                            label="Loan repayment"
+                                            value={`- ${formatCurrency(data.loanDeduction ?? '0')}`}
+                                            tone="negative"
+                                        />
+                                    )}
+                                    {Number(data.otherDeduction ?? 0) > 0 && (
+                                        <Row
+                                            label="Other manual deductions"
+                                            value={`- ${formatCurrency(data.otherDeduction ?? '0')}`}
+                                            tone="negative"
+                                        />
+                                    )}
+                                    <Row
+                                        label={t('payslips.deductions')}
+                                        value={`- ${formatCurrency(data.deductions)}`}
+                                        bold
+                                        tone="negative"
+                                    />
+                                </>
+                            )}
+
+                            <div className="my-1 border-t border-border" />
                             <Row label={t('payslips.net')} value={formatCurrency(data.netSalary)} bold />
                         </dl>
 
@@ -131,11 +210,37 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
     )
 }
 
-function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+function SectionLabel({ tone, children }: { tone: 'neutral' | 'positive' | 'negative'; children: ReactNode }) {
+    const color =
+        tone === 'positive'
+            ? 'text-emerald-700 dark:text-emerald-300'
+            : tone === 'negative'
+                ? 'text-rose-700 dark:text-rose-300'
+                : 'text-muted-foreground'
+    return (
+        <div className={`pt-1 text-[10px] font-bold uppercase tracking-widest ${color}`}>
+            {children}
+        </div>
+    )
+}
+
+function Row({ label, value, bold, tone }: { label: string; value: string; bold?: boolean; tone?: 'positive' | 'negative' }) {
+    const valueColor =
+        tone === 'positive'
+            ? 'text-emerald-700 dark:text-emerald-400'
+            : tone === 'negative'
+                ? 'text-rose-700 dark:text-rose-400'
+                : ''
     return (
         <div className="flex items-center justify-between">
             <dt className="text-muted-foreground">{label}</dt>
-            <dd className={bold ? 'font-display font-semibold tabular-figures' : 'tabular-figures'}>{value}</dd>
+            <dd
+                className={
+                    (bold ? 'font-display font-semibold tabular-figures ' : 'tabular-figures ') + valueColor
+                }
+            >
+                {value}
+            </dd>
         </div>
     )
 }

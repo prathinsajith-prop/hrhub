@@ -16,7 +16,7 @@ function splitName(full: string): { firstName: string; lastName: string } {
     return { firstName: parts[0] ?? '', lastName: parts.slice(1).join(' ') }
 }
 
-// ─── Profile Tab — current user avatar / name / department ────────────────────
+// ─── Profile Tab - current user avatar / name / department ────────────────────
 export function ProfileTab() {
     const { t } = useTranslation()
     const { user, setUser } = useAuthStore()
@@ -27,7 +27,7 @@ export function ProfileTab() {
     const [uploading, setUploading] = useState(false)
     const fileRef = useRef<HTMLInputElement>(null)
 
-    // Sync form fields when the stored identity/name changes — but NOT on every setUser
+    // Sync form fields when the stored identity/name changes - but NOT on every setUser
     // call (e.g. avatar-only patches would reset in-progress edits). Track the
     // composite key in state so we only re-sync when id or name actually changes.
     const userKey = `${user?.id ?? ''}:${user?.name ?? ''}`
@@ -101,7 +101,7 @@ export function ProfileTab() {
             <SettingsCard>
                 <div className="flex items-start gap-5 pb-5 border-b">
                     <div className="relative">
-                        <Avatar className="h-20 w-20 border-2 border-border">
+                        <Avatar className="size-20 border-2 border-border">
                             {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
                             <AvatarFallback className="bg-primary/10 text-primary text-lg font-semibold">
                                 {initials}
@@ -111,10 +111,10 @@ export function ProfileTab() {
                             type="button"
                             onClick={handlePickFile}
                             disabled={uploading}
-                            className="absolute -bottom-1 -end-1 h-7 w-7 rounded-full bg-primary text-primary-foreground border-2 border-card shadow-sm flex items-center justify-center hover:bg-primary/90 disabled:opacity-50"
+                            className="absolute -bottom-1 -end-1 size-7 rounded-full bg-primary text-primary-foreground border-2 border-card shadow-sm flex items-center justify-center hover:bg-primary/90 disabled:opacity-50"
                             aria-label={t('settingsDetail.profile.changePhoto')}
                         >
-                            <UserCircle className="h-3.5 w-3.5" />
+                            <UserCircle className="size-3.5" />
                         </button>
                         <input
                             ref={fileRef}
@@ -167,7 +167,7 @@ export function ProfileTab() {
                     <Button
                         onClick={handleSave}
                         loading={saving}
-                        leftIcon={saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+                        leftIcon={saved ? <CheckCircle2 className="size-4" /> : <Save className="size-4" />}
                         variant={saved ? 'success' : 'default'}
                     >
                         {saved ? t('settingsDetail.profile.saved') : t('settingsDetail.profile.saveChanges')}

@@ -283,9 +283,9 @@ export default async function (fastify: any): Promise<void> {
     // POST /api/v1/auth/2fa/verify — confirm token to activate 2FA
     fastify.post('/2fa/verify', auth, async (request: any, reply: any) => {
         const { token } = request.body as { token: string }
-        if (!token) return reply.code(400).send({ error: 'token is required' })
+        if (!token) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'token is required' })
         const result = await verifyAndEnableTotp(request.user.id, token)
-        if (!result.enabled) return reply.code(400).send({ error: 'Invalid or expired token' })
+        if (!result.enabled) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid or expired token' })
         // Return plaintext backup codes ONCE — user must save them now
         return reply.send({ data: { enabled: true, backupCodes: result.backupCodes ?? [] } })
     })
@@ -293,9 +293,9 @@ export default async function (fastify: any): Promise<void> {
     // POST /api/v1/auth/2fa/disable — disable 2FA (requires current TOTP token)
     fastify.post('/2fa/disable', auth, async (request: any, reply: any) => {
         const { token } = request.body as { token: string }
-        if (!token) return reply.code(400).send({ error: 'token is required' })
+        if (!token) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'token is required' })
         const ok = await disableTotp(request.user.id, token)
-        if (!ok) return reply.code(400).send({ error: 'Invalid token or 2FA not enabled' })
+        if (!ok) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid token or 2FA not enabled' })
         return reply.send({ data: { enabled: false } })
     })
 
@@ -303,9 +303,9 @@ export default async function (fastify: any): Promise<void> {
     // Requires a valid TOTP code as proof of identity.
     fastify.post('/2fa/backup-codes/regenerate', auth, async (request: any, reply: any) => {
         const { token } = request.body as { token: string }
-        if (!token) return reply.code(400).send({ error: 'token is required' })
+        if (!token) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'token is required' })
         const codes = await regenerateBackupCodes(request.user.id, token)
-        if (!codes) return reply.code(400).send({ error: 'Invalid token or 2FA not enabled' })
+        if (!codes) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid token or 2FA not enabled' })
         return reply.send({ data: { backupCodes: codes } })
     })
 

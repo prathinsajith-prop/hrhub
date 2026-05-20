@@ -138,7 +138,7 @@ export interface Employee {
 // Recruitment
 export type JobStatus = 'draft' | 'open' | 'closed' | 'on_hold'
 /**
- * Stage keys are per-tenant — admins can add/rename them in Organization
+ * Stage keys are per-tenant - admins can add/rename them in Organization
  * Settings → Recruitment Stages. The seven names below are the system defaults
  * seeded for every new tenant; the union is widened to `string` so user-
  * defined keys are accepted. Code that branches on a specific key (e.g.
@@ -240,7 +240,7 @@ export interface Document {
   docType: string
   fileName: string
   fileSize?: number | null
-  /** The number printed on the document — visa number, Emirates ID, passport, etc. */
+  /** The number printed on the document - visa number, Emirates ID, passport, etc. */
   docNumber?: string | null
   issueDate?: string | null
   expiryDate?: string | null
@@ -273,6 +273,15 @@ export interface Payslip {
   id: string
   employeeId: string
   employeeName: string
+  employeeNo?: string | null
+  department?: string | null
+  /**
+   * `true` when this row came from the draft preview rather than a persisted
+   * payslip. The PDF download button is hidden for previews — there's no
+   * payslip row to PDF-ify until runPayroll is processed. The `id` will
+   * look like `draft:<runId>:<employeeId>` instead of a UUID.
+   */
+  isDraft?: boolean
   month: number
   year: number
   basicSalary: number
@@ -280,9 +289,51 @@ export interface Payslip {
   transportAllowance: number
   otherAllowances: number
   overtime: number
+  commission?: number
   deductions: number
+  // Itemised leave-driven deductions (LOP + sick-half-pay). Always present
+  // on payslips generated after migration 0037; default to 0 otherwise so
+  // the breakdown stays additive and never shows NaN.
+  unpaidLeaveDays?: number | null
+  unpaidLeaveDeduction?: number | string | null
+  sickHalfPayDays?: number | null
+  sickHalfPayDeduction?: number | string | null
+  // Loan and "other manual" deduction buckets - populated by the adjustments
+  // engine. Sum of all four itemised deductions equals the `deductions` field.
+  loanDeduction?: number | string | null
+  otherDeduction?: number | string | null
   grossSalary: number
   netSalary: number
+  daysWorked?: number | null
+}
+
+// Payroll adjustments - see backend/src/db/schema/payroll_adjustments.ts.
+export type PayrollAdjustmentKind = 'addition' | 'deduction'
+export type PayrollAdjustmentCategory =
+  | 'overtime' | 'commission' | 'bonus'
+  | 'loan_repayment' | 'salary_advance'
+  | 'unpaid_leave' | 'sick_half_pay'
+  | 'manual'
+export type PayrollAdjustmentSource = 'manual' | 'leave_engine' | 'loan_engine' | 'expense_engine'
+
+export interface PayrollAdjustment {
+  id: string
+  employeeId: string
+  periodYear: number
+  periodMonth: number
+  kind: PayrollAdjustmentKind
+  category: PayrollAdjustmentCategory
+  amount: string
+  notes: string | null
+  source: PayrollAdjustmentSource
+  sourceRef: string | null
+  createdAt: string
+  // Joined fields from the list endpoint
+  employeeNo: string | null
+  firstName: string
+  lastName: string
+  department: string | null
+  createdByName: string | null
 }
 
 // Leave

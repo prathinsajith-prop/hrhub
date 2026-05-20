@@ -78,7 +78,7 @@ function AppRow({
         >
             {/* Icon */}
             <div className={cn(
-                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white text-sm font-bold shadow-sm',
+                'flex size-10 shrink-0 items-center justify-center rounded-xl text-white text-sm font-bold shadow-sm',
                 appColor(app.name),
             )}>
                 {app.name[0].toUpperCase()}
@@ -103,7 +103,7 @@ function AppRow({
                     <code className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded group-hover/key:bg-primary/10 group-hover/key:text-primary transition-colors">
                         {truncateKey(app.appKey)}
                     </code>
-                    <Copy className="h-2.5 w-2.5 text-muted-foreground/50 group-hover/key:text-primary transition-colors shrink-0" />
+                    <Copy className="size-2.5 text-muted-foreground/50 group-hover/key:text-primary transition-colors shrink-0" />
                 </button>
             </div>
 
@@ -152,21 +152,21 @@ function AppRow({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="size-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <MoreHorizontal className="h-4 w-4" />
+                            <MoreHorizontal className="size-4" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRegen(app) }} className="gap-2">
-                            <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                            <RefreshCw className="size-3.5 text-muted-foreground" />
                             {t('apps.regenerateSecret')}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onToggle(app) }} className="gap-2">
                             {isActive
-                                ? <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
-                                : <Wifi className="h-3.5 w-3.5 text-muted-foreground" />}
+                                ? <WifiOff className="size-3.5 text-muted-foreground" />
+                                : <Wifi className="size-3.5 text-muted-foreground" />}
                             {isActive ? t('apps.revoke') : t('apps.reactivate')}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -179,7 +179,7 @@ function AppRow({
                     </DropdownMenuContent>
                 </DropdownMenu>
             ) : (
-                <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0 group-hover:text-muted-foreground transition-colors" />
+                <ChevronRight className="size-4 text-muted-foreground/40 shrink-0 group-hover:text-muted-foreground transition-colors" />
             )}
         </div>
     )
@@ -214,7 +214,10 @@ export function ConnectedAppsPage() {
     const submitCreate = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
-            const ipAllowlist = form.ipAllowlist.split(',').map(s => s.trim()).filter(Boolean)
+            const ipAllowlist = form.ipAllowlist.split(',').flatMap(s => {
+                const t = s.trim()
+                return t ? [t] : []
+            })
             const res = await createMut.mutateAsync({
                 name: form.name,
                 description: form.description || undefined,
@@ -274,14 +277,14 @@ export function ConnectedAppsPage() {
                         <Button
                             variant="outline"
                             size="sm"
-                            leftIcon={<RefreshCcw className={isFetching ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />}
+                            leftIcon={<RefreshCcw className={isFetching ? 'size-3.5 animate-spin' : 'size-3.5'} />}
                             onClick={() => refetch()}
                             disabled={isFetching}
                         >
                             Refresh
                         </Button>
                         {canManage && (
-                            <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={openCreate}>
+                            <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={openCreate}>
                                 {t('apps.newApp')}
                             </Button>
                         )}
@@ -289,7 +292,7 @@ export function ConnectedAppsPage() {
                 }
             />
 
-            {/* KPI cards — same design as dashboard */}
+            {/* KPI cards - same design as dashboard */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <KpiCardCompact
                     label="Total Apps"
@@ -337,7 +340,7 @@ export function ConnectedAppsPage() {
                         <div className="divide-y divide-border">
                             {[1, 2, 3].map((i) => (
                                 <div key={i} className="flex items-center gap-4 px-5 py-4">
-                                    <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+                                    <Skeleton className="size-10 rounded-xl shrink-0" />
                                     <div className="flex-1 space-y-1.5">
                                         <Skeleton className="h-3.5 w-32" />
                                         <Skeleton className="h-3 w-48" />
@@ -352,7 +355,7 @@ export function ConnectedAppsPage() {
                         </div>
                     ) : !apps || apps.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-                            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mb-4">
+                            <div className="flex size-14 items-center justify-center rounded-2xl bg-muted mb-4">
                                 <Plug2 className="size-7 text-muted-foreground/40" />
                             </div>
                             <p className="text-sm font-semibold text-foreground">{t('common.noData')}</p>
@@ -360,7 +363,7 @@ export function ConnectedAppsPage() {
                                 Create an API app to connect external systems like ERP, payroll, or analytics tools.
                             </p>
                             {canManage && (
-                                <Button size="sm" className="mt-4" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={openCreate}>
+                                <Button size="sm" className="mt-4" leftIcon={<Plus className="size-3.5" />} onClick={openCreate}>
                                     {t('apps.newApp')}
                                 </Button>
                             )}
@@ -397,7 +400,7 @@ export function ConnectedAppsPage() {
                                 id="app-name"
                                 placeholder="e.g. My ERP Integration"
                                 value={form.name}
-                                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
                                 required
                             />
                         </div>
@@ -408,7 +411,7 @@ export function ConnectedAppsPage() {
                                 rows={2}
                                 placeholder="What does this app do?"
                                 value={form.description}
-                                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                                onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
                             />
                         </div>
                         <ScopeMatrix value={selectedScopes} onChange={setSelectedScopes} />
@@ -418,7 +421,7 @@ export function ConnectedAppsPage() {
                                 id="app-ip"
                                 placeholder={t('apps.ipAllowlistPlaceholder')}
                                 value={form.ipAllowlist}
-                                onChange={(e) => setForm({ ...form, ipAllowlist: e.target.value })}
+                                onChange={(e) => setForm(prev => ({ ...prev, ipAllowlist: e.target.value }))}
                             />
                             <p className="text-xs text-muted-foreground">Leave blank to allow requests from any IP.</p>
                         </div>
@@ -435,7 +438,7 @@ export function ConnectedAppsPage() {
                 <DialogContent className="sm:max-w-xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="h-4 w-4 text-amber-500" /> {t('apps.secretRevealedTitle')}
+                            <AlertTriangle className="size-4 text-amber-500" /> {t('apps.secretRevealedTitle')}
                         </DialogTitle>
                         <DialogDescription>{t('apps.secretRevealedDesc')}</DialogDescription>
                     </DialogHeader>
@@ -444,18 +447,18 @@ export function ConnectedAppsPage() {
                             <div className="space-y-1">
                                 <Label className="text-xs">{t('apps.appKey')}</Label>
                                 <div className="flex gap-2">
-                                    <code className="flex-1 text-xs bg-muted rounded px-2 py-2 break-all">{revealedSecret.key}</code>
+                                    <code className="flex-1 text-xs bg-muted rounded p-2 break-all">{revealedSecret.key}</code>
                                     <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(revealedSecret.key); toast.success(t('apps.copied')) }}>
-                                        <Copy className="h-3.5 w-3.5" />
+                                        <Copy className="size-3.5" />
                                     </Button>
                                 </div>
                             </div>
                             <div className="space-y-1">
                                 <Label className="text-xs">{t('apps.appSecret')}</Label>
                                 <div className="flex gap-2">
-                                    <code className="flex-1 text-xs bg-muted rounded px-2 py-2 break-all">{revealedSecret.secret}</code>
+                                    <code className="flex-1 text-xs bg-muted rounded p-2 break-all">{revealedSecret.secret}</code>
                                     <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(revealedSecret.secret); toast.success(t('apps.copied')) }}>
-                                        <Copy className="h-3.5 w-3.5" />
+                                        <Copy className="size-3.5" />
                                     </Button>
                                 </div>
                             </div>

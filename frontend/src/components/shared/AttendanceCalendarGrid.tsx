@@ -50,7 +50,7 @@ interface Props {
     data: CalendarResponse | undefined
     loading: boolean
     /**
-     * When true, omits the sticky employee name column — useful inside an
+     * When true, omits the sticky employee name column - useful inside an
      * employee detail page where the row already identifies the person.
      */
     hideEmployeeColumn?: boolean
@@ -64,7 +64,7 @@ interface Props {
  * holiday name, or leave type.
  *
  * With `hideEmployeeColumn`, renders a single employee's row without the
- * name column — reused by EmployeeDetailPage's attendance tab.
+ * name column - reused by EmployeeDetailPage's attendance tab.
  */
 export function AttendanceCalendarGrid({ data, loading, hideEmployeeColumn, emptyMessage }: Props) {
     if (loading) return <GridSkeleton />

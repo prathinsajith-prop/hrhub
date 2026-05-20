@@ -1,5 +1,5 @@
 /**
- * OperatorPills — small pill row used by every primitive filter to switch
+ * OperatorPills - small pill row used by every primitive filter to switch
  * between available operators (contains / equals / between / …).
  */
 import { cn } from '@/lib/utils'

@@ -1,5 +1,5 @@
 /**
- * Filter system — types shared between frontend components and backend
+ * Filter system - types shared between frontend components and backend
  * search endpoints. Mirrors FilterSystem.md semantics, adapted to our stack.
  */
 
@@ -50,7 +50,7 @@ export interface FilterConfig {
     name: string
     label: string
     type: FilterType
-    /** Field used in the SQL query — defaults to `name`. */
+    /** Field used in the SQL query - defaults to `name`. */
     field?: string
     /** Default operator when none chosen. */
     defaultOperator?: FilterOperator
@@ -96,7 +96,7 @@ export interface SearchPagination {
     limit?: number
     /** Preferred: maps directly to the `offset` query param the backend reads. */
     offset?: number
-    /** Legacy aliases — converted to limit/offset automatically. */
+    /** Legacy aliases - converted to limit/offset automatically. */
     page?: number
     pageSize?: number
     sortBy?: string

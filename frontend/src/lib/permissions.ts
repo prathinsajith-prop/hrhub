@@ -1,7 +1,7 @@
 import type { UserRole } from '@/types'
 
 // ─── Role hierarchy ───────────────────────────────────────────────────────────
-/** Numeric level per role — higher = more access. */
+/** Numeric level per role - higher = more access. */
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
   employee: 1,
   dept_head: 2,
@@ -79,7 +79,7 @@ export type Permission =
   | 'manage_apps'
   | 'invite_members'
 
-// ─── Route keys — must match App.tsx path strings exactly ────────────────────
+// ─── Route keys - must match App.tsx path strings exactly ────────────────────
 export type RouteKey =
   | 'dashboard'
   | 'employees'
@@ -371,7 +371,7 @@ export function canAccessRoute(role: UserRole, routeKey: RouteKey): boolean {
   return ROUTE_ACCESS[routeKey]?.includes(role) ?? false
 }
 
-/** Multi-role variants — union of permissions across all assigned roles. */
+/** Multi-role variants - union of permissions across all assigned roles. */
 export function hasPermissionForRoles(roles: UserRole[], permission: Permission): boolean {
   return roles.some(r => ROLE_PERMISSIONS[r]?.includes(permission) ?? false)
 }

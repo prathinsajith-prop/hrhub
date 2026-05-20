@@ -93,11 +93,11 @@ export function Combobox({
                                 onClick={e => { e.stopPropagation(); onValueChange('') }}
                                 className="flex items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
                             >
-                                <X className="h-3 w-3" />
+                                <X className="size-3" />
                             </span>
                         )}
                         <ChevronDown className={cn(
-                            'h-4 w-4 text-muted-foreground/60 transition-transform duration-200',
+                            'size-4 text-muted-foreground/60 transition-transform duration-200',
                             open && 'rotate-180',
                         )} />
                     </span>
@@ -135,10 +135,10 @@ export function Combobox({
                                         key={opt.value}
                                         value={opt.secondary ? `${opt.label} ${opt.secondary}` : opt.label}
                                         onSelect={() => handleSelect(opt.value)}
-                                        className="flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer"
+                                        className="flex items-center gap-2 p-2 rounded-md cursor-pointer"
                                     >
                                         <Check className={cn(
-                                            'h-3.5 w-3.5 shrink-0 text-primary transition-opacity',
+                                            'size-3.5 shrink-0 text-primary transition-opacity',
                                             value.toLowerCase() === opt.value.toLowerCase() ? 'opacity-100' : 'opacity-0',
                                         )} />
                                         <span className="flex-1 min-w-0">
@@ -158,9 +158,9 @@ export function Combobox({
                                 <CommandItem
                                     value={`__create__${search.trim()}`}
                                     onSelect={handleCreate}
-                                    className="flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer text-primary"
+                                    className="flex items-center gap-2 p-2 rounded-md cursor-pointer text-primary"
                                 >
-                                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                                    <Plus className="size-3.5 shrink-0" />
                                     <span className="text-sm">
                                         Use <span className="font-medium">"{search.trim()}"</span>
                                     </span>

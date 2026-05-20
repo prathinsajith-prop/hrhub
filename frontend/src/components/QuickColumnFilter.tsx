@@ -1,5 +1,5 @@
 /**
- * QuickColumnFilter — lightweight per-column filter popover rendered in table
+ * QuickColumnFilter - lightweight per-column filter popover rendered in table
  * column headers. Supports text, select, number_range, and date_range filters.
  */
 import { useState } from 'react'
@@ -52,7 +52,7 @@ export function QuickColumnFilter({
                 <button
                     type="button"
                     className={cn(
-                        'ml-1 inline-flex items-center justify-center h-5 w-5 rounded transition-colors',
+                        'ml-1 inline-flex items-center justify-center size-5 rounded transition-colors',
                         isActive
                             ? 'text-primary bg-primary/10 hover:bg-primary/20'
                             : 'text-muted-foreground hover:text-foreground hover:bg-muted',
@@ -71,11 +71,11 @@ export function QuickColumnFilter({
 
                 <div className="flex items-center gap-1.5 pt-1">
                     <Button size="sm" onClick={handleApply} className="h-7 text-xs flex-1 gap-1">
-                        <Check className="h-3 w-3" />Apply
+                        <Check className="size-3" />Apply
                     </Button>
                     {isActive && (
                         <Button variant="ghost" size="sm" onClick={handleClear} className="h-7 text-xs gap-1">
-                            <X className="h-3 w-3" />Clear
+                            <X className="size-3" />Clear
                         </Button>
                     )}
                 </div>
@@ -136,8 +136,8 @@ function ColumnFilterInput({
                                     selected ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/60',
                                 )}
                             >
-                                <span className={cn('h-3.5 w-3.5 shrink-0 rounded border flex items-center justify-center', selected && 'bg-primary border-primary')}>
-                                    {selected && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                                <span className={cn('size-3.5 shrink-0 rounded border flex items-center justify-center', selected && 'bg-primary border-primary')}>
+                                    {selected && <Check className="size-2.5 text-primary-foreground" />}
                                 </span>
                                 {opt.label}
                             </button>

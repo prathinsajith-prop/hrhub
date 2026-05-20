@@ -20,7 +20,7 @@ import { INDUSTRY_OPTIONS, COMPANY_SIZE_OPTIONS } from '@/lib/options'
 
 const registerSchema = z
   .object({
-    // Step 1 — account
+    // Step 1 - account
     firstName: z.string().min(1, 'First name is required'),
     lastName: z.string().min(1, 'Last name is required'),
     email: z.string().email('Invalid email address'),
@@ -30,7 +30,7 @@ const registerSchema = z
       .regex(/[A-Z]/, 'Must contain an uppercase letter')
       .regex(/[0-9]/, 'Must contain a number'),
     confirmPassword: z.string(),
-    // Step 2 — organization
+    // Step 2 - organization
     company: z.string().min(2, 'Company name must be at least 2 characters'),
     industry: z.string().min(1, 'Please select your industry'),
     companySize: z.string().min(1, 'Please select your company size'),
@@ -65,13 +65,13 @@ function StepIndicator({ step }: { step: 1 | 2 }) {
             <div className="flex items-center gap-2 shrink-0">
               <div
                 className={cn(
-                  'h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors border-2',
+                  'size-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors border-2',
                   isComplete && 'bg-primary border-primary text-primary-foreground',
                   isActive && 'bg-primary/10 border-primary text-primary',
                   !isComplete && !isActive && 'bg-muted border-muted-foreground/30 text-muted-foreground',
                 )}
               >
-                {isComplete ? <Check className="h-3.5 w-3.5" /> : s.num}
+                {isComplete ? <Check className="size-3.5" /> : s.num}
               </div>
               <span
                 className={cn(
@@ -189,8 +189,8 @@ export function RegisterPage() {
               key={p.title}
               className="flex items-start gap-3 rounded-xl p-4 bg-sidebar-accent/40 border border-sidebar-border"
             >
-              <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 bg-primary/15 text-primary">
-                <p.icon className="h-4 w-4" />
+              <div className="size-8 rounded-lg flex items-center justify-center shrink-0 bg-primary/15 text-primary">
+                <p.icon className="size-4" />
               </div>
               <div>
                 <p className="text-sm font-semibold text-sidebar-accent-foreground">{p.title}</p>
@@ -208,8 +208,8 @@ export function RegisterPage() {
         {step === 1 ? (
           <>
             <div className="flex items-center gap-2 mb-1.5">
-              <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                <User className="h-3.5 w-3.5 text-primary" />
+              <div className="size-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                <User className="size-3.5 text-primary" />
               </div>
               <h2 className="text-xl font-semibold text-foreground font-display">{t('auth.yourAccount')}</h2>
             </div>
@@ -218,8 +218,8 @@ export function RegisterPage() {
         ) : (
           <>
             <div className="flex items-center gap-2 mb-1.5">
-              <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Briefcase className="h-3.5 w-3.5 text-primary" />
+              <div className="size-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Briefcase className="size-3.5 text-primary" />
               </div>
               <h2 className="text-xl font-semibold text-foreground font-display">{t('auth.yourOrganization')}</h2>
             </div>
@@ -228,7 +228,7 @@ export function RegisterPage() {
         )}
       </div>
 
-      {/* ── Step 1 — Account ─────────────────────────────────────────── */}
+      {/* ── Step 1 - Account ─────────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -293,7 +293,7 @@ export function RegisterPage() {
                 tabIndex={-1}
                 aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
             </div>
             {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
@@ -318,7 +318,7 @@ export function RegisterPage() {
                 tabIndex={-1}
                 aria-label={showConfirm ? t('auth.hidePassword') : t('auth.showPassword')}
               >
-                {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showConfirm ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
             </div>
             {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>}
@@ -328,14 +328,14 @@ export function RegisterPage() {
             type="button"
             className="w-full font-semibold"
             onClick={goToStep2}
-            rightIcon={<ArrowRight className="h-4 w-4" />}
+            rightIcon={<ArrowRight className="size-4" />}
           >
             {t('auth.continue')}
           </Button>
         </div>
       )}
 
-      {/* ── Step 2 — Organization ─────────────────────────────────────── */}
+      {/* ── Step 2 - Organization ─────────────────────────────────────── */}
       {step === 2 && (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 
@@ -354,7 +354,7 @@ export function RegisterPage() {
             {errors.company && <p className="text-xs text-destructive">{errors.company.message}</p>}
           </div>
 
-          {/* Industry + Company size — 2-col grid */}
+          {/* Industry + Company size - 2-col grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t('auth.industry')}</Label>
@@ -423,7 +423,7 @@ export function RegisterPage() {
             {errors.jurisdiction && <p className="text-xs text-destructive">{errors.jurisdiction.message}</p>}
           </div>
 
-          {/* Trade license + Phone — optional 2-col */}
+          {/* Trade license + Phone - optional 2-col */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="tradeLicenseNo">
@@ -457,7 +457,7 @@ export function RegisterPage() {
                   })}
                   className="pl-11"
                 />
-                <Phone className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+                <Phone className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/50" />
               </div>
             </div>
           </div>
@@ -478,12 +478,12 @@ export function RegisterPage() {
               className={cn('mt-0.5', errors.terms && 'border-destructive')}
             />
             <div>
-              <label htmlFor="terms" className="text-sm text-muted-foreground leading-snug cursor-pointer">
+              <Label htmlFor="terms" className="text-sm text-muted-foreground leading-snug cursor-pointer">
                 {t('auth.iAgreeTo')}{' '}
                 <button type="button" className="text-primary font-medium hover:underline">{t('auth.termsOfService')}</button>
                 {' '}{t('auth.and')}{' '}
                 <button type="button" className="text-primary font-medium hover:underline">{t('auth.privacyPolicy')}</button>
-              </label>
+              </Label>
               {errors.terms && <p className="text-xs text-destructive mt-1">{errors.terms.message}</p>}
             </div>
           </div>
@@ -495,7 +495,7 @@ export function RegisterPage() {
               variant="outline"
               className="shrink-0"
               onClick={() => setStep(1)}
-              leftIcon={<ArrowLeft className="h-4 w-4" />}
+              leftIcon={<ArrowLeft className="size-4" />}
             >
               {t('common.back')}
             </Button>
@@ -503,7 +503,7 @@ export function RegisterPage() {
               type="submit"
               className="flex-1 font-semibold"
               loading={loading}
-              rightIcon={!loading ? <ArrowRight className="h-4 w-4" /> : undefined}
+              rightIcon={!loading ? <ArrowRight className="size-4" /> : undefined}
             >
               {t('auth.createAccountAction')}
             </Button>

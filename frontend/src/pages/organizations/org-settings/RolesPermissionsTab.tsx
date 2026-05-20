@@ -45,7 +45,7 @@ export function RolesPermissionsTab() {
                 description={t('orgSettings.roles.builtInDesc')}
             >
                 <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 mb-4">
-                    <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <AlertCircle className="size-3.5 shrink-0 mt-0.5" />
                     <span>{t('orgSettings.roles.readOnlyNote')}</span>
                 </div>
                 <div className="overflow-x-auto rounded-lg border">
@@ -74,14 +74,14 @@ export function RolesPermissionsTab() {
                                             {ALL_ROLES.map((r) => {
                                                 const granted = matrix[r]?.includes(p) ?? false
                                                 return (
-                                                    <td key={r} className="px-2 py-2 text-center">
+                                                    <td key={r} className="p-2 text-center">
                                                         {granted ? (
                                                             <CheckCircle2
-                                                                className="h-4 w-4 text-emerald-600 inline"
+                                                                className="size-4 text-emerald-600 inline"
                                                                 aria-label={t('orgSettings.roles.granted')}
                                                             />
                                                         ) : (
-                                                            <MinusCircle className="h-4 w-4 text-muted-foreground/40 inline" aria-label={t('orgSettings.roles.denied')} />
+                                                            <MinusCircle className="size-4 text-muted-foreground/40 inline" aria-label={t('orgSettings.roles.denied')} />
                                                         )}
                                                     </td>
                                                 )

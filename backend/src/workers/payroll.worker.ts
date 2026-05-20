@@ -87,7 +87,13 @@ export async function startPayrollWorker(): Promise<void> {
         async (job) => {
             const { tenantId, payrollRunId } = job.data
             log.info({ payrollRunId, tenantId }, 'payroll-worker: processing run')
-            await runPayroll(tenantId, payrollRunId)
+            const ok = await runPayroll(tenantId, payrollRunId)
+            // Surface the no-op outcomes (run not in draft, no payable employees,
+            // etc.) as failures so the `completed` broadcast can't fire on a
+            // run that silently reverted to draft.
+            if (!ok) {
+                throw new Error('Payroll run could not be processed (not in draft state or no payable employees)')
+            }
             log.info({ payrollRunId }, 'payroll-worker: run complete')
         },
         {

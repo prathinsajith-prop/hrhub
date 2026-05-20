@@ -18,6 +18,7 @@ import { useOnboardingChecklists, useCreateOnboardingChecklist, useOnboardingAna
 import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { deriveSteps, progressTone } from './onboarding-helpers'
+import { Label } from '@/components/ui/label'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
     { key: 'overdue', label: 'Overdue' },
 ]
 
-// ── Onboarding card — memoised to avoid re-renders on window expansion ────────
+// ── Onboarding card - memoised to avoid re-renders on window expansion ────────
 
 const STATUS_ACCENT = {
     completed: 'bg-success',
@@ -86,10 +87,10 @@ const OnboardingCard = memo(function OnboardingCard({
                 aria-hidden
             />
 
-            {/* Col 1 — Avatar */}
+            {/* Col 1 - Avatar */}
             <InitialsAvatar name={c.employeeName} src={c.avatarUrl ?? undefined} size="sm" />
 
-            {/* Col 2 — Identity */}
+            {/* Col 2 - Identity */}
             <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                     <p className="text-sm font-semibold truncate text-foreground leading-tight">{c.employeeName}</p>
@@ -106,7 +107,7 @@ const OnboardingCard = memo(function OnboardingCard({
                 )}
             </div>
 
-            {/* Col 3 — Progress (md+) */}
+            {/* Col 3 - Progress (md+) */}
             <div className="hidden md:flex flex-col gap-1 min-w-0">
                 {hasChecklist ? (
                     <>
@@ -124,18 +125,18 @@ const OnboardingCard = memo(function OnboardingCard({
                 )}
             </div>
 
-            {/* Col 4 — Due date (lg+) */}
+            {/* Col 4 - Due date (lg+) */}
             <div className="hidden lg:flex items-center gap-1.5 text-[11px] tabular-nums min-w-0">
                 {c.dueDate ? (
                     <>
-                        <Clock className={cn('h-3 w-3 shrink-0', overdueCount > 0 ? 'text-destructive' : 'text-muted-foreground')} />
+                        <Clock className={cn('size-3 shrink-0', overdueCount > 0 ? 'text-destructive' : 'text-muted-foreground')} />
                         <span className={cn('truncate', overdueCount > 0 ? 'text-destructive font-medium' : 'text-muted-foreground')}>
                             {formatDate(c.dueDate)}
                         </span>
                     </>
                 ) : c.startDate ? (
                     <>
-                        <Calendar className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        <Calendar className="size-3 shrink-0 text-muted-foreground" />
                         <span className="text-muted-foreground truncate">{formatDate(c.startDate)}</span>
                     </>
                 ) : (
@@ -143,11 +144,11 @@ const OnboardingCard = memo(function OnboardingCard({
                 )}
             </div>
 
-            {/* Col 5 — Status pill (sm+) */}
+            {/* Col 5 - Status pill (sm+) */}
             <div className="hidden sm:flex justify-start min-w-0">
                 {overdueCount > 0 ? (
                     <Badge variant="destructive" className="text-[10px] gap-1">
-                        <AlertTriangle className="h-2.5 w-2.5" />
+                        <AlertTriangle className="size-2.5" />
                         {overdueCount} overdue
                     </Badge>
                 ) : (
@@ -157,20 +158,20 @@ const OnboardingCard = memo(function OnboardingCard({
                 )}
             </div>
 
-            {/* Col 6 — Action */}
+            {/* Col 6 - Action */}
             <div onClick={e => e.stopPropagation()} className="flex justify-end">
                 {hasChecklist ? (
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 w-7 p-0 opacity-60 group-hover:opacity-100 transition-opacity"
+                        className="size-7 p-0 opacity-60 group-hover:opacity-100 transition-opacity"
                         onClick={() => navigate(`/onboarding/${c.employeeId}`)}
                         aria-label="View checklist"
                     >
-                        <Eye className="h-3.5 w-3.5" />
+                        <Eye className="size-3.5" />
                     </Button>
                 ) : (
-                    <Button size="sm" className="h-7 px-2.5 text-xs" leftIcon={<Plus className="h-3 w-3" />} onClick={onStart}>
+                    <Button size="sm" className="h-7 px-2.5 text-xs" leftIcon={<Plus className="size-3" />} onClick={onStart}>
                         Start
                     </Button>
                 )}
@@ -214,7 +215,7 @@ function RowSkeleton() {
                 'lg:grid-cols-[2rem_minmax(0,1fr)_9rem_8rem_7rem_5rem]',
             )}
         >
-            <div className="h-8 w-8 rounded-full bg-muted" />
+            <div className="size-8 rounded-full bg-muted" />
             <div className="space-y-1.5">
                 <div className="h-3 bg-muted rounded w-32" />
                 <div className="h-2.5 bg-muted rounded w-24" />
@@ -222,7 +223,7 @@ function RowSkeleton() {
             <div className="hidden md:block h-2 bg-muted rounded-full" />
             <div className="hidden lg:block h-2.5 bg-muted rounded w-24" />
             <div className="hidden sm:block h-5 w-20 bg-muted rounded-full" />
-            <div className="h-7 w-7 bg-muted rounded-md justify-self-end" />
+            <div className="size-7 bg-muted rounded-md justify-self-end" />
         </div>
     )
 }
@@ -304,7 +305,7 @@ export function OnboardingPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { setVisibleCount(PAGE_SIZE) }, [search, statusFilter])
 
-    // IntersectionObserver — auto-expand window as sentinel scrolls into view
+    // IntersectionObserver - auto-expand window as sentinel scrolls into view
     useEffect(() => {
         const el = sentinelRef.current
         if (!el || visibleCount >= filtered.length) return
@@ -366,13 +367,13 @@ export function OnboardingPage() {
                         <Button
                             variant="outline"
                             size="sm"
-                            leftIcon={<RefreshCcw className={cn('h-3.5 w-3.5', onboardingFetching && 'animate-spin')} />}
+                            leftIcon={<RefreshCcw className={cn('size-3.5', onboardingFetching && 'animate-spin')} />}
                             onClick={() => refetchOnboarding()}
                             disabled={onboardingFetching}
                         >
                             Refresh
                         </Button>
-                        <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setNewOpen(true)}>
+                        <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={() => setNewOpen(true)}>
                             New Onboarding
                         </Button>
                     </div>
@@ -390,7 +391,7 @@ export function OnboardingPage() {
             {/* Search + status pill bar */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
                 <div className="relative w-full sm:max-w-xs">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
                     <Input
                         className="pl-8 h-9 text-sm"
                         placeholder="Search by name, role, department…"
@@ -399,7 +400,7 @@ export function OnboardingPage() {
                     />
                     {search && (
                         <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                            <X className="h-3.5 w-3.5" />
+                            <X className="size-3.5" />
                         </button>
                     )}
                 </div>
@@ -434,12 +435,12 @@ export function OnboardingPage() {
             {onboardingLoading ? (
                 <Card className="overflow-hidden">
                     <ListHeader />
-                    {[...Array(PAGE_SIZE)].map((_, i) => <RowSkeleton key={i} />)}
+                    {[...Array(PAGE_SIZE)].map((_, i) => <RowSkeleton key={`rowskeleton-${i}`} />)}
                 </Card>
             ) : enriched.length === 0 ? (
                 <Card className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                        <UserPlus className="h-6 w-6 text-muted-foreground" />
+                    <div className="size-12 rounded-full bg-muted flex items-center justify-center">
+                        <UserPlus className="size-6 text-muted-foreground" />
                     </div>
                     <div>
                         <p className="text-sm font-medium">No onboarding checklists yet</p>
@@ -447,13 +448,13 @@ export function OnboardingPage() {
                             New employees with status "onboarding" appear here automatically.
                         </p>
                     </div>
-                    <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setNewOpen(true)}>
+                    <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={() => setNewOpen(true)}>
                         New Onboarding
                     </Button>
                 </Card>
             ) : filtered.length === 0 ? (
                 <Card className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                    <Search className="h-8 w-8 text-muted-foreground/40" />
+                    <Search className="size-8 text-muted-foreground/40" />
                     <p className="text-sm text-muted-foreground">No checklists match your filters.</p>
                     <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatusFilter('all') }}>
                         Clear filters
@@ -495,36 +496,36 @@ export function OnboardingPage() {
                     <DialogHeader><DialogTitle>Start Onboarding</DialogTitle></DialogHeader>
                     <DialogBody className="space-y-4">
                         <div className="space-y-1">
-                            <label className="text-xs font-medium text-muted-foreground">Employee *</label>
+                            <Label className="text-xs font-medium text-muted-foreground">Employee *</Label>
                             <EmployeeSelect value={newEmpId} onValueChange={setNewEmpId} clearable />
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-muted-foreground">Start date</label>
+                                <Label className="text-xs font-medium text-muted-foreground">Start date</Label>
                                 <DatePicker value={newStartDate} onChange={setNewStartDate} className="h-9" />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-muted-foreground">Due date</label>
+                                <Label className="text-xs font-medium text-muted-foreground">Due date</Label>
                                 <DatePicker value={newDueDate} onChange={setNewDueDate} className="h-9" />
                             </div>
                         </div>
-                        <label className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border cursor-pointer hover:bg-muted/80 transition-colors">
+                        <Label className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border cursor-pointer hover:bg-muted/80 transition-colors">
                             <input
                                 type="checkbox"
                                 checked={useTemplate}
                                 onChange={e => setUseTemplate(e.target.checked)}
-                                className="mt-0.5 h-4 w-4 rounded accent-primary"
+                                className="mt-0.5 size-4 rounded accent-primary"
                             />
                             <div>
                                 <div className="flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                                    <Sparkles className="size-3.5 text-primary" />
                                     <span className="text-sm font-medium">Use default template</span>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground mt-0.5">
                                     Auto-creates 9 standard onboarding steps (HR docs, IT setup, orientation, 30-day check-in, etc.)
                                 </p>
                             </div>
-                        </label>
+                        </Label>
                     </DialogBody>
                     <DialogFooter>
                         <DialogClose asChild><Button variant="outline" size="sm">Cancel</Button></DialogClose>

@@ -115,7 +115,7 @@ function ComplaintDetail({ complaint, onClose }: { complaint: Complaint; onClose
                             </span>
                             {isOverdue(complaint.slaDueAt, complaint.status) && (
                                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-700 ring-1 ring-red-200 flex items-center gap-1">
-                                    <Clock className="h-3 w-3" /> {t('complaints.detail.overdue')}
+                                    <Clock className="size-3" /> {t('complaints.detail.overdue')}
                                 </span>
                             )}
                         </div>
@@ -184,12 +184,12 @@ function ComplaintDetail({ complaint, onClose }: { complaint: Complaint; onClose
                                     onClick={() => escalate.mutate(complaint.id)}
                                     disabled={escalate.isPending}
                                 >
-                                    <ArrowUpRight className="h-3.5 w-3.5 mr-1.5" />
+                                    <ArrowUpRight className="size-3.5 mr-1.5" />
                                     {t('complaints.detail.escalate')}
                                 </Button>
                             )}
                             <Button size="sm" onClick={() => setResolving(true)}>
-                                <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                                <CheckCircle2 className="size-3.5 mr-1.5" />
                                 {t('complaints.detail.resolve')}
                             </Button>
                         </DialogFooter>
@@ -234,7 +234,7 @@ function ComplaintRow({ c, onClick }: { c: Complaint; onClick: () => void }) {
             <td className="px-4 py-3">
                 {c.slaDueAt ? (
                     <p className={cn('text-xs', overdue ? 'text-red-600 font-semibold' : 'text-muted-foreground')}>
-                        {overdue && <Clock className="h-3 w-3 inline mr-1" />}
+                        {overdue && <Clock className="size-3 inline mr-1" />}
                         {new Date(c.slaDueAt).toLocaleDateString()}
                     </p>
                 ) : (
@@ -242,7 +242,7 @@ function ComplaintRow({ c, onClick }: { c: Complaint; onClick: () => void }) {
                 )}
             </td>
             <td className="px-4 py-3">
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <ChevronRight className="size-4 text-muted-foreground" />
             </td>
         </tr>
     )
@@ -315,7 +315,7 @@ export function ComplaintsPage() {
             {/* KPI strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 {statsLoading
-                    ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)
+                    ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-20 rounded-xl" />)
                     : ([
                         { label: t('complaints.stats.total'),    value: stats?.total ?? 0,    icon: ShieldAlert,    color: 'blue' },
                         { label: t('complaints.stats.open'),     value: stats?.open ?? 0,     icon: AlertCircle,    color: 'blue' },
@@ -369,7 +369,7 @@ export function ComplaintsPage() {
                                 ? (
                                     <tr>
                                         <td colSpan={6} className="text-center py-16">
-                                            <ShieldAlert className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                                            <ShieldAlert className="size-10 text-muted-foreground mx-auto mb-3" />
                                             <p className="text-muted-foreground text-sm">{t('complaints.noComplaints')}</p>
                                         </td>
                                     </tr>
