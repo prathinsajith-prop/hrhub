@@ -2,7 +2,7 @@
 // Keep this in sync with the main backend whenever the schema changes.
 // Migrations live in backend/migrations/ only — do not generate migrations here.
 
-import { pgTable, uuid, text, integer, numeric, date, timestamp, index, unique } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, numeric, date, timestamp, index, unique, jsonb } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
@@ -40,6 +40,14 @@ export const payslips = pgTable('payslips', {
     housingAllowance: numeric('housing_allowance', { precision: 12, scale: 2 }).notNull().default('0'),
     transportAllowance: numeric('transport_allowance', { precision: 12, scale: 2 }).notNull().default('0'),
     otherAllowances: numeric('other_allowances', { precision: 12, scale: 2 }).notNull().default('0'),
+    // ⚠ Kept in sync with backend/src/db/schema/payroll.ts (migration 0048).
+    // JSON snapshot of catalog earnings rolled up into this payslip. Empty
+    // array for pre-0048 payslips — UI must fall back to the four named
+    // columns above in that case.
+    earningsBreakdown: jsonb('earnings_breakdown')
+        .$type<Array<{ componentId: string; category: string; name: string; amount: number }>>()
+        .notNull()
+        .default([]),
     overtime: numeric('overtime', { precision: 12, scale: 2 }).notNull().default('0'),
     commission: numeric('commission', { precision: 12, scale: 2 }).notNull().default('0'),
     grossSalary: numeric('gross_salary', { precision: 12, scale: 2 }).notNull().default('0'),

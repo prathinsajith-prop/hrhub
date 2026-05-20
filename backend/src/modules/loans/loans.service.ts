@@ -45,8 +45,50 @@ export async function listLoans(
                 employeeName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
                 employeeNo: employees.employeeNo,
                 employeeDepartment: employees.department,
-                employeeBasicSalary: employees.basicSalary,
-                employeeTotalSalary: employees.totalSalary,
+                // Display the resolved catalog basic if it exists (the
+                // source of truth for payroll); fall back to the legacy
+                // column for employees with no assignments yet. Same idea
+                // for total salary — sum every active earning component,
+                // falling back to the legacy totalSalary column.
+                employeeBasicSalary: sql<string | null>`COALESCE(
+                    (SELECT SUM(COALESCE(esc.amount::numeric, sc.amount::numeric, 0))::text
+                     FROM employee_salary_components esc
+                     JOIN salary_components sc ON sc.id = esc.component_id
+                     WHERE esc.employee_id = ${employees.id}
+                       AND esc.tenant_id = ${tenantId}
+                       AND esc.is_active = true
+                       AND sc.is_active = true
+                       AND sc.kind = 'earning'
+                       AND sc.category = 'basic'),
+                    ${employees.basicSalary}
+                )`,
+                employeeTotalSalary: sql<string | null>`COALESCE(
+                    (SELECT SUM(
+                        CASE WHEN sc.calculation_type = 'percentage_of_basic'
+                             THEN (
+                                (SELECT COALESCE(SUM(COALESCE(esc2.amount::numeric, sc2.amount::numeric, 0)), 0)
+                                 FROM employee_salary_components esc2
+                                 JOIN salary_components sc2 ON sc2.id = esc2.component_id
+                                 WHERE esc2.employee_id = ${employees.id}
+                                   AND esc2.tenant_id = ${tenantId}
+                                   AND esc2.is_active = true
+                                   AND sc2.is_active = true
+                                   AND sc2.kind = 'earning'
+                                   AND sc2.category = 'basic')
+                                * COALESCE(esc.amount::numeric, sc.amount::numeric, 0) / 100
+                             )
+                             ELSE COALESCE(esc.amount::numeric, sc.amount::numeric, 0)
+                        END
+                    )::text
+                     FROM employee_salary_components esc
+                     JOIN salary_components sc ON sc.id = esc.component_id
+                     WHERE esc.employee_id = ${employees.id}
+                       AND esc.tenant_id = ${tenantId}
+                       AND esc.is_active = true
+                       AND sc.is_active = true
+                       AND sc.kind = 'earning'),
+                    ${employees.totalSalary}
+                )`,
                 approverName: sql<string | null>`${users.name}`,
                 total: sql<number>`COUNT(*) OVER()`.as('total'),
             })

@@ -42,6 +42,28 @@ import { useShifts } from '@/hooks/useShifts'
 import type { Employee, Shift } from '@/types'
 
 
+// Standard display order for salary-component inputs. Mirrors UAE WPS
+// reporting order (Basic first, then statutory allowances, then everything
+// else), so HR sees the same shape across Add/Edit Employee, Change Salary,
+// and the payslip breakdown. Custom tenant components sort last in their
+// catalog-created order — they pick up rank 99 here and then fall back to
+// the original array order, which is alphabetical by name from the API.
+const CATEGORY_RANK: Record<string, number> = {
+    basic: 0,
+    housing: 1,
+    transport: 2,
+    cost_of_living: 3,
+    custom_allowance: 4,
+    social: 5,
+}
+function byCatalogPriority<T extends { category: string; name: string }>(a: T, b: T): number {
+    const ra = CATEGORY_RANK[a.category] ?? 99
+    const rb = CATEGORY_RANK[b.category] ?? 99
+    if (ra !== rb) return ra - rb
+    return a.name.localeCompare(b.name)
+}
+
+
 function buildGradeLevelOptions(grades: GradeLevel[]): ComboboxOption[] {
     const toOption = (g: GradeLevel): ComboboxOption => ({
         value: g.id,
@@ -596,7 +618,7 @@ export function AddEmployeeDialog({
     // in the catalog but excluded here.
     const { data: salaryEarningsResp } = useSalaryComponents('earning')
     const earningsCatalog = useMemo(
-        () => (salaryEarningsResp ?? []).filter((c) => c.isActive),
+        () => (salaryEarningsResp ?? []).filter((c) => c.isActive).sort(byCatalogPriority),
         [salaryEarningsResp],
     )
 
@@ -1651,7 +1673,7 @@ export function EditPayrollDialog({
     // Catalog of active earning components — drives the salary inputs.
     const { data: salaryEarningsResp } = useSalaryComponents('earning')
     const earningsCatalog = useMemo(
-        () => (salaryEarningsResp ?? []).filter((c) => c.isActive),
+        () => (salaryEarningsResp ?? []).filter((c) => c.isActive).sort(byCatalogPriority),
         [salaryEarningsResp],
     )
     // Existing per-employee assignments — pre-fills the inputs on edit so HR

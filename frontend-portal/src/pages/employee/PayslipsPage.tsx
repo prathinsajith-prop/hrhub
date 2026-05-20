@@ -93,13 +93,23 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                 ) : (
                     <div className="space-y-4">
                         <div className="rounded-xl border border-border bg-gradient-to-br from-indigo-50 to-sky-50 p-4 dark:from-indigo-950/30 dark:to-sky-950/20">
-                            <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                                {monthName(data.month)} {data.year}
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                                        {monthName(data.month)} {data.year}
+                                    </div>
+                                    <div className="mt-1 font-display text-2xl font-bold tabular-figures">
+                                        {formatCurrency(data.netSalary)}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">{t('payslips.net')}</div>
+                                </div>
+                                {data.daysWorked != null && (
+                                    <div className="text-right">
+                                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Days worked</div>
+                                        <div className="font-display text-lg font-semibold tabular-figures">{data.daysWorked}</div>
+                                    </div>
+                                )}
                             </div>
-                            <div className="mt-1 font-display text-2xl font-bold tabular-figures">
-                                {formatCurrency(data.netSalary)}
-                            </div>
-                            <div className="text-xs text-muted-foreground">{t('payslips.net')}</div>
                         </div>
 
                         {/* Grouped Earnings → Additions → Deductions → Net so the
@@ -111,13 +121,18 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                                 named columns (legacy payslips). */}
                             <SectionLabel tone="neutral">Earnings</SectionLabel>
                             {(() => {
+                                // Same priority order as the admin payslip
+                                // breakdown — Basic first, then statutory
+                                // allowances, then custom components.
                                 const breakdown = (data.earningsBreakdown ?? [])
                                     .map((b) => ({ ...b, amount: Number(b.amount) }))
                                     .filter((b) => b.amount > 0)
                                     .sort((a, b) => {
-                                        const order = (cat: string) =>
-                                            ({ basic: 0, housing: 1, transport: 2 }[cat] ?? 3)
-                                        return order(a.category) - order(b.category)
+                                        const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
+                                        const ra = rank[a.category] ?? 99
+                                        const rb = rank[b.category] ?? 99
+                                        if (ra !== rb) return ra - rb
+                                        return a.name.localeCompare(b.name)
                                     })
                                 if (breakdown.length > 0) {
                                     return breakdown.map((b) => (

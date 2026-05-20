@@ -162,11 +162,22 @@ export async function deletePayrollRun(tenantId: string, id: string) {
  * Returns null for non-draft runs (the persisted totals are the source of
  * truth there; nothing left to check).
  */
+export interface PayrollReadinessEmployee {
+    id: string
+    employeeNo: string
+    name: string
+    avatarUrl: string | null
+}
+
 export interface PayrollReadiness {
     employeeCount: number
     missingIban: number
     missingSalary: number
     pendingLeaveInPeriod: number
+    /** Up to 50 employees flagged for missing IBAN — small enough to render
+     *  in a popover, larger lists are truncated and surfaced via the count. */
+    missingIbanEmployees: PayrollReadinessEmployee[]
+    missingSalaryEmployees: PayrollReadinessEmployee[]
     blockers: string[]
     warnings: string[]
     canProcess: boolean
@@ -183,9 +194,12 @@ export async function getPayrollReadiness(
     const monthStart = `${run.year}-${String(run.month).padStart(2, '0')}-01`
     const monthEnd = `${run.year}-${String(run.month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-    // One round-trip — every check is its own COUNT query but they all hit
-    // the same DB connection in parallel.
-    const [emps, ibanCounts, salaryCounts, leaveCounts] = await Promise.all([
+    // One round-trip — every check is its own query but they all hit the
+    // same DB connection in parallel. Missing-IBAN / missing-salary return
+    // the offending employees (capped at 50) so the UI can render a popover
+    // with names + links rather than just a count.
+    const READINESS_EMPLOYEE_CAP = 50
+    const [emps, ibanRows, salaryRows, leaveCounts] = await Promise.all([
         // Employee count (just to surface it in the response — also used to
         // decide "no payable employees" blocker)
         db.select({ count: sql<number>`COUNT(*)::int` })
@@ -196,24 +210,55 @@ export async function getPayrollReadiness(
                 inArray(employees.status, ['active', 'onboarding']),
             )),
         // Missing IBAN — WPS submission warning
-        db.select({ count: sql<number>`COUNT(*)::int` })
+        db.select({
+            id: employees.id,
+            employeeNo: employees.employeeNo,
+            firstName: employees.firstName,
+            lastName: employees.lastName,
+            avatarUrl: employees.avatarUrl,
+        })
             .from(employees)
             .where(and(
                 eq(employees.tenantId, tenantId),
                 eq(employees.isArchived, false),
                 inArray(employees.status, ['active', 'onboarding']),
                 sql`(${employees.iban} IS NULL OR ${employees.iban} = '')`,
-            )),
+            ))
+            .orderBy(employees.firstName, employees.lastName)
+            .limit(READINESS_EMPLOYEE_CAP),
         // Missing/zero basic salary — payroll math BLOCKER (gross would be 0
-        // even for a senior employee, almost always a data-entry mistake)
-        db.select({ count: sql<number>`COUNT(*)::int` })
+        // even for a senior employee, almost always a data-entry mistake).
+        // Catalog-aware: an employee is OK if EITHER the legacy column has a
+        // positive basic OR they have an active basic-category catalog
+        // assignment with a positive amount. We only flag the intersection
+        // of "both empty" so catalog-only employees aren't false positives.
+        db.select({
+            id: employees.id,
+            employeeNo: employees.employeeNo,
+            firstName: employees.firstName,
+            lastName: employees.lastName,
+            avatarUrl: employees.avatarUrl,
+        })
             .from(employees)
             .where(and(
                 eq(employees.tenantId, tenantId),
                 eq(employees.isArchived, false),
                 inArray(employees.status, ['active', 'onboarding']),
                 sql`(${employees.basicSalary} IS NULL OR ${employees.basicSalary}::numeric = 0)`,
-            )),
+                sql`NOT EXISTS (
+                    SELECT 1 FROM employee_salary_components esc
+                    JOIN salary_components sc ON sc.id = esc.component_id
+                    WHERE esc.employee_id = ${employees.id}
+                      AND esc.tenant_id = ${tenantId}
+                      AND esc.is_active = true
+                      AND sc.is_active = true
+                      AND sc.kind = 'earning'
+                      AND sc.category = 'basic'
+                      AND COALESCE(esc.amount::numeric, sc.amount::numeric, 0) > 0
+                )`,
+            ))
+            .orderBy(employees.firstName, employees.lastName)
+            .limit(READINESS_EMPLOYEE_CAP),
         // Pending leave whose start date falls inside this period — LOP / sick
         // won't be reflected until the leave is approved AND auto-synced
         db.select({ count: sql<number>`COUNT(*)::int` })
@@ -226,10 +271,52 @@ export async function getPayrollReadiness(
             )),
     ])
 
+    // We need the TOTAL counts (not just the capped slice) for the messages.
+    // Two extra COUNT queries — both indexed, very cheap.
+    const [ibanTotalRows, salaryTotalRows] = await Promise.all([
+        db.select({ count: sql<number>`COUNT(*)::int` })
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                inArray(employees.status, ['active', 'onboarding']),
+                sql`(${employees.iban} IS NULL OR ${employees.iban} = '')`,
+            )),
+        db.select({ count: sql<number>`COUNT(*)::int` })
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                inArray(employees.status, ['active', 'onboarding']),
+                sql`(${employees.basicSalary} IS NULL OR ${employees.basicSalary}::numeric = 0)`,
+                // Mirror the catalog-aware exclusion from the list query above.
+                sql`NOT EXISTS (
+                    SELECT 1 FROM employee_salary_components esc
+                    JOIN salary_components sc ON sc.id = esc.component_id
+                    WHERE esc.employee_id = ${employees.id}
+                      AND esc.tenant_id = ${tenantId}
+                      AND esc.is_active = true
+                      AND sc.is_active = true
+                      AND sc.kind = 'earning'
+                      AND sc.category = 'basic'
+                      AND COALESCE(esc.amount::numeric, sc.amount::numeric, 0) > 0
+                )`,
+            )),
+    ])
+
     const employeeCount = emps[0]?.count ?? 0
-    const missingIban = ibanCounts[0]?.count ?? 0
-    const missingSalary = salaryCounts[0]?.count ?? 0
+    const missingIban = ibanTotalRows[0]?.count ?? 0
+    const missingSalary = salaryTotalRows[0]?.count ?? 0
     const pendingLeaveInPeriod = leaveCounts[0]?.count ?? 0
+
+    const toReadinessEmp = (r: { id: string; employeeNo: string; firstName: string; lastName: string; avatarUrl: string | null }): PayrollReadinessEmployee => ({
+        id: r.id,
+        employeeNo: r.employeeNo,
+        name: `${r.firstName} ${r.lastName}`.trim(),
+        avatarUrl: r.avatarUrl,
+    })
+    const missingIbanEmployees = ibanRows.map(toReadinessEmp)
+    const missingSalaryEmployees = salaryRows.map(toReadinessEmp)
 
     const blockers: string[] = []
     const warnings: string[] = []
@@ -252,6 +339,8 @@ export async function getPayrollReadiness(
         missingIban,
         missingSalary,
         pendingLeaveInPeriod,
+        missingIbanEmployees,
+        missingSalaryEmployees,
         blockers,
         warnings,
         canProcess: blockers.length === 0,

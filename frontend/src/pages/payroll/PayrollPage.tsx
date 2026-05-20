@@ -5,8 +5,11 @@ import {
   CreditCard, CheckCircle2, Clock, Play, FileDown, Send,
   TrendingUp, RefreshCcw, Plus, Calculator, DollarSign,
   CircleDot, ArrowRight, Banknote, Users, BarChart3,
-  Sparkles, Trash2, Lock, AlertTriangle, AlertCircle,
+  Sparkles, Trash2, Lock, AlertTriangle, AlertCircle, ExternalLink,
 } from 'lucide-react'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { InitialsAvatar } from '@/components/shared/Avatar'
+import type { PayrollReadinessEmployee } from '@/hooks/usePayroll'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -82,6 +85,90 @@ async function downloadBlob(url: string, filename: string, token: string | null)
   a.download = match?.[1] ?? filename
   a.click()
   URL.revokeObjectURL(a.href)
+}
+
+// ─── Readiness row ─────────────────────────────────────────────────────────
+// Renders a single blocker/warning line. When the line is associated with a
+// list of employees (missing salary / missing IBAN), the message becomes a
+// popover trigger that lists names + employee_no with a link to the employee
+// detail page so HR can jump straight to the fix.
+
+function inferReadinessEmployees(
+  msg: string,
+  readiness: { missingSalaryEmployees: PayrollReadinessEmployee[]; missingIbanEmployees: PayrollReadinessEmployee[] },
+): PayrollReadinessEmployee[] | null {
+  // The backend writes the human messages, but the *association* is implicit.
+  // Match by substring — the readiness messages have stable phrasing.
+  if (msg.includes('no basic salary')) return readiness.missingSalaryEmployees
+  if (msg.includes('missing an IBAN')) return readiness.missingIbanEmployees
+  return null
+}
+
+function ReadinessRow({
+  tone, message, employees,
+}: {
+  tone: 'blocker' | 'warning'
+  message: string
+  employees: PayrollReadinessEmployee[] | null
+}) {
+  const Icon = tone === 'blocker' ? AlertCircle : AlertTriangle
+  const wrapperClass = tone === 'blocker'
+    ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200'
+    : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200'
+  const linkClass = tone === 'blocker'
+    ? 'underline decoration-rose-400 underline-offset-2 hover:text-rose-900 dark:hover:text-rose-100'
+    : 'underline decoration-amber-400 underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100'
+
+  if (!employees || employees.length === 0) {
+    return (
+      <div className={cn('flex items-start gap-2 rounded-md border px-3 py-2 text-xs', wrapperClass)}>
+        <Icon className="mt-0.5 size-3.5 shrink-0" />
+        <span>{message}</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={cn('flex items-start gap-2 rounded-md border px-3 py-2 text-xs', wrapperClass)}>
+      <Icon className="mt-0.5 size-3.5 shrink-0" />
+      <div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" className={cn('text-left', linkClass)}>
+              {message}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" sideOffset={6} className="w-80 p-0">
+            <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+              <span className="text-xs font-medium text-foreground">Affected employees</span>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                {employees.length}
+              </span>
+            </div>
+            <ul className="max-h-64 divide-y overflow-y-auto">
+              {employees.map((e) => (
+                <li key={e.id}>
+                  <Link
+                    to={`/employees/${e.id}`}
+                    className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/60"
+                  >
+                    <InitialsAvatar name={e.name || e.employeeNo} src={e.avatarUrl} size="sm" />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate text-xs font-medium text-foreground">
+                        {e.name || e.employeeNo}
+                      </span>
+                      <span className="truncate text-[11px] text-muted-foreground">{e.employeeNo}</span>
+                    </span>
+                    <ExternalLink className="size-3.5 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-muted-foreground" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
+  )
 }
 
 // ─── Workflow progress bar ─────────────────────────────────────────────────────
@@ -294,12 +381,17 @@ function PayslipBreakdown({ ps }: { ps: Payslip }) {
   // Catalog snapshot persisted alongside the payslip — when present, every
   // earning line gets its real component name. Legacy payslips (pre-0048)
   // have an empty array and fall through to the 4 named columns below.
+  // Order mirrors Add/Edit Employee Step 3 + Payroll Summary so HR sees the
+  // same shape everywhere.
   const breakdown = (ps.earningsBreakdown ?? [])
       .map((b) => ({ ...b, amount: Number(b.amount) }))
       .filter((b) => b.amount > 0)
       .sort((a, b) => {
-          const order = (cat: string) => ({ basic: 0, housing: 1, transport: 2 }[cat] ?? 3)
-          return order(a.category) - order(b.category)
+          const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
+          const ra = rank[a.category] ?? 99
+          const rb = rank[b.category] ?? 99
+          if (ra !== rb) return ra - rb
+          return a.name.localeCompare(b.name)
       })
   const overtime = Number(ps.overtime)
   const commission = Number(ps.commission ?? 0)
@@ -1469,27 +1561,33 @@ export function PayrollPage() {
 
             {/* Row 1.5: readiness checklist — only renders when there's at
                 least one finding. Blockers (rose) gate the Process button;
-                warnings (amber) are informational. */}
+                warnings (amber) are informational. Rows tied to a specific
+                employee list (missing salary, missing IBAN) render with a
+                popover so HR can jump straight to the offending record. */}
             {readiness && (readiness.blockers.length > 0 || readiness.warnings.length > 0) && (
               <div className="mb-5 space-y-2">
-                {readiness.blockers.map((msg, i) => (
-                  <div
-                    key={`b-${i}`}
-                    className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200"
-                  >
-                    <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-                    <span>{msg}</span>
-                  </div>
-                ))}
-                {readiness.warnings.map((msg, i) => (
-                  <div
-                    key={`w-${i}`}
-                    className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
-                  >
-                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                    <span>{msg}</span>
-                  </div>
-                ))}
+                {readiness.blockers.map((msg, i) => {
+                  const emps = inferReadinessEmployees(msg, readiness)
+                  return (
+                    <ReadinessRow
+                      key={`b-${i}`}
+                      tone="blocker"
+                      message={msg}
+                      employees={emps}
+                    />
+                  )
+                })}
+                {readiness.warnings.map((msg, i) => {
+                  const emps = inferReadinessEmployees(msg, readiness)
+                  return (
+                    <ReadinessRow
+                      key={`w-${i}`}
+                      tone="warning"
+                      message={msg}
+                      employees={emps}
+                    />
+                  )
+                })}
               </div>
             )}
 

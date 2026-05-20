@@ -167,4 +167,70 @@ describe('buildPayslipsAndTotals', () => {
             expect(result.totalGross).toBeCloseTo(16_000, 2)
         })
     })
+
+    describe('breakdown ↔ persisted columns parity', () => {
+        // Defensive guard: the persisted basic/housing/transport/other
+        // columns + earningsBreakdown jsonb are two views of the same data.
+        // If they ever drift, the UI shows numbers that don't tie out (the
+        // root cause of the multi-basic bug). This test fences against any
+        // future divergence — for every catalog-path payslip the breakdown
+        // sum must equal the sum of the four rollup columns within rounding.
+        const allCategories: PayslipResolvedEarnings = {
+            basic: 10_000,
+            hasBasic: true,
+            earnings: [
+                { componentId: 'c-basic',     category: 'basic',           name: 'Basic',         amount: 10_000 },
+                { componentId: 'c-housing',   category: 'housing',         name: 'Housing',       amount: 2_500 },
+                { componentId: 'c-transport', category: 'transport',       name: 'Transport',     amount: 800 },
+                { componentId: 'c-col',       category: 'cost_of_living',  name: 'Cost of Living', amount: 500 },
+                { componentId: 'c-custom',    category: 'custom_allowance', name: 'Comm Allow',   amount: 350 },
+            ],
+        }
+
+        it('breakdown sum equals basic+housing+transport+other (full month)', () => {
+            const result = buildPayslipsAndTotals(
+                'tenant-1', 'run-1', 2026, 5,
+                [emp() as any],
+                noAdjustments,
+                new Map([['emp-1', allCategories]]),
+            )
+            const slip = result.payslipValues[0]!
+            const columnSum = Number(slip.basicSalary) + Number(slip.housingAllowance)
+                + Number(slip.transportAllowance) + Number(slip.otherAllowances)
+            const breakdownSum = slip.earningsBreakdown.reduce((s, e) => s + Number(e.amount), 0)
+            expect(breakdownSum).toBeCloseTo(columnSum, 2)
+            expect(columnSum).toBeCloseTo(14_150, 2) // 10000+2500+800+500+350
+        })
+
+        it('parity holds under proration (mid-month joiner)', () => {
+            // 31-day month, joined 16th → 16/31 proration. Each component is
+            // prorated individually in the breakdown; the columns are
+            // prorated as rollups. Rounding could differ at the cent level,
+            // but the two views must agree within 2 cents.
+            const result = buildPayslipsAndTotals(
+                'tenant-1', 'run-1', 2026, 5,
+                [emp({ joinDate: '2026-05-16' }) as any],
+                noAdjustments,
+                new Map([['emp-1', allCategories]]),
+            )
+            const slip = result.payslipValues[0]!
+            const columnSum = Number(slip.basicSalary) + Number(slip.housingAllowance)
+                + Number(slip.transportAllowance) + Number(slip.otherAllowances)
+            const breakdownSum = slip.earningsBreakdown.reduce((s, e) => s + Number(e.amount), 0)
+            expect(Math.abs(breakdownSum - columnSum)).toBeLessThanOrEqual(0.02)
+        })
+
+        it('legacy fallback path: breakdown is empty (no spurious entries)', () => {
+            // No resolved earnings → the engine reads the four employee
+            // columns and writes them through. earningsBreakdown must be
+            // empty (UI keys off this to switch to the legacy display).
+            const result = buildPayslipsAndTotals(
+                'tenant-1', 'run-1', 2026, 5,
+                [emp() as any],
+                noAdjustments,
+                new Map(),
+            )
+            expect(result.payslipValues[0]?.earningsBreakdown).toEqual([])
+        })
+    })
 })

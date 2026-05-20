@@ -437,10 +437,17 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
   const displayTotal = computedTotal ?? prevTotal
   const diff = computedTotal != null && prevTotal > 0 ? computedTotal - prevTotal : null
 
-  // Sort: basic first, then housing/transport, then others
+  // Standard order — Basic first, then statutory allowances, then everything
+  // else. Same rank table as action-dialogs.tsx so the layout stays
+  // consistent across Add/Edit Employee, Change Salary, and payslip views.
   const orderedCatalog = React.useMemo(() => {
-    const rank = (cat: string) => ({ basic: 0, housing: 1, transport: 2 }[cat] ?? 3)
-    return [...earningsCatalog].sort((a, b) => rank(a.category) - rank(b.category))
+    const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
+    return [...earningsCatalog].sort((a, b) => {
+      const ra = rank[a.category] ?? 99
+      const rb = rank[b.category] ?? 99
+      if (ra !== rb) return ra - rb
+      return a.name.localeCompare(b.name)
+    })
   }, [earningsCatalog])
 
   return (
@@ -1090,9 +1097,13 @@ export function EmployeeDetailPage() {
       () => (salaryAssignments ?? [])
           .filter((a) => a.isActive)
           .sort((a, b) => {
-              // Standard order: basic first, then housing/transport, then everything else.
-              const order = (cat: string) => ({ basic: 0, housing: 1, transport: 2 }[cat] ?? 3)
-              return order(a.category) - order(b.category)
+              // Same priority order as the Add/Edit Employee dialog so the
+              // profile, the form, and the payslip all line up.
+              const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
+              const ra = rank[a.category] ?? 99
+              const rb = rank[b.category] ?? 99
+              if (ra !== rb) return ra - rb
+              return a.name.localeCompare(b.name)
           }),
       [salaryAssignments],
   )
@@ -2409,14 +2420,14 @@ export function EmployeeDetailPage() {
                 <BankChangeReviewBanner employeeId={e.id} autoOpenRequestId={reviewRequestId} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
-                    <InfoRow label="Account Name" value={e.accountName} icon={User} />
-                    <InfoRow label="Account Number" value={e.accountNumber} icon={Hash} />
-                    <InfoRow label="Bank Name" value={e.bankName} icon={Building2} />
+                    <InfoRow label="Account Name" value={e.accountName} icon={User} alwaysShow />
+                    <InfoRow label="Account Number" value={e.accountNumber} icon={Hash} alwaysShow />
+                    <InfoRow label="Bank Name" value={e.bankName} icon={Building2} alwaysShow />
                   </div>
                   <div>
-                    <InfoRow label="IBAN" value={e.iban} icon={Hash} />
-                    <InfoRow label="Swift Code" value={e.swiftCode} icon={Hash} />
-                    <InfoRow label="Branch" value={e.bankBranch} icon={Building2} />
+                    <InfoRow label="IBAN" value={e.iban} icon={Hash} alwaysShow />
+                    <InfoRow label="Swift Code" value={e.swiftCode} icon={Hash} alwaysShow />
+                    <InfoRow label="Branch" value={e.bankBranch} icon={Building2} alwaysShow />
                   </div>
                 </div>
               </CardContent>
