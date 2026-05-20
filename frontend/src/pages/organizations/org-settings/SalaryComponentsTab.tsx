@@ -134,16 +134,16 @@ export function SalaryComponentsTab() {
             <Tabs value={tab} onValueChange={(v) => setTab(v as SalaryComponentKind)}>
                 <TabsList className="bg-muted/60">
                     <TabsTrigger value="earning" className="gap-1.5 text-sm">
-                        <Banknote className="h-3.5 w-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.earnings')}
+                        <Banknote className="size-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.earnings')}
                     </TabsTrigger>
                     <TabsTrigger value="deduction" className="gap-1.5 text-sm">
-                        <FileMinus className="h-3.5 w-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.deductions')}
+                        <FileMinus className="size-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.deductions')}
                     </TabsTrigger>
                     <TabsTrigger value="benefit" className="gap-1.5 text-sm">
-                        <HeartPulse className="h-3.5 w-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.benefits')}
+                        <HeartPulse className="size-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.benefits')}
                     </TabsTrigger>
                     <TabsTrigger value="correction" className="gap-1.5 text-sm">
-                        <RefreshCcw className="h-3.5 w-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.corrections')}
+                        <RefreshCcw className="size-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.corrections')}
                     </TabsTrigger>
                 </TabsList>
 

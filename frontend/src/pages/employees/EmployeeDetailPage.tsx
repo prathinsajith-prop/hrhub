@@ -442,7 +442,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
   // consistent across Add/Edit Employee, Change Salary, and payslip views.
   const orderedCatalog = React.useMemo(() => {
     const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
-    return [...earningsCatalog].sort((a, b) => {
+    return earningsCatalog.toSorted((a, b) => {
       const ra = rank[a.category] ?? 99
       const rb = rank[b.category] ?? 99
       if (ra !== rb) return ra - rb

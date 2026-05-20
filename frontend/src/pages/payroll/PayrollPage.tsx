@@ -505,6 +505,27 @@ function PayslipBreakdown({ ps }: { ps: Payslip }) {
   )
 }
 
+/** Small KPI tile used in the PayslipsSheet header. Tonal background keeps
+ *  Total Net visually anchored as the "headline" number HR cares about. */
+function SheetStat({ label, value, tone, prominent }: {
+  label: string
+  value: string
+  tone: 'muted' | 'blue' | 'emerald'
+  prominent?: boolean
+}) {
+  const toneClass = tone === 'emerald'
+    ? 'bg-emerald-50 border-emerald-200/70 text-emerald-700 dark:bg-emerald-950/30 dark:border-emerald-900/40 dark:text-emerald-300'
+    : tone === 'blue'
+      ? 'bg-sky-50 border-sky-200/70 text-sky-700 dark:bg-sky-950/30 dark:border-sky-900/40 dark:text-sky-300'
+      : 'bg-muted/40 border-border text-foreground'
+  return (
+    <div className={cn('rounded-lg border px-3 py-1.5 min-w-[110px]', toneClass)}>
+      <p className="text-[10px] font-medium uppercase tracking-wider opacity-70">{label}</p>
+      <p className={cn('tabular-nums font-semibold leading-tight', prominent ? 'text-base' : 'text-sm')}>{value}</p>
+    </div>
+  )
+}
+
 function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: boolean; onClose: () => void }) {
   const { accessToken } = useAuthStore()
   const { data, isLoading } = usePayslips(run?.id ?? '')
@@ -534,19 +555,46 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
     }
   }
 
+  // Header KPIs — derived once so they stay in sync with the row list, even
+  // for draft runs where the run.totalNet column hasn't been written yet.
+  const headerKpis = useMemo(() => {
+    const totalGross = payslips.reduce((s, p) => s + Number(p.grossSalary), 0)
+    const totalNet = payslips.reduce((s, p) => s + Number(p.netSalary), 0)
+    const totalDeductions = payslips.reduce((s, p) => s + Number(p.deductions ?? 0), 0)
+    return { totalGross, totalNet, totalDeductions, count: payslips.length }
+  }, [payslips])
+
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
       {/* Full-screen on every viewport - the previous sm:max-w-lg cap felt
           cramped for the side-by-side payslip breakdown. */}
       <SheetContent className="w-screen sm:max-w-none flex flex-col p-0">
-        <SheetHeader className="px-6 py-5 border-b shrink-0">
-          <SheetTitle>{run ? `${periodLabel(run.month, run.year)} - Payslips` : 'Payslips'}</SheetTitle>
-          {run && (
-            <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1"><Users className="size-3" />{run.totalEmployees ?? 0} employees</span>
-              <span className="flex items-center gap-1 text-emerald-600 font-medium"><Banknote className="size-3" />Net {formatCurrency(Number(run.totalNet ?? 0))}</span>
+        <SheetHeader className="border-b shrink-0 px-6 py-4 bg-gradient-to-br from-background to-muted/30">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <SheetTitle className="text-lg font-semibold tracking-tight">
+                  {run ? periodLabel(run.month, run.year) : 'Payslips'}
+                </SheetTitle>
+                {run && (
+                  <Badge
+                    variant={isDraftPreview ? 'warning' : run.status === 'paid' ? 'success' : 'secondary'}
+                    className="capitalize text-[10px]"
+                  >
+                    {isDraftPreview ? 'Draft' : (run.status ?? '').replace('_', ' ')}
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">Payroll run — {headerKpis.count} payslips</p>
             </div>
-          )}
+            {payslips.length > 0 && (
+              <div className="grid grid-cols-3 gap-3 sm:gap-5">
+                <SheetStat label="Employees" value={String(headerKpis.count)} tone="muted" />
+                <SheetStat label="Total Gross" value={formatCurrency(headerKpis.totalGross)} tone="blue" />
+                <SheetStat label="Total Net" value={formatCurrency(headerKpis.totalNet)} tone="emerald" prominent />
+              </div>
+            )}
+          </div>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto divide-y">
@@ -589,17 +637,37 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
                 </div>
               )}
 
-              {/* Mini bar chart inside sheet */}
+              {/* Mini bar chart — top earners at a glance. Two-tone legend so HR
+                  can tell Gross from Net without hovering. */}
               {chartData.length > 0 && (
-                <div className="px-5 py-4 bg-muted/20">
-                  <p className="text-xs font-medium text-muted-foreground mb-3">Salary Overview (top {chartData.length})</p>
-                  <ResponsiveContainer width="100%" height={120}>
-                    <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                      <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                <div className="px-5 py-4 border-b bg-muted/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <BarChart3 className="size-3.5 text-muted-foreground" />
+                      <p className="text-xs font-semibold text-foreground/80">Salary Overview</p>
+                      <span className="text-[10px] text-muted-foreground">· Top {chartData.length}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px]">
+                      <span className="flex items-center gap-1 text-muted-foreground">
+                        <span className="size-2 rounded-sm bg-sky-300" />Gross
+                      </span>
+                      <span className="flex items-center gap-1 text-muted-foreground">
+                        <span className="size-2 rounded-sm bg-emerald-500" />Net
+                      </span>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} tickMargin={4} axisLine={false} tickLine={false} />
                       <YAxis hide tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v: unknown) => formatCurrency(Number(v ?? 0))} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
-                      <Bar dataKey="Gross" fill="#93c5fd" radius={[2, 2, 0, 0]} maxBarSize={20} />
-                      <Bar dataKey="Net" fill="#10b981" radius={[2, 2, 0, 0]} maxBarSize={20} />
+                      <Tooltip
+                        cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                        formatter={(v: unknown) => formatCurrency(Number(v ?? 0))}
+                        contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid hsl(var(--border))', padding: '6px 10px' }}
+                        labelStyle={{ fontWeight: 600, fontSize: 11 }}
+                      />
+                      <Bar dataKey="Gross" fill="#93c5fd" radius={[3, 3, 0, 0]} maxBarSize={22} />
+                      <Bar dataKey="Net" fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={22} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -607,20 +675,47 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
 
               {payslips.map((ps) => {
                 const isExp = expanded === ps.id
+                const gross = Number(ps.grossSalary)
+                const net = Number(ps.netSalary)
+                const ded = Number(ps.deductions ?? 0)
                 return (
-                  <div key={ps.id} className="hover:bg-muted/20 transition-colors">
+                  <div key={ps.id} className={cn('transition-colors', isExp ? 'bg-muted/30' : 'hover:bg-muted/20')}>
                     <button
                       type="button"
-                      className="w-full flex items-center justify-between px-5 py-3.5 text-left"
+                      className="w-full flex items-center gap-3 px-5 py-3.5 text-left"
                       onClick={() => setExpanded(isExp ? null : ps.id)}
                     >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{ps.employeeName}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Gross {formatCurrency(Number(ps.grossSalary))} · Net <span className="text-emerald-600 font-semibold">{formatCurrency(Number(ps.netSalary))}</span>
+                      <InitialsAvatar name={ps.employeeName ?? '?'} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold truncate">{ps.employeeName}</p>
+                          {ps.employeeNo && (
+                            <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">#{ps.employeeNo}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {ps.department ?? '—'}
+                          {ps.designation ? ` · ${ps.designation}` : ''}
+                          {typeof ps.daysWorked === 'number' ? ` · ${ps.daysWorked}d` : ''}
                         </p>
                       </div>
-                      <ArrowRight className={cn('size-3.5 text-muted-foreground shrink-0 ml-3 transition-transform', isExp && 'rotate-90')} />
+                      <div className="hidden sm:flex items-center gap-4 shrink-0 text-right">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Gross</p>
+                          <p className="text-xs font-medium tabular-nums">{formatCurrency(gross)}</p>
+                        </div>
+                        {ded > 0 && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-rose-600/80">Deductions</p>
+                            <p className="text-xs font-medium tabular-nums text-rose-700 dark:text-rose-400">− {formatCurrency(ded)}</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right min-w-[100px]">
+                        <p className="text-[10px] uppercase tracking-wider text-emerald-700/80 dark:text-emerald-300/80">Net Pay</p>
+                        <p className="text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{formatCurrency(net)}</p>
+                      </div>
+                      <ArrowRight className={cn('size-3.5 text-muted-foreground shrink-0 transition-transform', isExp && 'rotate-90')} />
                     </button>
 
                     {isExp && (
@@ -1566,22 +1661,22 @@ export function PayrollPage() {
                 popover so HR can jump straight to the offending record. */}
             {readiness && (readiness.blockers.length > 0 || readiness.warnings.length > 0) && (
               <div className="mb-5 space-y-2">
-                {readiness.blockers.map((msg, i) => {
+                {readiness.blockers.map((msg) => {
                   const emps = inferReadinessEmployees(msg, readiness)
                   return (
                     <ReadinessRow
-                      key={`b-${i}`}
+                      key={`b:${msg}`}
                       tone="blocker"
                       message={msg}
                       employees={emps}
                     />
                   )
                 })}
-                {readiness.warnings.map((msg, i) => {
+                {readiness.warnings.map((msg) => {
                   const emps = inferReadinessEmployees(msg, readiness)
                   return (
                     <ReadinessRow
-                      key={`w-${i}`}
+                      key={`w:${msg}`}
                       tone="warning"
                       message={msg}
                       employees={emps}
