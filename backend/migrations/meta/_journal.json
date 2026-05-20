@@ -330,6 +330,13 @@
       "when": 1780617600000,
       "tag": "0046_other_allowance_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1780704000000,
+      "tag": "0047_seed_catalog_existing_tenants",
+      "breakpoints": true
     }
   ]
 }

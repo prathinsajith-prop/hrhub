@@ -27,6 +27,12 @@ const KIND_CATEGORIES: Record<SalaryComponentKind, readonly string[]> = {
 
 const SOCIAL_SCHEME_SET = new Set<string>(SOCIAL_SECURITY_SCHEMES)
 
+/** Dedupe a scheme array while preserving order. Defence in depth — the
+ *  toggle UI can't produce duplicates, but a malformed API call could. */
+function dedupeSchemes(schemes: string[] | undefined): string[] {
+    return Array.from(new Set(schemes ?? []))
+}
+
 export interface CreateSalaryComponentInput {
     kind: SalaryComponentKind
     category: string
@@ -126,7 +132,7 @@ export async function createSalaryComponent(
                 calculationType: input.kind === 'earning' ? (input.calculationType ?? null) : null,
                 amount: input.amount != null ? String(input.amount) : null,
                 proRata: input.proRata ?? true,
-                applicableSocialSecurity: input.kind === 'earning' ? (input.applicableSocialSecurity ?? []) : [],
+                applicableSocialSecurity: input.kind === 'earning' ? dedupeSchemes(input.applicableSocialSecurity) : [],
                 frequency: input.kind === 'deduction' || input.kind === 'benefit' ? (input.frequency ?? null) : null,
                 isActive: input.isActive ?? true,
                 createdBy,
@@ -176,7 +182,7 @@ export async function updateSalaryComponent(
     if (patch.amount !== undefined) set.amount = merged.amount != null ? String(merged.amount) : null
     if (patch.proRata !== undefined) set.proRata = merged.proRata
     if (patch.applicableSocialSecurity !== undefined) {
-        set.applicableSocialSecurity = existing.kind === 'earning' ? merged.applicableSocialSecurity : []
+        set.applicableSocialSecurity = existing.kind === 'earning' ? dedupeSchemes(merged.applicableSocialSecurity) : []
     }
     if (patch.frequency !== undefined) set.frequency = (existing.kind === 'deduction' || existing.kind === 'benefit') ? merged.frequency : null
     if (patch.isActive !== undefined) set.isActive = merged.isActive

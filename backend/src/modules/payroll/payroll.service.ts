@@ -364,6 +364,17 @@ interface ResolvedEarning {
     amount: number
 }
 
+interface ResolvedEarnings {
+    basic: number
+    /** True when the employee has a basic earning assignment. Used to gate
+        the catalog path — a partial set of assignments (e.g. only an "Other
+        Allowance" left over from a half-finished migration) must still fall
+        back to the legacy static fields, otherwise the resolver would zero
+        out basic / housing / transport. */
+    hasBasic: boolean
+    earnings: ResolvedEarning[]
+}
+
 /**
  * Earnings derived from the salary-components catalog + per-employee
  * assignments. This is the source of truth payroll uses; the legacy
@@ -383,8 +394,8 @@ interface ResolvedEarning {
 async function resolveEmployeeEarnings(
     tenantId: string,
     empIds: string[],
-): Promise<Map<string, { basic: number; earnings: ResolvedEarning[] }>> {
-    const result = new Map<string, { basic: number; earnings: ResolvedEarning[] }>()
+): Promise<Map<string, ResolvedEarnings>> {
+    const result = new Map<string, ResolvedEarnings>()
     if (empIds.length === 0) return result
 
     // Active assignments joined with their catalog component. The catalog
@@ -425,12 +436,13 @@ async function resolveEmployeeEarnings(
     // into absolute AED using the basic we computed above.
     for (const r of rows) {
         const basic = basicByEmp.get(r.employeeId) ?? 0
+        const hasBasic = basicByEmp.has(r.employeeId)
         const rawAmount = Number(r.assignmentAmount ?? r.componentAmount ?? 0)
         const amount = r.calculationType === 'percentage_of_basic'
             ? (basic * rawAmount) / 100
             : rawAmount
 
-        const entry = result.get(r.employeeId) ?? { basic, earnings: [] }
+        const entry = result.get(r.employeeId) ?? { basic, hasBasic, earnings: [] }
         entry.earnings.push({ componentId: r.componentId, category: r.category, amount })
         result.set(r.employeeId, entry)
     }
@@ -450,7 +462,12 @@ async function resolveEmployeeEarnings(
  * employee has no assignments (newly created, pre-migration etc.), we fall
  * back to the legacy static fields on the employee row so payroll keeps
  * producing a sensible result and HR sees no regression.
+ *
+ * Exported for tests — production callers go through previewPayrollRun /
+ * runPayroll / getDraftPayslipsPreview.
  */
+export type { ResolvedEarnings as PayslipResolvedEarnings }
+export { buildPayslipsAndTotals as __buildPayslipsAndTotals_forTests }
 function buildPayslipsAndTotals(
     tenantId: string,
     payrollRunId: string,
@@ -458,7 +475,7 @@ function buildPayslipsAndTotals(
     month: number,
     emps: PayableEmployee[],
     adjustmentTotals: Awaited<ReturnType<typeof getAdjustmentTotalsByEmployee>>,
-    earningsByEmp: Map<string, { basic: number; earnings: ResolvedEarning[] }>,
+    earningsByEmp: Map<string, ResolvedEarnings>,
 ) {
     const daysInMonth = new Date(year, month, 0).getDate()
     const monthStart = new Date(year, month - 1, 1)
@@ -475,9 +492,14 @@ function buildPayslipsAndTotals(
         // newly-created employees (the Add Employee flow today still writes
         // the four columns directly; a follow-up will switch it to creating
         // assignments).
+        // Catalog path requires a basic-earning assignment — otherwise we
+        // can't trust the resolved set as the source of truth, and the
+        // legacy static fields stay authoritative. This guard prevents a
+        // partial-migration scenario (one stray "Other Allowance" assignment
+        // with no Basic) from zeroing out basic / housing / transport.
         const resolved = earningsByEmp.get(emp.id)
         let basic: number, housing: number, transport: number, other: number
-        if (resolved && resolved.earnings.length > 0) {
+        if (resolved && resolved.hasBasic) {
             basic = resolved.basic
             housing = resolved.earnings.filter(e => e.category === 'housing').reduce((s, e) => s + e.amount, 0)
             transport = resolved.earnings.filter(e => e.category === 'transport').reduce((s, e) => s + e.amount, 0)

@@ -2,11 +2,12 @@
  * Salary Components configuration tab.
  *
  * Tenant-wide catalog of earning / deduction / benefit / correction templates,
- * laid out as three sub-tabs (matching the Zoho Payroll reference). Adding a
+ * laid out as four sub-tabs (matching the Zoho Payroll reference). Adding a
  * component opens a kind-specific form via the unified `<Add Component>` menu
  * — fields swap based on what's being created.
  */
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
     Banknote, Briefcase, CheckCircle2, Circle, Coins,
     Crown, FileMinus, FileText, HeartPulse, Pencil, Plus, RefreshCcw,
@@ -38,18 +39,6 @@ import {
 } from '@/types'
 import { cn, formatCurrency } from '@/lib/utils'
 
-// Friendlier category labels for the UI — DB stores snake_case.
-const CATEGORY_LABELS: Record<string, string> = {
-    basic: 'Basic', housing: 'Housing Allowance', transport: 'Transport Allowance',
-    cost_of_living: 'Cost of Living Allowance', children_social: 'Children Social Allowance',
-    social: 'Social Allowance', custom_allowance: 'Custom Allowance',
-    withheld_salary: 'Withheld Salary', salary_advance: 'Salary Advance',
-    fines_damages: 'Fines and Damages', notice_pay: 'Notice Pay', custom: 'Custom',
-    medical_insurance: 'Medical Insurance',
-    bonus: 'Bonus', commission: 'Commission', leave_encashment: 'Leave Encashment',
-    annual_leave_salary: 'Annual Leave Salary',
-}
-
 // Each kind gets its own dropdown of categories. Display order matters here
 // — the most common picks (Basic, Custom Allowance) sit at the top.
 const KIND_CATEGORIES: Record<SalaryComponentKind, readonly string[]> = {
@@ -66,14 +55,8 @@ const KIND_ICONS: Record<SalaryComponentKind, typeof Banknote> = {
     correction: RefreshCcw,
 }
 
-const KIND_LABELS: Record<SalaryComponentKind, string> = {
-    earning: 'Earning',
-    deduction: 'Deduction',
-    benefit: 'Benefit',
-    correction: 'Correction',
-}
-
 export function SalaryComponentsTab() {
+    const { t } = useTranslation()
     const [tab, setTab] = useState<SalaryComponentKind>('earning')
     // Dialog state — opens for either "new" (componentToEdit = null) or "edit"
     // (componentToEdit = the row). Pre-selecting `dialogKind` lets the Add menu
@@ -85,15 +68,21 @@ export function SalaryComponentsTab() {
     const earnings = useSalaryComponents('earning')
     const deductions = useSalaryComponents('deduction')
     const benefits = useSalaryComponents('benefit')
+    const corrections = useSalaryComponents('correction')
 
     const del = useDeleteSalaryComponent()
     const update = useUpdateSalaryComponent()
+
+    const kindLabel = (k: SalaryComponentKind) => t(`orgSettings.salaryComponentsTab.kinds.${k}`)
 
     const handleToggleActive = (c: SalaryComponent) => {
         update.mutate(
             { id: c.id, patch: { isActive: !c.isActive } },
             {
-                onSuccess: () => toast.success(`${c.name} ${!c.isActive ? 'activated' : 'deactivated'}`),
+                onSuccess: () => {
+                    const key = !c.isActive ? 'activated' : 'deactivated'
+                    toast.success(t(`orgSettings.salaryComponentsTab.toast.${key}`, { name: c.name }))
+                },
             },
         )
     }
@@ -102,7 +91,7 @@ export function SalaryComponentsTab() {
         if (!toDelete) return
         del.mutate(toDelete.id, {
             onSuccess: () => {
-                toast.success(`${toDelete.name} deleted`)
+                toast.success(t('orgSettings.salaryComponentsTab.toast.deleted', { name: toDelete.name }))
                 setToDelete(null)
             },
             onError: () => setToDelete(null),
@@ -112,12 +101,14 @@ export function SalaryComponentsTab() {
     return (
         <Section
             icon={Coins}
-            title="Salary Components"
-            description="Catalog of earning, deduction, benefit, and correction templates used across payroll."
+            title={t('orgSettings.salaryComponentsTab.title')}
+            description={t('orgSettings.salaryComponentsTab.description')}
             action={
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button size="sm" leftIcon={<Plus className="size-3.5" />}>Add Component</Button>
+                        <Button size="sm" leftIcon={<Plus className="size-3.5" />}>
+                            {t('orgSettings.salaryComponentsTab.addComponent')}
+                        </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" sideOffset={6} className="w-44">
                         {(['earning', 'correction', 'benefit', 'deduction'] as SalaryComponentKind[]).map((k) => {
@@ -132,7 +123,7 @@ export function SalaryComponentsTab() {
                                     className="gap-2 text-sm"
                                 >
                                     <Icon className="size-3.5" />
-                                    {KIND_LABELS[k]}
+                                    {kindLabel(k)}
                                 </DropdownMenuItem>
                             )
                         })}
@@ -143,13 +134,16 @@ export function SalaryComponentsTab() {
             <Tabs value={tab} onValueChange={(v) => setTab(v as SalaryComponentKind)}>
                 <TabsList className="bg-muted/60">
                     <TabsTrigger value="earning" className="gap-1.5 text-sm">
-                        <Banknote className="h-3.5 w-3.5" /> Earnings
+                        <Banknote className="h-3.5 w-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.earnings')}
                     </TabsTrigger>
                     <TabsTrigger value="deduction" className="gap-1.5 text-sm">
-                        <FileMinus className="h-3.5 w-3.5" /> Deductions
+                        <FileMinus className="h-3.5 w-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.deductions')}
                     </TabsTrigger>
                     <TabsTrigger value="benefit" className="gap-1.5 text-sm">
-                        <HeartPulse className="h-3.5 w-3.5" /> Benefits
+                        <HeartPulse className="h-3.5 w-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.benefits')}
+                    </TabsTrigger>
+                    <TabsTrigger value="correction" className="gap-1.5 text-sm">
+                        <RefreshCcw className="h-3.5 w-3.5" /> {t('orgSettings.salaryComponentsTab.tabs.corrections')}
                     </TabsTrigger>
                 </TabsList>
 
@@ -183,6 +177,16 @@ export function SalaryComponentsTab() {
                         onToggle={handleToggleActive}
                     />
                 </TabsContent>
+                <TabsContent value="correction" className="mt-4">
+                    <ComponentList
+                        kind="correction"
+                        items={corrections.data ?? []}
+                        loading={corrections.isLoading}
+                        onEdit={(c) => { setDialogKind(c.kind); setComponentToEdit(c) }}
+                        onDelete={(c) => setToDelete(c)}
+                        onToggle={handleToggleActive}
+                    />
+                </TabsContent>
             </Tabs>
 
             {dialogKind && (
@@ -196,10 +200,12 @@ export function SalaryComponentsTab() {
             <ConfirmDialog
                 open={!!toDelete}
                 onOpenChange={(o) => { if (!del.isPending && !o) setToDelete(null) }}
-                title={toDelete ? `Delete "${toDelete.name}"?` : ''}
-                description="This component will no longer appear when adjusting payroll. Existing payslips that already used it stay unchanged."
-                confirmLabel={del.isPending ? 'Deleting…' : 'Delete'}
-                cancelLabel="Cancel"
+                title={toDelete ? t('orgSettings.salaryComponentsTab.confirm.deleteTitle', { name: toDelete.name }) : ''}
+                description={t('orgSettings.salaryComponentsTab.confirm.deleteDesc')}
+                confirmLabel={del.isPending
+                    ? t('orgSettings.salaryComponentsTab.confirm.deleting')
+                    : t('orgSettings.salaryComponentsTab.confirm.delete')}
+                cancelLabel={t('orgSettings.salaryComponentsTab.confirm.cancel')}
                 onConfirm={handleDelete}
                 variant="destructive"
             />
@@ -219,6 +225,9 @@ function ComponentList({
     onDelete: (c: SalaryComponent) => void
     onToggle: (c: SalaryComponent) => void
 }) {
+    const { t } = useTranslation()
+    const categoryLabel = (c: string) => t(`orgSettings.salaryComponentsTab.categories.${c}`, { defaultValue: c })
+
     if (loading) {
         return (
             <div className="space-y-2">
@@ -227,31 +236,45 @@ function ComponentList({
         )
     }
     if (items.length === 0) {
+        const emptyKey = {
+            earning: 'noEarnings', deduction: 'noDeductions',
+            benefit: 'noBenefits', correction: 'noCorrections',
+        }[kind]
         return (
             <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-12 text-center">
                 <Sparkles className="size-6 text-muted-foreground/40" />
-                <p className="text-sm font-medium">No {kind}s yet</p>
+                <p className="text-sm font-medium">{t(`orgSettings.salaryComponentsTab.empty.${emptyKey}`)}</p>
                 <p className="text-xs text-muted-foreground">
-                    Add your first {KIND_LABELS[kind].toLowerCase()} using the button above.
+                    {t('orgSettings.salaryComponentsTab.empty.hint', {
+                        kind: t(`orgSettings.salaryComponentsTab.kinds.${kind}`).toLowerCase(),
+                    })}
                 </p>
             </div>
         )
     }
+
+    const categoryHeader = kind === 'earning'
+        ? t('orgSettings.salaryComponentsTab.table.category')
+        : kind === 'benefit'
+            ? t('orgSettings.salaryComponentsTab.table.benefitType')
+            : kind === 'correction'
+                ? t('orgSettings.salaryComponentsTab.table.correctionType')
+                : t('orgSettings.salaryComponentsTab.table.deductionType')
+
+    const detailHeader = kind === 'earning'
+        ? t('orgSettings.salaryComponentsTab.table.payTypeAmount')
+        : t('orgSettings.salaryComponentsTab.table.frequency')
 
     return (
         <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                     <tr>
-                        <th className="px-4 py-2.5 text-left font-medium">Name</th>
-                        <th className="px-4 py-2.5 text-left font-medium">
-                            {kind === 'earning' ? 'Category' : kind === 'benefit' ? 'Benefit Type' : 'Deduction Type'}
-                        </th>
-                        <th className="px-4 py-2.5 text-left font-medium">
-                            {kind === 'earning' ? 'Pay Type · Amount' : 'Frequency'}
-                        </th>
-                        <th className="px-4 py-2.5 text-left font-medium">Status</th>
-                        <th className="px-4 py-2.5 text-right font-medium">Actions</th>
+                        <th className="px-4 py-2.5 text-left font-medium">{t('orgSettings.salaryComponentsTab.table.name')}</th>
+                        <th className="px-4 py-2.5 text-left font-medium">{categoryHeader}</th>
+                        <th className="px-4 py-2.5 text-left font-medium">{detailHeader}</th>
+                        <th className="px-4 py-2.5 text-left font-medium">{t('orgSettings.salaryComponentsTab.table.status')}</th>
+                        <th className="px-4 py-2.5 text-right font-medium">{t('orgSettings.salaryComponentsTab.table.actions')}</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -261,12 +284,12 @@ function ComponentList({
                                 <div className="font-medium">{c.name}</div>
                                 {c.nameInPayslip !== c.name && (
                                     <div className="text-[11px] text-muted-foreground">
-                                        Payslip: {c.nameInPayslip}
+                                        {t('orgSettings.salaryComponentsTab.table.payslipPrefix', { name: c.nameInPayslip })}
                                     </div>
                                 )}
                             </td>
                             <td className="px-4 py-3 text-muted-foreground">
-                                {CATEGORY_LABELS[c.category] ?? c.category}
+                                {categoryLabel(c.category)}
                             </td>
                             <td className="px-4 py-3 text-muted-foreground">
                                 {kind === 'earning' ? (
@@ -277,14 +300,18 @@ function ComponentList({
                                         {c.amount != null && (
                                             <span className="tabular-nums">
                                                 {c.calculationType === 'percentage_of_basic'
-                                                    ? `${Number(c.amount)}% of basic`
+                                                    ? t('orgSettings.salaryComponentsTab.table.percentOfBasic', { value: Number(c.amount) })
                                                     : formatCurrency(Number(c.amount))}
                                             </span>
                                         )}
                                     </span>
                                 ) : (
                                     <Badge variant="outline" className="text-[10px] uppercase">
-                                        {c.frequency === 'one_time' ? 'One Time' : c.frequency === 'recurring' ? 'Recurring' : '—'}
+                                        {c.frequency === 'one_time'
+                                            ? t('orgSettings.salaryComponentsTab.table.oneTime')
+                                            : c.frequency === 'recurring'
+                                                ? t('orgSettings.salaryComponentsTab.table.recurring')
+                                                : '—'}
                                     </Badge>
                                 )}
                             </td>
@@ -298,10 +325,12 @@ function ComponentList({
                                             ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300'
                                             : 'bg-muted text-muted-foreground hover:bg-muted/70',
                                     )}
-                                    title="Click to toggle"
+                                    title={t('orgSettings.salaryComponentsTab.table.toggleHint')}
                                 >
                                     {c.isActive ? <CheckCircle2 className="size-3" /> : <Circle className="size-3" />}
-                                    {c.isActive ? 'Active' : 'Inactive'}
+                                    {c.isActive
+                                        ? t('orgSettings.salaryComponentsTab.table.active')
+                                        : t('orgSettings.salaryComponentsTab.table.inactive')}
                                 </button>
                             </td>
                             <td className="px-4 py-3 text-right">
@@ -311,7 +340,7 @@ function ComponentList({
                                         size="icon"
                                         className="size-7"
                                         onClick={() => onEdit(c)}
-                                        title="Edit"
+                                        title={t('orgSettings.salaryComponentsTab.table.edit')}
                                     >
                                         <Pencil className="size-3.5" />
                                     </Button>
@@ -321,12 +350,12 @@ function ComponentList({
                                             size="icon"
                                             className="size-7 text-muted-foreground hover:text-rose-600"
                                             onClick={() => onDelete(c)}
-                                            title="Delete"
+                                            title={t('orgSettings.salaryComponentsTab.table.delete')}
                                         >
                                             <Trash2 className="size-3.5" />
                                         </Button>
                                     ) : (
-                                        <span title="System component — cannot be deleted">
+                                        <span title={t('orgSettings.salaryComponentsTab.table.systemComponent')}>
                                             <Crown className="size-3.5 text-amber-500" />
                                         </span>
                                     )}
@@ -349,6 +378,7 @@ function ComponentDialog({
     existing: SalaryComponent | null
     onClose: () => void
 }) {
+    const { t } = useTranslation()
     const create = useCreateSalaryComponent()
     const update = useUpdateSalaryComponent()
     const isEditing = !!existing
@@ -373,7 +403,9 @@ function ComponentDialog({
     const [frequency, setFrequency] = useState<'one_time' | 'recurring'>(
         existing?.frequency ?? 'one_time',
     )
-    const [isActive, setIsActive] = useState(existing?.isActive ?? false)
+    // Default new components to active so they're discoverable in payroll
+    // immediately. Matches the seeded defaults; HR can still deactivate.
+    const [isActive, setIsActive] = useState(existing?.isActive ?? true)
     const [schemes, setSchemes] = useState<SocialSecurityScheme[]>(
         existing?.applicableSocialSecurity ?? defaultSchemes,
     )
@@ -388,9 +420,12 @@ function ComponentDialog({
     }
 
     const categories = KIND_CATEGORIES[kind]
+    const kindLabel = t(`orgSettings.salaryComponentsTab.kinds.${kind}`)
     const dialogTitle = isEditing
-        ? `Edit ${KIND_LABELS[kind]}`
-        : `New ${KIND_LABELS[kind]}`
+        ? t('orgSettings.salaryComponentsTab.dialog.titleEdit', { kind: kindLabel })
+        : t('orgSettings.salaryComponentsTab.dialog.titleNew', { kind: kindLabel })
+
+    const categoryLabel = (c: string) => t(`orgSettings.salaryComponentsTab.categories.${c}`, { defaultValue: c })
 
     const toggleScheme = (s: SocialSecurityScheme) =>
         setSchemes((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]))
@@ -412,12 +447,17 @@ function ComponentDialog({
         }
         const opts = {
             onSuccess: () => {
-                toast.success(isEditing ? 'Component updated' : 'Component added')
+                toast.success(t(isEditing
+                    ? 'orgSettings.salaryComponentsTab.toast.updated'
+                    : 'orgSettings.salaryComponentsTab.toast.added'))
                 onClose()
             },
         }
         if (isEditing) {
-            update.mutate({ id: existing.id, patch: body }, opts)
+            // Drop `kind` from the PATCH body — the server schema omits it
+            // and it's an immutable field on the row anyway.
+            const { kind: _omit, ...patch } = body
+            update.mutate({ id: existing.id, patch }, opts)
         } else {
             create.mutate(body, opts)
         }
@@ -434,16 +474,22 @@ function ComponentDialog({
     // Other kinds only have the field column so 2xl is plenty.
     const dialogWidth = kind === 'earning' ? 'sm:max-w-5xl' : 'sm:max-w-2xl'
 
+    const categoryFieldLabel = kind === 'earning'
+        ? t('orgSettings.salaryComponentsTab.dialog.earningType')
+        : kind === 'correction'
+            ? t('orgSettings.salaryComponentsTab.dialog.correctionType')
+            : t('orgSettings.salaryComponentsTab.dialog.category')
+
     return (
         <Dialog open onOpenChange={(o) => { if (!o && !isPending) onClose() }}>
             <DialogContent className={cn('w-[95vw] max-h-[90vh] overflow-y-auto', dialogWidth)}>
                 <DialogHeader>
                     <DialogTitle>{dialogTitle}</DialogTitle>
                     <DialogDescription>
-                        {kind === 'earning' && 'Defines a recurring or one-off earning that appears on payslips.'}
-                        {kind === 'deduction' && 'A deduction line that HR can apply on a specific payroll run.'}
-                        {kind === 'benefit' && 'A non-cash or scheduled benefit (e.g. medical insurance) tracked alongside payroll.'}
-                        {kind === 'correction' && 'A one-off correction such as a bonus, commission, or leave encashment.'}
+                        {kind === 'earning' && t('orgSettings.salaryComponentsTab.dialog.descEarning')}
+                        {kind === 'deduction' && t('orgSettings.salaryComponentsTab.dialog.descDeduction')}
+                        {kind === 'benefit' && t('orgSettings.salaryComponentsTab.dialog.descBenefit')}
+                        {kind === 'correction' && t('orgSettings.salaryComponentsTab.dialog.descCorrection')}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -452,39 +498,45 @@ function ComponentDialog({
                     <div className="space-y-3">
                         <div className="space-y-1.5">
                             <Label>
-                                {kind === 'earning' ? 'Earning Type' : kind === 'correction' ? 'Correction Type' : 'Category'}
+                                {categoryFieldLabel}
                                 <span className="text-destructive"> *</span>
                             </Label>
                             <Select value={category} onValueChange={setCategory} disabled={isEditing}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {categories.map((c) => (
-                                        <SelectItem key={c} value={c}>{CATEGORY_LABELS[c] ?? c}</SelectItem>
+                                        <SelectItem key={c} value={c}>{categoryLabel(c)}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label>Name <span className="text-destructive">*</span></Label>
-                            <Input value={name} onChange={(e) => setNameSmart(e.target.value)} placeholder={`e.g. ${CATEGORY_LABELS[category] ?? 'Allowance'}`} />
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <Label>Name in payslip <span className="text-destructive">*</span></Label>
+                            <Label>{t('orgSettings.salaryComponentsTab.dialog.name')} <span className="text-destructive">*</span></Label>
                             <Input
-                                value={nameInPayslip}
-                                onChange={(e) => { setNameInPayslip(e.target.value); setPayslipDirty(true) }}
-                                placeholder="Printed on the payslip"
+                                value={name}
+                                onChange={(e) => setNameSmart(e.target.value)}
+                                placeholder={t('orgSettings.salaryComponentsTab.dialog.namePlaceholder', {
+                                    example: categoryLabel(category),
+                                })}
                             />
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label>Name in payslip (Arabic)</Label>
+                            <Label>{t('orgSettings.salaryComponentsTab.dialog.nameInPayslip')} <span className="text-destructive">*</span></Label>
+                            <Input
+                                value={nameInPayslip}
+                                onChange={(e) => { setNameInPayslip(e.target.value); setPayslipDirty(true) }}
+                                placeholder={t('orgSettings.salaryComponentsTab.dialog.nameInPayslipPlaceholder')}
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label>{t('orgSettings.salaryComponentsTab.dialog.nameInPayslipAr')}</Label>
                             <Input
                                 value={nameInPayslipAr ?? ''}
                                 onChange={(e) => setNameInPayslipAr(e.target.value)}
-                                placeholder="optional — Arabic display"
+                                placeholder={t('orgSettings.salaryComponentsTab.dialog.nameInPayslipArPlaceholder')}
                                 dir="rtl"
                             />
                         </div>
@@ -493,17 +545,17 @@ function ComponentDialog({
                         {kind === 'earning' && (
                             <>
                                 <fieldset className="space-y-1.5">
-                                    <Label>Pay type <span className="text-destructive">*</span></Label>
+                                    <Label>{t('orgSettings.salaryComponentsTab.dialog.payType')} <span className="text-destructive">*</span></Label>
                                     <div className="grid grid-cols-2 gap-2">
                                         <RadioCard
-                                            label="Fixed"
-                                            help="Same amount every month"
+                                            label={t('orgSettings.salaryComponentsTab.dialog.payTypeFixed')}
+                                            help={t('orgSettings.salaryComponentsTab.dialog.payTypeFixedHelp')}
                                             selected={payType === 'fixed'}
                                             onClick={() => setPayType('fixed')}
                                         />
                                         <RadioCard
-                                            label="Variable"
-                                            help="Differs per payroll"
+                                            label={t('orgSettings.salaryComponentsTab.dialog.payTypeVariable')}
+                                            help={t('orgSettings.salaryComponentsTab.dialog.payTypeVariableHelp')}
                                             selected={payType === 'variable'}
                                             onClick={() => setPayType('variable')}
                                         />
@@ -511,17 +563,17 @@ function ComponentDialog({
                                 </fieldset>
 
                                 <fieldset className="space-y-1.5">
-                                    <Label>Calculation <span className="text-destructive">*</span></Label>
+                                    <Label>{t('orgSettings.salaryComponentsTab.dialog.calculation')} <span className="text-destructive">*</span></Label>
                                     <div className="grid grid-cols-2 gap-2">
                                         <RadioCard
-                                            label="Flat amount"
-                                            help="Fixed AED value"
+                                            label={t('orgSettings.salaryComponentsTab.dialog.calcFlat')}
+                                            help={t('orgSettings.salaryComponentsTab.dialog.calcFlatHelp')}
                                             selected={calculationType === 'flat'}
                                             onClick={() => setCalculationType('flat')}
                                         />
                                         <RadioCard
-                                            label="% of basic"
-                                            help="Percentage of basic salary"
+                                            label={t('orgSettings.salaryComponentsTab.dialog.calcPercentage')}
+                                            help={t('orgSettings.salaryComponentsTab.dialog.calcPercentageHelp')}
                                             selected={calculationType === 'percentage_of_basic'}
                                             onClick={() => setCalculationType('percentage_of_basic')}
                                         />
@@ -530,12 +582,16 @@ function ComponentDialog({
 
                                 <div className="space-y-1.5">
                                     <Label>
-                                        {calculationType === 'percentage_of_basic' ? 'Percentage' : 'Amount (AED)'}
+                                        {calculationType === 'percentage_of_basic'
+                                            ? t('orgSettings.salaryComponentsTab.dialog.percentage')
+                                            : t('orgSettings.salaryComponentsTab.dialog.amountAed')}
                                     </Label>
                                     <NumericInput
                                         value={amount}
                                         onChange={(e) => setAmount(e.target.value)}
-                                        placeholder={calculationType === 'percentage_of_basic' ? '0–100' : '0.00'}
+                                        placeholder={calculationType === 'percentage_of_basic'
+                                            ? t('orgSettings.salaryComponentsTab.dialog.percentagePlaceholder')
+                                            : t('orgSettings.salaryComponentsTab.dialog.amountPlaceholder')}
                                         maxDecimals={2}
                                     />
                                 </div>
@@ -548,9 +604,9 @@ function ComponentDialog({
                                         className="mt-0.5 size-4 accent-primary"
                                     />
                                     <span>
-                                        Calculate on pro-rata basis
+                                        {t('orgSettings.salaryComponentsTab.dialog.proRata')}
                                         <span className="block text-[11px] text-muted-foreground">
-                                            Reduce automatically when employees joined or left mid-month.
+                                            {t('orgSettings.salaryComponentsTab.dialog.proRataHelp')}
                                         </span>
                                     </span>
                                 </label>
@@ -560,17 +616,17 @@ function ComponentDialog({
                         {/* Deduction / Benefit frequency */}
                         {(kind === 'deduction' || kind === 'benefit') && (
                             <fieldset className="space-y-1.5">
-                                <Label>Frequency <span className="text-destructive">*</span></Label>
+                                <Label>{t('orgSettings.salaryComponentsTab.dialog.frequency')} <span className="text-destructive">*</span></Label>
                                 <div className="grid grid-cols-2 gap-2">
                                     <RadioCard
-                                        label="One-time"
-                                        help="Applied on a single payroll"
+                                        label={t('orgSettings.salaryComponentsTab.dialog.freqOneTime')}
+                                        help={t('orgSettings.salaryComponentsTab.dialog.freqOneTimeHelp')}
                                         selected={frequency === 'one_time'}
                                         onClick={() => setFrequency('one_time')}
                                     />
                                     <RadioCard
-                                        label="Recurring"
-                                        help="Every payroll until deactivated"
+                                        label={t('orgSettings.salaryComponentsTab.dialog.freqRecurring')}
+                                        help={t('orgSettings.salaryComponentsTab.dialog.freqRecurringHelp')}
                                         selected={frequency === 'recurring'}
                                         onClick={() => setFrequency('recurring')}
                                     />
@@ -585,7 +641,7 @@ function ComponentDialog({
                                 onChange={(e) => setIsActive(e.target.checked)}
                                 className="size-4 accent-primary"
                             />
-                            Mark as active
+                            {t('orgSettings.salaryComponentsTab.dialog.markActive')}
                         </label>
                     </div>
 
@@ -593,9 +649,11 @@ function ComponentDialog({
                     {kind === 'earning' && (
                         <div className="space-y-3">
                             <div>
-                                <p className="text-sm font-semibold">Applicable Social Security Benefits</p>
+                                <p className="text-sm font-semibold">
+                                    {t('orgSettings.salaryComponentsTab.dialog.schemesTitle')}
+                                </p>
                                 <p className="text-xs text-muted-foreground mt-0.5">
-                                    Schemes that include this earning when computing employer and employee contributions.
+                                    {t('orgSettings.salaryComponentsTab.dialog.schemesDesc')}
                                 </p>
                             </div>
                             <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
@@ -609,7 +667,7 @@ function ComponentDialog({
                                         />
                                         <span className="font-medium">{s}</span>
                                         <span className="text-[11px] text-muted-foreground">
-                                            {SCHEME_NAMES[s]}
+                                            {t(`orgSettings.salaryComponentsTab.schemes.${s}`)}
                                         </span>
                                     </label>
                                 ))}
@@ -619,31 +677,24 @@ function ComponentDialog({
                 </div>
 
                 <div className="mt-4 rounded-md border border-amber-200/70 bg-amber-50/60 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-                    <strong>Heads up:</strong> Once you associate this component with an employee or a processed payslip, only the name and amount stay editable. Amount changes apply only to new payroll runs.
+                    <strong>{t('orgSettings.salaryComponentsTab.dialog.headsUp')}</strong>{' '}
+                    {t('orgSettings.salaryComponentsTab.dialog.headsUpBody')}
                 </div>
 
                 <div className="mt-4 flex items-center justify-end gap-2">
                     <Button variant="ghost" onClick={onClose} disabled={isPending}>
-                        <X className="size-3.5" /> Cancel
+                        <X className="size-3.5" /> {t('orgSettings.salaryComponentsTab.dialog.cancel')}
                     </Button>
                     <Button onClick={handleSave} loading={isPending} disabled={!canSubmit}>
-                        <FileText className="size-3.5" /> {isEditing ? 'Save changes' : 'Save'}
+                        <FileText className="size-3.5" />{' '}
+                        {isEditing
+                            ? t('orgSettings.salaryComponentsTab.dialog.saveChanges')
+                            : t('orgSettings.salaryComponentsTab.dialog.save')}
                     </Button>
                 </div>
             </DialogContent>
         </Dialog>
     )
-}
-
-// Friendly long-form names for the social-security pickers.
-const SCHEME_NAMES: Record<SocialSecurityScheme, string> = {
-    GPSSA: 'General Pension And Social Security Authority',
-    ADPF: 'Abu Dhabi Pension Fund',
-    GOSI: 'General Organization for Social Insurance',
-    SIO: 'Social Insurance Organization',
-    SPF: 'Social Protection Fund',
-    PIFSS: 'Public Institution for Social Security',
-    GRSIA: 'General Retirement and Social Insurance Authority',
 }
 
 function RadioCard({
