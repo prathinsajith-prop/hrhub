@@ -141,6 +141,10 @@ export interface Payslip {
     housingAllowance: string
     transportAllowance: string
     otherAllowances: string
+    // Catalog-driven per-component breakdown captured at run time
+    // (migration 0048). Empty array for legacy payslips — the dialog falls
+    // back to the four named columns above.
+    earningsBreakdown?: Array<{ componentId: string; category: string; name: string; amount: number | string }>
     overtime?: string
     commission?: string
     grossSalary: string

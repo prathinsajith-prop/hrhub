@@ -5,8 +5,11 @@ import {
   CreditCard, CheckCircle2, Clock, Play, FileDown, Send,
   TrendingUp, RefreshCcw, Plus, Calculator, DollarSign,
   CircleDot, ArrowRight, Banknote, Users, BarChart3,
-  Sparkles, Trash2, Lock, AlertTriangle, AlertCircle,
+  Sparkles, Trash2, Lock, AlertTriangle, AlertCircle, ExternalLink,
 } from 'lucide-react'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { InitialsAvatar } from '@/components/shared/Avatar'
+import type { PayrollReadinessEmployee } from '@/hooks/usePayroll'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -82,6 +85,90 @@ async function downloadBlob(url: string, filename: string, token: string | null)
   a.download = match?.[1] ?? filename
   a.click()
   URL.revokeObjectURL(a.href)
+}
+
+// ─── Readiness row ─────────────────────────────────────────────────────────
+// Renders a single blocker/warning line. When the line is associated with a
+// list of employees (missing salary / missing IBAN), the message becomes a
+// popover trigger that lists names + employee_no with a link to the employee
+// detail page so HR can jump straight to the fix.
+
+function inferReadinessEmployees(
+  msg: string,
+  readiness: { missingSalaryEmployees: PayrollReadinessEmployee[]; missingIbanEmployees: PayrollReadinessEmployee[] },
+): PayrollReadinessEmployee[] | null {
+  // The backend writes the human messages, but the *association* is implicit.
+  // Match by substring — the readiness messages have stable phrasing.
+  if (msg.includes('no basic salary')) return readiness.missingSalaryEmployees
+  if (msg.includes('missing an IBAN')) return readiness.missingIbanEmployees
+  return null
+}
+
+function ReadinessRow({
+  tone, message, employees,
+}: {
+  tone: 'blocker' | 'warning'
+  message: string
+  employees: PayrollReadinessEmployee[] | null
+}) {
+  const Icon = tone === 'blocker' ? AlertCircle : AlertTriangle
+  const wrapperClass = tone === 'blocker'
+    ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200'
+    : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200'
+  const linkClass = tone === 'blocker'
+    ? 'underline decoration-rose-400 underline-offset-2 hover:text-rose-900 dark:hover:text-rose-100'
+    : 'underline decoration-amber-400 underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100'
+
+  if (!employees || employees.length === 0) {
+    return (
+      <div className={cn('flex items-start gap-2 rounded-md border px-3 py-2 text-xs', wrapperClass)}>
+        <Icon className="mt-0.5 size-3.5 shrink-0" />
+        <span>{message}</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={cn('flex items-start gap-2 rounded-md border px-3 py-2 text-xs', wrapperClass)}>
+      <Icon className="mt-0.5 size-3.5 shrink-0" />
+      <div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" className={cn('text-left', linkClass)}>
+              {message}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" sideOffset={6} className="w-80 p-0">
+            <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+              <span className="text-xs font-medium text-foreground">Affected employees</span>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                {employees.length}
+              </span>
+            </div>
+            <ul className="max-h-64 divide-y overflow-y-auto">
+              {employees.map((e) => (
+                <li key={e.id}>
+                  <Link
+                    to={`/employees/${e.id}`}
+                    className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/60"
+                  >
+                    <InitialsAvatar name={e.name || e.employeeNo} src={e.avatarUrl} size="sm" />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate text-xs font-medium text-foreground">
+                        {e.name || e.employeeNo}
+                      </span>
+                      <span className="truncate text-[11px] text-muted-foreground">{e.employeeNo}</span>
+                    </span>
+                    <ExternalLink className="size-3.5 shrink-0 text-muted-foreground/60 transition-colors group-hover:text-muted-foreground" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
+  )
 }
 
 // ─── Workflow progress bar ─────────────────────────────────────────────────────
@@ -291,6 +378,21 @@ function PayslipBreakdown({ ps }: { ps: Payslip }) {
   const housing = Number(ps.housingAllowance)
   const transport = Number(ps.transportAllowance)
   const other = Number(ps.otherAllowances)
+  // Catalog snapshot persisted alongside the payslip — when present, every
+  // earning line gets its real component name. Legacy payslips (pre-0048)
+  // have an empty array and fall through to the 4 named columns below.
+  // Order mirrors Add/Edit Employee Step 3 + Payroll Summary so HR sees the
+  // same shape everywhere.
+  const breakdown = (ps.earningsBreakdown ?? [])
+      .map((b) => ({ ...b, amount: Number(b.amount) }))
+      .filter((b) => b.amount > 0)
+      .sort((a, b) => {
+          const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
+          const ra = rank[a.category] ?? 99
+          const rb = rank[b.category] ?? 99
+          if (ra !== rb) return ra - rb
+          return a.name.localeCompare(b.name)
+      })
   const overtime = Number(ps.overtime)
   const commission = Number(ps.commission ?? 0)
   const additions = overtime + commission
@@ -324,10 +426,18 @@ function PayslipBreakdown({ ps }: { ps: Payslip }) {
           Earnings
         </p>
         <div className="px-3 pb-1">
-          {basic > 0 && <PayslipRow label="Basic Salary" value={basic} sub />}
-          {housing > 0 && <PayslipRow label="Housing Allowance" value={housing} sub />}
-          {transport > 0 && <PayslipRow label="Transport Allowance" value={transport} sub />}
-          {other > 0 && <PayslipRow label="Other Allowances" value={other} sub />}
+          {breakdown.length > 0 ? (
+            breakdown.map((b) => (
+              <PayslipRow key={b.componentId} label={b.name} value={b.amount} sub />
+            ))
+          ) : (
+            <>
+              {basic > 0 && <PayslipRow label="Basic Salary" value={basic} sub />}
+              {housing > 0 && <PayslipRow label="Housing Allowance" value={housing} sub />}
+              {transport > 0 && <PayslipRow label="Transport Allowance" value={transport} sub />}
+              {other > 0 && <PayslipRow label="Other Allowances" value={other} sub />}
+            </>
+          )}
           <PayslipRow label="Earnings subtotal" value={earningsSubtotal} bold />
         </div>
       </div>
@@ -395,6 +505,27 @@ function PayslipBreakdown({ ps }: { ps: Payslip }) {
   )
 }
 
+/** Small KPI tile used in the PayslipsSheet header. Tonal background keeps
+ *  Total Net visually anchored as the "headline" number HR cares about. */
+function SheetStat({ label, value, tone, prominent }: {
+  label: string
+  value: string
+  tone: 'muted' | 'blue' | 'emerald'
+  prominent?: boolean
+}) {
+  const toneClass = tone === 'emerald'
+    ? 'bg-emerald-50 border-emerald-200/70 text-emerald-700 dark:bg-emerald-950/30 dark:border-emerald-900/40 dark:text-emerald-300'
+    : tone === 'blue'
+      ? 'bg-sky-50 border-sky-200/70 text-sky-700 dark:bg-sky-950/30 dark:border-sky-900/40 dark:text-sky-300'
+      : 'bg-muted/40 border-border text-foreground'
+  return (
+    <div className={cn('rounded-lg border px-3 py-1.5 min-w-[110px]', toneClass)}>
+      <p className="text-[10px] font-medium uppercase tracking-wider opacity-70">{label}</p>
+      <p className={cn('tabular-nums font-semibold leading-tight', prominent ? 'text-base' : 'text-sm')}>{value}</p>
+    </div>
+  )
+}
+
 function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: boolean; onClose: () => void }) {
   const { accessToken } = useAuthStore()
   const { data, isLoading } = usePayslips(run?.id ?? '')
@@ -424,19 +555,46 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
     }
   }
 
+  // Header KPIs — derived once so they stay in sync with the row list, even
+  // for draft runs where the run.totalNet column hasn't been written yet.
+  const headerKpis = useMemo(() => {
+    const totalGross = payslips.reduce((s, p) => s + Number(p.grossSalary), 0)
+    const totalNet = payslips.reduce((s, p) => s + Number(p.netSalary), 0)
+    const totalDeductions = payslips.reduce((s, p) => s + Number(p.deductions ?? 0), 0)
+    return { totalGross, totalNet, totalDeductions, count: payslips.length }
+  }, [payslips])
+
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
       {/* Full-screen on every viewport - the previous sm:max-w-lg cap felt
           cramped for the side-by-side payslip breakdown. */}
       <SheetContent className="w-screen sm:max-w-none flex flex-col p-0">
-        <SheetHeader className="px-6 py-5 border-b shrink-0">
-          <SheetTitle>{run ? `${periodLabel(run.month, run.year)} - Payslips` : 'Payslips'}</SheetTitle>
-          {run && (
-            <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1"><Users className="size-3" />{run.totalEmployees ?? 0} employees</span>
-              <span className="flex items-center gap-1 text-emerald-600 font-medium"><Banknote className="size-3" />Net {formatCurrency(Number(run.totalNet ?? 0))}</span>
+        <SheetHeader className="border-b shrink-0 px-6 py-4 bg-gradient-to-br from-background to-muted/30">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <SheetTitle className="text-lg font-semibold tracking-tight">
+                  {run ? periodLabel(run.month, run.year) : 'Payslips'}
+                </SheetTitle>
+                {run && (
+                  <Badge
+                    variant={isDraftPreview ? 'warning' : run.status === 'paid' ? 'success' : 'secondary'}
+                    className="capitalize text-[10px]"
+                  >
+                    {isDraftPreview ? 'Draft' : (run.status ?? '').replace('_', ' ')}
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground">Payroll run — {headerKpis.count} payslips</p>
             </div>
-          )}
+            {payslips.length > 0 && (
+              <div className="grid grid-cols-3 gap-3 sm:gap-5">
+                <SheetStat label="Employees" value={String(headerKpis.count)} tone="muted" />
+                <SheetStat label="Total Gross" value={formatCurrency(headerKpis.totalGross)} tone="blue" />
+                <SheetStat label="Total Net" value={formatCurrency(headerKpis.totalNet)} tone="emerald" prominent />
+              </div>
+            )}
+          </div>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto divide-y">
@@ -479,17 +637,37 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
                 </div>
               )}
 
-              {/* Mini bar chart inside sheet */}
+              {/* Mini bar chart — top earners at a glance. Two-tone legend so HR
+                  can tell Gross from Net without hovering. */}
               {chartData.length > 0 && (
-                <div className="px-5 py-4 bg-muted/20">
-                  <p className="text-xs font-medium text-muted-foreground mb-3">Salary Overview (top {chartData.length})</p>
-                  <ResponsiveContainer width="100%" height={120}>
-                    <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                      <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                <div className="px-5 py-4 border-b bg-muted/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <BarChart3 className="size-3.5 text-muted-foreground" />
+                      <p className="text-xs font-semibold text-foreground/80">Salary Overview</p>
+                      <span className="text-[10px] text-muted-foreground">· Top {chartData.length}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px]">
+                      <span className="flex items-center gap-1 text-muted-foreground">
+                        <span className="size-2 rounded-sm bg-sky-300" />Gross
+                      </span>
+                      <span className="flex items-center gap-1 text-muted-foreground">
+                        <span className="size-2 rounded-sm bg-emerald-500" />Net
+                      </span>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} tickMargin={4} axisLine={false} tickLine={false} />
                       <YAxis hide tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v: unknown) => formatCurrency(Number(v ?? 0))} contentStyle={{ fontSize: 11, borderRadius: 6 }} />
-                      <Bar dataKey="Gross" fill="#93c5fd" radius={[2, 2, 0, 0]} maxBarSize={20} />
-                      <Bar dataKey="Net" fill="#10b981" radius={[2, 2, 0, 0]} maxBarSize={20} />
+                      <Tooltip
+                        cursor={{ fill: 'rgba(148,163,184,0.08)' }}
+                        formatter={(v: unknown) => formatCurrency(Number(v ?? 0))}
+                        contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid hsl(var(--border))', padding: '6px 10px' }}
+                        labelStyle={{ fontWeight: 600, fontSize: 11 }}
+                      />
+                      <Bar dataKey="Gross" fill="#93c5fd" radius={[3, 3, 0, 0]} maxBarSize={22} />
+                      <Bar dataKey="Net" fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={22} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -497,20 +675,47 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
 
               {payslips.map((ps) => {
                 const isExp = expanded === ps.id
+                const gross = Number(ps.grossSalary)
+                const net = Number(ps.netSalary)
+                const ded = Number(ps.deductions ?? 0)
                 return (
-                  <div key={ps.id} className="hover:bg-muted/20 transition-colors">
+                  <div key={ps.id} className={cn('transition-colors', isExp ? 'bg-muted/30' : 'hover:bg-muted/20')}>
                     <button
                       type="button"
-                      className="w-full flex items-center justify-between px-5 py-3.5 text-left"
+                      className="w-full flex items-center gap-3 px-5 py-3.5 text-left"
                       onClick={() => setExpanded(isExp ? null : ps.id)}
                     >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{ps.employeeName}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Gross {formatCurrency(Number(ps.grossSalary))} · Net <span className="text-emerald-600 font-semibold">{formatCurrency(Number(ps.netSalary))}</span>
+                      <InitialsAvatar name={ps.employeeName ?? '?'} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold truncate">{ps.employeeName}</p>
+                          {ps.employeeNo && (
+                            <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">#{ps.employeeNo}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {ps.department ?? '—'}
+                          {ps.designation ? ` · ${ps.designation}` : ''}
+                          {typeof ps.daysWorked === 'number' ? ` · ${ps.daysWorked}d` : ''}
                         </p>
                       </div>
-                      <ArrowRight className={cn('size-3.5 text-muted-foreground shrink-0 ml-3 transition-transform', isExp && 'rotate-90')} />
+                      <div className="hidden sm:flex items-center gap-4 shrink-0 text-right">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Gross</p>
+                          <p className="text-xs font-medium tabular-nums">{formatCurrency(gross)}</p>
+                        </div>
+                        {ded > 0 && (
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-rose-600/80">Deductions</p>
+                            <p className="text-xs font-medium tabular-nums text-rose-700 dark:text-rose-400">− {formatCurrency(ded)}</p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right min-w-[100px]">
+                        <p className="text-[10px] uppercase tracking-wider text-emerald-700/80 dark:text-emerald-300/80">Net Pay</p>
+                        <p className="text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{formatCurrency(net)}</p>
+                      </div>
+                      <ArrowRight className={cn('size-3.5 text-muted-foreground shrink-0 transition-transform', isExp && 'rotate-90')} />
                     </button>
 
                     {isExp && (
@@ -1451,27 +1656,33 @@ export function PayrollPage() {
 
             {/* Row 1.5: readiness checklist — only renders when there's at
                 least one finding. Blockers (rose) gate the Process button;
-                warnings (amber) are informational. */}
+                warnings (amber) are informational. Rows tied to a specific
+                employee list (missing salary, missing IBAN) render with a
+                popover so HR can jump straight to the offending record. */}
             {readiness && (readiness.blockers.length > 0 || readiness.warnings.length > 0) && (
               <div className="mb-5 space-y-2">
-                {readiness.blockers.map((msg, i) => (
-                  <div
-                    key={`b-${i}`}
-                    className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200"
-                  >
-                    <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-                    <span>{msg}</span>
-                  </div>
-                ))}
-                {readiness.warnings.map((msg, i) => (
-                  <div
-                    key={`w-${i}`}
-                    className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"
-                  >
-                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                    <span>{msg}</span>
-                  </div>
-                ))}
+                {readiness.blockers.map((msg) => {
+                  const emps = inferReadinessEmployees(msg, readiness)
+                  return (
+                    <ReadinessRow
+                      key={`b:${msg}`}
+                      tone="blocker"
+                      message={msg}
+                      employees={emps}
+                    />
+                  )
+                })}
+                {readiness.warnings.map((msg) => {
+                  const emps = inferReadinessEmployees(msg, readiness)
+                  return (
+                    <ReadinessRow
+                      key={`w:${msg}`}
+                      tone="warning"
+                      message={msg}
+                      employees={emps}
+                    />
+                  )
+                })}
               </div>
             )}
 

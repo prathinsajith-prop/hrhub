@@ -3,6 +3,7 @@ import { exitRequests, employees, leaveRequests, leaveBalances } from '../../db/
 import { eq, and, sql, desc } from 'drizzle-orm'
 import { resolveAvatarUrl, resolveAvatarUrls } from '../../plugins/s3.js'
 import { Conditions } from '../../lib/filters.js'
+import { resolveEmployeeEarnings } from '../payroll/payroll.service.js'
 
 const EXIT_FIELD_MAP = {
     exitType: exitRequests.exitType,
@@ -40,8 +41,16 @@ export async function calculateSettlement(
 
     if (!emp) throw Object.assign(new Error('Employee not found'), { statusCode: 404 })
 
-    const basicSalary = parseFloat(emp.basicSalary ?? '0')
-    const totalSalaryVal = parseFloat(emp.totalSalary ?? emp.basicSalary ?? '0')
+    // Resolve compensation from the salary-components catalog first — that's
+    // the source of truth payroll already uses. Fall back to the legacy
+    // columns only when the employee has no assignments yet (pre-catalog
+    // data), keeping the EOSB calculation parity with payslip math.
+    const resolved = (await resolveEmployeeEarnings(tenantId, [employeeId])).get(employeeId)
+    const legacyBasic = parseFloat(emp.basicSalary ?? '0')
+    const legacyTotal = parseFloat(emp.totalSalary ?? emp.basicSalary ?? '0')
+    const basicSalary = resolved?.hasBasic ? resolved.basic : legacyBasic
+    const resolvedTotal = resolved?.earnings.reduce((s, e) => s + e.amount, 0) ?? 0
+    const totalSalaryVal = resolved?.hasBasic && resolvedTotal > 0 ? resolvedTotal : legacyTotal
     const joinDate = new Date(emp.joinDate)
     const exit = new Date(exitDate)
     const yearsOfService = (exit.getTime() - joinDate.getTime()) / (365.25 * 24 * 3600 * 1000)

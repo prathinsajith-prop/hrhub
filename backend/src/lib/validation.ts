@@ -125,6 +125,14 @@ const employeeBaseSchema = z.object({
     divisionId: z.string().uuid().nullable().optional(),
     departmentId: z.string().uuid().nullable().optional(),
     branchId: z.string().uuid().nullable().optional(),
+    // Per-employee salary-component assignments. Optional in the API so the
+    // legacy "just send basicSalary/housingAllowance" path keeps working;
+    // when provided, the create flow ALSO writes employee_salary_components
+    // rows so payroll's catalog-driven engine sees them.
+    salaryComponents: z.array(z.object({
+        componentId: z.string().uuid(),
+        amount: z.number().nonnegative(),
+    })).optional(),
 })
 
 export const createEmployeeSchema = employeeBaseSchema

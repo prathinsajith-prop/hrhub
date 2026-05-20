@@ -55,6 +55,7 @@ import employeeWarningsRoutes from './modules/employees/employee-warnings.routes
 import subscriptionRoutes from './modules/subscription/subscription.routes.js'
 import { orgUnitsRoutes } from './modules/orgUnits/orgUnits.routes.js'
 import { designationsRoutes } from './modules/designations/designations.routes.js'
+import { salaryComponentsRoutes } from './modules/salary-components/salary-components.routes.js'
 import { shiftsRoutes } from './modules/shifts/shifts.routes.js'
 import { gradeLevelsRoutes } from './modules/gradeLevels/grade-levels.routes.js'
 import { sponsoringEntitiesRoutes } from './modules/sponsoringEntities/sponsoring-entities.routes.js'
@@ -377,6 +378,7 @@ async function bootstrap() {
     await app.register(subscriptionRoutes, { prefix: '/api/v1/subscription' })
     await app.register(orgUnitsRoutes, { prefix: '/api/v1' })
     await app.register(designationsRoutes, { prefix: '/api/v1' })
+    await app.register(salaryComponentsRoutes, { prefix: '/api/v1' })
     await app.register(shiftsRoutes, { prefix: '/api/v1' })
     await app.register(gradeLevelsRoutes, { prefix: '/api/v1' })
     await app.register(sponsoringEntitiesRoutes, { prefix: '/api/v1' })

@@ -91,6 +91,10 @@ export interface Employee {
   housingAllowance?: number
   transportAllowance?: number
   otherAllowances?: number
+  // Catalog-driven assignments sent on create/update. The backend
+  // writes these into employee_salary_components and keeps the legacy
+  // columns above in sync. Read paths do not echo this field.
+  salaryComponents?: { componentId: string; amount: number }[]
   paymentMethod?: 'bank_transfer' | 'cash' | 'cheque'
   bankName?: string
   accountName?: string
@@ -275,6 +279,7 @@ export interface Payslip {
   employeeName: string
   employeeNo?: string | null
   department?: string | null
+  designation?: string | null
   /**
    * `true` when this row came from the draft preview rather than a persisted
    * payslip. The PDF download button is hidden for previews — there's no
@@ -288,6 +293,10 @@ export interface Payslip {
   housingAllowance: number
   transportAllowance: number
   otherAllowances: number
+  // Catalog-driven per-component snapshot the payroll engine resolved at
+  // run time. Empty for legacy payslips generated before migration 0048 —
+  // the UI must fall back to the four named columns above in that case.
+  earningsBreakdown?: Array<{ componentId: string; category: string; name: string; amount: number | string }>
   overtime: number
   commission?: number
   deductions: number
@@ -334,6 +343,44 @@ export interface PayrollAdjustment {
   lastName: string
   department: string | null
   createdByName: string | null
+}
+
+// Salary Components (catalog)
+export type SalaryComponentKind = 'earning' | 'deduction' | 'benefit' | 'correction'
+export type SalaryComponentPayType = 'fixed' | 'variable'
+export type SalaryComponentCalcType = 'flat' | 'percentage_of_basic'
+export type SalaryComponentFrequency = 'one_time' | 'recurring'
+
+/** GCC social-security schemes a tenant may opt earnings into. */
+export const SOCIAL_SECURITY_SCHEMES = ['GPSSA', 'ADPF', 'GOSI', 'SIO', 'SPF', 'PIFSS', 'GRSIA'] as const
+export type SocialSecurityScheme = typeof SOCIAL_SECURITY_SCHEMES[number]
+
+export const EARNING_CATEGORIES = ['basic', 'housing', 'transport', 'cost_of_living', 'children_social', 'social', 'custom_allowance'] as const
+export const DEDUCTION_CATEGORIES = ['withheld_salary', 'salary_advance', 'fines_damages', 'notice_pay', 'custom'] as const
+export const BENEFIT_CATEGORIES = ['medical_insurance', 'custom'] as const
+export const CORRECTION_CATEGORIES = ['bonus', 'commission', 'leave_encashment', 'notice_pay', 'annual_leave_salary', 'custom'] as const
+
+export interface SalaryComponent {
+  id: string
+  tenantId: string
+  kind: SalaryComponentKind
+  category: string
+  name: string
+  nameInPayslip: string
+  nameInPayslipAr: string | null
+  // Earning-only
+  payType: SalaryComponentPayType | null
+  calculationType: SalaryComponentCalcType | null
+  amount: string | null
+  proRata: boolean
+  applicableSocialSecurity: SocialSecurityScheme[]
+  // Deduction / benefit
+  frequency: SalaryComponentFrequency | null
+  // Status
+  isActive: boolean
+  isSystem: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 // Leave
