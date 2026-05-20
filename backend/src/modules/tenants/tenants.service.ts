@@ -2,9 +2,10 @@ import crypto from 'node:crypto'
 import { eq, and, desc, isNull, sql } from 'drizzle-orm'
 import { log } from '../../lib/logger.js'
 import { db } from '../../db/index.js'
-import { tenants, users, tenantMemberships, entities, employees, gradeLevels, sponsoringEntities, orgUnits, onboardingTemplateSteps, recruitmentStages } from '../../db/schema/index.js'
+import { tenants, users, tenantMemberships, entities, employees, gradeLevels, sponsoringEntities, orgUnits, onboardingTemplateSteps, recruitmentStages, salaryComponents } from '../../db/schema/index.js'
 import { buildDefaultOnboardingTemplateRows } from '../onboarding/onboarding.defaults.js'
 import { buildDefaultRecruitmentStageRows } from '../recruitment/recruitment.defaults.js'
+import { buildDefaultSalaryComponentRows } from '../salary-components/salary-components.defaults.js'
 import {
     type MemberRole,
     buildPermissionMap,
@@ -307,6 +308,12 @@ export async function createTenant(actorUserId: string, input: {
         // Admins can edit/reorder/recolour these from Organization Settings.
         await tx.insert(onboardingTemplateSteps).values(buildDefaultOnboardingTemplateRows(tenant.id))
         await tx.insert(recruitmentStages).values(buildDefaultRecruitmentStageRows(tenant.id))
+
+        // 5d. Seed the salary-component catalog (Basic + standard UAE
+        // allowances, deductions, medical insurance, corrections). HR sees
+        // a fully usable component list on day one from Organization Settings
+        // → Salary Components.
+        await tx.insert(salaryComponents).values(buildDefaultSalaryComponentRows(tenant.id))
 
         // 6. Link the user row to this employee. We always update for the active
         // tenant so the Employees list, my-account, and the JWT all resolve to

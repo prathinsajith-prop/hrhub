@@ -34,7 +34,8 @@ import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { cn, formatDate, formatDateTime, formatCurrency, formatFileSize, getInitials } from '@/lib/utils'
-import { useEmployee, useUpdateEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision, useUpdateEmployeeStatus, useArchiveEmployee } from '@/hooks/useEmployees'
+import { useEmployee, useUpdateEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision, useUpdateEmployeeStatus, useArchiveEmployee, useEmployeeSalaryComponents } from '@/hooks/useEmployees'
+import { useSalaryComponents } from '@/hooks/useSalaryComponents'
 import type { SalaryHistoryFilters } from '@/hooks/useEmployees'
 import { useDesignations, useCreateDesignation } from '@/hooks/useDesignations'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
@@ -132,15 +133,20 @@ const REVISION_TYPE_VARIANT: Record<string, 'success' | 'destructive' | 'info' |
 
 // ─── Small components ─────────────────────────────────────────────────────────
 
-const InfoRow = React.memo(function InfoRow({ label, value, icon: Icon, trailing }: { label: string; value?: string | null; icon?: React.ElementType; trailing?: React.ReactNode }) {
-  // Hide rows that have no real value - keeps the layout tight and free of "—" filler.
+const InfoRow = React.memo(function InfoRow({ label, value, icon: Icon, trailing, alwaysShow }: { label: string; value?: string | null; icon?: React.ElementType; trailing?: React.ReactNode; alwaysShow?: boolean }) {
+  // Hide rows that have no real value — keeps the layout tight and free of "—"
+  // filler. Pass `alwaysShow` for sections where the full schema matters even
+  // when fields are blank (e.g. Bank Details — HR needs to see at a glance
+  // which fields haven't been captured yet).
   const hasValue = value !== undefined && value !== null && String(value).trim() !== ''
-  if (!hasValue && !trailing) return null
+  if (!hasValue && !trailing && !alwaysShow) return null
   return (
     <div className="flex items-center gap-3 py-3 border-b border-border/40 last:border-0">
       {Icon && <Icon className="size-4 text-muted-foreground shrink-0" />}
       <span className="text-sm text-muted-foreground w-36 shrink-0">{label}</span>
-      <span className="text-sm font-medium text-foreground truncate flex-1">{hasValue ? value : ''}</span>
+      <span className={cn('text-sm truncate flex-1', hasValue ? 'font-medium text-foreground' : 'text-muted-foreground/60 italic')}>
+        {hasValue ? value : 'Not set'}
+      </span>
       {trailing && <span className="shrink-0">{trailing}</span>}
     </div>
   )
@@ -332,27 +338,67 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
 
   const [effectiveDate, setEffectiveDate] = React.useState('')
   const [revisionType, setRevisionType] = React.useState('increment')
-  const [newBasic, setNewBasic] = React.useState(() => currentBasic != null ? String(currentBasic) : '')
-  const [newHousing, setNewHousing] = React.useState(() => currentHousing != null ? String(currentHousing) : '')
-  const [newTransport, setNewTransport] = React.useState(() => currentTransport != null ? String(currentTransport) : '')
-  const [newOther, setNewOther] = React.useState(() => currentOther != null ? String(currentOther) : '')
+  const [componentAmounts, setComponentAmounts] = React.useState<Record<string, string>>({})
   const [remarks, setRemarks] = React.useState('')
 
-  // Auto-compute total from components
-  const basicNum = parseFloat(newBasic) || 0
-  const housingNum = parseFloat(newHousing) || 0
-  const transportNum = parseFloat(newTransport) || 0
-  const otherNum = parseFloat(newOther) || 0
+  const { data: salaryEarningsResp } = useSalaryComponents('earning')
+  const earningsCatalog = React.useMemo(
+    () => (salaryEarningsResp ?? []).filter((c) => c.isActive),
+    [salaryEarningsResp],
+  )
+  const { data: assignments } = useEmployeeSalaryComponents(employeeId)
+
+  // Seed inputs from real assignments only. Blank stays blank — HR sees the
+  // honest state. Legacy columns are used as a one-time fallback ONLY when no
+  // assignments exist yet (pre-catalog data); catalog defaults never seed an
+  // edit form, since substituting a default would show a number the employee
+  // wasn't actually paid.
+  const hasAssignments = (assignments?.length ?? 0) > 0
+  const seedKey = open && earningsCatalog.length > 0 ? `${earningsCatalog.length}:${assignments?.length ?? 0}` : null
+  const [lastSeed, setLastSeed] = React.useState<string | null>(null)
+  if (seedKey && seedKey !== lastSeed) {
+    setLastSeed(seedKey)
+    const next: Record<string, string> = {}
+    for (const a of assignments ?? []) {
+      if (a.amount != null) next[a.componentId] = String(a.amount)
+    }
+    if (!hasAssignments) {
+      const firstByCategory = (cat: string) => earningsCatalog.find((c) => c.category === cat)
+      const fillLegacy = (cat: string | string[], val: number | null | undefined) => {
+        if (val == null) return
+        const cats = Array.isArray(cat) ? cat : [cat]
+        for (const k of cats) {
+          const c = firstByCategory(k)
+          if (c && next[c.id] == null) { next[c.id] = String(val); return }
+        }
+      }
+      fillLegacy('basic', currentBasic)
+      fillLegacy('housing', currentHousing)
+      fillLegacy('transport', currentTransport)
+      fillLegacy(['custom_allowance', 'cost_of_living'], currentOther)
+    }
+    setComponentAmounts(next)
+  }
+
+  // Derived totals
+  const amountByCategory = (cat: string) =>
+    earningsCatalog
+      .filter((c) => c.category === cat)
+      .reduce((s, c) => s + (parseFloat(componentAmounts[c.id] || '0') || 0), 0)
+  const basicNum = amountByCategory('basic')
+  const housingNum = amountByCategory('housing')
+  const transportNum = amountByCategory('transport')
+  const otherNum = earningsCatalog
+    .filter((c) => !['basic', 'housing', 'transport'].includes(c.category))
+    .reduce((s, c) => s + (parseFloat(componentAmounts[c.id] || '0') || 0), 0)
   const computedTotal = basicNum > 0 ? basicNum + housingNum + transportNum + otherNum : null
 
   function resetForm() {
     setEffectiveDate('')
     setRevisionType('increment')
-    setNewBasic(currentBasic != null ? String(currentBasic) : '')
-    setNewHousing(currentHousing != null ? String(currentHousing) : '')
-    setNewTransport(currentTransport != null ? String(currentTransport) : '')
-    setNewOther(currentOther != null ? String(currentOther) : '')
+    setComponentAmounts({})
     setRemarks('')
+    setLastSeed(null)
   }
 
   function handleClose(o: boolean) {
@@ -363,16 +409,16 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!effectiveDate) { toast.error('Effective date required', 'Enter the date the salary change takes effect.'); return }
-    if (!newBasic)      { toast.error('New basic salary required', 'Enter the new basic salary amount.'); return }
+    if (basicNum <= 0)  { toast.error('Basic salary required', 'Enter an amount for the Basic component.'); return }
 
     mutation.mutate(
       {
         effectiveDate,
         revisionType,
-        newBasicSalary: parseFloat(newBasic),
-        newHousingAllowance: parseFloat(newHousing) || 0,
-        newTransportAllowance: parseFloat(newTransport) || 0,
-        newOtherAllowances: parseFloat(newOther) || 0,
+        newBasicSalary: basicNum,
+        newHousingAllowance: housingNum,
+        newTransportAllowance: transportNum,
+        newOtherAllowances: otherNum,
         reason: remarks || undefined,
       },
       {
@@ -390,6 +436,19 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
   const prevTotal = currentTotal ?? ((currentBasic ?? 0) + (currentHousing ?? 0) + (currentTransport ?? 0) + (currentOther ?? 0))
   const displayTotal = computedTotal ?? prevTotal
   const diff = computedTotal != null && prevTotal > 0 ? computedTotal - prevTotal : null
+
+  // Standard order — Basic first, then statutory allowances, then everything
+  // else. Same rank table as action-dialogs.tsx so the layout stays
+  // consistent across Add/Edit Employee, Change Salary, and payslip views.
+  const orderedCatalog = React.useMemo(() => {
+    const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
+    return earningsCatalog.toSorted((a, b) => {
+      const ra = rank[a.category] ?? 99
+      const rb = rank[b.category] ?? 99
+      if (ra !== rb) return ra - rb
+      return a.name.localeCompare(b.name)
+    })
+  }, [earningsCatalog])
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -432,7 +491,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
               </div>
             </div>
 
-            {/* Current package summary */}
+            {/* Current package summary — legacy snapshot of what's on file */}
             {(currentBasic != null || currentHousing != null || currentTransport != null || currentOther != null) && (
               <div className="rounded-lg border bg-muted/30 px-4 py-3 space-y-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Current Package</p>
@@ -452,34 +511,44 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
               </div>
             )}
 
-            {/* Basic salary */}
-            <div className="space-y-1.5">
-              <Label htmlFor="cs-basic" className="text-sm font-medium">
-                Basic Salary <span className="text-muted-foreground font-normal text-xs">(AED)</span> <span className="text-destructive">*</span>
-              </Label>
-              <NumericInput id="cs-basic" placeholder="0.00" value={newBasic} onChange={e => setNewBasic(e.target.value)} className="h-9" />
-            </div>
-
-            {/* Allowances - 3 equal columns */}
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-2">Allowances <span className="font-normal">(optional)</span></p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="cs-housing" className="text-xs text-muted-foreground">Housing</Label>
-                  <NumericInput id="cs-housing" placeholder="0.00" value={newHousing} onChange={e => setNewHousing(e.target.value)} className="h-9" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="cs-transport" className="text-xs text-muted-foreground">Transport</Label>
-                  <NumericInput id="cs-transport" placeholder="0.00" value={newTransport} onChange={e => setNewTransport(e.target.value)} className="h-9" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="cs-other" className="text-xs text-muted-foreground">Other</Label>
-                  <NumericInput id="cs-other" placeholder="0.00" value={newOther} onChange={e => setNewOther(e.target.value)} className="h-9" />
-                </div>
+            {/* Catalog-driven salary inputs */}
+            {orderedCatalog.length === 0 ? (
+              <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+                No active earning components found.
+                <br />
+                <span className="text-xs">
+                  Add or activate components in Organization Settings → Salary Components, then refresh.
+                </span>
               </div>
-            </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {orderedCatalog.map((c) => {
+                  const isBasic = c.category === 'basic'
+                  return (
+                    <div key={c.id} className="space-y-1.5">
+                      <Label htmlFor={`cs-${c.id}`} className="text-sm font-medium">
+                        {c.name} <span className="text-muted-foreground font-normal text-xs">(AED)</span>
+                        {isBasic && <span className="text-destructive ms-1">*</span>}
+                        {c.calculationType === 'percentage_of_basic' && (
+                          <span className="ms-1 text-[10px] uppercase tracking-wider text-muted-foreground">% of basic</span>
+                        )}
+                      </Label>
+                      <NumericInput
+                        id={`cs-${c.id}`}
+                        placeholder={c.calculationType === 'percentage_of_basic' ? '0' : '0.00'}
+                        value={componentAmounts[c.id] ?? ''}
+                        onChange={(ev) =>
+                          setComponentAmounts((prev) => ({ ...prev, [c.id]: ev.target.value }))
+                        }
+                        className="h-9"
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
-            {/* Total package - always visible */}
+            {/* Total package — always visible */}
             <div className="rounded-lg border bg-primary/5 border-primary/20 px-4 py-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -1019,6 +1088,25 @@ export function EmployeeDetailPage() {
   }), [docs])
 
   const e = employee
+
+  // Catalog assignments — used by the Payroll Summary section to render each
+  // active component as its own row instead of the four static fields. Falls
+  // through to legacy display if the employee has no assignments yet.
+  const { data: salaryAssignments } = useEmployeeSalaryComponents(id)
+  const activeAssignments = React.useMemo(
+      () => (salaryAssignments ?? [])
+          .filter((a) => a.isActive)
+          .sort((a, b) => {
+              // Same priority order as the Add/Edit Employee dialog so the
+              // profile, the form, and the payslip all line up.
+              const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
+              const ra = rank[a.category] ?? 99
+              const rb = rank[b.category] ?? 99
+              if (ra !== rb) return ra - rb
+              return a.name.localeCompare(b.name)
+          }),
+      [salaryAssignments],
+  )
 
   // Terminated or suspended employees must not be granted/managed system access
   const isAccessRestricted = ['terminated', 'suspended'].includes(e?.status ?? '')
@@ -2238,10 +2326,36 @@ export function EmployeeDetailPage() {
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                         <div>
-                          <InfoRow label="Basic Salary" value={formatCurrency(e.basicSalary ?? 0)} icon={CreditCard} />
-                          <InfoRow label="Housing Allow." value={formatCurrency(e.housingAllowance ?? 0)} icon={CreditCard} />
-                          <InfoRow label="Transport Allow." value={formatCurrency(e.transportAllowance ?? 0)} icon={CreditCard} />
-                          <InfoRow label="Other Allow." value={formatCurrency(e.otherAllowances ?? 0)} icon={CreditCard} />
+                          {activeAssignments.length > 0 ? (
+                              // Catalog-driven: one row per active assignment.
+                              // For percentage-of-basic components we show
+                              // both the percentage AND the resolved AED
+                              // amount so HR sees what payroll will actually pay.
+                              activeAssignments.map((a) => {
+                                  const amount = Number(a.amount ?? a.catalogAmount ?? 0)
+                                  const basicAmount = Number(activeAssignments.find(x => x.category === 'basic')?.amount ?? 0)
+                                  const isPct = a.calculationType === 'percentage_of_basic'
+                                  const resolvedAed = isPct ? (basicAmount * amount) / 100 : amount
+                                  return (
+                                      <InfoRow
+                                          key={a.componentId}
+                                          label={a.name}
+                                          value={isPct
+                                              ? `${formatCurrency(resolvedAed)} (${amount}% of basic)`
+                                              : formatCurrency(resolvedAed)}
+                                          icon={CreditCard}
+                                      />
+                                  )
+                              })
+                          ) : (
+                              // Legacy fallback — no assignments yet.
+                              <>
+                                  <InfoRow label="Basic Salary" value={formatCurrency(e.basicSalary ?? 0)} icon={CreditCard} />
+                                  <InfoRow label="Housing Allow." value={formatCurrency(e.housingAllowance ?? 0)} icon={CreditCard} />
+                                  <InfoRow label="Transport Allow." value={formatCurrency(e.transportAllowance ?? 0)} icon={CreditCard} />
+                                  <InfoRow label="Other Allow." value={formatCurrency(e.otherAllowances ?? 0)} icon={CreditCard} />
+                              </>
+                          )}
                         </div>
                         <div>
                           <InfoRow label="Total Salary" value={formatCurrency(e.totalSalary ?? 0)} icon={CreditCard} />
@@ -2306,14 +2420,14 @@ export function EmployeeDetailPage() {
                 <BankChangeReviewBanner employeeId={e.id} autoOpenRequestId={reviewRequestId} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
                   <div>
-                    <InfoRow label="Account Name" value={e.accountName} icon={User} />
-                    <InfoRow label="Account Number" value={e.accountNumber} icon={Hash} />
-                    <InfoRow label="Bank Name" value={e.bankName} icon={Building2} />
+                    <InfoRow label="Account Name" value={e.accountName} icon={User} alwaysShow />
+                    <InfoRow label="Account Number" value={e.accountNumber} icon={Hash} alwaysShow />
+                    <InfoRow label="Bank Name" value={e.bankName} icon={Building2} alwaysShow />
                   </div>
                   <div>
-                    <InfoRow label="IBAN" value={e.iban} icon={Hash} />
-                    <InfoRow label="Swift Code" value={e.swiftCode} icon={Hash} />
-                    <InfoRow label="Branch" value={e.bankBranch} icon={Building2} />
+                    <InfoRow label="IBAN" value={e.iban} icon={Hash} alwaysShow />
+                    <InfoRow label="Swift Code" value={e.swiftCode} icon={Hash} alwaysShow />
+                    <InfoRow label="Branch" value={e.bankBranch} icon={Building2} alwaysShow />
                   </div>
                 </div>
               </CardContent>

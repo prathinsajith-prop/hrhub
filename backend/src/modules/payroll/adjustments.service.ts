@@ -192,23 +192,43 @@ export async function syncAdjustmentsForPeriod(
     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
     // Fetch payable employees ('active' + 'onboarding' — see PAYABLE_STATUSES
-    // in payroll.service.ts) with their daily rate basis.
+    // in payroll.service.ts). The daily rate uses the assignment-derived
+    // basic salary so LOP and sick-half-pay match what runPayroll computes
+    // for gross — they MUST share the same basic figure or the deductions
+    // would be wrong relative to the earnings on the same payslip.
+    //
+    // Resolution order: assignment.amount (override) → catalog default → 0.
+    // Fallback to the legacy column when an employee has no Basic assignment
+    // yet (newly created pre-Phase-2B). Same fallback policy as
+    // buildPayslipsAndTotals in payroll.service.ts.
     const emps = await db
         .select({
             id: employees.id,
-            basicSalary: employees.basicSalary,
+            legacyBasic: employees.basicSalary,
+            assignmentBasic: sql<string | null>`
+                (SELECT COALESCE(esc.amount, sc.amount)
+                 FROM employee_salary_components esc
+                 JOIN salary_components sc ON sc.id = esc.component_id
+                 WHERE esc.employee_id = ${employees.id}
+                   AND esc.is_active = true
+                   AND sc.is_active = true
+                   AND sc.kind = 'earning'
+                   AND sc.category = 'basic'
+                 LIMIT 1)
+            `,
         })
         .from(employees)
         .where(and(
             eq(employees.tenantId, tenantId),
             eq(employees.isArchived, false),
-            // Match the payroll-run eligibility filter — see comment in payroll.service.ts.
             inArray(employees.status, ['active', 'onboarding']),
         ))
 
     const dailyRateByEmp = new Map<string, number>()
     for (const e of emps) {
-        dailyRateByEmp.set(e.id, Number(e.basicSalary ?? 0) / 30)
+        // Prefer the assignment-derived basic; fall back to the legacy column.
+        const basic = Number(e.assignmentBasic ?? e.legacyBasic ?? 0)
+        dailyRateByEmp.set(e.id, basic / 30)
     }
     const empIds = emps.map(e => e.id)
     if (empIds.length === 0) {

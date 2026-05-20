@@ -2243,6 +2243,10 @@
         "label": "Shifts",
         "desc": "Working hours and weekly off-days"
       },
+      "salaryComponents": {
+        "label": "Salary Components",
+        "desc": "Earnings, deductions, benefits & corrections catalog"
+      },
       "security": {
         "label": "Security",
         "desc": "Policies, IP allowlist & data"
@@ -2375,6 +2379,139 @@
       "orgDeleted": "Org Deleted",
       "orgDeletedDesc": "Org Deleted Desc",
       "typeToConfirm": "Type the organisation name to confirm"
+    },
+    "salaryComponentsTab": {
+      "title": "Salary Components",
+      "description": "Catalog of earning, deduction, benefit, and correction templates used across payroll.",
+      "addComponent": "Add Component",
+      "kinds": {
+        "earning": "Earning",
+        "deduction": "Deduction",
+        "benefit": "Benefit",
+        "correction": "Correction"
+      },
+      "tabs": {
+        "earnings": "Earnings",
+        "deductions": "Deductions",
+        "benefits": "Benefits",
+        "corrections": "Corrections"
+      },
+      "table": {
+        "name": "Name",
+        "category": "Category",
+        "benefitType": "Benefit Type",
+        "deductionType": "Deduction Type",
+        "correctionType": "Correction Type",
+        "payTypeAmount": "Pay Type · Amount",
+        "frequency": "Frequency",
+        "status": "Status",
+        "actions": "Actions",
+        "payslipPrefix": "Payslip: {{name}}",
+        "percentOfBasic": "{{value}}% of basic",
+        "oneTime": "One Time",
+        "recurring": "Recurring",
+        "active": "Active",
+        "inactive": "Inactive",
+        "toggleHint": "Click to toggle",
+        "edit": "Edit",
+        "delete": "Delete",
+        "systemComponent": "System component — cannot be deleted"
+      },
+      "empty": {
+        "noEarnings": "No earnings yet",
+        "noDeductions": "No deductions yet",
+        "noBenefits": "No benefits yet",
+        "noCorrections": "No corrections yet",
+        "hint": "Add your first {{kind}} using the button above."
+      },
+      "dialog": {
+        "titleEdit": "Edit {{kind}}",
+        "titleNew": "New {{kind}}",
+        "descEarning": "Defines a recurring or one-off earning that appears on payslips.",
+        "descDeduction": "A deduction line that HR can apply on a specific payroll run.",
+        "descBenefit": "A non-cash or scheduled benefit (e.g. medical insurance) tracked alongside payroll.",
+        "descCorrection": "A one-off correction such as a bonus, commission, or leave encashment.",
+        "earningType": "Earning Type",
+        "correctionType": "Correction Type",
+        "category": "Category",
+        "name": "Name",
+        "namePlaceholder": "e.g. {{example}}",
+        "nameInPayslip": "Name in payslip",
+        "nameInPayslipPlaceholder": "Printed on the payslip",
+        "nameInPayslipAr": "Name in payslip (Arabic)",
+        "nameInPayslipArPlaceholder": "optional — Arabic display",
+        "payType": "Pay type",
+        "payTypeFixed": "Fixed",
+        "payTypeFixedHelp": "Same amount every month",
+        "payTypeVariable": "Variable",
+        "payTypeVariableHelp": "Differs per payroll",
+        "calculation": "Calculation",
+        "calcFlat": "Flat amount",
+        "calcFlatHelp": "Fixed AED value",
+        "calcPercentage": "% of basic",
+        "calcPercentageHelp": "Percentage of basic salary",
+        "percentage": "Percentage",
+        "amountAed": "Amount (AED)",
+        "percentagePlaceholder": "0–100",
+        "amountPlaceholder": "0.00",
+        "proRata": "Calculate on pro-rata basis",
+        "proRataHelp": "Reduce automatically when employees joined or left mid-month.",
+        "frequency": "Frequency",
+        "freqOneTime": "One-time",
+        "freqOneTimeHelp": "Applied on a single payroll",
+        "freqRecurring": "Recurring",
+        "freqRecurringHelp": "Every payroll until deactivated",
+        "markActive": "Mark as active",
+        "schemesTitle": "Applicable Social Security Benefits",
+        "schemesDesc": "Schemes that include this earning when computing employer and employee contributions.",
+        "headsUp": "Heads up:",
+        "headsUpBody": "Once you associate this component with an employee or a processed payslip, only the name and amount stay editable. Amount changes apply only to new payroll runs.",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saveChanges": "Save changes"
+      },
+      "categories": {
+        "basic": "Basic",
+        "housing": "Housing Allowance",
+        "transport": "Transport Allowance",
+        "cost_of_living": "Cost of Living Allowance",
+        "children_social": "Children Social Allowance",
+        "social": "Social Allowance",
+        "custom_allowance": "Custom Allowance",
+        "withheld_salary": "Withheld Salary",
+        "salary_advance": "Salary Advance",
+        "fines_damages": "Fines and Damages",
+        "notice_pay": "Notice Pay",
+        "custom": "Custom",
+        "medical_insurance": "Medical Insurance",
+        "bonus": "Bonus",
+        "commission": "Commission",
+        "leave_encashment": "Leave Encashment",
+        "annual_leave_salary": "Annual Leave Salary"
+      },
+      "schemes": {
+        "GPSSA": "General Pension And Social Security Authority",
+        "ADPF": "Abu Dhabi Pension Fund",
+        "GOSI": "General Organization for Social Insurance",
+        "SIO": "Social Insurance Organization",
+        "SPF": "Social Protection Fund",
+        "PIFSS": "Public Institution for Social Security",
+        "GRSIA": "General Retirement and Social Insurance Authority"
+      },
+      "confirm": {
+        "deleteTitle": "Delete \"{{name}}\"?",
+        "deleteDesc": "This component will no longer appear when adjusting payroll. Existing payslips that already used it stay unchanged.",
+        "deleting": "Deleting…",
+        "delete": "Delete",
+        "cancel": "Cancel"
+      },
+      "toast": {
+        "activated": "{{name}} activated",
+        "deactivated": "{{name}} deactivated",
+        "deleted": "{{name}} deleted",
+        "added": "Component added",
+        "updated": "Component updated"
+      }
     }
   },
   "subscriptionPage": {
