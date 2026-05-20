@@ -2243,6 +2243,10 @@
         "label": "Shifts",
         "desc": "Working hours and weekly off-days"
       },
+      "salaryComponents": {
+        "label": "Salary Components",
+        "desc": "Earnings, deductions, benefits & corrections catalog"
+      },
       "security": {
         "label": "Security",
         "desc": "Policies, IP allowlist & data"

@@ -1,6 +1,6 @@
 import { eq, and, desc, gte, lte, inArray, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/index.js'
-import { payrollRuns, payslips, employees, leaveRequests, orgUnits, tenants } from '../../db/schema/index.js'
+import { payrollRuns, payslips, employees, employeeSalaryComponents, leaveRequests, orgUnits, salaryComponents, tenants } from '../../db/schema/index.js'
 import { syncAdjustmentsForPeriod, getAdjustmentTotalsByEmployee } from './adjustments.service.js'
 import type { InferInsertModel } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
@@ -44,8 +44,13 @@ export async function listPayrollRuns(tenantId: string, params: { year?: number;
         new Map(draftRows.map(r => [`${r.year}-${r.month}`, { year: r.year, month: r.month }])).values(),
     )
 
-    const [emps, ...adjResults] = await Promise.all([
-        getPayableEmployees(tenantId),
+    const emps = await getPayableEmployees(tenantId)
+    // Now that we have the employee IDs, fetch adjustments (per period) and
+    // earnings (shared across all periods — assignments don't change month
+    // to month) in parallel. One pass for any number of drafts in the same
+    // tenant — preview cost stays bounded.
+    const [earningsByEmp, ...adjResults] = await Promise.all([
+        resolveEmployeeEarnings(tenantId, emps.map(e => e.id)),
         ...uniquePeriods.map(p => getAdjustmentTotalsByEmployee(tenantId, p.year, p.month)),
     ])
     const adjByPeriod = new Map<string, typeof adjResults[number]>(
@@ -62,7 +67,7 @@ export async function listPayrollRuns(tenantId: string, params: { year?: number;
             return previewPayrollRun(
                 tenantId,
                 { id: r.id, year: r.year, month: r.month, status: r.status as string },
-                { emps, adjustmentTotals },
+                { emps, adjustmentTotals, earningsByEmp },
             ).catch(() => null)
         }),
     )
@@ -350,6 +355,89 @@ function parseLocalDate(s: string | null | undefined): Date | null {
     return new Date(y, m - 1, d)
 }
 
+/** One resolved earning line for an employee on a specific period. */
+interface ResolvedEarning {
+    componentId: string
+    category: string
+    /** AED amount for this earning before proration. Percentage-of-basic
+        components are already converted to absolute AED here. */
+    amount: number
+}
+
+/**
+ * Earnings derived from the salary-components catalog + per-employee
+ * assignments. This is the source of truth payroll uses; the legacy
+ * `employees.basic_salary` etc. columns serve as a backstop only for
+ * employees that don't have any assignments yet (newly-created employee,
+ * pre-backfill data, etc.).
+ *
+ * Returns a Map keyed by employee_id. Inside each entry: the resolved
+ * earnings array + the computed basic figure (already flat AED). The
+ * basic figure is split out separately because percentage-of-basic
+ * components need it as their multiplier and we want to compute it once.
+ *
+ * Performance: one query joining assignments + components for ALL payable
+ * employees in the tenant — O(N + M) where N = employees and M = total
+ * assignments. Way better than per-employee fetches inside the math loop.
+ */
+async function resolveEmployeeEarnings(
+    tenantId: string,
+    empIds: string[],
+): Promise<Map<string, { basic: number; earnings: ResolvedEarning[] }>> {
+    const result = new Map<string, { basic: number; earnings: ResolvedEarning[] }>()
+    if (empIds.length === 0) return result
+
+    // Active assignments joined with their catalog component. The catalog
+    // tells us flat vs percentage and the default amount; the assignment
+    // can override the amount. We also pre-filter to active components +
+    // active assignments + earning kind so we don't have to filter in JS.
+    const rows = await db
+        .select({
+            employeeId: employeeSalaryComponents.employeeId,
+            componentId: salaryComponents.id,
+            category: salaryComponents.category,
+            calculationType: salaryComponents.calculationType,
+            componentAmount: salaryComponents.amount,
+            assignmentAmount: employeeSalaryComponents.amount,
+        })
+        .from(employeeSalaryComponents)
+        .innerJoin(salaryComponents, eq(employeeSalaryComponents.componentId, salaryComponents.id))
+        .where(and(
+            eq(employeeSalaryComponents.tenantId, tenantId),
+            eq(employeeSalaryComponents.isActive, true),
+            eq(salaryComponents.isActive, true),
+            eq(salaryComponents.kind, 'earning'),
+            inArray(employeeSalaryComponents.employeeId, empIds),
+        ))
+
+    // First pass: compute the Basic for each employee. Percentage-of-basic
+    // components need this as their multiplier in the second pass.
+    const basicByEmp = new Map<string, number>()
+    for (const r of rows) {
+        if (r.category !== 'basic') continue
+        // Basic is always flat AED — even if catalog says percentage we treat
+        // the assignment's amount as the AED value.
+        const amt = Number(r.assignmentAmount ?? r.componentAmount ?? 0)
+        basicByEmp.set(r.employeeId, amt)
+    }
+
+    // Second pass: resolve every earning, converting percentage-of-basic
+    // into absolute AED using the basic we computed above.
+    for (const r of rows) {
+        const basic = basicByEmp.get(r.employeeId) ?? 0
+        const rawAmount = Number(r.assignmentAmount ?? r.componentAmount ?? 0)
+        const amount = r.calculationType === 'percentage_of_basic'
+            ? (basic * rawAmount) / 100
+            : rawAmount
+
+        const entry = result.get(r.employeeId) ?? { basic, earnings: [] }
+        entry.earnings.push({ componentId: r.componentId, category: r.category, amount })
+        result.set(r.employeeId, entry)
+    }
+
+    return result
+}
+
 /**
  * Pure function — given employees, adjustments, and a period, returns the
  * per-employee payslip rows + the run totals. No DB writes. runPayroll calls
@@ -357,6 +445,11 @@ function parseLocalDate(s: string | null | undefined): Date | null {
  *
  * `payrollRunId` is included in the payslip rows but only matters when the
  * caller intends to persist — preview ignores the values inside `payslipValues`.
+ *
+ * Earnings come from the salary-components catalog via `earningsByEmp`. If an
+ * employee has no assignments (newly created, pre-migration etc.), we fall
+ * back to the legacy static fields on the employee row so payroll keeps
+ * producing a sensible result and HR sees no regression.
  */
 function buildPayslipsAndTotals(
     tenantId: string,
@@ -365,6 +458,7 @@ function buildPayslipsAndTotals(
     month: number,
     emps: PayableEmployee[],
     adjustmentTotals: Awaited<ReturnType<typeof getAdjustmentTotalsByEmployee>>,
+    earningsByEmp: Map<string, { basic: number; earnings: ResolvedEarning[] }>,
 ) {
     const daysInMonth = new Date(year, month, 0).getDate()
     const monthStart = new Date(year, month - 1, 1)
@@ -375,10 +469,30 @@ function buildPayslipsAndTotals(
     let totalNet = 0
 
     const payslipValues: InferInsertModel<typeof payslips>[] = emps.map(emp => {
-        const basic = Number(emp.basicSalary ?? 0)
-        const housing = Number(emp.housingAllowance ?? 0)
-        const transport = Number(emp.transportAllowance ?? 0)
-        const other = Number(emp.otherAllowances ?? 0)
+        // ── Earnings: resolved from the catalog if assignments exist; fall
+        // back to the legacy static fields when an employee has nothing
+        // assigned yet. The static-fields path is the safety net for
+        // newly-created employees (the Add Employee flow today still writes
+        // the four columns directly; a follow-up will switch it to creating
+        // assignments).
+        const resolved = earningsByEmp.get(emp.id)
+        let basic: number, housing: number, transport: number, other: number
+        if (resolved && resolved.earnings.length > 0) {
+            basic = resolved.basic
+            housing = resolved.earnings.filter(e => e.category === 'housing').reduce((s, e) => s + e.amount, 0)
+            transport = resolved.earnings.filter(e => e.category === 'transport').reduce((s, e) => s + e.amount, 0)
+            // Every other earning category (cost_of_living, social, custom, …)
+            // rolls up into "other" on the persisted payslip columns — keeps
+            // the payslip shape stable while letting the catalog grow.
+            other = resolved.earnings
+                .filter(e => !['basic', 'housing', 'transport'].includes(e.category))
+                .reduce((s, e) => s + e.amount, 0)
+        } else {
+            basic = Number(emp.basicSalary ?? 0)
+            housing = Number(emp.housingAllowance ?? 0)
+            transport = Number(emp.transportAllowance ?? 0)
+            other = Number(emp.otherAllowances ?? 0)
+        }
 
         let workedDays = daysInMonth
         const joinDate = parseLocalDate(emp.joinDate)
@@ -463,6 +577,9 @@ function buildPayslipsAndTotals(
 export interface PayrollPreloaded {
     emps: PayableEmployee[]
     adjustmentTotals: Awaited<ReturnType<typeof getAdjustmentTotalsByEmployee>>
+    /** Pre-resolved earnings (assignments + catalog). Optional — falls back
+     *  to an internal resolve if absent. */
+    earningsByEmp?: Awaited<ReturnType<typeof resolveEmployeeEarnings>>
 }
 
 export async function previewPayrollRun(
@@ -481,10 +598,12 @@ export async function previewPayrollRun(
         return { totalEmployees: 0, totalGross: 0, totalDeductions: 0, totalNet: 0 }
     }
 
-    const adjustmentTotals = preloaded?.adjustmentTotals
-        ?? await getAdjustmentTotalsByEmployee(tenantId, run.year, run.month)
+    const [adjustmentTotals, earningsByEmp] = await Promise.all([
+        preloaded?.adjustmentTotals ?? getAdjustmentTotalsByEmployee(tenantId, run.year, run.month),
+        preloaded?.earningsByEmp ?? resolveEmployeeEarnings(tenantId, emps.map(e => e.id)),
+    ])
     const { totalEmployees, totalGross, totalDeductions, totalNet } =
-        buildPayslipsAndTotals(tenantId, run.id, run.year, run.month, emps, adjustmentTotals)
+        buildPayslipsAndTotals(tenantId, run.id, run.year, run.month, emps, adjustmentTotals, earningsByEmp)
     return { totalEmployees, totalGross, totalDeductions, totalNet }
 }
 
@@ -523,12 +642,15 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
     // Refresh auto-imported adjustment rows (LOP / sick / loan), then pull
     // the per-employee totals — HR-created manual rows are folded in here too.
     await syncAdjustmentsForPeriod(tenantId, run.year, run.month)
-    const adjustmentTotals = await getAdjustmentTotalsByEmployee(tenantId, run.year, run.month)
+    const [adjustmentTotals, earningsByEmp] = await Promise.all([
+        getAdjustmentTotalsByEmployee(tenantId, run.year, run.month),
+        resolveEmployeeEarnings(tenantId, activeEmps.map(e => e.id)),
+    ])
 
     // Run the calculation through the shared helper so a draft preview and
     // the real run cannot drift in their math.
     const { payslipValues, totalGross, totalDeductions, totalNet } = buildPayslipsAndTotals(
-        tenantId, payrollRunId, run.year, run.month, activeEmps, adjustmentTotals,
+        tenantId, payrollRunId, run.year, run.month, activeEmps, adjustmentTotals, earningsByEmp,
     )
 
     if (payslipValues.length === 0) {
@@ -713,6 +835,9 @@ async function getDraftPayslipsPreview(tenantId: string, run: { id: string; year
 
     if (emps.length === 0) return []
 
+    // Resolve catalog earnings for the same employee list.
+    const earningsByEmp = await resolveEmployeeEarnings(tenantId, emps.map(e => e.id))
+
     // Strip down to the PayableEmployee shape for the math helper.
     const mathInputs: PayableEmployee[] = emps.map(e => ({
         id: e.id,
@@ -724,7 +849,7 @@ async function getDraftPayslipsPreview(tenantId: string, run: { id: string; year
         contractEndDate: e.contractEndDate,
     }))
     const { payslipValues } = buildPayslipsAndTotals(
-        tenantId, run.id, run.year, run.month, mathInputs, adjustmentTotals,
+        tenantId, run.id, run.year, run.month, mathInputs, adjustmentTotals, earningsByEmp,
     )
 
     // Merge the math output with the employee display fields. Iterate by the

@@ -336,6 +336,44 @@ export interface PayrollAdjustment {
   createdByName: string | null
 }
 
+// Salary Components (catalog)
+export type SalaryComponentKind = 'earning' | 'deduction' | 'benefit' | 'correction'
+export type SalaryComponentPayType = 'fixed' | 'variable'
+export type SalaryComponentCalcType = 'flat' | 'percentage_of_basic'
+export type SalaryComponentFrequency = 'one_time' | 'recurring'
+
+/** GCC social-security schemes a tenant may opt earnings into. */
+export const SOCIAL_SECURITY_SCHEMES = ['GPSSA', 'ADPF', 'GOSI', 'SIO', 'SPF', 'PIFSS', 'GRSIA'] as const
+export type SocialSecurityScheme = typeof SOCIAL_SECURITY_SCHEMES[number]
+
+export const EARNING_CATEGORIES = ['basic', 'housing', 'transport', 'cost_of_living', 'children_social', 'social', 'custom_allowance'] as const
+export const DEDUCTION_CATEGORIES = ['withheld_salary', 'salary_advance', 'fines_damages', 'notice_pay', 'custom'] as const
+export const BENEFIT_CATEGORIES = ['medical_insurance', 'custom'] as const
+export const CORRECTION_CATEGORIES = ['bonus', 'commission', 'leave_encashment', 'notice_pay', 'annual_leave_salary', 'custom'] as const
+
+export interface SalaryComponent {
+  id: string
+  tenantId: string
+  kind: SalaryComponentKind
+  category: string
+  name: string
+  nameInPayslip: string
+  nameInPayslipAr: string | null
+  // Earning-only
+  payType: SalaryComponentPayType | null
+  calculationType: SalaryComponentCalcType | null
+  amount: string | null
+  proRata: boolean
+  applicableSocialSecurity: SocialSecurityScheme[]
+  // Deduction / benefit
+  frequency: SalaryComponentFrequency | null
+  // Status
+  isActive: boolean
+  isSystem: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 // Leave
 export type LeaveType = 'annual' | 'sick' | 'maternity' | 'paternity' | 'hajj' | 'compassionate' | 'unpaid'
 export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
