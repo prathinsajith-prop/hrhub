@@ -22,7 +22,7 @@ import { sendEmail, onboardingUploadLinkEmail } from '../../plugins/email.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { db } from '../../db/index.js'
 import { onboardingChecklists, onboardingSteps, onboardingStepRequiredDocs, documents, tenants, employees } from '../../db/schema/index.js'
-import { eq, and, isNull, inArray } from 'drizzle-orm'
+import { eq, and, isNull, inArray, ne } from 'drizzle-orm'
 import { buildS3Key, uploadObject } from '../../plugins/s3.js'
 import { fileTypeFromBuffer } from 'file-type'
 import { loadEnv } from '../../config/env.js'
@@ -57,6 +57,68 @@ function getStepSuggestions(title: string) {
         if (lower.includes(key)) return docs
     }
     return []
+}
+
+/**
+ * Move a step forward based on the employee's uploads.
+ *
+ *  - If every mandatory required-doc has a matching non-rejected upload, mark
+ *    the step `completed` and stamp today's `completedDate`.
+ *  - If the step has **no** mandatory required-docs configured, the upload
+ *    itself is the only completion signal we have. Treat it as fulfilling the
+ *    step rather than leaving it stuck at `in_progress` forever. Most tenants
+ *    use the default template steps without configuring per-step docs, so
+ *    this branch is the common case.
+ *  - Else, if the step is still `pending`/`overdue`, bump it to `in_progress`
+ *    so HR can see something is happening.
+ *  - Never downgrade a step that's already `completed`.
+ */
+async function autoAdvanceStepAfterUpload(opts: {
+    tenantId: string
+    checklistId: string
+    employeeId: string
+    stepId: string
+}): Promise<void> {
+    const [currentStep] = await db
+        .select({ status: onboardingSteps.status })
+        .from(onboardingSteps)
+        .where(eq(onboardingSteps.id, opts.stepId))
+        .limit(1)
+    if (!currentStep || currentStep.status === 'completed') return
+
+    const reqs = await db
+        .select({ category: onboardingStepRequiredDocs.category, docType: onboardingStepRequiredDocs.docType })
+        .from(onboardingStepRequiredDocs)
+        .where(and(
+            eq(onboardingStepRequiredDocs.stepId, opts.stepId),
+            eq(onboardingStepRequiredDocs.isMandatory, true),
+        ))
+
+    // Nothing mandatory configured → the just-completed upload is the signal.
+    let allFulfilled = reqs.length === 0
+    if (reqs.length > 0) {
+        const uploaded = await db
+            .select({ category: documents.category, docType: documents.docType })
+            .from(documents)
+            .where(and(
+                eq(documents.tenantId, opts.tenantId),
+                eq(documents.employeeId, opts.employeeId),
+                eq(documents.stepId, opts.stepId),
+                isNull(documents.deletedAt),
+                ne(documents.status, 'rejected'),
+            ))
+        const have = new Set(uploaded.map(d => `${d.category}::${d.docType}`))
+        allFulfilled = reqs.every(r => have.has(`${r.category}::${r.docType}`))
+    }
+
+    if (allFulfilled) {
+        await updateStep(opts.tenantId, opts.checklistId, opts.stepId, {
+            status: 'completed',
+            completedDate: new Date().toISOString().split('T')[0],
+        })
+    } else if (currentStep.status === 'pending' || currentStep.status === 'overdue') {
+        await updateStep(opts.tenantId, opts.checklistId, opts.stepId, { status: 'in_progress' })
+    }
 }
 
 export default async function (fastify: any): Promise<void> {
@@ -632,6 +694,25 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'] as string | undefined,
         })
+
+        // Auto-progress the step based on what's now uploaded. Two transitions:
+        //
+        //   pending/overdue → in_progress    (first upload received)
+        //   in_progress     → completed      (every mandatory required-doc has
+        //                                     at least one non-rejected upload)
+        //
+        // Going through updateStep() recomputes the checklist's `progress`
+        // counter and graduates the employee from probation → active when
+        // everything hits 100. Failures here are non-fatal — the upload itself
+        // already succeeded.
+        if (stepId) {
+            await autoAdvanceStepAfterUpload({
+                tenantId: claims.tenantId,
+                checklistId: claims.checklistId,
+                employeeId: claims.employeeId,
+                stepId,
+            }).catch((err) => request.log?.warn?.({ err }, 'auto step-advance after upload failed'))
+        }
 
         return reply.code(201).send({ data: doc })
     })

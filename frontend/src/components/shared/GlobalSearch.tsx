@@ -112,7 +112,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                             onSelect={() => handleSelect(item.path)}
                             className="gap-2 cursor-pointer"
                         >
-                            <item.icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <item.icon className="size-4 text-muted-foreground shrink-0" />
                             <span>{item.label}</span>
                         </CommandItem>
                     ))}
@@ -129,7 +129,7 @@ export function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) {
                                     onSelect={() => handleSelect(`/employees/${emp.id}`)}
                                     className="gap-2 cursor-pointer"
                                 >
-                                    <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <Users className="size-4 text-muted-foreground shrink-0" />
                                     <div className="min-w-0">
                                         <span className="block truncate">
                                             {emp.fullName ?? `${emp.firstName} ${emp.lastName}`}

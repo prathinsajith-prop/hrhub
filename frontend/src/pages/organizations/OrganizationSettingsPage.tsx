@@ -81,7 +81,7 @@ export function OrganizationSettingsPage() {
                 orientation="vertical"
                 className="xl:grid xl:grid-cols-[240px_minmax(0,1fr)] xl:gap-8 xl:items-start"
             >
-                {/* Mobile / Tablet: OverflowTabsList — same pattern as EmployeeDetailPage */}
+                {/* Mobile / Tablet: OverflowTabsList - same pattern as EmployeeDetailPage */}
                 <div className="xl:hidden">
                     <OverflowTabsList
                         tabs={visibleTabs}
@@ -109,7 +109,7 @@ export function OrganizationSettingsPage() {
                                         )}
                                     >
                                         <tab.icon className={cn(
-                                            'h-4 w-4 shrink-0 transition-colors',
+                                            'size-4 shrink-0 transition-colors',
                                             isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
                                         )} />
                                         <div className="flex flex-col items-start min-w-0">
@@ -119,7 +119,7 @@ export function OrganizationSettingsPage() {
                                             </span>
                                         </div>
                                         {isActive && (
-                                            <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                                            <span className="ml-auto size-1.5 rounded-full bg-primary shrink-0" />
                                         )}
                                     </button>
                                 )

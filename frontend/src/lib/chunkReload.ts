@@ -9,7 +9,7 @@
 //   2. Force-reloads the page so the browser fetches the new index.html and
 //      the new chunk hashes.
 //   3. Guards against infinite reload loops by stamping a sessionStorage key
-//      — if a chunk load fails *again* after reloading, we surface the real
+//      - if a chunk load fails *again* after reloading, we surface the real
 //      error instead of reloading endlessly.
 
 const RELOAD_FLAG = 'hrhub.chunkReload.ts'
@@ -39,11 +39,11 @@ export function isChunkLoadError(err: unknown): boolean {
 /**
  * Reload the page once. Returns true if a reload was triggered; false if a
  * reload was suppressed (we already reloaded recently and the error is still
- * happening — surface the real error instead of looping).
+ * happening - surface the real error instead of looping).
  *
  * Briefly paints an "Updating to the latest version…" overlay before the
  * reload so the screen doesn't just flash blank. The reload is delayed by
- * ~600 ms — long enough for the user to read the message, short enough to
+ * ~600 ms - long enough for the user to read the message, short enough to
  * stay snappy.
  */
 export function tryReloadForChunkError(): boolean {
@@ -72,7 +72,7 @@ let overlayInstalled = false
 
 /**
  * Inject a lightweight inline overlay so we don't depend on any UI library
- * during the reload — the React tree may already be in a broken state when
+ * during the reload - the React tree may already be in a broken state when
  * we're called. Stays up only until the reload tears the page down.
  */
 function showUpdatingOverlay(): void {
@@ -112,7 +112,7 @@ export function installChunkReloadListeners(): void {
     window.addEventListener('vite:preloadError', (event) => {
         if (tryReloadForChunkError()) event.preventDefault?.()
     })
-    // Unhandled `import()` rejections — covers cases where the user navigates
+    // Unhandled `import()` rejections - covers cases where the user navigates
     // before the lazy import is awaited inside a Suspense boundary.
     window.addEventListener('unhandledrejection', (event) => {
         if (isChunkLoadError(event.reason)) {

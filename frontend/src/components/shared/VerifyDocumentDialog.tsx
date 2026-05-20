@@ -87,7 +87,7 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
         let cancelled = false
         api.get<{ data: { downloadUrl: string } }>(`/documents/${document.id}/download-url`)
             .then(r => { if (!cancelled) setPreviewUrl(r.data.downloadUrl) })
-            .catch(() => { /* ignore — preview is optional */ })
+            .catch(() => { /* ignore - preview is optional */ })
             .finally(() => { if (!cancelled) setPreviewLoading(false) })
         return () => { cancelled = true }
     }, [open, document])
@@ -130,7 +130,7 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
             <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Shield className="h-5 w-5 text-blue-600" />
+                        <Shield className="size-5 text-blue-600" />
                         Verify Document
                     </DialogTitle>
                 </DialogHeader>
@@ -166,7 +166,7 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
                         {/* Preview */}
                         <div className="lg:col-span-2 border rounded-lg bg-gray-50 overflow-hidden flex items-center justify-center min-h-[260px]">
                             {previewLoading ? (
-                                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                                <Loader2 className="size-6 animate-spin text-gray-400" />
                             ) : previewUrl ? (
                                 isPdf ? (
                                     <iframe src={previewUrl} className="w-full h-[420px] border-0" title="Document preview" />
@@ -174,16 +174,16 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
                                     <img src={previewUrl} alt="Document preview" className="max-h-[420px] max-w-full object-contain" />
                                 ) : (
                                     <div className="text-center space-y-2">
-                                        <FileText className="h-8 w-8 text-gray-400 mx-auto" />
+                                        <FileText className="size-8 text-gray-400 mx-auto" />
                                         <p className="text-sm text-gray-600">{fileName}</p>
-                                        <Button size="sm" variant="outline" leftIcon={<ExternalLink className="h-3.5 w-3.5" />} onClick={() => window.open(previewUrl, '_blank')}>
+                                        <Button size="sm" variant="outline" leftIcon={<ExternalLink className="size-3.5" />} onClick={() => window.open(previewUrl, '_blank')}>
                                             Open in new tab
                                         </Button>
                                     </div>
                                 )
                             ) : (
                                 <div className="text-center text-sm text-gray-500">
-                                    <FileText className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                                    <FileText className="size-8 text-gray-300 mx-auto mb-2" />
                                     Preview unavailable
                                 </div>
                             )}
@@ -192,7 +192,7 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
                         {/* Audit log */}
                         <div className="border rounded-lg bg-white overflow-hidden flex flex-col">
                             <div className="px-3 py-2 border-b bg-gray-50 flex items-center gap-1.5">
-                                <History className="h-3.5 w-3.5 text-gray-500" />
+                                <History className="size-3.5 text-gray-500" />
                                 <p className="text-[11px] font-semibold text-gray-700 uppercase tracking-wide">Audit log</p>
                             </div>
                             <div className="flex-1 overflow-y-auto p-2 space-y-1.5 max-h-[420px]">
@@ -204,8 +204,8 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
                                         const tone = ACTION_TONE[e.action] ?? 'text-gray-600 bg-gray-50'
                                         return (
                                             <div key={e.id} className="flex gap-2 p-2 rounded-md hover:bg-gray-50">
-                                                <span className={`h-6 w-6 rounded-full flex items-center justify-center shrink-0 ${tone}`}>
-                                                    <Icon className="h-3 w-3" />
+                                                <span className={`size-6 rounded-full flex items-center justify-center shrink-0 ${tone}`}>
+                                                    <Icon className="size-3" />
                                                 </span>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-[11px] font-medium text-gray-800 capitalize">{labelFor(e.action)}</p>
@@ -227,12 +227,12 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
                     {/* Reject reason area (toggled) */}
                     {rejectMode && (
                         <div className="border border-red-200 rounded-lg bg-red-50 p-3 space-y-2">
-                            <label className="text-xs font-semibold text-red-800">Reason for rejection (will be emailed to the employee)</label>
+                            <span className="text-xs font-semibold text-red-800">Reason for rejection (will be emailed to the employee)</span>
                             <textarea
                                 value={reason}
                                 onChange={(e) => setReason(e.target.value)}
                                 rows={3}
-                                placeholder="e.g. Document is blurry — please re-upload a clear scan."
+                                placeholder="e.g. Document is blurry - please re-upload a clear scan."
                                 className="w-full text-sm rounded-md border border-red-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-400/40"
                             />
                         </div>
@@ -241,17 +241,17 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
                     {/* Action bar */}
                     <div className="flex flex-wrap items-center justify-end gap-2 pt-1 border-t pt-3">
                         {previewUrl && (
-                            <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => window.open(previewUrl, '_blank')}>
+                            <Button variant="outline" size="sm" leftIcon={<Download className="size-3.5" />} onClick={() => window.open(previewUrl, '_blank')}>
                                 Open file
                             </Button>
                         )}
                         <div className="flex-1" />
                         {!rejectMode ? (
                             <>
-                                <Button variant="outline" size="sm" className="border-red-200 text-red-700 hover:bg-red-50" leftIcon={<XCircle className="h-3.5 w-3.5" />} onClick={() => setRejectMode(true)}>
+                                <Button variant="outline" size="sm" className="border-red-200 text-red-700 hover:bg-red-50" leftIcon={<XCircle className="size-3.5" />} onClick={() => setRejectMode(true)}>
                                     Reject
                                 </Button>
-                                <Button size="sm" leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />} onClick={handleApprove} loading={verify.isPending}>
+                                <Button size="sm" leftIcon={<CheckCircle2 className="size-3.5" />} onClick={handleApprove} loading={verify.isPending}>
                                     Approve
                                 </Button>
                             </>
@@ -260,7 +260,7 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
                                 <Button variant="ghost" size="sm" onClick={() => { setRejectMode(false); setReason('') }}>
                                     Cancel
                                 </Button>
-                                <Button variant="destructive" size="sm" leftIcon={<XCircle className="h-3.5 w-3.5" />} onClick={handleReject} loading={reject.isPending}>
+                                <Button variant="destructive" size="sm" leftIcon={<XCircle className="size-3.5" />} onClick={handleReject} loading={reject.isPending}>
                                     Confirm Reject
                                 </Button>
                             </>
@@ -276,7 +276,7 @@ function ContextItem({ label, icon: Icon, children }: { label: string; icon: typ
     return (
         <div className="border rounded-lg p-3 bg-white">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1 mb-1">
-                <Icon className="h-3 w-3" />{label}
+                <Icon className="size-3" />{label}
             </p>
             {children}
         </div>

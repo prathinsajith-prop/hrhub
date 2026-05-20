@@ -1,5 +1,5 @@
 /**
- * Hybrid transport — picks GET (compact query string) or POST (JSON body) for
+ * Hybrid transport - picks GET (compact query string) or POST (JSON body) for
  * search/list endpoints. Switches to POST automatically when the URL would
  * exceed the safe length threshold (default 2000 chars), avoiding 414 errors
  * on long filter expressions.
@@ -15,7 +15,7 @@ import { buildSearchQuery } from './query-builder'
 const MAX_GET_URL_LENGTH = 2000
 
 export interface RunSearchOptions<T> {
-    /** Module path, e.g. "/employees" — `/search` is appended for POST. */
+    /** Module path, e.g. "/employees" - `/search` is appended for POST. */
     path: string
     /** Search text. */
     q?: string
@@ -31,7 +31,7 @@ export interface RunSearchOptions<T> {
     extraQuery?: Record<string, string | number | undefined>
     /** Optional request signal. */
     signal?: AbortSignal
-    /** Type guard / response shape — pass-through. */
+    /** Type guard / response shape - pass-through. */
     select?: (raw: unknown) => T
 }
 

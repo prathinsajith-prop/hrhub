@@ -102,7 +102,7 @@ export function MyLoansPage() {
                 description={t('loans.myPageDesc')}
                 actions={
                     <Button onClick={() => setRequestOpen(true)}>
-                        <Plus className="h-4 w-4 mr-1.5" />
+                        <Plus className="size-4 mr-1.5" />
                         {t('loans.requestLoan')}
                     </Button>
                 }
@@ -133,7 +133,7 @@ export function MyLoansPage() {
                             ) : loans.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                                        <Banknote className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                                        <Banknote className="size-10 mx-auto mb-2 opacity-30" />
                                         <p>{t('loans.noMyLoans')}</p>
                                     </td>
                                 </tr>

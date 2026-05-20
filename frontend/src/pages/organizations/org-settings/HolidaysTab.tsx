@@ -97,7 +97,7 @@ export function HolidaysTab() {
                             onClick={() => setYear(y => y - 1)}
                             aria-label={t('orgSettings.holidays.previousYear')}
                         >
-                            <ChevronLeft className="h-4 w-4" />
+                            <ChevronLeft className="size-4" />
                         </Button>
                         <span className="px-3 text-sm font-semibold tabular-nums">{year}</span>
                         <Button
@@ -106,7 +106,7 @@ export function HolidaysTab() {
                             onClick={() => setYear(y => y + 1)}
                             aria-label={t('orgSettings.holidays.nextYear')}
                         >
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="size-4" />
                         </Button>
                         {year !== thisYear && (
                             <Button
@@ -131,7 +131,7 @@ export function HolidaysTab() {
                         </Button>
                         <Button
                             size="sm"
-                            leftIcon={<Plus className="h-3.5 w-3.5" />}
+                            leftIcon={<Plus className="size-3.5" />}
                             onClick={() => {
                                 setShowForm(s => !s)
                                 setForm(f => ({ ...f, date: `${year}-01-01` }))
@@ -205,12 +205,12 @@ export function HolidaysTab() {
             {/* Holiday list */}
             {isLoading ? (
                 <div className="space-y-3">
-                    {[1, 2, 3].map(n => <Skeleton key={n} className="h-14 w-full" />)}
+                    {[1, 2, 3].map(n => <Skeleton key={`skeleton-${n}`} className="h-14 w-full" />)}
                 </div>
             ) : sorted.length === 0 ? (
                 <Card>
                     <div className="text-center py-14 text-muted-foreground">
-                        <CalendarDays className="h-10 w-10 mx-auto mb-3 opacity-25" />
+                        <CalendarDays className="size-10 mx-auto mb-3 opacity-25" />
                         <p className="text-sm font-medium">{t('orgSettings.holidays.noHolidays', { year })}</p>
                         <p className="text-xs mt-1">
                             {t('orgSettings.holidays.noHolidaysHint')}
@@ -235,15 +235,15 @@ export function HolidaysTab() {
                                         className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/20 transition-colors"
                                     >
                                         <div className="flex items-center gap-3 min-w-0">
-                                            <div className="h-9 w-9 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0">
-                                                <CalendarDays className="h-4 w-4 text-rose-500" />
+                                            <div className="size-9 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0">
+                                                <CalendarDays className="size-4 text-rose-500" />
                                             </div>
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <p className="text-sm font-medium">{h.name}</p>
                                                     {h.isRecurring && (
                                                         <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 border border-blue-200 text-blue-700 px-1.5 py-0.5 rounded-full">
-                                                            <Repeat2 className="h-2.5 w-2.5" />
+                                                            <Repeat2 className="size-2.5" />
                                                             {t('orgSettings.holidays.recurring')}
                                                         </span>
                                                     )}
@@ -257,11 +257,11 @@ export function HolidaysTab() {
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                            className="size-7 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                             onClick={() => setDeleteTarget(h.id)}
                                             aria-label={t('orgSettings.holidays.deleteAria', { name: h.name })}
                                         >
-                                            <Trash2 className="h-3.5 w-3.5" />
+                                            <Trash2 className="size-3.5" />
                                         </Button>
                                     </div>
                                 ))}

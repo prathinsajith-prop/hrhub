@@ -8,7 +8,7 @@ interface SearchInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEleme
     onChange: (value: string) => void
     onClear?: () => void
     containerClassName?: string
-    /** size variant — 'sm' matches DataTable (h-8 text-xs), 'md' for larger forms */
+    /** size variant - 'sm' matches DataTable (h-8 text-xs), 'md' for larger forms */
     size?: 'sm' | 'md'
 }
 
@@ -39,7 +39,7 @@ export const SearchInput = memo(
         }
 
         const sizeClasses = size === 'sm' ? 'h-8 text-xs' : 'h-9 text-sm'
-        const iconSize = size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'
+        const iconSize = size === 'sm' ? 'size-3.5' : 'size-4'
 
         return (
             <div className={cn('relative flex-1', containerClassName)}>

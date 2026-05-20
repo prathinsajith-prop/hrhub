@@ -80,7 +80,25 @@ export async function createTransfer(
         if (data.toDivisionId !== undefined) updateFields['divisionId'] = data.toDivisionId
         if (data.toDepartmentId !== undefined) updateFields['departmentId'] = data.toDepartmentId
         if (data.toDesignation !== undefined) updateFields['designation'] = data.toDesignation
-        if (data.toDepartment !== undefined && data.toDepartment !== null) updateFields['department'] = data.toDepartment
+        if (data.toDepartment !== undefined && data.toDepartment !== null) {
+            updateFields['department'] = data.toDepartment
+        } else if (data.toDepartmentId !== undefined) {
+            // Caller picked a department FK without supplying the text label —
+            // resolve it from org_units so the legacy `department` text column
+            // stays in sync. Without this the text drifts on every transfer
+            // and downstream views (which COALESCE FK ↦ text) silently show
+            // mixed values across the app. Clearing the FK clears the text.
+            if (data.toDepartmentId === null) {
+                updateFields['department'] = null
+            } else {
+                const [unit] = await db
+                    .select({ name: orgUnits.name })
+                    .from(orgUnits)
+                    .where(and(eq(orgUnits.id, data.toDepartmentId), eq(orgUnits.tenantId, tenantId)))
+                    .limit(1)
+                updateFields['department'] = unit?.name ?? null
+            }
+        }
         if (data.newSalary !== undefined && data.newSalary !== null) {
             updateFields['totalSalary'] = String(data.newSalary)
         }

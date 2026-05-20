@@ -142,7 +142,7 @@ export async function createTenant(actorUserId: string, input: {
             tradeLicenseNo: placeholderLicense,
             jurisdiction: (input.jurisdiction ?? 'mainland') as 'mainland' | 'freezone',
             industryType: input.industryType ?? 'Other',
-            subscriptionPlan: (input.subscriptionPlan ?? 'starter') as any,
+            subscriptionPlan: (input.subscriptionPlan ?? 'starter') as 'starter' | 'growth' | 'enterprise',
         }).returning()
 
         // 2. Bootstrap: actor becomes super_admin of the new tenant
@@ -289,7 +289,7 @@ export async function createTenant(actorUserId: string, input: {
             sponsoringEntityId: sponsoringEntity?.id ?? null,
             designation: 'Founder',
             contractType: 'permanent',
-        } as any).returning()
+        }).returning()
 
         // 5b. Make the founder the head of the seeded Admin/HR org units so the
         // hierarchy isn't blank on day one.
@@ -381,7 +381,7 @@ export async function prepareTenantSwitch(actorUserId: string, targetTenantId: s
                 email: u.email,
                 joinDate: now.toISOString().slice(0, 10),
                 status: 'active',
-            } as any).returning()
+            }).returning()
 
             return inserted
         })

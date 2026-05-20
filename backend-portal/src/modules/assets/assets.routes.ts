@@ -29,8 +29,17 @@ async function getActiveAssignments(tenantId: string, employeeId: string) {
             categoryName: assetCategories.name,
         })
         .from(assetAssignments)
-        .leftJoin(assets, eq(assets.id, assetAssignments.assetId))
-        .leftJoin(assetCategories, eq(assetCategories.id, assets.categoryId))
+        // Tenant defence on every join — schema doesn't enforce that the
+        // joined assets/categories share the same tenant_id, so we filter
+        // explicitly to avoid any cross-tenant leak from stray FKs.
+        .leftJoin(assets, and(
+            eq(assets.id, assetAssignments.assetId),
+            eq(assets.tenantId, tenantId),
+        ))
+        .leftJoin(assetCategories, and(
+            eq(assetCategories.id, assets.categoryId),
+            eq(assetCategories.tenantId, tenantId),
+        ))
         .where(
             and(
                 eq(assetAssignments.tenantId, tenantId),

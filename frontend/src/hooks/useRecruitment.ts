@@ -257,7 +257,7 @@ export function useDeleteRecruitmentStage() {
     return useMutation({
         mutationFn: (stageId: string) => api.delete(`/stages/${stageId}`),
         onSuccess: () => qc.invalidateQueries({ queryKey: STAGES_KEY }),
-        // Suppress the generic toast — the settings tab handles the
+        // Suppress the generic toast - the settings tab handles the
         // candidate-still-on-stage case with its own clearer message.
         onError: () => { },
     })

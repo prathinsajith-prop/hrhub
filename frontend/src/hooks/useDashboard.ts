@@ -31,7 +31,7 @@ const DASHBOARD_STALE = 2 * 60 * 1000 // 2 min
 
 // Chart/analytic data changes even less frequently
 const ANALYTICS_STALE = 5 * 60 * 1000 // 5 min
-const ANALYTICS_GC = 30 * 60 * 1000 // 30 min — keep chart data in memory between tab switches
+const ANALYTICS_GC = 30 * 60 * 1000 // 30 min - keep chart data in memory between tab switches
 
 export function useDashboardKPIs() {
     return useQuery({
@@ -117,9 +117,16 @@ export interface BreakdownPoint {
 
 export interface BirthdayEntry {
     day: number
+    /** 1-12; the month the birthday falls in. */
+    month?: number
     name: string
     employeeNo: string
     department: string
+    avatarUrl?: string | null
+    /** Days until next birthday — 0 = today, 1 = tomorrow. Only present from /birthdays endpoint. */
+    daysUntil?: number
+    isToday?: boolean
+    isTomorrow?: boolean
 }
 
 export interface AnniversaryEntry {

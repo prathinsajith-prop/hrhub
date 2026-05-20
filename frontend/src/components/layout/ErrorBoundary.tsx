@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
         // guards against an infinite reload loop.
         if (isChunkLoadError(error) && tryReloadForChunkError()) return
 
-        // Always surface to the console — in production this feeds into any
+        // Always surface to the console - in production this feeds into any
         // browser-side monitoring (DataDog RUM, Sentry, etc.) that reads
         // console.error. In dev it gives the full component stack inline.
         console.error('[ErrorBoundary]', error.message, {
@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
         return (
             <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10">
+                <div className="flex size-16 items-center justify-center rounded-2xl bg-destructive/10">
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="28"

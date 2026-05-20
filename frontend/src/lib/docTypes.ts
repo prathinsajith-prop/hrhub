@@ -23,7 +23,7 @@ export interface DocTypeDefinition {
 
 export const DOC_TYPE_CATALOG: Record<DocCategory, DocTypeDefinition[]> = {
     identity: [
-        { docType: 'Passport', label: 'Passport', category: 'identity', expiryRequired: true, hint: 'Valid passport — all pages' },
+        { docType: 'Passport', label: 'Passport', category: 'identity', expiryRequired: true, hint: 'Valid passport - all pages' },
         { docType: 'Emirates ID', label: 'Emirates ID', category: 'identity', expiryRequired: true, hint: 'Front and back scan' },
         { docType: 'National ID', label: 'National ID', category: 'identity', expiryRequired: true },
         { docType: 'Driving License', label: 'Driving License', category: 'identity', expiryRequired: true },
@@ -64,7 +64,7 @@ export const DOC_TYPE_CATALOG: Record<DocCategory, DocTypeDefinition[]> = {
         { docType: 'Diploma', label: 'Diploma', category: 'qualification', expiryRequired: false },
         { docType: 'Academic Transcript', label: 'Academic Transcript', category: 'qualification', expiryRequired: false },
         { docType: 'Educational Certificate', label: 'Educational Certificate', category: 'qualification', expiryRequired: false },
-        { docType: 'Professional Certificate', label: 'Professional Certificate', category: 'qualification', expiryRequired: true, hint: 'Some professional certs expire — note renewal date' },
+        { docType: 'Professional Certificate', label: 'Professional Certificate', category: 'qualification', expiryRequired: true, hint: 'Some professional certs expire - note renewal date' },
         { docType: 'Attestation Certificate', label: 'Attestation Certificate', category: 'qualification', expiryRequired: false },
     ],
     financial: [

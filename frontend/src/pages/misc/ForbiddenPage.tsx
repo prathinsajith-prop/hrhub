@@ -8,10 +8,10 @@ export function ForbiddenPage() {
 
     return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-8 text-center">
-            <ShieldOffIcon className="h-16 w-16 text-muted-foreground/30" />
+            <ShieldOffIcon className="size-16 text-muted-foreground/30" />
             <div className="space-y-1">
                 <p className="text-8xl font-bold text-muted-foreground/20 select-none">403</p>
-                <h1 className="text-2xl font-bold">{t('errors.accessDenied')}</h1>
+                <h1 className="text-2xl font-semibold">{t('errors.accessDenied')}</h1>
                 <p className="text-sm text-muted-foreground">
                     {t('errors.forbidden')}
                 </p>

@@ -28,7 +28,7 @@ interface Props {
  * with the changed-field count and a "Review & approve" button. Clicking
  * opens a dialog with the field-by-field diff and the checkbox-verify gate.
  *
- * Hidden when there's nothing pending — zero visual weight at rest.
+ * Hidden when there's nothing pending - zero visual weight at rest.
  */
 export function BankChangeReviewBanner({ employeeId, autoOpenRequestId }: Props) {
     const { data } = useProfileChangeHistory({ employeeId, status: 'pending' })
@@ -53,7 +53,7 @@ export function BankChangeReviewBanner({ employeeId, autoOpenRequestId }: Props)
     return (
         <>
             <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 p-3 dark:border-sky-900/60 dark:bg-sky-950/30">
-                <Clock className="mt-0.5 h-4 w-4 shrink-0 text-sky-600 dark:text-sky-300" />
+                <Clock className="mt-0.5 size-4 shrink-0 text-sky-600 dark:text-sky-300" />
                 <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-sky-900 dark:text-sky-100">
                         Bank details update pending review
@@ -177,7 +177,7 @@ function ReviewDialog({ request, onClose }: { request: ProfileChangeRequest; onC
                     <>
                         <div className="space-y-2">
                             <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                <ShieldCheck className="h-3.5 w-3.5" /> Verify each change before approving
+                                <ShieldCheck className="size-3.5" /> Verify each change before approving
                             </div>
                             {changedFields.map((f) => (
                                 <FieldDiff
@@ -217,10 +217,10 @@ function ReviewDialog({ request, onClose }: { request: ProfileChangeRequest; onC
                             </p>
                             <div className="flex gap-2">
                                 <Button variant="outline" size="sm" onClick={() => setRejectMode(true)}>
-                                    <X className="h-4 w-4" /> Reject
+                                    <X className="size-4" /> Reject
                                 </Button>
                                 <Button size="sm" onClick={onApprove} loading={approve.isPending} disabled={!allVerified}>
-                                    <Check className="h-4 w-4" /> Approve &amp; apply
+                                    <Check className="size-4" /> Approve &amp; apply
                                 </Button>
                             </div>
                         </DialogFooter>
@@ -245,7 +245,7 @@ function FieldDiff({
     onToggle: () => void
 }) {
     return (
-        <label
+        <Label
             className={cn(
                 'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
                 verified
@@ -257,7 +257,7 @@ function FieldDiff({
                 type="checkbox"
                 checked={verified}
                 onChange={onToggle}
-                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-emerald-600"
+                className="mt-0.5 size-4 shrink-0 cursor-pointer accent-emerald-600"
                 aria-label={`Verify ${FIELD_LABELS[field] ?? field}`}
             />
             <div className="min-w-0 flex-1">
@@ -268,7 +268,7 @@ function FieldDiff({
                     <span className="rounded bg-muted px-2 py-0.5 font-mono text-foreground/70">
                         {current ?? <em className="text-muted-foreground">empty</em>}
                     </span>
-                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                    <ArrowRight className="size-3 text-muted-foreground" />
                     <span
                         className={cn(
                             'rounded px-2 py-0.5 font-mono font-semibold',
@@ -281,6 +281,6 @@ function FieldDiff({
                     </span>
                 </div>
             </div>
-        </label>
+        </Label>
     )
 }

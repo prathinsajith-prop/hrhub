@@ -9,6 +9,7 @@ import { NumericInput } from '@/components/ui/numeric-input'
 import { Badge } from '@/components/ui/primitives'
 import { Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Label } from '@/components/ui/label'
 
 interface PrimitiveProps {
     config: FilterConfig
@@ -95,12 +96,12 @@ export function SelectFilter({ config, value, onChange }: PrimitiveProps) {
                             )}
                         >
                             <span className={cn(
-                                'flex h-4 w-4 shrink-0 items-center justify-center rounded',
+                                'flex size-4 shrink-0 items-center justify-center rounded',
                                 isMulti ? 'border border-border' : '',
                                 isSelected && isMulti ? 'bg-primary border-primary' : '',
                             )}>
                                 {isSelected && (
-                                    <Check className={cn('h-3 w-3', isMulti ? 'text-primary-foreground' : 'text-primary')} />
+                                    <Check className={cn('size-3', isMulti ? 'text-primary-foreground' : 'text-primary')} />
                                 )}
                             </span>
                             {opt.label}
@@ -193,10 +194,10 @@ export function NumberRangeFilter({ config, value, onChange }: PrimitiveProps) {
 export function ToggleFilter({ config, value, onChange }: PrimitiveProps) {
     const v = value?.value === true
     return (
-        <label className="flex items-center justify-between gap-3">
+        <Label className="flex items-center justify-between gap-3">
             <span className="text-sm">{config.label}</span>
             <Switch checked={v} onCheckedChange={(checked) => onChange(checked ? { value: true, operator: 'is' } : null)} />
-        </label>
+        </Label>
     )
 }
 
@@ -222,7 +223,7 @@ export function TagFilter({ config, value, onChange }: PrimitiveProps) {
                                 const next = v.filter((x) => x !== t)
                                 onChange(next.length ? { value: next, operator: 'in' } : null)
                             }}>
-                                <X className="h-3 w-3" />
+                                <X className="size-3" />
                             </button>
                         </Badge>
                     ))}
@@ -298,7 +299,7 @@ export function AutocompleteFilter({ config, value, onChange }: PrimitiveProps) 
                             <Badge key={val} variant="secondary" className="text-[11px] gap-1">
                                 {opt?.label ?? val}
                                 <button type="button" onClick={() => onChange({ value: arrVal.filter((x) => x !== val), operator: op })}>
-                                    <X className="h-3 w-3" />
+                                    <X className="size-3" />
                                 </button>
                             </Badge>
                         )

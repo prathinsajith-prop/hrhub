@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../db/client.js'
-import { documents, employees } from '../../db/schema/index.js'
+import { documents, employees, orgUnits } from '../../db/schema/index.js'
 import { e400, e403, e404 } from '../../lib/errors.js'
 import { buildS3Key, generateDownloadUrl, generateUploadUrl, objectExists } from '../../lib/s3.js'
 import { parseUuidParam } from '../../lib/validation.js'
@@ -120,10 +120,18 @@ export default async function documentsRoutes(fastify: FastifyInstance) {
                 employeeId: documents.employeeId,
                 employeeName: sql<string | null>`${employees.firstName} || ' ' || ${employees.lastName}`,
                 employeeNo: employees.employeeNo,
-                employeeDepartment: employees.department,
+                // Resolve via org_units FK (consistent with /employees/*).
+                employeeDepartment: sql<string | null>`COALESCE(${orgUnits.name}, ${employees.department})`,
             })
             .from(documents)
-            .leftJoin(employees, eq(employees.id, documents.employeeId))
+            .leftJoin(employees, and(
+                eq(employees.id, documents.employeeId),
+                eq(employees.tenantId, user.tenantId),
+            ))
+            .leftJoin(orgUnits, and(
+                eq(employees.departmentId, orgUnits.id),
+                eq(orgUnits.tenantId, user.tenantId),
+            ))
             .where(
                 and(
                     eq(documents.tenantId, user.tenantId),

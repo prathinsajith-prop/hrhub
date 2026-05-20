@@ -455,7 +455,7 @@ function LeaveAdjustmentsTab({ canManage }: { canManage: boolean }) {
                 </div>
                 {canManage && (
                     <Button size="sm" onClick={() => setCreateOpen(true)}>
-                        <Plus className="h-4 w-4 mr-1.5" />
+                        <Plus className="size-4 mr-1.5" />
                         {t('leaveAdjustments.adjustment.newAdjustment')}
                     </Button>
                 )}
@@ -487,7 +487,7 @@ function LeaveAdjustmentsTab({ canManage }: { canManage: boolean }) {
                             ) : adjustments.length === 0 ? (
                                 <tr>
                                     <td colSpan={canManage ? 7 : 6} className="px-4 py-12 text-center text-muted-foreground">
-                                        <SlidersHorizontal className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                                        <SlidersHorizontal className="size-10 mx-auto mb-2 opacity-30" />
                                         <p>{t('leaveAdjustments.adjustment.noAdjustments')}</p>
                                     </td>
                                 </tr>
@@ -517,10 +517,10 @@ function LeaveAdjustmentsTab({ canManage }: { canManage: boolean }) {
                                                 <td className="px-4 py-3">
                                                     <Button
                                                         variant="ghost" size="icon"
-                                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                                        className="size-7 text-destructive hover:text-destructive"
                                                         onClick={() => setDeleteTarget(adj)}
                                                     >
-                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                        <Trash2 className="size-3.5" />
                                                     </Button>
                                                 </td>
                                             )}
@@ -576,7 +576,7 @@ function AirTicketsTab({ canManage }: { canManage: boolean }) {
                 </div>
                 {canManage && (
                     <Button size="sm" onClick={() => setCreateOpen(true)}>
-                        <Plus className="h-4 w-4 mr-1.5" />
+                        <Plus className="size-4 mr-1.5" />
                         {t('leaveAdjustments.airTicket.newAirTicket')}
                     </Button>
                 )}
@@ -610,7 +610,7 @@ function AirTicketsTab({ canManage }: { canManage: boolean }) {
                             ) : tickets.length === 0 ? (
                                 <tr>
                                     <td colSpan={canManage ? 9 : 8} className="px-4 py-12 text-center text-muted-foreground">
-                                        <Plane className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                                        <Plane className="size-10 mx-auto mb-2 opacity-30" />
                                         <p>{t('leaveAdjustments.airTicket.noTickets')}</p>
                                     </td>
                                 </tr>
@@ -647,10 +647,10 @@ function AirTicketsTab({ canManage }: { canManage: boolean }) {
                                                     </Button>
                                                     <Button
                                                         variant="ghost" size="icon"
-                                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                                        className="size-7 text-destructive hover:text-destructive"
                                                         onClick={() => setDeleteTarget(ticket)}
                                                     >
-                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                        <Trash2 className="size-3.5" />
                                                     </Button>
                                                 </div>
                                             </td>
@@ -707,7 +707,7 @@ function OffsetAdjustmentsTab({ canManage }: { canManage: boolean }) {
                 </div>
                 {canManage && (
                     <Button size="sm" onClick={() => setCreateOpen(true)}>
-                        <Plus className="h-4 w-4 mr-1.5" />
+                        <Plus className="size-4 mr-1.5" />
                         {t('leaveAdjustments.offset.newOffset')}
                     </Button>
                 )}
@@ -740,7 +740,7 @@ function OffsetAdjustmentsTab({ canManage }: { canManage: boolean }) {
                             ) : offsets.length === 0 ? (
                                 <tr>
                                     <td colSpan={canManage ? 8 : 7} className="px-4 py-12 text-center text-muted-foreground">
-                                        <CalendarPlus className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                                        <CalendarPlus className="size-10 mx-auto mb-2 opacity-30" />
                                         <p>{t('leaveAdjustments.offset.noOffsets')}</p>
                                     </td>
                                 </tr>
@@ -771,10 +771,10 @@ function OffsetAdjustmentsTab({ canManage }: { canManage: boolean }) {
                                                     </Button>
                                                     <Button
                                                         variant="ghost" size="icon"
-                                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                                        className="size-7 text-destructive hover:text-destructive"
                                                         onClick={() => setDeleteTarget(offset)}
                                                     >
-                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                        <Trash2 className="size-3.5" />
                                                     </Button>
                                                 </div>
                                             </td>
@@ -826,15 +826,15 @@ export function LeaveAdjustmentsPage() {
             <Tabs defaultValue="air-ticket">
                 <TabsList className="mb-6">
                     <TabsTrigger value="air-ticket" className="gap-2">
-                        <Plane className="h-4 w-4" />
+                        <Plane className="size-4" />
                         {t('leaveAdjustments.tabAirTicket')}
                     </TabsTrigger>
                     <TabsTrigger value="leave-adjustment" className="gap-2">
-                        <SlidersHorizontal className="h-4 w-4" />
+                        <SlidersHorizontal className="size-4" />
                         {t('leaveAdjustments.tabLeaveAdjustment')}
                     </TabsTrigger>
                     <TabsTrigger value="offset-adjustment" className="gap-2">
-                        <CalendarPlus className="h-4 w-4" />
+                        <CalendarPlus className="size-4" />
                         {t('leaveAdjustments.tabOffsetAdjustment')}
                     </TabsTrigger>
                 </TabsList>

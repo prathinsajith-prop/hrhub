@@ -1,6 +1,10 @@
-import { eq, and, count, lte, gte, sql, isNotNull } from 'drizzle-orm'
+import { eq, and, count, lte, gte, sql, isNotNull, inArray } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { employees, payrollRuns, documents } from '../../db/schema/index.js'
+
+// Mirror of WORKING_STATUSES in dashboard.service.ts — onboarding employees
+// are part of the payable workforce, not background data.
+const WORKING_STATUSES = ['active', 'onboarding'] as const
 
 export async function getEmiratisationMetrics(tenantId: string) {
     const [{ total }] = await db.select({ total: count() }).from(employees)
@@ -101,12 +105,12 @@ export async function getComplianceReport(tenantId: string) {
         )),
         getEmiratisationMetrics(tenantId),
         db.select({ total: count() }).from(employees)
-            .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), eq(employees.status, 'active'))),
+            .where(and(eq(employees.tenantId, tenantId), eq(employees.isArchived, false), inArray(employees.status, WORKING_STATUSES as unknown as string[]))),
         db.select({ expired: count() }).from(employees)
             .where(and(
                 eq(employees.tenantId, tenantId),
                 eq(employees.isArchived, false),
-                eq(employees.status, 'active'),
+                inArray(employees.status, WORKING_STATUSES as unknown as string[]),
                 isNotNull(employees.visaExpiry),
                 lte(employees.visaExpiry, today),
             )),

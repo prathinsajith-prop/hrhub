@@ -417,12 +417,12 @@ function BalanceTab({ employeeId }: { employeeId: string }) {
     return (
         <Card>
             <CardHeader>
-                <CardTitle className="text-base">Leave Balance — {new Date().getFullYear()}</CardTitle>
+                <CardTitle className="text-base">Leave Balance - {new Date().getFullYear()}</CardTitle>
             </CardHeader>
             <CardContent>
                 {isLoading ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                        {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 rounded-lg" />)}
+                        {[1, 2, 3, 4].map(i => <Skeleton key={`skeleton-${i}`} className="h-20 rounded-lg" />)}
                     </div>
                 ) : !balanceData?.balance ? (
                     <p className="text-sm text-muted-foreground text-center py-6">No leave data available</p>
@@ -438,7 +438,7 @@ function BalanceTab({ employeeId }: { employeeId: string }) {
                                     <div key={type} className="rounded-lg border bg-card p-3 space-y-2">
                                         <div className="flex items-start justify-between gap-1">
                                             <span className="text-xs font-medium leading-tight">{labelFor(type)}</span>
-                                            {isLow && <TrendingDown className="h-3 w-3 text-destructive shrink-0 mt-0.5" />}
+                                            {isLow && <TrendingDown className="size-3 text-destructive shrink-0 mt-0.5" />}
                                         </div>
                                         <div className="flex items-baseline gap-1">
                                             <span className={cn('text-xl font-bold font-display', isLow ? 'text-destructive' : 'text-foreground')}>
@@ -481,10 +481,10 @@ function HistoryTab({ employeeId }: { employeeId: string }) {
             </CardHeader>
             <CardContent>
                 {isLoading ? (
-                    <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                    <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-12 w-full" />)}</div>
                 ) : requests.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
-                        <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                        <CalendarDays className="size-8 mx-auto mb-2 opacity-30" />
                         <p className="text-sm font-medium">No leave requests found</p>
                     </div>
                 ) : (
@@ -494,7 +494,7 @@ function HistoryTab({ employeeId }: { employeeId: string }) {
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium capitalize">{labelFor(req.leaveType)} Leave</p>
                                     <p className="text-xs text-muted-foreground">
-                                        {formatDate(req.startDate)} — {formatDate(req.endDate)} · {req.days} day{req.days !== 1 ? 's' : ''}
+                                        {formatDate(req.startDate)} - {formatDate(req.endDate)} · {req.days} day{req.days !== 1 ? 's' : ''}
                                     </p>
                                 </div>
                                 <Badge
@@ -528,7 +528,7 @@ function AdjustmentsTab({ employeeId, canManage }: { employeeId: string; canMana
             {canManage && (
                 <div className="flex justify-end">
                     <Button size="sm" onClick={() => setCreateOpen(true)}>
-                        <Plus className="h-4 w-4 mr-1.5" />
+                        <Plus className="size-4 mr-1.5" />
                         {t('leaveAdjustments.adjustment.newAdjustment')}
                     </Button>
                 </div>
@@ -559,7 +559,7 @@ function AdjustmentsTab({ employeeId, canManage }: { employeeId: string; canMana
                             ) : adjustments.length === 0 ? (
                                 <tr>
                                     <td colSpan={canManage ? 6 : 5} className="px-4 py-10 text-center text-muted-foreground">
-                                        <SlidersHorizontal className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                                        <SlidersHorizontal className="size-8 mx-auto mb-2 opacity-30" />
                                         <p className="text-sm">{t('leaveAdjustments.adjustment.noAdjustments')}</p>
                                     </td>
                                 </tr>
@@ -583,10 +583,10 @@ function AdjustmentsTab({ employeeId, canManage }: { employeeId: string; canMana
                                                 <td className="px-4 py-3">
                                                     <Button
                                                         variant="ghost" size="icon"
-                                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                                        className="size-7 text-destructive hover:text-destructive"
                                                         onClick={() => setDeleteTarget(adj)}
                                                     >
-                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                        <Trash2 className="size-3.5" />
                                                     </Button>
                                                 </td>
                                             )}
@@ -637,7 +637,7 @@ function AirTicketsTab({ employeeId, canManage }: { employeeId: string; canManag
             {canManage && (
                 <div className="flex justify-end">
                     <Button size="sm" onClick={() => setCreateOpen(true)}>
-                        <Plus className="h-4 w-4 mr-1.5" />
+                        <Plus className="size-4 mr-1.5" />
                         {t('leaveAdjustments.airTicket.newAirTicket')}
                     </Button>
                 </div>
@@ -669,7 +669,7 @@ function AirTicketsTab({ employeeId, canManage }: { employeeId: string; canManag
                             ) : tickets.length === 0 ? (
                                 <tr>
                                     <td colSpan={canManage ? 7 : 6} className="px-4 py-10 text-center text-muted-foreground">
-                                        <Plane className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                                        <Plane className="size-8 mx-auto mb-2 opacity-30" />
                                         <p className="text-sm">{t('leaveAdjustments.airTicket.noTickets')}</p>
                                     </td>
                                 </tr>
@@ -698,10 +698,10 @@ function AirTicketsTab({ employeeId, canManage }: { employeeId: string; canManag
                                                     </Button>
                                                     <Button
                                                         variant="ghost" size="icon"
-                                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                                        className="size-7 text-destructive hover:text-destructive"
                                                         onClick={() => setDeleteTarget(ticket)}
                                                     >
-                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                        <Trash2 className="size-3.5" />
                                                     </Button>
                                                 </div>
                                             </td>
@@ -753,7 +753,7 @@ function OffsetsTab({ employeeId, canManage }: { employeeId: string; canManage: 
             {canManage && (
                 <div className="flex justify-end">
                     <Button size="sm" onClick={() => setCreateOpen(true)}>
-                        <Plus className="h-4 w-4 mr-1.5" />
+                        <Plus className="size-4 mr-1.5" />
                         {t('leaveAdjustments.offset.newOffset')}
                     </Button>
                 </div>
@@ -784,7 +784,7 @@ function OffsetsTab({ employeeId, canManage }: { employeeId: string; canManage: 
                             ) : offsets.length === 0 ? (
                                 <tr>
                                     <td colSpan={canManage ? 6 : 5} className="px-4 py-10 text-center text-muted-foreground">
-                                        <CalendarPlus className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                                        <CalendarPlus className="size-8 mx-auto mb-2 opacity-30" />
                                         <p className="text-sm">{t('leaveAdjustments.offset.noOffsets')}</p>
                                     </td>
                                 </tr>
@@ -808,10 +808,10 @@ function OffsetsTab({ employeeId, canManage }: { employeeId: string; canManage: 
                                                     </Button>
                                                     <Button
                                                         variant="ghost" size="icon"
-                                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                                        className="size-7 text-destructive hover:text-destructive"
                                                         onClick={() => setDeleteTarget(offset)}
                                                     >
-                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                        <Trash2 className="size-3.5" />
                                                     </Button>
                                                 </div>
                                             </td>
@@ -860,23 +860,23 @@ export function EmployeeLeavePanel({ employeeId, canManage }: EmployeeLeavePanel
         <Tabs defaultValue="balance" className="space-y-4">
             <TabsList className="h-9 bg-muted/50 p-1">
                 <TabsTrigger value="balance" className="text-xs gap-1.5">
-                    <CalendarDays className="h-3.5 w-3.5" />
+                    <CalendarDays className="size-3.5" />
                     Balance
                 </TabsTrigger>
                 <TabsTrigger value="history" className="text-xs gap-1.5">
-                    <CalendarDays className="h-3.5 w-3.5" />
+                    <CalendarDays className="size-3.5" />
                     History
                 </TabsTrigger>
                 <TabsTrigger value="air-tickets" className="text-xs gap-1.5">
-                    <Plane className="h-3.5 w-3.5" />
+                    <Plane className="size-3.5" />
                     {t('leaveAdjustments.tabAirTicket')}
                 </TabsTrigger>
                 <TabsTrigger value="adjustments" className="text-xs gap-1.5">
-                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    <SlidersHorizontal className="size-3.5" />
                     {t('leaveAdjustments.tabLeaveAdjustment')}
                 </TabsTrigger>
                 <TabsTrigger value="offsets" className="text-xs gap-1.5">
-                    <CalendarPlus className="h-3.5 w-3.5" />
+                    <CalendarPlus className="size-3.5" />
                     {t('leaveAdjustments.tabOffsetAdjustment')}
                 </TabsTrigger>
             </TabsList>

@@ -1,7 +1,7 @@
 import { eq, and, desc, gte, lte, inArray, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/index.js'
-import { payrollRuns, payslips, employees, tenants } from '../../db/schema/index.js'
-import { leaveRequests } from '../../db/schema/leave.js'
+import { payrollRuns, payslips, employees, leaveRequests, orgUnits, tenants } from '../../db/schema/index.js'
+import { syncAdjustmentsForPeriod, getAdjustmentTotalsByEmployee } from './adjustments.service.js'
 import type { InferInsertModel } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
@@ -23,14 +23,88 @@ export async function listPayrollRuns(tenantId: string, params: { year?: number;
         .limit(limit).offset(offset)
 
     const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
-    return { data: rows, total, limit, offset, hasMore: offset + limit < total }
+
+    // Enrich draft rows with a live preview so the dashboard card no longer
+    // shows 0 for "Net Pay" before processing. Persisted totals on draft rows
+    // are always 0 (they're only written by runPayroll when status flips to
+    // approved), so we have to recompute on the fly.
+    //
+    // Perf: we fetch the payable-employees list ONCE (shared across every
+    // draft, doesn't depend on month) and fetch adjustments ONCE PER PERIOD
+    // (multiple drafts in the same month share a period). Then we hand both
+    // to previewPayrollRun via the `preloaded` channel to skip its internal
+    // queries. Without this, each draft caused 3 extra DB round-trips —
+    // painful on Neon where RTT is ~50–100 ms.
+    const draftRows = rows.filter(r => r.status === 'draft')
+    if (draftRows.length === 0) {
+        return { data: rows, total, limit, offset, hasMore: offset + limit < total }
+    }
+
+    const uniquePeriods = Array.from(
+        new Map(draftRows.map(r => [`${r.year}-${r.month}`, { year: r.year, month: r.month }])).values(),
+    )
+
+    const [emps, ...adjResults] = await Promise.all([
+        getPayableEmployees(tenantId),
+        ...uniquePeriods.map(p => getAdjustmentTotalsByEmployee(tenantId, p.year, p.month)),
+    ])
+    const adjByPeriod = new Map<string, typeof adjResults[number]>(
+        uniquePeriods.map((p, i) => [`${p.year}-${p.month}`, adjResults[i]]),
+    )
+
+    const previews = await Promise.all(
+        draftRows.map(r => {
+            // The period key is guaranteed to be in `adjByPeriod` because we
+            // populated the map from these same draftRows above. Use a typed
+            // fallback (empty map) instead of a non-null assertion so this
+            // stays sound under TypeScript's `noUncheckedIndexedAccess`.
+            const adjustmentTotals = adjByPeriod.get(`${r.year}-${r.month}`) ?? new Map()
+            return previewPayrollRun(
+                tenantId,
+                { id: r.id, year: r.year, month: r.month, status: r.status as string },
+                { emps, adjustmentTotals },
+            ).catch(() => null)
+        }),
+    )
+    const previewByRunId = new Map<string, Awaited<ReturnType<typeof previewPayrollRun>>>(
+        draftRows.map((r, i) => [r.id, previews[i] ?? null]),
+    )
+
+    const data = rows.map(r => {
+        if (r.status !== 'draft') return r
+        const p = previewByRunId.get(r.id)
+        if (!p) return r
+        return {
+            ...r,
+            totalEmployees: p.totalEmployees,
+            totalGross: p.totalGross.toFixed(2),
+            totalDeductions: p.totalDeductions.toFixed(2),
+            totalNet: p.totalNet.toFixed(2),
+        }
+    })
+    return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 
 export async function getPayrollRun(tenantId: string, id: string) {
-    const [row] = await db.select().from(payrollRuns)
-        .where(and(eq(payrollRuns.id, id), eq(payrollRuns.tenantId, tenantId)))
-        .limit(1)
-    return row ?? null
+    const row = await getPayrollRunRaw(tenantId, id)
+    if (!row) return null
+
+    // Same preview-enrichment as listPayrollRuns. The /payroll/:id endpoint
+    // is hit by the pending-run card on the dashboard. We pass the row in
+    // directly so previewPayrollRun doesn't re-fetch it.
+    if (row.status === 'draft') {
+        const p = await previewPayrollRun(tenantId, row).catch(() => null)
+        if (p) {
+            return {
+                ...row,
+                totalEmployees: p.totalEmployees,
+                totalGross: p.totalGross.toFixed(2),
+                totalDeductions: p.totalDeductions.toFixed(2),
+                totalNet: p.totalNet.toFixed(2),
+            }
+        }
+    }
+    return row
 }
 
 export async function createPayrollRun(tenantId: string, data: Omit<NewPayrollRun, 'tenantId' | 'id'>) {
@@ -44,6 +118,139 @@ export async function updatePayrollRun(tenantId: string, id: string, data: Parti
         .where(and(eq(payrollRuns.id, id), eq(payrollRuns.tenantId, tenantId)))
         .returning()
     return row ?? null
+}
+
+/**
+ * Delete a draft payroll run. Only drafts can be deleted — once processed, the
+ * row is the historical record and removing it would orphan payslip
+ * downloads, audit traces, and WPS references. Returns the deleted row so the
+ * route can include the period in its audit log entry.
+ *
+ * Cascades automatically: payslips have ON DELETE CASCADE on payroll_run_id.
+ * Adjustments are intentionally NOT touched — HR-entered manual adjustments
+ * survive draft deletion so the user doesn't lose work if they re-create the
+ * period; auto-imported (leave/loan) rows can be regenerated by sync anyway.
+ */
+export async function deletePayrollRun(tenantId: string, id: string) {
+    const [row] = await db
+        .delete(payrollRuns)
+        .where(and(
+            eq(payrollRuns.id, id),
+            eq(payrollRuns.tenantId, tenantId),
+            eq(payrollRuns.status, 'draft'),
+        ))
+        .returning()
+    return row ?? null
+}
+
+/**
+ * Pre-processing readiness checklist for a draft run.
+ *
+ * Splits findings into two buckets:
+ *   - blockers — things that would break payroll math or hard-fail downstream
+ *     (no payable employees, missing salary on someone who'd be paid). Process
+ *     button is disabled until they're fixed.
+ *   - warnings — things HR should know but aren't fatal (missing IBAN means
+ *     WPS submission would later fail; pending leave for the period means LOP
+ *     won't be reflected; unsynced changes means the preview may be stale).
+ *
+ * Returns null for non-draft runs (the persisted totals are the source of
+ * truth there; nothing left to check).
+ */
+export interface PayrollReadiness {
+    employeeCount: number
+    missingIban: number
+    missingSalary: number
+    pendingLeaveInPeriod: number
+    blockers: string[]
+    warnings: string[]
+    canProcess: boolean
+}
+
+export async function getPayrollReadiness(
+    tenantId: string,
+    payrollRunId: string,
+): Promise<PayrollReadiness | null> {
+    const run = await getPayrollRunRaw(tenantId, payrollRunId)
+    if (!run || run.status !== 'draft') return null
+
+    const daysInMonth = new Date(run.year, run.month, 0).getDate()
+    const monthStart = `${run.year}-${String(run.month).padStart(2, '0')}-01`
+    const monthEnd = `${run.year}-${String(run.month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
+
+    // One round-trip — every check is its own COUNT query but they all hit
+    // the same DB connection in parallel.
+    const [emps, ibanCounts, salaryCounts, leaveCounts] = await Promise.all([
+        // Employee count (just to surface it in the response — also used to
+        // decide "no payable employees" blocker)
+        db.select({ count: sql<number>`COUNT(*)::int` })
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                inArray(employees.status, ['active', 'onboarding']),
+            )),
+        // Missing IBAN — WPS submission warning
+        db.select({ count: sql<number>`COUNT(*)::int` })
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                inArray(employees.status, ['active', 'onboarding']),
+                sql`(${employees.iban} IS NULL OR ${employees.iban} = '')`,
+            )),
+        // Missing/zero basic salary — payroll math BLOCKER (gross would be 0
+        // even for a senior employee, almost always a data-entry mistake)
+        db.select({ count: sql<number>`COUNT(*)::int` })
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                inArray(employees.status, ['active', 'onboarding']),
+                sql`(${employees.basicSalary} IS NULL OR ${employees.basicSalary}::numeric = 0)`,
+            )),
+        // Pending leave whose start date falls inside this period — LOP / sick
+        // won't be reflected until the leave is approved AND auto-synced
+        db.select({ count: sql<number>`COUNT(*)::int` })
+            .from(leaveRequests)
+            .where(and(
+                eq(leaveRequests.tenantId, tenantId),
+                eq(leaveRequests.status, 'pending'),
+                gte(leaveRequests.startDate, monthStart),
+                lte(leaveRequests.startDate, monthEnd),
+            )),
+    ])
+
+    const employeeCount = emps[0]?.count ?? 0
+    const missingIban = ibanCounts[0]?.count ?? 0
+    const missingSalary = salaryCounts[0]?.count ?? 0
+    const pendingLeaveInPeriod = leaveCounts[0]?.count ?? 0
+
+    const blockers: string[] = []
+    const warnings: string[] = []
+
+    if (employeeCount === 0) {
+        blockers.push('No payable employees (active or onboarding) for this tenant.')
+    }
+    if (missingSalary > 0) {
+        blockers.push(`${missingSalary} employee${missingSalary === 1 ? ' has' : 's have'} no basic salary set — fix before processing.`)
+    }
+    if (missingIban > 0) {
+        warnings.push(`${missingIban} employee${missingIban === 1 ? ' is' : 's are'} missing an IBAN — WPS submission will fail until added.`)
+    }
+    if (pendingLeaveInPeriod > 0) {
+        warnings.push(`${pendingLeaveInPeriod} leave request${pendingLeaveInPeriod === 1 ? '' : 's'} for this period ${pendingLeaveInPeriod === 1 ? 'is' : 'are'} still pending — approve and re-sync to reflect LOP/sick deductions.`)
+    }
+
+    return {
+        employeeCount,
+        missingIban,
+        missingSalary,
+        pendingLeaveInPeriod,
+        blockers,
+        warnings,
+        canProcess: blockers.length === 0,
+    }
 }
 
 export async function getPayslips(tenantId: string, payrollRunId: string) {
@@ -63,8 +270,16 @@ export async function getPayslipsByEmployee(tenantId: string, employeeId: string
             housingAllowance: payslips.housingAllowance,
             transportAllowance: payslips.transportAllowance,
             otherAllowances: payslips.otherAllowances,
+            overtime: payslips.overtime,
+            commission: payslips.commission,
             grossSalary: payslips.grossSalary,
             deductions: payslips.deductions,
+            unpaidLeaveDays: payslips.unpaidLeaveDays,
+            unpaidLeaveDeduction: payslips.unpaidLeaveDeduction,
+            sickHalfPayDays: payslips.sickHalfPayDays,
+            sickHalfPayDeduction: payslips.sickHalfPayDeduction,
+            loanDeduction: payslips.loanDeduction,
+            otherDeduction: payslips.otherDeduction,
             netSalary: payslips.netSalary,
             daysWorked: payslips.daysWorked,
         })
@@ -74,27 +289,39 @@ export async function getPayslipsByEmployee(tenantId: string, employeeId: string
         .orderBy(desc(payrollRuns.year), desc(payrollRuns.month))
 }
 
-// ─── Payroll Calculation Engine (Tasks 7.1–7.4) ────────────────────────────
-// UAE Labour Law rules applied:
-//   Gross = basic + housing + transport + other allowances
-//   Unpaid leave deduction = (daily rate) × days taken
-//   Sick half-pay deduction = (daily rate × 0.5) × sick days over 15
-//   Net = Gross − deductions
+// ─── Payroll Calculation Engine ─────────────────────────────────────────────
+// UAE Labour Law applied via the payroll_adjustments ledger:
+//   Gross   = (basic + housing + transport + other) × prorate ratio
+//   Net     = Gross + additions − deductions
+//
+// `additions` and `deductions` no longer come from inline computations — they
+// come from the payroll_adjustments table. runPayroll() first calls
+// syncAdjustmentsForPeriod() to refresh the leave-engine + loan-engine rows,
+// then aggregates everything (including HR-created manual rows) and writes
+// per-category totals into the payslip columns. See adjustments.service.ts.
 
-export async function runPayroll(tenantId: string, payrollRunId: string): Promise<boolean> {
-    const run = await getPayrollRun(tenantId, payrollRunId)
-    if (!run || run.status !== 'draft') return false
+interface PayableEmployee {
+    id: string
+    basicSalary: string | null
+    housingAllowance: string | null
+    transportAllowance: string | null
+    otherAllowances: string | null
+    joinDate: string | null
+    contractEndDate: string | null
+}
 
-    // Mark as processing immediately
-    await db.update(payrollRuns)
-        .set(withTimestamp({ status: 'processing' as const }))
-        .where(and(eq(payrollRuns.id, payrollRunId), eq(payrollRuns.tenantId, tenantId)))
+/**
+ * Single source of truth for who's payable. Both runPayroll and the draft
+ * preview funnel through this so the two paths can't drift on eligibility
+ * (e.g. one filter listing 'onboarding' and the other not).
+ *
+ * 'probation' is a contractType, not a status — never put it here.
+ */
+const PAYABLE_STATUSES = ['active', 'onboarding'] as const
 
-    // Fetch all active + probation employees for tenant
-    const activeEmps = await db.select({
+async function getPayableEmployees(tenantId: string): Promise<PayableEmployee[]> {
+    return db.select({
         id: employees.id,
-        firstName: employees.firstName,
-        lastName: employees.lastName,
         basicSalary: employees.basicSalary,
         housingAllowance: employees.housingAllowance,
         transportAllowance: employees.transportAllowance,
@@ -105,86 +332,77 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
         .where(and(
             eq(employees.tenantId, tenantId),
             eq(employees.isArchived, false),
-            inArray(employees.status, ['active', 'probation']),
+            inArray(employees.status, PAYABLE_STATUSES as unknown as string[]),
         ))
+}
 
-    if (activeEmps.length === 0) {
-        // Revert to draft if no employees
-        await db.update(payrollRuns)
-            .set(withTimestamp({ status: 'draft' as const }))
-            .where(and(eq(payrollRuns.id, payrollRunId), eq(payrollRuns.tenantId, tenantId)))
-        return false
-    }
+/**
+ * Parse a Postgres `date` column ('YYYY-MM-DD') as local midnight. We must
+ * NOT use `new Date(string)` here — that parses as UTC midnight, which lands
+ * 4 hours later than local midnight in UAE and causes proration boundary
+ * comparisons to flip wrong on the first/last day of the month (e.g. someone
+ * who joins on the 31st was getting a full month of pay).
+ */
+function parseLocalDate(s: string | null | undefined): Date | null {
+    if (!s) return null
+    const [y, m, d] = s.split('-').map(Number)
+    if (!y || !m || !d) return null
+    return new Date(y, m - 1, d)
+}
 
-    // Date range for the payroll month
-    const daysInMonth = new Date(run.year, run.month, 0).getDate()
-    const monthStart = `${run.year}-${String(run.month).padStart(2, '0')}-01`
-    const monthEnd = `${run.year}-${String(run.month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
+/**
+ * Pure function — given employees, adjustments, and a period, returns the
+ * per-employee payslip rows + the run totals. No DB writes. runPayroll calls
+ * this and then persists; the draft preview calls it and just returns totals.
+ *
+ * `payrollRunId` is included in the payslip rows but only matters when the
+ * caller intends to persist — preview ignores the values inside `payslipValues`.
+ */
+function buildPayslipsAndTotals(
+    tenantId: string,
+    payrollRunId: string,
+    year: number,
+    month: number,
+    emps: PayableEmployee[],
+    adjustmentTotals: Awaited<ReturnType<typeof getAdjustmentTotalsByEmployee>>,
+) {
+    const daysInMonth = new Date(year, month, 0).getDate()
+    const monthStart = new Date(year, month - 1, 1)
+    const monthEnd = new Date(year, month - 1, daysInMonth)
 
-    // Fetch approved leave for all these employees in this month
-    const empIds = activeEmps.map(e => e.id)
-    const leaveRows = await db.select({
-        employeeId: leaveRequests.employeeId,
-        leaveType: leaveRequests.leaveType,
-        days: leaveRequests.days,
-    }).from(leaveRequests)
-        .where(and(
-            eq(leaveRequests.tenantId, tenantId),
-            eq(leaveRequests.status, 'approved'),
-            gte(leaveRequests.startDate, monthStart),
-            lte(leaveRequests.startDate, monthEnd),
-            inArray(leaveRequests.employeeId, empIds),
-        ))
-
-    // Group leave by employeeId
-    const leaveByEmp = new Map<string, { unpaid: number; sickOver15: number }>()
-    for (const l of leaveRows) {
-        const existing = leaveByEmp.get(l.employeeId) ?? { unpaid: 0, sickOver15: 0 }
-        if (l.leaveType === 'unpaid') {
-            existing.unpaid += l.days ?? 0
-        } else if (l.leaveType === 'sick') {
-            // First 15 days full pay (no deduction), days 16–45 half-pay
-            const sickDays = l.days ?? 0
-            existing.sickOver15 += Math.max(0, sickDays - 15)
-        }
-        leaveByEmp.set(l.employeeId, existing)
-    }
-
-    // Calculate payslips
     let totalGross = 0
     let totalDeductions = 0
     let totalNet = 0
 
-    const payslipValues: InferInsertModel<typeof payslips>[] = activeEmps.map(emp => {
+    const payslipValues: InferInsertModel<typeof payslips>[] = emps.map(emp => {
         const basic = Number(emp.basicSalary ?? 0)
         const housing = Number(emp.housingAllowance ?? 0)
         const transport = Number(emp.transportAllowance ?? 0)
         const other = Number(emp.otherAllowances ?? 0)
 
-        // Prorated pay: apply if employee joined OR had contract end mid-month
         let workedDays = daysInMonth
-        const joinDate = emp.joinDate ? new Date(emp.joinDate) : null
-        const contractEndDate = emp.contractEndDate ? new Date(emp.contractEndDate) : null
-        const monthStart = new Date(run.year, run.month - 1, 1)
-        const monthEnd = new Date(run.year, run.month - 1, daysInMonth)
-
+        const joinDate = parseLocalDate(emp.joinDate)
+        const contractEndDate = parseLocalDate(emp.contractEndDate)
         if (joinDate && joinDate > monthStart && joinDate <= monthEnd) {
-            // Joined mid-month: only count from join day (prorated pay)
             workedDays = daysInMonth - joinDate.getDate() + 1
         }
-        // Terminated mid-month: count only up to contract end date
-        if (contractEndDate && contractEndDate >= monthStart && contractEndDate < monthEnd) {
+        if (contractEndDate && contractEndDate >= monthStart && contractEndDate <= monthEnd) {
             workedDays = Math.min(workedDays, contractEndDate.getDate())
         }
 
         const prorateRatio = workedDays / daysInMonth
-        const gross = (basic + housing + transport + other) * prorateRatio
+        const baseEarnings = (basic + housing + transport + other) * prorateRatio
 
-        const dailyRate = basic / 30
-        const leave = leaveByEmp.get(emp.id)
-        const unpaidDeduction = (leave?.unpaid ?? 0) * dailyRate
-        const sickHalfPayDeduction = (leave?.sickOver15 ?? 0) * dailyRate * 0.5
-        const deductions = unpaidDeduction + sickHalfPayDeduction
+        const adj = adjustmentTotals.get(emp.id)
+        const overtime = adj?.overtime ?? 0
+        const commission = adj?.commission ?? 0
+        const additions = overtime + commission
+        const unpaidLeaveDeduction = adj?.unpaidLeaveDeduction ?? 0
+        const sickHalfPayDeduction = adj?.sickHalfPayDeduction ?? 0
+        const loanDeduction = adj?.loanDeduction ?? 0
+        const otherDeduction = adj?.otherDeduction ?? 0
+        const deductions = unpaidLeaveDeduction + sickHalfPayDeduction + loanDeduction + otherDeduction
+        const gross = baseEarnings + additions
         const net = Math.max(0, gross - deductions)
 
         totalGross += gross
@@ -199,14 +417,119 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
             housingAllowance: String((housing * prorateRatio).toFixed(2)),
             transportAllowance: String((transport * prorateRatio).toFixed(2)),
             otherAllowances: String((other * prorateRatio).toFixed(2)),
+            overtime: overtime.toFixed(2),
+            commission: commission.toFixed(2),
             grossSalary: String(gross.toFixed(2)),
             deductions: String(deductions.toFixed(2)),
+            unpaidLeaveDays: adj?.unpaidLeaveDays ?? 0,
+            unpaidLeaveDeduction: unpaidLeaveDeduction.toFixed(2),
+            sickHalfPayDays: adj?.sickHalfPayDays ?? 0,
+            sickHalfPayDeduction: sickHalfPayDeduction.toFixed(2),
+            loanDeduction: loanDeduction.toFixed(2),
+            otherDeduction: otherDeduction.toFixed(2),
             netSalary: String(net.toFixed(2)),
-            daysWorked: workedDays - (leave?.unpaid ?? 0),
-            overtime: '0',
-            commission: '0',
+            daysWorked: workedDays - (adj?.unpaidLeaveDays ?? 0),
         }
     })
+
+    return {
+        payslipValues,
+        totalEmployees: emps.length,
+        totalGross,
+        totalDeductions,
+        totalNet,
+    }
+}
+
+/**
+ * Draft-run preview — same math as runPayroll, no side effects.
+ *
+ * Returns null for non-draft runs (their totals are already correct on the
+ * persisted row). The frontend calls this only when a card shows a draft, so
+ * the cost is bounded — typically one preview per page load.
+ *
+ * We deliberately do NOT call syncAdjustmentsForPeriod here. Sync is a state
+ * mutation that HR triggers explicitly from the Adjustments tab; preview just
+ * reflects the current ledger. If HR hasn't synced yet, leave/loan deductions
+ * show as 0 — matching what runPayroll WOULD persist if processed right now
+ * with the current data.
+ *
+ * For perf: pass `preloaded` to skip the employee + adjustment queries when
+ * the caller already has them (e.g. `listPayrollRuns` previewing multiple
+ * drafts that share the same (tenant, year, month)). Without preload this
+ * does 1 query for the run + 1 for employees + 2 for adjustments — Neon RTT
+ * is ~50–100 ms each, so cutting redundant fetches matters a lot.
+ */
+export interface PayrollPreloaded {
+    emps: PayableEmployee[]
+    adjustmentTotals: Awaited<ReturnType<typeof getAdjustmentTotalsByEmployee>>
+}
+
+export async function previewPayrollRun(
+    tenantId: string,
+    payrollRunIdOrRow: string | { id: string; year: number; month: number; status: string },
+    preloaded?: PayrollPreloaded,
+) {
+    // Avoid the redundant SELECT when the caller already has the row.
+    const run = typeof payrollRunIdOrRow === 'string'
+        ? await getPayrollRunRaw(tenantId, payrollRunIdOrRow)
+        : payrollRunIdOrRow
+    if (!run || run.status !== 'draft') return null
+
+    const emps = preloaded?.emps ?? await getPayableEmployees(tenantId)
+    if (emps.length === 0) {
+        return { totalEmployees: 0, totalGross: 0, totalDeductions: 0, totalNet: 0 }
+    }
+
+    const adjustmentTotals = preloaded?.adjustmentTotals
+        ?? await getAdjustmentTotalsByEmployee(tenantId, run.year, run.month)
+    const { totalEmployees, totalGross, totalDeductions, totalNet } =
+        buildPayslipsAndTotals(tenantId, run.id, run.year, run.month, emps, adjustmentTotals)
+    return { totalEmployees, totalGross, totalDeductions, totalNet }
+}
+
+/**
+ * Internal raw fetch — bypasses the preview-enrichment in getPayrollRun() so
+ * we don't recurse when previewPayrollRun calls back into getPayrollRun.
+ */
+async function getPayrollRunRaw(tenantId: string, id: string) {
+    const [row] = await db.select().from(payrollRuns)
+        .where(and(eq(payrollRuns.id, id), eq(payrollRuns.tenantId, tenantId)))
+        .limit(1)
+    return row ?? null
+}
+
+export async function runPayroll(tenantId: string, payrollRunId: string): Promise<boolean> {
+    const run = await getPayrollRun(tenantId, payrollRunId)
+    if (!run || run.status !== 'draft') return false
+
+    // Mark as processing immediately
+    await db.update(payrollRuns)
+        .set(withTimestamp({ status: 'processing' as const }))
+        .where(and(eq(payrollRuns.id, payrollRunId), eq(payrollRuns.tenantId, tenantId)))
+
+    // Fetch payable employees ('active' or 'onboarding' — see getPayableEmployees
+    // helper for the rationale on why 'onboarding' is included).
+    const activeEmps = await getPayableEmployees(tenantId)
+
+    if (activeEmps.length === 0) {
+        // Revert to draft if no employees
+        await db.update(payrollRuns)
+            .set(withTimestamp({ status: 'draft' as const }))
+            .where(and(eq(payrollRuns.id, payrollRunId), eq(payrollRuns.tenantId, tenantId)))
+        return false
+    }
+
+    // Refresh auto-imported adjustment rows (LOP / sick / loan), then pull
+    // the per-employee totals — HR-created manual rows are folded in here too.
+    await syncAdjustmentsForPeriod(tenantId, run.year, run.month)
+    const adjustmentTotals = await getAdjustmentTotalsByEmployee(tenantId, run.year, run.month)
+
+    // Run the calculation through the shared helper so a draft preview and
+    // the real run cannot drift in their math.
+    const { payslipValues, totalGross, totalDeductions, totalNet } = buildPayslipsAndTotals(
+        tenantId, payrollRunId, run.year, run.month, activeEmps, adjustmentTotals,
+    )
 
     if (payslipValues.length === 0) {
         await db.update(payrollRuns)
@@ -270,6 +593,16 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
                     netSalary: String(slip.netSalary ?? '0'),
                     companyName,
                     appUrl,
+                    // Itemised breakdown so the email matches the in-app payslip
+                    // view and the PDF download. Lines only render when > 0.
+                    overtime: String(slip.overtime ?? '0'),
+                    commission: String(slip.commission ?? '0'),
+                    unpaidLeaveDays: slip.unpaidLeaveDays ?? 0,
+                    unpaidLeaveDeduction: String(slip.unpaidLeaveDeduction ?? '0'),
+                    sickHalfPayDays: slip.sickHalfPayDays ?? 0,
+                    sickHalfPayDeduction: String(slip.sickHalfPayDeduction ?? '0'),
+                    loanDeduction: String(slip.loanDeduction ?? '0'),
+                    otherDeduction: String(slip.otherDeduction ?? '0'),
                 })
                 sendEmail({ ...opts, to: emp.email }).catch(() => {})
             }
@@ -282,6 +615,18 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
 }
 
 export async function getPayslipsWithEmployees(tenantId: string, payrollRunId: string) {
+    // First decide whether this run has been processed. Draft runs have no
+    // rows in `payslips` (they're only persisted when status flips to
+    // approved), so we compute a live preview using the same math as
+    // runPayroll. The frontend can tell the two shapes apart by `isDraft`
+    // and disable the PDF download for previews (no row to PDF-ify).
+    const run = await getPayrollRunRaw(tenantId, payrollRunId)
+    if (!run) return []
+
+    if (run.status === 'draft') {
+        return getDraftPayslipsPreview(tenantId, run)
+    }
+
     const slips = await db.select({
         id: payslips.id,
         employeeId: payslips.employeeId,
@@ -291,6 +636,12 @@ export async function getPayslipsWithEmployees(tenantId: string, payrollRunId: s
         otherAllowances: payslips.otherAllowances,
         grossSalary: payslips.grossSalary,
         deductions: payslips.deductions,
+        unpaidLeaveDays: payslips.unpaidLeaveDays,
+        unpaidLeaveDeduction: payslips.unpaidLeaveDeduction,
+        sickHalfPayDays: payslips.sickHalfPayDays,
+        sickHalfPayDeduction: payslips.sickHalfPayDeduction,
+        loanDeduction: payslips.loanDeduction,
+        otherDeduction: payslips.otherDeduction,
         netSalary: payslips.netSalary,
         daysWorked: payslips.daysWorked,
         overtime: payslips.overtime,
@@ -306,10 +657,117 @@ export async function getPayslipsWithEmployees(tenantId: string, payrollRunId: s
         .innerJoin(employees, eq(payslips.employeeId, employees.id))
         .where(and(eq(payslips.payrollRunId, payrollRunId), eq(payslips.tenantId, tenantId)))
 
-    return slips.map(s => ({
-        ...s,
-        fullName: `${s.firstName} ${s.lastName}`,
+    return slips.map(s => {
+        const fullName = `${s.firstName} ${s.lastName}`
+        return {
+            ...s,
+            fullName,
+            // Frontend expects `employeeName` on Payslip — alias here so the
+            // sheet doesn't render blanks. Keep `fullName` too for backward
+            // compatibility with any other callers (PDF templates etc.).
+            employeeName: fullName,
+            isDraft: false as const,
+        }
+    })
+}
+
+/**
+ * Build the same row shape as the persisted query, but from in-memory math.
+ * The synthetic `id` is `draft:<runId>:<employeeId>` so React keys are stable
+ * across renders but never collide with real payslip UUIDs — and any
+ * attempt to download a "draft:..." id obviously isn't a UUID, so the PDF
+ * route can detect it and 4xx if someone fakes a request. The UI also
+ * hides the download button entirely when `isDraft` is true.
+ */
+async function getDraftPayslipsPreview(tenantId: string, run: { id: string; year: number; month: number }) {
+    const [emps, adjustmentTotals] = await Promise.all([
+        // One query that gets both the math inputs and the display fields
+        // — saves a round-trip vs calling getPayableEmployees + a second
+        // fetch for names/IBANs.
+        db.select({
+            id: employees.id,
+            firstName: employees.firstName,
+            lastName: employees.lastName,
+            employeeNo: employees.employeeNo,
+            department: sql<string | null>`COALESCE(${orgUnits.name}, ${employees.department})`,
+            designation: employees.designation,
+            iban: employees.iban,
+            bankName: employees.bankName,
+            basicSalary: employees.basicSalary,
+            housingAllowance: employees.housingAllowance,
+            transportAllowance: employees.transportAllowance,
+            otherAllowances: employees.otherAllowances,
+            joinDate: employees.joinDate,
+            contractEndDate: employees.contractEndDate,
+        })
+            .from(employees)
+            .leftJoin(orgUnits, eq(employees.departmentId, orgUnits.id))
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                // MUST match getPayableEmployees — see PAYABLE_STATUSES comment.
+                inArray(employees.status, PAYABLE_STATUSES as unknown as string[]),
+            )),
+        getAdjustmentTotalsByEmployee(tenantId, run.year, run.month),
+    ])
+
+    if (emps.length === 0) return []
+
+    // Strip down to the PayableEmployee shape for the math helper.
+    const mathInputs: PayableEmployee[] = emps.map(e => ({
+        id: e.id,
+        basicSalary: e.basicSalary,
+        housingAllowance: e.housingAllowance,
+        transportAllowance: e.transportAllowance,
+        otherAllowances: e.otherAllowances,
+        joinDate: e.joinDate,
+        contractEndDate: e.contractEndDate,
     }))
+    const { payslipValues } = buildPayslipsAndTotals(
+        tenantId, run.id, run.year, run.month, mathInputs, adjustmentTotals,
+    )
+
+    // Merge the math output with the employee display fields. Iterate by the
+    // employees array (not payslipValues) so the order matches the
+    // alphabetical persisted query.
+    const valuesByEmp = new Map(payslipValues.map(p => [p.employeeId, p]))
+    return emps
+        .map(e => {
+            const v = valuesByEmp.get(e.id)
+            if (!v) return null
+            const fullName = `${e.firstName} ${e.lastName}`
+            return {
+                id: `draft:${run.id}:${e.id}`,
+                employeeId: e.id,
+                basicSalary: v.basicSalary,
+                housingAllowance: v.housingAllowance,
+                transportAllowance: v.transportAllowance,
+                otherAllowances: v.otherAllowances,
+                grossSalary: v.grossSalary,
+                deductions: v.deductions,
+                unpaidLeaveDays: v.unpaidLeaveDays,
+                unpaidLeaveDeduction: v.unpaidLeaveDeduction,
+                sickHalfPayDays: v.sickHalfPayDays,
+                sickHalfPayDeduction: v.sickHalfPayDeduction,
+                loanDeduction: v.loanDeduction,
+                otherDeduction: v.otherDeduction,
+                netSalary: v.netSalary,
+                daysWorked: v.daysWorked,
+                overtime: v.overtime,
+                commission: v.commission,
+                firstName: e.firstName,
+                lastName: e.lastName,
+                employeeNo: e.employeeNo,
+                department: e.department,
+                designation: e.designation,
+                iban: e.iban,
+                bankName: e.bankName,
+                fullName,
+                employeeName: fullName,
+                isDraft: true as const,
+            }
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null)
 }
 
 /** Re-export from exit service so there is a single canonical implementation. */
@@ -424,8 +882,16 @@ export async function getPayslipById(tenantId: string, payslipId: string) {
         housingAllowance: payslips.housingAllowance,
         transportAllowance: payslips.transportAllowance,
         otherAllowances: payslips.otherAllowances,
+        overtime: payslips.overtime,
+        commission: payslips.commission,
         grossSalary: payslips.grossSalary,
         deductions: payslips.deductions,
+        unpaidLeaveDays: payslips.unpaidLeaveDays,
+        unpaidLeaveDeduction: payslips.unpaidLeaveDeduction,
+        sickHalfPayDays: payslips.sickHalfPayDays,
+        sickHalfPayDeduction: payslips.sickHalfPayDeduction,
+        loanDeduction: payslips.loanDeduction,
+        otherDeduction: payslips.otherDeduction,
         netSalary: payslips.netSalary,
         daysWorked: payslips.daysWorked,
         totalDeductions: payslips.deductions,

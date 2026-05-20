@@ -11,6 +11,7 @@ import {
     useLeaveRequests,
     type CreateLeaveBody,
 } from '@/hooks/useLeave'
+import { useColleagues } from '@/hooks/useTeam'
 import { useUpcomingHolidays } from '@/hooks/useHolidays'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -19,6 +20,7 @@ import { GlassCard } from '@/components/shared/GlassCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -40,6 +42,19 @@ import { cn, formatDate } from '@/lib/utils'
 import type { LeaveStatus, LeaveType } from '@/types'
 
 const LEAVE_TYPES: LeaveType[] = ['annual', 'sick', 'maternity', 'paternity', 'unpaid', 'compassionate', 'emergency', 'bereavement', 'hajj']
+
+/**
+ * Inclusive day count between two YYYY-MM-DD strings. Returns 0 when either
+ * end is missing or end < start, so callers can render the chip without
+ * worrying about NaN or negative numbers.
+ */
+function computeDays(startISO: string, endISO: string): number {
+    if (!startISO || !endISO) return 0
+    const start = new Date(startISO + 'T00:00:00Z').getTime()
+    const end = new Date(endISO + 'T00:00:00Z').getTime()
+    if (Number.isNaN(start) || Number.isNaN(end) || end < start) return 0
+    return Math.round((end - start) / 86_400_000) + 1
+}
 
 const STATUS_TONE: Record<LeaveStatus, string> = {
     pending: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
@@ -219,20 +234,55 @@ function NewLeaveDialog({
 }) {
     const { t } = useTranslation()
     const create = useCreateLeave()
+    const { data: colleagues = [] } = useColleagues()
     const [type, setType] = useState<LeaveType>('annual')
     const [startDate, setStartDate] = useState('')
     const [endDate, setEndDate] = useState('')
     const [reason, setReason] = useState('')
+    const [handoverTo, setHandoverTo] = useState('')
+    const [handoverNotes, setHandoverNotes] = useState('')
+
+    // Handover required only if there's actually someone to hand over to.
+    // A solo employee (no other active member in their department) shouldn't
+    // be blocked from submitting.
+    const handoverRequired = colleagues.length > 0
+
+    // Hoist "today" so both date inputs share the same lower bound and the
+    // recomputation stays cheap.
+    const todayISO = new Date().toISOString().slice(0, 10)
+
+    // Derived day count — inclusive of both endpoints. Lets the UI show
+    // "3 days" next to the date row without an extra state field.
+    const days = computeDays(startDate, endDate)
+
+    function handleStartChange(value: string) {
+        setStartDate(value)
+        // Snap end-date forward when it would otherwise leave the request
+        // invalid (empty, or earlier than the new start). Default to a
+        // one-day request — that's the most common case and saves a click.
+        if (!endDate || endDate < value) setEndDate(value)
+    }
 
     function onSubmit(e: FormEvent) {
         e.preventDefault()
         if (!employeeId) return
+        if (!startDate || !endDate) return
+        if (endDate < startDate) {
+            toast.error(t('leave.endBeforeStart', { defaultValue: 'End date can\'t be before the start date' }))
+            return
+        }
+        if (handoverRequired && !handoverTo) {
+            toast.error(t('leave.handoverRequired', { defaultValue: 'Please pick a colleague to hand over to' }))
+            return
+        }
         const body: CreateLeaveBody = {
             employeeId,
             leaveType: type,
             startDate,
             endDate,
             ...(reason ? { reason } : {}),
+            ...(handoverTo ? { handoverTo } : {}),
+            ...(handoverNotes ? { handoverNotes } : {}),
         }
         create.mutate(body, {
             onSuccess: () => {
@@ -240,6 +290,8 @@ function NewLeaveDialog({
                 setStartDate('')
                 setEndDate('')
                 setReason('')
+                setHandoverTo('')
+                setHandoverNotes('')
                 onSubmitted()
             },
         })
@@ -269,18 +321,83 @@ function NewLeaveDialog({
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <Label>{t('leave.from')}</Label>
-                            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+                            <Label htmlFor="leave-from">{t('leave.from')}</Label>
+                            <DatePicker
+                                id="leave-from"
+                                value={startDate}
+                                min={todayISO}
+                                onChange={handleStartChange}
+                                placeholder={t('leave.from')}
+                            />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>{t('leave.to')}</Label>
-                            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+                            <Label htmlFor="leave-to">{t('leave.to')}</Label>
+                            <DatePicker
+                                id="leave-to"
+                                value={endDate}
+                                // End picker can't go earlier than the chosen start.
+                                // Falls back to today when start isn't picked yet.
+                                min={startDate || todayISO}
+                                onChange={setEndDate}
+                                disabled={!startDate}
+                                placeholder={t('leave.to')}
+                            />
                         </div>
                     </div>
+                    {days > 0 ? (
+                        <p className="-mt-2 text-[11px] text-muted-foreground">
+                            {days} {days === 1 ? t('leave.days', { count: days }) : t('leave.days_plural', { count: days })}
+                        </p>
+                    ) : null}
                     <div className="space-y-1.5">
                         <Label>{t('leave.reason')}</Label>
                         <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
                     </div>
+
+                    {/* Handover — required iff there's at least one colleague in
+                        the same department, so a single-person department isn't
+                        blocked from applying. */}
+                    <div className="space-y-1.5">
+                        <Label>
+                            {t('leave.handoverTo', { defaultValue: 'Handover to' })}
+                            {handoverRequired ? <span className="ml-0.5 text-destructive">*</span> : null}
+                        </Label>
+                        {colleagues.length > 0 ? (
+                            <Select value={handoverTo} onValueChange={setHandoverTo}>
+                                <SelectTrigger aria-invalid={handoverRequired && !handoverTo ? 'true' : 'false'}>
+                                    <SelectValue placeholder={t('common.selectEmployee', { defaultValue: 'Select an employee' })} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {colleagues.map((c) => (
+                                        <SelectItem key={c.id} value={c.id}>
+                                            {c.firstName} {c.lastName}
+                                            {c.designation ? <span className="ml-1 text-xs text-muted-foreground"> · {c.designation}</span> : null}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <p className="rounded-md border border-dashed border-border bg-card/40 px-3 py-2 text-xs text-muted-foreground">
+                                No colleagues in your department — handover not required.
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <Label>{t('leave.handoverNotes', { defaultValue: 'Handover notes (optional)' })}</Label>
+                        <Input
+                            value={handoverNotes}
+                            onChange={(e) => setHandoverNotes(e.target.value)}
+                            maxLength={500}
+                            placeholder="e.g. follow up with the Acme deal on Tuesday"
+                        />
+                        {handoverTo ? (
+                            <p className="text-[11px] text-muted-foreground">
+                                Your handover person will be notified once HR approves this request.
+                            </p>
+                        ) : null}
+                    </div>
+
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                             {t('common.cancel')}

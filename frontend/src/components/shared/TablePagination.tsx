@@ -32,7 +32,7 @@ export function TablePagination({ total, offset, limit, onChange, loading = fals
                         disabled={!hasPrev || loading}
                         onClick={() => onChange(Math.max(0, offset - limit))}
                     >
-                        <ChevronLeft className="h-4 w-4 mr-1" />
+                        <ChevronLeft className="size-4 mr-1" />
                         Previous
                     </Button>
                     <Button
@@ -42,7 +42,7 @@ export function TablePagination({ total, offset, limit, onChange, loading = fals
                         onClick={() => onChange(offset + limit)}
                     >
                         Next
-                        <ChevronRight className="h-4 w-4 ml-1" />
+                        <ChevronRight className="size-4 ml-1" />
                     </Button>
                 </div>
             )}

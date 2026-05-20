@@ -108,37 +108,37 @@ export function ShiftsTab() {
 
                 <Section icon={Clock} title={t('orgSettings.shifts.listTitle')} description={t('orgSettings.shifts.listDesc')}>
                     {isLoading ? (
-                        <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />)}</div>
+                        <div className="space-y-2">{[1, 2, 3].map(i => <div key={`div-${i}`} className="h-14 rounded-lg bg-muted animate-pulse" />)}</div>
                     ) : shifts.length === 0 ? (
                         <div className="text-center py-8 text-sm text-muted-foreground">
-                            <Clock className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                            <Clock className="size-8 mx-auto mb-2 opacity-40" />
                             <p>{t('orgSettings.shifts.empty')}</p>
                         </div>
                     ) : (
                         <div className="divide-y divide-border/50 rounded-lg border bg-background">
                             {shifts.map(s => (
-                                <div key={s.id} className="flex items-center gap-3 px-3 py-3">
+                                <div key={s.id} className="flex items-center gap-3 p-3">
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className={cn('font-medium text-sm', !s.isActive && 'line-through text-muted-foreground')}>{s.name}</span>
                                             {!s.isActive && <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-medium">{t('common.inactive')}</span>}
                                         </div>
                                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                                            <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{s.startTime}–{s.endTime}</span>
+                                            <span className="inline-flex items-center gap-1"><Clock className="size-3" />{s.startTime}–{s.endTime}</span>
                                             {s.weeklyOffDays.length > 0 && (
                                                 <span className="inline-flex items-center gap-1">
-                                                    <Calendar className="h-3 w-3" />
+                                                    <Calendar className="size-3" />
                                                     {s.weeklyOffDays.map(d => d[0].toUpperCase() + d.slice(1, 3)).join(', ')}
                                                 </span>
                                             )}
                                         </div>
                                     </div>
-                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={() => openEdit(s)} title={t('common.edit')}>
-                                        <Pencil className="h-3.5 w-3.5" />
+                                    <Button size="sm" variant="ghost" className="size-7 p-0 text-muted-foreground hover:text-foreground" onClick={() => openEdit(s)} title={t('common.edit')}>
+                                        <Pencil className="size-3.5" />
                                     </Button>
                                     {s.isActive && (
-                                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => setRemoveTarget(s)} title={t('common.delete')}>
-                                            <Trash2 className="h-3.5 w-3.5" />
+                                        <Button size="sm" variant="ghost" className="size-7 p-0 text-destructive hover:text-destructive" onClick={() => setRemoveTarget(s)} title={t('common.delete')}>
+                                            <Trash2 className="size-3.5" />
                                         </Button>
                                     )}
                                 </div>
@@ -147,7 +147,7 @@ export function ShiftsTab() {
                     )}
 
                     <Button variant="ghost" size="sm" className="gap-1.5 text-primary font-medium mt-2" onClick={openCreate}>
-                        <Plus className="h-3.5 w-3.5" /> {t('orgSettings.shifts.addShift')}
+                        <Plus className="size-3.5" /> {t('orgSettings.shifts.addShift')}
                     </Button>
                 </Section>
             </div>
@@ -165,7 +165,6 @@ export function ShiftsTab() {
                                     value={form.name}
                                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                                     placeholder={t('orgSettings.shifts.namePlaceholder')}
-                                    autoFocus
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-3">

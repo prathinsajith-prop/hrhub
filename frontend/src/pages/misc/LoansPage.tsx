@@ -209,7 +209,7 @@ export function LoansPage() {
                 description={t('loans.pageDesc')}
                 actions={canManage ? (
                     <Button onClick={() => setCreateOpen(true)}>
-                        <Plus className="h-4 w-4 mr-1.5" />
+                        <Plus className="size-4 mr-1.5" />
                         {t('loans.newLoan')}
                     </Button>
                 ) : undefined}
@@ -218,7 +218,7 @@ export function LoansPage() {
             {/* KPI Strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {isLoading ? (
-                    Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)
+                    Array.from({ length: 4 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-20 rounded-xl" />)
                 ) : (
                     <>
                         <KpiCardCompact label={t('loans.kpi.total')} value={summary?.total ?? 0} icon={Banknote} />
@@ -270,7 +270,7 @@ export function LoansPage() {
                             ) : loans.length === 0 ? (
                                 <tr>
                                     <td colSpan={canManage ? 8 : 7} className="px-4 py-12 text-center text-muted-foreground">
-                                        <Banknote className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                                        <Banknote className="size-10 mx-auto mb-2 opacity-30" />
                                         <p>{t('loans.noLoans')}</p>
                                     </td>
                                 </tr>
@@ -342,15 +342,15 @@ export function LoansPage() {
                                                         {loan.status === 'pending' && (
                                                             <>
                                                                 <Button variant="success" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); handleApprove(loan) }} disabled={approve.isPending}>
-                                                                    <Check className="h-3.5 w-3.5 mr-1" />
+                                                                    <Check className="size-3.5 mr-1" />
                                                                     Approve
                                                                 </Button>
                                                                 <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); setRejectTarget(loan) }}>
-                                                                    <X className="h-3.5 w-3.5 mr-1" />
+                                                                    <X className="size-3.5 mr-1" />
                                                                     Reject
                                                                 </Button>
-                                                                <Button variant="ghost" size="icon-sm" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteTarget(loan) }} aria-label="Delete loan">
-                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                <Button variant="ghost" size="icon-sm" className="size-7 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteTarget(loan) }} aria-label="Delete loan">
+                                                                    <Trash2 className="size-3.5" />
                                                                 </Button>
                                                             </>
                                                         )}

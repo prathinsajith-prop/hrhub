@@ -109,7 +109,10 @@ export async function countActiveEmployees(tenantId: string): Promise<number> {
         .where(and(
             eq(employees.tenantId, tenantId),
             eq(employees.isArchived, false),
-            inArray(employees.status, ['active', 'probation', 'onboarding', 'suspended', 'visa_expired']),
+            // Quota counts every non-terminated employee — 'probation' is a
+            // contractType, not a status, so it never matched here. Drop it
+            // to keep the filter honest.
+            inArray(employees.status, ['active', 'onboarding', 'suspended', 'visa_expired']),
         ))
     return Number(total)
 }

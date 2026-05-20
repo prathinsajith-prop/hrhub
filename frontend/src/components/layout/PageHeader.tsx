@@ -10,7 +10,7 @@ interface PageHeaderProps {
 }
 
 /**
- * Standardized page header — use at the top of each page to keep
+ * Standardized page header - use at the top of each page to keep
  * titles, descriptions and primary actions consistent.
  */
 export function PageHeader({
@@ -33,7 +33,7 @@ export function PageHeader({
             {eyebrow}
           </div>
         )}
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground font-display text-balance">
+        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground font-display text-balance">
           {title}
         </h1>
         {description && (

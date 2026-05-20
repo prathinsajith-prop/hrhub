@@ -26,7 +26,7 @@ interface EmployeeSelectProps {
 
 function EmployeeAvatar({ employee, size = 'sm' }: { employee: Pick<Employee, 'firstName' | 'lastName' | 'avatarUrl'>; size?: 'sm' | 'xs' }) {
     const initials = `${employee.firstName?.[0] ?? ''}${employee.lastName?.[0] ?? ''}`.toUpperCase()
-    const sizeClass = size === 'xs' ? 'h-5 w-5 text-[9px]' : 'h-6 w-6 text-[10px]'
+    const sizeClass = size === 'xs' ? 'size-5 text-[9px]' : 'size-6 text-[10px]'
     return employee.avatarUrl ? (
         <img
             src={employee.avatarUrl}
@@ -115,11 +115,11 @@ export function EmployeeSelect({
                                 onClick={e => { e.stopPropagation(); onValueChange(''); onEmployeeChange?.(null) }}
                                 className="flex items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
                             >
-                                <X className="h-3 w-3" />
+                                <X className="size-3" />
                             </span>
                         )}
                         <ChevronDown className={cn(
-                            'h-4 w-4 text-muted-foreground/60 transition-transform duration-200',
+                            'size-4 text-muted-foreground/60 transition-transform duration-200',
                             open && 'rotate-180',
                         )} />
                     </span>
@@ -142,7 +142,7 @@ export function EmployeeSelect({
                     <CommandList id={listboxId} className="max-h-56 overflow-y-auto">
                         {isFetching ? (
                             <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <Loader2 className="size-3.5 animate-spin" />
                                 {t('common.loading', 'Loading…')}
                             </div>
                         ) : employees.length === 0 ? (
@@ -166,7 +166,7 @@ export function EmployeeSelect({
                                         className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer"
                                     >
                                         <Check className={cn(
-                                            'h-3.5 w-3.5 shrink-0 text-primary transition-opacity',
+                                            'size-3.5 shrink-0 text-primary transition-opacity',
                                             value === emp.id ? 'opacity-100' : 'opacity-0',
                                         )} />
                                         <EmployeeAvatar employee={emp} size="sm" />

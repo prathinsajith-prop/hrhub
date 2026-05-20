@@ -86,9 +86,9 @@ function SortableRow({ stage, onEdit, onDelete, onSetFirst, onSetFinal, onToggle
                 {...attributes}
                 {...listeners}
             >
-                <GripVertical className="h-4 w-4" />
+                <GripVertical className="size-4" />
             </button>
-            <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', color.dotClass)} aria-hidden="true" />
+            <span className={cn('size-2.5 rounded-full shrink-0', color.dotClass)} aria-hidden="true" />
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium truncate">{stage.label}</p>
@@ -111,43 +111,43 @@ function SortableRow({ stage, onEdit, onDelete, onSetFirst, onSetFinal, onToggle
                     type="button"
                     variant={stage.isFirst ? 'secondary' : 'ghost'}
                     size="icon"
-                    className={cn('h-7 w-7', stage.isFirst && 'text-success')}
+                    className={cn('size-7', stage.isFirst && 'text-success')}
                     onClick={onSetFirst}
                     disabled={isUpdating || stage.isFirst}
                     aria-label="Mark as first stage"
                     title="Mark as first stage"
                 >
-                    <Flag className="h-3.5 w-3.5" />
+                    <Flag className="size-3.5" />
                 </Button>
                 <Button
                     type="button"
                     variant={stage.isFinal ? 'secondary' : 'ghost'}
                     size="icon"
-                    className={cn('h-7 w-7', stage.isFinal && 'text-destructive')}
+                    className={cn('size-7', stage.isFinal && 'text-destructive')}
                     onClick={onSetFinal}
                     disabled={isUpdating || stage.isFinal}
                     aria-label="Mark as final stage"
                     title="Mark as final stage"
                 >
-                    <Goal className="h-3.5 w-3.5" />
+                    <Goal className="size-3.5" />
                 </Button>
                 <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className={cn('h-7 w-7', !stage.showInKanban && 'text-muted-foreground/60')}
+                    className={cn('size-7', !stage.showInKanban && 'text-muted-foreground/60')}
                     onClick={onToggleKanban}
                     disabled={isUpdating}
                     aria-label={stage.showInKanban ? 'Hide from kanban' : 'Show on kanban'}
                     title={stage.showInKanban ? 'Hide from kanban' : 'Show on kanban'}
                 >
-                    {stage.showInKanban ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    {stage.showInKanban ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
                 </Button>
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit} aria-label="Edit stage">
-                    <Pencil className="h-3.5 w-3.5" />
+                <Button type="button" variant="ghost" size="icon" className="size-7" onClick={onEdit} aria-label="Edit stage">
+                    <Pencil className="size-3.5" />
                 </Button>
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={onDelete} aria-label="Delete stage">
-                    <Trash2 className="h-3.5 w-3.5" />
+                <Button type="button" variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={onDelete} aria-label="Delete stage">
+                    <Trash2 className="size-3.5" />
                 </Button>
             </div>
         </div>
@@ -237,7 +237,6 @@ function StageDialog({
                             value={label}
                             onChange={(e) => setLabel(e.target.value)}
                             maxLength={100}
-                            autoFocus
                             placeholder="e.g. Reference check"
                             onKeyDown={(e) => { if (e.key === 'Enter' && canSave) { e.preventDefault(); handleSave() } }}
                         />
@@ -252,7 +251,7 @@ function StageDialog({
                                     previewColor.badgeClass,
                                 )}
                             >
-                                <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', previewColor.dotClass)} />
+                                <span className={cn('size-1.5 rounded-full shrink-0', previewColor.dotClass)} />
                                 <span className="truncate">{previewLabel}</span>
                             </span>
                         </div>
@@ -269,14 +268,14 @@ function StageDialog({
                                         aria-pressed={selected}
                                         title={c.label}
                                         className={cn(
-                                            'h-8 w-8 rounded-full flex items-center justify-center transition-all',
+                                            'size-8 rounded-full flex items-center justify-center transition-all',
                                             c.swatchClass,
                                             selected
                                                 ? 'ring-2 ring-offset-2 ring-offset-background ring-foreground'
                                                 : 'opacity-80 hover:opacity-100 hover:scale-110',
                                         )}
                                     >
-                                        {selected && <Check className="h-4 w-4 text-white" />}
+                                        {selected && <Check className="size-4 text-white" />}
                                     </button>
                                 )
                             })}
@@ -363,7 +362,7 @@ export function RecruitmentStagesTab() {
             toast.success('Stage deleted', `${pendingDelete.label} removed from the pipeline.`)
             setPendingDelete(null)
         } catch (err: unknown) {
-            // Surface the 409 candidate-count message verbatim — it's actionable.
+            // Surface the 409 candidate-count message verbatim - it's actionable.
             const msg = (err as { message?: string })?.message ?? 'Could not delete the stage.'
             toast.error('Delete blocked', msg)
         }
@@ -385,7 +384,7 @@ export function RecruitmentStagesTab() {
                 <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
                     <div className="flex items-start gap-3 min-w-0">
                         <div className="rounded-lg bg-primary/10 p-2 shrink-0">
-                            <Workflow className="h-4 w-4 text-primary" />
+                            <Workflow className="size-4 text-primary" />
                         </div>
                         <div className="min-w-0">
                             <h2 className="text-base font-semibold">Recruitment stages</h2>
@@ -400,7 +399,7 @@ export function RecruitmentStagesTab() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
+                            leftIcon={<RotateCcw className="size-3.5" />}
                             onClick={() => setResetConfirmOpen(true)}
                             disabled={reset.isPending || isLoading}
                         >
@@ -409,7 +408,7 @@ export function RecruitmentStagesTab() {
                         <Button
                             type="button"
                             size="sm"
-                            leftIcon={<Plus className="h-3.5 w-3.5" />}
+                            leftIcon={<Plus className="size-3.5" />}
                             onClick={openCreate}
                         >
                             Add stage
@@ -419,14 +418,14 @@ export function RecruitmentStagesTab() {
 
                 {isLoading ? (
                     <div className="space-y-2">
-                        {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-12 rounded-lg" />)}
+                        {[0, 1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-12 rounded-lg" />)}
                     </div>
                 ) : localStages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 text-center">
-                        <Workflow className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                        <Workflow className="size-10 text-muted-foreground/40 mb-3" />
                         <p className="text-sm font-medium">No stages yet</p>
                         <p className="text-xs text-muted-foreground mt-1">Add a stage to get started, or reset to system defaults.</p>
-                        <Button type="button" size="sm" className="mt-3" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={openCreate}>
+                        <Button type="button" size="sm" className="mt-3" leftIcon={<Plus className="size-3.5" />} onClick={openCreate}>
                             Add your first stage
                         </Button>
                     </div>
@@ -473,7 +472,7 @@ export function RecruitmentStagesTab() {
                 open={resetConfirmOpen}
                 onOpenChange={setResetConfirmOpen}
                 title="Reset recruitment stages?"
-                description="This restores all stages to their system defaults — labels, colours, and order. Your custom names will be lost."
+                description="This restores all stages to their system defaults - labels, colours, and order. Your custom names will be lost."
                 confirmLabel="Reset"
                 variant="warning"
                 onConfirm={confirmReset}

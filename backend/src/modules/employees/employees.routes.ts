@@ -387,10 +387,10 @@ export default async function (fastify: any): Promise<void> {
     }, async (request: any, reply: any) => {
         const { employees: rows } = request.body as { employees: Record<string, string>[] }
         if (!Array.isArray(rows) || rows.length === 0) {
-            return reply.code(400).send({ error: 'employees array is required' })
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employees array is required' })
         }
         if (rows.length > 500) {
-            return reply.code(400).send({ error: 'Max 500 employees per import' })
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Max 500 employees per import' })
         }
         const results: { row: number; error: string }[] = []
         let created = 0

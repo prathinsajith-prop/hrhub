@@ -105,7 +105,7 @@ export function LoanScheduleDialog({ loan, open, onClose, canManage }: {
                 </DialogHeader>
                 <div className="overflow-y-auto flex-1 divide-y">
                     {isLoading ? (
-                        <div className="p-4 space-y-2">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-9 w-full" />)}</div>
+                        <div className="p-4 space-y-2">{[1, 2, 3, 4].map(i => <Skeleton key={`skeleton-${i}`} className="h-9 w-full" />)}</div>
                     ) : entries.length === 0 ? (
                         <div className="p-8 text-center text-sm text-muted-foreground">No schedule available.</div>
                     ) : entries.map(en => {
@@ -122,13 +122,13 @@ export function LoanScheduleDialog({ loan, open, onClose, canManage }: {
                         return (
                             <div key={en.installmentNo} className={cn('flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 flex-wrap', tone)}>
                                 <div className={cn(
-                                    'flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-semibold tabular-nums shrink-0',
+                                    'flex items-center justify-center size-7 rounded-full text-[11px] font-semibold tabular-nums shrink-0',
                                     isPaid ? 'bg-emerald-100 text-emerald-800'
                                         : isOverdue ? 'bg-red-100 text-red-800'
                                             : isUpcoming ? 'bg-muted/60 text-muted-foreground/60'
                                                 : 'bg-muted text-muted-foreground',
                                 )}>
-                                    {isPaid ? <Check className="h-3.5 w-3.5" /> : en.installmentNo}
+                                    {isPaid ? <Check className="size-3.5" /> : en.installmentNo}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className={cn('text-xs font-semibold leading-tight', isUpcoming && 'text-muted-foreground')}>
@@ -147,7 +147,7 @@ export function LoanScheduleDialog({ loan, open, onClose, canManage }: {
                                 {/* Right cell: status indicator + Pay (only when canPay) */}
                                 {isPaid ? (
                                     <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-emerald-700 font-medium">
-                                        <Check className="h-3 w-3" />
+                                        <Check className="size-3" />
                                         <span>Paid on {en.paidDate ? formatDate(en.paidDate) : '—'}</span>
                                     </div>
                                 ) : (
@@ -155,15 +155,15 @@ export function LoanScheduleDialog({ loan, open, onClose, canManage }: {
                                         <span className="shrink-0">
                                             {isOverdue ? (
                                                 <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px]">
-                                                    <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />Overdue
+                                                    <AlertTriangle className="size-2.5 mr-0.5" />Overdue
                                                 </Badge>
                                             ) : isUpcoming ? (
                                                 <Badge className="bg-slate-100 text-slate-600 border-slate-200 text-[10px]">
-                                                    <Calendar className="h-2.5 w-2.5 mr-0.5" />Upcoming
+                                                    <Calendar className="size-2.5 mr-0.5" />Upcoming
                                                 </Badge>
                                             ) : (
                                                 <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">
-                                                    <Calendar className="h-2.5 w-2.5 mr-0.5" />Pending
+                                                    <Calendar className="size-2.5 mr-0.5" />Pending
                                                 </Badge>
                                             )}
                                         </span>
@@ -189,7 +189,7 @@ export function LoanScheduleDialog({ loan, open, onClose, canManage }: {
             </DialogContent>
         </Dialog>
 
-        {/* ConfirmDialog rendered as a sibling — never nested inside the
+        {/* ConfirmDialog rendered as a sibling - never nested inside the
             schedule Dialog, which avoids Radix focus/dismiss conflicts that
             could otherwise close the parent dialog or trigger navigation. */}
         <ConfirmDialog
@@ -282,10 +282,10 @@ const LoanRow = memo(function LoanRow({ loan, canManage }: { loan: EmployeeLoan;
                         {canManage && isPending && (
                             <>
                                 <Button variant="success" size="sm" className="h-7 text-xs" onClick={() => setApproveConfirm(true)}>
-                                    <Check className="h-3.5 w-3.5 mr-1" />Approve
+                                    <Check className="size-3.5 mr-1" />Approve
                                 </Button>
                                 <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={() => setRejectOpen(true)}>
-                                    <X className="h-3.5 w-3.5 mr-1" />Reject
+                                    <X className="size-3.5 mr-1" />Reject
                                 </Button>
                             </>
                         )}
@@ -294,7 +294,7 @@ const LoanRow = memo(function LoanRow({ loan, canManage }: { loan: EmployeeLoan;
                                 variant={isActive ? 'info' : 'outline'} size="sm" type="button" className="h-7 text-xs"
                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setScheduleOpen(true) }}
                             >
-                                <Calendar className="h-3.5 w-3.5 mr-1" />
+                                <Calendar className="size-3.5 mr-1" />
                                 {isActive ? 'Record Payment' : 'Schedule'}
                             </Button>
                         )}
@@ -306,12 +306,12 @@ const LoanRow = memo(function LoanRow({ loan, canManage }: { loan: EmployeeLoan;
                                 onClick={() => setDeleteConfirm(true)}
                                 aria-label="Delete loan"
                             >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Trash2 className="size-3.5" />
                             </Button>
                         )}
                         {(loan.reason || loan.notes || loan.approverName) && (
                             <Button variant="ghost" size="icon-sm" onClick={() => setExpanded(v => !v)} aria-label="Toggle details">
-                                {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
                             </Button>
                         )}
                     </div>
@@ -320,7 +320,7 @@ const LoanRow = memo(function LoanRow({ loan, canManage }: { loan: EmployeeLoan;
                 {/* Progress (shown when loan has been approved at least once) */}
                 {(isActive || isCompleted) && total > 0 && (
                     <div className="mt-2 space-y-1.5">
-                        {/* Installment counter + percent + received/pending — single dense line */}
+                        {/* Installment counter + percent + received/pending - single dense line */}
                         <div className="flex items-center justify-between gap-3 text-[11px] leading-none">
                             <span className="font-medium text-muted-foreground tabular-nums">
                                 {paid}/{total} installments
@@ -410,10 +410,10 @@ export function EmployeeLoansPanel({ employeeId, canManage }: Props) {
             </CardHeader>
             <CardContent>
                 {isLoading ? (
-                    <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+                    <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-12 w-full" />)}</div>
                 ) : loans.length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground">
-                        <DollarSign className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                        <DollarSign className="size-10 mx-auto mb-3 opacity-30" />
                         <p className="text-sm font-medium">No loans</p>
                         <p className="text-xs mt-1">This employee has no loan records</p>
                     </div>

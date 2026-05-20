@@ -9,7 +9,7 @@ export function NotFoundPage() {
         <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-8 text-center">
             <div className="space-y-1">
                 <p className="text-8xl font-bold text-muted-foreground/20 select-none">404</p>
-                <h1 className="text-2xl font-bold">{t('errors.notFound')}</h1>
+                <h1 className="text-2xl font-semibold">{t('errors.notFound')}</h1>
                 <p className="text-sm text-muted-foreground">{t('errors.notFoundDesc')}</p>
             </div>
             <button

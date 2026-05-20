@@ -108,7 +108,7 @@ function TwoFactorCard() {
             const result = await verify.mutateAsync(token)
             toast.success(t('settingsDetail.security.mfaEnabled'), t('settingsDetail.security.mfaEnabledDesc'))
             setStep('idle'); setToken(''); setQrDataUrl(null); setSecret(null)
-            // Show backup codes — user must save them now
+            // Show backup codes - user must save them now
             if (result.backupCodes?.length) setBackupCodes(result.backupCodes)
         } catch {
             toast.error(t('settingsDetail.security.verificationFailed'), t('settingsDetail.security.verificationFailedDesc'))
@@ -157,7 +157,7 @@ function TwoFactorCard() {
     const downloadBackupCodes = () => {
         if (!backupCodes) return
         const content = [
-            'HRHub — Two-Factor Authentication Backup Codes',
+            'HRHub - Two-Factor Authentication Backup Codes',
             `Generated: ${new Date().toISOString()}`,
             '',
             'Each code can be used only once. Keep them somewhere safe.',
@@ -182,7 +182,7 @@ function TwoFactorCard() {
             description={t('settingsDetail.security.mfaDesc')}
             action={!isLoading && (
                 <Badge variant={enabled ? 'success' : 'secondary'} className="gap-1">
-                    {enabled && <CheckCircle2 className="h-3 w-3" />}
+                    {enabled && <CheckCircle2 className="size-3" />}
                     {enabled ? t('common.active') : t('settingsDetail.security.mfaOff')}
                 </Badge>
             )}
@@ -194,7 +194,7 @@ function TwoFactorCard() {
                     {step === 'idle' && (
                         <div className="rounded-lg border border-border bg-muted/30 p-4 flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3 min-w-0">
-                                <Smartphone className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <Smartphone className="size-4 text-muted-foreground shrink-0" />
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium leading-tight">{t('settingsDetail.security.authenticatorApp')}</p>
                                     <p className="text-xs text-muted-foreground mt-0.5 truncate">
@@ -218,7 +218,7 @@ function TwoFactorCard() {
                     {step === 'idle' && enabled && !backupCodes && (
                         <div className="rounded-lg border border-border bg-muted/30 p-4 flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3 min-w-0">
-                                <Key className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <Key className="size-4 text-muted-foreground shrink-0" />
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium leading-tight">{t('settingsDetail.security.recoveryBackupCodes')}</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -238,7 +238,7 @@ function TwoFactorCard() {
                     {backupCodes && (
                         <div className="space-y-3 rounded-lg border-2 border-amber-500/30 bg-amber-500/5 p-4">
                             <div className="flex items-start gap-2">
-                                <Key className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                                <Key className="size-4 text-amber-600 shrink-0 mt-0.5" />
                                 <div className="min-w-0 flex-1">
                                     <p className="text-sm font-semibold text-foreground">{t('settingsDetail.security.saveCodesNow')}</p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -297,7 +297,7 @@ function TwoFactorCard() {
 
                             <div className="grid sm:grid-cols-[auto_1fr] gap-4 items-start">
                                 <div className="rounded-lg bg-background border border-border p-2 mx-auto sm:mx-0">
-                                    <img src={qrDataUrl} alt={t('settingsDetail.security.qrAlt')} className="rounded w-40 h-40 block" />
+                                    <img src={qrDataUrl} alt={t('settingsDetail.security.qrAlt')} className="rounded size-40 block" />
                                 </div>
                                 {secret && (
                                     <div className="space-y-2">
@@ -422,12 +422,12 @@ function IpAllowlistCard() {
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                        className="size-7 text-muted-foreground hover:text-destructive"
                                         onClick={() => handleRemove(ip)}
                                         disabled={updateList.isPending}
                                         aria-label={t('settingsDetail.security.removeIp', { ip })}
                                     >
-                                        <Trash2 className="h-3.5 w-3.5" />
+                                        <Trash2 className="size-3.5" />
                                     </Button>
                                 </div>
                             ))}
@@ -441,7 +441,7 @@ function IpAllowlistCard() {
                             onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') handleAdd() }}
                             className="font-mono"
                         />
-                        <Button size="sm" onClick={handleAdd} loading={updateList.isPending} leftIcon={<Plus className="h-3.5 w-3.5" />}>
+                        <Button size="sm" onClick={handleAdd} loading={updateList.isPending} leftIcon={<Plus className="size-3.5" />}>
                             {t('common.add')}
                         </Button>
                     </div>
@@ -478,15 +478,15 @@ function LoginHistoryCard() {
     }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
     const eventIcon = (type: string) => {
-        if (type === 'login') return <LogIn className="h-3.5 w-3.5 text-green-600" />
-        if (type === 'logout') return <LogOut className="h-3.5 w-3.5 text-gray-500" />
-        if (type === 'failed_login') return <XCircle className="h-3.5 w-3.5 text-red-500" />
-        return <Shield className="h-3.5 w-3.5 text-blue-500" />
+        if (type === 'login') return <LogIn className="size-3.5 text-green-600" />
+        if (type === 'logout') return <LogOut className="size-3.5 text-gray-500" />
+        if (type === 'failed_login') return <XCircle className="size-3.5 text-red-500" />
+        return <Shield className="size-3.5 text-blue-500" />
     }
 
     const deviceIcon = (type: string) => {
-        if (type === 'mobile' || type === 'tablet') return <Smartphone className="h-3.5 w-3.5 text-muted-foreground" />
-        return <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+        if (type === 'mobile' || type === 'tablet') return <Smartphone className="size-3.5 text-muted-foreground" />
+        return <Monitor className="size-3.5 text-muted-foreground" />
     }
 
     return (
@@ -496,7 +496,7 @@ function LoginHistoryCard() {
             description={t('settingsDetail.security.loginHistoryDesc')}
         >
             {isLoading ? (
-                <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="h-12 rounded bg-muted animate-pulse" />)}</div>
+                <div className="space-y-2">{[1, 2, 3].map(i => <div key={`div-${i}`} className="h-12 rounded bg-muted animate-pulse" />)}</div>
             ) : history.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-10 border rounded-lg">{t('settingsDetail.security.noLoginHistory')}</p>
             ) : (
@@ -619,14 +619,14 @@ export function SecurityTab() {
                             <p className="text-sm font-medium">{t('settingsDetail.security.exportAllData')}</p>
                             <p className="text-xs text-muted-foreground">{t('settingsDetail.security.exportAllDataDesc')}</p>
                         </div>
-                        <Button variant="outline" size="sm" leftIcon={<FileText className="h-3.5 w-3.5" />} className="shrink-0">{t('common.export')}</Button>
+                        <Button variant="outline" size="sm" leftIcon={<FileText className="size-3.5" />} className="shrink-0">{t('common.export')}</Button>
                     </div>
                     <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20 bg-destructive/5">
                         <div className="min-w-0">
                             <p className="text-sm font-medium text-destructive">{t('settings.deleteAccount')}</p>
                             <p className="text-xs text-muted-foreground">{t('settingsDetail.security.deleteAccountDesc')}</p>
                         </div>
-                        <Button variant="destructive" size="sm" leftIcon={<Trash2 className="h-3.5 w-3.5" />} className="shrink-0">{t('common.delete')}</Button>
+                        <Button variant="destructive" size="sm" leftIcon={<Trash2 className="size-3.5" />} className="shrink-0">{t('common.delete')}</Button>
                     </div>
                 </div>
             </Section>

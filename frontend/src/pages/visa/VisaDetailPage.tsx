@@ -57,9 +57,9 @@ const FALLBACK_VISA_STEPS = [
 ]
 
 function UrgencyIcon({ level }: { level: string }) {
-    if (level === 'critical') return <AlertTriangle className="h-4 w-4 text-destructive" />
-    if (level === 'urgent') return <Clock className="h-4 w-4 text-warning" />
-    return <CheckCircle2 className="h-4 w-4 text-success" />
+    if (level === 'critical') return <AlertTriangle className="size-4 text-destructive" />
+    if (level === 'urgent') return <Clock className="size-4 text-warning" />
+    return <CheckCircle2 className="size-4 text-success" />
 }
 
 const CATEGORIES: CostCategory[] = ['govt_fee', 'medical', 'typing', 'translation', 'other']
@@ -115,7 +115,7 @@ export function VisaDetailPage() {
             <PageWrapper>
                 <PageHeader title={t('visa.title')} description={t('common.loading')} />
                 <div className="grid grid-cols-1 gap-4">
-                    {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}
+                    {Array.from({ length: 4 }).map((_, i) => <Skeleton key={`skeleton-${i}`} className="h-32" />)}
                 </div>
             </PageWrapper>
         )
@@ -126,10 +126,10 @@ export function VisaDetailPage() {
             <PageWrapper>
                 <PageHeader title={t('visa.title')} description={t('errors.notFound')} />
                 <div className="flex flex-col items-center gap-4 py-16">
-                    <XCircle className="h-12 w-12 text-muted-foreground" />
+                    <XCircle className="size-12 text-muted-foreground" />
                     <p className="text-muted-foreground">{t('visa.noVisa')}</p>
                     <Button variant="outline" onClick={() => navigate('/visa')}>
-                        <ArrowLeft className="h-4 w-4 mr-2" /> {t('common.back')}
+                        <ArrowLeft className="size-4 mr-2" /> {t('common.back')}
                     </Button>
                 </div>
             </PageWrapper>
@@ -195,7 +195,7 @@ export function VisaDetailPage() {
                 description={`${labelFor(visa.visaType)} · Application ID: ${visa.id.slice(0, 8).toUpperCase()}`}
                 actions={
                     <Button variant="ghost" size="sm" onClick={() => navigate('/visa')}>
-                        <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                        <ArrowLeft className="size-4 mr-2" /> Back
                     </Button>
                 }
             />
@@ -266,7 +266,7 @@ export function VisaDetailPage() {
                                                 t('common.loading')
                                             ) : (
                                                 <>
-                                                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                                                    <CheckCircle2 className="size-4 mr-2" />
                                                     Mark "{visaSteps[visa.currentStep - 1] ?? `Step ${visa.currentStep}`}" complete
                                                 </>
                                             )}
@@ -299,7 +299,7 @@ export function VisaDetailPage() {
                                             className="w-full justify-start text-xs"
                                             onClick={() => navigate(`/documents?employeeId=${visa.employeeId}&category=visa`)}
                                         >
-                                            <FileText className="h-3.5 w-3.5 mr-2" />
+                                            <FileText className="size-3.5 mr-2" />
                                             Upload stamped passport page
                                         </Button>
                                         <Button
@@ -308,7 +308,7 @@ export function VisaDetailPage() {
                                             className="w-full justify-start text-xs"
                                             onClick={() => setStampingRefDialogOpen(true)}
                                         >
-                                            <Hash className="h-3.5 w-3.5 mr-2" />
+                                            <Hash className="size-3.5 mr-2" />
                                             {visa.mohreRef ? 'Update stamping reference' : 'Record stamping reference'}
                                         </Button>
                                         <Button
@@ -317,7 +317,7 @@ export function VisaDetailPage() {
                                             className="w-full justify-start text-xs"
                                             onClick={() => setStampingApptDialogOpen(true)}
                                         >
-                                            <Clock className="h-3.5 w-3.5 mr-2" />
+                                            <Clock className="size-3.5 mr-2" />
                                             Schedule stamping appointment
                                         </Button>
                                     </div>
@@ -340,12 +340,12 @@ export function VisaDetailPage() {
                         <Card className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-2">
-                                    <FileText className="h-5 w-5 text-primary" />
+                                    <FileText className="size-5 text-primary" />
                                     <h3 className="font-semibold">Visa Process Timeline</h3>
                                 </div>
                                 {isDone && !isCancelled && (
                                     <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> All steps completed
+                                        <CheckCircle2 className="size-3.5 mr-1" /> All steps completed
                                     </Badge>
                                 )}
                             </div>
@@ -362,7 +362,7 @@ export function VisaDetailPage() {
                                         <div key={i} className="flex gap-4">
                                             <div className="flex flex-col items-center">
                                                 <div className={cn(
-                                                    'h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2',
+                                                    'size-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border-2',
                                                     done ? 'bg-success border-success text-success-foreground' :
                                                         current ? 'bg-primary border-primary text-primary-foreground' :
                                                             'bg-card border-border text-muted-foreground'
@@ -389,7 +389,7 @@ export function VisaDetailPage() {
                                                             disabled={advanceWithCosts.isPending}
                                                             className="h-7 text-xs"
                                                         >
-                                                            <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                                                            <CheckCircle2 className="size-3.5 mr-1.5" />
                                                             {isFinal ? 'Complete & activate visa' : `Mark ${label} complete`}
                                                         </Button>
                                                     )}
@@ -406,11 +406,11 @@ export function VisaDetailPage() {
                     </div>
                 </div>
 
-                {/* ── Cost Log — separate section, not part of the process timeline ── */}
+                {/* ── Cost Log - separate section, not part of the process timeline ── */}
                 <Card className="p-6">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
-                            <Receipt className="h-5 w-5 text-primary" />
+                            <Receipt className="size-5 text-primary" />
                             <div>
                                 <h3 className="font-semibold">Cost Log</h3>
                                 <p className="text-xs text-muted-foreground">
@@ -421,7 +421,7 @@ export function VisaDetailPage() {
                             </div>
                         </div>
                         <Button size="sm" variant="outline" onClick={() => setShowAddCost(v => !v)}>
-                            <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Cost
+                            <Plus className="size-3.5 mr-1.5" /> Add Cost
                         </Button>
                     </div>
 
@@ -431,7 +431,7 @@ export function VisaDetailPage() {
                             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">New Expense</p>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                 <div className="space-y-1">
-                                    <label className="text-xs text-muted-foreground">Category</label>
+                                    <span className="text-xs text-muted-foreground">Category</span>
                                     <select
                                         className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
                                         value={costForm.category}
@@ -443,7 +443,7 @@ export function VisaDetailPage() {
                                     </select>
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-xs text-muted-foreground">Amount (AED)</label>
+                                    <span className="text-xs text-muted-foreground">Amount (AED)</span>
                                     <input
                                         type="number"
                                         min="0"
@@ -455,7 +455,7 @@ export function VisaDetailPage() {
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-xs text-muted-foreground">Paid Date</label>
+                                    <span className="text-xs text-muted-foreground">Paid Date</span>
                                     <DatePicker
                                         value={costForm.paidDate}
                                         onChange={v => setCostForm(f => ({ ...f, paidDate: v ?? '' }))}
@@ -463,7 +463,7 @@ export function VisaDetailPage() {
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-xs text-muted-foreground">Receipt Ref (optional)</label>
+                                    <span className="text-xs text-muted-foreground">Receipt Ref (optional)</span>
                                     <Input
                                         value={costForm.receiptRef ?? ''}
                                         onChange={e => setCostForm(f => ({ ...f, receiptRef: e.target.value || undefined }))}
@@ -472,7 +472,7 @@ export function VisaDetailPage() {
                                 </div>
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs text-muted-foreground">Description (optional)</label>
+                                <span className="text-xs text-muted-foreground">Description (optional)</span>
                                 <input
                                     type="text"
                                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
@@ -493,23 +493,23 @@ export function VisaDetailPage() {
                     {/* Cost list */}
                     {costsLoading ? (
                         <div className="space-y-2">
-                            {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}
+                            {[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-10 w-full rounded-lg" />)}
                         </div>
                     ) : costList.length === 0 ? (
                         <div className="py-8 text-center">
-                            <DollarSign className="h-7 w-7 text-muted-foreground/40 mx-auto mb-2" />
+                            <DollarSign className="size-7 text-muted-foreground/40 mx-auto mb-2" />
                             <p className="text-xs text-muted-foreground">No costs recorded for this application</p>
                         </div>
                     ) : (
                         <div className="divide-y divide-border/50">
                             {costList.map(cost => (
                                 <div key={cost.id} className="flex items-center gap-3 py-2.5">
-                                    <div className="h-8 w-8 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
-                                        <Receipt className="h-3.5 w-3.5 text-primary" />
+                                    <div className="size-8 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
+                                        <Receipt className="size-3.5 text-primary" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium truncate">
-                                            {COST_CATEGORY_LABELS[cost.category]}{cost.description ? ` — ${cost.description}` : ''}
+                                            {COST_CATEGORY_LABELS[cost.category]}{cost.description ? ` - ${cost.description}` : ''}
                                         </p>
                                         <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
                                             <span>{formatDate(cost.paidDate)}</span>
@@ -528,11 +528,11 @@ export function VisaDetailPage() {
                                     <Button
                                         size="sm"
                                         variant="ghost"
-                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
+                                        className="size-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
                                         onClick={() => setDeleteCostTarget(cost.id)}
                                         disabled={deleteCost.isPending}
                                     >
-                                        <Trash2 className="h-3.5 w-3.5" />
+                                        <Trash2 className="size-3.5" />
                                     </Button>
                                 </div>
                             ))}
@@ -540,11 +540,11 @@ export function VisaDetailPage() {
                     )}
                 </Card>
 
-                {/* ── Stage History — append-only journal of every step transition ── */}
+                {/* ── Stage History - append-only journal of every step transition ── */}
                 {history && history.length > 0 && (
                     <Card className="p-6">
                         <div className="flex items-center gap-2 mb-4">
-                            <Clock className="h-5 w-5 text-primary" />
+                            <Clock className="size-5 text-primary" />
                             <div>
                                 <h3 className="font-semibold">Stage History</h3>
                                 <p className="text-xs text-muted-foreground">

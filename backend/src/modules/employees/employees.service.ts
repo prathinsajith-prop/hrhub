@@ -48,19 +48,26 @@ export interface ListEmployeesParams {
  * DB round-trip regardless of tree depth.
  */
 export async function getSubtreeEmployeeIds(tenantId: string, rootId: string): Promise<string[]> {
+    // Cycle-safe walk — refuses to re-enter a node already in the visited path
+    // and caps depth at 50. A self-referential `reporting_to` row (employee
+    // who reports to themselves) used to hang the previous version forever
+    // until Postgres statement_timeout killed it. See portal scoping.ts for
+    // the same fix.
     const rows = await db.execute<{ id: string }>(sql`
         WITH RECURSIVE subtree AS (
-            SELECT id
+            SELECT id, ARRAY[id] AS path
             FROM employees
             WHERE id = ${rootId}::uuid
               AND tenant_id = ${tenantId}::uuid
               AND is_archived = false
             UNION ALL
-            SELECT e.id
+            SELECT e.id, s.path || e.id
             FROM employees e
             JOIN subtree s ON e.reporting_to = s.id
             WHERE e.tenant_id = ${tenantId}::uuid
               AND e.is_archived = false
+              AND NOT (e.id = ANY(s.path))
+              AND array_length(s.path, 1) < 50
         )
         SELECT id FROM subtree
     `)
@@ -164,6 +171,11 @@ export async function listEmployees(params: ListEmployeesParams) {
             shiftStartTime: shifts.startTime,
             shiftEndTime: shifts.endTime,
             shiftWeeklyOffDays: shifts.weeklyOffDays,
+            // Pull the org-unit name so we can override the legacy text column
+            // when projecting the response — see the COALESCE below. Without
+            // this the admin app would show "Nostrum consequuntur" while the
+            // employee profile shows "Account Management Department".
+            departmentName: deptUnit.name,
         })
         .from(employees)
         .leftJoin(gradeLevels, eq(employees.gradeLevelId, gradeLevels.id))
@@ -195,7 +207,14 @@ export async function listEmployees(params: ListEmployeesParams) {
 
     // Batch resolve — one round of S3 signing for all unique avatar keys.
     const avatarUrls = await resolveAvatarUrls(pageRows.map(r => (r as any).avatarUrl))
-    const data = pageRows.map((r, i) => ({ ...withFullName(r as any), avatarUrl: avatarUrls[i] }))
+    // Project the canonical org-unit department name onto the `department` field.
+    // The legacy text column stays as the fallback so a tenant whose data
+    // never migrated to the org-units model keeps showing something.
+    const data = pageRows.map((r, i) => {
+        const row = r as any
+        const department = row.departmentName ?? row.department ?? null
+        return { ...withFullName(row), department, avatarUrl: avatarUrls[i] }
+    })
 
     return {
         data,
@@ -218,18 +237,23 @@ export async function getEmployee(tenantId: string, id: string) {
             shiftStartTime: shifts.startTime,
             shiftEndTime: shifts.endTime,
             shiftWeeklyOffDays: shifts.weeklyOffDays,
+            // Canonical department name from the org-units FK — overrides the
+            // legacy text column in the response shaping below.
+            departmentName: deptUnit.name,
         })
         .from(employees)
         .leftJoin(entities, eq(employees.entityId, entities.id))
         .leftJoin(gradeLevels, eq(employees.gradeLevelId, gradeLevels.id))
         .leftJoin(sponsoringEntities, eq(employees.sponsoringEntityId, sponsoringEntities.id))
         .leftJoin(shifts, eq(employees.shiftId, shifts.id))
+        .leftJoin(deptUnit, eq(employees.departmentId, deptUnit.id))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .limit(1)
 
     if (!row) return null
     const employee = withFullName(row as typeof row & { firstName: string; lastName: string })
-    return { ...employee, avatarUrl: await resolveAvatarUrl(employee.avatarUrl) }
+    const department = (row as any).departmentName ?? employee.department ?? null
+    return { ...employee, department, avatarUrl: await resolveAvatarUrl(employee.avatarUrl) }
 }
 
 export async function createEmployee(tenantId: string, data: Omit<NewEmployee, 'tenantId' | 'id'>) {
@@ -278,10 +302,37 @@ export async function generateNextEmployeeNo(tenantId: string, conn: any = db): 
     return `${companyCode}-${seq}-${mm}-${yyyy}`
 }
 
+/**
+ * Resolve the canonical text name for a department `org_units` row so the
+ * legacy `employees.department` column can be kept in sync with the FK. This
+ * is what stops "user FK points to Account but text column still says AWS"
+ * drift after a transfer or department edit.
+ *
+ * Returns `null` for an invalid/missing departmentId so the caller can null
+ * the text column explicitly when the FK is being cleared.
+ */
+async function resolveDepartmentText(tenantId: string, departmentId: string | null | undefined): Promise<string | null> {
+    if (!departmentId) return null
+    const [row] = await db
+        .select({ name: orgUnits.name })
+        .from(orgUnits)
+        .where(and(eq(orgUnits.id, departmentId), eq(orgUnits.tenantId, tenantId)))
+        .limit(1)
+    return row?.name ?? null
+}
+
 export async function updateEmployee(tenantId: string, id: string, data: Partial<NewEmployee>) {
+    // Sync the legacy text column whenever `departmentId` is being set/cleared,
+    // unless the caller also explicitly supplied a `department` value (rare
+    // but allowed for migrations that intentionally diverge the two).
+    const patch: Partial<NewEmployee> = { ...data }
+    if ('departmentId' in data && !('department' in data)) {
+        patch.department = await resolveDepartmentText(tenantId, data.departmentId ?? null)
+    }
+
     const [row] = await db
         .update(employees)
-        .set(withTimestamp(data))
+        .set(withTimestamp(patch))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .returning()
 

@@ -68,7 +68,7 @@ export function ScopeMatrix({ value, onChange }: { value: string[]; onChange: (v
                         <div key={group.label}>
                             <div className="flex items-center justify-between bg-muted/40 px-3 py-2">
                                 <button type="button" className="flex items-center gap-1.5 text-sm font-semibold" onClick={() => toggleCollapse(group.label)}>
-                                    {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                                    {isCollapsed ? <ChevronRight className="size-3.5 text-muted-foreground" /> : <ChevronDown className="size-3.5 text-muted-foreground" />}
                                     {group.label}
                                 </button>
                                 <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => toggleGroup(group)}>

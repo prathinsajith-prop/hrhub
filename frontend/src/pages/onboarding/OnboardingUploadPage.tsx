@@ -6,6 +6,7 @@ import { useOnboardingUploadInfo, useOnboardingPublicUpload, type UploadInfoStep
 import { DOC_TYPE_CATALOG, docNumberMeta, type DocCategory } from '@/lib/docTypes'
 import { DatePicker } from '@/components/ui/date-picker'
 import { cn, formatDate, formatFileSize } from '@/lib/utils'
+import { Label } from '@/components/ui/label'
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 const ACCEPTED_EXTENSIONS = /\.(pdf|jpg|jpeg|png|webp|gif|doc|docx|xlsx)$/i
@@ -124,10 +125,10 @@ function StepUploadArea({
             >
                 <div className="flex items-center gap-3 min-w-0">
                     <div className={cn(
-                        'h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
+                        'size-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
                         step.status === 'completed' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600',
                     )}>
-                        {step.status === 'completed' ? <CheckCircle2 className="h-4 w-4" /> : step.stepOrder}
+                        {step.status === 'completed' ? <CheckCircle2 className="size-4" /> : step.stepOrder}
                     </div>
                     <div className="text-left min-w-0">
                         <p className="text-sm font-semibold text-gray-900 truncate">{step.title}</p>
@@ -135,7 +136,7 @@ function StepUploadArea({
                             <StatusPill status={step.status} />
                             {step.dueDate && (
                                 <span className="text-[11px] text-gray-400 flex items-center gap-0.5">
-                                    <CalendarDays className="h-3 w-3" />Due {formatDate(step.dueDate)}
+                                    <CalendarDays className="size-3" />Due {formatDate(step.dueDate)}
                                 </span>
                             )}
                         </div>
@@ -160,7 +161,7 @@ function StepUploadArea({
                             {step.uploadedDocs.length} doc{step.uploadedDocs.length !== 1 ? 's' : ''}
                         </span>
                     )}
-                    {expanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+                    {expanded ? <ChevronUp className="size-4 text-gray-400" /> : <ChevronDown className="size-4 text-gray-400" />}
                 </div>
             </button>
 
@@ -190,8 +191,8 @@ function StepUploadArea({
                                     >
                                         <span className="mt-0.5 shrink-0">
                                             {r.fulfilled
-                                                ? <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                                : <span className={cn('h-2 w-2 rounded-full inline-block', r.isMandatory ? 'bg-red-500' : 'bg-gray-300', selectedDocType === r.docType && 'bg-white')} />}
+                                                ? <CheckCircle2 className="size-4 text-green-600" />
+                                                : <span className={cn('size-2 rounded-full inline-block', r.isMandatory ? 'bg-red-500' : 'bg-gray-300', selectedDocType === r.docType && 'bg-white')} />}
                                         </span>
                                         <span className="flex-1 min-w-0">
                                             <span className="flex items-center gap-1.5 flex-wrap">
@@ -267,14 +268,14 @@ function StepUploadArea({
                                             )}
                                         >
                                             {rejected
-                                                ? <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
-                                                : <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />}
+                                                ? <XCircle className="size-3.5 text-red-500 shrink-0 mt-0.5" />
+                                                : <FileText className="size-3.5 text-blue-500 shrink-0 mt-0.5" />}
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-xs font-medium text-gray-800 truncate">{d.docType}</p>
                                                 <p className="text-[10px] text-gray-400 truncate">{d.fileName}{d.expiryDate ? ` · Exp ${formatDate(d.expiryDate)}` : ''}</p>
                                                 {rejected && d.rejectionReason && (
                                                     <p className="text-[11px] text-red-700 mt-1">
-                                                        <span className="font-semibold">Rejected — please re-upload.</span>{' '}
+                                                        <span className="font-semibold">Rejected - please re-upload.</span>{' '}
                                                         Reason: {d.rejectionReason}
                                                     </p>
                                                 )}
@@ -296,7 +297,7 @@ function StepUploadArea({
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
-                                <label className="text-[11px] font-medium text-gray-500">Category *</label>
+                                <span className="text-[11px] font-medium text-gray-500">Category *</span>
                                 <select
                                     value={selectedCategory}
                                     onChange={(e) => { setSelectedCategory(e.target.value as DocCategory); setSelectedDocType('') }}
@@ -312,7 +313,7 @@ function StepUploadArea({
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-[11px] font-medium text-gray-500">Document type *</label>
+                                <span className="text-[11px] font-medium text-gray-500">Document type *</span>
                                 <select
                                     value={selectedDocType}
                                     onChange={(e) => setSelectedDocType(e.target.value)}
@@ -331,9 +332,9 @@ function StepUploadArea({
                             const meta = docNumberMeta(selectedDocType)
                             return (
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-medium text-gray-500">
+                                    <Label className="text-[11px] font-medium text-gray-500">
                                         {meta.label} <span className="text-[10px] font-normal text-gray-400">(optional)</span>
-                                    </label>
+                                    </Label>
                                     <input
                                         type="text"
                                         value={docNumber}
@@ -347,10 +348,10 @@ function StepUploadArea({
 
                         {expiryRequired && (
                             <div className="space-y-1">
-                                <label className="text-[11px] font-medium text-red-600 flex items-center gap-1">
-                                    <AlertCircle className="h-3 w-3" />
+                                <Label className="text-[11px] font-medium text-red-600 flex items-center gap-1">
+                                    <AlertCircle className="size-3" />
                                     Expiry date required *
-                                </label>
+                                </Label>
                                 <DatePicker
                                     value={expiryDate}
                                     onChange={setExpiryDate}
@@ -369,7 +370,7 @@ function StepUploadArea({
 
                         {/* File picker */}
                         <div className="space-y-1">
-                            <label className="text-[11px] font-medium text-gray-500">File *</label>
+                            <span className="text-[11px] font-medium text-gray-500">File *</span>
                             <input
                                 ref={fileRef}
                                 type="file"
@@ -379,8 +380,8 @@ function StepUploadArea({
                             />
                             {file ? (
                                 <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
-                                    <div className="h-9 w-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                                        <FileText className="h-4 w-4 text-blue-600" />
+                                    <div className="size-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                                        <FileText className="size-4 text-blue-600" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
@@ -392,7 +393,7 @@ function StepUploadArea({
                                         aria-label="Remove file"
                                         className="rounded-md p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                                     >
-                                        <X className="h-4 w-4" />
+                                        <X className="size-4" />
                                     </button>
                                 </div>
                             ) : (
@@ -409,8 +410,8 @@ function StepUploadArea({
                                             : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/40',
                                     )}
                                 >
-                                    <div className="h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-                                        <Upload className="h-5 w-5 text-blue-500" />
+                                    <div className="size-10 rounded-full bg-blue-50 flex items-center justify-center">
+                                        <Upload className="size-5 text-blue-500" />
                                     </div>
                                     <div className="text-center">
                                         <p className="text-sm font-medium text-gray-900">
@@ -424,15 +425,15 @@ function StepUploadArea({
 
                         {error && (
                             <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                                <AlertCircle className="size-3.5 shrink-0" />
                                 {error}
                             </div>
                         )}
 
                         {success && (
                             <div className="flex items-center gap-2 text-green-700 text-xs bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                                Document uploaded successfully — thank you!
+                                <CheckCircle2 className="size-3.5 shrink-0" />
+                                Document uploaded successfully - thank you!
                             </div>
                         )}
 
@@ -443,9 +444,9 @@ function StepUploadArea({
                             className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 transition-colors"
                         >
                             {uploading ? (
-                                <><div className="h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Uploading…</>
+                                <><div className="size-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Uploading…</>
                             ) : (
-                                <><Upload className="h-4 w-4" />Upload Document</>
+                                <><Upload className="size-4" />Upload Document</>
                             )}
                         </button>
                     </div>
@@ -465,7 +466,7 @@ export function OnboardingUploadPage() {
         return (
             <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-4">
                 <div className="flex flex-col items-center gap-3">
-                    <div className="h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    <div className="size-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                     <p className="text-sm text-gray-500">Loading your upload portal…</p>
                 </div>
             </div>
@@ -476,8 +477,8 @@ export function OnboardingUploadPage() {
         return (
             <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
                 <div className="max-w-sm w-full bg-white rounded-2xl shadow-lg border border-red-100 p-8 text-center space-y-3">
-                    <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mx-auto">
-                        <AlertCircle className="h-6 w-6 text-red-500" />
+                    <div className="size-12 rounded-full bg-red-100 flex items-center justify-center mx-auto">
+                        <AlertCircle className="size-6 text-red-500" />
                     </div>
                     <h2 className="text-lg font-semibold text-gray-900">Link Expired or Invalid</h2>
                     <p className="text-sm text-gray-500">This upload link has expired or is not valid. Please contact your HR team to request a new link.</p>
@@ -489,6 +490,7 @@ export function OnboardingUploadPage() {
     const completedSteps = info.steps.filter(s => s.status === 'completed').length
     const totalSteps = info.steps.length
     const hasUploads = info.steps.some(s => s.uploadedDocs.length > 0)
+    const isComplete = totalSteps > 0 && completedSteps === totalSteps
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 py-8 px-4">
@@ -496,8 +498,8 @@ export function OnboardingUploadPage() {
                 {/* Header card */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                     <div className="flex items-start gap-4">
-                        <div className="h-12 w-12 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
-                            <Building2 className="h-6 w-6 text-white" />
+                        <div className="size-12 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
+                            <Building2 className="size-6 text-white" />
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-0.5">
@@ -550,13 +552,25 @@ export function OnboardingUploadPage() {
                     </div>
                 </div>
 
-                {/* Info banner */}
-                {hasUploads && (
+                {/* Completion banner - replaces the partial-upload banner once every step is done */}
+                {isComplete ? (
+                    <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3.5">
+                        <div className="size-8 rounded-full bg-green-600 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="size-4.5 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-semibold text-green-900">You're all set! 🎉</p>
+                            <p className="text-xs text-green-800 mt-0.5">
+                                All onboarding steps are complete. Your HR team will review the documents and reach out if anything else is needed.
+                            </p>
+                        </div>
+                    </div>
+                ) : hasUploads ? (
                     <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-                        <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                        <CheckCircle2 className="size-4 text-green-600 shrink-0" />
                         <p className="text-sm text-green-800">Some documents have already been uploaded. You can continue uploading more below.</p>
                     </div>
-                )}
+                ) : null}
 
                 {/* Steps */}
                 <div className="space-y-3">
@@ -576,7 +590,7 @@ export function OnboardingUploadPage() {
                         Secure document upload powered by <strong className="text-gray-600">HRHub</strong> &mdash; UAE HR &amp; PRO Platform
                     </p>
                     <div className="flex items-center justify-center gap-1 mt-1">
-                        <Clock className="h-3 w-3 text-gray-400" />
+                        <Clock className="size-3 text-gray-400" />
                         <p className="text-[10px] text-gray-400">This link is single-use and time-limited. Contact HR if it expires.</p>
                     </div>
                 </div>

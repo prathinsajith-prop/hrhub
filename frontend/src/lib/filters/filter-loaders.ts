@@ -1,6 +1,6 @@
 /**
  * Async option loaders for autocomplete filters.
- * All functions are stable module-level references — safe to use in FilterConfig.onSearch
+ * All functions are stable module-level references - safe to use in FilterConfig.onSearch
  * without triggering hook-dependency churn.
  */
 import { ISO2_CODES, getCountryByISO2, searchCountry, type ISO2 } from 'country-atlas'

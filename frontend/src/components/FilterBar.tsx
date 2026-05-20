@@ -1,5 +1,5 @@
 /**
- * FilterBar — thin wrapper that normalises object-map props into the arrays
+ * FilterBar - thin wrapper that normalises object-map props into the arrays
  * that AdvancedSearchBar expects. Mount this on any page that has a filters
  * record keyed by filter name.
  */

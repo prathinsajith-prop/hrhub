@@ -65,7 +65,7 @@ function DialogContent({
       >
         {children}
         <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:pointer-events-none">
-          <X className="h-4 w-4" />
+          <X className="size-4" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
@@ -233,8 +233,8 @@ function ConfirmDialog({
       <AlertDialogContent>
         <AlertDialogHeader className="p-6 pb-5">
           <div className="flex items-start gap-4">
-            <div className={cn('shrink-0 flex h-10 w-10 items-center justify-center rounded-full mt-0.5', bg)}>
-              <Icon className={cn('h-5 w-5', iconClass)} />
+            <div className={cn('shrink-0 flex size-10 items-center justify-center rounded-full mt-0.5', bg)}>
+              <Icon className={cn('size-5', iconClass)} />
             </div>
             <div className="flex-1 min-w-0">
               <AlertDialogTitle className="leading-snug">{title}</AlertDialogTitle>
@@ -272,10 +272,10 @@ function ToastViewport({
 ToastViewport.displayName = ToastPrimitive.Viewport.displayName
 
 const toastVariants = {
-  success: { bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-800', icon: <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" /> },
-  error: { bg: 'bg-red-50 border-red-200 dark:bg-red-950/60 dark:border-red-800', icon: <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0" /> },
-  warning: { bg: 'bg-amber-50 border-amber-200 dark:bg-amber-950/60 dark:border-amber-800', icon: <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" /> },
-  info: { bg: 'bg-blue-50 border-blue-200 dark:bg-blue-950/60 dark:border-blue-800', icon: <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" /> },
+  success: { bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-800', icon: <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0" /> },
+  error: { bg: 'bg-red-50 border-red-200 dark:bg-red-950/60 dark:border-red-800', icon: <XCircle className="size-5 text-red-600 dark:text-red-400 shrink-0" /> },
+  warning: { bg: 'bg-amber-50 border-amber-200 dark:bg-amber-950/60 dark:border-amber-800', icon: <AlertTriangle className="size-5 text-amber-600 dark:text-amber-400 shrink-0" /> },
+  info: { bg: 'bg-blue-50 border-blue-200 dark:bg-blue-950/60 dark:border-blue-800', icon: <Info className="size-5 text-blue-600 dark:text-blue-400 shrink-0" /> },
 }
 
 interface ToastData {
@@ -333,7 +333,7 @@ function Toaster() {
               )}
             </div>
             <ToastPrimitive.Close className="shrink-0 opacity-50 hover:opacity-100 transition-opacity">
-              <X className="h-4 w-4" />
+              <X className="size-4" />
             </ToastPrimitive.Close>
           </ToastPrimitive.Root>
         )

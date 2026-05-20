@@ -29,8 +29,8 @@ export function Section({
         <Card className={className}>
             <div className="flex items-start justify-between gap-4 mb-4">
                 <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                        <Icon className="h-4 w-4 text-muted-foreground" />
+                    <div className="size-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <Icon className="size-4 text-muted-foreground" />
                     </div>
                     <div>
                         <p className="text-sm font-semibold leading-tight">{title}</p>

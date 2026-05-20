@@ -58,7 +58,7 @@ function LeaveBalancePanel() {
 
             {selectedEmployee && balanceLoading && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
+                    {[1, 2, 3, 4].map(i => <Skeleton key={`skeleton-${i}`} className="h-16 rounded-xl" />)}
                 </div>
             )}
 
@@ -120,9 +120,9 @@ function PendingActionsPanel({ leaves, canApprove, onApprove, onReject }: {
     return (
         <Card className="p-4 border-amber-200 bg-amber-50/40 dark:bg-amber-950/10 dark:border-amber-900/40">
             <div className="flex items-center gap-2 mb-3">
-                <Clock className="h-4 w-4 text-amber-600" />
+                <Clock className="size-4 text-amber-600" />
                 <p className="text-sm font-semibold text-amber-800 dark:text-amber-400">
-                    Needs Action — {pending.length} pending request{pending.length !== 1 ? 's' : ''}
+                    Needs Action - {pending.length} pending request{pending.length !== 1 ? 's' : ''}
                 </p>
             </div>
             <div className="space-y-2">
@@ -148,7 +148,7 @@ function PendingActionsPanel({ leaves, canApprove, onApprove, onReject }: {
                             </p>
                             {l.handoverToName && (
                                 <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                                    <ArrowRightLeft className="h-3 w-3" />
+                                    <ArrowRightLeft className="size-3" />
                                     Handover: <span className="font-medium text-foreground">{l.handoverToName}</span>
                                     {l.handoverNotes && <span className="truncate max-w-xs">· {l.handoverNotes}</span>}
                                 </p>
@@ -156,10 +156,10 @@ function PendingActionsPanel({ leaves, canApprove, onApprove, onReject }: {
                         </div>
                         <div className="flex gap-1.5 shrink-0">
                             <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 h-7 px-2.5" onClick={() => onApprove(l)}>
-                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve
+                                <CheckCircle2 className="size-3.5 mr-1" /> Approve
                             </Button>
                             <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 h-7 px-2.5" onClick={() => onReject(l)}>
-                                <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
+                                <XCircle className="size-3.5 mr-1" /> Reject
                             </Button>
                         </div>
                     </div>
@@ -254,7 +254,7 @@ export function LeavePage() {
                     {l.reason && <p className="text-xs truncate max-w-[160px]">{l.reason}</p>}
                     {l.handoverToName && (
                         <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                            <ArrowRightLeft className="h-3 w-3 shrink-0" />
+                            <ArrowRightLeft className="size-3 shrink-0" />
                             <span className="truncate max-w-[140px]">{l.handoverToName}</span>
                         </p>
                     )}
@@ -279,11 +279,11 @@ export function LeavePage() {
                         {l.status === 'pending' && canApprove && (
                             <>
                                 <Button size="sm" variant="outline" className="h-7 text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800" onClick={() => setApproveTarget(l)}>
-                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                    <CheckCircle2 className="size-3.5 mr-1" />
                                     Approve
                                 </Button>
                                 <Button size="sm" variant="outline" className="h-7 text-red-700 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-800" onClick={() => setRejectTarget(l)}>
-                                    <XCircle className="h-3.5 w-3.5 mr-1" />
+                                    <XCircle className="size-3.5 mr-1" />
                                     Reject
                                 </Button>
                             </>
@@ -304,26 +304,26 @@ export function LeavePage() {
                     <div className="flex items-center gap-2">
                         {isDeptHead && (
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground border rounded-lg px-2.5 py-1.5">
-                                <Users className="h-3.5 w-3.5" />
+                                <Users className="size-3.5" />
                                 <span>Dept. view</span>
                             </div>
                         )}
-                        <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => handleExport('csv')} disabled={exporting}>CSV</Button>
-                        <Button variant="outline" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={() => handleExport('pdf')} disabled={exporting}>PDF</Button>
-                        <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setApplyOpen(true)}>Apply Leave</Button>
+                        <Button variant="outline" size="sm" leftIcon={<Download className="size-3.5" />} onClick={() => handleExport('csv')} disabled={exporting}>CSV</Button>
+                        <Button variant="outline" size="sm" leftIcon={<Download className="size-3.5" />} onClick={() => handleExport('pdf')} disabled={exporting}>PDF</Button>
+                        <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={() => setApplyOpen(true)}>Apply Leave</Button>
                     </div>
                 }
             />
 
             {leaveError && !isFetching && (
                 <div className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <AlertCircle className="size-4 shrink-0" />
                     <span className="flex-1">
                         {(leaveErrorObj as Error)?.message
                             ? `Failed to load leave requests: ${(leaveErrorObj as Error).message}`
                             : 'Failed to load leave requests. Please try again.'}
                     </span>
-                    <Button size="sm" variant="outline" onClick={() => refetch()} leftIcon={<RefreshCcw className="h-3.5 w-3.5" />}>Retry</Button>
+                    <Button size="sm" variant="outline" onClick={() => refetch()} leftIcon={<RefreshCcw className="size-3.5" />}>Retry</Button>
                 </div>
             )}
 
@@ -334,7 +334,7 @@ export function LeavePage() {
                 <KpiCardCompact label="Rejected" value={leaves.filter((l) => l.status === 'rejected').length} icon={XCircle} color="red" />
             </div>
 
-            {/* Pending requests panel — shown to dept_head and approvers */}
+            {/* Pending requests panel - shown to dept_head and approvers */}
             {!leaveLoading && (
                 <PendingActionsPanel
                     leaves={leaves}
@@ -361,7 +361,7 @@ export function LeavePage() {
                 const entitlements: Record<string, number> = { annual: 30, sick: 45, maternity: 60, paternity: 5, compassionate: 5, hajj: 30, unpaid: 30 }
                 return (
                     <Card className="p-4">
-                        <p className="text-sm font-semibold mb-4">Leave Utilisation — {thisYear}</p>
+                        <p className="text-sm font-semibold mb-4">Leave Utilisation - {thisYear}</p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                             {types.filter(t => usedByType[t] || entitlements[t]).map(type => {
                                 const taken = usedByType[type] ?? 0
@@ -400,11 +400,11 @@ export function LeavePage() {
                     onRowClick={(row: LeaveRequest) => navigate(`/employees/${row.employeeId}`)}
                     bulkActions={(selected) => (
                         <>
-                            <Button variant="outline" size="sm" leftIcon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                            <Button variant="outline" size="sm" leftIcon={<CheckCircle2 className="size-3.5" />}
                                 onClick={() => setBulkAction({ ids: selected.map((l: LeaveRequest) => l.id), approve: true })}>
                                 Approve
                             </Button>
-                            <Button variant="destructive" size="sm" leftIcon={<XCircle className="h-3.5 w-3.5" />}
+                            <Button variant="destructive" size="sm" leftIcon={<XCircle className="size-3.5" />}
                                 onClick={() => setBulkAction({ ids: selected.map((l: LeaveRequest) => l.id), approve: false })}>
                                 Reject
                             </Button>

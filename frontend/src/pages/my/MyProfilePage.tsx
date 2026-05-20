@@ -62,7 +62,7 @@ function InfoRow({ icon: Icon, label, value, mono }: {
 }) {
     return (
         <div className="flex items-center gap-3 py-3 border-b border-border/40 last:border-0">
-            <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Icon className="size-4 text-muted-foreground shrink-0" />
             <span className="text-sm text-muted-foreground w-40 shrink-0">{label}</span>
             <span className={cn('text-sm font-medium text-foreground flex-1 truncate', mono && 'font-mono text-xs')}>
                 {value || '—'}
@@ -108,7 +108,7 @@ export function MyProfileContent() {
         homeCountryAddress: '',
     })
 
-    // Sync form when employee data first loads — track previous id to avoid re-
+    // Sync form when employee data first loads - track previous id to avoid re-
     // setting in-progress edits on every re-render.
     const [prevEmpId, setPrevEmpId] = useState<string | undefined>(undefined)
     if (employee && employee.id !== prevEmpId) {
@@ -159,14 +159,14 @@ export function MyProfileContent() {
         <div className="space-y-4">
             <Skeleton className="h-44 rounded-xl" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-64 rounded-xl" />)}
+                {[1, 2, 3, 4].map(i => <Skeleton key={`skeleton-${i}`} className="h-64 rounded-xl" />)}
             </div>
         </div>
     )
 
     if (!employee) return (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-            <User className="h-8 w-8 opacity-30" />
+            <User className="size-8 opacity-30" />
             <p className="text-sm">No employee record linked to your account.</p>
         </div>
     )
@@ -196,21 +196,21 @@ export function MyProfileContent() {
                 <CardContent className="p-5 sm:p-6">
                     <div className="flex flex-col sm:flex-row gap-5">
                         <div className="relative shrink-0 self-start">
-                            <Avatar className="h-20 w-20 sm:h-24 sm:w-24">
+                            <Avatar className="size-20 sm:h-24 sm:w-24">
                                 {(user?.avatarUrl ?? e.avatarUrl) && <AvatarImage src={user?.avatarUrl ?? e.avatarUrl} alt={e.fullName} />}
                                 <AvatarFallback className="text-2xl font-bold bg-primary text-primary-foreground">
                                     {initials}
                                 </AvatarFallback>
                             </Avatar>
-                            {sc && <span className={cn('absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-card', sc.dot)} />}
+                            {sc && <span className={cn('absolute bottom-0 right-0 size-3.5 rounded-full border-2 border-card', sc.dot)} />}
                             <button
                                 type="button"
                                 onClick={() => fileRef.current?.click()}
                                 disabled={uploading}
-                                className="absolute -bottom-1.5 -end-1.5 h-7 w-7 rounded-full bg-primary text-primary-foreground border-2 border-card shadow-sm flex items-center justify-center hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                                className="absolute -bottom-1.5 -end-1.5 size-7 rounded-full bg-primary text-primary-foreground border-2 border-card shadow-sm flex items-center justify-center hover:bg-primary/90 disabled:opacity-50 transition-colors"
                                 aria-label="Change profile photo"
                             >
-                                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+                                {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
                             </button>
                             <input
                                 ref={fileRef}
@@ -230,8 +230,8 @@ export function MyProfileContent() {
                                 {[e.designation, e.department].filter(Boolean).join(' · ') || '—'}
                             </p>
                             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-                                {e.email && <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />{e.email}</span>}
-                                {(e.mobileNo ?? e.phone) && <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{e.mobileNo ?? e.phone}</span>}
+                                {e.email && <span className="flex items-center gap-1.5"><Mail className="size-3.5" />{e.email}</span>}
+                                {(e.mobileNo ?? e.phone) && <span className="flex items-center gap-1.5"><Phone className="size-3.5" />{e.mobileNo ?? e.phone}</span>}
                             </div>
 
                             <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 pt-4 border-t border-border/60">
@@ -260,7 +260,7 @@ export function MyProfileContent() {
                             : 'border-amber-200 bg-amber-50 text-amber-700'
                         return (
                             <div key={label} className={cn('flex items-center gap-2.5 rounded-lg border px-4 py-2.5 text-sm', cls)}>
-                                <AlertTriangle className="h-4 w-4 shrink-0" />
+                                <AlertTriangle className="size-4 shrink-0" />
                                 <span className="font-medium">{label} expiry</span>
                                 <span className="text-xs ml-auto">
                                     {expired ? `Expired ${fmt(date)}` : `${d} day${d !== 1 ? 's' : ''} left · ${fmt(date)}`}
@@ -278,7 +278,7 @@ export function MyProfileContent() {
                 <Card>
                     <CardContent className="p-5">
                         <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border/60">
-                            <Briefcase className="h-4 w-4 text-muted-foreground" />
+                            <Briefcase className="size-4 text-muted-foreground" />
                             <p className="text-sm font-semibold">Employment</p>
                         </div>
                         <SectionTitle>Role</SectionTitle>
@@ -306,7 +306,7 @@ export function MyProfileContent() {
                 <Card>
                     <CardContent className="p-5">
                         <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border/60">
-                            <User className="h-4 w-4 text-muted-foreground" />
+                            <User className="size-4 text-muted-foreground" />
                             <p className="text-sm font-semibold">Personal Details</p>
                         </div>
                         <SectionTitle>Info</SectionTitle>
@@ -325,7 +325,7 @@ export function MyProfileContent() {
                 <Card>
                     <CardContent className="p-5">
                         <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border/60">
-                            <IdCard className="h-4 w-4 text-muted-foreground" />
+                            <IdCard className="size-4 text-muted-foreground" />
                             <p className="text-sm font-semibold">Identity Documents</p>
                         </div>
                         <SectionTitle>Emirates ID</SectionTitle>
@@ -345,21 +345,21 @@ export function MyProfileContent() {
                     <CardContent className="p-5">
                         <div className="flex items-center justify-between mb-4 pb-3 border-b border-border/60">
                             <div className="flex items-center gap-2">
-                                <Phone className="h-4 w-4 text-muted-foreground" />
+                                <Phone className="size-4 text-muted-foreground" />
                                 <p className="text-sm font-semibold">Contact Information</p>
                             </div>
                             {!editing
                                 ? <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => setEditing(true)}>
-                                    <Pencil className="h-3 w-3" />Edit
+                                    <Pencil className="size-3" />Edit
                                   </Button>
                                 : <div className="flex gap-1">
-                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditing(false)}>
-                                        <X className="h-3.5 w-3.5" />
+                                    <Button size="sm" variant="ghost" className="size-7 p-0" onClick={() => setEditing(false)}>
+                                        <X className="size-3.5" />
                                     </Button>
                                     <Button size="sm" className="h-7 gap-1 text-xs" onClick={save} disabled={update.isPending}>
                                         {update.isPending
-                                            ? <><Clock className="h-3 w-3 animate-spin" />Saving</>
-                                            : <><CheckCircle2 className="h-3 w-3" />Save</>}
+                                            ? <><Clock className="size-3 animate-spin" />Saving</>
+                                            : <><CheckCircle2 className="size-3" />Save</>}
                                     </Button>
                                   </div>}
                         </div>
@@ -425,7 +425,7 @@ export function MyProfileContent() {
                 <Card>
                     <CardContent className="p-5">
                         <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border/60">
-                            <Landmark className="h-4 w-4 text-muted-foreground" />
+                            <Landmark className="size-4 text-muted-foreground" />
                             <p className="text-sm font-semibold">Bank Details</p>
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10">
@@ -454,8 +454,8 @@ export function MyProfileContent() {
                 <Card>
                     <CardContent className="p-5">
                         <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border/60">
-                            <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                            <p className="text-sm font-semibold">Leave Balance — {new Date().getFullYear()}</p>
+                            <CalendarDays className="size-4 text-muted-foreground" />
+                            <p className="text-sm font-semibold">Leave Balance - {new Date().getFullYear()}</p>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                             {leaveEntries.map(([type, b]) => {
@@ -466,7 +466,7 @@ export function MyProfileContent() {
                                     <div key={type} className={cn('rounded-xl border p-4 space-y-2', low ? 'border-destructive/30 bg-destructive/5' : 'bg-muted/20')}>
                                         <div className="flex items-center justify-between">
                                             <p className="text-xs font-medium text-muted-foreground capitalize">{labelFor(type)}</p>
-                                            {low && <TrendingDown className="h-3 w-3 text-destructive" />}
+                                            {low && <TrendingDown className="size-3 text-destructive" />}
                                         </div>
                                         <div className="flex items-baseline gap-1">
                                             <span className={cn('text-2xl font-bold tabular-nums', low ? 'text-destructive' : '')}>

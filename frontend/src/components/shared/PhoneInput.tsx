@@ -103,7 +103,7 @@ export function countryNameFromIso(iso2: string | undefined): string {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// CountrySelect — dropdown of all countries with flag + name.
+// CountrySelect - dropdown of all countries with flag + name.
 // ───────────────────────────────────────────────────────────────────────────
 
 export interface CountrySelectProps {
@@ -117,7 +117,7 @@ export interface CountrySelectProps {
     name?: string
     /** Compact trigger: show only flag + calling code (for phone prefix pickers). */
     compact?: boolean
-    /** Show the calling code (+971) next to the country name. Default false — only needed for phone prefix pickers. */
+    /** Show the calling code (+971) next to the country name. Default false - only needed for phone prefix pickers. */
     showCallingCode?: boolean
     /** Error state for red border. */
     invalid?: boolean
@@ -199,7 +199,7 @@ export function CountrySelect({
                 ) : (
                     <span className="text-muted-foreground flex-1 text-left">{placeholder}</span>
                 )}
-                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                <ChevronDown className="size-4 text-muted-foreground shrink-0" />
             </button>
 
             {open && (
@@ -209,7 +209,7 @@ export function CountrySelect({
                 )}>
                     <div className="p-2 border-b border-border">
                         <div className="relative">
-                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
                             <input
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
@@ -243,7 +243,7 @@ export function CountrySelect({
                                         <FlagImg iso2={c.iso2} size={20} />
                                         <span className="truncate flex-1">{c.name}</span>
                                         {showCallingCode && <span className="text-xs text-muted-foreground">{c.callingCode}</span>}
-                                        {active && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                                        {active && <Check className="size-3.5 text-primary shrink-0" />}
                                     </button>
                                 )
                             })
@@ -256,7 +256,7 @@ export function CountrySelect({
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// PhoneInput — combined country-picker + national number, validates + emits
+// PhoneInput - combined country-picker + national number, validates + emits
 // normalized E.164-ish value "+<code><digits>".
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -304,7 +304,7 @@ export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(function
             // Fallback: try digit-prefix match against known calling codes.
             const digits = trimmed.replace(/\D/g, '')
             const withPlus = trimmed.startsWith('+') ? trimmed : `+${digits}`
-            const sorted = [...ALL_COUNTRIES].sort((a, b) => b.callingCode.length - a.callingCode.length)
+            const sorted = ALL_COUNTRIES.toSorted((a, b) => b.callingCode.length - a.callingCode.length)
             const hit = sorted.find((c) => withPlus.startsWith(c.callingCode))
             if (hit) {
                 const ccDigits = hit.callingCode.replace(/\D/g, '')

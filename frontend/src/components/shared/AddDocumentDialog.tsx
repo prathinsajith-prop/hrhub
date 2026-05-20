@@ -22,7 +22,7 @@ interface Props {
     stepId?: string
     /** Optional small caption rendered under the title (e.g. "For step: Visa & Compliance"). */
     contextNote?: string
-    /** Fires after a successful upload — useful to reset list pagination so the new doc shows on page 1. */
+    /** Fires after a successful upload - useful to reset list pagination so the new doc shows on page 1. */
     onUploaded?: () => void
 }
 
@@ -287,8 +287,8 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
 
                         {file ? (
                             <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
-                                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                    <FileText className="h-4 w-4 text-primary" />
+                                <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                                    <FileText className="size-4 text-primary" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium truncate">{file.name}</p>
@@ -299,7 +299,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
                                     onClick={() => { setFile(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
                                     className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                                 >
-                                    <X className="h-3.5 w-3.5" />
+                                    <X className="size-3.5" />
                                 </button>
                             </div>
                         ) : (
@@ -318,8 +318,8 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
                                             : 'border-border hover:border-primary/50 hover:bg-muted/30',
                                 )}
                             >
-                                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                                    <Upload className="h-5 w-5 text-muted-foreground" />
+                                <div className="size-10 rounded-full bg-muted flex items-center justify-center">
+                                    <Upload className="size-5 text-muted-foreground" />
                                 </div>
                                 <div className="text-center">
                                     <p className="text-sm font-medium text-foreground">
@@ -339,8 +339,8 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
                     </Button>
                     <Button onClick={handleSubmit} disabled={isPending}>
                         {isPending
-                            ? <><Upload className="h-3.5 w-3.5 mr-1.5 animate-pulse" />Uploading…</>
-                            : <><Upload className="h-3.5 w-3.5 mr-1.5" />Submit</>}
+                            ? <><Upload className="size-3.5 mr-1.5 animate-pulse" />Uploading…</>
+                            : <><Upload className="size-3.5 mr-1.5" />Submit</>}
                     </Button>
                 </DialogFooter>
             </DialogContent>

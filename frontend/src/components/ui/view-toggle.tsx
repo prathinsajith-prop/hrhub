@@ -16,26 +16,26 @@ export function ViewToggle({ view, onChange, className }: ViewToggleProps) {
                 onClick={() => onChange('table')}
                 title="Table view"
                 className={cn(
-                    'h-7 w-7 rounded-md flex items-center justify-center transition-all',
+                    'size-7 rounded-md flex items-center justify-center transition-all',
                     view === 'table'
                         ? 'bg-background shadow-sm text-foreground'
                         : 'text-muted-foreground hover:text-foreground',
                 )}
             >
-                <LayoutList className="h-3.5 w-3.5" />
+                <LayoutList className="size-3.5" />
             </button>
             <button
                 type="button"
                 onClick={() => onChange('grid')}
                 title="Grid view"
                 className={cn(
-                    'h-7 w-7 rounded-md flex items-center justify-center transition-all',
+                    'size-7 rounded-md flex items-center justify-center transition-all',
                     view === 'grid'
                         ? 'bg-background shadow-sm text-foreground'
                         : 'text-muted-foreground hover:text-foreground',
                 )}
             >
-                <LayoutGrid className="h-3.5 w-3.5" />
+                <LayoutGrid className="size-3.5" />
             </button>
         </div>
     )

@@ -35,6 +35,9 @@ import { useMyPayslips } from '@/hooks/usePayslips'
 import { useAttendance, useCheckIn, useCheckOut } from '@/hooks/useAttendance'
 import { GlassCard } from '@/components/shared/GlassCard'
 import { ChartCard } from '@/components/shared/ChartCard'
+import { AssignedAssetsCard } from '@/components/shared/AssignedAssetsCard'
+import { BirthdaysCard } from '@/components/shared/BirthdaysCard'
+import { MyTeamsCard } from '@/components/shared/MyTeamsCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -285,6 +288,17 @@ export function EmployeeHomePage() {
                     </div>
                 </section>
             ) : null}
+
+            {/* ── Team memberships + birthdays + assets ───────────────────
+                Three small cards that together answer "what context am I in
+                today?" — which teams I'm part of, who has a birthday today,
+                what hardware I'm holding. Two-column on lg, single-column
+                on smaller viewports. */}
+            <div className="grid gap-4 lg:grid-cols-2">
+                <MyTeamsCard variant="me" />
+                <BirthdaysCard title="Department birthdays today" />
+            </div>
+            <AssignedAssetsCard variant="me" />
 
             {/* ── Quick actions ─────────────────────────────────────────── */}
             <section>

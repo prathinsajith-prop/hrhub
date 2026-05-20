@@ -9,7 +9,7 @@ interface QueryBoundaryProps {
     error?: Error | null
     isEmpty?: boolean
     onRetry?: () => void
-    // Loading skeleton — pass count for repeated rows, or a custom element
+    // Loading skeleton - pass count for repeated rows, or a custom element
     skeletonRows?: number
     skeletonHeight?: string
     skeleton?: ReactNode
@@ -62,8 +62,8 @@ export function QueryBoundary({
     if (error) {
         return (
             <div className="flex flex-col items-center gap-3 py-12 text-center px-4">
-                <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
-                    <AlertCircle className="h-6 w-6 text-destructive" />
+                <div className="size-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                    <AlertCircle className="size-6 text-destructive" />
                 </div>
                 <div>
                     <p className="text-sm font-medium text-foreground">Something went wrong</p>
@@ -72,7 +72,7 @@ export function QueryBoundary({
                     </p>
                 </div>
                 {onRetry && (
-                    <Button variant="outline" size="sm" onClick={onRetry} leftIcon={<RefreshCw className="h-3.5 w-3.5" />}>
+                    <Button variant="outline" size="sm" onClick={onRetry} leftIcon={<RefreshCw className="size-3.5" />}>
                         Retry
                     </Button>
                 )}

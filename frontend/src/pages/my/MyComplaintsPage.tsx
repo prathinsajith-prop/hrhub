@@ -239,7 +239,7 @@ function ComplaintCard({ c }: { c: Complaint }) {
                         'text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1',
                         new Date(c.slaDueAt) < new Date() ? 'bg-red-50 text-red-700' : 'bg-muted text-muted-foreground'
                     )}>
-                        <Clock className="h-2.5 w-2.5" />
+                        <Clock className="size-2.5" />
                         Due {new Date(c.slaDueAt).toLocaleDateString()}
                     </span>
                 )}
@@ -274,7 +274,7 @@ export function MyComplaintsPage() {
                 description={t('complaints.myPageDesc')}
                 actions={
                     <Button onClick={() => setShowNew(true)} size="sm">
-                        <Plus className="h-4 w-4 mr-2" />
+                        <Plus className="size-4 mr-2" />
                         {t('complaints.newComplaint')}
                     </Button>
                 }
@@ -288,7 +288,7 @@ export function MyComplaintsPage() {
                 </div>
             ) : list.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-16 text-center">
-                    <ShieldAlert className="h-10 w-10 text-muted-foreground" />
+                    <ShieldAlert className="size-10 text-muted-foreground" />
                     <div>
                         <p className="font-medium text-sm">{t('complaints.noMyComplaints')}</p>
                         <p className="text-sm text-muted-foreground mt-1">

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
  * Tracks real-time network connectivity.
  * Returns `true` when online, `false` when offline.
  *
- * Note: `navigator.onLine` is a coarse signal — it detects the presence of a
+ * Note: `navigator.onLine` is a coarse signal - it detects the presence of a
  * network interface, not actual internet reachability. Use this for UI hints
  * (banners, disabling mutations) rather than authoritative connectivity checks.
  */
