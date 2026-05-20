@@ -73,11 +73,21 @@ export function useDeletePayrollRun() {
     })
 }
 
+export interface PayrollReadinessEmployee {
+    id: string
+    employeeNo: string
+    name: string
+    avatarUrl: string | null
+}
+
 export interface PayrollReadiness {
     employeeCount: number
     missingIban: number
     missingSalary: number
     pendingLeaveInPeriod: number
+    /** Up to 50 employees flagged — UI shows the list in a popover. */
+    missingIbanEmployees: PayrollReadinessEmployee[]
+    missingSalaryEmployees: PayrollReadinessEmployee[]
     blockers: string[]
     warnings: string[]
     canProcess: boolean

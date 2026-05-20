@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, numeric, date, timestamp, index, unique } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, numeric, date, timestamp, index, unique, jsonb } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
@@ -36,6 +36,14 @@ export const payslips = pgTable('payslips', {
     housingAllowance: numeric('housing_allowance', { precision: 12, scale: 2 }).notNull().default('0'),
     transportAllowance: numeric('transport_allowance', { precision: 12, scale: 2 }).notNull().default('0'),
     otherAllowances: numeric('other_allowances', { precision: 12, scale: 2 }).notNull().default('0'),
+    // Catalog-driven per-component snapshot used to render the payslip
+    // breakdown UI. Each entry is one earning line the payroll engine
+    // resolved at run time. The numeric columns above stay as rollups for
+    // WPS/back-compat; this is the source of truth for the UI.
+    earningsBreakdown: jsonb('earnings_breakdown')
+        .$type<Array<{ componentId: string; category: string; name: string; amount: number }>>()
+        .notNull()
+        .default([]),
     overtime: numeric('overtime', { precision: 12, scale: 2 }).notNull().default('0'),
     commission: numeric('commission', { precision: 12, scale: 2 }).notNull().default('0'),
     grossSalary: numeric('gross_salary', { precision: 12, scale: 2 }).notNull().default('0'),

@@ -7,8 +7,8 @@ import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSche
 import { recordActivity } from '../audit/audit.service.js'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { db } from '../../db/index.js'
-import { entities, employees, tenants, users } from '../../db/schema/index.js'
-import { eq, and } from 'drizzle-orm'
+import { entities, employees, employeeSalaryComponents, salaryComponents, tenants, users } from '../../db/schema/index.js'
+import { eq, and, sql, inArray } from 'drizzle-orm'
 import { inviteUser, resendInvite } from '../settings/settings.service.js'
 import { fileTypeFromBuffer } from 'file-type'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
@@ -219,6 +219,43 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data: employee })
     })
 
+    // GET /api/v1/employees/:id/salary-components
+    //
+    // Per-employee assignments joined with the catalog. The Add/Edit Employee
+    // form uses this to pre-fill the salary inputs — for an old employee
+    // created before the assignment table existed, the backfill migration
+    // (0044) populated these rows from the legacy basicSalary / housing /
+    // transport / other columns, so the form will see them either way.
+    fastify.get('/:id/salary-components', { ...auth, schema: { tags: ['Employees'] } }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        // Verify the employee belongs to the tenant before exposing salary info.
+        const [emp] = await db
+            .select({ id: employees.id })
+            .from(employees)
+            .where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
+            .limit(1)
+        if (!emp) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+
+        const rows = await db
+            .select({
+                componentId: employeeSalaryComponents.componentId,
+                amount: employeeSalaryComponents.amount,
+                isActive: employeeSalaryComponents.isActive,
+                category: salaryComponents.category,
+                name: salaryComponents.name,
+                calculationType: salaryComponents.calculationType,
+                catalogAmount: salaryComponents.amount,
+            })
+            .from(employeeSalaryComponents)
+            .innerJoin(salaryComponents, eq(salaryComponents.id, employeeSalaryComponents.componentId))
+            .where(and(
+                eq(employeeSalaryComponents.tenantId, request.user.tenantId),
+                eq(employeeSalaryComponents.employeeId, id),
+            ))
+
+        return reply.send({ data: rows })
+    })
+
     // POST /api/v1/employees
     fastify.post('/', {
         ...auth,
@@ -281,8 +318,44 @@ export default async function (fastify: any): Promise<void> {
         }
 
         const employeeNo = body.employeeNo ?? (await generateNextEmployeeNo(request.user.tenantId))
+        // Strip salaryComponents out of the row payload — that field belongs
+        // to a different table; we insert assignment rows after the employee
+        // row is created.
+        const { salaryComponents: assignmentInputs, ...employeeRow } = body as typeof body & {
+            salaryComponents?: { componentId: string; amount: number }[]
+        }
         try {
-            const employee = await createEmployee(request.user.tenantId, { ...body, employeeNo, entityId } as never)
+            const employee = await createEmployee(request.user.tenantId, { ...employeeRow, employeeNo, entityId } as never)
+
+            // Persist the salary-component assignments. We validate the
+            // componentIds belong to the same tenant before inserting (the DB
+            // trigger would catch a mismatch too, but the explicit check gives
+            // a clean 400 instead of a 500). Each assignment carries its own
+            // `amount` which overrides the catalog default.
+            if (assignmentInputs && assignmentInputs.length > 0) {
+                const ids = assignmentInputs.map(a => a.componentId)
+                const valid = await db
+                    .select({ id: salaryComponents.id })
+                    .from(salaryComponents)
+                    .where(and(
+                        eq(salaryComponents.tenantId, request.user.tenantId),
+                        inArray(salaryComponents.id, ids),
+                    ))
+                const validSet = new Set(valid.map(v => v.id))
+                const rows = assignmentInputs
+                    .filter(a => validSet.has(a.componentId))
+                    .map(a => ({
+                        tenantId: request.user.tenantId,
+                        employeeId: employee.id,
+                        componentId: a.componentId,
+                        amount: String(a.amount.toFixed(2)),
+                        isActive: true,
+                    }))
+                if (rows.length > 0) {
+                    await db.insert(employeeSalaryComponents).values(rows).onConflictDoNothing()
+                }
+            }
+
             recordActivity({
                 tenantId: request.user.tenantId,
                 userId: request.user.id,
@@ -292,6 +365,7 @@ export default async function (fastify: any): Promise<void> {
                 entityId: employee.id,
                 entityName: employee.fullName,
                 action: 'create',
+                metadata: { componentAssignments: assignmentInputs?.length ?? 0 },
                 ipAddress: (request as any).ip,
                 userAgent: request.headers['user-agent'],
             }).catch(() => { })
@@ -328,9 +402,55 @@ export default async function (fastify: any): Promise<void> {
                 })
             }
         }
+        // Pull salaryComponents off the row payload — like the create route,
+        // assignments live in a sibling table.
+        const { salaryComponents: assignmentInputs, ...employeeUpdate } = body as typeof body & {
+            salaryComponents?: { componentId: string; amount: number }[]
+        }
         const before = await getEmployee(request.user.tenantId, id)
-        const updated = await updateEmployee(request.user.tenantId, id, body as never)
+        const updated = await updateEmployee(request.user.tenantId, id, employeeUpdate as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+
+        // Sync the assignment table when the caller sent updated amounts.
+        // Strategy: upsert each row by (employee_id, component_id). A
+        // component that's no longer in the payload retains its prior value
+        // unless explicitly zeroed — the form sends every active earning so
+        // this works in practice, and we don't accidentally wipe assignments
+        // when a partial PATCH lacks the field.
+        if (assignmentInputs && assignmentInputs.length > 0) {
+            const ids = assignmentInputs.map(a => a.componentId)
+            const valid = await db
+                .select({ id: salaryComponents.id })
+                .from(salaryComponents)
+                .where(and(
+                    eq(salaryComponents.tenantId, request.user.tenantId),
+                    inArray(salaryComponents.id, ids),
+                ))
+            const validSet = new Set(valid.map(v => v.id))
+            const rows = assignmentInputs
+                .filter(a => validSet.has(a.componentId))
+                .map(a => ({
+                    tenantId: request.user.tenantId,
+                    employeeId: id,
+                    componentId: a.componentId,
+                    amount: String(a.amount.toFixed(2)),
+                    isActive: true,
+                    updatedAt: new Date(),
+                }))
+            if (rows.length > 0) {
+                await db
+                    .insert(employeeSalaryComponents)
+                    .values(rows)
+                    .onConflictDoUpdate({
+                        target: [employeeSalaryComponents.employeeId, employeeSalaryComponents.componentId],
+                        set: {
+                            amount: sql`excluded.amount`,
+                            isActive: sql`excluded.is_active`,
+                            updatedAt: sql`excluded.updated_at`,
+                        },
+                    })
+            }
+        }
 
         const TRACKED = ['firstName', 'lastName', 'email', 'phone', 'department', 'designation', 'status', 'basicSalary', 'contractType', 'nationality', 'jobTitle']
         const changes: Record<string, { from: unknown; to: unknown }> = {}

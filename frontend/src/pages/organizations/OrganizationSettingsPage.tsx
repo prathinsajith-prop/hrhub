@@ -8,6 +8,7 @@ import {
     CalendarDays,
     Briefcase,
     CalendarClock,
+    Coins,
     GraduationCap,
     ListOrdered,
     Workflow,
@@ -31,6 +32,7 @@ import { LeaveSettingsTab } from './org-settings/LeaveSettingsTab'
 import { OnboardingTemplateTab } from './org-settings/OnboardingTemplateTab'
 import { RecruitmentStagesTab } from './org-settings/RecruitmentStagesTab'
 import { ShiftsTab } from './org-settings/ShiftsTab'
+import { SalaryComponentsTab } from './org-settings/SalaryComponentsTab'
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 // Label/description resolved via `t()` per-render so they react to language changes.
@@ -44,6 +46,7 @@ const TAB_KEYS = [
     { value: 'onboarding',    i18nKey: 'orgSettings.tabs.onboarding',    icon: ListOrdered,   requires: 'manage_settings' as Permission | null },
     { value: 'recruitment-stages', i18nKey: 'orgSettings.tabs.recruitmentStages', icon: Workflow,  requires: 'manage_settings' as Permission | null },
     { value: 'shifts',        i18nKey: 'orgSettings.tabs.shifts',        icon: Clock,         requires: 'manage_settings' as Permission | null },
+    { value: 'salary-components', i18nKey: 'orgSettings.tabs.salaryComponents', icon: Coins,    requires: 'manage_payroll'  as Permission | null },
     { value: 'security',      i18nKey: 'orgSettings.tabs.security',      icon: Shield,        requires: 'manage_settings' as Permission | null },
 ]
 
@@ -139,6 +142,7 @@ export function OrganizationSettingsPage() {
                     <TabsContent value="onboarding"   className="mt-0"><OnboardingTemplateTab /></TabsContent>
                     <TabsContent value="recruitment-stages" className="mt-0"><RecruitmentStagesTab /></TabsContent>
                     <TabsContent value="shifts"       className="mt-0"><ShiftsTab /></TabsContent>
+                    <TabsContent value="salary-components" className="mt-0"><SalaryComponentsTab /></TabsContent>
                     <TabsContent value="security"     className="mt-0"><SecurityTab /></TabsContent>
                 </div>
             </Tabs>

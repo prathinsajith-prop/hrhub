@@ -302,6 +302,48 @@
       "when": 1780272000000,
       "tag": "0042_employee_department_text_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1780358400000,
+      "tag": "0043_salary_components",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1780444800000,
+      "tag": "0044_employee_salary_components",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1780531200000,
+      "tag": "0045_salary_component_seed_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1780617600000,
+      "tag": "0046_other_allowance_seed",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1780704000000,
+      "tag": "0047_seed_catalog_existing_tenants",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1780790400000,
+      "tag": "0048_payslip_earnings_breakdown",
+      "breakpoints": true
     }
   ]
 }

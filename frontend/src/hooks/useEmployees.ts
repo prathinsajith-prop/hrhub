@@ -106,6 +106,32 @@ export function useEmployee(id: string) {
     })
 }
 
+export interface EmployeeSalaryAssignment {
+    componentId: string
+    amount: string | null
+    isActive: boolean
+    category: string
+    name: string
+    calculationType: 'flat' | 'percentage_of_basic' | null
+    catalogAmount: string | null
+}
+
+/**
+ * Fetch the salary-component assignments for an employee. Used by the
+ * Add/Edit Employee form to pre-fill Step 3. Disabled when no id is supplied
+ * (Add mode); enabled when editing so the form sees the employee's real
+ * per-component amounts rather than relying on the legacy column derivation.
+ */
+export function useEmployeeSalaryComponents(id: string | undefined) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
+    return useQuery({
+        queryKey: ['employees', tenantId, id, 'salary-components'],
+        queryFn: () => api.get<{ data: EmployeeSalaryAssignment[] }>(`/employees/${id}/salary-components`).then(r => r.data),
+        enabled: !!id && !!tenantId,
+        staleTime: 30_000,
+    })
+}
+
 export function useCreateEmployee() {
     const qc = useQueryClient()
     return useMutation({

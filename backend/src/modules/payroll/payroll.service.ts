@@ -1,6 +1,6 @@
 import { eq, and, desc, gte, lte, inArray, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/index.js'
-import { payrollRuns, payslips, employees, leaveRequests, orgUnits, tenants } from '../../db/schema/index.js'
+import { payrollRuns, payslips, employees, employeeSalaryComponents, leaveRequests, orgUnits, salaryComponents, tenants } from '../../db/schema/index.js'
 import { syncAdjustmentsForPeriod, getAdjustmentTotalsByEmployee } from './adjustments.service.js'
 import type { InferInsertModel } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
@@ -44,8 +44,13 @@ export async function listPayrollRuns(tenantId: string, params: { year?: number;
         new Map(draftRows.map(r => [`${r.year}-${r.month}`, { year: r.year, month: r.month }])).values(),
     )
 
-    const [emps, ...adjResults] = await Promise.all([
-        getPayableEmployees(tenantId),
+    const emps = await getPayableEmployees(tenantId)
+    // Now that we have the employee IDs, fetch adjustments (per period) and
+    // earnings (shared across all periods — assignments don't change month
+    // to month) in parallel. One pass for any number of drafts in the same
+    // tenant — preview cost stays bounded.
+    const [earningsByEmp, ...adjResults] = await Promise.all([
+        resolveEmployeeEarnings(tenantId, emps.map(e => e.id)),
         ...uniquePeriods.map(p => getAdjustmentTotalsByEmployee(tenantId, p.year, p.month)),
     ])
     const adjByPeriod = new Map<string, typeof adjResults[number]>(
@@ -62,7 +67,7 @@ export async function listPayrollRuns(tenantId: string, params: { year?: number;
             return previewPayrollRun(
                 tenantId,
                 { id: r.id, year: r.year, month: r.month, status: r.status as string },
-                { emps, adjustmentTotals },
+                { emps, adjustmentTotals, earningsByEmp },
             ).catch(() => null)
         }),
     )
@@ -157,11 +162,22 @@ export async function deletePayrollRun(tenantId: string, id: string) {
  * Returns null for non-draft runs (the persisted totals are the source of
  * truth there; nothing left to check).
  */
+export interface PayrollReadinessEmployee {
+    id: string
+    employeeNo: string
+    name: string
+    avatarUrl: string | null
+}
+
 export interface PayrollReadiness {
     employeeCount: number
     missingIban: number
     missingSalary: number
     pendingLeaveInPeriod: number
+    /** Up to 50 employees flagged for missing IBAN — small enough to render
+     *  in a popover, larger lists are truncated and surfaced via the count. */
+    missingIbanEmployees: PayrollReadinessEmployee[]
+    missingSalaryEmployees: PayrollReadinessEmployee[]
     blockers: string[]
     warnings: string[]
     canProcess: boolean
@@ -178,9 +194,12 @@ export async function getPayrollReadiness(
     const monthStart = `${run.year}-${String(run.month).padStart(2, '0')}-01`
     const monthEnd = `${run.year}-${String(run.month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-    // One round-trip — every check is its own COUNT query but they all hit
-    // the same DB connection in parallel.
-    const [emps, ibanCounts, salaryCounts, leaveCounts] = await Promise.all([
+    // One round-trip — every check is its own query but they all hit the
+    // same DB connection in parallel. Missing-IBAN / missing-salary return
+    // the offending employees (capped at 50) so the UI can render a popover
+    // with names + links rather than just a count.
+    const READINESS_EMPLOYEE_CAP = 50
+    const [emps, ibanRows, salaryRows, leaveCounts] = await Promise.all([
         // Employee count (just to surface it in the response — also used to
         // decide "no payable employees" blocker)
         db.select({ count: sql<number>`COUNT(*)::int` })
@@ -191,24 +210,55 @@ export async function getPayrollReadiness(
                 inArray(employees.status, ['active', 'onboarding']),
             )),
         // Missing IBAN — WPS submission warning
-        db.select({ count: sql<number>`COUNT(*)::int` })
+        db.select({
+            id: employees.id,
+            employeeNo: employees.employeeNo,
+            firstName: employees.firstName,
+            lastName: employees.lastName,
+            avatarUrl: employees.avatarUrl,
+        })
             .from(employees)
             .where(and(
                 eq(employees.tenantId, tenantId),
                 eq(employees.isArchived, false),
                 inArray(employees.status, ['active', 'onboarding']),
                 sql`(${employees.iban} IS NULL OR ${employees.iban} = '')`,
-            )),
+            ))
+            .orderBy(employees.firstName, employees.lastName)
+            .limit(READINESS_EMPLOYEE_CAP),
         // Missing/zero basic salary — payroll math BLOCKER (gross would be 0
-        // even for a senior employee, almost always a data-entry mistake)
-        db.select({ count: sql<number>`COUNT(*)::int` })
+        // even for a senior employee, almost always a data-entry mistake).
+        // Catalog-aware: an employee is OK if EITHER the legacy column has a
+        // positive basic OR they have an active basic-category catalog
+        // assignment with a positive amount. We only flag the intersection
+        // of "both empty" so catalog-only employees aren't false positives.
+        db.select({
+            id: employees.id,
+            employeeNo: employees.employeeNo,
+            firstName: employees.firstName,
+            lastName: employees.lastName,
+            avatarUrl: employees.avatarUrl,
+        })
             .from(employees)
             .where(and(
                 eq(employees.tenantId, tenantId),
                 eq(employees.isArchived, false),
                 inArray(employees.status, ['active', 'onboarding']),
                 sql`(${employees.basicSalary} IS NULL OR ${employees.basicSalary}::numeric = 0)`,
-            )),
+                sql`NOT EXISTS (
+                    SELECT 1 FROM employee_salary_components esc
+                    JOIN salary_components sc ON sc.id = esc.component_id
+                    WHERE esc.employee_id = ${employees.id}
+                      AND esc.tenant_id = ${tenantId}
+                      AND esc.is_active = true
+                      AND sc.is_active = true
+                      AND sc.kind = 'earning'
+                      AND sc.category = 'basic'
+                      AND COALESCE(esc.amount::numeric, sc.amount::numeric, 0) > 0
+                )`,
+            ))
+            .orderBy(employees.firstName, employees.lastName)
+            .limit(READINESS_EMPLOYEE_CAP),
         // Pending leave whose start date falls inside this period — LOP / sick
         // won't be reflected until the leave is approved AND auto-synced
         db.select({ count: sql<number>`COUNT(*)::int` })
@@ -221,10 +271,52 @@ export async function getPayrollReadiness(
             )),
     ])
 
+    // We need the TOTAL counts (not just the capped slice) for the messages.
+    // Two extra COUNT queries — both indexed, very cheap.
+    const [ibanTotalRows, salaryTotalRows] = await Promise.all([
+        db.select({ count: sql<number>`COUNT(*)::int` })
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                inArray(employees.status, ['active', 'onboarding']),
+                sql`(${employees.iban} IS NULL OR ${employees.iban} = '')`,
+            )),
+        db.select({ count: sql<number>`COUNT(*)::int` })
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                inArray(employees.status, ['active', 'onboarding']),
+                sql`(${employees.basicSalary} IS NULL OR ${employees.basicSalary}::numeric = 0)`,
+                // Mirror the catalog-aware exclusion from the list query above.
+                sql`NOT EXISTS (
+                    SELECT 1 FROM employee_salary_components esc
+                    JOIN salary_components sc ON sc.id = esc.component_id
+                    WHERE esc.employee_id = ${employees.id}
+                      AND esc.tenant_id = ${tenantId}
+                      AND esc.is_active = true
+                      AND sc.is_active = true
+                      AND sc.kind = 'earning'
+                      AND sc.category = 'basic'
+                      AND COALESCE(esc.amount::numeric, sc.amount::numeric, 0) > 0
+                )`,
+            )),
+    ])
+
     const employeeCount = emps[0]?.count ?? 0
-    const missingIban = ibanCounts[0]?.count ?? 0
-    const missingSalary = salaryCounts[0]?.count ?? 0
+    const missingIban = ibanTotalRows[0]?.count ?? 0
+    const missingSalary = salaryTotalRows[0]?.count ?? 0
     const pendingLeaveInPeriod = leaveCounts[0]?.count ?? 0
+
+    const toReadinessEmp = (r: { id: string; employeeNo: string; firstName: string; lastName: string; avatarUrl: string | null }): PayrollReadinessEmployee => ({
+        id: r.id,
+        employeeNo: r.employeeNo,
+        name: `${r.firstName} ${r.lastName}`.trim(),
+        avatarUrl: r.avatarUrl,
+    })
+    const missingIbanEmployees = ibanRows.map(toReadinessEmp)
+    const missingSalaryEmployees = salaryRows.map(toReadinessEmp)
 
     const blockers: string[] = []
     const warnings: string[] = []
@@ -247,6 +339,8 @@ export async function getPayrollReadiness(
         missingIban,
         missingSalary,
         pendingLeaveInPeriod,
+        missingIbanEmployees,
+        missingSalaryEmployees,
         blockers,
         warnings,
         canProcess: blockers.length === 0,
@@ -270,6 +364,7 @@ export async function getPayslipsByEmployee(tenantId: string, employeeId: string
             housingAllowance: payslips.housingAllowance,
             transportAllowance: payslips.transportAllowance,
             otherAllowances: payslips.otherAllowances,
+            earningsBreakdown: payslips.earningsBreakdown,
             overtime: payslips.overtime,
             commission: payslips.commission,
             grossSalary: payslips.grossSalary,
@@ -350,6 +445,111 @@ function parseLocalDate(s: string | null | undefined): Date | null {
     return new Date(y, m - 1, d)
 }
 
+/** One resolved earning line for an employee on a specific period. */
+interface ResolvedEarning {
+    componentId: string
+    category: string
+    /** Human-readable component name from the catalog (e.g. "Communication
+        Allowance"). Used to label rows in the payslip breakdown UI. */
+    name: string
+    /** AED amount for this earning before proration. Percentage-of-basic
+        components are already converted to absolute AED here. */
+    amount: number
+}
+
+export interface ResolvedEarnings {
+    basic: number
+    /** True when the employee has a basic earning assignment. Used to gate
+        the catalog path — a partial set of assignments (e.g. only an "Other
+        Allowance" left over from a half-finished migration) must still fall
+        back to the legacy static fields, otherwise the resolver would zero
+        out basic / housing / transport. */
+    hasBasic: boolean
+    earnings: ResolvedEarning[]
+}
+
+/**
+ * Earnings derived from the salary-components catalog + per-employee
+ * assignments. This is the source of truth payroll uses; the legacy
+ * `employees.basic_salary` etc. columns serve as a backstop only for
+ * employees that don't have any assignments yet (newly-created employee,
+ * pre-backfill data, etc.).
+ *
+ * Returns a Map keyed by employee_id. Inside each entry: the resolved
+ * earnings array + the computed basic figure (already flat AED). The
+ * basic figure is split out separately because percentage-of-basic
+ * components need it as their multiplier and we want to compute it once.
+ *
+ * Performance: one query joining assignments + components for ALL payable
+ * employees in the tenant — O(N + M) where N = employees and M = total
+ * assignments. Way better than per-employee fetches inside the math loop.
+ */
+export async function resolveEmployeeEarnings(
+    tenantId: string,
+    empIds: string[],
+): Promise<Map<string, ResolvedEarnings>> {
+    const result = new Map<string, ResolvedEarnings>()
+    if (empIds.length === 0) return result
+
+    // Active assignments joined with their catalog component. The catalog
+    // tells us flat vs percentage and the default amount; the assignment
+    // can override the amount. We also pre-filter to active components +
+    // active assignments + earning kind so we don't have to filter in JS.
+    const rows = await db
+        .select({
+            employeeId: employeeSalaryComponents.employeeId,
+            componentId: salaryComponents.id,
+            name: salaryComponents.name,
+            category: salaryComponents.category,
+            calculationType: salaryComponents.calculationType,
+            componentAmount: salaryComponents.amount,
+            assignmentAmount: employeeSalaryComponents.amount,
+        })
+        .from(employeeSalaryComponents)
+        .innerJoin(salaryComponents, eq(employeeSalaryComponents.componentId, salaryComponents.id))
+        .where(and(
+            eq(employeeSalaryComponents.tenantId, tenantId),
+            eq(employeeSalaryComponents.isActive, true),
+            eq(salaryComponents.isActive, true),
+            eq(salaryComponents.kind, 'earning'),
+            inArray(employeeSalaryComponents.employeeId, empIds),
+        ))
+
+    // First pass: compute the Basic for each employee — SUMMING every
+    // assignment whose catalog row sits in the `basic` category. Tenants
+    // may legitimately split basic across multiple catalog rows (e.g. a
+    // "Basic" + "Probation Basic" structure), and we previously overwrote
+    // here, which meant one of them silently dropped out of the Basic
+    // figure used for gratuity, WPS, and as the % multiplier below.
+    //
+    // Percentage-of-basic components in this category are still treated as
+    // flat AED — the resolver's contract is that whatever HR put under
+    // `basic` is what gets paid as basic, no conversion.
+    const basicByEmp = new Map<string, number>()
+    for (const r of rows) {
+        if (r.category !== 'basic') continue
+        const amt = Number(r.assignmentAmount ?? r.componentAmount ?? 0)
+        basicByEmp.set(r.employeeId, (basicByEmp.get(r.employeeId) ?? 0) + amt)
+    }
+
+    // Second pass: resolve every earning, converting percentage-of-basic
+    // into absolute AED using the basic we computed above.
+    for (const r of rows) {
+        const basic = basicByEmp.get(r.employeeId) ?? 0
+        const hasBasic = basicByEmp.has(r.employeeId)
+        const rawAmount = Number(r.assignmentAmount ?? r.componentAmount ?? 0)
+        const amount = r.calculationType === 'percentage_of_basic'
+            ? (basic * rawAmount) / 100
+            : rawAmount
+
+        const entry = result.get(r.employeeId) ?? { basic, hasBasic, earnings: [] }
+        entry.earnings.push({ componentId: r.componentId, category: r.category, name: r.name, amount })
+        result.set(r.employeeId, entry)
+    }
+
+    return result
+}
+
 /**
  * Pure function — given employees, adjustments, and a period, returns the
  * per-employee payslip rows + the run totals. No DB writes. runPayroll calls
@@ -357,7 +557,17 @@ function parseLocalDate(s: string | null | undefined): Date | null {
  *
  * `payrollRunId` is included in the payslip rows but only matters when the
  * caller intends to persist — preview ignores the values inside `payslipValues`.
+ *
+ * Earnings come from the salary-components catalog via `earningsByEmp`. If an
+ * employee has no assignments (newly created, pre-migration etc.), we fall
+ * back to the legacy static fields on the employee row so payroll keeps
+ * producing a sensible result and HR sees no regression.
+ *
+ * Exported for tests — production callers go through previewPayrollRun /
+ * runPayroll / getDraftPayslipsPreview.
  */
+export type { ResolvedEarnings as PayslipResolvedEarnings }
+export { buildPayslipsAndTotals as __buildPayslipsAndTotals_forTests }
 function buildPayslipsAndTotals(
     tenantId: string,
     payrollRunId: string,
@@ -365,6 +575,7 @@ function buildPayslipsAndTotals(
     month: number,
     emps: PayableEmployee[],
     adjustmentTotals: Awaited<ReturnType<typeof getAdjustmentTotalsByEmployee>>,
+    earningsByEmp: Map<string, ResolvedEarnings>,
 ) {
     const daysInMonth = new Date(year, month, 0).getDate()
     const monthStart = new Date(year, month - 1, 1)
@@ -375,10 +586,40 @@ function buildPayslipsAndTotals(
     let totalNet = 0
 
     const payslipValues: InferInsertModel<typeof payslips>[] = emps.map(emp => {
-        const basic = Number(emp.basicSalary ?? 0)
-        const housing = Number(emp.housingAllowance ?? 0)
-        const transport = Number(emp.transportAllowance ?? 0)
-        const other = Number(emp.otherAllowances ?? 0)
+        // ── Earnings: resolved from the catalog if assignments exist; fall
+        // back to the legacy static fields when an employee has nothing
+        // assigned yet. The static-fields path is the safety net for
+        // newly-created employees (the Add Employee flow today still writes
+        // the four columns directly; a follow-up will switch it to creating
+        // assignments).
+        // Catalog path requires a basic-earning assignment — otherwise we
+        // can't trust the resolved set as the source of truth, and the
+        // legacy static fields stay authoritative. This guard prevents a
+        // partial-migration scenario (one stray "Other Allowance" assignment
+        // with no Basic) from zeroing out basic / housing / transport.
+        const resolved = earningsByEmp.get(emp.id)
+        let basic: number, housing: number, transport: number, other: number
+        if (resolved && resolved.hasBasic) {
+            basic = resolved.basic
+            housing = resolved.earnings.filter(e => e.category === 'housing').reduce((s, e) => s + e.amount, 0)
+            transport = resolved.earnings.filter(e => e.category === 'transport').reduce((s, e) => s + e.amount, 0)
+            // Every other earning category (cost_of_living, social, custom, …)
+            // rolls up into "other" on the persisted payslip columns — keeps
+            // the payslip shape stable while letting the catalog grow.
+            other = resolved.earnings
+                .filter(e => !['basic', 'housing', 'transport'].includes(e.category))
+                .reduce((s, e) => s + e.amount, 0)
+        } else {
+            basic = Number(emp.basicSalary ?? 0)
+            housing = Number(emp.housingAllowance ?? 0)
+            transport = Number(emp.transportAllowance ?? 0)
+            other = Number(emp.otherAllowances ?? 0)
+        }
+        // Snapshot of every catalog earning that fed into this payslip. The
+        // amounts here are pre-prorated; the UI applies the proration ratio
+        // already baked into the row totals — actually no, we DO prorate
+        // them here so the breakdown sums exactly to the persisted column
+        // totals. Empty when the employee was on the legacy fallback path.
 
         let workedDays = daysInMonth
         const joinDate = parseLocalDate(emp.joinDate)
@@ -409,6 +650,15 @@ function buildPayslipsAndTotals(
         totalDeductions += deductions
         totalNet += net
 
+        const earningsBreakdown = resolved && resolved.hasBasic
+            ? resolved.earnings.map(e => ({
+                componentId: e.componentId,
+                category: e.category,
+                name: e.name,
+                amount: Number((e.amount * prorateRatio).toFixed(2)),
+            }))
+            : []
+
         return {
             payrollRunId,
             employeeId: emp.id,
@@ -417,6 +667,7 @@ function buildPayslipsAndTotals(
             housingAllowance: String((housing * prorateRatio).toFixed(2)),
             transportAllowance: String((transport * prorateRatio).toFixed(2)),
             otherAllowances: String((other * prorateRatio).toFixed(2)),
+            earningsBreakdown,
             overtime: overtime.toFixed(2),
             commission: commission.toFixed(2),
             grossSalary: String(gross.toFixed(2)),
@@ -463,6 +714,9 @@ function buildPayslipsAndTotals(
 export interface PayrollPreloaded {
     emps: PayableEmployee[]
     adjustmentTotals: Awaited<ReturnType<typeof getAdjustmentTotalsByEmployee>>
+    /** Pre-resolved earnings (assignments + catalog). Optional — falls back
+     *  to an internal resolve if absent. */
+    earningsByEmp?: Awaited<ReturnType<typeof resolveEmployeeEarnings>>
 }
 
 export async function previewPayrollRun(
@@ -481,10 +735,12 @@ export async function previewPayrollRun(
         return { totalEmployees: 0, totalGross: 0, totalDeductions: 0, totalNet: 0 }
     }
 
-    const adjustmentTotals = preloaded?.adjustmentTotals
-        ?? await getAdjustmentTotalsByEmployee(tenantId, run.year, run.month)
+    const [adjustmentTotals, earningsByEmp] = await Promise.all([
+        preloaded?.adjustmentTotals ?? getAdjustmentTotalsByEmployee(tenantId, run.year, run.month),
+        preloaded?.earningsByEmp ?? resolveEmployeeEarnings(tenantId, emps.map(e => e.id)),
+    ])
     const { totalEmployees, totalGross, totalDeductions, totalNet } =
-        buildPayslipsAndTotals(tenantId, run.id, run.year, run.month, emps, adjustmentTotals)
+        buildPayslipsAndTotals(tenantId, run.id, run.year, run.month, emps, adjustmentTotals, earningsByEmp)
     return { totalEmployees, totalGross, totalDeductions, totalNet }
 }
 
@@ -523,12 +779,15 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
     // Refresh auto-imported adjustment rows (LOP / sick / loan), then pull
     // the per-employee totals — HR-created manual rows are folded in here too.
     await syncAdjustmentsForPeriod(tenantId, run.year, run.month)
-    const adjustmentTotals = await getAdjustmentTotalsByEmployee(tenantId, run.year, run.month)
+    const [adjustmentTotals, earningsByEmp] = await Promise.all([
+        getAdjustmentTotalsByEmployee(tenantId, run.year, run.month),
+        resolveEmployeeEarnings(tenantId, activeEmps.map(e => e.id)),
+    ])
 
     // Run the calculation through the shared helper so a draft preview and
     // the real run cannot drift in their math.
     const { payslipValues, totalGross, totalDeductions, totalNet } = buildPayslipsAndTotals(
-        tenantId, payrollRunId, run.year, run.month, activeEmps, adjustmentTotals,
+        tenantId, payrollRunId, run.year, run.month, activeEmps, adjustmentTotals, earningsByEmp,
     )
 
     if (payslipValues.length === 0) {
@@ -634,6 +893,7 @@ export async function getPayslipsWithEmployees(tenantId: string, payrollRunId: s
         housingAllowance: payslips.housingAllowance,
         transportAllowance: payslips.transportAllowance,
         otherAllowances: payslips.otherAllowances,
+        earningsBreakdown: payslips.earningsBreakdown,
         grossSalary: payslips.grossSalary,
         deductions: payslips.deductions,
         unpaidLeaveDays: payslips.unpaidLeaveDays,
@@ -713,6 +973,9 @@ async function getDraftPayslipsPreview(tenantId: string, run: { id: string; year
 
     if (emps.length === 0) return []
 
+    // Resolve catalog earnings for the same employee list.
+    const earningsByEmp = await resolveEmployeeEarnings(tenantId, emps.map(e => e.id))
+
     // Strip down to the PayableEmployee shape for the math helper.
     const mathInputs: PayableEmployee[] = emps.map(e => ({
         id: e.id,
@@ -724,7 +987,7 @@ async function getDraftPayslipsPreview(tenantId: string, run: { id: string; year
         contractEndDate: e.contractEndDate,
     }))
     const { payslipValues } = buildPayslipsAndTotals(
-        tenantId, run.id, run.year, run.month, mathInputs, adjustmentTotals,
+        tenantId, run.id, run.year, run.month, mathInputs, adjustmentTotals, earningsByEmp,
     )
 
     // Merge the math output with the employee display fields. Iterate by the
@@ -743,6 +1006,7 @@ async function getDraftPayslipsPreview(tenantId: string, run: { id: string; year
                 housingAllowance: v.housingAllowance,
                 transportAllowance: v.transportAllowance,
                 otherAllowances: v.otherAllowances,
+                earningsBreakdown: v.earningsBreakdown,
                 grossSalary: v.grossSalary,
                 deductions: v.deductions,
                 unpaidLeaveDays: v.unpaidLeaveDays,
@@ -882,6 +1146,7 @@ export async function getPayslipById(tenantId: string, payslipId: string) {
         housingAllowance: payslips.housingAllowance,
         transportAllowance: payslips.transportAllowance,
         otherAllowances: payslips.otherAllowances,
+        earningsBreakdown: payslips.earningsBreakdown,
         overtime: payslips.overtime,
         commission: payslips.commission,
         grossSalary: payslips.grossSalary,
