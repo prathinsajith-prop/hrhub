@@ -3,6 +3,7 @@ import { db } from '../../db/index.js'
 import { tenants, users, employees } from '../../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
 import { invalidatePrivacyPolicyCache } from '../../lib/privacy.js'
+import { dashboardSummaryCache, dashboardCache, invalidateL1AndL2 } from '../../lib/cache.js'
 
 const VALID_ROLES = ['employee', 'dept_head', 'pro_officer', 'hr_manager', 'super_admin'] as const
 type ValidRole = typeof VALID_ROLES[number]
@@ -265,7 +266,12 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     // Per-employee opt-outs live on employees.privacy_overrides — employees
     // can hide their own birthday/anniversary/mobile via /me/privacy below.
     const ORG_POLICY_DEFAULTS = { showBirthday: true, showWorkAnniversary: true, showMobile: true, searchableInDirectory: true }
-    fastify.get('/org-policy', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
+    // GET is auth-only (not HR-only) — the frontend uses these flags as
+    // feature gates (hide birthday widget when showBirthday is off, hide
+    // mobile column when showMobile is off, etc.). Returning the policy to
+    // every authenticated user lets the UI hide widgets consistently for HR
+    // AND peers without an extra role-gated fetch. PATCH stays HR-only.
+    fastify.get('/org-policy', { preHandler: [fastify.authenticate], schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const [row] = await db
             .select({ notificationsEnabled: tenants.notificationsEnabled, privacyPolicy: tenants.privacyPolicy })
             .from(tenants)
@@ -311,6 +317,13 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         // Bust the process-level cache so HR sees their change immediately
         // rather than waiting up to TTL (60s) for the next eviction.
         invalidatePrivacyPolicyCache(request.user.tenantId)
+        // The dashboard BFF caches birthdays/anniversaries inside its summary
+        // payload — bust both layers so the next dashboard load reflects the
+        // toggle change (empty widget vs full list).
+        await Promise.all([
+            invalidateL1AndL2(dashboardSummaryCache.key(request.user.tenantId)),
+            invalidateL1AndL2(dashboardCache.key(request.user.tenantId)),
+        ])
         return reply.send({
             data: {
                 notificationsEnabled: updated?.notificationsEnabled ?? true,

@@ -103,19 +103,58 @@ export function effectiveVisibility(policy: PrivacyPolicy, overrides: PrivacyOve
 
 /**
  * Mutating mask — redacts sensitive fields on an employee-shaped object in
- * place when the viewer is a peer and the target has opted out. Returns the
- * same object for chaining.
+ * place. Two layers:
+ *
+ *   1. Feature flag (applies to EVERYONE, including HR): when the org policy
+ *      toggle is OFF, the field is hidden regardless of viewer. HR has
+ *      explicitly turned off the feature for the whole tenant — there's no
+ *      "but I'm HR so I can still see it" override.
+ *
+ *   2. Self-control (applies to PEERS only): when the org policy is ON but
+ *      the individual employee has overridden their setting to off, the
+ *      field is hidden for peers only. HR and self-view still see it.
  *
  * Fields touched (kept in one place so the policy schema and the mask stay
  * in sync):
- *   - dateOfBirth  → policy.showBirthday
- *   - joinDate     → policy.showWorkAnniversary  (the date itself isn't
- *                    secret, but a hidden anniversary implies a hidden join
- *                    date — peers can still see tenure aggregations)
- *   - mobileNo     → policy.showMobile
- *   - emergencyContact / emergencyContactPhone → always policy.showMobile
+ *   - dateOfBirth                                                   → showBirthday
+ *   - joinDate (rounded to year so tenure aggregations still work)  → showWorkAnniversary
+ *   - mobileNo, emergencyContact, emergencyContactPhone             → showMobile
  *     (same trust boundary; if you can't see the personal mobile you don't
  *     get the emergency contact either)
+ */
+export function maskEmployeeForViewer<T extends {
+    id: string
+    dateOfBirth?: string | Date | null
+    joinDate?: string | Date | null
+    mobileNo?: string | null
+    emergencyContact?: string | null
+    emergencyContactPhone?: string | null
+    privacyOverrides?: PrivacyOverrides | null
+} | Record<string, unknown>>(row: T, policy: PrivacyPolicy, isPeer: boolean): T {
+    const overrides = (row as { privacyOverrides?: PrivacyOverrides | null }).privacyOverrides ?? {}
+    // shouldHide combines feature-flag (org policy off) AND peer-only opt-out:
+    //   - feature off              → hide for everyone
+    //   - feature on, peer opt-out → hide for peers
+    const shouldHide = (key: keyof PrivacyPolicy): boolean =>
+        !policy[key] || (isPeer && overrides[key] === false)
+
+    if (shouldHide('showBirthday')) (row as Record<string, unknown>).dateOfBirth = null
+    if (shouldHide('showMobile')) {
+        (row as Record<string, unknown>).mobileNo = null
+        ;(row as Record<string, unknown>).emergencyContact = null
+        ;(row as Record<string, unknown>).emergencyContactPhone = null
+    }
+    if (shouldHide('showWorkAnniversary') && (row as { joinDate?: string | Date | null }).joinDate) {
+        const raw = (row as { joinDate: string | Date }).joinDate
+        const year = typeof raw === 'string' ? raw.slice(0, 4) : new Date(raw).getUTCFullYear().toString()
+        if (year && /^\d{4}$/.test(year)) (row as Record<string, unknown>).joinDate = `${year}-01-01`
+    }
+    return row
+}
+
+/**
+ * @deprecated Use `maskEmployeeForViewer(row, policy, true)` instead. Kept
+ * as a thin shim for call sites that haven't migrated.
  */
 export function maskEmployeeForPeer<T extends {
     id: string
@@ -126,23 +165,7 @@ export function maskEmployeeForPeer<T extends {
     emergencyContactPhone?: string | null
     privacyOverrides?: PrivacyOverrides | null
 } | Record<string, unknown>>(row: T, policy: PrivacyPolicy): T {
-    const overrides = (row as { privacyOverrides?: PrivacyOverrides | null }).privacyOverrides ?? {}
-    const vis = effectiveVisibility(policy, overrides)
-    if (!vis.showBirthday) (row as Record<string, unknown>).dateOfBirth = null
-    if (!vis.showMobile) {
-        (row as Record<string, unknown>).mobileNo = null
-        ;(row as Record<string, unknown>).emergencyContact = null
-        ;(row as Record<string, unknown>).emergencyContactPhone = null
-    }
-    // joinDate is the anchor for anniversary calculations. Hide the day but
-    // leave the year so peers can still see "2024-01-01" → tenure of ~1 yr.
-    // Simplest implementation: round to the first of the year.
-    if (!vis.showWorkAnniversary && (row as { joinDate?: string | Date | null }).joinDate) {
-        const raw = (row as { joinDate: string | Date }).joinDate
-        const year = typeof raw === 'string' ? raw.slice(0, 4) : new Date(raw).getUTCFullYear().toString()
-        if (year && /^\d{4}$/.test(year)) (row as Record<string, unknown>).joinDate = `${year}-01-01`
-    }
-    return row
+    return maskEmployeeForViewer(row, policy, true)
 }
 
 /**

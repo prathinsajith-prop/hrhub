@@ -254,10 +254,13 @@ export async function approveLeave(tenantId: string, id: string, approvedBy: str
         })()
     }
 
-    // Send notification using data already fetched in the initial JOIN (no extra DB call)
+    // Send notification using data already fetched in the initial JOIN (no extra DB call).
+    // tenantId routes through the notifications kill-switch — HR can silence
+    // approval notifications from Settings → Organization Policy.
     if (req.employeeEmail) {
         sendEmail({
             to: req.employeeEmail,
+            tenantId,
             subject: `Leave Request ${approved ? 'Approved' : 'Rejected'}`,
             html: `<p>Hi ${req.employeeFirstName},</p>
                 <p>Your <strong>${req.leaveType}</strong> leave request starting <strong>${req.startDate}</strong> has been <strong>${approved ? 'approved' : 'rejected'}</strong>.</p>

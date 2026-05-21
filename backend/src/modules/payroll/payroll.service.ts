@@ -834,7 +834,11 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
                     loanDeduction: String(slip.loanDeduction ?? '0'),
                     otherDeduction: String(slip.otherDeduction ?? '0'),
                 })
-                sendEmail({ ...opts, to: emp.email }).catch(() => {})
+                // Pass tenantId so sendEmail honours the org-wide
+                // notifications kill-switch. Payslip emails are business
+                // notifications, not transactional auth flows, so they
+                // should be silenceable from Settings → Organization Policy.
+                sendEmail({ ...opts, to: emp.email, tenantId }).catch(() => {})
             }
         } catch {
             // non-fatal — email errors must not fail payroll
