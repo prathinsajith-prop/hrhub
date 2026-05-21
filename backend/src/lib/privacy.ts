@@ -46,19 +46,46 @@ export function viewerCanBypassPrivacy(role: string | undefined): boolean {
 }
 
 /**
- * Tenant policy lookup. Caches in-process for the lifetime of the request
- * via a Map keyed by tenantId — callers pass a shared map when they're
- * applying the mask to many rows from the same tenant.
+ * Process-wide TTL cache for the tenant Privacy Policy.
+ *
+ * The policy is read on every employee list / detail request for peer
+ * viewers. It changes only when HR toggles a switch on Org Settings →
+ * Organization Policy, so a short TTL is safe and skips ~99% of the DB
+ * round-trips on a tenant under load.
+ *
+ * Stale-after-write: `invalidatePrivacyPolicyCache(tenantId)` is called from
+ * the PATCH /settings/org-policy handler so HR sees their changes
+ * immediately. The 60-second TTL is a backstop in case a write skips that
+ * call (cross-process update, replica lag, etc.).
  */
+const POLICY_CACHE_TTL_MS = 60_000
+interface CachedPolicy { policy: PrivacyPolicy; expiresAt: number }
+const policyCache = new Map<string, CachedPolicy>()
+
+export function invalidatePrivacyPolicyCache(tenantId: string): void {
+    policyCache.delete(tenantId)
+}
+
 export async function loadPrivacyPolicy(tenantId: string, cache?: Map<string, PrivacyPolicy>): Promise<PrivacyPolicy> {
-    const cached = cache?.get(tenantId)
-    if (cached) return cached
+    // Caller-supplied per-request cache wins (e.g. batch operations within
+    // one handler can pre-populate). Falls through to the process cache.
+    const requestCached = cache?.get(tenantId)
+    if (requestCached) return requestCached
+
+    const now = Date.now()
+    const processCached = policyCache.get(tenantId)
+    if (processCached && processCached.expiresAt > now) {
+        cache?.set(tenantId, processCached.policy)
+        return processCached.policy
+    }
+
     const [row] = await db
         .select({ privacyPolicy: tenants.privacyPolicy })
         .from(tenants)
         .where(eq(tenants.id, tenantId))
         .limit(1)
     const policy: PrivacyPolicy = { ...DEFAULT_PRIVACY_POLICY, ...(row?.privacyPolicy ?? {}) }
+    policyCache.set(tenantId, { policy, expiresAt: now + POLICY_CACHE_TTL_MS })
     cache?.set(tenantId, policy)
     return policy
 }

@@ -33,7 +33,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { DatePicker } from '@/components/ui/date-picker'
-import { cn, formatDate, formatDateTime, formatCurrency, formatFileSize, getInitials, onActivate } from '@/lib/utils'
+import { cn, formatDate, formatDateTime, formatCurrency, formatFileSize, getInitials } from '@/lib/utils'
 import { useEmployee, useUpdateEmployee, useUploadEmployeeAvatar, useEmployeeAccount, useSalaryHistory, useRecordSalaryRevision, useUpdateEmployeeStatus, useArchiveEmployee, useEmployeeSalaryComponents } from '@/hooks/useEmployees'
 import { useSalaryComponents } from '@/hooks/useSalaryComponents'
 import type { SalaryHistoryFilters } from '@/hooks/useEmployees'
@@ -3540,7 +3540,12 @@ function AddWarningDialog({
               dragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-muted/30',
             )}
             onClick={() => fileRef.current?.click()}
-            onKeyDown={onActivate(() => fileRef.current?.click())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                fileRef.current?.click()
+              }
+            }}
             onDragOver={e => { e.preventDefault(); setDragging(true) }}
             onDragLeave={() => setDragging(false)}
             onDrop={e => { e.preventDefault(); setDragging(false); pickFile(e.dataTransfer.files[0]) }}

@@ -40,6 +40,19 @@ export interface ListEmployeesParams {
     limit: number
     offset: number
     after?: string // cursor: base64url-encoded { c: createdAt, i: id }
+    /**
+     * Apply the Organization Policy "searchable in directory" filter at the
+     * SQL layer. The route layer resolves the tenant policy once per request
+     * and passes it down so the WHERE clause can drop hidden rows before
+     * pagination / total counts. Omit (or pass `null`) for HR / super_admin
+     * and self-only views — they bypass the directory filter.
+     */
+    directoryPrivacy?: {
+        /** Resolved tenant default — false hides everyone except the viewer. */
+        policySearchableInDirectory: boolean
+        /** Viewer's own employee row — never filtered out. */
+        viewerEmployeeId: string | null
+    }
 }
 
 /**
@@ -75,9 +88,42 @@ export async function getSubtreeEmployeeIds(tenantId: string, rootId: string): P
 }
 
 export async function listEmployees(params: ListEmployeesParams) {
-    const { tenantId, search, status, department, managerEmployeeId, filter, limit, offset, after } = params
+    const { tenantId, search, status, department, managerEmployeeId, filter, limit, offset, after, directoryPrivacy } = params
 
     const conditions = [eq(employees.tenantId, tenantId), eq(employees.isArchived, false)]
+
+    // Apply the Organization Policy "searchable in directory" filter for peer
+    // viewers. Pushed into SQL so the row count / pagination cursor reflect
+    // what the viewer can actually see, and so we avoid serialising rows that
+    // will be dropped. Self is always visible.
+    //
+    // Semantics:
+    //   - tenant policy ON, employee override absent or true  → row visible
+    //   - tenant policy ON, employee override false           → hidden
+    //   - tenant policy OFF                                    → only self visible
+    if (directoryPrivacy) {
+        const { policySearchableInDirectory, viewerEmployeeId } = directoryPrivacy
+        if (!policySearchableInDirectory) {
+            // Org has turned the directory off entirely for peers — only the
+            // viewer's own row remains visible. If there's no viewer employee
+            // (rare edge case: a HR-admin demoted in mid-session), short-circuit.
+            if (!viewerEmployeeId) {
+                return { data: [], total: 0, limit, offset, hasMore: false }
+            }
+            conditions.push(eq(employees.id, viewerEmployeeId))
+        } else {
+            // Org default ON — drop only the rows that explicitly opted OUT.
+            // The override jsonb defaults to `{}`, so the COALESCE keeps
+            // unset employees visible.
+            const selfClause = viewerEmployeeId
+                ? sql`${employees.id} = ${viewerEmployeeId}`
+                : sql`false`
+            conditions.push(or(
+                selfClause,
+                sql`COALESCE((${employees.privacyOverrides} ->> 'searchableInDirectory')::boolean, true) = true`,
+            )!)
+        }
+    }
 
     if (status) {
         conditions.push(eq(employees.status, status))

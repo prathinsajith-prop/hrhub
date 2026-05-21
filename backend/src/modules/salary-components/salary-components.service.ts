@@ -97,10 +97,27 @@ function capitalize(s: string): string {
  * List components for a tenant, optionally filtered by kind. Sorted by
  * created_at desc so the most recently-added shows first.
  */
-export async function listSalaryComponents(tenantId: string, kind?: SalaryComponentKind) {
+/**
+ * List catalog components for a tenant.
+ *
+ * Pagination is optional — when no `limit` is supplied the caller gets all
+ * rows back (small bounded list in practice: <200 components per tenant).
+ * The route layer caps `limit` to keep the unbounded case from blowing up
+ * for runaway tenants.
+ */
+export async function listSalaryComponents(
+    tenantId: string,
+    kind?: SalaryComponentKind,
+    opts: { limit?: number; offset?: number } = {},
+) {
     const conditions = [eq(salaryComponents.tenantId, tenantId)]
     if (kind) conditions.push(eq(salaryComponents.kind, kind))
-    return db.select().from(salaryComponents).where(and(...conditions)).orderBy(desc(salaryComponents.createdAt))
+    let query = db.select().from(salaryComponents).where(and(...conditions)).orderBy(desc(salaryComponents.createdAt)).$dynamic()
+    if (opts.limit !== undefined) {
+        query = query.limit(opts.limit)
+        if (opts.offset) query = query.offset(opts.offset)
+    }
+    return query
 }
 
 export async function getSalaryComponent(tenantId: string, id: string) {

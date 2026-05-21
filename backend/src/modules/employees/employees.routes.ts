@@ -9,7 +9,7 @@ import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.
 import { db } from '../../db/index.js'
 import { entities, employees, employeeSalaryComponents, salaryComponents, tenants, users } from '../../db/schema/index.js'
 import { eq, and, sql, inArray } from 'drizzle-orm'
-import { loadPrivacyPolicy, maskEmployeeForPeer, shouldMask, viewerCanBypassPrivacy } from '../../lib/privacy.js'
+import { loadPrivacyPolicy, maskEmployeeForPeer, shouldMask, viewerCanBypassPrivacy, effectiveVisibility, type PrivacyOverrides } from '../../lib/privacy.js'
 import { inviteUser, resendInvite } from '../settings/settings.service.js'
 import { fileTypeFromBuffer } from 'file-type'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
@@ -29,6 +29,13 @@ export default async function (fastify: any): Promise<void> {
             ? (user.employeeId ?? undefined)
             : undefined
 
+        // Resolve the org Privacy Policy ONCE per request when the viewer is a
+        // peer. Same instance is then passed into listEmployees for SQL-side
+        // row filtering AND used by maskEmployeeForPeer for field redaction.
+        // HR / super_admin / pro_officer / dept_head bypass both paths.
+        const isPeer = !viewerCanBypassPrivacy(user.role)
+        const policy = isPeer ? await loadPrivacyPolicy(request.user.tenantId) : null
+
         const result = await listEmployees({
             tenantId: request.user.tenantId,
             search: query.search,
@@ -39,12 +46,20 @@ export default async function (fastify: any): Promise<void> {
             limit: query.limit,
             offset: query.offset,
             after: query.after,
+            // Push the searchable-in-directory filter into SQL so dropped
+            // rows don't pollute `total` or pagination, and we don't ship
+            // bytes the viewer would never see.
+            directoryPrivacy: policy
+                ? {
+                    policySearchableInDirectory: policy.searchableInDirectory,
+                    viewerEmployeeId: user.employeeId ?? null,
+                }
+                : undefined,
         })
 
-        // Apply the org-policy privacy mask in bulk. Peer viewers see hidden
-        // birthdays / mobiles / anniversaries; HR and self-view bypass.
-        if (!viewerCanBypassPrivacy(user.role) && Array.isArray((result as any).data)) {
-            const policy = await loadPrivacyPolicy(request.user.tenantId)
+        // Field-level mask: hide DOB / mobile / anniversary on the surviving
+        // rows. Self-view bypasses (same `continue` as before).
+        if (policy && Array.isArray((result as any).data)) {
             const rows = (result as any).data as Array<{ id: string }>
             for (const row of rows) {
                 if (user.employeeId && row.id === user.employeeId) continue
@@ -233,9 +248,16 @@ export default async function (fastify: any): Promise<void> {
         // widened via the row's runtime `id`, which getEmployee always
         // selects via getTableColumns(employees) even though TypeScript's
         // inferred narrow type doesn't surface it.
-        const employeeRow = employee as typeof employee & { id: string }
+        const employeeRow = employee as typeof employee & { id: string; privacyOverrides?: PrivacyOverrides | null }
         if (shouldMask((request as any).user.role, (request as any).user.employeeId, employeeRow.id)) {
             const policy = await loadPrivacyPolicy((request as any).user.tenantId)
+            // Directory-hidden employees return 404 to peers — the same
+            // contract as the list endpoint. Returning 403 would leak
+            // existence; 404 keeps the surface uniform with "not found".
+            const visibility = effectiveVisibility(policy, employeeRow.privacyOverrides ?? {})
+            if (!visibility.searchableInDirectory) {
+                return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+            }
             maskEmployeeForPeer(employeeRow, policy)
         }
         return reply.send({ data: employee })

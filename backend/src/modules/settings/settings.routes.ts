@@ -2,6 +2,7 @@ import { getCompanySettings, updateCompanySettings, listTenantUsers, listInvitab
 import { db } from '../../db/index.js'
 import { tenants, users, employees } from '../../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
+import { invalidatePrivacyPolicyCache } from '../../lib/privacy.js'
 
 const VALID_ROLES = ['employee', 'dept_head', 'pro_officer', 'hr_manager', 'super_admin'] as const
 type ValidRole = typeof VALID_ROLES[number]
@@ -307,6 +308,9 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             })
             .where(eq(tenants.id, request.user.tenantId))
             .returning({ notificationsEnabled: tenants.notificationsEnabled, privacyPolicy: tenants.privacyPolicy })
+        // Bust the process-level cache so HR sees their change immediately
+        // rather than waiting up to TTL (60s) for the next eviction.
+        invalidatePrivacyPolicyCache(request.user.tenantId)
         return reply.send({
             data: {
                 notificationsEnabled: updated?.notificationsEnabled ?? true,
