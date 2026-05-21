@@ -24,7 +24,7 @@ import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { formatCurrency, formatDate, getInitials, splitFullName, cn } from '@/lib/utils'
+import { cn, formatCurrency, formatDate, getInitials, onActivate, splitFullName } from '@/lib/utils'
 import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useConvertCandidateToEmployee, useUploadResume, useRecruitmentStages } from '@/hooks/useRecruitment'
 import { DEFAULT_STAGES, kanbanStages as filterKanbanStages, resolveStageColor, stageByKey, type RecruitmentStage } from '@/lib/recruitmentStages'
 import { StageBadge } from '@/components/shared/StageBadge'
@@ -600,12 +600,7 @@ const CandidateListRow = memo(function CandidateListRow({
     <div
       className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4 hover:bg-muted/40 transition-colors group cursor-pointer"
       onClick={() => onView(candidate.id)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onView(candidate.id)
-        }
-      }}
+      onKeyDown={onActivate(() => onView(candidate.id))}
       role="button"
       tabIndex={0}
     >
@@ -666,8 +661,6 @@ const CandidateListRow = memo(function CandidateListRow({
       <div
         className="w-8 shrink-0 flex items-center justify-end sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
         onClick={e => e.stopPropagation()}
-        onKeyDown={e => e.stopPropagation()}
-        role="presentation"
       >
         {onEdit
           ? <Button size="icon-sm" variant="ghost" aria-label="Edit candidate" onClick={() => onEdit(candidate)}><Edit2 className="size-3.5" /></Button>

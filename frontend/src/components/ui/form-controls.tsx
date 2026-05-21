@@ -1,7 +1,7 @@
 import * as React from 'react'
 import * as SelectPrimitive from '@radix-ui/react-select'
 import { Check, ChevronDown, Upload, X, Image as ImageIcon, File } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, onActivate } from '@/lib/utils'
 
 // ─── Select ──────────────────────────────────────────────────────────────────
 const Select = SelectPrimitive.Root
@@ -194,12 +194,7 @@ function ImageUpload({
             dragOver ? 'border-blue-400 bg-blue-50' : 'border-border hover:border-blue-300 hover:bg-muted/50'
           )}
           onClick={() => inputRef.current?.click()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              inputRef.current?.click()
-            }
-          }}
+          onKeyDown={onActivate(() => inputRef.current?.click())}
           onDragOver={e => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}

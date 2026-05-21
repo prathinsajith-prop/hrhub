@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn, onActivate } from '@/lib/utils'
 import {
     useNotificationsList,
     useMarkNotificationRead,
@@ -111,12 +111,7 @@ export function NotificationsPage() {
                                 'hover:bg-muted/50 cursor-pointer',
                             )}
                             onClick={() => !n.isRead && markRead.mutate(n.id)}
-                            onKeyDown={(e) => {
-                                if ((e.key === 'Enter' || e.key === ' ') && !n.isRead) {
-                                    e.preventDefault()
-                                    markRead.mutate(n.id)
-                                }
-                            }}
+                            onKeyDown={onActivate(() => { if (!n.isRead) markRead.mutate(n.id) })}
                             role="button"
                             tabIndex={0}
                         >

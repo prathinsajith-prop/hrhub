@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { Check, ChevronDown, X, Plus } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, onActivate } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
     Command, CommandEmpty, CommandGroup,
@@ -92,13 +92,7 @@ export function Combobox({
                                 tabIndex={0}
                                 aria-label="Clear"
                                 onClick={e => { e.stopPropagation(); onValueChange('') }}
-                                onKeyDown={e => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                        onValueChange('')
-                                    }
-                                }}
+                                onKeyDown={onActivate(() => onValueChange(''))}
                                 className="flex items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
                             >
                                 <X className="size-3" />

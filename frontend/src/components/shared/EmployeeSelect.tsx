@@ -6,7 +6,7 @@ import {
     Command, CommandEmpty, CommandGroup,
     CommandInput, CommandItem, CommandList,
 } from '@/components/ui/command'
-import { cn } from '@/lib/utils'
+import { cn, onActivate } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
 import type { Employee } from '@/types'
 
@@ -114,14 +114,7 @@ export function EmployeeSelect({
                                 tabIndex={0}
                                 aria-label="Clear"
                                 onClick={e => { e.stopPropagation(); onValueChange(''); onEmployeeChange?.(null) }}
-                                onKeyDown={e => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                        onValueChange('')
-                                        onEmployeeChange?.(null)
-                                    }
-                                }}
+                                onKeyDown={onActivate(() => { onValueChange(''); onEmployeeChange?.(null) })}
                                 className="flex items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
                             >
                                 <X className="size-3" />

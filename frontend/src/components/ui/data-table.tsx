@@ -310,19 +310,20 @@ export function DataTable<TData, TValue>({
                       key={header.id}
                       className="h-10 px-4 text-left align-middle font-medium text-muted-foreground text-xs uppercase tracking-wide whitespace-nowrap"
                       style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
+                      aria-sort={
+                        !header.column.getCanSort() ? undefined
+                          : header.column.getIsSorted() === 'asc' ? 'ascending'
+                            : header.column.getIsSorted() === 'desc' ? 'descending'
+                              : 'none'
+                      }
                     >
                       {header.isPlaceholder ? null : (
                         <div className="flex items-center gap-0.5">
                           {header.column.getCanSort() ? (
                             <button
                               type="button"
-                              className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors text-left font-medium text-muted-foreground text-xs uppercase tracking-wide"
+                              className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors text-left"
                               onClick={header.column.getToggleSortingHandler()}
-                              aria-sort={
-                                header.column.getIsSorted() === 'asc' ? 'ascending'
-                                  : header.column.getIsSorted() === 'desc' ? 'descending'
-                                  : 'none'
-                              }
                             >
                               {flexRender(header.column.columnDef.header, header.getContext())}
                               <span className="ml-0.5">

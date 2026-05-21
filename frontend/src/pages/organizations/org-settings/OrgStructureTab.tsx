@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { cn } from '@/lib/utils'
+import { cn, onActivate } from '@/lib/utils'
 import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import {
     useOrgUnits, useCreateOrgUnit, useUpdateOrgUnit, useDeleteOrgUnit, useCascadeManager,
@@ -756,12 +756,7 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                     hasContent ? 'cursor-pointer hover:bg-muted/40' : 'hover:bg-muted/20',
                 )}
                 onClick={hasContent ? () => setExpanded(e => !e) : undefined}
-                onKeyDown={hasContent ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setExpanded(v => !v)
-                    }
-                } : undefined}
+                onKeyDown={hasContent ? onActivate(() => setExpanded(v => !v)) : undefined}
                 role={hasContent ? 'button' : undefined}
                 tabIndex={hasContent ? 0 : undefined}
                 aria-expanded={hasContent ? expanded : undefined}
@@ -815,12 +810,7 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
 
                 {!unit.isActive && <Badge variant="secondary" className="text-[10px]">{t('orgSettings.structure.inactive')}</Badge>}
 
-                <div
-                    className="flex gap-1 shrink-0"
-                    onClick={e => e.stopPropagation()}
-                    onKeyDown={e => e.stopPropagation()}
-                    role="presentation"
-                >
+                <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                     {isDept && (
                         <Button
                             size="sm" variant="ghost"

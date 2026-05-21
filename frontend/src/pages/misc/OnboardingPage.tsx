@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -11,7 +11,7 @@ import { Badge, Card, Progress } from '@/components/ui/primitives'
 import { toast, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, DialogClose } from '@/components/ui/overlays'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { DatePicker } from '@/components/ui/date-picker'
-import { formatDate, cn } from '@/lib/utils'
+import { cn, formatDate, onActivate } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useOnboardingChecklists, useCreateOnboardingChecklist, useOnboardingAnalytics, type OnboardingChecklist } from '@/hooks/useOnboarding'
@@ -61,15 +61,7 @@ const OnboardingCard = memo(function OnboardingCard({
     const statusVariant: 'success' | 'info' | 'secondary' =
         statusKey === 'completed' ? 'success' : statusKey === 'in_progress' ? 'info' : 'secondary'
 
-    const handleCardClick = useCallback(() => {
-        if (hasChecklist) navigate(`/onboarding/${c.employeeId}`)
-    }, [hasChecklist, navigate, c.employeeId])
-    const handleCardKey = useCallback((e: KeyboardEvent) => {
-        if ((e.key === 'Enter' || e.key === ' ') && hasChecklist) {
-            e.preventDefault()
-            navigate(`/onboarding/${c.employeeId}`)
-        }
-    }, [hasChecklist, navigate, c.employeeId])
+    const openChecklist = () => navigate(`/onboarding/${c.employeeId}`)
 
     return (
         <div
@@ -81,8 +73,8 @@ const OnboardingCard = memo(function OnboardingCard({
                 'lg:grid-cols-[2rem_minmax(0,1fr)_9rem_8rem_7rem_5rem]',
                 hasChecklist && 'cursor-pointer hover:bg-muted/40',
             )}
-            onClick={hasChecklist ? handleCardClick : undefined}
-            onKeyDown={hasChecklist ? handleCardKey : undefined}
+            onClick={hasChecklist ? openChecklist : undefined}
+            onKeyDown={hasChecklist ? onActivate(openChecklist) : undefined}
             role={hasChecklist ? 'button' : undefined}
             tabIndex={hasChecklist ? 0 : undefined}
         >
@@ -168,12 +160,7 @@ const OnboardingCard = memo(function OnboardingCard({
             </div>
 
             {/* Col 6 - Action */}
-            <div
-                onClick={e => e.stopPropagation()}
-                onKeyDown={e => e.stopPropagation()}
-                role="presentation"
-                className="flex justify-end"
-            >
+            <div onClick={e => e.stopPropagation()} className="flex justify-end">
                 {hasChecklist ? (
                     <Button
                         size="sm"
