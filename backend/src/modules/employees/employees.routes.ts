@@ -9,6 +9,7 @@ import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.
 import { db } from '../../db/index.js'
 import { entities, employees, employeeSalaryComponents, salaryComponents, tenants, users } from '../../db/schema/index.js'
 import { eq, and, sql, inArray } from 'drizzle-orm'
+import { loadPrivacyPolicy, maskEmployeeForViewer, viewerCanBypassPrivacy, effectiveVisibility, type PrivacyOverrides } from '../../lib/privacy.js'
 import { inviteUser, resendInvite } from '../settings/settings.service.js'
 import { fileTypeFromBuffer } from 'file-type'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
@@ -28,6 +29,15 @@ export default async function (fastify: any): Promise<void> {
             ? (user.employeeId ?? undefined)
             : undefined
 
+        // Resolve the org Privacy Policy ONCE per request. The policy now
+        // doubles as a feature-flag bag — when a toggle is OFF the field is
+        // hidden from everyone (including HR), so we ALWAYS load it and
+        // ALWAYS apply the mask. The `isPeer` flag then controls whether
+        // per-employee overrides also kick in (peer-only). HR sees feature
+        // flags applied but not the peer-opt-out layer.
+        const isPeer = !viewerCanBypassPrivacy(user.role)
+        const policy = await loadPrivacyPolicy(request.user.tenantId)
+
         const result = await listEmployees({
             tenantId: request.user.tenantId,
             search: query.search,
@@ -38,7 +48,24 @@ export default async function (fastify: any): Promise<void> {
             limit: query.limit,
             offset: query.offset,
             after: query.after,
+            // Directory filter applies only to peer viewers — HR still sees
+            // everyone for admin operations (assign leave, run payroll, etc).
+            directoryPrivacy: isPeer
+                ? {
+                    policySearchableInDirectory: policy.searchableInDirectory,
+                    viewerEmployeeId: user.employeeId ?? null,
+                }
+                : undefined,
         })
+
+        if (Array.isArray((result as any).data)) {
+            const rows = (result as any).data as Array<{ id: string }>
+            for (const row of rows) {
+                // Self-view always sees own row in full — bypass the mask.
+                if (user.employeeId && row.id === user.employeeId) continue
+                maskEmployeeForViewer(row as any, policy, isPeer)
+            }
+        }
 
         return reply.send(result)
     })
@@ -59,6 +86,16 @@ export default async function (fastify: any): Promise<void> {
         })
         const rows = result.data as Record<string, unknown>[]
         const date = new Date().toISOString().slice(0, 10)
+
+        // Even though export is HR-only, the org Policy toggles are feature
+        // flags — if the org has turned off "Birthday" / "Work Anniversary"
+        // / "Mobile", those columns should be empty in the export too. Run
+        // the same mask we apply on the read API. Pass isPeer=false because
+        // export is HR; the feature-flag layer is the only one that fires.
+        const policy = await loadPrivacyPolicy(request.user.tenantId)
+        for (const row of rows) {
+            maskEmployeeForViewer(row as { id: string }, policy, false)
+        }
 
         if (format === 'pdf') {
             const [tenantRow] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, request.user.tenantId)).limit(1)
@@ -216,6 +253,27 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const employee = await getEmployee(request.user.tenantId, id)
         if (!employee) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+
+        // Apply the Organization Policy mask. Feature flags hit everyone,
+        // peer overrides hit only peers. Self-view always sees own data.
+        const user = (request as any).user
+        const employeeRow = employee as typeof employee & { id: string; privacyOverrides?: PrivacyOverrides | null }
+        const isSelf = user.employeeId === employeeRow.id
+        const isPeer = !viewerCanBypassPrivacy(user.role) && !isSelf
+        const policy = await loadPrivacyPolicy(user.tenantId)
+
+        // Directory-hidden employees return 404 to peers — uniform with the
+        // list endpoint (don't leak existence). HR + self can still load.
+        if (isPeer) {
+            const visibility = effectiveVisibility(policy, employeeRow.privacyOverrides ?? {})
+            if (!visibility.searchableInDirectory) {
+                return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+            }
+        }
+
+        if (!isSelf) {
+            maskEmployeeForViewer(employeeRow, policy, isPeer)
+        }
         return reply.send({ data: employee })
     })
 
@@ -228,13 +286,29 @@ export default async function (fastify: any): Promise<void> {
     // transport / other columns, so the form will see them either way.
     fastify.get('/:id/salary-components', { ...auth, schema: { tags: ['Employees'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
-        // Verify the employee belongs to the tenant before exposing salary info.
+        const user = (request as any).user
+        // Verify the employee belongs to the tenant before exposing salary
+        // info — and ALSO check the directory privacy gate for peers. We
+        // pull privacyOverrides at the same time so the gate check costs no
+        // extra round-trip.
         const [emp] = await db
-            .select({ id: employees.id })
+            .select({ id: employees.id, privacyOverrides: employees.privacyOverrides })
             .from(employees)
             .where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
             .limit(1)
         if (!emp) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+        // For peer viewers (non-HR, non-self), refuse if the target is
+        // hidden from the directory. Same 404 contract as GET /:id so
+        // existence isn't leaked.
+        const isSelf = user.employeeId === emp.id
+        const isPeer = !viewerCanBypassPrivacy(user.role) && !isSelf
+        if (isPeer) {
+            const policy = await loadPrivacyPolicy(user.tenantId)
+            const vis = effectiveVisibility(policy, emp.privacyOverrides ?? {})
+            if (!vis.searchableInDirectory) {
+                return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+            }
+        }
 
         const rows = await db
             .select({

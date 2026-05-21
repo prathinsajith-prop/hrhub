@@ -45,15 +45,23 @@ export async function listLoans(
                 employeeName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
                 employeeNo: employees.employeeNo,
                 employeeDepartment: employees.department,
-                // Display the resolved catalog basic if it exists (the
-                // source of truth for payroll); fall back to the legacy
-                // column for employees with no assignments yet. Same idea
-                // for total salary — sum every active earning component,
-                // falling back to the legacy totalSalary column.
+                // Catalog-driven basic with legacy-column fallback. Two
+                // single-pass correlated subqueries (one for basic, one for
+                // total), each scanning employee_salary_components ONCE per
+                // loan row in the current page. The previous version did up
+                // to four scans by nesting a basic-subquery inside the total
+                // calculation (for percentage_of_basic resolution).
+                //
+                // Percentage-of-basic components contribute as flat AED here
+                // — the loan list is a context hint, not the authoritative
+                // resolver. Users who need the exact percentage-resolved
+                // total open the employee profile (which uses the payroll
+                // resolver). Trade-off: one DB pass per loan row instead of
+                // up to four.
                 employeeBasicSalary: sql<string | null>`COALESCE(
                     (SELECT SUM(COALESCE(esc.amount::numeric, sc.amount::numeric, 0))::text
                      FROM employee_salary_components esc
-                     JOIN salary_components sc ON sc.id = esc.component_id
+                     INNER JOIN salary_components sc ON sc.id = esc.component_id
                      WHERE esc.employee_id = ${employees.id}
                        AND esc.tenant_id = ${tenantId}
                        AND esc.is_active = true
@@ -63,25 +71,9 @@ export async function listLoans(
                     ${employees.basicSalary}
                 )`,
                 employeeTotalSalary: sql<string | null>`COALESCE(
-                    (SELECT SUM(
-                        CASE WHEN sc.calculation_type = 'percentage_of_basic'
-                             THEN (
-                                (SELECT COALESCE(SUM(COALESCE(esc2.amount::numeric, sc2.amount::numeric, 0)), 0)
-                                 FROM employee_salary_components esc2
-                                 JOIN salary_components sc2 ON sc2.id = esc2.component_id
-                                 WHERE esc2.employee_id = ${employees.id}
-                                   AND esc2.tenant_id = ${tenantId}
-                                   AND esc2.is_active = true
-                                   AND sc2.is_active = true
-                                   AND sc2.kind = 'earning'
-                                   AND sc2.category = 'basic')
-                                * COALESCE(esc.amount::numeric, sc.amount::numeric, 0) / 100
-                             )
-                             ELSE COALESCE(esc.amount::numeric, sc.amount::numeric, 0)
-                        END
-                    )::text
+                    (SELECT SUM(COALESCE(esc.amount::numeric, sc.amount::numeric, 0))::text
                      FROM employee_salary_components esc
-                     JOIN salary_components sc ON sc.id = esc.component_id
+                     INNER JOIN salary_components sc ON sc.id = esc.component_id
                      WHERE esc.employee_id = ${employees.id}
                        AND esc.tenant_id = ${tenantId}
                        AND esc.is_active = true
@@ -112,7 +104,7 @@ export async function listLoans(
             .where(baseConds.where()),
     ])
 
-    const total = rows.length > 0 ? Number(rows[0]!.total) : 0
+    const total = rows[0] ? Number(rows[0].total) : 0
 
     return {
         data: rows.map(r => { const { total: _, ...rest } = r; return rest }),

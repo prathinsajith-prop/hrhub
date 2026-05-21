@@ -194,7 +194,7 @@ export async function issueTokens(fastify: AnyFastify, user: UserRow, meta: { ip
             id: tenant.id,
             name: tenant.name,
             tradeLicenseNo: tenant.tradeLicenseNo,
-            jurisdiction: tenant.jurisdiction,
+            businessType: tenant.businessType,
             industryType: tenant.industryType,
             subscriptionPlan: tenant.subscriptionPlan,
             logoUrl: tenant.logoUrl,
@@ -287,6 +287,8 @@ export async function registerTenant(input: {
     password: string
     company: string
     industry?: string
+    businessType?: 'mainland' | 'freezone'
+    /** @deprecated kept for back-compat — read businessType first. */
     jurisdiction?: 'mainland' | 'freezone'
     tradeLicenseNo?: string
     phone?: string
@@ -304,11 +306,15 @@ export async function registerTenant(input: {
     return db.transaction(async (tx) => {
         const companyCode = await generateUniqueCompanyCode(tx, input.company)
 
+        // Resolve the business type — prefer the new `businessType` field;
+        // fall back to the legacy `jurisdiction` alias for older API callers.
+        const businessType = input.businessType ?? input.jurisdiction ?? 'mainland'
+
         const [tenant] = await tx.insert(tenants).values({
             name: input.company,
             companyCode,
             tradeLicenseNo: input.tradeLicenseNo?.trim() || `PENDING-${crypto.randomBytes(8).toString('hex')}`,
-            jurisdiction: input.jurisdiction ?? 'mainland',
+            businessType,
             industryType: input.industry ?? 'general',
             phone: input.phone?.trim() || null,
             companySize: input.companySize ?? null,
@@ -320,7 +326,7 @@ export async function registerTenant(input: {
         const [entity] = await tx.insert(entities).values({
             tenantId: tenant.id,
             entityName: input.company,
-            licenseType: input.jurisdiction ?? 'mainland',
+            licenseType: businessType,
         }).returning({ id: entities.id })
 
         const firstName = input.firstName.trim()

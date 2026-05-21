@@ -1,8 +1,23 @@
+import type { KeyboardEvent } from 'react'
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+/**
+ * Keyboard handler that fires on Enter/Space — the activation keys for buttons.
+ * Use on non-button elements (e.g. clickable `<div role="button">`) so they
+ * behave like real buttons for keyboard users.
+ */
+export function onActivate(handler: () => void) {
+  return (e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handler()
+    }
+  }
 }
 
 export function formatDate(date: string | Date | null | undefined, format: 'short' | 'long' | 'relative' = 'short'): string {

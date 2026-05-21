@@ -108,7 +108,10 @@ export default async function (fastify: any): Promise<void> {
                         endDate: body.endDate,
                         approveUrl: `${appUrl}/leave`,
                     })
-                    sendEmail({ ...opts, to: recipient.email }).catch(() => {})
+                    // tenantId routes the send through the notifications
+                    // kill-switch — HR can silence approval notifications
+                    // from Settings → Organization Policy.
+                    sendEmail({ ...opts, to: recipient.email, tenantId: request.user.tenantId }).catch(() => {})
                 }
             } catch { /* non-fatal */ }
         })()

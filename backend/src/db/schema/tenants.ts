@@ -8,8 +8,16 @@ export const tenants = pgTable('tenants', {
     name: text('name').notNull(),
     companyCode: text('company_code').unique(),
     tradeLicenseNo: text('trade_license_no').unique().notNull(),
-    jurisdiction: text('jurisdiction').notNull().$type<'mainland' | 'freezone'>(),
+    // UAE business type — mainland or freezone. Historically named
+    // `jurisdiction` in the schema; renamed in migration 0051 so the column
+    // matches what the signup page collects ("Business Type").
+    businessType: text('business_type').notNull().$type<'mainland' | 'freezone'>(),
     industryType: text('industry_type').notNull(),
+    // Org Profile fields surfaced in Settings → Organization Profile.
+    // `phone` (further below) is the company phone — added at signup.
+    address: text('address'),
+    companyEmail: text('company_email'),
+    companyWebsite: text('company_website'),
     subscriptionPlan: text('subscription_plan').notNull().default('starter')
         .$type<'starter' | 'growth' | 'enterprise'>(),
     // Maximum active employees allowed. NULL = unlimited (enterprise only).
@@ -34,6 +42,22 @@ export const tenants = pgTable('tenants', {
         weekOffDays?: string[]
         workingWeekStart?: string
     }>().notNull().default({ rolloverEnabledFrom: null, weekOffDays: ['saturday', 'sunday'], workingWeekStart: 'monday' }),
+    // Master kill-switch for outbound email. When false sendEmail() returns
+    // early — useful for paused tenants, sandboxes, and staging. Per-user
+    // notification preferences (notificationsPrefs) still apply BELOW this
+    // gate; this is the tenant-wide override.
+    notificationsEnabled: boolean('notifications_enabled').notNull().default(true),
+    // Org-wide default visibility for sensitive fields surfaced on
+    // dashboards and the employee directory. Defaults to all-visible to
+    // match historical behaviour; HR can opt the entire org out from
+    // Settings → Organization Policy. Employees can further opt themselves
+    // out via employees.privacy_overrides (their choice wins).
+    privacyPolicy: jsonb('privacy_policy').$type<{
+        showBirthday: boolean
+        showWorkAnniversary: boolean
+        showMobile: boolean
+        searchableInDirectory: boolean
+    }>().notNull().default({ showBirthday: true, showWorkAnniversary: true, showMobile: true, searchableInDirectory: true }),
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

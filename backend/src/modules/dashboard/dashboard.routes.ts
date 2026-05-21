@@ -1,5 +1,6 @@
 import { getDashboardKPIs, getRecentNotifications, getPayrollTrend, getNationalityBreakdown, getDeptHeadcount, getEmiratisationStatus, getOnboardingSummary, getGenderBreakdown, getMaritalStatusBreakdown, getUpcomingBirthdays, getWorkAnniversaries } from './dashboard.service.js'
 import { dashboardSummaryCache } from '../../lib/cache.js'
+import { loadPrivacyPolicy } from '../../lib/privacy.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -52,13 +53,21 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data })
     })
 
+    // Birthday / anniversary widgets honour the Organization Policy. When
+    // HR turns the toggle off, the endpoint returns an empty list so the
+    // dashboard card collapses (the frontend also hides the widget shell —
+    // server-side enforcement guards against direct API access).
     fastify.get('/birthdays', { ...hrOnly, schema: { tags: ['Dashboard'] } }, async (request: any, reply: any) => {
+        const policy = await loadPrivacyPolicy(request.user.tenantId)
+        if (!policy.showBirthday) return reply.send({ data: [] })
         const { month } = request.query as { month?: string }
         const data = await getUpcomingBirthdays(request.user.tenantId, month ? Number(month) : undefined)
         return reply.send({ data })
     })
 
     fastify.get('/anniversaries', { ...hrOnly, schema: { tags: ['Dashboard'] } }, async (request: any, reply: any) => {
+        const policy = await loadPrivacyPolicy(request.user.tenantId)
+        if (!policy.showWorkAnniversary) return reply.send({ data: [] })
         const { month } = request.query as { month?: string }
         const data = await getWorkAnniversaries(request.user.tenantId, month ? Number(month) : undefined)
         return reply.send({ data })
@@ -72,6 +81,11 @@ export default async function (fastify: any): Promise<void> {
         const cached = await dashboardSummaryCache.get(tenantId)
         if (cached) return reply.send(cached)
 
+        // Resolve policy once so the birthday/anniversary widgets honour the
+        // feature flags. When a flag is off we skip the underlying query
+        // entirely — saves the DB round-trip AND returns an empty list so
+        // the frontend collapses the widget.
+        const policy = await loadPrivacyPolicy(tenantId)
         const [kpis, payrollTrend, nationalityBreakdown, deptHeadcount, emiratisation, onboardingSummary, genderBreakdown, maritalBreakdown, birthdays, anniversaries] =
             await Promise.all([
                 getDashboardKPIs(tenantId),
@@ -82,8 +96,8 @@ export default async function (fastify: any): Promise<void> {
                 getOnboardingSummary(tenantId),
                 getGenderBreakdown(tenantId),
                 getMaritalStatusBreakdown(tenantId),
-                getUpcomingBirthdays(tenantId),
-                getWorkAnniversaries(tenantId),
+                policy.showBirthday ? getUpcomingBirthdays(tenantId) : Promise.resolve([]),
+                policy.showWorkAnniversary ? getWorkAnniversaries(tenantId) : Promise.resolve([]),
             ])
         const result = { kpis, payrollTrend, nationalityBreakdown, deptHeadcount, emiratisation, onboardingSummary, genderBreakdown, maritalBreakdown, birthdays, anniversaries }
         await dashboardSummaryCache.set([tenantId], result)

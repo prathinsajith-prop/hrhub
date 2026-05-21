@@ -213,6 +213,140 @@ export function useDeleteAdjustment(year: number, month: number) {
     })
 }
 
+export interface BulkAdjustmentRow {
+    rowNumber: number
+    employeeNo?: string | null
+    employeeName?: string | null
+    employeeEmail?: string | null
+    employeePhone?: string | null
+    amount: number
+    notes?: string | null
+}
+
+export interface BulkCreateAdjustmentsBody {
+    periodYear: number
+    periodMonth: number
+    category: PayrollAdjustmentCategory
+    rows: BulkAdjustmentRow[]
+    /** When present, the dialog uploads the original .xlsx alongside the
+     *  parsed rows. The server stores it in S3 and adds an entry to the
+     *  bulk-import history. JSON-only callers (no file) still work. */
+    file?: File
+}
+
+export interface BulkCreateAdjustmentsResult {
+    created: number
+    failed: number
+    errors: Array<{ row: number; error: string }>
+}
+
+export function useBulkCreateAdjustments() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: async (body: BulkCreateAdjustmentsBody) => {
+            const { file, ...payload } = body
+            // Multipart path is opt-in: we ONLY send it when we actually have
+            // file bytes to ship. A zero-byte file falls through to the JSON
+            // route, which is functionally equivalent minus the S3 audit row
+            // — better than failing with "missing file" when the buffer got
+            // detached for any reason.
+            if (file && file.size > 0) {
+                const form = new FormData()
+                form.append('file', file)
+                form.append('payload', JSON.stringify(payload))
+                return api.upload<BulkCreateAdjustmentsResult>('/payroll/adjustments/bulk', form)
+            }
+            return api.post<BulkCreateAdjustmentsResult>('/payroll/adjustments/bulk', payload)
+        },
+        onSuccess: (_d, vars) => {
+            qc.invalidateQueries({ queryKey: ['payroll-adjustments', vars.periodYear, vars.periodMonth] })
+            qc.invalidateQueries({ queryKey: ['payroll-adjustment-imports'] })
+        },
+        // No global error toast — the dialog renders per-row errors inline.
+        onError: () => {},
+    })
+}
+
+// ─── Bulk import history ────────────────────────────────────────────────────
+
+export interface BulkImportHistoryRow {
+    id: string
+    periodYear: number
+    periodMonth: number
+    category: PayrollAdjustmentCategory
+    rowsCreated: number
+    fileName: string
+    fileSize: number
+    createdAt: string
+    createdByName: string | null
+}
+
+export function useBulkImportHistory(filter: { year?: number; month?: number } = {}) {
+    const q = new URLSearchParams()
+    if (filter.year !== undefined) q.set('year', String(filter.year))
+    if (filter.month !== undefined) q.set('month', String(filter.month))
+    return useQuery({
+        queryKey: ['payroll-adjustment-imports', filter.year, filter.month],
+        queryFn: () =>
+            api.get<{ data: BulkImportHistoryRow[] }>(`/payroll/adjustments/imports${q.toString() ? `?${q}` : ''}`).then((r) => r.data),
+        staleTime: 30_000,
+    })
+}
+
+/** Trigger browser download of the original uploaded file via presigned URL. */
+export function useDownloadImportFile() {
+    return useMutation({
+        mutationFn: async (id: string) => {
+            const res = await api.get<{ data: { url: string; fileName: string } }>(`/payroll/adjustments/imports/${id}/download`)
+            // Open the presigned URL directly. We use a hidden <a download> so
+            // the browser keeps the filename even when the URL doesn't end in
+            // a recognisable extension.
+            const a = document.createElement('a')
+            a.href = res.data.url
+            a.download = res.data.fileName
+            a.target = '_blank'
+            a.rel = 'noopener noreferrer'
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+        },
+        onError: (err: Error) => toast.error('Download failed', err?.message ?? 'Could not fetch the file.'),
+    })
+}
+
+export interface BulkValidateRow {
+    rowNumber: number
+    status: 'valid' | 'invalid'
+    error: string | null
+    /** Non-blocking warning (e.g. duplicate employee in batch). */
+    warning: string | null
+    employeeId: string | null
+    resolvedName: string | null
+    resolvedEmployeeNo: string | null
+}
+
+export interface BulkValidateResult {
+    total: number
+    valid: number
+    invalid: number
+    /** Valid rows that also carry a warning. */
+    warned: number
+    /** True when the period is locked — surfaces the same blocker the
+     *  bulk-create endpoint enforces, ahead of clicking Submit. */
+    periodLocked: boolean
+    rows: BulkValidateRow[]
+}
+
+export function useValidateBulkAdjustments() {
+    return useMutation({
+        // Accepts optional period context so the validator can report
+        // periodLocked. Older callers that only send `rows` still work.
+        mutationFn: (body: { rows: BulkAdjustmentRow[]; periodYear?: number; periodMonth?: number }) =>
+            api.post<BulkValidateResult>('/payroll/adjustments/bulk-validate', body),
+        onError: () => {},
+    })
+}
+
 export function useSyncAdjustments() {
     const qc = useQueryClient()
     return useMutation({

@@ -41,6 +41,8 @@ export default async function tenantsRoutes(fastify: any): Promise<void> {
     }, async (request: any, reply: any) => {
         const body = request.body as {
             name: string
+            businessType?: string
+            /** @deprecated legacy alias for businessType */
             jurisdiction?: string
             industryType?: string
             subscriptionPlan?: string
@@ -48,7 +50,11 @@ export default async function tenantsRoutes(fastify: any): Promise<void> {
         if (!body?.name || body.name.trim().length < 2) {
             return reply.code(400).send({ statusCode: 400, error: 'BadRequest', message: 'name is required' })
         }
-        const tenant = await createTenant(request.user.id, body)
+        // Accept either field name from older clients; canonical is businessType.
+        const tenant = await createTenant(request.user.id, {
+            ...body,
+            businessType: body.businessType ?? body.jurisdiction,
+        })
         return reply.code(201).send({ data: tenant })
     })
 

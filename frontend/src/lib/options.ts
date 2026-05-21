@@ -165,12 +165,14 @@ export const ROLE_OPTIONS: SelectOption[] = toOptions(ROLE_LABELS)
 export const JURISDICTION_OPTIONS: SelectOption[] = toOptions(JURISDICTION_LABELS)
 export const PLAN_OPTIONS: SelectOption[] = toOptions(PLAN_LABELS)
 
-// NewOrganizationPage stores jurisdiction as title-case strings - kept separate
-// to avoid a data migration.
+// Business Type — backend enum is lowercase ('mainland' | 'freezone'). The
+// value sent on form submit must match the schema enum verbatim; we keep
+// human-readable labels for the dropdown UI. There is no 'offshore' option
+// in the backend type — it was a stale frontend-only value that would have
+// been silently stored as a string mismatch.
 export const ORG_JURISDICTION_OPTIONS: SelectOption[] = [
-    { value: 'Mainland', label: 'Mainland' },
-    { value: 'Free Zone', label: 'Free Zone' },
-    { value: 'Offshore', label: 'Offshore' },
+    { value: 'mainland', label: 'Mainland' },
+    { value: 'freezone', label: 'Free Zone' },
 ]
 export const ORG_INDUSTRY_OPTIONS: SelectOption[] = [
     { value: 'Technology', label: 'Technology' },

@@ -194,14 +194,23 @@ export async function getPayrollReadiness(
     const monthStart = `${run.year}-${String(run.month).padStart(2, '0')}-01`
     const monthEnd = `${run.year}-${String(run.month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-    // One round-trip — every check is its own query but they all hit the
-    // same DB connection in parallel. Missing-IBAN / missing-salary return
-    // the offending employees (capped at 50) so the UI can render a popover
-    // with names + links rather than just a count.
+    // Four parallel queries — the slice queries carry the unfiltered total
+    // via COUNT(*) OVER() so we don't pay for separate COUNT round-trips.
+    // Missing-IBAN / missing-salary return up to 50 offending employees so
+    // the UI can render a popover with names + links.
     const READINESS_EMPLOYEE_CAP = 50
+    const hasPositiveBasicAssignment = sql`EXISTS (
+        SELECT 1 FROM employee_salary_components esc
+        JOIN salary_components sc ON sc.id = esc.component_id
+        WHERE esc.employee_id = ${employees.id}
+          AND esc.tenant_id = ${tenantId}
+          AND esc.is_active = true
+          AND sc.is_active = true
+          AND sc.kind = 'earning'
+          AND sc.category = 'basic'
+          AND COALESCE(esc.amount::numeric, sc.amount::numeric, 0) > 0
+    )`
     const [emps, ibanRows, salaryRows, leaveCounts] = await Promise.all([
-        // Employee count (just to surface it in the response — also used to
-        // decide "no payable employees" blocker)
         db.select({ count: sql<number>`COUNT(*)::int` })
             .from(employees)
             .where(and(
@@ -209,13 +218,19 @@ export async function getPayrollReadiness(
                 eq(employees.isArchived, false),
                 inArray(employees.status, ['active', 'onboarding']),
             )),
-        // Missing IBAN — WPS submission warning
+        // IBAN is only required for employees paid via bank_transfer (WPS
+        // submission needs it). Cash / cheque / other payout methods don't
+        // need an IBAN — flagging them produced a false "X employees missing
+        // IBAN" warning for tenants with mixed payout types. We treat a
+        // NULL payment_method as bank_transfer because that's the schema
+        // default and the historical assumption for legacy rows.
         db.select({
             id: employees.id,
             employeeNo: employees.employeeNo,
             firstName: employees.firstName,
             lastName: employees.lastName,
             avatarUrl: employees.avatarUrl,
+            total: sql<number>`COUNT(*) OVER()`.as('total'),
         })
             .from(employees)
             .where(and(
@@ -223,21 +238,22 @@ export async function getPayrollReadiness(
                 eq(employees.isArchived, false),
                 inArray(employees.status, ['active', 'onboarding']),
                 sql`(${employees.iban} IS NULL OR ${employees.iban} = '')`,
+                sql`(${employees.paymentMethod} IS NULL OR ${employees.paymentMethod} = 'bank_transfer')`,
             ))
             .orderBy(employees.firstName, employees.lastName)
             .limit(READINESS_EMPLOYEE_CAP),
-        // Missing/zero basic salary — payroll math BLOCKER (gross would be 0
-        // even for a senior employee, almost always a data-entry mistake).
-        // Catalog-aware: an employee is OK if EITHER the legacy column has a
-        // positive basic OR they have an active basic-category catalog
-        // assignment with a positive amount. We only flag the intersection
-        // of "both empty" so catalog-only employees aren't false positives.
+        // Missing/zero basic salary — payroll math BLOCKER. Catalog-aware:
+        // an employee is OK if EITHER the legacy column has a positive
+        // basic OR they have an active basic-category catalog assignment
+        // with a positive amount. We only flag the intersection of "both
+        // empty" so catalog-only employees aren't false positives.
         db.select({
             id: employees.id,
             employeeNo: employees.employeeNo,
             firstName: employees.firstName,
             lastName: employees.lastName,
             avatarUrl: employees.avatarUrl,
+            total: sql<number>`COUNT(*) OVER()`.as('total'),
         })
             .from(employees)
             .where(and(
@@ -245,22 +261,10 @@ export async function getPayrollReadiness(
                 eq(employees.isArchived, false),
                 inArray(employees.status, ['active', 'onboarding']),
                 sql`(${employees.basicSalary} IS NULL OR ${employees.basicSalary}::numeric = 0)`,
-                sql`NOT EXISTS (
-                    SELECT 1 FROM employee_salary_components esc
-                    JOIN salary_components sc ON sc.id = esc.component_id
-                    WHERE esc.employee_id = ${employees.id}
-                      AND esc.tenant_id = ${tenantId}
-                      AND esc.is_active = true
-                      AND sc.is_active = true
-                      AND sc.kind = 'earning'
-                      AND sc.category = 'basic'
-                      AND COALESCE(esc.amount::numeric, sc.amount::numeric, 0) > 0
-                )`,
+                sql`NOT ${hasPositiveBasicAssignment}`,
             ))
             .orderBy(employees.firstName, employees.lastName)
             .limit(READINESS_EMPLOYEE_CAP),
-        // Pending leave whose start date falls inside this period — LOP / sick
-        // won't be reflected until the leave is approved AND auto-synced
         db.select({ count: sql<number>`COUNT(*)::int` })
             .from(leaveRequests)
             .where(and(
@@ -271,42 +275,9 @@ export async function getPayrollReadiness(
             )),
     ])
 
-    // We need the TOTAL counts (not just the capped slice) for the messages.
-    // Two extra COUNT queries — both indexed, very cheap.
-    const [ibanTotalRows, salaryTotalRows] = await Promise.all([
-        db.select({ count: sql<number>`COUNT(*)::int` })
-            .from(employees)
-            .where(and(
-                eq(employees.tenantId, tenantId),
-                eq(employees.isArchived, false),
-                inArray(employees.status, ['active', 'onboarding']),
-                sql`(${employees.iban} IS NULL OR ${employees.iban} = '')`,
-            )),
-        db.select({ count: sql<number>`COUNT(*)::int` })
-            .from(employees)
-            .where(and(
-                eq(employees.tenantId, tenantId),
-                eq(employees.isArchived, false),
-                inArray(employees.status, ['active', 'onboarding']),
-                sql`(${employees.basicSalary} IS NULL OR ${employees.basicSalary}::numeric = 0)`,
-                // Mirror the catalog-aware exclusion from the list query above.
-                sql`NOT EXISTS (
-                    SELECT 1 FROM employee_salary_components esc
-                    JOIN salary_components sc ON sc.id = esc.component_id
-                    WHERE esc.employee_id = ${employees.id}
-                      AND esc.tenant_id = ${tenantId}
-                      AND esc.is_active = true
-                      AND sc.is_active = true
-                      AND sc.kind = 'earning'
-                      AND sc.category = 'basic'
-                      AND COALESCE(esc.amount::numeric, sc.amount::numeric, 0) > 0
-                )`,
-            )),
-    ])
-
     const employeeCount = emps[0]?.count ?? 0
-    const missingIban = ibanTotalRows[0]?.count ?? 0
-    const missingSalary = salaryTotalRows[0]?.count ?? 0
+    const missingIban = Number(ibanRows[0]?.total ?? 0)
+    const missingSalary = Number(salaryRows[0]?.total ?? 0)
     const pendingLeaveInPeriod = leaveCounts[0]?.count ?? 0
 
     const toReadinessEmp = (r: { id: string; employeeNo: string; firstName: string; lastName: string; avatarUrl: string | null }): PayrollReadinessEmployee => ({
@@ -328,7 +299,9 @@ export async function getPayrollReadiness(
         blockers.push(`${missingSalary} employee${missingSalary === 1 ? ' has' : 's have'} no basic salary set — fix before processing.`)
     }
     if (missingIban > 0) {
-        warnings.push(`${missingIban} employee${missingIban === 1 ? ' is' : 's are'} missing an IBAN — WPS submission will fail until added.`)
+        // Wording reflects the new scope: only bank-transfer employees are
+        // counted. Cash / cheque payouts continue to work without an IBAN.
+        warnings.push(`${missingIban} bank-transfer employee${missingIban === 1 ? ' is' : 's are'} missing an IBAN — WPS submission will fail for them. Cash / cheque employees are unaffected.`)
     }
     if (pendingLeaveInPeriod > 0) {
         warnings.push(`${pendingLeaveInPeriod} leave request${pendingLeaveInPeriod === 1 ? '' : 's'} for this period ${pendingLeaveInPeriod === 1 ? 'is' : 'are'} still pending — approve and re-sync to reflect LOP/sick deductions.`)
@@ -515,28 +488,34 @@ export async function resolveEmployeeEarnings(
             inArray(employeeSalaryComponents.employeeId, empIds),
         ))
 
-    // First pass: compute the Basic for each employee — SUMMING every
-    // assignment whose catalog row sits in the `basic` category. Tenants
-    // may legitimately split basic across multiple catalog rows (e.g. a
-    // "Basic" + "Probation Basic" structure), and we previously overwrote
-    // here, which meant one of them silently dropped out of the Basic
-    // figure used for gratuity, WPS, and as the % multiplier below.
+    // First pass: compute the FLAT basic sum per employee. This is the
+    // multiplier base for every percentage_of_basic component (including
+    // basic-category percentage components — they multiply against the
+    // flat basic, then their resolved amount rolls back into the basic
+    // line on the payslip).
     //
-    // Percentage-of-basic components in this category are still treated as
-    // flat AED — the resolver's contract is that whatever HR put under
-    // `basic` is what gets paid as basic, no conversion.
+    // Skipping percentage rows here prevents a circular definition: a
+    // basic-category percentage can't be a percentage of itself.
     const basicByEmp = new Map<string, number>()
     for (const r of rows) {
         if (r.category !== 'basic') continue
+        if (r.calculationType === 'percentage_of_basic') continue
         const amt = Number(r.assignmentAmount ?? r.componentAmount ?? 0)
         basicByEmp.set(r.employeeId, (basicByEmp.get(r.employeeId) ?? 0) + amt)
     }
 
-    // Second pass: resolve every earning, converting percentage-of-basic
-    // into absolute AED using the basic we computed above.
+    // Second pass: resolve every earning, converting percentage_of_basic
+    // (any category) into absolute AED using the flat basic from pass 1.
+    //
+    // `hasBasic` requires a POSITIVE basic — a zero-amount assignment (left
+    // over from sibling-zeroing during a salary revision, or HR clearing
+    // the amount) must fall back to the legacy column so payroll doesn't
+    // produce a payslip with basic=0. Matches the readiness check at
+    // hasPositiveBasicAssignment so a draft preview and the readiness
+    // blocker can't disagree.
     for (const r of rows) {
         const basic = basicByEmp.get(r.employeeId) ?? 0
-        const hasBasic = basicByEmp.has(r.employeeId)
+        const hasBasic = basic > 0
         const rawAmount = Number(r.assignmentAmount ?? r.componentAmount ?? 0)
         const amount = r.calculationType === 'percentage_of_basic'
             ? (basic * rawAmount) / 100
@@ -600,7 +579,12 @@ function buildPayslipsAndTotals(
         const resolved = earningsByEmp.get(emp.id)
         let basic: number, housing: number, transport: number, other: number
         if (resolved && resolved.hasBasic) {
-            basic = resolved.basic
+            // Basic line on the payslip = sum of ALL basic-category resolved
+            // amounts. That includes the flat rows (which are also the
+            // multiplier base in resolved.basic) PLUS any basic-category
+            // percentage_of_basic rows that have already been resolved to
+            // their AED contribution in pass 2 of the resolver.
+            basic = resolved.earnings.filter(e => e.category === 'basic').reduce((s, e) => s + e.amount, 0)
             housing = resolved.earnings.filter(e => e.category === 'housing').reduce((s, e) => s + e.amount, 0)
             transport = resolved.earnings.filter(e => e.category === 'transport').reduce((s, e) => s + e.amount, 0)
             // Every other earning category (cost_of_living, social, custom, …)
@@ -863,7 +847,11 @@ export async function runPayroll(tenantId: string, payrollRunId: string): Promis
                     loanDeduction: String(slip.loanDeduction ?? '0'),
                     otherDeduction: String(slip.otherDeduction ?? '0'),
                 })
-                sendEmail({ ...opts, to: emp.email }).catch(() => {})
+                // Pass tenantId so sendEmail honours the org-wide
+                // notifications kill-switch. Payslip emails are business
+                // notifications, not transactional auth flows, so they
+                // should be silenceable from Settings → Organization Policy.
+                sendEmail({ ...opts, to: emp.email, tenantId }).catch(() => {})
             }
         } catch {
             // non-fatal — email errors must not fail payroll
@@ -1051,7 +1039,11 @@ export async function generateWpsSif(tenantId: string, payrollRunId: string): Pr
     const slips = await getPayslips(tenantId, payrollRunId)
     if (slips.length === 0) return null
 
-    // Fetch employee details only for employees in this payroll run
+    // Fetch employee details only for employees in this payroll run. We
+    // pull paymentMethod so we can SKIP cash/cheque employees — WPS by
+    // definition is the bank-transfer protection scheme, so non-bank
+    // payouts don't belong in the SIF (the alternative would be to use
+    // the placeholder IBAN, which would silently fail at MOHRE submission).
     const empIds = slips.map(s => s.employeeId)
     const empRows = await db
         .select({
@@ -1062,6 +1054,7 @@ export async function generateWpsSif(tenantId: string, payrollRunId: string): Pr
             iban: employees.iban,
             bankName: employees.bankName,
             labourCardNumber: employees.labourCardNumber,
+            paymentMethod: employees.paymentMethod,
         })
         .from(employees)
         .where(and(
@@ -1071,12 +1064,22 @@ export async function generateWpsSif(tenantId: string, payrollRunId: string): Pr
         ))
 
     const empMap = new Map(empRows.map(e => [e.id, e]))
+    // Filter the payslip list to bank-transfer employees only. NULL is
+    // treated as bank_transfer (schema default + historical assumption).
+    const wpsSlips = slips.filter(s => {
+        const m = empMap.get(s.employeeId)?.paymentMethod
+        return m == null || m === 'bank_transfer'
+    })
+    if (wpsSlips.length === 0) return null
 
     // Payment date: last day of payroll month
     const lastDay = new Date(run.year, run.month, 0)
     const payDateStr = `${String(lastDay.getDate()).padStart(2, '0')}/${String(run.month).padStart(2, '0')}/${run.year}`
 
-    const totalSalary = Number(run.totalNet).toFixed(2)
+    // Total reflects ONLY the bank-transfer subset — cash/cheque payouts
+    // aren't reported through WPS so their amounts don't belong in the
+    // header total either.
+    const wpsTotalNet = wpsSlips.reduce((s, p) => s + Number(p.netSalary), 0).toFixed(2)
     const lines: string[] = []
 
     // EDR — Employer Detail Record
@@ -1086,16 +1089,16 @@ export async function generateWpsSif(tenantId: string, payrollRunId: string): Pr
         '0000000000',                          // Employer bank account (placeholder — set in real deployment)
         String(run.year),
         String(run.month).padStart(2, '0'),
-        String(slips.length),
-        totalSalary,
+        String(wpsSlips.length),
+        wpsTotalNet,
         'AED',
         tenantId.slice(0, 8).toUpperCase(),   // MOL establishment ID
         payDateStr,
         'TRF',                                 // Payment type: Transfer
     ].join('|'))
 
-    // EMP records — one per payslip
-    for (const slip of slips) {
+    // EMP records — one per bank-transfer payslip
+    for (const slip of wpsSlips) {
         const emp = empMap.get(slip.employeeId)
         const name = emp ? `${emp.firstName} ${emp.lastName}` : 'Unknown'
         const iban = emp?.iban ?? '0000000000000000000000000000'   // placeholder if no IBAN
@@ -1122,11 +1125,11 @@ export async function generateWpsSif(tenantId: string, payrollRunId: string): Pr
         ].join('|'))
     }
 
-    // TRL — Trailer Record
+    // TRL — Trailer Record (count + total of the BANK-TRANSFER subset only)
     lines.push([
         'TRL',
-        String(slips.length),
-        totalSalary,
+        String(wpsSlips.length),
+        wpsTotalNet,
     ].join('|'))
 
     const content = lines.join('\n')

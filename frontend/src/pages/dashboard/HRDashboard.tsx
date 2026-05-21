@@ -21,6 +21,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'
 import { useDashboardSummary, useNotifications, useAnniversaries } from '@/hooks/useDashboard'
+import { useOrgPolicy } from '@/hooks/useSettings'
 import type { BirthdayEntry, AnniversaryEntry, BreakdownPoint } from '@/hooks/useDashboard'
 import { useVisas } from '@/hooks/useVisa'
 import { useNavigate } from 'react-router-dom'
@@ -100,6 +101,12 @@ export function HRDashboard() {
   const { data: summary, isLoading: dashLoading } = useDashboardSummary()
   const { data: notifications } = useNotifications(20)
   const { data: visaData, isLoading: visasLoading } = useVisas({ limit: 10 })
+  // Organization Policy gates the birthday and anniversary widgets — when
+  // HR turns the toggle off in Settings → Organization Policy, the widget
+  // disappears from the dashboard entirely (backend also returns []).
+  const { data: orgPolicy } = useOrgPolicy()
+  const showBirthdayWidget = orgPolicy?.privacyPolicy.showBirthday ?? true
+  const showAnniversaryWidget = orgPolicy?.privacyPolicy.showWorkAnniversary ?? true
 
   const currentMonth = new Date().getMonth() + 1
   // Birthday picker was removed (we only show today's). Anniversary still
@@ -462,7 +469,10 @@ export function HRDashboard() {
         </CardContent>
       </Card>
 
-      {/* Birthdays & Work Anniversaries */}
+      {/* Birthdays & Work Anniversaries — entire section hidden when BOTH
+          Organization Policy toggles are off. Individual cards hide
+          themselves below when their respective toggle is off. */}
+      {(showBirthdayWidget || showAnniversaryWidget) && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Birthdays — today only.
             The dashboard summary endpoint returns the whole current month, so
@@ -470,7 +480,7 @@ export function HRDashboard() {
             was removed: HR asked for "today only" so a calendar picker is
             misleading. If they ever need a historical view, restore the
             picker + the dedicated /dashboard/birthdays?month=X path. */}
-        {(() => {
+        {showBirthdayWidget && (() => {
           const todays = birthdayData.filter((b) => b.isToday)
           return (
             <Card>
@@ -541,6 +551,7 @@ export function HRDashboard() {
         })()}
 
         {/* Work Anniversaries */}
+        {showAnniversaryWidget && (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -591,7 +602,9 @@ export function HRDashboard() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
+      )}
 
       {/* Gender & Marital Status breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
