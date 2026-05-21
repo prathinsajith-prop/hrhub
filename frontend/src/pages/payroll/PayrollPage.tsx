@@ -1269,6 +1269,10 @@ function AddAdjustmentDialog({
   const [fileHash, setFileHash] = useState<string | null>(null)
   const [rows, setRows] = useState<MergedRow[]>([])
   const [parseError, setParseError] = useState<string | null>(null)
+  // Submit-time error from the server (vs parseError which covers client-side
+  // .xlsx issues). Rendered inline at the bottom of the bulk tab so HR can
+  // see the exact failure reason without hunting the toast.
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
 
@@ -1288,6 +1292,7 @@ function AddAdjustmentDialog({
     setFileHash(null)
     setRows([])
     setParseError(null)
+    setSubmitError(null)
     setDragOver(false)
   }
 
@@ -1501,6 +1506,7 @@ function AddAdjustmentDialog({
 
   const handleBulkSubmit = () => {
     if (validRows.length === 0 || invalidRows.length > 0) return
+    setSubmitError(null)
     setStage('submitting')
     bulk.mutate(
       {
@@ -1529,20 +1535,34 @@ function AddAdjustmentDialog({
           onOpenChange(false)
         },
         onError: (err: unknown) => {
-          // Server replies 400 with per-row errors; surface them inline so HR
-          // can fix the offending lines without a re-upload guessing game.
-          const e = err as { data?: BulkCreateAdjustmentsResult; message?: string }
-          if (e?.data?.errors && Array.isArray(e.data.errors)) {
+          // ApiError shape: { statusCode, message, data: <server body> }
+          const e = err as {
+            statusCode?: number
+            message?: string
+            data?: BulkCreateAdjustmentsResult & { error?: string; statusCode?: number }
+          }
+          // Per-row validation failure (400 with errors array): paint each
+          // bad row inline so HR sees exactly which lines to fix.
+          if (e?.data?.errors && Array.isArray(e.data.errors) && e.data.errors.length > 0) {
             const byRow = new Map(e.data.errors.map((er) => [er.row, er.error]))
             setRows((prev) => prev.map((r) => {
               const msg = byRow.get(r.rowNumber)
               return msg ? { ...r, serverStatus: 'invalid' as const, serverError: msg } : r
             }))
+            setSubmitError(`${e.data.errors.length} row${e.data.errors.length === 1 ? '' : 's'} rejected by the server. See the preview table for details.`)
             setStage('ready')
-          } else {
-            toast.error('Import failed', e?.message ?? 'Unknown error')
-            setStage('ready')
+            return
           }
+          // Top-level failure (period locked, duplicate file, bad multipart,
+          // category invalid, etc.). The server's `message` field carries the
+          // human-readable reason — surface it inline AND as a toast so it's
+          // impossible to miss.
+          const reason = e?.message
+            || (typeof e?.data?.error === 'string' ? e.data.error : null)
+            || 'The server rejected the upload. Please try again.'
+          setSubmitError(reason)
+          toast.error('Import failed', reason)
+          setStage('ready')
         },
       },
     )
@@ -1558,7 +1578,7 @@ function AddAdjustmentDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className={cn(
         'max-h-[90vh] flex flex-col',
-        mode === 'single' ? 'sm:max-w-md' : 'sm:max-w-3xl',
+        mode === 'single' ? 'sm:max-w-lg' : 'sm:max-w-5xl',
       )}>
         <DialogHeader>
           <DialogTitle>New adjustment - {MONTH_NAMES[month - 1]} {year}</DialogTitle>
@@ -1801,7 +1821,9 @@ function AddAdjustmentDialog({
                           <th className="px-2 py-1.5 text-left font-medium w-8">#</th>
                           <th className="px-2 py-1.5 text-left font-medium w-7"></th>
                           <th className="px-2 py-1.5 text-left font-medium">Employee</th>
-                          <th className="px-2 py-1.5 text-right font-medium">Amount</th>
+                          <th className="px-2 py-1.5 text-left font-medium w-40">Email</th>
+                          <th className="px-2 py-1.5 text-left font-medium w-36">Phone</th>
+                          <th className="px-2 py-1.5 text-right font-medium w-24">Amount</th>
                           <th className="px-2 py-1.5 text-left font-medium">Note / Issue</th>
                         </tr>
                       </thead>
@@ -1813,8 +1835,8 @@ function AddAdjustmentDialog({
                               key={r.rowNumber}
                               className={cn(status.invalid && 'bg-rose-50/60 dark:bg-rose-950/20')}
                             >
-                              <td className="px-2 py-1.5 text-muted-foreground tabular-nums">{r.rowNumber}</td>
-                              <td className="px-2 py-1.5">
+                              <td className="px-2 py-1.5 text-muted-foreground tabular-nums align-top">{r.rowNumber}</td>
+                              <td className="px-2 py-1.5 align-top">
                                 {status.invalid ? (
                                   <XCircle className="size-3.5 text-rose-600 dark:text-rose-400" />
                                 ) : r.serverStatus === 'valid' ? (
@@ -1823,24 +1845,34 @@ function AddAdjustmentDialog({
                                   <Loader2 className="size-3.5 text-muted-foreground/50 animate-spin" />
                                 )}
                               </td>
-                              <td className="px-2 py-1.5">
+                              <td className="px-2 py-1.5 align-top">
                                 <div className="min-w-0">
                                   <p className="truncate">
                                     {r.resolvedName ?? r.employeeName ?? r.employeeNo ?? r.employeeEmail ?? <span className="text-muted-foreground">—</span>}
                                   </p>
-                                  {(r.resolvedEmployeeNo || r.employeeNo || r.employeeEmail) && (
+                                  {(r.resolvedEmployeeNo || r.employeeNo) && (
                                     <p className="text-[10px] text-muted-foreground truncate">
-                                      {r.resolvedEmployeeNo ?? r.employeeNo ?? r.employeeEmail}
+                                      {r.resolvedEmployeeNo ?? r.employeeNo}
                                     </p>
                                   )}
                                 </div>
                               </td>
-                              <td className="px-2 py-1.5 text-right tabular-nums">
+                              <td className="px-2 py-1.5 align-top truncate max-w-[12rem]">
+                                {r.employeeEmail
+                                  ? <span className="text-muted-foreground" title={r.employeeEmail}>{r.employeeEmail}</span>
+                                  : <span className="text-muted-foreground/40">—</span>}
+                              </td>
+                              <td className="px-2 py-1.5 align-top tabular-nums">
+                                {r.employeePhone
+                                  ? <span className="text-muted-foreground">{r.employeePhone}</span>
+                                  : <span className="text-muted-foreground/40">—</span>}
+                              </td>
+                              <td className="px-2 py-1.5 text-right tabular-nums align-top">
                                 {Number.isFinite(r.amount) && r.amount > 0
                                   ? formatCurrency(r.amount)
                                   : <span className="text-rose-600">—</span>}
                               </td>
-                              <td className="px-2 py-1.5">
+                              <td className="px-2 py-1.5 align-top">
                                 {status.invalid ? (
                                   <span className="text-rose-600 dark:text-rose-400">{status.message}</span>
                                 ) : (
@@ -1873,6 +1905,19 @@ function AddAdjustmentDialog({
                     {warnedRows.length} row{warnedRows.length === 1 ? '' : 's'} flagged — same employee appears more than once in this batch. They will create separate adjustment lines. Continue if intentional.
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Top-level submit failure (period locked, dupe file, etc.).
+                Lives outside the rows-preview block so it shows even when
+                the failure happened before any rows were validated. */}
+            {submitError && stage === 'ready' && (
+              <div className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
+                <AlertCircle className="size-3.5 mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium">Import failed</p>
+                  <p className="text-rose-600/90 dark:text-rose-300/80 break-words">{submitError}</p>
+                </div>
               </div>
             )}
 

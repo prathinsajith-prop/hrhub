@@ -245,8 +245,12 @@ export function useBulkCreateAdjustments() {
     return useMutation({
         mutationFn: async (body: BulkCreateAdjustmentsBody) => {
             const { file, ...payload } = body
-            if (file) {
-                // Multipart path — keeps the file for the history trail.
+            // Multipart path is opt-in: we ONLY send it when we actually have
+            // file bytes to ship. A zero-byte file falls through to the JSON
+            // route, which is functionally equivalent minus the S3 audit row
+            // — better than failing with "missing file" when the buffer got
+            // detached for any reason.
+            if (file && file.size > 0) {
                 const form = new FormData()
                 form.append('file', file)
                 form.append('payload', JSON.stringify(payload))

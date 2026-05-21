@@ -575,25 +575,41 @@ export default async function (fastify: any): Promise<void> {
         let fileMime: string | null = null
 
         if (contentType.includes('multipart/form-data')) {
-            const parts = (request as any).parts() as AsyncIterable<any>
             let payloadRaw: string | null = null
-            for await (const part of parts) {
-                if (part.type === 'file' && part.fieldname === 'file') {
-                    fileBuffer = await part.toBuffer()
-                    fileName = String(part.filename ?? 'upload.xlsx')
-                    fileMime = String(part.mimetype ?? 'application/octet-stream')
-                } else if (part.type === 'field' && part.fieldname === 'payload') {
-                    payloadRaw = String(part.value ?? '')
+            try {
+                const parts = (request as any).parts() as AsyncIterable<any>
+                for await (const part of parts) {
+                    if (part.type === 'file' && part.fieldname === 'file') {
+                        const buf = await part.toBuffer()
+                        // Empty file parts are tolerated — some clients
+                        // (Chrome "Copy as cURL", flaky proxies) send the
+                        // headers but no bytes. We just skip the S3 audit
+                        // trail rather than rejecting the whole request.
+                        if (buf.length > 0) {
+                            fileBuffer = buf
+                            fileName = String(part.filename ?? 'upload.xlsx')
+                            fileMime = String(part.mimetype ?? 'application/octet-stream')
+                        }
+                    } else if (part.type === 'field' && part.fieldname === 'payload') {
+                        payloadRaw = String(part.value ?? '')
+                    }
                 }
+            } catch (err) {
+                request.log.warn({ err }, 'multipart parse failed')
+                const reason = err instanceof Error ? err.message : 'malformed multipart body'
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Could not read upload: ${reason}` })
             }
             if (!payloadRaw) {
-                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'multipart upload requires a "payload" JSON field' })
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Upload missing the "payload" field. Refresh the page and try again.' })
             }
+            // File is OPTIONAL — when absent we still import the rows but
+            // skip the S3 audit step. Lets HR import even when their proxy
+            // strips file bodies, and matches the JSON-only fallback path.
             let parsed: Record<string, unknown>
             try {
                 parsed = JSON.parse(payloadRaw)
             } catch {
-                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'payload field must be valid JSON' })
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'The hidden form payload was not valid JSON. Refresh the page and try again.' })
             }
             periodYear = Number(parsed.periodYear)
             periodMonth = Number(parsed.periodMonth)
@@ -608,19 +624,19 @@ export default async function (fastify: any): Promise<void> {
         }
 
         if (!Number.isInteger(periodYear) || !Number.isInteger(periodMonth) || periodMonth < 1 || periodMonth > 12) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'periodYear + periodMonth required (month 1-12)' })
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'A valid year and month (1–12) are required.' })
         }
         if (!ADJUSTMENT_CATEGORIES.includes(category)) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `category must be one of: ${ADJUSTMENT_CATEGORIES.join(', ')}` })
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Category must be one of: ${ADJUSTMENT_CATEGORIES.join(', ')}.` })
         }
         if (rows.length === 0) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must contain at least one entry' })
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'The spreadsheet has no rows to import.' })
         }
         // Cap matches the employee bulk-import ceiling — keeps memory + tx
         // size predictable, and forces obvious mistakes (uploading a 50k-row
         // export) to fail fast instead of locking the DB.
         if (rows.length > 500) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'maximum 500 rows per import' })
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Too many rows (${rows.length}). The maximum per import is 500 — split your spreadsheet and try again.` })
         }
         if (await isPeriodLocked(request.user.tenantId, periodYear, periodMonth)) {
             return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Payroll for this period has already been processed — adjustments are locked.' })
