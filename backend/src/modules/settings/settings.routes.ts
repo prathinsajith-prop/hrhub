@@ -1,6 +1,6 @@
 import { getCompanySettings, updateCompanySettings, listTenantUsers, listInvitableEmployees, inviteUser, inviteUserBulk, updateUserStatus, resendInvite } from './settings.service.js'
 import { db } from '../../db/index.js'
-import { tenants, users } from '../../db/schema/index.js'
+import { tenants, users, employees } from '../../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
 
 const VALID_ROLES = ['employee', 'dept_head', 'pro_officer', 'hr_manager', 'super_admin'] as const
@@ -34,15 +34,23 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
 
     // PATCH /settings/company — update tenant profile (hr_manager / super_admin only)
     fastify.patch('/company', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
-        const { name, companyCode, tradeLicenseNo, jurisdiction, industryType, logoUrl } = request.body as Record<string, string>
+        // Accept either `businessType` (canonical, post-migration 0051) or
+        // the legacy `jurisdiction` field name from older clients. Both map
+        // to the same DB column.
+        const body = request.body as Record<string, string | null>
+        const { name, companyCode, tradeLicenseNo, businessType, jurisdiction, industryType, logoUrl, phone, address, companyEmail, companyWebsite } = body
         try {
             const updated = await updateCompanySettings(request.user.tenantId, {
-                name,
-                companyCode,
-                tradeLicenseNo,
-                jurisdiction: jurisdiction as 'mainland' | 'freezone',
-                industryType,
-                logoUrl,
+                name: name as string | undefined,
+                companyCode: companyCode as string | undefined,
+                tradeLicenseNo: tradeLicenseNo as string | undefined,
+                businessType: (businessType ?? jurisdiction) as 'mainland' | 'freezone' | undefined,
+                industryType: industryType as string | undefined,
+                logoUrl: logoUrl as string | undefined,
+                phone: phone === undefined ? undefined : phone,
+                address: address === undefined ? undefined : address,
+                companyEmail: companyEmail === undefined ? undefined : companyEmail,
+                companyWebsite: companyWebsite === undefined ? undefined : companyWebsite,
             })
             return reply.send({ data: updated })
         } catch (err: any) {
@@ -246,6 +254,103 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             .where(eq(tenants.id, request.user.tenantId))
             .returning({ securitySettings: tenants.securitySettings })
         return reply.send({ data: updated?.securitySettings })
+    })
+
+    // ── Organisation Policy ───────────────────────────────────────────────────
+    // Org-wide privacy defaults + master notifications kill-switch. The four
+    // toggles HR sees on the Org Policy tab map directly to columns/fields:
+    //   - notificationsEnabled         → tenants.notifications_enabled
+    //   - showBirthday / etc           → tenants.privacy_policy jsonb
+    // Per-employee opt-outs live on employees.privacy_overrides — employees
+    // can hide their own birthday/anniversary/mobile via /me/privacy below.
+    const ORG_POLICY_DEFAULTS = { showBirthday: true, showWorkAnniversary: true, showMobile: true, searchableInDirectory: true }
+    fastify.get('/org-policy', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
+        const [row] = await db
+            .select({ notificationsEnabled: tenants.notificationsEnabled, privacyPolicy: tenants.privacyPolicy })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
+            .limit(1)
+        return reply.send({
+            data: {
+                notificationsEnabled: row?.notificationsEnabled ?? true,
+                privacyPolicy: { ...ORG_POLICY_DEFAULTS, ...(row?.privacyPolicy ?? {}) },
+            },
+        })
+    })
+
+    fastify.patch('/org-policy', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
+        const body = request.body as {
+            notificationsEnabled?: boolean
+            privacyPolicy?: Partial<typeof ORG_POLICY_DEFAULTS>
+        }
+        const [current] = await db
+            .select({ notificationsEnabled: tenants.notificationsEnabled, privacyPolicy: tenants.privacyPolicy })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
+            .limit(1)
+        // Only spread known boolean keys — refuse to persist arbitrary keys
+        // an attacker might smuggle in via the privacyPolicy bag.
+        const allowedKeys: (keyof typeof ORG_POLICY_DEFAULTS)[] = ['showBirthday', 'showWorkAnniversary', 'showMobile', 'searchableInDirectory']
+        const patch: typeof ORG_POLICY_DEFAULTS = { ...ORG_POLICY_DEFAULTS, ...(current?.privacyPolicy ?? {}) }
+        if (body.privacyPolicy && typeof body.privacyPolicy === 'object') {
+            for (const k of allowedKeys) {
+                const v = body.privacyPolicy[k]
+                if (typeof v === 'boolean') patch[k] = v
+            }
+        }
+        const [updated] = await db
+            .update(tenants)
+            .set({
+                ...(typeof body.notificationsEnabled === 'boolean' ? { notificationsEnabled: body.notificationsEnabled } : {}),
+                privacyPolicy: patch,
+                updatedAt: new Date(),
+            })
+            .where(eq(tenants.id, request.user.tenantId))
+            .returning({ notificationsEnabled: tenants.notificationsEnabled, privacyPolicy: tenants.privacyPolicy })
+        return reply.send({
+            data: {
+                notificationsEnabled: updated?.notificationsEnabled ?? true,
+                privacyPolicy: { ...ORG_POLICY_DEFAULTS, ...(updated?.privacyPolicy ?? {}) },
+            },
+        })
+    })
+
+    // ── Per-employee privacy overrides ────────────────────────────────────────
+    // The employee sees this surface under "My Profile → Privacy". They can
+    // opt themselves OUT of the org-wide defaults (hide their own birthday
+    // even if HR has the org default on). They cannot opt themselves IN if
+    // the org has the default off — HR is the upper bound.
+    fastify.get('/me/privacy', { preHandler: [fastify.authenticate], schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
+        if (!request.user.employeeId) return reply.send({ data: {} })
+        const [row] = await db
+            .select({ privacyOverrides: employees.privacyOverrides })
+            .from(employees)
+            .where(and(eq(employees.id, request.user.employeeId), eq(employees.tenantId, request.user.tenantId)))
+            .limit(1)
+        return reply.send({ data: row?.privacyOverrides ?? {} })
+    })
+
+    fastify.patch('/me/privacy', { preHandler: [fastify.authenticate], schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
+        if (!request.user.employeeId) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'No employee linked to this account' })
+        const body = request.body as Partial<{ showBirthday: boolean; showWorkAnniversary: boolean; showMobile: boolean; searchableInDirectory: boolean }>
+        const allowedKeys: (keyof typeof body)[] = ['showBirthday', 'showWorkAnniversary', 'showMobile', 'searchableInDirectory']
+        const patch: Record<string, boolean> = {}
+        for (const k of allowedKeys) {
+            const v = body[k]
+            if (typeof v === 'boolean') patch[k] = v
+        }
+        const [current] = await db
+            .select({ privacyOverrides: employees.privacyOverrides })
+            .from(employees)
+            .where(and(eq(employees.id, request.user.employeeId), eq(employees.tenantId, request.user.tenantId)))
+            .limit(1)
+        const merged = { ...(current?.privacyOverrides ?? {}), ...patch }
+        const [updated] = await db
+            .update(employees)
+            .set({ privacyOverrides: merged, updatedAt: new Date() })
+            .where(and(eq(employees.id, request.user.employeeId), eq(employees.tenantId, request.user.tenantId)))
+            .returning({ privacyOverrides: employees.privacyOverrides })
+        return reply.send({ data: updated?.privacyOverrides ?? merged })
     })
 
     // ── Notification Preferences (per user) ───────────────────────────────────

@@ -64,6 +64,7 @@ export function SalaryComponentsTab() {
     const [dialogKind, setDialogKind] = useState<SalaryComponentKind | null>(null)
     const [componentToEdit, setComponentToEdit] = useState<SalaryComponent | null>(null)
     const [toDelete, setToDelete] = useState<SalaryComponent | null>(null)
+    const [toToggle, setToToggle] = useState<SalaryComponent | null>(null)
 
     const earnings = useSalaryComponents('earning')
     const deductions = useSalaryComponents('deduction')
@@ -75,14 +76,18 @@ export function SalaryComponentsTab() {
 
     const kindLabel = (k: SalaryComponentKind) => t(`orgSettings.salaryComponentsTab.kinds.${k}`)
 
-    const handleToggleActive = (c: SalaryComponent) => {
+    const handleToggleActiveConfirm = () => {
+        if (!toToggle) return
+        const target = toToggle
         update.mutate(
-            { id: c.id, patch: { isActive: !c.isActive } },
+            { id: target.id, patch: { isActive: !target.isActive } },
             {
                 onSuccess: () => {
-                    const key = !c.isActive ? 'activated' : 'deactivated'
-                    toast.success(t(`orgSettings.salaryComponentsTab.toast.${key}`, { name: c.name }))
+                    const key = !target.isActive ? 'activated' : 'deactivated'
+                    toast.success(t(`orgSettings.salaryComponentsTab.toast.${key}`, { name: target.name }))
+                    setToToggle(null)
                 },
+                onError: () => setToToggle(null),
             },
         )
     }
@@ -154,7 +159,7 @@ export function SalaryComponentsTab() {
                         loading={earnings.isLoading}
                         onEdit={(c) => { setDialogKind(c.kind); setComponentToEdit(c) }}
                         onDelete={(c) => setToDelete(c)}
-                        onToggle={handleToggleActive}
+                        onToggle={(c) => setToToggle(c)}
                     />
                 </TabsContent>
                 <TabsContent value="deduction" className="mt-4">
@@ -164,7 +169,7 @@ export function SalaryComponentsTab() {
                         loading={deductions.isLoading}
                         onEdit={(c) => { setDialogKind(c.kind); setComponentToEdit(c) }}
                         onDelete={(c) => setToDelete(c)}
-                        onToggle={handleToggleActive}
+                        onToggle={(c) => setToToggle(c)}
                     />
                 </TabsContent>
                 <TabsContent value="benefit" className="mt-4">
@@ -174,7 +179,7 @@ export function SalaryComponentsTab() {
                         loading={benefits.isLoading}
                         onEdit={(c) => { setDialogKind(c.kind); setComponentToEdit(c) }}
                         onDelete={(c) => setToDelete(c)}
-                        onToggle={handleToggleActive}
+                        onToggle={(c) => setToToggle(c)}
                     />
                 </TabsContent>
                 <TabsContent value="correction" className="mt-4">
@@ -184,7 +189,7 @@ export function SalaryComponentsTab() {
                         loading={corrections.isLoading}
                         onEdit={(c) => { setDialogKind(c.kind); setComponentToEdit(c) }}
                         onDelete={(c) => setToDelete(c)}
-                        onToggle={handleToggleActive}
+                        onToggle={(c) => setToToggle(c)}
                     />
                 </TabsContent>
             </Tabs>
@@ -209,7 +214,47 @@ export function SalaryComponentsTab() {
                 onConfirm={handleDelete}
                 variant="destructive"
             />
+
+            <ToggleConfirmDialog
+                target={toToggle}
+                pending={update.isPending}
+                onCancel={() => setToToggle(null)}
+                onConfirm={handleToggleActiveConfirm}
+            />
         </Section>
+    )
+}
+
+// ─── Toggle confirm ───────────────────────────────────────────────────────
+// One-shot wrapper around ConfirmDialog that swaps copy + variant based on
+// the current isActive state. Pulled out of SalaryComponentsTab to keep the
+// JSX in the table view readable.
+
+function ToggleConfirmDialog({
+    target, pending, onCancel, onConfirm,
+}: {
+    target: SalaryComponent | null
+    pending: boolean
+    onCancel: () => void
+    onConfirm: () => void
+}) {
+    const { t } = useTranslation()
+    const k = 'orgSettings.salaryComponentsTab.confirm'
+    const copy = target?.isActive
+        ? { titleK: `${k}.deactivateTitle`, descK: `${k}.deactivateDesc`, confirmK: `${k}.deactivate`, variant: 'warning' as const }
+        : { titleK: `${k}.activateTitle`,   descK: `${k}.activateDesc`,   confirmK: `${k}.activate`,   variant: 'success' as const }
+
+    return (
+        <ConfirmDialog
+            open={!!target}
+            onOpenChange={(o) => { if (!pending && !o) onCancel() }}
+            title={target ? t(copy.titleK, { name: target.name }) : ''}
+            description={target ? t(copy.descK) : ''}
+            confirmLabel={pending ? t(`${k}.toggling`) : t(copy.confirmK)}
+            cancelLabel={t(`${k}.cancel`)}
+            onConfirm={onConfirm}
+            variant={copy.variant}
+        />
     )
 }
 

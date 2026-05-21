@@ -34,7 +34,7 @@ const registerSchema = z
     company: z.string().min(2, 'Company name must be at least 2 characters'),
     industry: z.string().min(1, 'Please select your industry'),
     companySize: z.string().min(1, 'Please select your company size'),
-    jurisdiction: z.enum(['mainland', 'freezone'], { message: 'Please select your business type' }),
+    businessType: z.enum(['mainland', 'freezone'], { message: 'Please select your business type' }),
     tradeLicenseNo: z.string().optional(),
     phone: z.string().refine((v) => !v || /^[\d+\s\-().]+$/.test(v), 'Enter a valid phone number').optional(),
     terms: z.boolean().refine((v) => v === true, 'You must accept the terms'),
@@ -125,7 +125,7 @@ export function RegisterPage() {
   })
 
   // eslint-disable-next-line react-hooks/incompatible-library
-  const [termsChecked, industry, companySize, jurisdiction] = watch(['terms', 'industry', 'companySize', 'jurisdiction'])
+  const [termsChecked, industry, companySize, businessType] = watch(['terms', 'industry', 'companySize', 'businessType'])
 
   const goToStep2 = async () => {
     const valid = await trigger(STEP_1_FIELDS)
@@ -151,7 +151,7 @@ export function RegisterPage() {
           password: data.password,
           company: data.company,
           industry: data.industry,
-          jurisdiction: data.jurisdiction,
+          businessType: data.businessType,
           companySize: data.companySize,
           tradeLicenseNo: data.tradeLicenseNo || undefined,
           phone: data.phone || undefined,
@@ -393,7 +393,7 @@ export function RegisterPage() {
             </div>
           </div>
 
-          {/* Business type / jurisdiction */}
+          {/* Business type / businessType */}
           <div className="space-y-1.5">
             <Label>{t('auth.businessType')}</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -404,23 +404,23 @@ export function RegisterPage() {
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setValue('jurisdiction', opt.value, { shouldValidate: true })}
+                  onClick={() => setValue('businessType', opt.value, { shouldValidate: true })}
                   className={cn(
                     'text-left rounded-lg border-2 p-3 transition-all',
-                    jurisdiction === opt.value
+                    businessType === opt.value
                       ? 'border-primary bg-primary/5'
                       : 'border-border hover:border-muted-foreground/40',
-                    errors.jurisdiction && !jurisdiction && 'border-destructive',
+                    errors.businessType && !businessType && 'border-destructive',
                   )}
                 >
-                  <p className={cn('text-sm font-semibold', jurisdiction === opt.value ? 'text-primary' : 'text-foreground')}>
+                  <p className={cn('text-sm font-semibold', businessType === opt.value ? 'text-primary' : 'text-foreground')}>
                     {opt.label}
                   </p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">{opt.desc}</p>
                 </button>
               ))}
             </div>
-            {errors.jurisdiction && <p className="text-xs text-destructive">{errors.jurisdiction.message}</p>}
+            {errors.businessType && <p className="text-xs text-destructive">{errors.businessType.message}</p>}
           </div>
 
           {/* Trade license + Phone - optional 2-col */}

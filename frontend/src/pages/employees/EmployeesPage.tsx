@@ -309,7 +309,11 @@ export function EmployeesPage() {
             {(() => {
               const email = e.workEmail || e.email || e.personalEmail || null
               return email ? (
-                <span onClick={ev => ev.stopPropagation()}>
+                <span
+                  onClick={ev => ev.stopPropagation()}
+                  onKeyDown={ev => ev.stopPropagation()}
+                  role="presentation"
+                >
                   <CopyableEmail email={email} className="text-[11px] text-muted-foreground/70 truncate" />
                 </span>
               ) : null
@@ -331,7 +335,7 @@ export function EmployeesPage() {
         return (
           <div className="flex items-center gap-1 min-w-0 flex-wrap">
             {parts.map((part, i) => (
-              <span key={i} className="flex items-center gap-1 min-w-0">
+              <span key={part} className="flex items-center gap-1 min-w-0">
                 {i > 0 && <span className="text-muted-foreground/40 text-[10px] shrink-0">›</span>}
                 <span className={cn(
                   'truncate text-xs',

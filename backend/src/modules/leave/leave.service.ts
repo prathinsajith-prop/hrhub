@@ -4,7 +4,7 @@ import { cacheDel } from '../../lib/redis.js'
 import { leaveBalancesCache } from '../../lib/cache.js'
 import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
-import { leaveRequests, leavePolicies, leaveBalances, publicHolidays, attendanceRecords, leaveAdjustments, airTickets, leaveOffsets } from '../../db/schema/index.js'
+import { leaveRequests, leavePolicies, leaveBalances, publicHolidays, attendanceRecords, leaveAdjustments, airTickets, leaveOffsets, tenants } from '../../db/schema/index.js'
 import { employees } from '../../db/schema/employees.js'
 import { users } from '../../db/schema/users.js'
 import { sendEmail } from '../../plugins/email.js'
@@ -60,16 +60,35 @@ export async function listLeaveRequests(tenantId: string, params: { employeeId?:
     return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 
+// Maps weekday name in `tenants.settings.weekOffDays` to JS `Date#getDay()`
+// index (Sunday=0). Default to Fri+Sat (UAE federal decree).
+const DAY_NAME_TO_INDEX: Record<string, number> = {
+    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+    thursday: 4, friday: 5, saturday: 6,
+}
+const DEFAULT_WEEK_OFF = new Set([5, 6])
+
 async function countWorkingDays(tenantId: string, startDate: string, endDate: string): Promise<number> {
     const start = new Date(startDate)
     const end = new Date(endDate)
 
-    // Count Mon–Thu + Sun only (UAE weekend = Fri + Sat per Federal Decree-Law No. 33 of 2021)
+    // Tenant-configured weekend (free-zone / foreign tenants may differ from
+    // the UAE default of Fri+Sat). Falls back to Fri+Sat if the column or
+    // the array is missing.
+    const [tenant] = await db
+        .select({ leaveSettings: tenants.leaveSettings })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1)
+    const configured = tenant?.leaveSettings?.weekOffDays
+    const weekOff = configured && configured.length > 0
+        ? new Set(configured.map(d => DAY_NAME_TO_INDEX[d.toLowerCase()]).filter((n): n is number => n != null))
+        : DEFAULT_WEEK_OFF
+
     let workingDays = 0
     const cur = new Date(start)
     while (cur <= end) {
-        const dow = cur.getDay()
-        if (dow !== 5 && dow !== 6) workingDays++
+        if (!weekOff.has(cur.getDay())) workingDays++
         cur.setDate(cur.getDate() + 1)
     }
 

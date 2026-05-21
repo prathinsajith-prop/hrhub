@@ -9,6 +9,7 @@ import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.
 import { db } from '../../db/index.js'
 import { entities, employees, employeeSalaryComponents, salaryComponents, tenants, users } from '../../db/schema/index.js'
 import { eq, and, sql, inArray } from 'drizzle-orm'
+import { loadPrivacyPolicy, maskEmployeeForPeer, shouldMask, viewerCanBypassPrivacy } from '../../lib/privacy.js'
 import { inviteUser, resendInvite } from '../settings/settings.service.js'
 import { fileTypeFromBuffer } from 'file-type'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
@@ -39,6 +40,17 @@ export default async function (fastify: any): Promise<void> {
             offset: query.offset,
             after: query.after,
         })
+
+        // Apply the org-policy privacy mask in bulk. Peer viewers see hidden
+        // birthdays / mobiles / anniversaries; HR and self-view bypass.
+        if (!viewerCanBypassPrivacy(user.role) && Array.isArray((result as any).data)) {
+            const policy = await loadPrivacyPolicy(request.user.tenantId)
+            const rows = (result as any).data as Array<{ id: string }>
+            for (const row of rows) {
+                if (user.employeeId && row.id === user.employeeId) continue
+                maskEmployeeForPeer(row as any, policy)
+            }
+        }
 
         return reply.send(result)
     })
@@ -216,6 +228,16 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const employee = await getEmployee(request.user.tenantId, id)
         if (!employee) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
+        // Apply the Organization Policy privacy mask for peer viewers.
+        // HR / self-view bypass the mask via shouldMask(). `employee` is
+        // widened via the row's runtime `id`, which getEmployee always
+        // selects via getTableColumns(employees) even though TypeScript's
+        // inferred narrow type doesn't surface it.
+        const employeeRow = employee as typeof employee & { id: string }
+        if (shouldMask((request as any).user.role, (request as any).user.employeeId, employeeRow.id)) {
+            const policy = await loadPrivacyPolicy((request as any).user.tenantId)
+            maskEmployeeForPeer(employeeRow, policy)
+        }
         return reply.send({ data: employee })
     })
 

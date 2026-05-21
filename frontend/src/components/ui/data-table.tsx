@@ -313,12 +313,18 @@ export function DataTable<TData, TValue>({
                     >
                       {header.isPlaceholder ? null : (
                         <div className="flex items-center gap-0.5">
-                          <div
-                            className={cn('flex items-center gap-1', header.column.getCanSort() && 'cursor-pointer select-none hover:text-foreground transition-colors')}
-                            onClick={header.column.getToggleSortingHandler()}
-                          >
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                            {header.column.getCanSort() && (
+                          {header.column.getCanSort() ? (
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors text-left font-medium text-muted-foreground text-xs uppercase tracking-wide"
+                              onClick={header.column.getToggleSortingHandler()}
+                              aria-sort={
+                                header.column.getIsSorted() === 'asc' ? 'ascending'
+                                  : header.column.getIsSorted() === 'desc' ? 'descending'
+                                  : 'none'
+                              }
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
                               <span className="ml-0.5">
                                 {header.column.getIsSorted() === 'asc' ? (
                                   <ChevronUp className="size-3" />
@@ -328,8 +334,12 @@ export function DataTable<TData, TValue>({
                                   <ChevronsUpDown className="size-3 opacity-40" />
                                 )}
                               </span>
-                            )}
-                          </div>
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </div>
+                          )}
                           {(() => {
                             const meta = header.column.columnDef.meta as DataTableColumnMeta | undefined
                             if (!meta?.filterable || !meta.filterKey) return null

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, timestamp, numeric, date, index, uniqueIndex, check, type AnyPgColumn } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, boolean, timestamp, numeric, date, jsonb, index, uniqueIndex, check, type AnyPgColumn } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 import { tenants, entities } from './tenants.js'
 import { orgUnits } from './orgUnits.js'
@@ -75,6 +75,17 @@ export const employees = pgTable('employees', {
     departmentId: uuid('department_id').references(() => orgUnits.id, { onDelete: 'set null' }),
     branchId: uuid('branch_id').references(() => orgUnits.id, { onDelete: 'set null' }),
     isArchived: boolean('is_archived').notNull().default(false),
+    // Per-employee opt-outs for the org-wide visibility defaults in
+    // tenants.privacyPolicy. Each key matches a policy field; when the key
+    // is present and false here, the employee has overridden the default to
+    // hide the field on the directory / dashboard. Missing key = inherit the
+    // org default. Employees see this surface in Settings → Privacy.
+    privacyOverrides: jsonb('privacy_overrides').$type<{
+        showBirthday?: boolean
+        showWorkAnniversary?: boolean
+        showMobile?: boolean
+        searchableInDirectory?: boolean
+    }>().notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

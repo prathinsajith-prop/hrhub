@@ -762,12 +762,13 @@
     },
     "company": {
       "companyProfile": "Company profile",
-      "companyProfileDesc": "Legal name, jurisdiction, and basic details.",
+      "companyProfileDesc": "Legal name, business type, and basic details.",
       "plan": "plan",
       "subscriptionPlan": "Subscription plan",
       "subscriptionPlanHint": "Manage billing from the Subscription page.",
       "tradeLicense": "Trade license",
-      "jurisdiction": "Jurisdiction",
+      "businessType": "Business Type",
+      "jurisdiction": "Business Type",
       "regionalSettings": "Regional settings",
       "regionalSettingsDesc": "Timezone, currency, and date format.",
       "dateFormat": "Date format",
@@ -2247,6 +2248,10 @@
         "label": "Salary Components",
         "desc": "Earnings, deductions, benefits & corrections catalog"
       },
+      "orgPolicy": {
+        "label": "Organization Policy",
+        "desc": "Notification kill-switch and employee privacy defaults"
+      },
       "security": {
         "label": "Security",
         "desc": "Policies, IP allowlist & data"
@@ -2339,6 +2344,13 @@
       "companyCodeHint": "Company Code Hint",
       "companyName": "Company Name",
       "organization": "Organization",
+      "businessType": "Business Type",
+      "businessTypePlaceholder": "Select business type",
+      "companyPhone": "Company Phone",
+      "companyEmail": "Company Email",
+      "companyWebsite": "Company Website",
+      "address": "Address",
+      "addressPlaceholder": "Office address (street, city, country)",
       "saveFailed": "Save Failed",
       "saveFailedDesc": "Save Failed Desc",
       "settingsSaved": "Settings Saved",
@@ -2503,7 +2515,14 @@
         "deleteDesc": "This component will no longer appear when adjusting payroll. Existing payslips that already used it stay unchanged.",
         "deleting": "Deleting…",
         "delete": "Delete",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "deactivateTitle": "Deactivate \"{{name}}\"?",
+        "deactivateDesc": "This component will be hidden from new payroll runs and Add Adjustment dropdowns. Existing payslips that already used it stay unchanged. You can reactivate it later.",
+        "deactivate": "Deactivate",
+        "activateTitle": "Activate \"{{name}}\"?",
+        "activateDesc": "This component will be available in payroll runs and the Add Adjustment dropdown going forward.",
+        "activate": "Activate",
+        "toggling": "Saving…"
       },
       "toast": {
         "activated": "{{name}} activated",

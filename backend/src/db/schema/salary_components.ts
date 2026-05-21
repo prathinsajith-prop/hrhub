@@ -67,6 +67,11 @@ export const EARNING_CATEGORIES = [
     'children_social', 'social', 'custom_allowance',
 ] as const
 
+/** Earning categories that map to the legacy `employees.other_allowances`
+ *  column. Anything in these categories rolls up into the single "other"
+ *  bucket on the payslip and in the 4-field salary-revisions input. */
+export const OTHER_EARNING_CATEGORIES = ['custom_allowance', 'cost_of_living'] as const
+
 export const DEDUCTION_CATEGORIES = [
     'withheld_salary', 'salary_advance', 'fines_damages', 'notice_pay', 'custom',
 ] as const

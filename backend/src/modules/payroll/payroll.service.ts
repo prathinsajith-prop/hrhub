@@ -194,14 +194,23 @@ export async function getPayrollReadiness(
     const monthStart = `${run.year}-${String(run.month).padStart(2, '0')}-01`
     const monthEnd = `${run.year}-${String(run.month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-    // One round-trip — every check is its own query but they all hit the
-    // same DB connection in parallel. Missing-IBAN / missing-salary return
-    // the offending employees (capped at 50) so the UI can render a popover
-    // with names + links rather than just a count.
+    // Four parallel queries — the slice queries carry the unfiltered total
+    // via COUNT(*) OVER() so we don't pay for separate COUNT round-trips.
+    // Missing-IBAN / missing-salary return up to 50 offending employees so
+    // the UI can render a popover with names + links.
     const READINESS_EMPLOYEE_CAP = 50
+    const hasPositiveBasicAssignment = sql`EXISTS (
+        SELECT 1 FROM employee_salary_components esc
+        JOIN salary_components sc ON sc.id = esc.component_id
+        WHERE esc.employee_id = ${employees.id}
+          AND esc.tenant_id = ${tenantId}
+          AND esc.is_active = true
+          AND sc.is_active = true
+          AND sc.kind = 'earning'
+          AND sc.category = 'basic'
+          AND COALESCE(esc.amount::numeric, sc.amount::numeric, 0) > 0
+    )`
     const [emps, ibanRows, salaryRows, leaveCounts] = await Promise.all([
-        // Employee count (just to surface it in the response — also used to
-        // decide "no payable employees" blocker)
         db.select({ count: sql<number>`COUNT(*)::int` })
             .from(employees)
             .where(and(
@@ -209,13 +218,13 @@ export async function getPayrollReadiness(
                 eq(employees.isArchived, false),
                 inArray(employees.status, ['active', 'onboarding']),
             )),
-        // Missing IBAN — WPS submission warning
         db.select({
             id: employees.id,
             employeeNo: employees.employeeNo,
             firstName: employees.firstName,
             lastName: employees.lastName,
             avatarUrl: employees.avatarUrl,
+            total: sql<number>`COUNT(*) OVER()`.as('total'),
         })
             .from(employees)
             .where(and(
@@ -226,18 +235,18 @@ export async function getPayrollReadiness(
             ))
             .orderBy(employees.firstName, employees.lastName)
             .limit(READINESS_EMPLOYEE_CAP),
-        // Missing/zero basic salary — payroll math BLOCKER (gross would be 0
-        // even for a senior employee, almost always a data-entry mistake).
-        // Catalog-aware: an employee is OK if EITHER the legacy column has a
-        // positive basic OR they have an active basic-category catalog
-        // assignment with a positive amount. We only flag the intersection
-        // of "both empty" so catalog-only employees aren't false positives.
+        // Missing/zero basic salary — payroll math BLOCKER. Catalog-aware:
+        // an employee is OK if EITHER the legacy column has a positive
+        // basic OR they have an active basic-category catalog assignment
+        // with a positive amount. We only flag the intersection of "both
+        // empty" so catalog-only employees aren't false positives.
         db.select({
             id: employees.id,
             employeeNo: employees.employeeNo,
             firstName: employees.firstName,
             lastName: employees.lastName,
             avatarUrl: employees.avatarUrl,
+            total: sql<number>`COUNT(*) OVER()`.as('total'),
         })
             .from(employees)
             .where(and(
@@ -245,22 +254,10 @@ export async function getPayrollReadiness(
                 eq(employees.isArchived, false),
                 inArray(employees.status, ['active', 'onboarding']),
                 sql`(${employees.basicSalary} IS NULL OR ${employees.basicSalary}::numeric = 0)`,
-                sql`NOT EXISTS (
-                    SELECT 1 FROM employee_salary_components esc
-                    JOIN salary_components sc ON sc.id = esc.component_id
-                    WHERE esc.employee_id = ${employees.id}
-                      AND esc.tenant_id = ${tenantId}
-                      AND esc.is_active = true
-                      AND sc.is_active = true
-                      AND sc.kind = 'earning'
-                      AND sc.category = 'basic'
-                      AND COALESCE(esc.amount::numeric, sc.amount::numeric, 0) > 0
-                )`,
+                sql`NOT ${hasPositiveBasicAssignment}`,
             ))
             .orderBy(employees.firstName, employees.lastName)
             .limit(READINESS_EMPLOYEE_CAP),
-        // Pending leave whose start date falls inside this period — LOP / sick
-        // won't be reflected until the leave is approved AND auto-synced
         db.select({ count: sql<number>`COUNT(*)::int` })
             .from(leaveRequests)
             .where(and(
@@ -271,42 +268,9 @@ export async function getPayrollReadiness(
             )),
     ])
 
-    // We need the TOTAL counts (not just the capped slice) for the messages.
-    // Two extra COUNT queries — both indexed, very cheap.
-    const [ibanTotalRows, salaryTotalRows] = await Promise.all([
-        db.select({ count: sql<number>`COUNT(*)::int` })
-            .from(employees)
-            .where(and(
-                eq(employees.tenantId, tenantId),
-                eq(employees.isArchived, false),
-                inArray(employees.status, ['active', 'onboarding']),
-                sql`(${employees.iban} IS NULL OR ${employees.iban} = '')`,
-            )),
-        db.select({ count: sql<number>`COUNT(*)::int` })
-            .from(employees)
-            .where(and(
-                eq(employees.tenantId, tenantId),
-                eq(employees.isArchived, false),
-                inArray(employees.status, ['active', 'onboarding']),
-                sql`(${employees.basicSalary} IS NULL OR ${employees.basicSalary}::numeric = 0)`,
-                // Mirror the catalog-aware exclusion from the list query above.
-                sql`NOT EXISTS (
-                    SELECT 1 FROM employee_salary_components esc
-                    JOIN salary_components sc ON sc.id = esc.component_id
-                    WHERE esc.employee_id = ${employees.id}
-                      AND esc.tenant_id = ${tenantId}
-                      AND esc.is_active = true
-                      AND sc.is_active = true
-                      AND sc.kind = 'earning'
-                      AND sc.category = 'basic'
-                      AND COALESCE(esc.amount::numeric, sc.amount::numeric, 0) > 0
-                )`,
-            )),
-    ])
-
     const employeeCount = emps[0]?.count ?? 0
-    const missingIban = ibanTotalRows[0]?.count ?? 0
-    const missingSalary = salaryTotalRows[0]?.count ?? 0
+    const missingIban = Number(ibanRows[0]?.total ?? 0)
+    const missingSalary = Number(salaryRows[0]?.total ?? 0)
     const pendingLeaveInPeriod = leaveCounts[0]?.count ?? 0
 
     const toReadinessEmp = (r: { id: string; employeeNo: string; firstName: string; lastName: string; avatarUrl: string | null }): PayrollReadinessEmployee => ({
@@ -534,9 +498,16 @@ export async function resolveEmployeeEarnings(
 
     // Second pass: resolve every earning, converting percentage-of-basic
     // into absolute AED using the basic we computed above.
+    //
+    // `hasBasic` requires a POSITIVE basic — a zero-amount assignment (left
+    // over from sibling-zeroing during a salary revision, or HR clearing
+    // the amount) must fall back to the legacy column so payroll doesn't
+    // produce a payslip with basic=0. Matches the readiness check at
+    // hasPositiveBasicAssignment so a draft preview and the readiness
+    // blocker can't disagree.
     for (const r of rows) {
         const basic = basicByEmp.get(r.employeeId) ?? 0
-        const hasBasic = basicByEmp.has(r.employeeId)
+        const hasBasic = basic > 0
         const rawAmount = Number(r.assignmentAmount ?? r.componentAmount ?? 0)
         const amount = r.calculationType === 'percentage_of_basic'
             ? (basic * rawAmount) / 100

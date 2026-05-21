@@ -74,6 +74,14 @@ function AppRow({
     return (
         <div
             onClick={() => onClick(app)}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onClick(app)
+                }
+            }}
+            role="button"
+            tabIndex={0}
             className="group flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-muted/40 transition-colors border-b border-border last:border-0"
         >
             {/* Icon */}

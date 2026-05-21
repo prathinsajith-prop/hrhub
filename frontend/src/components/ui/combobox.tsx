@@ -89,8 +89,16 @@ export function Combobox({
                         {clearable && value && (
                             <span
                                 role="button"
+                                tabIndex={0}
                                 aria-label="Clear"
                                 onClick={e => { e.stopPropagation(); onValueChange('') }}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        onValueChange('')
+                                    }
+                                }}
                                 className="flex items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
                             >
                                 <X className="size-3" />

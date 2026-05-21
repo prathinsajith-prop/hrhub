@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -64,6 +64,12 @@ const OnboardingCard = memo(function OnboardingCard({
     const handleCardClick = useCallback(() => {
         if (hasChecklist) navigate(`/onboarding/${c.employeeId}`)
     }, [hasChecklist, navigate, c.employeeId])
+    const handleCardKey = useCallback((e: KeyboardEvent) => {
+        if ((e.key === 'Enter' || e.key === ' ') && hasChecklist) {
+            e.preventDefault()
+            navigate(`/onboarding/${c.employeeId}`)
+        }
+    }, [hasChecklist, navigate, c.employeeId])
 
     return (
         <div
@@ -75,7 +81,10 @@ const OnboardingCard = memo(function OnboardingCard({
                 'lg:grid-cols-[2rem_minmax(0,1fr)_9rem_8rem_7rem_5rem]',
                 hasChecklist && 'cursor-pointer hover:bg-muted/40',
             )}
-            onClick={handleCardClick}
+            onClick={hasChecklist ? handleCardClick : undefined}
+            onKeyDown={hasChecklist ? handleCardKey : undefined}
+            role={hasChecklist ? 'button' : undefined}
+            tabIndex={hasChecklist ? 0 : undefined}
         >
             {/* Status accent bar */}
             <span
@@ -159,7 +168,12 @@ const OnboardingCard = memo(function OnboardingCard({
             </div>
 
             {/* Col 6 - Action */}
-            <div onClick={e => e.stopPropagation()} className="flex justify-end">
+            <div
+                onClick={e => e.stopPropagation()}
+                onKeyDown={e => e.stopPropagation()}
+                role="presentation"
+                className="flex justify-end"
+            >
                 {hasChecklist ? (
                     <Button
                         size="sm"

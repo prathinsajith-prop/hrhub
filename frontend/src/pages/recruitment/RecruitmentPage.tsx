@@ -600,6 +600,14 @@ const CandidateListRow = memo(function CandidateListRow({
     <div
       className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4 hover:bg-muted/40 transition-colors group cursor-pointer"
       onClick={() => onView(candidate.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onView(candidate.id)
+        }
+      }}
+      role="button"
+      tabIndex={0}
     >
       {/* Candidate info - flex-1 matches header */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -658,6 +666,8 @@ const CandidateListRow = memo(function CandidateListRow({
       <div
         className="w-8 shrink-0 flex items-center justify-end sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
         onClick={e => e.stopPropagation()}
+        onKeyDown={e => e.stopPropagation()}
+        role="presentation"
       >
         {onEdit
           ? <Button size="icon-sm" variant="ghost" aria-label="Edit candidate" onClick={() => onEdit(candidate)}><Edit2 className="size-3.5" /></Button>

@@ -23,6 +23,8 @@ import {
     payrollAdjustments,
     payrollRuns,
     employees,
+    employeeSalaryComponents,
+    salaryComponents,
     leaveRequests,
     employeeLoans,
     users,
@@ -191,43 +193,54 @@ export async function syncAdjustmentsForPeriod(
     const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-    // Fetch payable employees ('active' + 'onboarding' — see PAYABLE_STATUSES
-    // in payroll.service.ts). The daily rate uses the assignment-derived
-    // basic salary so LOP and sick-half-pay match what runPayroll computes
-    // for gross — they MUST share the same basic figure or the deductions
-    // would be wrong relative to the earnings on the same payslip.
+    // Fetch payable employees + their catalog basic in two parallel scans
+    // (vs the previous per-employee correlated subquery). The daily rate
+    // uses the assignment-derived basic salary so LOP and sick-half-pay
+    // match what runPayroll computes for gross — they MUST share the same
+    // basic figure or the deductions would be wrong relative to the
+    // earnings on the same payslip.
     //
-    // Resolution order: assignment.amount (override) → catalog default → 0.
-    // Fallback to the legacy column when an employee has no Basic assignment
-    // yet (newly created pre-Phase-2B). Same fallback policy as
-    // buildPayslipsAndTotals in payroll.service.ts.
-    const emps = await db
-        .select({
+    // Resolution order: assignment.amount (override) → catalog default → 0,
+    // then fall back to the legacy column when no Basic assignment exists.
+    const [emps, basicRows] = await Promise.all([
+        db.select({
             id: employees.id,
             legacyBasic: employees.basicSalary,
-            assignmentBasic: sql<string | null>`
-                (SELECT COALESCE(esc.amount, sc.amount)
-                 FROM employee_salary_components esc
-                 JOIN salary_components sc ON sc.id = esc.component_id
-                 WHERE esc.employee_id = ${employees.id}
-                   AND esc.is_active = true
-                   AND sc.is_active = true
-                   AND sc.kind = 'earning'
-                   AND sc.category = 'basic'
-                 LIMIT 1)
-            `,
         })
-        .from(employees)
-        .where(and(
-            eq(employees.tenantId, tenantId),
-            eq(employees.isArchived, false),
-            inArray(employees.status, ['active', 'onboarding']),
-        ))
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                inArray(employees.status, ['active', 'onboarding']),
+            )),
+        db.select({
+            employeeId: employeeSalaryComponents.employeeId,
+            amount: sql<string | null>`COALESCE(${employeeSalaryComponents.amount}, ${salaryComponents.amount})`,
+        })
+            .from(employeeSalaryComponents)
+            .innerJoin(salaryComponents, and(
+                eq(salaryComponents.id, employeeSalaryComponents.componentId),
+                eq(salaryComponents.isActive, true),
+                eq(salaryComponents.kind, 'earning'),
+                eq(salaryComponents.category, 'basic'),
+            ))
+            .where(and(
+                eq(employeeSalaryComponents.tenantId, tenantId),
+                eq(employeeSalaryComponents.isActive, true),
+            )),
+    ])
 
+    // SUM (not overwrite) so a tenant with two `basic`-category rows on the
+    // same employee — see payroll-resolver.test.ts "multiple basic-category
+    // components" — gets the same combined basic the resolver computes.
+    const basicByEmp = new Map<string, number>()
+    for (const r of basicRows) {
+        const prev = basicByEmp.get(r.employeeId) ?? 0
+        basicByEmp.set(r.employeeId, prev + Number(r.amount ?? 0))
+    }
     const dailyRateByEmp = new Map<string, number>()
     for (const e of emps) {
-        // Prefer the assignment-derived basic; fall back to the legacy column.
-        const basic = Number(e.assignmentBasic ?? e.legacyBasic ?? 0)
+        const basic = basicByEmp.get(e.id) ?? Number(e.legacyBasic ?? 0)
         dailyRateByEmp.set(e.id, basic / 30)
     }
     const empIds = emps.map(e => e.id)

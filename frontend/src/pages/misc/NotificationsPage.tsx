@@ -111,6 +111,14 @@ export function NotificationsPage() {
                                 'hover:bg-muted/50 cursor-pointer',
                             )}
                             onClick={() => !n.isRead && markRead.mutate(n.id)}
+                            onKeyDown={(e) => {
+                                if ((e.key === 'Enter' || e.key === ' ') && !n.isRead) {
+                                    e.preventDefault()
+                                    markRead.mutate(n.id)
+                                }
+                            }}
+                            role="button"
+                            tabIndex={0}
                         >
                             {/* Icon */}
                             <div className={cn('mt-0.5 shrink-0', cfg.classes)}>

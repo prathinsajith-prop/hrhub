@@ -49,7 +49,7 @@ beforeEach(() => {
 // ─── Company settings ─────────────────────────────────────────────────────────
 describe('useCompanySettings', () => {
     it('GETs /settings/company and returns the unwrapped data', async () => {
-        apiMock.get.mockResolvedValue({ data: { id: 't1', name: 'Acme', tradeLicenseNo: 'TL-1', jurisdiction: 'mainland', industryType: 'tech', subscriptionPlan: 'free', logoUrl: null } })
+        apiMock.get.mockResolvedValue({ data: { id: 't1', name: 'Acme', tradeLicenseNo: 'TL-1', businessType: 'mainland', industryType: 'tech', subscriptionPlan: 'free', logoUrl: null } })
         const { result } = renderHook(() => useCompanySettings(), { wrapper: makeWrapper() })
         await waitFor(() => expect(result.current.isSuccess).toBe(true))
         expect(apiMock.get).toHaveBeenCalledWith('/settings/company')
@@ -59,7 +59,7 @@ describe('useCompanySettings', () => {
 
 describe('useUpdateCompanySettings', () => {
     it('PATCHes /settings/company with the supplied payload', async () => {
-        apiMock.patch.mockResolvedValue({ data: { id: 't1', name: 'New Name', tradeLicenseNo: 'TL-1', jurisdiction: 'mainland', industryType: 'tech', subscriptionPlan: 'free', logoUrl: null } })
+        apiMock.patch.mockResolvedValue({ data: { id: 't1', name: 'New Name', tradeLicenseNo: 'TL-1', businessType: 'mainland', industryType: 'tech', subscriptionPlan: 'free', logoUrl: null } })
         const { result } = renderHook(() => useUpdateCompanySettings(), { wrapper: makeWrapper() })
         await act(async () => { await result.current.mutateAsync({ name: 'New Name' }) })
         expect(apiMock.patch).toHaveBeenCalledWith('/settings/company', { name: 'New Name' })

@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect, forwardRef } from 'react'
+import { useMemo, useState, useRef, useEffect, type Ref } from 'react'
 import { ChevronDown, Check, Search } from 'lucide-react'
 import {
     ISO2_CODES,
@@ -275,12 +275,10 @@ export interface PhoneInputProps {
     invalid?: boolean
     /** Called with validation details whenever the input changes. */
     onValidate?: (res: { isValid: boolean; country: string; internationalFormat?: string }) => void
+    ref?: Ref<HTMLInputElement>
 }
 
-export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(function PhoneInput(
-    { value = '', onChange, defaultCountry = 'AE', placeholder = '50 123 4567', id, name, disabled, className, invalid, onValidate },
-    ref,
-) {
+export function PhoneInput({ value = '', onChange, defaultCountry = 'AE', placeholder = '50 123 4567', id, name, disabled, className, invalid, onValidate, ref }: PhoneInputProps) {
     // Derive country + national digits from the current value.
     const { iso2, nationalDigits } = useMemo(() => {
         const trimmed = value.trim()
@@ -377,4 +375,4 @@ export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(function
             </div>
         </div>
     )
-})
+}

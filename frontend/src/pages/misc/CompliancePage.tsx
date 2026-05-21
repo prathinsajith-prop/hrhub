@@ -105,7 +105,14 @@ function ComplianceCheckCard({ check, onClick }: { check: ComplianceCheck; onCli
                 check.status === 'warning' && 'border-amber-200/60',
             )}
             onClick={isClickable ? onClick : undefined}
+            onKeyDown={isClickable ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onClick?.()
+                }
+            } : undefined}
             role={isClickable ? 'button' : undefined}
+            tabIndex={isClickable ? 0 : undefined}
         >
             <div className="flex items-start gap-3">
                 <div className={cn(
