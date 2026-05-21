@@ -331,7 +331,7 @@ export function EmployeesPage() {
         return (
           <div className="flex items-center gap-1 min-w-0 flex-wrap">
             {parts.map((part, i) => (
-              <span key={i} className="flex items-center gap-1 min-w-0">
+              <span key={`${part}-${i}`} className="flex items-center gap-1 min-w-0">
                 {i > 0 && <span className="text-muted-foreground/40 text-[10px] shrink-0">›</span>}
                 <span className={cn(
                   'truncate text-xs',

@@ -14,10 +14,17 @@ const COMPANY_SETTINGS_COLS = {
     name: tenants.name,
     companyCode: tenants.companyCode,
     tradeLicenseNo: tenants.tradeLicenseNo,
-    jurisdiction: tenants.jurisdiction,
+    // Renamed from `jurisdiction` in migration 0051 — the column stores
+    // the UAE business type (mainland / freezone).
+    businessType: tenants.businessType,
     industryType: tenants.industryType,
     subscriptionPlan: tenants.subscriptionPlan,
     logoUrl: tenants.logoUrl,
+    // Contact + address surfaced on Org Settings → Organization Profile.
+    phone: tenants.phone,
+    address: tenants.address,
+    companyEmail: tenants.companyEmail,
+    companyWebsite: tenants.companyWebsite,
 }
 
 export async function getCompanySettings(tenantId: string) {
@@ -36,9 +43,13 @@ export async function updateCompanySettings(
         name: string
         companyCode: string
         tradeLicenseNo: string
-        jurisdiction: 'mainland' | 'freezone'
+        businessType: 'mainland' | 'freezone'
         industryType: string
         logoUrl: string
+        phone: string | null
+        address: string | null
+        companyEmail: string | null
+        companyWebsite: string | null
     }>,
 ) {
     // Validate and normalise companyCode if provided

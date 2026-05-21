@@ -1,0 +1,21 @@
+-- Migration 0053 normalised any basic-category earning that had
+-- `calculation_type = 'percentage_of_basic'` to `'flat'`, because the
+-- combination was thought to be invalid (percent-of-self). It turns out
+-- HR does want that combination — the math is well-defined when the
+-- percentage multiplies against the FLAT basic sum and rolls back into
+-- the basic line.
+--
+-- This migration is intentionally a NO-OP: there's no per-row history of
+-- which calculation_type each row originally had, so we can't reliably
+-- reverse 0053 in bulk. Tenants that need their basic-percentage rows
+-- back should edit them once in Org Settings → Salary Components → set
+-- "Calculation type" back to "Percentage of basic". After that the
+-- resolver, the form helpers, and the Edit Payroll preview will all
+-- multiply correctly (e.g. Basic 4000 + test 10% → AED 4,400 total).
+--
+-- Why ship an empty migration? So a fresh tenant that ran the journal
+-- through 0052 then jumps to 0055+ doesn't get a gap. It also documents
+-- intent in source control.
+
+-- intentional no-op
+SELECT 1 WHERE false;

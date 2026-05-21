@@ -45,13 +45,20 @@ export async function salaryComponentsRoutes(fastify: any) {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
     }
 
-    // GET /api/v1/salary-components?kind=earning
+    // GET /api/v1/salary-components?kind=earning&limit=50&offset=0
     fastify.get('/salary-components', { ...adminAuth, schema: { tags: ['SalaryComponents'] } }, async (req: any, reply: any) => {
-        const kind = (req.query as any)?.kind as SalaryComponentKind | undefined
+        const q = (req.query as any) ?? {}
+        const kind = q.kind as SalaryComponentKind | undefined
         if (kind && !SALARY_COMPONENT_KINDS.includes(kind)) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Unknown kind: ${kind}` })
         }
-        const data = await listSalaryComponents(req.user.tenantId, kind)
+        // Pagination is optional but capped at 200 per page so a runaway
+        // tenant catalog can't return MB of JSON on a single GET.
+        const rawLimit = Number(q.limit)
+        const rawOffset = Number(q.offset)
+        const limit = Number.isFinite(rawLimit) ? Math.min(200, Math.max(1, Math.trunc(rawLimit))) : undefined
+        const offset = Number.isFinite(rawOffset) ? Math.max(0, Math.trunc(rawOffset)) : undefined
+        const data = await listSalaryComponents(req.user.tenantId, kind, { limit, offset })
         return reply.send({ data })
     })
 

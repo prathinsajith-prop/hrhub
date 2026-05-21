@@ -21,7 +21,8 @@ export interface Tenant {
   id: string
   name: string
   tradeLicenseNo?: string
-  jurisdiction: 'mainland' | 'freezone'
+  // UAE business type — was `jurisdiction` until migration 0051.
+  businessType: 'mainland' | 'freezone'
   industryType: IndustryType
   subscriptionPlan: 'starter' | 'growth' | 'enterprise'
   // Persisted or resolved URL for the tenant logo used when displaying stored data.

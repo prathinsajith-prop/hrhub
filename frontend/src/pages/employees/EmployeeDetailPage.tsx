@@ -348,49 +348,70 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
   )
   const { data: assignments } = useEmployeeSalaryComponents(employeeId)
 
-  // Seed inputs from real assignments only. Blank stays blank — HR sees the
-  // honest state. Legacy columns are used as a one-time fallback ONLY when no
-  // assignments exist yet (pre-catalog data); catalog defaults never seed an
-  // edit form, since substituting a default would show a number the employee
-  // wasn't actually paid.
-  const hasAssignments = (assignments?.length ?? 0) > 0
-  const seedKey = open && earningsCatalog.length > 0 ? `${earningsCatalog.length}:${assignments?.length ?? 0}` : null
+  // Three-tier seed precedence — assignment > legacy column > catalog
+  // default. Same logic as EditPayrollDialog so the form always opens with
+  // editable starting values, even for components HR added today.
+  const seedKey = open && earningsCatalog.length > 0
+    ? `${earningsCatalog.length}:${assignments?.length ?? 0}`
+    : null
   const [lastSeed, setLastSeed] = React.useState<string | null>(null)
   if (seedKey && seedKey !== lastSeed) {
     setLastSeed(seedKey)
     const next: Record<string, string> = {}
+    // 1) assignments win
     for (const a of assignments ?? []) {
       if (a.amount != null) next[a.componentId] = String(a.amount)
     }
-    if (!hasAssignments) {
-      const firstByCategory = (cat: string) => earningsCatalog.find((c) => c.category === cat)
-      const fillLegacy = (cat: string | string[], val: number | null | undefined) => {
-        if (val == null) return
-        const cats = Array.isArray(cat) ? cat : [cat]
-        for (const k of cats) {
-          const c = firstByCategory(k)
-          if (c && next[c.id] == null) { next[c.id] = String(val); return }
-        }
+    // 2) legacy columns by category for components still without a value
+    const firstByCategory = (cat: string) => earningsCatalog.find((c) => c.category === cat)
+    const fillLegacy = (cat: string | string[], val: number | null | undefined) => {
+      if (val == null) return
+      const cats = Array.isArray(cat) ? cat : [cat]
+      for (const k of cats) {
+        const c = firstByCategory(k)
+        if (c && next[c.id] == null) { next[c.id] = String(val); return }
       }
-      fillLegacy('basic', currentBasic)
-      fillLegacy('housing', currentHousing)
-      fillLegacy('transport', currentTransport)
-      fillLegacy(['custom_allowance', 'cost_of_living'], currentOther)
+    }
+    fillLegacy('basic', currentBasic)
+    fillLegacy('housing', currentHousing)
+    fillLegacy('transport', currentTransport)
+    fillLegacy(['custom_allowance', 'cost_of_living'], currentOther)
+    // 3) catalog defaults — last-line fallback so brand-new earning
+    // components HR added in Org Settings show their default value even
+    // for existing employees that don't have an assignment row yet.
+    for (const c of earningsCatalog) {
+      if (next[c.id] == null && c.amount != null && c.amount !== '') {
+        next[c.id] = String(c.amount)
+      }
     }
     setComponentAmounts(next)
   }
 
-  // Derived totals
-  const amountByCategory = (cat: string) =>
-    earningsCatalog
-      .filter((c) => c.category === cat)
-      .reduce((s, c) => s + (parseFloat(componentAmounts[c.id] || '0') || 0), 0)
-  const basicNum = amountByCategory('basic')
-  const housingNum = amountByCategory('housing')
-  const transportNum = amountByCategory('transport')
+  // Multiplier base = sum of FLAT basic-category rows only. Percentage
+  // rows (any category, including basic) multiply against this base.
+  // Basic-category percentage rows then roll back into the basic line.
+  const isEffectivelyPct = (c: { calculationType?: 'flat' | 'percentage_of_basic' | null }) =>
+    c.calculationType === 'percentage_of_basic'
+  const basicFlat = earningsCatalog
+    .filter((c) => c.category === 'basic' && !isEffectivelyPct(c))
+    .reduce((s, c) => s + (parseFloat(componentAmounts[c.id] || '0') || 0), 0)
+  const resolveAed = (c: { calculationType?: 'flat' | 'percentage_of_basic' | null }, raw: string | undefined) => {
+    const v = parseFloat(raw || '0') || 0
+    return isEffectivelyPct(c) ? (basicFlat * v) / 100 : v
+  }
+  // basicNum = full basic line on the payslip (flat + resolved percentage)
+  const basicNum = earningsCatalog
+    .filter((c) => c.category === 'basic')
+    .reduce((s, c) => s + resolveAed(c, componentAmounts[c.id]), 0)
+  const housingNum = earningsCatalog
+    .filter((c) => c.category === 'housing')
+    .reduce((s, c) => s + resolveAed(c, componentAmounts[c.id]), 0)
+  const transportNum = earningsCatalog
+    .filter((c) => c.category === 'transport')
+    .reduce((s, c) => s + resolveAed(c, componentAmounts[c.id]), 0)
   const otherNum = earningsCatalog
     .filter((c) => !['basic', 'housing', 'transport'].includes(c.category))
-    .reduce((s, c) => s + (parseFloat(componentAmounts[c.id] || '0') || 0), 0)
+    .reduce((s, c) => s + resolveAed(c, componentAmounts[c.id]), 0)
   const computedTotal = basicNum > 0 ? basicNum + housingNum + transportNum + otherNum : null
 
   function resetForm() {
@@ -524,24 +545,39 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {orderedCatalog.map((c) => {
                   const isBasic = c.category === 'basic'
+                  const isPct = isEffectivelyPct(c)
+                  const rawValue = componentAmounts[c.id] ?? ''
+                  const rawNum = parseFloat(rawValue || '0') || 0
+                  // Percentage hint uses the FLAT basic sum as the
+                  // multiplier base — same rule as the backend resolver.
+                  const aedValue = isPct ? (basicFlat * rawNum) / 100 : 0
                   return (
                     <div key={c.id} className="space-y-1.5">
                       <Label htmlFor={`cs-${c.id}`} className="text-sm font-medium">
-                        {c.name} <span className="text-muted-foreground font-normal text-xs">(AED)</span>
+                        {c.name}{' '}
+                        <span className="text-muted-foreground font-normal text-xs">
+                          ({isPct ? '% of basic' : 'AED'})
+                        </span>
                         {isBasic && <span className="text-destructive ms-1">*</span>}
-                        {c.calculationType === 'percentage_of_basic' && (
-                          <span className="ms-1 text-[10px] uppercase tracking-wider text-muted-foreground">% of basic</span>
-                        )}
                       </Label>
                       <NumericInput
                         id={`cs-${c.id}`}
-                        placeholder={c.calculationType === 'percentage_of_basic' ? '0' : '0.00'}
-                        value={componentAmounts[c.id] ?? ''}
+                        placeholder={isPct ? '0' : '0.00'}
+                        value={rawValue}
                         onChange={(ev) =>
                           setComponentAmounts((prev) => ({ ...prev, [c.id]: ev.target.value }))
                         }
                         className="h-9"
                       />
+                      {isPct && (
+                        <p className="text-[11px] text-muted-foreground tabular-nums">
+                          {basicFlat <= 0
+                            ? 'Enter Basic first — the AED amount is derived from it.'
+                            : rawNum > 0
+                              ? `= ${formatCurrency(aedValue)} (${rawNum}% of basic)`
+                              : `Enter a percentage (e.g. 10 = 10% of ${formatCurrency(basicFlat)})`}
+                        </p>
+                      )}
                     </div>
                   )
                 })}
@@ -2331,22 +2367,30 @@ export function EmployeeDetailPage() {
                               // For percentage-of-basic components we show
                               // both the percentage AND the resolved AED
                               // amount so HR sees what payroll will actually pay.
-                              activeAssignments.map((a) => {
-                                  const amount = Number(a.amount ?? a.catalogAmount ?? 0)
-                                  const basicAmount = Number(activeAssignments.find(x => x.category === 'basic')?.amount ?? 0)
-                                  const isPct = a.calculationType === 'percentage_of_basic'
-                                  const resolvedAed = isPct ? (basicAmount * amount) / 100 : amount
-                                  return (
-                                      <InfoRow
-                                          key={a.componentId}
-                                          label={a.name}
-                                          value={isPct
-                                              ? `${formatCurrency(resolvedAed)} (${amount}% of basic)`
-                                              : formatCurrency(resolvedAed)}
-                                          icon={CreditCard}
-                                      />
-                                  )
-                              })
+                              (() => {
+                                  // Multiplier base for every percentage row: sum
+                                  // of all FLAT basic-category assignments. Same
+                                  // rule as the backend resolver — keeps the
+                                  // displayed numbers consistent with payslip math.
+                                  const basicFlatSum = activeAssignments
+                                      .filter(x => x.category === 'basic' && x.calculationType !== 'percentage_of_basic')
+                                      .reduce((s, x) => s + Number(x.amount ?? x.catalogAmount ?? 0), 0)
+                                  return activeAssignments.map((a) => {
+                                      const amount = Number(a.amount ?? a.catalogAmount ?? 0)
+                                      const isPct = a.calculationType === 'percentage_of_basic'
+                                      const resolvedAed = isPct ? (basicFlatSum * amount) / 100 : amount
+                                      return (
+                                          <InfoRow
+                                              key={a.componentId}
+                                              label={a.name}
+                                              value={isPct
+                                                  ? `${formatCurrency(resolvedAed)} (${amount}% of basic)`
+                                                  : formatCurrency(resolvedAed)}
+                                              icon={CreditCard}
+                                          />
+                                      )
+                                  })
+                              })()
                           ) : (
                               // Legacy fallback — no assignments yet.
                               <>
@@ -3532,11 +3576,20 @@ function AddWarningDialog({
           </div>
           {/* File upload dropzone */}
           <div
+            role="button"
+            tabIndex={0}
+            aria-label="Upload supporting document"
             className={cn(
               'border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors text-center',
               dragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40 hover:bg-muted/30',
             )}
             onClick={() => fileRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                fileRef.current?.click()
+              }
+            }}
             onDragOver={e => { e.preventDefault(); setDragging(true) }}
             onDragLeave={() => setDragging(false)}
             onDrop={e => { e.preventDefault(); setDragging(false); pickFile(e.dataTransfer.files[0]) }}

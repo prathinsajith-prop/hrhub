@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Combobox } from '@/components/ui/combobox'
 import { toast } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
 import {
@@ -15,6 +17,8 @@ import {
 } from '@/hooks/useSettings'
 import type { CompanySettings } from '@/hooks/useSettings'
 import { labelFor } from '@/lib/enums'
+import { ORG_INDUSTRY_OPTIONS, ORG_JURISDICTION_OPTIONS } from '@/lib/options'
+import { CURRENCY_OPTIONS, TIMEZONE_OPTIONS } from '@/lib/regional-options'
 import { Card, Section } from './_shared'
 import { useTranslation } from 'react-i18next'
 
@@ -42,8 +46,12 @@ export function ProfileTab() {
             name: company?.name ?? '',
             companyCode: company?.companyCode ?? '',
             tradeLicenseNo: company?.tradeLicenseNo ?? '',
-            jurisdiction: company?.jurisdiction ?? '',
+            businessType: company?.businessType ?? '',
             industryType: company?.industryType ?? '',
+            phone: company?.phone ?? '',
+            address: company?.address ?? '',
+            companyEmail: company?.companyEmail ?? '',
+            companyWebsite: company?.companyWebsite ?? '',
         })
     }
 
@@ -84,7 +92,7 @@ export function ProfileTab() {
                     <div className="min-w-0 flex-1">
                         <p className="font-semibold truncate">{company?.name ?? tenant?.name ?? t('orgSettings.profile.organization')}</p>
                         <p className="text-sm text-muted-foreground capitalize truncate">
-                            {company?.jurisdiction ?? 'UAE'}
+                            {company?.businessType ?? 'UAE'}
                             {company?.industryType ? ` · ${labelFor(company.industryType)}` : ''}
                         </p>
                     </div>
@@ -124,12 +132,71 @@ export function ProfileTab() {
                             <Input id="trade_license" value={form.tradeLicenseNo ?? ''} onChange={e => set('tradeLicenseNo', e.target.value)} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="jurisdiction">{t('settingsDetail.company.jurisdiction')}</Label>
-                            <Input id="jurisdiction" value={form.jurisdiction ?? ''} onChange={e => set('jurisdiction', e.target.value)} placeholder="e.g. Dubai Mainland" />
+                            <Label htmlFor="business_type">{t('orgSettings.profile.businessType', 'Business Type')}</Label>
+                            <Select
+                                value={form.businessType ?? ''}
+                                onValueChange={v => set('businessType', v)}
+                            >
+                                <SelectTrigger id="business_type"><SelectValue placeholder={t('orgSettings.profile.businessTypePlaceholder', 'Select business type')} /></SelectTrigger>
+                                <SelectContent>
+                                    {ORG_JURISDICTION_OPTIONS.map(o => (
+                                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="industry">{t('settings.industry')}</Label>
-                            <Input id="industry" value={form.industryType ?? ''} onChange={e => set('industryType', e.target.value)} placeholder="e.g. Technology" />
+                            <Select
+                                value={form.industryType ?? ''}
+                                onValueChange={v => set('industryType', v)}
+                            >
+                                <SelectTrigger id="industry"><SelectValue placeholder="Select industry" /></SelectTrigger>
+                                <SelectContent>
+                                    {ORG_INDUSTRY_OPTIONS.map(o => (
+                                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="company_phone">{t('orgSettings.profile.companyPhone', 'Company Phone')}</Label>
+                            <Input
+                                id="company_phone"
+                                type="tel"
+                                value={form.phone ?? ''}
+                                onChange={e => set('phone', e.target.value)}
+                                placeholder="+971 50 123 4567"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="company_email">{t('orgSettings.profile.companyEmail', 'Company Email')}</Label>
+                            <Input
+                                id="company_email"
+                                type="email"
+                                value={form.companyEmail ?? ''}
+                                onChange={e => set('companyEmail', e.target.value)}
+                                placeholder="info@company.ae"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="company_website">{t('orgSettings.profile.companyWebsite', 'Company Website')}</Label>
+                            <Input
+                                id="company_website"
+                                type="url"
+                                value={form.companyWebsite ?? ''}
+                                onChange={e => set('companyWebsite', e.target.value)}
+                                placeholder="https://company.ae"
+                            />
+                        </div>
+                        <div className="space-y-1.5 md:col-span-2">
+                            <Label htmlFor="address">{t('orgSettings.profile.address', 'Address')}</Label>
+                            <Input
+                                id="address"
+                                value={form.address ?? ''}
+                                onChange={e => set('address', e.target.value)}
+                                placeholder={t('orgSettings.profile.addressPlaceholder', 'Office address (street, city, country)')}
+                            />
                         </div>
                     </div>
                 </div>
@@ -145,11 +212,23 @@ export function ProfileTab() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="space-y-1.5">
                             <Label htmlFor="timezone">{t('settings.timezone')}</Label>
-                            <Input id="timezone" value={regionalForm.timezone} onChange={e => setRegionalForm(p => ({ ...p, timezone: e.target.value }))} />
+                            <Combobox
+                                value={regionalForm.timezone}
+                                onValueChange={v => setRegionalForm(p => ({ ...p, timezone: v }))}
+                                options={TIMEZONE_OPTIONS}
+                                placeholder="Select timezone"
+                                searchPlaceholder="Search timezone…"
+                            />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="currency">{t('settings.currency')}</Label>
-                            <Input id="currency" value={regionalForm.currency} onChange={e => setRegionalForm(p => ({ ...p, currency: e.target.value }))} />
+                            <Combobox
+                                value={regionalForm.currency}
+                                onValueChange={v => setRegionalForm(p => ({ ...p, currency: v }))}
+                                options={CURRENCY_OPTIONS}
+                                placeholder="Select currency"
+                                searchPlaceholder="Search currency…"
+                            />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="dateFormat">{t('settingsDetail.company.dateFormat')}</Label>

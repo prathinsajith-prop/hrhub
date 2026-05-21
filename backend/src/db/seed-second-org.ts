@@ -36,7 +36,7 @@ async function run() {
         const [tenant2] = await db.insert(tenants).values({
             name: 'Noor Tech Solutions DIFC',
             tradeLicenseNo: SECOND_LICENSE,
-            jurisdiction: 'freezone',
+            businessType: 'freezone',
             industryType: 'technology',
             subscriptionPlan: 'starter',
             isActive: true,

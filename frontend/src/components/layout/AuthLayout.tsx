@@ -17,7 +17,7 @@ export function AuthLayout({
   children,
 }: AuthLayoutProps) {
   return (
-    <div className="min-h-screen grid lg:grid-cols-[55%_45%] bg-background">
+    <div className="min-h-screen grid lg:grid-cols-[55%_45%] bg-background overflow-x-hidden">
 
       {/* ── Brand panel ── */}
       <aside className="hidden lg:flex flex-col justify-between relative overflow-hidden text-white bg-sidebar">
@@ -104,7 +104,7 @@ export function AuthLayout({
         </div>
 
         {/* Security trust badges */}
-        <div className="relative z-10 flex items-center justify-center gap-6 px-8 py-3 border-t border-border/50 text-[11px] text-muted-foreground">
+        <div className="relative z-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 px-6 sm:px-8 py-3 border-t border-border/50 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <svg className="size-3.5 text-muted-foreground/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
             MOHRE Compliant
@@ -122,7 +122,7 @@ export function AuthLayout({
         </div>
 
         {/* Footer */}
-        <div className="relative z-10 flex items-center justify-center gap-3 px-8 py-3 text-[11px] text-muted-foreground/50">
+        <div className="relative z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-6 sm:px-8 py-3 text-[11px] text-muted-foreground/50">
           <span>&copy; 2026 HRHub.ae</span>
           <span className="text-border">·</span>
           <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>

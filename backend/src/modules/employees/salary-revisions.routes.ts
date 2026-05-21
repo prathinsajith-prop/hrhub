@@ -1,5 +1,7 @@
 import { db } from '../../db/index.js'
 import { salaryRevisions, employees, employeeSalaryComponents, salaryComponents, users } from '../../db/schema/index.js'
+import { OTHER_EARNING_CATEGORIES } from '../../db/schema/salary_components.js'
+import { resolveEmployeeEarnings } from '../payroll/payroll.service.js'
 import { eq, and, desc, sql, gte, lte, inArray } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
 import { z } from 'zod'
@@ -100,13 +102,29 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
 
         if (!emp) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
 
-        // Allowances default to 0 when not previously set on the employee — ensures
-        // the revision record is always fully populated so the detail view has complete data.
-        const prevBasic = emp.basicSalary ?? null
+        // Snapshot the previous values from the resolver (catalog assignments
+        // are the source of truth payroll reads), falling back to the legacy
+        // columns when the employee has no catalog data. Reading purely from
+        // the legacy columns could capture a stale value if HR deactivated a
+        // catalog component without touching the employee row.
+        const resolvedPrev = (await resolveEmployeeEarnings(request.user.tenantId, [id])).get(id)
+        const sumByCategory = (cat: string) => resolvedPrev?.earnings
+            .filter(e => e.category === cat)
+            .reduce((s, e) => s + e.amount, 0) ?? 0
+        const sumOtherCategories = () => resolvedPrev?.earnings
+            .filter(e => (OTHER_EARNING_CATEGORIES as readonly string[]).includes(e.category))
+            .reduce((s, e) => s + e.amount, 0) ?? 0
+
+        const prevBasic = resolvedPrev?.hasBasic
+            ? String(resolvedPrev.basic.toFixed(2))
+            : (emp.basicSalary ?? null)
         const prevTotal = emp.totalSalary ?? null
-        const prevHousing = String(emp.housingAllowance != null ? emp.housingAllowance : '0')
-        const prevTransport = String(emp.transportAllowance != null ? emp.transportAllowance : '0')
-        const prevOther = String(emp.otherAllowances != null ? emp.otherAllowances : '0')
+        const resolvedHousing = sumByCategory('housing')
+        const resolvedTransport = sumByCategory('transport')
+        const resolvedOther = sumOtherCategories()
+        const prevHousing = String((resolvedHousing > 0 ? resolvedHousing : Number(emp.housingAllowance ?? 0)).toFixed(2))
+        const prevTransport = String((resolvedTransport > 0 ? resolvedTransport : Number(emp.transportAllowance ?? 0)).toFixed(2))
+        const prevOther = String((resolvedOther > 0 ? resolvedOther : Number(emp.otherAllowances ?? 0)).toFixed(2))
 
         // Effective new values: use explicit input if provided, otherwise carry the previous value forward
         const effHousing = newHousingAllowance ?? (emp.housingAllowance != null ? parseFloat(emp.housingAllowance) : 0)
@@ -137,11 +155,13 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
                     eq(salaryComponents.isActive, true),
                     eq(salaryComponents.kind, 'earning'),
                 ))
+            const LEGACY_4FIELD = new Set<string>([
+                'basic', 'housing', 'transport',
+                ...OTHER_EARNING_CATEGORIES,
+            ])
             for (const r of extras) {
-                // Skip categories already represented by the 4 legacy inputs —
-                // those are summed explicitly below.
-                if (['basic', 'housing', 'transport'].includes(r.category)) continue
-                if (['custom_allowance', 'cost_of_living'].includes(r.category)) continue
+                // Skip categories already represented by the 4 legacy inputs.
+                if (LEGACY_4FIELD.has(r.category)) continue
                 const raw = Number(r.assignmentAmount ?? r.catalogAmount ?? 0)
                 extraCatalogTotal += r.calcType === 'percentage_of_basic'
                     ? (newBasicSalary * raw) / 100
@@ -153,80 +173,69 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
             ? newTotalSalary
             : newBasicSalary + effHousing + effTransport + effOther + extraCatalogTotal
 
-        const [revision] = await db.insert(salaryRevisions).values({
-            tenantId: request.user.tenantId,
-            employeeId: id,
-            effectiveDate,
-            revisionType,
-            previousBasicSalary: prevBasic,
-            newBasicSalary: String(newBasicSalary),
-            previousTotalSalary: prevTotal,
-            newTotalSalary: String(effectiveTotal),
-            previousHousingAllowance: prevHousing,
-            newHousingAllowance: String(effHousing),
-            previousTransportAllowance: prevTransport,
-            newTransportAllowance: String(effTransport),
-            previousOtherAllowances: prevOther,
-            newOtherAllowances: String(effOther),
-            reason: reason ?? null,
-            approvedBy: request.user.id,
-        }).returning()
-
-        // Apply to employee record if effectiveDate <= today
+        // Apply atomically — the revision record, employee row update, and
+        // catalog assignment sync must succeed or fail together, otherwise
+        // payroll's resolver could read a state that doesn't match the
+        // legacy columns or the revision history.
         const today = new Date().toISOString().split('T')[0]!
-        if (effectiveDate <= today) {
-            await db.update(employees).set({
+        const shouldApplyNow = effectiveDate <= today
+        const tenantId = request.user.tenantId
+        const revision = await db.transaction(async (tx) => {
+            const [rev] = await tx.insert(salaryRevisions).values({
+                tenantId,
+                employeeId: id,
+                effectiveDate,
+                revisionType,
+                previousBasicSalary: prevBasic,
+                newBasicSalary: String(newBasicSalary),
+                previousTotalSalary: prevTotal,
+                newTotalSalary: String(effectiveTotal),
+                previousHousingAllowance: prevHousing,
+                newHousingAllowance: String(effHousing),
+                previousTransportAllowance: prevTransport,
+                newTransportAllowance: String(effTransport),
+                previousOtherAllowances: prevOther,
+                newOtherAllowances: String(effOther),
+                reason: reason ?? null,
+                approvedBy: request.user.id,
+            }).returning()
+
+            if (!shouldApplyNow) return rev
+
+            await tx.update(employees).set({
                 basicSalary: String(newBasicSalary),
                 totalSalary: String(effectiveTotal),
                 housingAllowance: String(effHousing),
                 transportAllowance: String(effTransport),
                 otherAllowances: String(effOther),
                 updatedAt: new Date(),
-            }).where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
+            }).where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
 
-            // Sync the catalog assignments so payroll's resolver sees the new
-            // amounts. The 4 legacy fields (basic/housing/transport/other) map
-            // to the catalog as follows:
-            //   - basic → first active 'basic' component
-            //   - housing → first active 'housing' component
-            //   - transport → first active 'transport' component
-            //   - other → ONE assignment in custom_allowance/cost_of_living
-            //     (preferring an existing employee assignment so we don't
-            //     orphan one HR set up earlier). Any sibling "other-bucket"
-            //     assignments on this employee are zeroed so the resolved
-            //     gross matches `effOther` exactly — otherwise multiple
-            //     custom-allowance rows would silently inflate it.
-            const components = await db
-                .select({ id: salaryComponents.id, category: salaryComponents.category })
+            // One round-trip pulls catalog rows + flags which ones the
+            // employee already has assigned. Saves a second SELECT.
+            const components = await tx
+                .select({
+                    id: salaryComponents.id,
+                    category: salaryComponents.category,
+                    hasAssignment: sql<boolean>`${employeeSalaryComponents.componentId} IS NOT NULL`,
+                })
                 .from(salaryComponents)
+                .leftJoin(employeeSalaryComponents, and(
+                    eq(employeeSalaryComponents.componentId, salaryComponents.id),
+                    eq(employeeSalaryComponents.employeeId, id),
+                    eq(employeeSalaryComponents.tenantId, tenantId),
+                ))
                 .where(and(
-                    eq(salaryComponents.tenantId, request.user.tenantId),
+                    eq(salaryComponents.tenantId, tenantId),
                     eq(salaryComponents.kind, 'earning'),
                     eq(salaryComponents.isActive, true),
                 ))
             const firstByCategory = (cat: string) => components.find(c => c.category === cat)
-            const OTHER_CATEGORIES = ['custom_allowance', 'cost_of_living']
-            const otherCatalogIds = new Set(
-                components.filter(c => OTHER_CATEGORIES.includes(c.category)).map(c => c.id),
-            )
-
-            // Pick the canonical "other" target: prefer an assignment the
-            // employee already has so HR doesn't see a different bucket
-            // appear out of nowhere; otherwise fall back to the catalog's
-            // first custom_allowance, then cost_of_living.
-            const existingOtherAssignments = otherCatalogIds.size > 0
-                ? await db
-                    .select({ componentId: employeeSalaryComponents.componentId })
-                    .from(employeeSalaryComponents)
-                    .where(and(
-                        eq(employeeSalaryComponents.tenantId, request.user.tenantId),
-                        eq(employeeSalaryComponents.employeeId, id),
-                        inArray(employeeSalaryComponents.componentId, Array.from(otherCatalogIds)),
-                    ))
-                : []
-            const otherTargetId = existingOtherAssignments[0]?.componentId
-                ?? firstByCategory('custom_allowance')?.id
-                ?? firstByCategory('cost_of_living')?.id
+            const otherBucket = components.filter(c => (OTHER_EARNING_CATEGORIES as readonly string[]).includes(c.category))
+            // Prefer a bucket the employee already uses so HR doesn't see a
+            // different "other" label appear after the revision.
+            const otherTargetId = otherBucket.find(c => c.hasAssignment)?.id
+                ?? otherBucket[0]?.id
 
             const targets: { componentId: string | undefined; amount: number }[] = [
                 { componentId: firstByCategory('basic')?.id, amount: newBasicSalary },
@@ -237,7 +246,7 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
             const upserts = targets
                 .filter((t): t is { componentId: string; amount: number } => !!t.componentId)
                 .map(t => ({
-                    tenantId: request.user.tenantId,
+                    tenantId,
                     employeeId: id,
                     componentId: t.componentId,
                     amount: String(t.amount.toFixed(2)),
@@ -245,7 +254,7 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
                     updatedAt: new Date(),
                 }))
             if (upserts.length > 0) {
-                await db
+                await tx
                     .insert(employeeSalaryComponents)
                     .values(upserts)
                     .onConflictDoUpdate({
@@ -258,21 +267,21 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
                     })
             }
 
-            // Zero out any sibling "other-bucket" assignments so the catalog
-            // gross can't drift above the legacy `effOther` value. A single
-            // UPDATE keeps this cheap — only touches existing rows.
-            const siblingIds = Array.from(otherCatalogIds).filter(cid => cid !== otherTargetId)
+            // Zero sibling other-bucket assignments so the resolved gross
+            // can't drift above effOther when a tenant has >1 custom row.
+            const siblingIds = otherBucket.map(c => c.id).filter(cid => cid !== otherTargetId)
             if (siblingIds.length > 0) {
-                await db
+                await tx
                     .update(employeeSalaryComponents)
                     .set({ amount: '0.00', updatedAt: new Date() })
                     .where(and(
-                        eq(employeeSalaryComponents.tenantId, request.user.tenantId),
+                        eq(employeeSalaryComponents.tenantId, tenantId),
                         eq(employeeSalaryComponents.employeeId, id),
                         inArray(employeeSalaryComponents.componentId, siblingIds),
                     ))
             }
-        }
+            return rev
+        })
 
         recordActivity({
             tenantId: request.user.tenantId,

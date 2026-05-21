@@ -21,8 +21,11 @@ import { and, eq, gte, inArray, lte, sql, desc } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import {
     payrollAdjustments,
+    payrollAdjustmentImports,
     payrollRuns,
     employees,
+    employeeSalaryComponents,
+    salaryComponents,
     leaveRequests,
     employeeLoans,
     users,
@@ -94,6 +97,329 @@ export async function createAdjustment(
         })
         .returning()
     return row
+}
+
+export interface BulkAdjustmentRow {
+    /** 1-based row number from the source spreadsheet (used for per-row error reporting). */
+    rowNumber: number
+    employeeNo?: string | null
+    employeeName?: string | null
+    employeeEmail?: string | null
+    employeePhone?: string | null
+    amount: number | string
+    notes?: string | null
+}
+
+/** Strip every non-digit so '+971 50 123 4567' and '+971501234567' compare equal. */
+export function normalizePhone(value: string | null | undefined): string | null {
+    if (!value) return null
+    const digits = String(value).replace(/\D+/g, '')
+    return digits.length > 0 ? digits : null
+}
+
+/** Compact employee lookup tables used by the per-row matcher.
+ *  Exposed so the matching logic can be unit-tested without a DB. */
+export interface EmployeeLookups {
+    byEmployeeNo: Map<string, { id: string; employeeNo: string | null; firstName: string; lastName: string }>
+    byEmail: Map<string, { id: string; employeeNo: string | null; firstName: string; lastName: string }>
+    byPhone?: Map<string, { id: string; employeeNo: string | null; firstName: string; lastName: string }>
+}
+
+/**
+ * Pure per-row matcher — given a parsed row and pre-built lookup maps,
+ * produces either a ResolvedRow with an employeeId or one with a row-level
+ * error. Extracted so the resolution rules can be unit-tested independently
+ * of the surrounding DB query.
+ *
+ * Resolution priority: employeeNo → employeeEmail → employeePhone. First match
+ * wins; if all three are absent or none match, the row is invalid.
+ */
+export function matchBulkRow(row: BulkAdjustmentRow, lookups: EmployeeLookups) {
+    const num = typeof row.amount === 'string' ? Number(row.amount) : row.amount
+    if (!Number.isFinite(num) || num <= 0) {
+        return {
+            rowNumber: row.rowNumber,
+            employeeId: null,
+            resolvedName: null,
+            resolvedEmployeeNo: null,
+            amount: num,
+            notes: row.notes ?? null,
+            error: 'amount must be a positive number',
+        }
+    }
+    let match = row.employeeNo ? lookups.byEmployeeNo.get(String(row.employeeNo).trim()) : undefined
+    if (!match && row.employeeEmail) {
+        match = lookups.byEmail.get(String(row.employeeEmail).trim().toLowerCase())
+    }
+    if (!match && row.employeePhone && lookups.byPhone) {
+        const phone = normalizePhone(row.employeePhone)
+        if (phone) match = lookups.byPhone.get(phone)
+    }
+    if (!match) {
+        const hint = row.employeeNo || row.employeeEmail || row.employeePhone || row.employeeName || '(blank)'
+        return {
+            rowNumber: row.rowNumber,
+            employeeId: null,
+            resolvedName: null,
+            resolvedEmployeeNo: null,
+            amount: num,
+            notes: row.notes ?? null,
+            error: `employee not found: ${hint}`,
+        }
+    }
+    return {
+        rowNumber: row.rowNumber,
+        employeeId: match.id,
+        resolvedName: `${match.firstName} ${match.lastName}`.trim(),
+        resolvedEmployeeNo: match.employeeNo,
+        amount: num,
+        notes: row.notes?.trim() ? row.notes.trim() : null,
+        error: null,
+    }
+}
+
+export interface BulkCreateAdjustmentsInput {
+    periodYear: number
+    periodMonth: number
+    category: AdjustmentCategory
+    rows: BulkAdjustmentRow[]
+}
+
+export interface BulkCreateAdjustmentsResult {
+    created: number
+    failed: number
+    errors: Array<{ row: number; error: string }>
+}
+
+export interface BulkValidateRowResult {
+    rowNumber: number
+    status: 'valid' | 'invalid'
+    error: string | null
+    /** Non-blocking warning — surfaced in the preview but doesn't disable
+     *  submit. Currently set for duplicate (employee × batch) entries. */
+    warning: string | null
+    /** Server-resolved employee id (only on `valid`). */
+    employeeId: string | null
+    /** Display name from the matched record so the preview can show the
+     *  authoritative value alongside what the spreadsheet contained. */
+    resolvedName: string | null
+    resolvedEmployeeNo: string | null
+}
+
+export interface BulkValidateResult {
+    total: number
+    valid: number
+    invalid: number
+    /** Count of valid rows that also carry a non-blocking warning. */
+    warned: number
+    /** Period-level guard — populated when the caller supplied periodYear /
+     *  periodMonth. Lets the preview dialog show "this period is already
+     *  locked" before HR clicks Submit and gets a 409. */
+    periodLocked: boolean
+    rows: BulkValidateRowResult[]
+}
+
+interface ResolvedRow {
+    rowNumber: number
+    employeeId: string | null
+    resolvedName: string | null
+    resolvedEmployeeNo: string | null
+    amount: number
+    notes: string | null
+    error: string | null
+}
+
+/**
+ * Resolve + validate bulk rows against the tenant's employees in a single DB
+ * round-trip. Shared by the validate endpoint (which previews) and the create
+ * endpoint (which inserts).
+ */
+async function resolveBulkRows(
+    tenantId: string,
+    rows: BulkAdjustmentRow[],
+): Promise<ResolvedRow[]> {
+    const empNos = new Set<string>()
+    const empEmails = new Set<string>()
+    const empPhones = new Set<string>()
+    for (const r of rows) {
+        if (r.employeeNo) empNos.add(String(r.employeeNo).trim())
+        if (r.employeeEmail) empEmails.add(String(r.employeeEmail).trim().toLowerCase())
+        const phone = normalizePhone(r.employeePhone)
+        if (phone) empPhones.add(phone)
+    }
+
+    // Fetch ONLY the employees actually referenced in this upload — not
+    // every employee in the tenant. With the filter pushed into SQL, a
+    // 50-row upload reads at most 50 employee rows even in a tenant with
+    // 10k employees.
+    //
+    // Phones can't be matched in SQL directly (the stored values may have
+    // spaces, '+', or country-code prefixes that don't byte-match the
+    // user's input). We over-fetch by ILIKE on a digit substring, then
+    // re-match in JS using the normalised digits — keeps the SQL cheap
+    // while still letting `+971 50 123 4567` find `971501234567`.
+    const empNosList = [...empNos]
+    const empEmailsList = [...empEmails]
+    const empPhonesList = [...empPhones]
+    const orClauses: ReturnType<typeof inArray>[] = []
+    if (empNosList.length > 0) orClauses.push(inArray(employees.employeeNo, empNosList))
+    if (empEmailsList.length > 0) {
+        // employees may have any of three email columns set — match any.
+        orClauses.push(inArray(employees.email, empEmailsList))
+        orClauses.push(inArray(employees.workEmail, empEmailsList))
+        orClauses.push(inArray(employees.personalEmail, empEmailsList))
+    }
+    if (empPhonesList.length > 0) {
+        // Use the last 7 digits as a coarse SQL filter — narrow enough to
+        // exploit indexes, broad enough to still hit even if HR omitted the
+        // country code. The exact match happens in JS.
+        const tails = empPhonesList.map((p) => p.slice(-7)).filter(Boolean)
+        if (tails.length > 0) {
+            orClauses.push(sql`(${employees.mobileNo} ~ ${`(${tails.join('|')})`} OR ${employees.phone} ~ ${`(${tails.join('|')})`})` as unknown as ReturnType<typeof inArray>)
+        }
+    }
+    const empRows = orClauses.length === 0
+        ? []
+        : await db
+              .select({
+                  id: employees.id,
+                  employeeNo: employees.employeeNo,
+                  firstName: employees.firstName,
+                  lastName: employees.lastName,
+                  email: employees.email,
+                  workEmail: employees.workEmail,
+                  personalEmail: employees.personalEmail,
+                  mobileNo: employees.mobileNo,
+                  phone: employees.phone,
+              })
+              .from(employees)
+              .where(and(
+                  eq(employees.tenantId, tenantId),
+                  eq(employees.isArchived, false),
+                  // OR across all known identifier columns
+                  sql`(${sql.join(orClauses, sql` OR `)})`,
+              ))
+
+    const byEmployeeNo = new Map<string, typeof empRows[number]>()
+    const byEmail = new Map<string, typeof empRows[number]>()
+    const byPhone = new Map<string, typeof empRows[number]>()
+    for (const e of empRows) {
+        if (e.employeeNo) byEmployeeNo.set(String(e.employeeNo).trim(), e)
+        if (e.email) byEmail.set(String(e.email).trim().toLowerCase(), e)
+        if (e.workEmail) byEmail.set(String(e.workEmail).trim().toLowerCase(), e)
+        if (e.personalEmail) byEmail.set(String(e.personalEmail).trim().toLowerCase(), e)
+        const mob = normalizePhone(e.mobileNo)
+        if (mob) byPhone.set(mob, e)
+        const ph = normalizePhone(e.phone)
+        if (ph && !byPhone.has(ph)) byPhone.set(ph, e)
+    }
+
+    return rows.map((r) => matchBulkRow(r, { byEmployeeNo, byEmail, byPhone }))
+}
+
+export async function validateBulkAdjustments(
+    tenantId: string,
+    rows: BulkAdjustmentRow[],
+    opts: { periodYear?: number; periodMonth?: number } = {},
+): Promise<BulkValidateResult> {
+    const resolved = await resolveBulkRows(tenantId, rows)
+
+    // Detect within-batch duplicates by resolved employeeId. Same employee
+    // appearing more than once in a single upload is almost always a copy-
+    // paste mistake; rare cases (e.g. splitting a bonus into two lines)
+    // can keep going since this is a warning, not a blocker.
+    const seenByEmp = new Map<string, number>()
+    for (const r of resolved) {
+        if (!r.employeeId) continue
+        seenByEmp.set(r.employeeId, (seenByEmp.get(r.employeeId) ?? 0) + 1)
+    }
+
+    const rowResults: BulkValidateRowResult[] = resolved.map((r) => {
+        const duplicateCount = r.employeeId ? seenByEmp.get(r.employeeId) ?? 0 : 0
+        const warning = !r.error && duplicateCount > 1
+            ? `Employee ${r.resolvedEmployeeNo ?? ''} appears ${duplicateCount} times in this batch — these will create separate adjustment lines.`
+            : null
+        return {
+            rowNumber: r.rowNumber,
+            status: r.error ? 'invalid' : 'valid',
+            error: r.error,
+            warning,
+            employeeId: r.employeeId,
+            resolvedName: r.resolvedName,
+            resolvedEmployeeNo: r.resolvedEmployeeNo,
+        }
+    })
+    const invalid = rowResults.filter((r) => r.status === 'invalid').length
+    const warned = rowResults.filter((r) => r.status === 'valid' && r.warning).length
+
+    // Parity with the create endpoint: if the period is already locked,
+    // surface that on the preview so HR sees the blocker before clicking
+    // Submit. Only checks when the caller passes the period — older
+    // callers that omit it just get periodLocked=false.
+    const periodLocked = (opts.periodYear && opts.periodMonth)
+        ? await isPeriodLocked(tenantId, opts.periodYear, opts.periodMonth)
+        : false
+
+    return {
+        total: rowResults.length,
+        valid: rowResults.length - invalid,
+        invalid,
+        warned,
+        periodLocked,
+        rows: rowResults,
+    }
+}
+
+/**
+ * Bulk-create manual payroll adjustments from a spreadsheet upload.
+ *
+ * Resolution: each row is matched to an employee by `employeeNo` first, then
+ * `employeeEmail`. Tenant ownership is enforced — rows pointing at employees
+ * outside the caller's tenant are rejected with a row-level error (and never
+ * exposed in the response).
+ *
+ * Atomicity: all valid rows are inserted in a single transaction. If any row
+ * fails resolution or validation, the entire batch is aborted and `errors`
+ * lists every problem found. Callers must fix the spreadsheet and retry.
+ */
+export async function bulkCreateAdjustments(
+    tenantId: string,
+    input: BulkCreateAdjustmentsInput,
+    createdBy: string | null,
+): Promise<BulkCreateAdjustmentsResult> {
+    const resolved = await resolveBulkRows(tenantId, input.rows)
+    const errors = resolved
+        .filter((r) => r.error)
+        .map((r) => ({ row: r.rowNumber, error: r.error as string }))
+
+    if (errors.length > 0) {
+        return { created: 0, failed: errors.length, errors }
+    }
+
+    const kind = kindForCategory(input.category)
+    const toInsert: Array<typeof payrollAdjustments.$inferInsert> = resolved.map((r) => ({
+        tenantId,
+        employeeId: r.employeeId as string,
+        periodYear: input.periodYear,
+        periodMonth: input.periodMonth,
+        kind,
+        category: input.category,
+        amount: r.amount.toFixed(2),
+        notes: r.notes,
+        source: 'manual',
+        sourceRef: null,
+        createdBy,
+    }))
+
+    if (toInsert.length === 0) {
+        return { created: 0, failed: 0, errors: [] }
+    }
+
+    await db.transaction(async (tx) => {
+        await tx.insert(payrollAdjustments).values(toInsert)
+    })
+
+    return { created: toInsert.length, failed: 0, errors: [] }
 }
 
 export interface UpdateAdjustmentInput {
@@ -191,43 +517,54 @@ export async function syncAdjustmentsForPeriod(
     const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-    // Fetch payable employees ('active' + 'onboarding' — see PAYABLE_STATUSES
-    // in payroll.service.ts). The daily rate uses the assignment-derived
-    // basic salary so LOP and sick-half-pay match what runPayroll computes
-    // for gross — they MUST share the same basic figure or the deductions
-    // would be wrong relative to the earnings on the same payslip.
+    // Fetch payable employees + their catalog basic in two parallel scans
+    // (vs the previous per-employee correlated subquery). The daily rate
+    // uses the assignment-derived basic salary so LOP and sick-half-pay
+    // match what runPayroll computes for gross — they MUST share the same
+    // basic figure or the deductions would be wrong relative to the
+    // earnings on the same payslip.
     //
-    // Resolution order: assignment.amount (override) → catalog default → 0.
-    // Fallback to the legacy column when an employee has no Basic assignment
-    // yet (newly created pre-Phase-2B). Same fallback policy as
-    // buildPayslipsAndTotals in payroll.service.ts.
-    const emps = await db
-        .select({
+    // Resolution order: assignment.amount (override) → catalog default → 0,
+    // then fall back to the legacy column when no Basic assignment exists.
+    const [emps, basicRows] = await Promise.all([
+        db.select({
             id: employees.id,
             legacyBasic: employees.basicSalary,
-            assignmentBasic: sql<string | null>`
-                (SELECT COALESCE(esc.amount, sc.amount)
-                 FROM employee_salary_components esc
-                 JOIN salary_components sc ON sc.id = esc.component_id
-                 WHERE esc.employee_id = ${employees.id}
-                   AND esc.is_active = true
-                   AND sc.is_active = true
-                   AND sc.kind = 'earning'
-                   AND sc.category = 'basic'
-                 LIMIT 1)
-            `,
         })
-        .from(employees)
-        .where(and(
-            eq(employees.tenantId, tenantId),
-            eq(employees.isArchived, false),
-            inArray(employees.status, ['active', 'onboarding']),
-        ))
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                inArray(employees.status, ['active', 'onboarding']),
+            )),
+        db.select({
+            employeeId: employeeSalaryComponents.employeeId,
+            amount: sql<string | null>`COALESCE(${employeeSalaryComponents.amount}, ${salaryComponents.amount})`,
+        })
+            .from(employeeSalaryComponents)
+            .innerJoin(salaryComponents, and(
+                eq(salaryComponents.id, employeeSalaryComponents.componentId),
+                eq(salaryComponents.isActive, true),
+                eq(salaryComponents.kind, 'earning'),
+                eq(salaryComponents.category, 'basic'),
+            ))
+            .where(and(
+                eq(employeeSalaryComponents.tenantId, tenantId),
+                eq(employeeSalaryComponents.isActive, true),
+            )),
+    ])
 
+    // SUM (not overwrite) so a tenant with two `basic`-category rows on the
+    // same employee — see payroll-resolver.test.ts "multiple basic-category
+    // components" — gets the same combined basic the resolver computes.
+    const basicByEmp = new Map<string, number>()
+    for (const r of basicRows) {
+        const prev = basicByEmp.get(r.employeeId) ?? 0
+        basicByEmp.set(r.employeeId, prev + Number(r.amount ?? 0))
+    }
     const dailyRateByEmp = new Map<string, number>()
     for (const e of emps) {
-        // Prefer the assignment-derived basic; fall back to the legacy column.
-        const basic = Number(e.assignmentBasic ?? e.legacyBasic ?? 0)
+        const basic = basicByEmp.get(e.id) ?? Number(e.legacyBasic ?? 0)
         dailyRateByEmp.set(e.id, basic / 30)
     }
     const empIds = emps.map(e => e.id)
@@ -454,4 +791,104 @@ export async function getAdjustmentTotalsByEmployee(
     }
 
     return totals
+}
+
+// ─── Bulk import history ─────────────────────────────────────────────────────
+//
+// Each successful bulk upload writes a row to payroll_adjustment_imports that
+// references the original spreadsheet in S3. Lets HR review past uploads and
+// re-download the source file when needed.
+
+export interface RecordImportInput {
+    periodYear: number
+    periodMonth: number
+    category: AdjustmentCategory
+    rowsCreated: number
+    fileName: string
+    fileSize: number
+    fileMime: string
+    fileS3Key: string
+    fileHash: string
+}
+
+export async function recordImport(
+    tenantId: string,
+    input: RecordImportInput,
+    createdBy: string | null,
+) {
+    const [row] = await db
+        .insert(payrollAdjustmentImports)
+        .values({
+            tenantId,
+            periodYear: input.periodYear,
+            periodMonth: input.periodMonth,
+            category: input.category,
+            rowsCreated: input.rowsCreated,
+            fileName: input.fileName,
+            fileSize: input.fileSize,
+            fileMime: input.fileMime,
+            fileS3Key: input.fileS3Key,
+            fileHash: input.fileHash,
+            createdBy,
+        })
+        .returning()
+    return row
+}
+
+export async function findImportByHash(
+    tenantId: string,
+    periodYear: number,
+    periodMonth: number,
+    fileHash: string,
+) {
+    const [row] = await db
+        .select({ id: payrollAdjustmentImports.id, createdAt: payrollAdjustmentImports.createdAt })
+        .from(payrollAdjustmentImports)
+        .where(and(
+            eq(payrollAdjustmentImports.tenantId, tenantId),
+            eq(payrollAdjustmentImports.periodYear, periodYear),
+            eq(payrollAdjustmentImports.periodMonth, periodMonth),
+            eq(payrollAdjustmentImports.fileHash, fileHash),
+        ))
+        .limit(1)
+    return row ?? null
+}
+
+export async function listImports(
+    tenantId: string,
+    filter: { year?: number; month?: number; limit?: number } = {},
+) {
+    const limit = Math.min(filter.limit ?? 50, 200)
+    const conditions = [eq(payrollAdjustmentImports.tenantId, tenantId)]
+    if (filter.year !== undefined) conditions.push(eq(payrollAdjustmentImports.periodYear, filter.year))
+    if (filter.month !== undefined) conditions.push(eq(payrollAdjustmentImports.periodMonth, filter.month))
+    return db
+        .select({
+            id: payrollAdjustmentImports.id,
+            periodYear: payrollAdjustmentImports.periodYear,
+            periodMonth: payrollAdjustmentImports.periodMonth,
+            category: payrollAdjustmentImports.category,
+            rowsCreated: payrollAdjustmentImports.rowsCreated,
+            fileName: payrollAdjustmentImports.fileName,
+            fileSize: payrollAdjustmentImports.fileSize,
+            createdAt: payrollAdjustmentImports.createdAt,
+            createdByName: users.name,
+        })
+        .from(payrollAdjustmentImports)
+        .leftJoin(users, eq(payrollAdjustmentImports.createdBy, users.id))
+        .where(and(...conditions))
+        .orderBy(desc(payrollAdjustmentImports.createdAt))
+        .limit(limit)
+}
+
+export async function getImportById(tenantId: string, id: string) {
+    const [row] = await db
+        .select()
+        .from(payrollAdjustmentImports)
+        .where(and(
+            eq(payrollAdjustmentImports.tenantId, tenantId),
+            eq(payrollAdjustmentImports.id, id),
+        ))
+        .limit(1)
+    return row ?? null
 }

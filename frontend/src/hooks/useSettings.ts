@@ -7,10 +7,18 @@ export interface CompanySettings {
     name: string
     companyCode: string | null
     tradeLicenseNo: string
-    jurisdiction: string
+    /** UAE business type — mainland or freezone. Was named `jurisdiction`
+        until migration 0051; the API still accepts the old key on PATCH for
+        back-compat. */
+    businessType: string
     industryType: string
     subscriptionPlan: string
     logoUrl: string | null
+    // Org Profile contact fields
+    phone: string | null
+    address: string | null
+    companyEmail: string | null
+    companyWebsite: string | null
 }
 
 export interface TenantUser {
@@ -212,6 +220,62 @@ export function useUpdateSecuritySettings() {
         mutationFn: (data: Partial<SecuritySettings>) =>
             api.patch<{ data: SecuritySettings }>('/settings/security', data).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'security'] }),
+    })
+}
+
+// ── Organisation Policy hooks ────────────────────────────────────────────────
+// Mirrors backend `/settings/org-policy`. The org-wide privacy policy + the
+// notifications-enabled master toggle live here; per-user prefs use the
+// separate `notifications` hook below.
+export interface OrgPolicy {
+    notificationsEnabled: boolean
+    privacyPolicy: {
+        showBirthday: boolean
+        showWorkAnniversary: boolean
+        showMobile: boolean
+        searchableInDirectory: boolean
+    }
+}
+
+export function useOrgPolicy() {
+    return useQuery({
+        queryKey: ['settings', 'org-policy'],
+        queryFn: () => api.get<{ data: OrgPolicy }>('/settings/org-policy').then(r => r.data),
+        staleTime: 5 * 60 * 1000,
+    })
+}
+
+export function useUpdateOrgPolicy() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: Partial<{ notificationsEnabled: boolean; privacyPolicy: Partial<OrgPolicy['privacyPolicy']> }>) =>
+            api.patch<{ data: OrgPolicy }>('/settings/org-policy', data).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'org-policy'] }),
+    })
+}
+
+// ── Per-employee privacy overrides (self-service) ────────────────────────────
+export type PrivacyOverrides = Partial<{
+    showBirthday: boolean
+    showWorkAnniversary: boolean
+    showMobile: boolean
+    searchableInDirectory: boolean
+}>
+
+export function useMyPrivacy() {
+    return useQuery({
+        queryKey: ['settings', 'me', 'privacy'],
+        queryFn: () => api.get<{ data: PrivacyOverrides }>('/settings/me/privacy').then(r => r.data),
+        staleTime: 5 * 60 * 1000,
+    })
+}
+
+export function useUpdateMyPrivacy() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (data: PrivacyOverrides) =>
+            api.patch<{ data: PrivacyOverrides }>('/settings/me/privacy', data).then(r => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'me', 'privacy'] }),
     })
 }
 

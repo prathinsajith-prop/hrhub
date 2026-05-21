@@ -1,16 +1,29 @@
 import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, deletePayrollRun, getPayrollReadiness, getPayslipsWithEmployees, getPayslipsByEmployee, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
 import {
+    bulkCreateAdjustments,
     createAdjustment,
     deleteAdjustment,
+    findImportByHash,
+    getImportById,
     isPeriodLocked,
     listAdjustments,
+    listImports,
+    recordImport,
     syncAdjustmentsForPeriod,
     updateAdjustment,
+    validateBulkAdjustments,
     type AdjustmentCategory,
+    type BulkAdjustmentRow,
 } from './adjustments.service.js'
+import { uploadObject, generateDownloadUrl } from '../../plugins/s3.js'
+import { createHash, randomUUID } from 'node:crypto'
+import * as XLSX from 'xlsx'
 import { generatePayslipPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { enqueuePayrollRun, getPayrollQueue, type PayrollJobData } from '../../workers/payroll.worker.js'
+import { db } from '../../db/index.js'
+import { employees } from '../../db/schema/index.js'
+import { and, eq } from 'drizzle-orm'
 
 const ADJUSTMENT_CATEGORIES: readonly AdjustmentCategory[] = [
     'overtime', 'commission', 'bonus', 'salary_advance', 'manual',
@@ -400,6 +413,19 @@ export default async function (fastify: any): Promise<void> {
             return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Payroll for this period has already been processed — adjustments are locked.' })
         }
 
+        // Guard cross-tenant injection: the employeeId must belong to the
+        // caller's tenant. Without this, an HR manager who learns a foreign
+        // tenant's employee UUID could insert a row that leaks the foreign
+        // employee's name/employeeNo through the GET response.
+        const [empRow] = await db
+            .select({ id: employees.id })
+            .from(employees)
+            .where(and(eq(employees.id, employeeId), eq(employees.tenantId, request.user.tenantId)))
+            .limit(1)
+        if (!empRow) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found.' })
+        }
+
         const row = await createAdjustment(
             request.user.tenantId,
             { employeeId, periodYear, periodMonth, category, amount, notes },
@@ -418,6 +444,331 @@ export default async function (fastify: any): Promise<void> {
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
         return reply.code(201).send({ data: row })
+    })
+
+    // GET /adjustments/bulk-template — download a starter .xlsx.
+    //
+    // Columns: employee_no, employee_name, employee_email, employee_phone,
+    //          amount, note.
+    // Category is NOT a column — it's picked in the dialog and applied to
+    // every row, keeping HR's per-row data entry focused on identifiers and
+    // amounts.
+    //
+    // `?withSample=true` pre-fills up to 10 real active employees from the
+    // tenant so HR can edit-and-upload immediately for end-to-end testing.
+    // The default (no query param) returns headers + one example row so HR
+    // can build a fresh sheet.
+    fastify.get('/adjustments/bulk-template', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const q = request.query as Record<string, string | undefined>
+        const withSample = q.withSample === 'true' || q.withSample === '1'
+
+        const header = ['employee_no', 'employee_name', 'employee_email', 'employee_phone', 'amount', 'note']
+        const aoa: unknown[][] = [header]
+
+        if (withSample) {
+            const sampleEmps = await db
+                .select({
+                    employeeNo: employees.employeeNo,
+                    firstName: employees.firstName,
+                    lastName: employees.lastName,
+                    email: employees.email,
+                    workEmail: employees.workEmail,
+                    mobileNo: employees.mobileNo,
+                    phone: employees.phone,
+                })
+                .from(employees)
+                .where(and(
+                    eq(employees.tenantId, request.user.tenantId),
+                    eq(employees.isArchived, false),
+                    eq(employees.status, 'active'),
+                ))
+                .limit(10)
+            for (const e of sampleEmps) {
+                aoa.push([
+                    e.employeeNo ?? '',
+                    `${e.firstName} ${e.lastName}`.trim(),
+                    e.workEmail ?? e.email ?? '',
+                    e.mobileNo ?? e.phone ?? '',
+                    100,
+                    '',
+                ])
+            }
+            // If the tenant has no employees yet, fall back to the static row
+            // so the downloaded file still has demonstrable content.
+            if (sampleEmps.length === 0) {
+                aoa.push(['EMP-0001', 'Jane Doe', 'jane.doe@example.com', '+971501234567', 500, 'Optional note'])
+            }
+        } else {
+            aoa.push(['EMP-0001', 'Jane Doe', 'jane.doe@example.com', '+971501234567', 500, 'Optional note'])
+        }
+
+        const sheet = XLSX.utils.aoa_to_sheet(aoa)
+        sheet['!cols'] = [{ wch: 14 }, { wch: 24 }, { wch: 28 }, { wch: 18 }, { wch: 10 }, { wch: 30 }]
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, sheet, 'Adjustments')
+        const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+        const filename = withSample
+            ? 'payroll-adjustments-sample.xlsx'
+            : 'payroll-adjustments-template.xlsx'
+        reply
+            .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            .header('Content-Disposition', `attachment; filename="${filename}"`)
+            .send(buf)
+    })
+
+    // POST /adjustments/bulk-validate — preview a bulk import without persisting
+    // any rows. Returns per-row resolution (employee found? amount positive?)
+    // so the dialog can show correct vs incorrect rows before HR commits.
+    fastify.post('/adjustments/bulk-validate', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const body = request.body as Record<string, unknown>
+        const rows = Array.isArray(body.rows) ? body.rows as Array<Record<string, unknown>> : []
+        if (rows.length === 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must contain at least one entry' })
+        }
+        if (rows.length > 500) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'maximum 500 rows per import' })
+        }
+        const normalized: BulkAdjustmentRow[] = rows.map((r, i) => ({
+            rowNumber: Number(r.rowNumber) || i + 1,
+            employeeNo: r.employeeNo != null ? String(r.employeeNo) : null,
+            employeeName: r.employeeName != null ? String(r.employeeName) : null,
+            employeeEmail: r.employeeEmail != null ? String(r.employeeEmail) : null,
+            employeePhone: r.employeePhone != null ? String(r.employeePhone) : null,
+            amount: r.amount as number | string,
+            notes: r.notes != null ? String(r.notes) : null,
+        }))
+        // Optional period context — when present the validator returns
+        // periodLocked so the dialog can show the same blocker the create
+        // endpoint enforces, without the user having to click Submit
+        // twice.
+        const periodYearRaw = Number(body.periodYear)
+        const periodMonthRaw = Number(body.periodMonth)
+        const periodYear = Number.isInteger(periodYearRaw) ? periodYearRaw : undefined
+        const periodMonth = Number.isInteger(periodMonthRaw) && periodMonthRaw >= 1 && periodMonthRaw <= 12
+            ? periodMonthRaw
+            : undefined
+        const result = await validateBulkAdjustments(request.user.tenantId, normalized, { periodYear, periodMonth })
+        return reply.send(result)
+    })
+
+    // POST /adjustments/bulk — import many manual adjustments at once.
+    //
+    // Accepts either multipart/form-data (preferred — the .xlsx is stored to
+    // S3 and surfaced in the import history) or application/json (legacy —
+    // rows only, no file retention).
+    //
+    // Multipart fields:
+    //   file:     the source .xlsx (mime audited, max 10 MB via @fastify/multipart limits)
+    //   payload:  JSON string with { periodYear, periodMonth, category, rows }
+    //
+    // All rows share the same category, picked once in the dialog.
+    fastify.post('/adjustments/bulk', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const contentType = String(request.headers['content-type'] ?? '')
+
+        // Parse the payload + (optional) file. The multipart branch streams
+        // the file into memory once — we both insert the rows from the parsed
+        // payload AND store the bytes to S3 for the history trail.
+        let periodYear: number, periodMonth: number, category: AdjustmentCategory
+        let rows: Array<Record<string, unknown>>
+        let fileBuffer: Buffer | null = null
+        let fileName: string | null = null
+        let fileMime: string | null = null
+
+        if (contentType.includes('multipart/form-data')) {
+            let payloadRaw: string | null = null
+            try {
+                const parts = (request as any).parts() as AsyncIterable<any>
+                for await (const part of parts) {
+                    if (part.type === 'file' && part.fieldname === 'file') {
+                        const buf = await part.toBuffer()
+                        // Empty file parts are tolerated — some clients
+                        // (Chrome "Copy as cURL", flaky proxies) send the
+                        // headers but no bytes. We just skip the S3 audit
+                        // trail rather than rejecting the whole request.
+                        if (buf.length > 0) {
+                            fileBuffer = buf
+                            fileName = String(part.filename ?? 'upload.xlsx')
+                            fileMime = String(part.mimetype ?? 'application/octet-stream')
+                        }
+                    } else if (part.type === 'field' && part.fieldname === 'payload') {
+                        payloadRaw = String(part.value ?? '')
+                    }
+                }
+            } catch (err) {
+                request.log.warn({ err }, 'multipart parse failed')
+                const reason = err instanceof Error ? err.message : 'malformed multipart body'
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Could not read upload: ${reason}` })
+            }
+            if (!payloadRaw) {
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Upload missing the "payload" field. Refresh the page and try again.' })
+            }
+            // File is OPTIONAL — when absent we still import the rows but
+            // skip the S3 audit step. Lets HR import even when their proxy
+            // strips file bodies, and matches the JSON-only fallback path.
+            let parsed: Record<string, unknown>
+            try {
+                parsed = JSON.parse(payloadRaw)
+            } catch {
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'The hidden form payload was not valid JSON. Refresh the page and try again.' })
+            }
+            periodYear = Number(parsed.periodYear)
+            periodMonth = Number(parsed.periodMonth)
+            category = String(parsed.category ?? '') as AdjustmentCategory
+            rows = Array.isArray(parsed.rows) ? parsed.rows as Array<Record<string, unknown>> : []
+        } else {
+            const body = request.body as Record<string, unknown>
+            periodYear = Number(body.periodYear)
+            periodMonth = Number(body.periodMonth)
+            category = String(body.category ?? '') as AdjustmentCategory
+            rows = Array.isArray(body.rows) ? body.rows as Array<Record<string, unknown>> : []
+        }
+
+        if (!Number.isInteger(periodYear) || !Number.isInteger(periodMonth) || periodMonth < 1 || periodMonth > 12) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'A valid year and month (1–12) are required.' })
+        }
+        if (!ADJUSTMENT_CATEGORIES.includes(category)) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Category must be one of: ${ADJUSTMENT_CATEGORIES.join(', ')}.` })
+        }
+        if (rows.length === 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'The spreadsheet has no rows to import.' })
+        }
+        // Cap matches the employee bulk-import ceiling — keeps memory + tx
+        // size predictable, and forces obvious mistakes (uploading a 50k-row
+        // export) to fail fast instead of locking the DB.
+        if (rows.length > 500) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Too many rows (${rows.length}). The maximum per import is 500 — split your spreadsheet and try again.` })
+        }
+        if (await isPeriodLocked(request.user.tenantId, periodYear, periodMonth)) {
+            return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Payroll for this period has already been processed — adjustments are locked.' })
+        }
+
+        // Server-side duplicate-file guard. Same bytes, same period, same
+        // tenant → 409. Catches the rare case where two HR users grab the
+        // same sheet and both upload it.
+        let fileHash: string | null = null
+        if (fileBuffer) {
+            fileHash = createHash('sha256').update(fileBuffer).digest('hex')
+            const dupe = await findImportByHash(request.user.tenantId, periodYear, periodMonth, fileHash)
+            if (dupe) {
+                return reply.code(409).send({
+                    statusCode: 409,
+                    error: 'Conflict',
+                    message: 'This file was already imported for this period.',
+                    importedAt: dupe.createdAt,
+                })
+            }
+        }
+
+        const normalized: BulkAdjustmentRow[] = rows.map((r, i) => ({
+            rowNumber: Number(r.rowNumber) || i + 1,
+            employeeNo: r.employeeNo != null ? String(r.employeeNo) : null,
+            employeeName: r.employeeName != null ? String(r.employeeName) : null,
+            employeeEmail: r.employeeEmail != null ? String(r.employeeEmail) : null,
+            employeePhone: r.employeePhone != null ? String(r.employeePhone) : null,
+            amount: r.amount as number | string,
+            notes: r.notes != null ? String(r.notes) : null,
+        }))
+
+        const result = await bulkCreateAdjustments(
+            request.user.tenantId,
+            { periodYear, periodMonth, category, rows: normalized },
+            request.user.id,
+        )
+
+        // Only record the import + persist the file when rows actually
+        // committed. A 400 response (validation errors, rollback) means there
+        // is no DB state to keep an audit trail for.
+        if (result.created > 0) {
+            if (fileBuffer && fileHash && fileName) {
+                // S3 key namespaces by tenant so cross-tenant access is
+                // impossible at the bucket level (defence in depth on top of
+                // the tenantId predicate in getImportById).
+                const safeName = fileName.replace(/[^A-Za-z0-9._-]/g, '_')
+                const s3Key = `tenants/${request.user.tenantId}/payroll-imports/${periodYear}/${String(periodMonth).padStart(2, '0')}/${randomUUID()}-${safeName}`
+                try {
+                    await uploadObject(s3Key, fileBuffer, fileMime ?? 'application/octet-stream')
+                    await recordImport(
+                        request.user.tenantId,
+                        {
+                            periodYear,
+                            periodMonth,
+                            category,
+                            rowsCreated: result.created,
+                            fileName,
+                            fileSize: fileBuffer.length,
+                            fileMime: fileMime ?? 'application/octet-stream',
+                            fileS3Key: s3Key,
+                            fileHash,
+                        },
+                        request.user.id,
+                    )
+                } catch (err) {
+                    // S3 failure shouldn't undo the DB insert — payroll rows
+                    // are the source of truth. Log + continue; HR sees the
+                    // adjustments but the history entry is missing. Better
+                    // than rolling back a successful insert that would have
+                    // to be re-typed.
+                    request.log.warn({ err }, 'payroll bulk-import: failed to store original file')
+                }
+            }
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'payroll_adjustment',
+                entityId: `${periodYear}-${periodMonth}`,
+                entityName: `Bulk import ${result.created} ${category} rows for ${periodMonth}/${periodYear}`,
+                action: 'create',
+                metadata: { created: result.created, category },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
+
+        // If any row failed, return 400 with the per-row errors so the frontend
+        // can highlight the offending lines. The transaction was rolled back so
+        // partial inserts can't have happened.
+        const status = result.failed > 0 ? 400 : 201
+        return reply.code(status).send(result)
+    })
+
+    // GET /adjustments/imports — bulk import history.
+    fastify.get('/adjustments/imports', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const { year, month, limit } = request.query as Record<string, string>
+        const filter: { year?: number; month?: number; limit?: number } = {}
+        if (year !== undefined) {
+            const y = Number(year)
+            if (!Number.isInteger(y)) {
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'year must be an integer' })
+            }
+            filter.year = y
+        }
+        if (month !== undefined) {
+            const m = Number(month)
+            if (!Number.isInteger(m) || m < 1 || m > 12) {
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'month must be 1-12' })
+            }
+            filter.month = m
+        }
+        if (limit !== undefined) {
+            const l = Number(limit)
+            if (Number.isInteger(l) && l > 0) filter.limit = l
+        }
+        const data = await listImports(request.user.tenantId, filter)
+        return reply.send({ data })
+    })
+
+    // GET /adjustments/imports/:id/download — fetch the original uploaded
+    // file. Returns a presigned S3 URL the client can hit directly.
+    fastify.get('/adjustments/imports/:id/download', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const { id } = request.params as { id: string }
+        const row = await getImportById(request.user.tenantId, id)
+        if (!row) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Import record not found.' })
+        }
+        const url = await generateDownloadUrl(row.fileS3Key, 300, row.fileName)
+        return reply.send({ data: { url, fileName: row.fileName, fileMime: row.fileMime, fileSize: row.fileSize } })
     })
 
     fastify.patch('/adjustments/:id', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {

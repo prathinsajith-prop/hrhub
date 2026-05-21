@@ -11,7 +11,7 @@ import { Badge, Card, Progress } from '@/components/ui/primitives'
 import { toast, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, DialogClose } from '@/components/ui/overlays'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { DatePicker } from '@/components/ui/date-picker'
-import { formatDate, cn } from '@/lib/utils'
+import { cn, formatDate, onActivate } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useOnboardingChecklists, useCreateOnboardingChecklist, useOnboardingAnalytics, type OnboardingChecklist } from '@/hooks/useOnboarding'
@@ -61,9 +61,7 @@ const OnboardingCard = memo(function OnboardingCard({
     const statusVariant: 'success' | 'info' | 'secondary' =
         statusKey === 'completed' ? 'success' : statusKey === 'in_progress' ? 'info' : 'secondary'
 
-    const handleCardClick = useCallback(() => {
-        if (hasChecklist) navigate(`/onboarding/${c.employeeId}`)
-    }, [hasChecklist, navigate, c.employeeId])
+    const openChecklist = () => navigate(`/onboarding/${c.employeeId}`)
 
     return (
         <div
@@ -75,7 +73,10 @@ const OnboardingCard = memo(function OnboardingCard({
                 'lg:grid-cols-[2rem_minmax(0,1fr)_9rem_8rem_7rem_5rem]',
                 hasChecklist && 'cursor-pointer hover:bg-muted/40',
             )}
-            onClick={handleCardClick}
+            onClick={hasChecklist ? openChecklist : undefined}
+            onKeyDown={hasChecklist ? onActivate(openChecklist) : undefined}
+            role={hasChecklist ? 'button' : undefined}
+            tabIndex={hasChecklist ? 0 : undefined}
         >
             {/* Status accent bar */}
             <span

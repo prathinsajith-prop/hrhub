@@ -241,7 +241,7 @@ export default async function extRoutes(fastify: any): Promise<void> {
                 id: tenant.id,
                 name: tenant.name,
                 tradeLicenseNo: tenant.tradeLicenseNo,
-                jurisdiction: tenant.jurisdiction,
+                businessType: tenant.businessType,
                 industryType: tenant.industryType,
                 phone: tenant.phone,
                 companySize: tenant.companySize,
