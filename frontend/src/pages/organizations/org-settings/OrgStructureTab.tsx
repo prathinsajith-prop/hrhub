@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { getInitials } from '@/lib/utils'
 import { useEmployees } from '@/hooks/useEmployees'
+import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { Select as UiSelect, SelectContent as UiSelectContent, SelectItem as UiSelectItem, SelectTrigger as UiSelectTrigger, SelectValue as UiSelectValue } from '@/components/ui/select'
 import { Textarea as UiTextarea } from '@/components/ui/textarea'
 import { Dialog as UiDialog, DialogContent as UiDialogContent, DialogHeader as UiDialogHeader, DialogTitle as UiDialogTitle, DialogFooter as UiDialogFooter, DialogDescription as UiDialogDescription } from '@/components/ui/dialog'
@@ -215,18 +216,12 @@ function OrgUnitDialog({
 
                     <div className="space-y-1.5">
                         <Label>{t('orgSettings.structure.headManager')}</Label>
-                        <UiSelect
-                            value={form.headEmployeeId || NONE}
-                            onValueChange={v => setForm(f => ({ ...f, headEmployeeId: v === NONE ? '' : v }))}
-                        >
-                            <UiSelectTrigger><UiSelectValue placeholder={t('orgSettings.structure.unassignedPlaceholder')} /></UiSelectTrigger>
-                            <UiSelectContent>
-                                <UiSelectItem value={NONE}>{t('orgSettings.structure.unassigned')}</UiSelectItem>
-                                {empList.map(e => (
-                                    <UiSelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName}</UiSelectItem>
-                                ))}
-                            </UiSelectContent>
-                        </UiSelect>
+                        <EmployeeSelect
+                            value={form.headEmployeeId}
+                            onValueChange={v => setForm(f => ({ ...f, headEmployeeId: v }))}
+                            placeholder={t('orgSettings.structure.unassignedPlaceholder')}
+                            clearable
+                        />
                     </div>
 
                     <div className="space-y-1.5">

@@ -386,6 +386,13 @@
       "when": 1781308800000,
       "tag": "0054_revert_basic_percentage_normalization",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1779638400000,
+      "tag": "0055_payroll_adjustment_imports",
+      "breakpoints": true
     }
   ]
 }

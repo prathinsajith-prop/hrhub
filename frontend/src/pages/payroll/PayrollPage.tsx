@@ -40,8 +40,10 @@ import {
   useCreatePayrollRun, useUpdatePayrollRun, usePayslips, useGratuityCalc,
   useAdjustments, useCreateAdjustment, useDeleteAdjustment, useSyncAdjustments,
   useBulkCreateAdjustments, useValidateBulkAdjustments,
+  useBulkImportHistory, useDownloadImportFile,
   useDeletePayrollRun, useReadiness,
   type BulkAdjustmentRow, type BulkCreateAdjustmentsResult, type BulkValidateRow,
+  type BulkImportHistoryRow,
 } from '@/hooks/usePayroll'
 import { api } from '@/lib/api'
 import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
@@ -1174,13 +1176,14 @@ function AdjustmentsTable({
 
 // Spreadsheet columns. Category is NOT a column — it lives at the dialog level
 // so HR's import sheet stays focused on per-employee fields.
-const TEMPLATE_HEADERS = ['employee_no', 'employee_name', 'employee_email', 'amount', 'note'] as const
+const TEMPLATE_HEADERS = ['employee_no', 'employee_name', 'employee_email', 'employee_phone', 'amount', 'note'] as const
 
 interface ParsedRow {
   rowNumber: number
   employeeNo: string
   employeeName: string
   employeeEmail: string
+  employeePhone: string
   amount: number
   notes: string
   error: string | null
@@ -1200,6 +1203,8 @@ type BulkStage =
 interface MergedRow extends ParsedRow {
   serverStatus: 'pending' | 'valid' | 'invalid'
   serverError: string | null
+  /** Non-blocking warning from the validator (e.g. duplicate employee). */
+  serverWarning: string | null
   resolvedName: string | null
   resolvedEmployeeNo: string | null
 }
@@ -1325,19 +1330,28 @@ function AddAdjustmentDialog({
     }
   }
 
+  // Period-locked flag from the last validation pass — surfaced as a
+  // blocker in the dialog so HR sees the issue before clicking Submit.
+  const [periodLocked, setPeriodLocked] = useState(false)
+
   const validateOnServer = async (parsed: MergedRow[]) => {
     setStage('validating')
     try {
-      const result = await validate.mutateAsync(
-        parsed.map<BulkAdjustmentRow>((r) => ({
+      const result = await validate.mutateAsync({
+        rows: parsed.map<BulkAdjustmentRow>((r) => ({
           rowNumber: r.rowNumber,
           employeeNo: r.employeeNo || null,
           employeeName: r.employeeName || null,
           employeeEmail: r.employeeEmail || null,
+          employeePhone: r.employeePhone || null,
           amount: r.amount,
           notes: r.notes || null,
         })),
-      )
+        // Pass the selected period so the validator can also report
+        // periodLocked — same blocker the bulk-create endpoint enforces.
+        periodYear: year,
+        periodMonth: month,
+      })
       const byRow = new Map<number, BulkValidateRow>(result.rows.map((r) => [r.rowNumber, r]))
       setRows((prev) =>
         prev.map((r) => {
@@ -1347,11 +1361,13 @@ function AddAdjustmentDialog({
             ...r,
             serverStatus: v.status,
             serverError: v.error,
+            serverWarning: v.warning,
             resolvedName: v.resolvedName,
             resolvedEmployeeNo: v.resolvedEmployeeNo,
           }
         }),
       )
+      setPeriodLocked(result.periodLocked)
       setStage('ready')
     } catch (err) {
       toast.error('Validation failed', err instanceof Error ? err.message : 'Could not validate file')
@@ -1359,8 +1375,19 @@ function AddAdjustmentDialog({
     }
   }
 
+  // Cap the upload at 5 MB. A typical 500-row .xlsx is well under 200 KB,
+  // so anything larger is almost always wrong (full HR export, embedded
+  // images, corrupted file) and would hang the browser when we call
+  // `arrayBuffer()` on it.
+  const MAX_BULK_BYTES = 5 * 1024 * 1024
+
   const handleFile = async (picked: File) => {
     setParseError(null)
+    if (picked.size > MAX_BULK_BYTES) {
+      setParseError(`File is too large (${(picked.size / 1024 / 1024).toFixed(1)} MB). Maximum 5 MB — typical templates are under 200 KB.`)
+      setStage('idle')
+      return
+    }
     setStage('parsing')
 
     let buffer: ArrayBuffer
@@ -1420,18 +1447,20 @@ function AddAdjustmentDialog({
         const employeeNo = String(row.employee_no ?? '').trim()
         const employeeName = String(row.employee_name ?? '').trim()
         const employeeEmail = String(row.employee_email ?? '').trim()
+        const employeePhone = String(row.employee_phone ?? '').trim()
         const amountRaw = row.amount
         const am = typeof amountRaw === 'number' ? amountRaw : Number(String(amountRaw ?? '').trim())
         const n = String(row.note ?? '').trim()
         // rowNumber refers to the spreadsheet line (header is row 1).
         const rowNumber = idx + 2
         let error: string | null = null
-        if (!employeeNo && !employeeEmail) error = 'employee_no or employee_email is required'
+        if (!employeeNo && !employeeEmail && !employeePhone) error = 'one of employee_no, employee_email, or employee_phone is required'
         else if (!Number.isFinite(am) || am <= 0) error = 'amount must be a positive number'
         return {
-          rowNumber, employeeNo, employeeName, employeeEmail, amount: am, notes: n, error,
-          serverStatus: 'pending',
+          rowNumber, employeeNo, employeeName, employeeEmail, employeePhone, amount: am, notes: n, error,
+          serverStatus: 'pending' as const,
           serverError: null,
+          serverWarning: null,
           resolvedName: null,
           resolvedEmployeeNo: null,
         }
@@ -1483,9 +1512,14 @@ function AddAdjustmentDialog({
           employeeNo: r.employeeNo || null,
           employeeName: r.employeeName || null,
           employeeEmail: r.employeeEmail || null,
+          employeePhone: r.employeePhone || null,
           amount: r.amount,
           notes: r.notes || null,
         })),
+        // Send the original .xlsx alongside the rows so the server can keep
+        // it in S3 + the import history. Optional — server falls back to
+        // JSON-only when file is omitted.
+        file: file ?? undefined,
       },
       {
         onSuccess: (res: BulkCreateAdjustmentsResult) => {
@@ -1515,7 +1549,10 @@ function AddAdjustmentDialog({
   }
 
   const singleCanSubmit = !!employeeId && !!amount && Number(amount) > 0
-  const bulkCanSubmit = stage === 'ready' && validRows.length > 0 && invalidRows.length === 0
+  // Surface period-locked as a blocker on the dialog (same contract as
+  // bulk-create — better to fail validation than to fail the submit).
+  const bulkCanSubmit = stage === 'ready' && validRows.length > 0 && invalidRows.length === 0 && !periodLocked
+  const warnedRows = rows.filter(r => r.serverWarning)
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -1824,8 +1861,22 @@ function AddAdjustmentDialog({
                     Fix the {invalidRows.length} highlighted row{invalidRows.length === 1 ? '' : 's'} in your spreadsheet, then re-upload. Imports run all-or-nothing.
                   </p>
                 )}
+                {periodLocked && stage === 'ready' && (
+                  <p className="flex items-start gap-1.5 text-xs text-rose-600 dark:text-rose-400">
+                    <AlertCircle className="size-3 mt-0.5 shrink-0" />
+                    Payroll for this period has already been processed — adjustments are locked. Pick an open period to import into.
+                  </p>
+                )}
+                {warnedRows.length > 0 && stage === 'ready' && invalidRows.length === 0 && !periodLocked && (
+                  <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                    <AlertCircle className="size-3 mt-0.5 shrink-0" />
+                    {warnedRows.length} row{warnedRows.length === 1 ? '' : 's'} flagged — same employee appears more than once in this batch. They will create separate adjustment lines. Continue if intentional.
+                  </p>
+                )}
               </div>
             )}
+
+            <ImportHistorySection year={year} month={month} />
           </TabsContent>
         </Tabs>
 
@@ -1856,6 +1907,91 @@ function AddAdjustmentDialog({
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ─── Import history (lives inside the bulk tab) ─────────────────────────────
+
+const CATEGORY_LABELS_FOR_IMPORT: Record<string, string> = {
+  overtime: 'Overtime',
+  commission: 'Commission',
+  bonus: 'Bonus',
+  salary_advance: 'Salary advance',
+  manual: 'Manual deduction',
+  loan_repayment: 'Loan repayment',
+  unpaid_leave: 'Loss of pay',
+  sick_half_pay: 'Sick half-pay',
+}
+
+function formatImportBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatImportDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-AE', { day: '2-digit', month: 'short', year: 'numeric' }) +
+    ' · ' + d.toLocaleTimeString('en-AE', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+function ImportHistorySection({ year, month }: { year: number; month: number }) {
+  const { data, isLoading } = useBulkImportHistory({ year, month })
+  const download = useDownloadImportFile()
+  const rows = data ?? []
+
+  return (
+    <div className="space-y-2 pt-2 border-t">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold text-foreground">Recent imports</p>
+          <p className="text-[11px] text-muted-foreground">Past uploads for {MONTH_NAMES[month - 1]} {year} — re-download the original file anytime.</p>
+        </div>
+        {rows.length > 0 && (
+          <Badge variant="secondary" className="text-[10px]">{rows.length}</Badge>
+        )}
+      </div>
+      {isLoading ? (
+        <div className="space-y-1.5">
+          {Array.from({ length: 2 }).map((_, i) => <Skeleton key={`hist-skeleton-${i}`} className="h-12 rounded-md" />)}
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="rounded-md border bg-muted/20 px-3 py-4 text-center text-[11px] text-muted-foreground">
+          No bulk imports yet for this period.
+        </p>
+      ) : (
+        <ul className="rounded-lg border divide-y overflow-hidden">
+          {rows.map((row: BulkImportHistoryRow) => (
+            <li key={row.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30 transition-colors">
+              <div className="flex size-8 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 shrink-0">
+                <FileSpreadsheet className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium truncate">{row.fileName}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {CATEGORY_LABELS_FOR_IMPORT[row.category] ?? row.category}
+                  {' · '}{row.rowsCreated} row{row.rowsCreated === 1 ? '' : 's'}
+                  {' · '}{formatImportBytes(row.fileSize)}
+                  {row.createdByName && ` · by ${row.createdByName}`}
+                </p>
+                <p className="text-[10px] text-muted-foreground/80">{formatImportDate(row.createdAt)}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => download.mutate(row.id)}
+                loading={download.isPending && download.variables === row.id}
+                className="shrink-0"
+              >
+                <FileDown className="size-3.5" />
+                Download
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
