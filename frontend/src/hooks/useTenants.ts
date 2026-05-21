@@ -12,7 +12,7 @@ export interface TenantMembershipSummary {
     status: 'pending' | 'accepted' | 'revoked'
     tenantId: string
     tenantName: string
-    jurisdiction: string | null
+    businessType: string | null
     industryType: string | null
     subscriptionPlan: string | null
     logoUrl: string | null
@@ -22,7 +22,7 @@ export interface CurrentTenant {
     tenant: {
         id: string
         name: string
-        jurisdiction: string | null
+        businessType: string | null
         industryType: string | null
         subscriptionPlan: string | null
         logoUrl: string | null
@@ -54,7 +54,7 @@ export function useCurrentTenant() {
 export function useCreateTenant() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (body: { name: string; jurisdiction?: string; industryType?: string; subscriptionPlan?: string }) =>
+        mutationFn: (body: { name: string; businessType?: string; industryType?: string; subscriptionPlan?: string }) =>
             api.post<{ data: { id: string; name: string } }>('/tenants', body).then(r => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['tenants'] }),
     })

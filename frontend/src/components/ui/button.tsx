@@ -42,37 +42,30 @@ export interface ButtonProps
   loading?: boolean
   leftIcon?: React.ReactNode
   rightIcon?: React.ReactNode
+  ref?: React.Ref<HTMLButtonElement>
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, loading, leftIcon, rightIcon, children, disabled, type, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
-    // Default to type="button" so buttons placed inside <form> elements never
-    // trigger an accidental form submission (which can cause page reloads or
-    // navigation). Callers can still explicitly opt-in with type="submit".
-    // The `type` attribute is invalid on non-button hosts (asChild=true), so
-    // only forward it when we render an actual <button>.
-    const buttonProps = !asChild ? { type: type ?? 'button' } : {}
-    return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        disabled={disabled || loading}
-        {...buttonProps}
-        {...props}
-      >
-        {asChild ? children : (
-          <>
-            {loading ? <Loader2 className="animate-spin" /> : leftIcon}
-            {children}
-            {!loading && rightIcon}
-          </>
-        )}
-      </Comp>
-    )
-  }
-)
-Button.displayName = "Button"
+function Button({ className, variant, size, asChild = false, loading, leftIcon, rightIcon, children, disabled, type, ref, ...props }: ButtonProps) {
+  const Comp = asChild ? Slot : "button"
+  const buttonProps = !asChild ? { type: type ?? 'button' } : {}
+  return (
+    <Comp
+      className={cn(buttonVariants({ variant, size, className }))}
+      ref={ref}
+      disabled={disabled || loading}
+      {...buttonProps}
+      {...props}
+    >
+      {asChild ? children : (
+        <>
+          {loading ? <Loader2 className="animate-spin" /> : leftIcon}
+          {children}
+          {!loading && rightIcon}
+        </>
+      )}
+    </Comp>
+  )
+}
 
 // eslint-disable-next-line react-refresh/only-export-components
 export { Button, buttonVariants }

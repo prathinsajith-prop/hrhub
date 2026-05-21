@@ -34,7 +34,7 @@ export function CompanyTab() {
             setForm({
                 name: company.name,
                 tradeLicenseNo: company.tradeLicenseNo,
-                jurisdiction: company.jurisdiction,
+                businessType: company.businessType,
                 industryType: company.industryType,
             })
         }
@@ -88,7 +88,7 @@ export function CompanyTab() {
                     <div className="min-w-0 flex-1">
                         <p className="font-semibold truncate">{company?.name ?? tenant?.name ?? 'HRHub Demo Company'}</p>
                         <p className="text-sm text-muted-foreground capitalize truncate">
-                            {company?.jurisdiction ?? 'UAE'}
+                            {company?.businessType ?? 'UAE'}
                             {company?.industryType ? ` · ${labelFor(company.industryType)}` : ''}
                         </p>
                     </div>
@@ -111,8 +111,8 @@ export function CompanyTab() {
                             <Input id="trade_license" value={form.tradeLicenseNo ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('tradeLicenseNo', e.target.value)} disabled={!canEdit} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label htmlFor="jurisdiction">{t('settingsDetail.company.jurisdiction')}</Label>
-                            <Input id="jurisdiction" value={form.jurisdiction ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('jurisdiction', e.target.value)} disabled={!canEdit} />
+                            <Label htmlFor="business-type">{t('settingsDetail.company.businessType')}</Label>
+                            <Input id="business-type" value={form.businessType ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('businessType', e.target.value)} disabled={!canEdit} />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="industry">{t('settings.industry')}</Label>

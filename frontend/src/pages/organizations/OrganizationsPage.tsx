@@ -90,7 +90,7 @@ export function OrganizationsPage() {
                                                 <div className="text-xs text-muted-foreground capitalize mt-0.5">
                                                     {t(`team.roles.${m.role}`, { defaultValue: labelFor(m.role) })}
                                                     {m.subscriptionPlan ? ` · ${m.subscriptionPlan}` : ''}
-                                                    {m.jurisdiction ? ` · ${m.jurisdiction}` : ''}
+                                                    {m.businessType ? ` · ${m.businessType}` : ''}
                                                 </div>
                                             </div>
                                         </div>

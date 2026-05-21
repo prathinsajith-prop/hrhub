@@ -38,7 +38,7 @@ async function seed() {
     const [tenant] = await db.insert(tenants).values({
         name: 'Al Noor Real Estate LLC',
         tradeLicenseNo: TRADE_LICENSE,
-        jurisdiction: 'mainland',
+        businessType: 'mainland',
         industryType: 'real_estate',
         subscriptionPlan: 'growth',
         isActive: true,
@@ -342,7 +342,7 @@ async function seed() {
     const [tenant2] = await db.insert(tenants).values({
         name: 'Al Noor Freezone LLC',
         tradeLicenseNo: 'DIFC-2021-98765',
-        jurisdiction: 'freezone',
+        businessType: 'freezone',
         industryType: 'technology',
         subscriptionPlan: 'starter',
         isActive: true,

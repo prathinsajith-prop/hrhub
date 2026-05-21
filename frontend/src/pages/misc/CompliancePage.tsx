@@ -4,7 +4,7 @@ import { RefreshCcw, CheckCircle2, AlertTriangle, XCircle, ArrowRight, FileText,
 import { Badge, Card, Progress } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
+import { cn, onActivate } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useComplianceReport } from '@/hooks/useCompliance'
@@ -105,7 +105,9 @@ function ComplianceCheckCard({ check, onClick }: { check: ComplianceCheck; onCli
                 check.status === 'warning' && 'border-amber-200/60',
             )}
             onClick={isClickable ? onClick : undefined}
+            onKeyDown={isClickable ? onActivate(() => onClick?.()) : undefined}
             role={isClickable ? 'button' : undefined}
+            tabIndex={isClickable ? 0 : undefined}
         >
             <div className="flex items-start gap-3">
                 <div className={cn(

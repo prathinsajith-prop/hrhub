@@ -344,6 +344,55 @@
       "when": 1780790400000,
       "tag": "0048_payslip_earnings_breakdown",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1780876800000,
+      "tag": "0049_payroll_perf_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1780963200000,
+      "tag": "0050_org_privacy_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1781049600000,
+      "tag": "0051_tenants_org_profile_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1781136000000,
+      "tag": "0052_employees_privacy_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1781222400000,
+      "tag": "0053_normalize_basic_calc_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1781308800000,
+      "tag": "0054_revert_basic_percentage_normalization",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1779638400000,
+      "tag": "0055_payroll_adjustment_imports",
+      "breakpoints": true
     }
   ]
 }

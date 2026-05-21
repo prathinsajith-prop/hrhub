@@ -150,7 +150,9 @@ async function runVisaExpiryCheck() {
                             daysRemaining: days,
                             actionUrl: `${frontendUrl}/visas?employee=${emp.id}`,
                         })
-                        await sendEmail({ ...emailOpts, to: manager.email })
+                        // tenantId routes through the notifications kill-switch
+                        // so HR can silence expiry alerts org-wide.
+                        await sendEmail({ ...emailOpts, to: manager.email, tenantId: emp.tenantId })
                     }
                 }
             } catch (err) { log.warn({ err }, 'worker: visa expiry email delivery failed') }
@@ -224,6 +226,7 @@ async function runDocumentExpiryCheck() {
                         actionUrl,
                     })
                     opts.to = u.email
+                    opts.tenantId = doc.tenantId
                     sendEmail(opts).catch((err: unknown) => log.warn({ err }, 'worker: document expiry email delivery failed'))
                 }
             } catch (err) { log.warn({ err }, 'worker: document expiry email setup failed') }

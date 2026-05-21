@@ -55,7 +55,7 @@ export async function listMyTenants(userId: string) {
             status: tenantMemberships.inviteStatus,
             tenantId: tenants.id,
             tenantName: tenants.name,
-            jurisdiction: tenants.jurisdiction,
+            businessType: tenants.businessType,
             industryType: tenants.industryType,
             subscriptionPlan: tenants.subscriptionPlan,
             logoUrl: tenants.logoUrl,
@@ -82,7 +82,7 @@ export async function listMyTenants(userId: string) {
             .select({
                 id: tenants.id,
                 name: tenants.name,
-                jurisdiction: tenants.jurisdiction,
+                businessType: tenants.businessType,
                 industryType: tenants.industryType,
                 subscriptionPlan: tenants.subscriptionPlan,
                 logoUrl: tenants.logoUrl,
@@ -99,7 +99,7 @@ export async function listMyTenants(userId: string) {
                 status: 'accepted',
                 tenantId: t.id,
                 tenantName: t.name,
-                jurisdiction: t.jurisdiction,
+                businessType: t.businessType,
                 industryType: t.industryType,
                 subscriptionPlan: t.subscriptionPlan,
                 logoUrl: t.logoUrl,
@@ -126,7 +126,7 @@ export async function getCurrentTenant(userId: string, tenantId: string) {
 
 export async function createTenant(actorUserId: string, input: {
     name: string
-    jurisdiction?: string
+    businessType?: string
     industryType?: string
     subscriptionPlan?: string
 }) {
@@ -141,7 +141,7 @@ export async function createTenant(actorUserId: string, input: {
         const [tenant] = await tx.insert(tenants).values({
             name: input.name,
             tradeLicenseNo: placeholderLicense,
-            jurisdiction: (input.jurisdiction ?? 'mainland') as 'mainland' | 'freezone',
+            businessType: (input.businessType ?? 'mainland') as 'mainland' | 'freezone',
             industryType: input.industryType ?? 'Other',
             subscriptionPlan: (input.subscriptionPlan ?? 'starter') as 'starter' | 'growth' | 'enterprise',
         }).returning()

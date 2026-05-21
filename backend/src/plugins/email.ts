@@ -64,6 +64,14 @@ export interface EmailOptions {
     cc?: string | string[]
     bcc?: string | string[]
     replyTo?: string
+    /**
+     * When provided, sendEmail() consults tenants.notifications_enabled
+     * before sending. If the tenant has disabled notifications, the send is
+     * short-circuited and returns `{ ok: false, error: 'tenant-disabled' }`.
+     * Transactional emails that must always be delivered (password reset,
+     * security alerts) should omit this and call sendEmail directly.
+     */
+    tenantId?: string
 }
 
 export interface SendResult {
@@ -79,6 +87,31 @@ export interface SendResult {
 export async function sendEmail(opts: EmailOptions): Promise<SendResult> {
     const env = loadEnv()
     if (!opts.to) return { ok: false, error: 'No recipient' }
+    // Tenant-wide notifications kill-switch. Looked up lazily so importing
+    // this module doesn't drag in the db layer. Only consulted when the
+    // caller opts in by passing tenantId — transactional emails (password
+    // reset, security) intentionally bypass this by omitting the field.
+    if (opts.tenantId) {
+        try {
+            const { db } = await import('../db/index.js')
+            const { tenants } = await import('../db/schema/index.js')
+            const { eq } = await import('drizzle-orm')
+            const [row] = await db
+                .select({ enabled: tenants.notificationsEnabled })
+                .from(tenants)
+                .where(eq(tenants.id, opts.tenantId))
+                .limit(1)
+            if (row && row.enabled === false) {
+                log.info({ to: opts.to, subject: opts.subject, tenantId: opts.tenantId }, 'email skipped — tenant notifications disabled')
+                return { ok: false, error: 'tenant-disabled' }
+            }
+        } catch (err) {
+            // Failed lookup means we'd rather send than silently drop — log
+            // the lookup failure and continue. This keeps password resets
+            // working even if the tenants row is briefly unreachable.
+            log.warn({ tenantId: opts.tenantId, err: err instanceof Error ? err.message : String(err) }, 'tenant notification-flag lookup failed; sending anyway')
+        }
+    }
     try {
         const t = getTransporter()
         const info = await t.sendMail({

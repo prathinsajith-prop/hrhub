@@ -762,12 +762,13 @@
     },
     "company": {
       "companyProfile": "ملف الشركة",
-      "companyProfileDesc": "الاسم القانوني والاختصاص القضائي والتفاصيل الأساسية.",
+      "companyProfileDesc": "الاسم القانوني ونوع النشاط التجاري والتفاصيل الأساسية.",
       "plan": "الخطة",
       "subscriptionPlan": "خطة الاشتراك",
       "subscriptionPlanHint": "أدر الفوترة من صفحة الاشتراك.",
       "tradeLicense": "الرخصة التجارية",
-      "jurisdiction": "الاختصاص القضائي",
+      "businessType": "نوع النشاط التجاري",
+      "jurisdiction": "نوع النشاط التجاري",
       "regionalSettings": "الإعدادات الإقليمية",
       "regionalSettingsDesc": "المنطقة الزمنية والعملة وتنسيق التاريخ.",
       "dateFormat": "تنسيق التاريخ",
@@ -2247,6 +2248,10 @@
         "label": "مكونات الراتب",
         "desc": "كتالوج الأرباح والاستقطاعات والمزايا والتصحيحات"
       },
+      "orgPolicy": {
+        "label": "سياسة المؤسسة",
+        "desc": "مفتاح الإيقاف الرئيسي للإشعارات وإعدادات الخصوصية الافتراضية للموظفين"
+      },
       "security": {
         "label": "الأمان",
         "desc": "السياسات والقائمة المسموح بها للعناوين والبيانات"
@@ -2335,14 +2340,21 @@
       "updated": "Updated"
     },
     "profile": {
-      "companyCode": "Company Code",
-      "companyCodeHint": "Company Code Hint",
-      "companyName": "Company Name",
-      "organization": "Organization",
-      "saveFailed": "Save Failed",
-      "saveFailedDesc": "Save Failed Desc",
-      "settingsSaved": "Settings Saved",
-      "settingsSavedDesc": "Settings Saved Desc"
+      "companyCode": "رمز الشركة",
+      "companyCodeHint": "تلميح رمز الشركة",
+      "companyName": "اسم الشركة",
+      "organization": "المنظمة",
+      "businessType": "نوع النشاط التجاري",
+      "businessTypePlaceholder": "اختر نوع النشاط التجاري",
+      "companyPhone": "هاتف الشركة",
+      "companyEmail": "البريد الإلكتروني للشركة",
+      "companyWebsite": "موقع الشركة الإلكتروني",
+      "address": "العنوان",
+      "addressPlaceholder": "عنوان المكتب (الشارع، المدينة، الدولة)",
+      "saveFailed": "فشل الحفظ",
+      "saveFailedDesc": "تعذر حفظ الإعدادات",
+      "settingsSaved": "تم حفظ الإعدادات",
+      "settingsSavedDesc": "تم تحديث الإعدادات"
     },
     "roles": {
       "blurb": {
@@ -2503,7 +2515,14 @@
         "deleteDesc": "لن يظهر هذا المكون عند تعديل الرواتب. تبقى كشوف الرواتب الحالية التي استخدمته دون تغيير.",
         "deleting": "جارٍ الحذف…",
         "delete": "حذف",
-        "cancel": "إلغاء"
+        "cancel": "إلغاء",
+        "deactivateTitle": "إلغاء تفعيل \"{{name}}\"؟",
+        "deactivateDesc": "سيتم إخفاء هذا المكون من دفعات الرواتب الجديدة وقائمة إضافة التعديلات. تبقى كشوف الرواتب الحالية التي استخدمته دون تغيير. يمكنك إعادة تفعيله لاحقًا.",
+        "deactivate": "إلغاء التفعيل",
+        "activateTitle": "تفعيل \"{{name}}\"؟",
+        "activateDesc": "سيكون هذا المكون متاحًا في دفعات الرواتب وقائمة إضافة التعديلات اعتبارًا من الآن.",
+        "activate": "تفعيل",
+        "toggling": "جارٍ الحفظ…"
       },
       "toast": {
         "activated": "تم تفعيل {{name}}",

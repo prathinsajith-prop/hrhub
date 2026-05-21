@@ -29,8 +29,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { ScopeMatrix } from '@/components/apps/ScopeMatrix'
-import { formatDate } from '@/lib/utils'
-import { cn } from '@/lib/utils'
+import { cn, formatDate, onActivate } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -74,6 +73,9 @@ function AppRow({
     return (
         <div
             onClick={() => onClick(app)}
+            onKeyDown={onActivate(() => onClick(app))}
+            role="button"
+            tabIndex={0}
             className="group flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-muted/40 transition-colors border-b border-border last:border-0"
         >
             {/* Icon */}
