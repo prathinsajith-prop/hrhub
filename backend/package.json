@@ -47,6 +47,7 @@
     "postgres": "^3.4.9",
     "qrcode": "^1.5.4",
     "stripe": "^22.1.1",
+    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {

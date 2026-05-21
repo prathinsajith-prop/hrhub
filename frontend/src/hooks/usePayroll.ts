@@ -213,6 +213,65 @@ export function useDeleteAdjustment(year: number, month: number) {
     })
 }
 
+export interface BulkAdjustmentRow {
+    rowNumber: number
+    employeeNo?: string | null
+    employeeName?: string | null
+    employeeEmail?: string | null
+    amount: number
+    notes?: string | null
+}
+
+export interface BulkCreateAdjustmentsBody {
+    periodYear: number
+    periodMonth: number
+    category: PayrollAdjustmentCategory
+    rows: BulkAdjustmentRow[]
+}
+
+export interface BulkCreateAdjustmentsResult {
+    created: number
+    failed: number
+    errors: Array<{ row: number; error: string }>
+}
+
+export function useBulkCreateAdjustments() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (body: BulkCreateAdjustmentsBody) =>
+            api.post<BulkCreateAdjustmentsResult>('/payroll/adjustments/bulk', body),
+        onSuccess: (_d, vars) => {
+            qc.invalidateQueries({ queryKey: ['payroll-adjustments', vars.periodYear, vars.periodMonth] })
+        },
+        // No global error toast — the dialog renders per-row errors inline.
+        onError: () => {},
+    })
+}
+
+export interface BulkValidateRow {
+    rowNumber: number
+    status: 'valid' | 'invalid'
+    error: string | null
+    employeeId: string | null
+    resolvedName: string | null
+    resolvedEmployeeNo: string | null
+}
+
+export interface BulkValidateResult {
+    total: number
+    valid: number
+    invalid: number
+    rows: BulkValidateRow[]
+}
+
+export function useValidateBulkAdjustments() {
+    return useMutation({
+        mutationFn: (rows: BulkAdjustmentRow[]) =>
+            api.post<BulkValidateResult>('/payroll/adjustments/bulk-validate', { rows }),
+        onError: () => {},
+    })
+}
+
 export function useSyncAdjustments() {
     const qc = useQueryClient()
     return useMutation({

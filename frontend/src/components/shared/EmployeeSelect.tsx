@@ -22,6 +22,8 @@ interface EmployeeSelectProps {
     clearable?: boolean
     /** Exclude a specific employee ID from the results (e.g. exclude self in handover selects) */
     excludeId?: string
+    /** Number of employees shown before the user types. Default 25. */
+    initialLimit?: number
 }
 
 function EmployeeAvatar({ employee, size = 'sm' }: { employee: Pick<Employee, 'firstName' | 'lastName' | 'avatarUrl'>; size?: 'sm' | 'xs' }) {
@@ -46,6 +48,7 @@ function EmployeeAvatar({ employee, size = 'sm' }: { employee: Pick<Employee, 'f
 export function EmployeeSelect({
     value, onValueChange, onEmployeeChange, status = 'active',
     placeholder, className, disabled = false, clearable = false, excludeId,
+    initialLimit = 25,
 }: EmployeeSelectProps) {
     const { t } = useTranslation()
     const [open, setOpen] = useState(false)
@@ -61,7 +64,7 @@ export function EmployeeSelect({
     const { data, isFetching } = useEmployees({
         search: debouncedSearch || undefined,
         status,
-        limit: 20,
+        limit: initialLimit,
     })
 
     const employees = (data?.data ?? []).filter(e => !excludeId || e.id !== excludeId)
@@ -149,9 +152,7 @@ export function EmployeeSelect({
                             </div>
                         ) : employees.length === 0 ? (
                             <CommandEmpty className="py-6 text-sm text-muted-foreground text-center">
-                                {debouncedSearch
-                                    ? t('common.noResults', 'No employees found.')
-                                    : t('common.typeToSearch', 'Start typing to search.')}
+                                {t('common.noResults', 'No employees found.')}
                             </CommandEmpty>
                         ) : (
                             <CommandGroup className="p-1">

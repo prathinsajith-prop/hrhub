@@ -1,16 +1,23 @@
 import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, deletePayrollRun, getPayrollReadiness, getPayslipsWithEmployees, getPayslipsByEmployee, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
 import {
+    bulkCreateAdjustments,
     createAdjustment,
     deleteAdjustment,
     isPeriodLocked,
     listAdjustments,
     syncAdjustmentsForPeriod,
     updateAdjustment,
+    validateBulkAdjustments,
     type AdjustmentCategory,
+    type BulkAdjustmentRow,
 } from './adjustments.service.js'
+import * as XLSX from 'xlsx'
 import { generatePayslipPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { enqueuePayrollRun, getPayrollQueue, type PayrollJobData } from '../../workers/payroll.worker.js'
+import { db } from '../../db/index.js'
+import { employees } from '../../db/schema/index.js'
+import { and, eq } from 'drizzle-orm'
 
 const ADJUSTMENT_CATEGORIES: readonly AdjustmentCategory[] = [
     'overtime', 'commission', 'bonus', 'salary_advance', 'manual',
@@ -400,6 +407,19 @@ export default async function (fastify: any): Promise<void> {
             return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Payroll for this period has already been processed — adjustments are locked.' })
         }
 
+        // Guard cross-tenant injection: the employeeId must belong to the
+        // caller's tenant. Without this, an HR manager who learns a foreign
+        // tenant's employee UUID could insert a row that leaks the foreign
+        // employee's name/employeeNo through the GET response.
+        const [empRow] = await db
+            .select({ id: employees.id })
+            .from(employees)
+            .where(and(eq(employees.id, employeeId), eq(employees.tenantId, request.user.tenantId)))
+            .limit(1)
+        if (!empRow) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found.' })
+        }
+
         const row = await createAdjustment(
             request.user.tenantId,
             { employeeId, periodYear, periodMonth, category, amount, notes },
@@ -418,6 +438,116 @@ export default async function (fastify: any): Promise<void> {
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
         return reply.code(201).send({ data: row })
+    })
+
+    // GET /adjustments/bulk-template — download a starter .xlsx with the
+    // required column headers + one example row. Category is NOT a column in
+    // the sheet — it's picked once per upload in the bulk dialog and applied
+    // to every row.
+    fastify.get('/adjustments/bulk-template', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (_request, reply) => {
+        const sheet = XLSX.utils.aoa_to_sheet([
+            ['employee_no', 'employee_name', 'employee_email', 'amount', 'note'],
+            ['EMP-0001', 'Jane Doe', 'jane.doe@example.com', 500, 'Optional note'],
+        ])
+        sheet['!cols'] = [{ wch: 14 }, { wch: 24 }, { wch: 28 }, { wch: 10 }, { wch: 30 }]
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, sheet, 'Adjustments')
+        const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+        reply
+            .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            .header('Content-Disposition', 'attachment; filename="payroll-adjustments-template.xlsx"')
+            .send(buf)
+    })
+
+    // POST /adjustments/bulk-validate — preview a bulk import without persisting
+    // any rows. Returns per-row resolution (employee found? amount positive?)
+    // so the dialog can show correct vs incorrect rows before HR commits.
+    fastify.post('/adjustments/bulk-validate', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const body = request.body as Record<string, unknown>
+        const rows = Array.isArray(body.rows) ? body.rows as Array<Record<string, unknown>> : []
+        if (rows.length === 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must contain at least one entry' })
+        }
+        if (rows.length > 500) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'maximum 500 rows per import' })
+        }
+        const normalized: BulkAdjustmentRow[] = rows.map((r, i) => ({
+            rowNumber: Number(r.rowNumber) || i + 1,
+            employeeNo: r.employeeNo != null ? String(r.employeeNo) : null,
+            employeeName: r.employeeName != null ? String(r.employeeName) : null,
+            employeeEmail: r.employeeEmail != null ? String(r.employeeEmail) : null,
+            amount: r.amount as number | string,
+            notes: r.notes != null ? String(r.notes) : null,
+        }))
+        const result = await validateBulkAdjustments(request.user.tenantId, normalized)
+        return reply.send(result)
+    })
+
+    // POST /adjustments/bulk — import many manual adjustments at once.
+    // Body: { periodYear, periodMonth, category, rows: [{ rowNumber, employeeNo?, employeeEmail?, employeeName?, amount, notes? }, …] }
+    // All rows share the same category (picked in the dialog, outside the sheet).
+    fastify.post('/adjustments/bulk', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const body = request.body as Record<string, unknown>
+        const periodYear = Number(body.periodYear)
+        const periodMonth = Number(body.periodMonth)
+        const category = String(body.category ?? '') as AdjustmentCategory
+        const rows = Array.isArray(body.rows) ? body.rows as Array<Record<string, unknown>> : []
+
+        if (!Number.isInteger(periodYear) || !Number.isInteger(periodMonth) || periodMonth < 1 || periodMonth > 12) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'periodYear + periodMonth required (month 1-12)' })
+        }
+        if (!ADJUSTMENT_CATEGORIES.includes(category)) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `category must be one of: ${ADJUSTMENT_CATEGORIES.join(', ')}` })
+        }
+        if (rows.length === 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must contain at least one entry' })
+        }
+        // Cap matches the employee bulk-import ceiling — keeps memory + tx
+        // size predictable, and forces obvious mistakes (uploading a 50k-row
+        // export) to fail fast instead of locking the DB.
+        if (rows.length > 500) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'maximum 500 rows per import' })
+        }
+        if (await isPeriodLocked(request.user.tenantId, periodYear, periodMonth)) {
+            return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Payroll for this period has already been processed — adjustments are locked.' })
+        }
+
+        const normalized: BulkAdjustmentRow[] = rows.map((r, i) => ({
+            rowNumber: Number(r.rowNumber) || i + 1,
+            employeeNo: r.employeeNo != null ? String(r.employeeNo) : null,
+            employeeName: r.employeeName != null ? String(r.employeeName) : null,
+            employeeEmail: r.employeeEmail != null ? String(r.employeeEmail) : null,
+            amount: r.amount as number | string,
+            notes: r.notes != null ? String(r.notes) : null,
+        }))
+
+        const result = await bulkCreateAdjustments(
+            request.user.tenantId,
+            { periodYear, periodMonth, category, rows: normalized },
+            request.user.id,
+        )
+
+        if (result.created > 0) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'payroll_adjustment',
+                entityId: `${periodYear}-${periodMonth}`,
+                entityName: `Bulk import ${result.created} ${category} rows for ${periodMonth}/${periodYear}`,
+                action: 'create',
+                metadata: { created: result.created, category },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
+
+        // If any row failed, return 400 with the per-row errors so the frontend
+        // can highlight the offending lines. The transaction was rolled back so
+        // partial inserts can't have happened.
+        const status = result.failed > 0 ? 400 : 201
+        return reply.code(status).send(result)
     })
 
     fastify.patch('/adjustments/:id', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {

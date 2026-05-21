@@ -67,6 +67,10 @@ function assertValid(input: CreateSalaryComponentInput): void {
     if (input.kind === 'earning') {
         if (!input.payType) throw fail(400, 'Earnings require a pay type')
         if (!input.calculationType) throw fail(400, 'Earnings require a calculation type')
+        // basic + percentage_of_basic IS supported — the percentage is
+        // applied against the FLAT basic sum and rolls back into the
+        // basic line on the payslip. See payroll.service.ts resolver +
+        // buildPayslipsAndTotals for the math.
         if (input.amount != null) {
             const n = Number(input.amount)
             if (!Number.isFinite(n) || n < 0) throw fail(400, 'Amount must be a non-negative number')

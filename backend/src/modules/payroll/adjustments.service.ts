@@ -98,6 +98,216 @@ export async function createAdjustment(
     return row
 }
 
+export interface BulkAdjustmentRow {
+    /** 1-based row number from the source spreadsheet (used for per-row error reporting). */
+    rowNumber: number
+    employeeNo?: string | null
+    employeeName?: string | null
+    employeeEmail?: string | null
+    amount: number | string
+    notes?: string | null
+}
+
+export interface BulkCreateAdjustmentsInput {
+    periodYear: number
+    periodMonth: number
+    category: AdjustmentCategory
+    rows: BulkAdjustmentRow[]
+}
+
+export interface BulkCreateAdjustmentsResult {
+    created: number
+    failed: number
+    errors: Array<{ row: number; error: string }>
+}
+
+export interface BulkValidateRowResult {
+    rowNumber: number
+    status: 'valid' | 'invalid'
+    error: string | null
+    /** Server-resolved employee id (only on `valid`). */
+    employeeId: string | null
+    /** Display name from the matched record so the preview can show the
+     *  authoritative value alongside what the spreadsheet contained. */
+    resolvedName: string | null
+    resolvedEmployeeNo: string | null
+}
+
+export interface BulkValidateResult {
+    total: number
+    valid: number
+    invalid: number
+    rows: BulkValidateRowResult[]
+}
+
+interface ResolvedRow {
+    rowNumber: number
+    employeeId: string | null
+    resolvedName: string | null
+    resolvedEmployeeNo: string | null
+    amount: number
+    notes: string | null
+    error: string | null
+}
+
+/**
+ * Resolve + validate bulk rows against the tenant's employees in a single DB
+ * round-trip. Shared by the validate endpoint (which previews) and the create
+ * endpoint (which inserts).
+ */
+async function resolveBulkRows(
+    tenantId: string,
+    rows: BulkAdjustmentRow[],
+): Promise<ResolvedRow[]> {
+    const empNos = new Set<string>()
+    const empEmails = new Set<string>()
+    for (const r of rows) {
+        if (r.employeeNo) empNos.add(String(r.employeeNo).trim())
+        if (r.employeeEmail) empEmails.add(String(r.employeeEmail).trim().toLowerCase())
+    }
+
+    const empRows = empNos.size + empEmails.size === 0
+        ? []
+        : await db
+              .select({
+                  id: employees.id,
+                  employeeNo: employees.employeeNo,
+                  firstName: employees.firstName,
+                  lastName: employees.lastName,
+                  email: employees.email,
+                  workEmail: employees.workEmail,
+                  personalEmail: employees.personalEmail,
+              })
+              .from(employees)
+              .where(and(
+                  eq(employees.tenantId, tenantId),
+                  eq(employees.isArchived, false),
+              ))
+
+    const byEmployeeNo = new Map<string, typeof empRows[number]>()
+    const byEmail = new Map<string, typeof empRows[number]>()
+    for (const e of empRows) {
+        if (e.employeeNo) byEmployeeNo.set(String(e.employeeNo).trim(), e)
+        if (e.email) byEmail.set(String(e.email).trim().toLowerCase(), e)
+        if (e.workEmail) byEmail.set(String(e.workEmail).trim().toLowerCase(), e)
+        if (e.personalEmail) byEmail.set(String(e.personalEmail).trim().toLowerCase(), e)
+    }
+
+    return rows.map((r) => {
+        const num = typeof r.amount === 'string' ? Number(r.amount) : r.amount
+        if (!Number.isFinite(num) || num <= 0) {
+            return {
+                rowNumber: r.rowNumber,
+                employeeId: null,
+                resolvedName: null,
+                resolvedEmployeeNo: null,
+                amount: num,
+                notes: r.notes ?? null,
+                error: 'amount must be a positive number',
+            }
+        }
+        let match = r.employeeNo ? byEmployeeNo.get(String(r.employeeNo).trim()) : undefined
+        if (!match && r.employeeEmail) {
+            match = byEmail.get(String(r.employeeEmail).trim().toLowerCase())
+        }
+        if (!match) {
+            const hint = r.employeeNo || r.employeeEmail || r.employeeName || '(blank)'
+            return {
+                rowNumber: r.rowNumber,
+                employeeId: null,
+                resolvedName: null,
+                resolvedEmployeeNo: null,
+                amount: num,
+                notes: r.notes ?? null,
+                error: `employee not found: ${hint}`,
+            }
+        }
+        return {
+            rowNumber: r.rowNumber,
+            employeeId: match.id,
+            resolvedName: `${match.firstName} ${match.lastName}`.trim(),
+            resolvedEmployeeNo: match.employeeNo,
+            amount: num,
+            notes: r.notes?.trim() ? r.notes.trim() : null,
+            error: null,
+        }
+    })
+}
+
+export async function validateBulkAdjustments(
+    tenantId: string,
+    rows: BulkAdjustmentRow[],
+): Promise<BulkValidateResult> {
+    const resolved = await resolveBulkRows(tenantId, rows)
+    const rowResults: BulkValidateRowResult[] = resolved.map((r) => ({
+        rowNumber: r.rowNumber,
+        status: r.error ? 'invalid' : 'valid',
+        error: r.error,
+        employeeId: r.employeeId,
+        resolvedName: r.resolvedName,
+        resolvedEmployeeNo: r.resolvedEmployeeNo,
+    }))
+    const invalid = rowResults.filter((r) => r.status === 'invalid').length
+    return {
+        total: rowResults.length,
+        valid: rowResults.length - invalid,
+        invalid,
+        rows: rowResults,
+    }
+}
+
+/**
+ * Bulk-create manual payroll adjustments from a spreadsheet upload.
+ *
+ * Resolution: each row is matched to an employee by `employeeNo` first, then
+ * `employeeEmail`. Tenant ownership is enforced — rows pointing at employees
+ * outside the caller's tenant are rejected with a row-level error (and never
+ * exposed in the response).
+ *
+ * Atomicity: all valid rows are inserted in a single transaction. If any row
+ * fails resolution or validation, the entire batch is aborted and `errors`
+ * lists every problem found. Callers must fix the spreadsheet and retry.
+ */
+export async function bulkCreateAdjustments(
+    tenantId: string,
+    input: BulkCreateAdjustmentsInput,
+    createdBy: string | null,
+): Promise<BulkCreateAdjustmentsResult> {
+    const resolved = await resolveBulkRows(tenantId, input.rows)
+    const errors = resolved
+        .filter((r) => r.error)
+        .map((r) => ({ row: r.rowNumber, error: r.error as string }))
+
+    if (errors.length > 0) {
+        return { created: 0, failed: errors.length, errors }
+    }
+
+    const kind = kindForCategory(input.category)
+    const toInsert: Array<typeof payrollAdjustments.$inferInsert> = resolved.map((r) => ({
+        tenantId,
+        employeeId: r.employeeId as string,
+        periodYear: input.periodYear,
+        periodMonth: input.periodMonth,
+        kind,
+        category: input.category,
+        amount: r.amount.toFixed(2),
+        notes: r.notes,
+        source: 'manual',
+        sourceRef: null,
+        createdBy,
+    }))
+
+    if (toInsert.length === 0) {
+        return { created: 0, failed: 0, errors: [] }
+    }
+
+    await db.transaction(async (tx) => {
+        await tx.insert(payrollAdjustments).values(toInsert)
+    })
+
+    return { created: toInsert.length, failed: 0, errors: [] }
+}
+
 export interface UpdateAdjustmentInput {
     amount?: number | string
     notes?: string | null

@@ -6,6 +6,7 @@ import {
   TrendingUp, RefreshCcw, Plus, Calculator, DollarSign,
   CircleDot, ArrowRight, Banknote, Users, BarChart3,
   Sparkles, Trash2, Lock, AlertTriangle, AlertCircle, ExternalLink,
+  Upload, FileSpreadsheet, X, XCircle, Loader2,
 } from 'lucide-react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { InitialsAvatar } from '@/components/shared/Avatar'
@@ -38,13 +39,14 @@ import {
   usePayrollRuns, useRunPayroll, useSubmitWps,
   useCreatePayrollRun, useUpdatePayrollRun, usePayslips, useGratuityCalc,
   useAdjustments, useCreateAdjustment, useDeleteAdjustment, useSyncAdjustments,
+  useBulkCreateAdjustments, useValidateBulkAdjustments,
   useDeletePayrollRun, useReadiness,
+  type BulkAdjustmentRow, type BulkCreateAdjustmentsResult, type BulkValidateRow,
 } from '@/hooks/usePayroll'
-import { useEmployees } from '@/hooks/useEmployees'
+import { api } from '@/lib/api'
+import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/store/authStore'
-import { useLoans, LOAN_STATUS_STYLE, type EmployeeLoan } from '@/hooks/useLoans'
-import { labelFor } from '@/lib/enums'
 import { Link } from 'react-router-dom'
 import type { PayrollRun, Payslip, PayrollAdjustment, PayrollAdjustmentCategory } from '@/types'
 
@@ -934,159 +936,12 @@ function firstAvailableMonth(runs: PayrollRun[], maxMonth: number): number {
   return Array.from({ length: maxMonth }, (_, i) => i + 1).find(m => !taken.has(m)) ?? 1
 }
 
-// ─── Loans tab - organisation-wide loan visibility for payroll managers ───────
-
-function LoansSection() {
-  const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'completed'>('all')
-  const status = filter === 'all' ? undefined : filter
-  const { data, isLoading } = useLoans({ status, limit: 25 })
-
-  const loans = data?.data ?? []
-  const summary = data?.summary
-
-  const columns = useMemo<ColumnDef<EmployeeLoan>[]>(() => [
-    {
-      accessorKey: 'employeeName',
-      header: 'Employee',
-      cell: ({ row }) => (
-        <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{row.original.employeeName ?? '—'}</p>
-          <p className="text-[11px] text-muted-foreground truncate">
-            {row.original.employeeNo ?? ''}
-            {row.original.employeeDepartment ? ` · ${row.original.employeeDepartment}` : ''}
-          </p>
-        </div>
-      ),
-    },
-    {
-      accessorKey: 'amount',
-      header: 'Amount',
-      cell: ({ row }) => (
-        <span className="text-sm font-semibold tabular-nums">{formatCurrency(Number(row.original.amount))}</span>
-      ),
-    },
-    {
-      accessorKey: 'monthlyDeduction',
-      header: 'Monthly',
-      cell: ({ row }) => (
-        <span className="text-sm tabular-nums text-muted-foreground">{formatCurrency(Number(row.original.monthlyDeduction))}</span>
-      ),
-    },
-    {
-      id: 'progress',
-      header: 'Progress',
-      cell: ({ row }) => {
-        const total = row.original.totalInstallments ?? 0
-        const paid = row.original.paidInstallments ?? 0
-        const pct = total > 0 ? Math.round((paid / total) * 100) : 0
-        return (
-          <div className="min-w-[110px]">
-            <div className="flex items-center justify-between text-[10px] mb-1 tabular-nums">
-              <span className="text-muted-foreground">{paid}/{total}</span>
-              <span className="font-medium">{pct}%</span>
-            </div>
-            <div className="h-1 rounded-full bg-muted overflow-hidden">
-              <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-            </div>
-          </div>
-        )
-      },
-    },
-    {
-      accessorKey: 'remainingBalance',
-      header: 'Outstanding',
-      cell: ({ row }) => {
-        const v = row.original.remainingBalance
-        return v != null ? (
-          <span className="text-sm tabular-nums">{formatCurrency(Number(v))}</span>
-        ) : <span className="text-xs text-muted-foreground">—</span>
-      },
-    },
-    {
-      accessorKey: 'status',
-      header: 'Status',
-      cell: ({ row }) => (
-        <Badge className={cn('text-[10px] font-medium', LOAN_STATUS_STYLE[row.original.status])}>
-          {labelFor(row.original.status)}
-        </Badge>
-      ),
-    },
-    {
-      id: 'view',
-      header: '',
-      cell: ({ row }) => (
-        <Link
-          to={`/employees/${row.original.employeeId}`}
-          className="text-xs text-primary hover:underline"
-          onClick={e => e.stopPropagation()}
-        >
-          View
-        </Link>
-      ),
-    },
-  ], [])
-
-  const FILTERS: { key: typeof filter; label: string }[] = [
-    { key: 'all',       label: 'All' },
-    { key: 'pending',   label: 'Pending' },
-    { key: 'active',    label: 'Active' },
-    { key: 'completed', label: 'Completed' },
-  ]
-
-  return (
-    <div className="space-y-4">
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCardCompact label="Pending"     value={summary?.pending ?? '—'}                                      icon={Clock}       color="amber" loading={isLoading} />
-        <KpiCardCompact label="Active"      value={summary?.active ?? '—'}                                       icon={DollarSign}  color="purple" loading={isLoading} />
-        <KpiCardCompact label="Disbursed"   value={summary ? formatCurrency(summary.totalDisbursed) : '—'}        icon={TrendingUp}  color="green" loading={isLoading} />
-        <KpiCardCompact label="Outstanding" value={summary ? formatCurrency(summary.totalOutstanding) : '—'}      icon={Banknote}    color="blue"  loading={isLoading} />
-      </div>
-
-      {/* Filter pills */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {FILTERS.map(f => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setFilter(f.key)}
-            className={cn(
-              'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
-              filter === f.key
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background text-muted-foreground border-border hover:bg-muted hover:text-foreground',
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold">Employee loans</CardTitle>
-            <Button asChild size="sm" variant="outline">
-              <Link to="/loans">Manage all loans</Link>
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Active loans are auto-deducted from monthly payroll. Click any row to open the employee profile.
-          </p>
-        </CardHeader>
-        <CardContent className="p-0">
-          <DataTable
-            columns={columns}
-            data={loans}
-            isLoading={isLoading}
-            emptyMessage={filter === 'all' ? 'No loan records yet.' : `No ${filter} loans.`}
-            getRowId={(row) => String(row.id)}
-          />
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
+// Loans section was removed from the Payroll page — loan management lives
+// on the dedicated `/loans` page (sidebar > Loans & Advances). Active loans
+// still feed payroll automatically via the adjustments sync (LoanDeduction
+// rows in PayrollAdjustments), so removing this UI surface doesn't affect
+// any payroll math. Reinstate from git history if it ever needs to come
+// back as a tab.
 
 // ─── Adjustments section ──────────────────────────────────────────────────────
 //
@@ -1317,6 +1172,74 @@ function AdjustmentsTable({
   )
 }
 
+// Spreadsheet columns. Category is NOT a column — it lives at the dialog level
+// so HR's import sheet stays focused on per-employee fields.
+const TEMPLATE_HEADERS = ['employee_no', 'employee_name', 'employee_email', 'amount', 'note'] as const
+
+interface ParsedRow {
+  rowNumber: number
+  employeeNo: string
+  employeeName: string
+  employeeEmail: string
+  amount: number
+  notes: string
+  error: string | null
+}
+
+// Stages for the bulk-import workflow. Each transition is one-way (or back to
+// idle via Replace), so the UI state stays predictable.
+type BulkStage =
+  | 'idle'         // No file picked yet
+  | 'parsing'      // Reading the .xlsx in the browser
+  | 'parsed'       // Local validation done, no server roundtrip yet
+  | 'validating'   // Server is resolving employees + tenant ownership
+  | 'ready'        // Validation finished, preview is up to date
+  | 'submitting'   // Server is inserting rows
+  | 'submitted'    // Done, dialog about to close
+
+interface MergedRow extends ParsedRow {
+  serverStatus: 'pending' | 'valid' | 'invalid'
+  serverError: string | null
+  resolvedName: string | null
+  resolvedEmployeeNo: string | null
+}
+
+async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
+  const hash = await crypto.subtle.digest('SHA-256', buffer)
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function StepBadge({ active, done, label, num }: { active: boolean; done: boolean; label: string; num: number }) {
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <div
+        className={cn(
+          'flex size-6 items-center justify-center rounded-full text-[11px] font-bold shrink-0 transition-colors',
+          done ? 'bg-emerald-500 text-white'
+            : active ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground',
+        )}
+      >
+        {done ? <CheckCircle2 className="size-3.5" /> : num}
+      </div>
+      <span
+        className={cn(
+          'text-xs font-medium truncate transition-colors',
+          active || done ? 'text-foreground' : 'text-muted-foreground',
+        )}
+      >
+        {label}
+      </span>
+    </div>
+  )
+}
+
 function AddAdjustmentDialog({
   open, onOpenChange, year, month,
 }: {
@@ -1325,23 +1248,51 @@ function AddAdjustmentDialog({
   year: number
   month: number
 }) {
-  const [employeeId, setEmployeeId] = useState('')
+  // Mode is local UI state; the period + category are shared across both modes
+  // so switching tabs doesn't lose context HR has already chosen.
+  const [mode, setMode] = useState<'single' | 'bulk'>('single')
   const [category, setCategory] = useState<PayrollAdjustmentCategory>('overtime')
+
+  // Single-mode state
+  const [employeeId, setEmployeeId] = useState('')
   const [amount, setAmount] = useState<number | ''>('' as const)
   const [notes, setNotes] = useState('')
 
-  const { data: empList } = useEmployees({ limit: 200 })
-  const employees = empList?.data ?? []
+  // Bulk-mode state
+  const [stage, setStage] = useState<BulkStage>('idle')
+  const [file, setFile] = useState<File | null>(null)
+  const [fileHash, setFileHash] = useState<string | null>(null)
+  const [rows, setRows] = useState<MergedRow[]>([])
+  const [parseError, setParseError] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+
   const create = useCreateAdjustment()
+  const bulk = useBulkCreateAdjustments()
+  const validate = useValidateBulkAdjustments()
+  const submitting = create.isPending || bulk.isPending
 
   const reset = () => {
-    setEmployeeId('')
+    setMode('single')
     setCategory('overtime')
+    setEmployeeId('')
     setAmount('' as const)
     setNotes('')
+    setStage('idle')
+    setFile(null)
+    setFileHash(null)
+    setRows([])
+    setParseError(null)
+    setDragOver(false)
   }
 
-  const handleSubmit = () => {
+  const handleOpenChange = (v: boolean) => {
+    if (submitting || stage === 'parsing' || stage === 'validating') return
+    onOpenChange(v)
+    if (!v) reset()
+  }
+
+  const handleSingleSubmit = () => {
     if (!employeeId || !amount || Number(amount) <= 0) return
     create.mutate(
       { employeeId, periodYear: year, periodMonth: month, category, amount: Number(amount), notes: notes || null },
@@ -1355,83 +1306,553 @@ function AddAdjustmentDialog({
     )
   }
 
+  const handleDownloadTemplate = async () => {
+    setDownloading(true)
+    try {
+      const blob = await api.download('/payroll/adjustments/bulk-template')
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'payroll-adjustments-template.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      toast.error('Could not download template', err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const validateOnServer = async (parsed: MergedRow[]) => {
+    setStage('validating')
+    try {
+      const result = await validate.mutateAsync(
+        parsed.map<BulkAdjustmentRow>((r) => ({
+          rowNumber: r.rowNumber,
+          employeeNo: r.employeeNo || null,
+          employeeName: r.employeeName || null,
+          employeeEmail: r.employeeEmail || null,
+          amount: r.amount,
+          notes: r.notes || null,
+        })),
+      )
+      const byRow = new Map<number, BulkValidateRow>(result.rows.map((r) => [r.rowNumber, r]))
+      setRows((prev) =>
+        prev.map((r) => {
+          const v = byRow.get(r.rowNumber)
+          if (!v) return r
+          return {
+            ...r,
+            serverStatus: v.status,
+            serverError: v.error,
+            resolvedName: v.resolvedName,
+            resolvedEmployeeNo: v.resolvedEmployeeNo,
+          }
+        }),
+      )
+      setStage('ready')
+    } catch (err) {
+      toast.error('Validation failed', err instanceof Error ? err.message : 'Could not validate file')
+      setStage('parsed')
+    }
+  }
+
+  const handleFile = async (picked: File) => {
+    setParseError(null)
+    setStage('parsing')
+
+    let buffer: ArrayBuffer
+    try {
+      buffer = await picked.arrayBuffer()
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : 'Could not read file.')
+      setStage('idle')
+      return
+    }
+
+    // Duplicate-content guard. We hash the file bytes (not name + size) so HR
+    // can't sneak in the same data twice by renaming it.
+    let hash: string
+    try {
+      hash = await sha256Hex(buffer)
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : 'Could not hash file.')
+      setStage('idle')
+      return
+    }
+    if (file && fileHash === hash) {
+      toast.error('Same file already uploaded', 'Pick a different .xlsx or use Replace to start over.')
+      setStage(rows.length > 0 ? 'ready' : 'idle')
+      return
+    }
+
+    setFile(picked)
+    setFileHash(hash)
+
+    try {
+      const XLSX = await import('xlsx')
+      const wb = XLSX.read(buffer, { type: 'array' })
+      const firstSheet = wb.Sheets[wb.SheetNames[0]]
+      if (!firstSheet) {
+        setParseError('Workbook contains no sheets.')
+        setRows([])
+        setStage('idle')
+        return
+      }
+      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '', raw: true })
+      if (json.length === 0) {
+        setParseError('Sheet is empty. Download the template for the correct format.')
+        setRows([])
+        setStage('idle')
+        return
+      }
+      const sample = json[0]
+      const haveExpectedHeader = TEMPLATE_HEADERS.some((h) => h in sample)
+      if (!haveExpectedHeader) {
+        setParseError(`Headers must match: ${TEMPLATE_HEADERS.join(', ')}.`)
+        setRows([])
+        setStage('idle')
+        return
+      }
+      const parsed: MergedRow[] = json.map((row, idx) => {
+        const employeeNo = String(row.employee_no ?? '').trim()
+        const employeeName = String(row.employee_name ?? '').trim()
+        const employeeEmail = String(row.employee_email ?? '').trim()
+        const amountRaw = row.amount
+        const am = typeof amountRaw === 'number' ? amountRaw : Number(String(amountRaw ?? '').trim())
+        const n = String(row.note ?? '').trim()
+        // rowNumber refers to the spreadsheet line (header is row 1).
+        const rowNumber = idx + 2
+        let error: string | null = null
+        if (!employeeNo && !employeeEmail) error = 'employee_no or employee_email is required'
+        else if (!Number.isFinite(am) || am <= 0) error = 'amount must be a positive number'
+        return {
+          rowNumber, employeeNo, employeeName, employeeEmail, amount: am, notes: n, error,
+          serverStatus: 'pending',
+          serverError: null,
+          resolvedName: null,
+          resolvedEmployeeNo: null,
+        }
+      })
+      setRows(parsed)
+      setStage('parsed')
+      // Auto-validate server-side. Skip the network call if every row already
+      // failed local checks — there's nothing the server can resolve.
+      if (parsed.some((r) => !r.error)) {
+        await validateOnServer(parsed)
+      } else {
+        setStage('ready')
+      }
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : 'Could not parse file.')
+      setRows([])
+      setStage('idle')
+    }
+  }
+
+  const clearFile = () => {
+    setFile(null)
+    setFileHash(null)
+    setRows([])
+    setParseError(null)
+    setStage('idle')
+  }
+
+  // Combine local + server validation into a single per-row truth.
+  const rowStatus = (r: MergedRow): { invalid: boolean; message: string | null } => {
+    if (r.error) return { invalid: true, message: r.error }
+    if (r.serverStatus === 'invalid') return { invalid: true, message: r.serverError }
+    return { invalid: false, message: null }
+  }
+  const validRows = useMemo(() => rows.filter((r) => !rowStatus(r).invalid), [rows])
+  const invalidRows = useMemo(() => rows.filter((r) => rowStatus(r).invalid), [rows])
+  const totalRows = rows.length
+
+  const handleBulkSubmit = () => {
+    if (validRows.length === 0 || invalidRows.length > 0) return
+    setStage('submitting')
+    bulk.mutate(
+      {
+        periodYear: year,
+        periodMonth: month,
+        category,
+        rows: validRows.map<BulkAdjustmentRow>((r) => ({
+          rowNumber: r.rowNumber,
+          employeeNo: r.employeeNo || null,
+          employeeName: r.employeeName || null,
+          employeeEmail: r.employeeEmail || null,
+          amount: r.amount,
+          notes: r.notes || null,
+        })),
+      },
+      {
+        onSuccess: (res: BulkCreateAdjustmentsResult) => {
+          setStage('submitted')
+          toast.success('Adjustments imported', `${res.created} row${res.created === 1 ? '' : 's'} created.`)
+          reset()
+          onOpenChange(false)
+        },
+        onError: (err: unknown) => {
+          // Server replies 400 with per-row errors; surface them inline so HR
+          // can fix the offending lines without a re-upload guessing game.
+          const e = err as { data?: BulkCreateAdjustmentsResult; message?: string }
+          if (e?.data?.errors && Array.isArray(e.data.errors)) {
+            const byRow = new Map(e.data.errors.map((er) => [er.row, er.error]))
+            setRows((prev) => prev.map((r) => {
+              const msg = byRow.get(r.rowNumber)
+              return msg ? { ...r, serverStatus: 'invalid' as const, serverError: msg } : r
+            }))
+            setStage('ready')
+          } else {
+            toast.error('Import failed', e?.message ?? 'Unknown error')
+            setStage('ready')
+          }
+        },
+      },
+    )
+  }
+
+  const singleCanSubmit = !!employeeId && !!amount && Number(amount) > 0
+  const bulkCanSubmit = stage === 'ready' && validRows.length > 0 && invalidRows.length === 0
+
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!create.isPending) { onOpenChange(v); if (!v) reset() } }}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className={cn(
+        'max-h-[90vh] flex flex-col',
+        mode === 'single' ? 'sm:max-w-md' : 'sm:max-w-3xl',
+      )}>
         <DialogHeader>
           <DialogTitle>New adjustment - {MONTH_NAMES[month - 1]} {year}</DialogTitle>
           <DialogDescription>
-            Add an addition or deduction line that will be applied when payroll runs for this period.
+            {mode === 'single'
+              ? 'Add a single addition or deduction that will apply when payroll runs.'
+              : 'Upload an Excel file to add many adjustments at once. The category applies to every row.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 pt-1">
-          <div className="space-y-1.5">
-            <Label>Employee</Label>
-            <Select value={employeeId} onValueChange={setEmployeeId}>
-              <SelectTrigger><SelectValue placeholder="Pick an employee" /></SelectTrigger>
-              <SelectContent>
-                {employees.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.firstName} {e.lastName} {e.employeeNo ? `(${e.employeeNo})` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
 
-          <div className="space-y-1.5">
-            <Label>Category</Label>
+        <Tabs value={mode} onValueChange={(v) => setMode(v as 'single' | 'bulk')} className="mt-1">
+          <TabsList className="grid grid-cols-2 w-full">
+            <TabsTrigger value="single" disabled={submitting || stage === 'parsing' || stage === 'validating'}>
+              <Plus className="size-3.5 me-1.5" />
+              Single entry
+            </TabsTrigger>
+            <TabsTrigger value="bulk" disabled={submitting}>
+              <Upload className="size-3.5 me-1.5" />
+              Bulk import
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Category - shared between both modes so switching tabs preserves intent. */}
+          <div className="space-y-1.5 pt-4">
+            <Label>Category {mode === 'bulk' && <span className="text-[10px] font-normal text-muted-foreground">(applies to every row)</span>}</Label>
             <Select value={category} onValueChange={(v) => setCategory(v as PayrollAdjustmentCategory)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {ADJUSTMENT_PICKABLE_CATEGORIES.map((c) => (
                   <SelectItem key={c.value} value={c.value}>
                     {c.label}
-                    <span className="ms-1.5 text-[10px] text-muted-foreground">
-                      ({c.kind})
-                    </span>
+                    <span className="ms-1.5 text-[10px] text-muted-foreground">({c.kind})</span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Amount (AED)</Label>
-            <NumericInput
-              value={amount === '' ? '' : String(amount)}
-              onChange={(e) => {
-                const raw = e.target.value
-                setAmount(raw === '' ? '' : Number(raw))
-              }}
-              placeholder="0.00"
-              maxDecimals={2}
-            />
-          </div>
+          <TabsContent value="single" className="mt-4 space-y-3 focus-visible:outline-none">
+            <div className="space-y-1.5">
+              <Label>Employee</Label>
+              <EmployeeSelect
+                value={employeeId}
+                onValueChange={setEmployeeId}
+                placeholder="Pick an employee"
+                clearable
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Amount (AED)</Label>
+              <NumericInput
+                value={amount === '' ? '' : String(amount)}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  setAmount(raw === '' ? '' : Number(raw))
+                }}
+                placeholder="0.00"
+                maxDecimals={2}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notes (optional)</Label>
+              <input
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="e.g. Q2 sales commission"
+              />
+            </div>
+          </TabsContent>
 
-          <div className="space-y-1.5">
-            <Label>Notes (optional)</Label>
-            <input
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Q2 sales commission"
-            />
-          </div>
+          <TabsContent value="bulk" className="mt-4 space-y-4 focus-visible:outline-none overflow-y-auto">
+            {/* Workflow stepper */}
+            <div className="grid grid-cols-3 gap-1 rounded-lg border bg-muted/30 p-2">
+              <StepBadge
+                num={1}
+                label="Upload file"
+                active={stage === 'idle' || stage === 'parsing'}
+                done={stage !== 'idle' && stage !== 'parsing'}
+              />
+              <StepBadge
+                num={2}
+                label="Validate"
+                active={stage === 'parsed' || stage === 'validating'}
+                done={stage === 'ready' || stage === 'submitting' || stage === 'submitted'}
+              />
+              <StepBadge
+                num={3}
+                label="Import"
+                active={stage === 'ready' || stage === 'submitting'}
+                done={stage === 'submitted'}
+              />
+            </div>
 
-          <Separator />
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => { onOpenChange(false); reset() }} disabled={create.isPending}>
-              Cancel
-            </Button>
+            {/* Upload area */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Excel file</Label>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs font-medium"
+                  onClick={handleDownloadTemplate}
+                  loading={downloading}
+                >
+                  <FileDown className="size-3" />
+                  Download template
+                </Button>
+              </div>
+
+              {!file ? (
+                <label
+                  htmlFor="bulk-adjustment-file"
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setDragOver(false)
+                    const f = e.dataTransfer.files?.[0]
+                    if (f) handleFile(f)
+                  }}
+                  className={cn(
+                    'group relative flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 cursor-pointer transition-all',
+                    dragOver
+                      ? 'border-primary bg-primary/5 scale-[1.005]'
+                      : 'border-border bg-muted/20 hover:border-primary/50 hover:bg-muted/40',
+                  )}
+                >
+                  <div className={cn(
+                    'flex size-12 items-center justify-center rounded-full transition-colors',
+                    dragOver ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground group-hover:text-foreground',
+                  )}>
+                    <FileSpreadsheet className="size-6" />
+                  </div>
+                  <div className="text-center space-y-0.5">
+                    <p className="text-sm font-medium text-foreground">
+                      {dragOver ? 'Drop to upload' : 'Drag and drop or click to browse'}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      .xlsx · columns: {TEMPLATE_HEADERS.join(', ')}
+                    </p>
+                  </div>
+                  <input
+                    id="bulk-adjustment-file"
+                    type="file"
+                    accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f) handleFile(f)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+              ) : (
+                <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
+                  <div className={cn(
+                    'flex size-10 items-center justify-center rounded-lg shrink-0',
+                    invalidRows.length === 0 && stage === 'ready'
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+                  )}>
+                    {stage === 'parsing' || stage === 'validating'
+                      ? <Loader2 className="size-5 animate-spin" />
+                      : <FileSpreadsheet className="size-5" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{file.name}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {formatBytes(file.size)}
+                      {stage === 'parsing' && ' · parsing…'}
+                      {stage === 'validating' && ' · validating with server…'}
+                      {(stage === 'ready' || stage === 'parsed') && ` · ${totalRows} row${totalRows === 1 ? '' : 's'}`}
+                      {stage === 'submitting' && ' · importing…'}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFile}
+                    disabled={stage === 'parsing' || stage === 'validating' || stage === 'submitting'}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3.5 me-1" />
+                    Replace
+                  </Button>
+                </div>
+              )}
+              {parseError && (
+                <p className="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400">
+                  <AlertCircle className="size-3" />
+                  {parseError}
+                </p>
+              )}
+            </div>
+
+            {/* Validation summary */}
+            {totalRows > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Total</p>
+                  <p className="mt-1 text-xl font-bold tabular-nums">{totalRows}</p>
+                </div>
+                <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/15">
+                  <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+                    <CheckCircle2 className="size-3" />
+                    Valid
+                  </p>
+                  <p className="mt-1 text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{validRows.length}</p>
+                </div>
+                <div className={cn(
+                  'rounded-lg border p-3',
+                  invalidRows.length > 0
+                    ? 'border-rose-200/60 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-950/15'
+                    : 'border-border bg-muted/20',
+                )}>
+                  <p className={cn(
+                    'flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest',
+                    invalidRows.length > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground',
+                  )}>
+                    <XCircle className="size-3" />
+                    Invalid
+                  </p>
+                  <p className={cn(
+                    'mt-1 text-xl font-bold tabular-nums',
+                    invalidRows.length > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground',
+                  )}>{invalidRows.length}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Preview table */}
+            {totalRows > 0 && (
+              <div className="space-y-2">
+                <div className="rounded-lg border overflow-hidden">
+                  <div className="max-h-72 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/50 sticky top-0">
+                        <tr>
+                          <th className="px-2 py-1.5 text-left font-medium w-8">#</th>
+                          <th className="px-2 py-1.5 text-left font-medium w-7"></th>
+                          <th className="px-2 py-1.5 text-left font-medium">Employee</th>
+                          <th className="px-2 py-1.5 text-right font-medium">Amount</th>
+                          <th className="px-2 py-1.5 text-left font-medium">Note / Issue</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {rows.map((r) => {
+                          const status = rowStatus(r)
+                          return (
+                            <tr
+                              key={r.rowNumber}
+                              className={cn(status.invalid && 'bg-rose-50/60 dark:bg-rose-950/20')}
+                            >
+                              <td className="px-2 py-1.5 text-muted-foreground tabular-nums">{r.rowNumber}</td>
+                              <td className="px-2 py-1.5">
+                                {status.invalid ? (
+                                  <XCircle className="size-3.5 text-rose-600 dark:text-rose-400" />
+                                ) : r.serverStatus === 'valid' ? (
+                                  <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                                ) : (
+                                  <Loader2 className="size-3.5 text-muted-foreground/50 animate-spin" />
+                                )}
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <div className="min-w-0">
+                                  <p className="truncate">
+                                    {r.resolvedName ?? r.employeeName ?? r.employeeNo ?? r.employeeEmail ?? <span className="text-muted-foreground">—</span>}
+                                  </p>
+                                  {(r.resolvedEmployeeNo || r.employeeNo || r.employeeEmail) && (
+                                    <p className="text-[10px] text-muted-foreground truncate">
+                                      {r.resolvedEmployeeNo ?? r.employeeNo ?? r.employeeEmail}
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-2 py-1.5 text-right tabular-nums">
+                                {Number.isFinite(r.amount) && r.amount > 0
+                                  ? formatCurrency(r.amount)
+                                  : <span className="text-rose-600">—</span>}
+                              </td>
+                              <td className="px-2 py-1.5">
+                                {status.invalid ? (
+                                  <span className="text-rose-600 dark:text-rose-400">{status.message}</span>
+                                ) : (
+                                  r.notes || <span className="text-muted-foreground">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {invalidRows.length > 0 && stage === 'ready' && (
+                  <p className="flex items-start gap-1.5 text-xs text-rose-600 dark:text-rose-400">
+                    <AlertCircle className="size-3 mt-0.5 shrink-0" />
+                    Fix the {invalidRows.length} highlighted row{invalidRows.length === 1 ? '' : 's'} in your spreadsheet, then re-upload. Imports run all-or-nothing.
+                  </p>
+                )}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        <Separator />
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={submitting || stage === 'parsing' || stage === 'validating'}>
+            Cancel
+          </Button>
+          {mode === 'single' ? (
             <Button
-              onClick={handleSubmit}
+              onClick={handleSingleSubmit}
               loading={create.isPending}
-              disabled={!employeeId || !amount || Number(amount) <= 0}
+              disabled={!singleCanSubmit || submitting}
             >
               Save adjustment
             </Button>
-          </div>
+          ) : (
+            <Button
+              onClick={handleBulkSubmit}
+              loading={bulk.isPending}
+              disabled={!bulkCanSubmit || submitting}
+            >
+              {validRows.length > 0
+                ? `Import ${validRows.length} row${validRows.length === 1 ? '' : 's'}`
+                : 'Import rows'}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -1731,10 +2152,10 @@ export function PayrollPage() {
             <Sparkles className="size-3.5" />
             Adjustments
           </TabsTrigger>
-          <TabsTrigger value="loans" className="gap-1.5 text-sm">
-            <DollarSign className="size-3.5" />
-            Loans
-          </TabsTrigger>
+          {/* Loans tab intentionally removed from Payroll — loan management
+              lives on the dedicated Loans & Advances page (sidebar > Loans).
+              Auto-deduction continues to feed payroll via the adjustments
+              sync; HR doesn't need a duplicate surface inside Payroll. */}
           <TabsTrigger value="tools" className="gap-1.5 text-sm">
             <Calculator className="size-3.5" />
             Gratuity Calculator
@@ -1784,10 +2205,6 @@ export function PayrollPage() {
 
         <TabsContent value="adjustments" className="mt-4">
           <AdjustmentsSection />
-        </TabsContent>
-
-        <TabsContent value="loans" className="mt-4">
-          <LoansSection />
         </TabsContent>
 
         <TabsContent value="tools" className="mt-4">
