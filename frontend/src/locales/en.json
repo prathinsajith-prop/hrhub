@@ -13,6 +13,7 @@
     "attendance": "Attendance",
     "performance": "Performance",
     "assets": "Assets",
+    "travel": "Travel",
     "exit": "Exit & Offboarding",
     "calendar": "Calendar",
     "reports": "Reports",
@@ -1526,6 +1527,107 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low"
+    }
+  },
+  "travel": {
+    "title": "Travel",
+    "subtitle": "Trip requests and per-trip expense claims",
+    "actions": {
+      "newRequest": "New travel request"
+    },
+    "tabs": {
+      "requests": "Travel Requests",
+      "expenses": "Travel Expenses"
+    },
+    "filters": {
+      "all": "All",
+      "draft": "Draft",
+      "submitted": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled",
+      "completed": "Completed"
+    },
+    "kpi": {
+      "pending": "Pending approval",
+      "approved": "Approved",
+      "completed": "Completed",
+      "draft": "Drafts"
+    },
+    "list": {
+      "travelId": "Travel ID",
+      "employee": "Employee",
+      "place": "Place",
+      "dates": "Dates",
+      "days": "Days",
+      "status": "Status",
+      "actions": "Actions",
+      "empty": "No travel requests yet"
+    },
+    "create": {
+      "title": "New travel request",
+      "desc": "Submit a trip request for approval. Expenses can be added once the request is approved.",
+      "employee": "Employee",
+      "place": "Place of visit",
+      "departure": "Departure date",
+      "arrival": "Arrival date",
+      "duration": "Expected duration",
+      "durationPreview": "{{n}} day(s)",
+      "purpose": "Purpose of visit",
+      "customer": "Customer name",
+      "billable": "Billable to customer",
+      "notes": "Notes",
+      "submit": "Create request",
+      "success": "Travel request created"
+    },
+    "reject": {
+      "title": "Reject travel request?",
+      "desc": "The employee will see this reason in their notification.",
+      "reason": "Reason",
+      "confirm": "Reject"
+    },
+    "delete": {
+      "title": "Delete travel request?",
+      "desc": "This will remove the request and any attached expenses. The data remains in the audit trail."
+    },
+    "expenses": {
+      "back": "Back to requests",
+      "add": "Add expense",
+      "date": "Date",
+      "description": "Description",
+      "ticket": "Ticket",
+      "lodging": "Lodging",
+      "boarding": "Boarding",
+      "phone": "Phone",
+      "localConveyance": "Local",
+      "incidentals": "Incid.",
+      "others": "Others",
+      "total": "Total",
+      "status": "Status",
+      "actions": "Actions",
+      "empty": "No expenses yet. Add one to get started.",
+      "totals": "Expense totals",
+      "grandTotal": "Grand total",
+      "rejectPrompt": "Reason for rejection:"
+    },
+    "expense": {
+      "title": "Add travel expense",
+      "desc": "Add one expense line — leave any category at 0 if it doesn't apply.",
+      "date": "Date",
+      "description": "Description",
+      "ticket": "Ticket",
+      "lodging": "Lodging",
+      "boarding": "Boarding",
+      "phone": "Phone",
+      "localConveyance": "Local conveyance",
+      "incidentals": "Incidentals",
+      "others": "Others",
+      "total": "Total",
+      "submit": "Add expense",
+      "success": "Expense added",
+      "errors": {
+        "invalid": "Add at least one positive amount and a date"
+      }
     }
   },
   "training": {

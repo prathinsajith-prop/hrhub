@@ -46,14 +46,32 @@ export type EmployeeStatus = 'active' | 'onboarding' | 'suspended' | 'terminated
 
 export type WeekDay = 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday'
 
+/** Single core-hours window in a shift. Both fields are 'HH:MM' (24-hour) and
+ *  `from` is always earlier than `to` — multi-segment shifts are expressed as
+ *  multiple windows rather than one wraparound window. */
+export interface ShiftCoreHoursWindow {
+  from: string
+  to: string
+}
+
 // Tenant-defined shift template; employees reference one via Employee.shiftId.
 export interface Shift {
   id: string
   tenantId: string
   name: string
+  /** Optional UI swatch (hex like #RRGGBB or a CSS keyword). */
+  color: string | null
   startTime: string // 'HH:MM'
   endTime: string   // 'HH:MM'
   weeklyOffDays: WeekDay[]
+  /** Punch-in / out must fall inside [startTime - margin, endTime + margin]
+   *  to count toward payable hours. Null = no margin enforcement. */
+  shiftMarginBeforeMinutes: number | null
+  shiftMarginAfterMinutes: number | null
+  /** Time frames during which employees must be present. Empty = no requirement. */
+  coreWorkingHours: ShiftCoreHoursWindow[]
+  /** When true, breaks cannot overlap any coreWorkingHours window. */
+  restrictBreaksDuringCoreHours: boolean
   isActive: boolean
   sortOrder: number
   createdAt: string

@@ -621,7 +621,8 @@ function buildPayslipsAndTotals(
         const adj = adjustmentTotals.get(emp.id)
         const overtime = adj?.overtime ?? 0
         const commission = adj?.commission ?? 0
-        const additions = overtime + commission
+        const otherAddition = adj?.otherAddition ?? 0
+        const additions = overtime + commission + otherAddition
         const unpaidLeaveDeduction = adj?.unpaidLeaveDeduction ?? 0
         const sickHalfPayDeduction = adj?.sickHalfPayDeduction ?? 0
         const loanDeduction = adj?.loanDeduction ?? 0
@@ -653,7 +654,10 @@ function buildPayslipsAndTotals(
             otherAllowances: String((other * prorateRatio).toFixed(2)),
             earningsBreakdown,
             overtime: overtime.toFixed(2),
-            commission: commission.toFixed(2),
+            // commission + custom-category additions pooled — keeps the
+            // payslip's gross = earnings + overtime + commission identity
+            // intact without needing a separate column per custom category.
+            commission: (commission + otherAddition).toFixed(2),
             grossSalary: String(gross.toFixed(2)),
             deductions: String(deductions.toFixed(2)),
             unpaidLeaveDays: adj?.unpaidLeaveDays ?? 0,

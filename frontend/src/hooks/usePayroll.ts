@@ -235,7 +235,15 @@ export interface BulkCreateAdjustmentsBody {
 }
 
 export interface BulkCreateAdjustmentsResult {
+    /** Rows inserted as brand-new adjustments. */
     created: number
+    /** Existing rows whose amount or notes were updated. */
+    updated: number
+    /** Existing rows that matched exactly — skipped. */
+    unchanged: number
+    /** Within-batch duplicates beyond the first occurrence — skipped. */
+    duplicate: number
+    /** Rows that failed validation (resolution / amount / category). */
     failed: number
     errors: Array<{ row: number; error: string }>
 }
@@ -259,8 +267,16 @@ export function useBulkCreateAdjustments() {
             return api.post<BulkCreateAdjustmentsResult>('/payroll/adjustments/bulk', payload)
         },
         onSuccess: (_d, vars) => {
+            // Belt-and-suspenders refresh of every consumer downstream of the
+            // adjustments ledger. invalidate marks each cache stale AND forces
+            // active queries to refetch immediately (TanStack default behaviour),
+            // so the Total additions / Total deductions KPIs on PayrollPage
+            // update in the same tick the dialog closes — no stale-flash.
             qc.invalidateQueries({ queryKey: ['payroll-adjustments', vars.periodYear, vars.periodMonth] })
             qc.invalidateQueries({ queryKey: ['payroll-adjustment-imports'] })
+            // Readiness + payslip totals depend on adjustments too — bulk
+            // create can flip readiness from OK → blocked (or vice versa).
+            qc.invalidateQueries({ queryKey: ['payroll'] })
         },
         // No global error toast — the dialog renders per-row errors inline.
         onError: () => {},
@@ -314,34 +330,98 @@ export function useDownloadImportFile() {
     })
 }
 
+/** Verdict produced by the row-level comparison engine. Drives badge + colour. */
+export type BulkRowAction = 'new' | 'unchanged' | 'updated' | 'duplicate' | 'invalid'
+
+export interface FieldChange<T> {
+    old: T
+    new: T
+}
+
+export interface RowChanges {
+    amount?: FieldChange<number>
+    notes?: FieldChange<string | null>
+}
+
 export interface BulkValidateRow {
     rowNumber: number
+    /** Legacy field — `valid` means the row will commit (new OR updated). */
     status: 'valid' | 'invalid'
+    /** Per-row verdict — preferred over `status` for new code. */
+    action: BulkRowAction
     error: string | null
-    /** Non-blocking warning (e.g. duplicate employee in batch). */
+    /** Non-blocking warning (e.g. duplicate-in-batch). */
     warning: string | null
     employeeId: string | null
     resolvedName: string | null
     resolvedEmployeeNo: string | null
+    /** Existing manual adjustment matched on (employee, period, category). */
+    existing: { id: string; amount: number; notes: string | null } | null
+    /** Field-level diff when action === 'updated'. */
+    changes: RowChanges | null
 }
 
 export interface BulkValidateResult {
     total: number
+    /** Rows that will commit on submit (new + updated). */
     valid: number
     invalid: number
-    /** Valid rows that also carry a warning. */
+    /** Valid rows that also carry a non-blocking warning. */
     warned: number
+    /** Counters fed into the preview summary cards. */
+    newCount: number
+    updatedCount: number
+    unchangedCount: number
+    duplicateCount: number
     /** True when the period is locked — surfaces the same blocker the
      *  bulk-create endpoint enforces, ahead of clicking Submit. */
     periodLocked: boolean
     rows: BulkValidateRow[]
 }
 
+// ─── Adjustment category catalog ────────────────────────────────────────────
+
+export interface AdjustmentCategoryOption {
+    value: string
+    label: string
+    kind: 'addition' | 'deduction'
+    builtin: boolean
+    /** False for auto-only categories (loan_repayment, unpaid_leave, sick_half_pay). */
+    manual: boolean
+}
+
+export function useAdjustmentCategories() {
+    return useQuery({
+        queryKey: ['payroll-adjustment-categories'],
+        queryFn: () =>
+            api.get<{ data: AdjustmentCategoryOption[] }>('/payroll/adjustments/categories').then((r) => r.data),
+        staleTime: 60_000,
+    })
+}
+
+export function useCreateAdjustmentCategory() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (body: { label: string; kind: 'addition' | 'deduction' }) =>
+            api.post<{ data: AdjustmentCategoryOption; created: boolean }>('/payroll/adjustments/categories', body),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['payroll-adjustment-categories'] })
+        },
+        onError: (err: Error) => toast.error('Could not create category', err?.message ?? 'Unexpected error'),
+    })
+}
+
 export function useValidateBulkAdjustments() {
     return useMutation({
-        // Accepts optional period context so the validator can report
-        // periodLocked. Older callers that only send `rows` still work.
-        mutationFn: (body: { rows: BulkAdjustmentRow[]; periodYear?: number; periodMonth?: number }) =>
+        // Period + category anchor the comparison engine — when all three are
+        // present, every row is classified as new/updated/unchanged/duplicate.
+        // Without them every row falls back to `new`.
+        mutationFn: (body: {
+            rows: BulkAdjustmentRow[]
+            periodYear?: number
+            periodMonth?: number
+            category?: PayrollAdjustmentCategory
+        }) =>
             api.post<BulkValidateResult>('/payroll/adjustments/bulk-validate', body),
         onError: () => {},
     })

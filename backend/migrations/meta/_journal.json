@@ -393,6 +393,62 @@
       "when": 1779638400000,
       "tag": "0055_payroll_adjustment_imports",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1779724800000,
+      "tag": "0056_payroll_adjustment_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1779811200000,
+      "tag": "0057_payroll_adjustments_allow_custom_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1779897600000,
+      "tag": "0058_payroll_adjustments_soft_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1779984000000,
+      "tag": "0059_drop_payroll_import_hash_uniq",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1780070400000,
+      "tag": "0060_travel",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1780156800000,
+      "tag": "0061_shifts_margin_core_hours",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1780243200000,
+      "tag": "0062_attendance_punches",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1780329600000,
+      "tag": "0063_biometric_id_mappings",
+      "breakpoints": true
     }
   ]
 }
