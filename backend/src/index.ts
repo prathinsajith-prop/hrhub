@@ -163,8 +163,11 @@ async function bootstrap() {
         sign: { expiresIn: env.JWT_EXPIRES_IN as never },
     })
 
-    // API documentation — only enabled when ENABLE_API_DOCS=true.
-    const docsEnabled = env.ENABLE_API_DOCS
+    // API documentation — always on in development, opt-in via
+    // ENABLE_API_DOCS=true for staging/prod. This matches CLAUDE.md's
+    // documented behaviour: HR engineers shouldn't have to set an env
+    // var just to view Swagger locally.
+    const docsEnabled = env.ENABLE_API_DOCS || env.NODE_ENV !== 'production'
     if (docsEnabled) {
         await app.register(swagger, {
             openapi: {
