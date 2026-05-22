@@ -36,6 +36,7 @@ import dashboardRoutes from './modules/dashboard/dashboard.routes.js'
 import reportsRoutes from './modules/reports/reports.routes.js'
 import settingsRoutes from './modules/settings/settings.routes.js'
 import { exitRoutes } from './modules/exit/exit.routes.js'
+import { offboardingFlowRoutes } from './modules/offboardingFlow/offboarding.routes.js'
 import { interviewRoutes } from './modules/recruitment/interview.routes.js'
 import { performanceRoutes } from './modules/performance/performance.routes.js'
 import { attendanceRoutes } from './modules/attendance/attendance.routes.js'
@@ -364,6 +365,7 @@ async function bootstrap() {
     await app.register(reportsRoutes, { prefix: '/api/v1/reports' })
     await app.register(settingsRoutes, { prefix: '/api/v1/settings' })
     await app.register(exitRoutes, { prefix: '/api/v1' })
+    await app.register(offboardingFlowRoutes, { prefix: '/api/v1' })
     await app.register(interviewRoutes, { prefix: '/api/v1' })
     await app.register(performanceRoutes, { prefix: '/api/v1' })
     await app.register(attendanceRoutes, { prefix: '/api/v1' })

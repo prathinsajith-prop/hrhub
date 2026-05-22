@@ -456,6 +456,34 @@
       "when": 1780416000000,
       "tag": "0064_attendance_punches_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1780502400000,
+      "tag": "0065_offboarding_flow",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1780588800000,
+      "tag": "0066_offboarding_default_questions",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1780675200000,
+      "tag": "0067_offboarding_doc_body",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1780761600000,
+      "tag": "0068_offboarding_settings_backfill",
+      "breakpoints": true
     }
   ]
 }

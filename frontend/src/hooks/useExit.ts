@@ -30,6 +30,11 @@ export interface ExitRequest {
     employeeDesignation?: string
     employeeDepartment?: string
     employeeAvatarUrl?: string | null
+    // Offboarding-flow progress — populated by the list/detail SQL via
+    // correlated subqueries against exit_clearance_items + exit_interview_responses.
+    clearanceTotal?: number
+    clearanceCompleted?: number
+    interviewSubmitted?: boolean
 }
 
 export interface SettlementPreview {
@@ -112,10 +117,42 @@ export function useInitiateExit() {
     })
 }
 
+/**
+ * Readiness payload — drives the "Can this exit be approved yet?" gate in
+ * the Exit Detail dialog. canApprove is `false` until all clearance items
+ * reach a terminal state (completed/waived); HR may still force-approve via
+ * the mutation's `override` flag.
+ */
+export interface ExitApprovalReadiness {
+    canApprove: boolean
+    totalClearances: number
+    completedClearances: number
+    pendingClearances: Array<{ id: string; name: string; status: string }>
+    interviewSubmitted: boolean
+    documentsConfigured: number
+}
+
+export function useExitApprovalReadiness(exitId: string | null | undefined) {
+    return useQuery({
+        queryKey: ['exit', exitId, 'readiness'],
+        queryFn: () => api.get<{ data: ExitApprovalReadiness }>(`/exit/${exitId}/readiness`).then(r => r.data),
+        enabled: !!exitId,
+    })
+}
+
+/**
+ * Mutation accepts either a bare exit id (backwards-compatible) or an object
+ * with `{ id, override }`. Pass `override: true` to bypass the clearance
+ * gate — server records the override flag in the audit trail.
+ */
 export function useApproveExit() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (id: string) => api.patch(`/exit/${id}/approve`, {}),
+        mutationFn: (input: string | { id: string; override?: boolean }) => {
+            const id = typeof input === 'string' ? input : input.id
+            const override = typeof input === 'string' ? false : (input.override ?? false)
+            return api.patch(`/exit/${id}/approve`, { override })
+        },
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['exit'] })
             qc.invalidateQueries({ queryKey: ['employees'] })

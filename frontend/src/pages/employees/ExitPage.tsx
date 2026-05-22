@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
     LogOut, DollarSign, CheckCircle2, Clock, UserMinus, Eye, CalendarDays,
-    FileText, RefreshCcw, XCircle, AlertTriangle, Scale,
+    FileText, RefreshCcw, XCircle, AlertTriangle, Scale, ListChecks,
 } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -23,8 +23,10 @@ import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import {
     useExitRequests, useInitiateExit, useApproveExit, useRejectExit, useMarkSettlementPaid,
-    useSettlementPreview, type ExitRequest,
+    useSettlementPreview, useExitApprovalReadiness, type ExitRequest,
 } from '@/hooks/useExit'
+import { useOffboardingSettings } from '@/hooks/useOffboardingFlow'
+import { ConfirmDialog } from '@/components/ui/overlays'
 import { EmployeeSelect } from '@/components/shared'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
@@ -35,6 +37,8 @@ import { toast } from '@/components/ui/overlays'
 import { ApiError } from '@/lib/api'
 import { EXIT_TYPE_LABELS } from '@/lib/enums'
 import { EXIT_TYPE_OPTIONS } from '@/lib/options'
+import { ExitClearancePanel } from './ExitClearancePanel'
+import { ExitStagesTimeline, ExitProgressBadge } from './ExitStagesTimeline'
 
 const EXIT_FILTERS: FilterConfig[] = [
     { name: 'exitType', label: 'Exit type', type: 'multi_select', field: 'exitType', options: EXIT_TYPE_OPTIONS },
@@ -139,6 +143,11 @@ export function ExitPage() {
     const approve = useApproveExit()
     const reject = useRejectExit()
     const markPaid = useMarkSettlementPaid()
+    // Read the configured Offboarding Flow defaults so the Initiate Exit
+    // dialog pre-fills the notice period the tenant actually wants instead
+    // of a hard-coded 30. Hint copy below the input tells the user where
+    // the default came from.
+    const offboardingSettings = useOffboardingSettings()
 
     const [showDialog, setShowDialog] = useState(false)
     const [form, setForm] = useState<InitiateForm>(defaultForm)
@@ -146,6 +155,35 @@ export function ExitPage() {
     const [viewingExit, setViewingExit] = useState<ExitRequest | null>(null)
     const [rejectTarget, setRejectTarget] = useState<ExitRequest | null>(null)
     const [rejectReason, setRejectReason] = useState('')
+    const [overrideConfirm, setOverrideConfirm] = useState(false)
+
+    // Live readiness check for the open exit detail dialog. canApprove === false
+    // when clearance items are still pending — the Approve button is then
+    // disabled and a "Force approve" path appears for HR.
+    const readinessQ = useExitApprovalReadiness(viewingExit?.status === 'pending' ? viewingExit.id : null)
+    const readiness = readinessQ.data
+
+    // Compute the configured default notice period (in days) so it can be
+    // pre-filled into the Initiate Exit form. Falls back to 30 if the
+    // settings haven't loaded yet or notice period is disabled.
+    const configuredNoticeDays = (() => {
+        const s = offboardingSettings.data
+        if (!s || !s.noticePeriodEnabled) return 30
+        return s.noticePeriodUnit === 'months' ? s.noticePeriodValue * 30 : s.noticePeriodValue
+    })()
+    // State-during-render sync: when the Initiate dialog opens for the first
+    // time after the configured default loads, replace the placeholder 30
+    // with the tenant's actual configured value. Doesn't override after the
+    // user has typed.
+    const [lastConfiguredNotice, setLastConfiguredNotice] = useState(30)
+    if (configuredNoticeDays !== lastConfiguredNotice) {
+        setLastConfiguredNotice(configuredNoticeDays)
+        // Only seed when the dialog is closed (so it doesn't yank a value
+        // out from under a user mid-edit). The form resets on close anyway.
+        if (!showDialog) {
+            setForm((prev) => ({ ...prev, noticePeriodDays: configuredNoticeDays }))
+        }
+    }
 
     const exitSearch = useSearchFilters({
         storageKey: 'hrhub.exit.searchHistory',
@@ -283,6 +321,12 @@ export function ExitPage() {
             size: 110,
         },
         {
+            id: 'progress',
+            header: 'Offboarding',
+            cell: ({ row: { original: e } }) => <ExitProgressBadge exit={e} />,
+            size: 170,
+        },
+        {
             id: 'actions',
             header: '',
             cell: ({ row: { original: e } }) => (
@@ -303,9 +347,21 @@ export function ExitPage() {
                                 className="h-7 text-xs"
                                 onClick={(ev) => {
                                     ev.stopPropagation()
-                                    approve.mutate(e.id, {
+                                    approve.mutate({ id: e.id }, {
                                         onSuccess: () => toast.success('Approved', 'Exit request approved and employee marked as terminated.'),
-                                        onError: () => toast.error('Failed', 'Could not approve exit.'),
+                                        // Show the backend message so HR sees "3 clearance items
+                                        // still pending …" instead of a generic failure toast.
+                                        // They can then click the row to open the detail view
+                                        // and either complete clearances or use Force Approve.
+                                        onError: (err) => {
+                                            const apiErr = err as ApiError
+                                            const msg = apiErr?.message ?? 'Could not approve exit.'
+                                            if (apiErr?.statusCode === 409) {
+                                                toast.error('Approval blocked', msg)
+                                            } else {
+                                                toast.error('Failed', msg)
+                                            }
+                                        },
                                     })
                                 }}
                                 disabled={approve.isPending}
@@ -400,55 +456,77 @@ export function ExitPage() {
                 </CardContent>
             </Card>
 
-            {/* Detail view dialog */}
+            {/* Detail view dialog — wide two-column layout with the
+                offboarding-flow stages visualised at the top. Left column
+                holds the chronological flow (exit info → clearance →
+                interview), right column holds finance + documents. */}
             <Dialog open={!!viewingExit} onOpenChange={(o) => { if (!o) setViewingExit(null) }}>
-                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <FileText className="size-4" /> Exit Request Details
                         </DialogTitle>
-                        <DialogDescription>Full details and settlement breakdown.</DialogDescription>
+                        <DialogDescription>Full offboarding flow, settlement breakdown, and actions.</DialogDescription>
                     </DialogHeader>
                     {viewingExit && (
-                        <div className="space-y-4 py-1">
-                            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40">
+                        <div className="space-y-5 py-1">
+                            {/* Employee header */}
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border">
                                 <InitialsAvatar name={viewingExit.employeeName ?? '—'} src={viewingExit.employeeAvatarUrl ?? undefined} size="md" />
-                                <div>
-                                    <p className="text-sm font-semibold">{viewingExit.employeeName}</p>
-                                    {viewingExit.employeeDesignation && (
-                                        <p className="text-xs text-muted-foreground">{viewingExit.employeeDesignation}</p>
-                                    )}
-                                    {viewingExit.employeeDepartment && (
-                                        <p className="text-xs text-muted-foreground">{viewingExit.employeeDepartment}</p>
-                                    )}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold truncate">{viewingExit.employeeName}</p>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                        {[viewingExit.employeeNo, viewingExit.employeeDesignation, viewingExit.employeeDepartment].filter(Boolean).join(' · ')}
+                                    </p>
                                 </div>
-                                <div className="ml-auto">
-                                    <Badge variant={statusVariant[viewingExit.status] ?? 'secondary'} className="capitalize">
-                                        {viewingExit.status}
-                                    </Badge>
-                                </div>
+                                <Badge variant={statusVariant[viewingExit.status] ?? 'secondary'} className="capitalize shrink-0">
+                                    {viewingExit.status}
+                                </Badge>
                             </div>
 
-                            <div className="rounded-lg border divide-y text-sm">
-                                <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30">
-                                    <CalendarDays className="size-3.5 text-muted-foreground" />
-                                    <span className="font-medium text-xs uppercase tracking-wide text-muted-foreground">Exit Information</span>
+                            {/* Stages timeline — prominent header for the
+                                offboarding flow. Glanceable answer to "where
+                                is this exit in the process?" */}
+                            <div className="rounded-lg border bg-card p-4">
+                                <div className="flex items-center justify-between gap-2 mb-3">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                        Offboarding Flow
+                                    </p>
+                                    <span className="text-[11px] text-muted-foreground">
+                                        Clearance {viewingExit.clearanceCompleted ?? 0} / {viewingExit.clearanceTotal ?? 0}
+                                        {viewingExit.interviewSubmitted ? ' · Interview submitted' : ''}
+                                    </span>
                                 </div>
-                                <div className="px-4">
-                                    <DetailRow label="Exit Type" value={
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${exitTypeColor[viewingExit.exitType] ?? 'bg-gray-100 text-gray-700'}`}>
-                                            {EXIT_TYPE_LABELS[viewingExit.exitType] ?? viewingExit.exitType}
-                                        </span>
-                                    } />
-                                    <DetailRow label="Exit Date" value={formatDate(viewingExit.exitDate)} />
-                                    <DetailRow label="Last Working Day" value={formatDate(viewingExit.lastWorkingDay)} />
-                                    <DetailRow label="Notice Period" value={`${viewingExit.noticePeriodDays} days`} />
-                                    {viewingExit.reason && <DetailRow label="Reason" value={viewingExit.reason} />}
-                                    {viewingExit.notes && <DetailRow label="Notes" value={viewingExit.notes} />}
-                                </div>
+                                <ExitStagesTimeline exit={viewingExit} />
                             </div>
 
-                            {viewingExit.totalSettlement && (
+                            {/* Two-column body */}
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div className="space-y-4">
+                                    <div className="rounded-lg border divide-y text-sm overflow-hidden">
+                                        <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30">
+                                            <CalendarDays className="size-3.5 text-muted-foreground" />
+                                            <span className="font-medium text-xs uppercase tracking-wide text-muted-foreground">Exit Information</span>
+                                        </div>
+                                        <div className="px-4">
+                                            <DetailRow label="Exit Type" value={
+                                                <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${exitTypeColor[viewingExit.exitType] ?? 'bg-gray-100 text-gray-700'}`}>
+                                                    {EXIT_TYPE_LABELS[viewingExit.exitType] ?? viewingExit.exitType}
+                                                </span>
+                                            } />
+                                            <DetailRow label="Exit Date" value={formatDate(viewingExit.exitDate)} />
+                                            <DetailRow label="Last Working Day" value={formatDate(viewingExit.lastWorkingDay)} />
+                                            <DetailRow label="Notice Period" value={`${viewingExit.noticePeriodDays} days`} />
+                                            {viewingExit.reason && <DetailRow label="Reason" value={viewingExit.reason} />}
+                                            {viewingExit.notes && <DetailRow label="Notes" value={viewingExit.notes} />}
+                                        </div>
+                                    </div>
+
+                                    <ExitClearancePanel exitId={viewingExit.id} />
+                                </div>
+
+                                <div className="space-y-4">
+                                    {viewingExit.totalSettlement && (
                                 <div className="rounded-lg border divide-y text-sm overflow-hidden">
                                     <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30">
                                         <DollarSign className="size-3.5 text-muted-foreground" />
@@ -476,27 +554,95 @@ export function ExitPage() {
                                     )}
                                 </div>
                             )}
+
+                            {/* Exit Interview status card — surfaces the
+                                offboarding-flow interview step alongside the
+                                settlement so HR sees the full picture. */}
+                            <div className="rounded-lg border bg-card">
+                                <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30">
+                                    <ListChecks className="size-3.5 text-muted-foreground" />
+                                    <span className="font-medium text-xs uppercase tracking-wide text-muted-foreground">
+                                        Exit Interview
+                                    </span>
+                                    {viewingExit.interviewSubmitted ? (
+                                        <Badge variant="success" className="ms-auto text-[10px]">
+                                            <CheckCircle2 className="size-2.5 me-0.5" /> Submitted
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="secondary" className="ms-auto text-[10px]">
+                                            <Clock className="size-2.5 me-0.5" /> Awaiting response
+                                        </Badge>
+                                    )}
+                                </div>
+                                <div className="px-4 py-3 text-xs text-muted-foreground">
+                                    {viewingExit.interviewSubmitted
+                                        ? 'The employee has completed the exit interview. Responses are recorded for HR review.'
+                                        : 'The employee has not yet completed the configured exit interview. Reminders fire automatically per the workflow rules.'}
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                        </div>
+                    )}
+                    {canManage && viewingExit?.status === 'pending' && readiness && !readiness.canApprove && (
+                        <div className="rounded-lg border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 mb-3 text-xs">
+                            <div className="flex items-start gap-2">
+                                <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-amber-900 dark:text-amber-100">
+                                        {readiness.pendingClearances.length} clearance item{readiness.pendingClearances.length === 1 ? '' : 's'} still pending
+                                    </p>
+                                    <p className="text-amber-800 dark:text-amber-200/80 mt-0.5">
+                                        Approval is blocked until each clearance is marked complete (or HR overrides).
+                                    </p>
+                                    <ul className="mt-1.5 space-y-0.5 text-[11px] text-amber-900 dark:text-amber-100/90">
+                                        {readiness.pendingClearances.slice(0, 5).map(p => (
+                                            <li key={p.id} className="flex items-center gap-1.5">
+                                                <span className="size-1 rounded-full bg-amber-600 dark:bg-amber-400" />
+                                                {p.name}
+                                            </li>
+                                        ))}
+                                        {readiness.pendingClearances.length > 5 && (
+                                            <li className="text-amber-800/70 dark:text-amber-200/60 ms-2.5">
+                                                +{readiness.pendingClearances.length - 5} more…
+                                            </li>
+                                        )}
+                                    </ul>
+                                </div>
+                            </div>
                         </div>
                     )}
                     <DialogFooter className="gap-2 flex-wrap">
                         {canManage && viewingExit?.status === 'pending' && (
                             <>
-                                <Button
-                                    size="sm"
-                                    onClick={() => {
-                                        if (!viewingExit) return
-                                        approve.mutate(viewingExit.id, {
-                                            onSuccess: () => {
-                                                toast.success('Approved', 'Exit request approved.')
-                                                setViewingExit(null)
-                                            },
-                                            onError: () => toast.error('Failed', 'Could not approve exit.'),
-                                        })
-                                    }}
-                                    disabled={approve.isPending}
-                                >
-                                    Approve Exit
-                                </Button>
+                                {readiness && !readiness.canApprove ? (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="border-amber-400/60 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                                        onClick={() => setOverrideConfirm(true)}
+                                        disabled={approve.isPending}
+                                    >
+                                        Force Approve
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        size="sm"
+                                        onClick={() => {
+                                            if (!viewingExit) return
+                                            approve.mutate({ id: viewingExit.id }, {
+                                                onSuccess: () => {
+                                                    toast.success('Approved', 'Exit request approved.')
+                                                    setViewingExit(null)
+                                                },
+                                                onError: (e) => toast.error('Failed', e instanceof Error ? e.message : 'Could not approve exit.'),
+                                            })
+                                        }}
+                                        disabled={approve.isPending || !readiness}
+                                    >
+                                        <CheckCircle2 className="size-3.5 mr-1" /> Approve Exit
+                                    </Button>
+                                )}
                                 <Button
                                     size="sm"
                                     variant="outline"
@@ -534,6 +680,31 @@ export function ExitPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Force-approve confirm (when clearance items are pending) */}
+            <ConfirmDialog
+                open={overrideConfirm}
+                onOpenChange={setOverrideConfirm}
+                title="Force approve with pending clearances?"
+                description={
+                    readiness
+                        ? `${readiness.pendingClearances.length} clearance item${readiness.pendingClearances.length === 1 ? '' : 's'} ${readiness.pendingClearances.length === 1 ? 'is' : 'are'} still pending. The override will be recorded in the audit log. Continue?`
+                        : 'Some offboarding steps are still pending. Continue anyway?'
+                }
+                variant="warning"
+                confirmLabel="Force Approve"
+                onConfirm={async () => {
+                    if (!viewingExit) return
+                    try {
+                        await approve.mutateAsync({ id: viewingExit.id, override: true })
+                        toast.success('Approved', 'Exit request approved (override).')
+                        setViewingExit(null)
+                        setOverrideConfirm(false)
+                    } catch (e) {
+                        toast.error('Failed', e instanceof Error ? e.message : 'Could not approve exit.')
+                    }
+                }}
+            />
 
             {/* Reject dialog */}
             <Dialog open={!!rejectTarget} onOpenChange={o => { if (!o) setRejectTarget(null) }}>
@@ -625,6 +796,11 @@ export function ExitPage() {
                                 <div className="space-y-1.5">
                                     <Label>Notice Period (days)</Label>
                                     <NumericInput decimal={false} value={form.noticePeriodDays} onChange={e => set('noticePeriodDays', Number(e.target.value))} />
+                                    {form.noticePeriodDays === configuredNoticeDays && offboardingSettings.data?.noticePeriodEnabled && (
+                                        <p className="text-[10px] text-muted-foreground leading-tight">
+                                            Default from Org Settings → Offboarding Flow.
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Deductions (AED)</Label>

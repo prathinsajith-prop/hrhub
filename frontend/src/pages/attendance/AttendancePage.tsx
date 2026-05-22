@@ -284,7 +284,7 @@ export function AttendancePage() {
         const rows = list.map((r) => [
             r.date,
             empMap.get(r.employeeId)?.name ?? '—',
-            STATUS_LABEL[r.status],
+            STATUS_LABEL[r.status as keyof typeof STATUS_LABEL],
             fmtTime(r.checkIn),
             fmtTime(r.checkOut),
             r.hoursWorked ?? '',
@@ -1024,22 +1024,14 @@ function ImportAttendancePunchesDialog({
         return m
     }, [employees, mappings])
 
-    // Re-resolve every row whenever the lookup changes (mappings finish
-    // loading after the dialog opens, for instance). State-during-render
-    // beats useEffect for this simple sync.
-    const [lookupVersion, setLookupVersion] = useState(0)
-    const [lastSize, setLastSize] = useState(0)
-    if (lookup.size !== lastSize) {
-        setLastSize(lookup.size)
-        setLookupVersion((v) => v + 1)
-    }
-
+    // `lookup` is a fresh Map on every change to `employees` / `mappings`
+    // (built inside the useMemo above), so its reference flips automatically
+    // when the data finishes loading. That makes the bookkeeping counter
+    // and `lastSize` unnecessary — the useMemo below will recompute on its
+    // own as soon as the lookup identity changes.
     const resolvedRows = useMemo(
         () => rows.map((r) => resolveImportRow(r, lookup)),
-        // lookupVersion forces a recompute even though `lookup` is stable
-        // by reference within the same render tick.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [rows, lookup, lookupVersion],
+        [rows, lookup],
     )
 
     const validCount = resolvedRows.filter((r) => r.errors.length === 0).length
@@ -1093,7 +1085,7 @@ function ImportAttendancePunchesDialog({
                 // sheet_to_csv emits a normal CSV string — including blank
                 // cells as empty fields — that the existing parser handles
                 // unchanged. Force UTF-8 BOM off so the date header isn't
-                // mistaken for "﻿date".
+                // mistaken for "\uFEFFdate".
                 text = XLSX.utils.sheet_to_csv(sheet, { blankrows: false })
             }
         } catch (err) {

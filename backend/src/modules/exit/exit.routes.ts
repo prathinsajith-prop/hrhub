@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { calculateSettlement, initiateExit, getExitRequests, getExitRequest, approveExit, rejectExit, markSettlementPaid } from './exit.service.js'
+import { getExitApprovalReadiness } from '../offboardingFlow/offboarding.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
 import { tenants } from '../../db/schema/index.js'
@@ -63,12 +64,24 @@ export async function exitRoutes(fastify: any) {
         return reply.send({ data })
     })
 
+    // GET /api/v1/exit/:id/readiness — clearance-pending check used by the
+    // approval UI. Returns the full readiness payload (clearance counts,
+    // interview submission, document count, canApprove flag).
+    fastify.get('/exit/:id/readiness', { ...adminAuth, schema: { tags: ['Exit'] } }, async (request: any) => {
+        const { id } = request.params as { id: string }
+        const data = await getExitApprovalReadiness(request.user.tenantId, id)
+        return { data }
+    })
+
     // PATCH /api/v1/exit/:id/approve
+    // Refuses when clearances are pending unless the caller passes
+    // { override: true } in the body — HR escape hatch, audit-logged.
     fastify.patch('/exit/:id/approve', { ...adminAuth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const data = await approveExit(request.user.tenantId, id, request.user.id)
+        const { override = false } = (request.body ?? {}) as { override?: boolean }
+        const data = await approveExit(request.user.tenantId, id, request.user.id, { override })
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found or not pending' })
-        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: id, entityName: (data as any).employeeName, action: 'approve', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: id, entityName: (data as any).employeeName, action: 'approve', metadata: override ? { override: true } : undefined, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.send({ data })
     })
 
