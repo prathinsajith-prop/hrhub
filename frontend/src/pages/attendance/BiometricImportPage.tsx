@@ -14,7 +14,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     Fingerprint, Upload, ArrowLeft, Plus, Trash2, Loader2, FileSpreadsheet,
-    CheckCircle2, XCircle, AlertCircle, Copy, Download, X, Send,
+    CheckCircle2, XCircle, AlertCircle, Copy, Download, X, Send, Pencil,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -30,7 +30,7 @@ import { EmployeeSelect } from '@/components/shared'
 import { api } from '@/lib/api'
 import { cn, formatDate } from '@/lib/utils'
 import {
-    useBiometricMappings, useCreateMapping, useDeleteMapping,
+    useBiometricMappings, useCreateMapping, useUpdateMapping, useDeleteMapping,
     useValidateAttendanceImport, useCommitAttendanceImport,
     type BiometricMapping, type AttendanceImportRow, type AttendanceImportRowResult,
     type AttendanceImportValidateResult,
@@ -83,6 +83,7 @@ function BiometricMappingTab() {
     const { data, isLoading } = useBiometricMappings()
     const remove = useDeleteMapping()
     const [addOpen, setAddOpen] = useState(false)
+    const [editing, setEditing] = useState<BiometricMapping | null>(null)
     const [removing, setRemoving] = useState<BiometricMapping | null>(null)
     const rows = data ?? []
 
@@ -147,14 +148,26 @@ function BiometricMappingTab() {
                                         {formatDate(r.createdAt)}
                                     </td>
                                     <td className="px-3 py-2 text-right">
-                                        <button
-                                            type="button"
-                                            onClick={() => setRemoving(r)}
-                                            aria-label="Remove mapping"
-                                            className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-800 transition-colors hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
-                                        >
-                                            <Trash2 className="size-3.5" />
-                                        </button>
+                                        <div className="inline-flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditing(r)}
+                                                aria-label="Edit mapping"
+                                                title={t('common.edit', 'Edit') as string}
+                                                className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] font-semibold text-foreground transition-colors hover:bg-muted/40"
+                                            >
+                                                <Pencil className="size-3.5" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRemoving(r)}
+                                                aria-label="Remove mapping"
+                                                title={t('common.remove', 'Remove') as string}
+                                                className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-800 transition-colors hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
+                                            >
+                                                <Trash2 className="size-3.5" />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -164,6 +177,10 @@ function BiometricMappingTab() {
             </Card>
 
             <AddMappingDialog open={addOpen} onOpenChange={setAddOpen} />
+            <EditMappingDialog
+                mapping={editing}
+                onClose={() => setEditing(null)}
+            />
             <ConfirmDialog
                 open={!!removing}
                 onOpenChange={(v) => !v && setRemoving(null)}
@@ -269,6 +286,140 @@ function AddMappingDialog({
                     <Button onClick={handleSubmit} disabled={!canSubmit} loading={create.isPending} className="gap-1.5">
                         <Send className="size-3.5" />
                         {t('biometric.mapping.submit', 'Add mapping')}
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+/**
+ * Edit dialog for an existing mapping. Locks the Employee field (re-binding
+ * a mapper_id to a different employee is a delete + create, not an update —
+ * historical punches reference the mapping_id, so swapping the employee
+ * silently would rewrite history). Mapper_id + label are editable.
+ */
+function EditMappingDialog({
+    mapping,
+    onClose,
+}: {
+    mapping: BiometricMapping | null
+    onClose: () => void
+}) {
+    const { t } = useTranslation()
+    const update = useUpdateMapping()
+    // Local form state — initialized from the row when the dialog opens.
+    // State-during-render syncs back when the parent swaps the target row.
+    const [mapperId, setMapperId] = useState('')
+    const [label, setLabel] = useState('')
+    const [lastId, setLastId] = useState<string | null>(null)
+    if (mapping && mapping.id !== lastId) {
+        setLastId(mapping.id)
+        setMapperId(mapping.mapperId)
+        setLabel(mapping.label ?? '')
+    }
+    if (!mapping && lastId !== null) {
+        setLastId(null)
+    }
+
+    const trimmed = mapperId.trim()
+    const labelTrimmed = label.trim()
+    const dirty = !!mapping && (
+        trimmed !== mapping.mapperId.trim()
+        || labelTrimmed !== (mapping.label ?? '').trim()
+    )
+    const canSubmit = !!mapping && !!trimmed && dirty
+
+    const handleSubmit = async () => {
+        if (!mapping || !canSubmit) return
+        try {
+            await update.mutateAsync({
+                id: mapping.id,
+                // Only send fields that changed — keeps the PATCH minimal
+                // and avoids triggering an "already mapped" 409 when the
+                // mapper_id wasn't touched.
+                mapperId: trimmed !== mapping.mapperId.trim() ? trimmed : undefined,
+                label: labelTrimmed !== (mapping.label ?? '').trim() ? (labelTrimmed || null) : undefined,
+            })
+            toast.success(t('biometric.mapping.updateSuccess', 'Mapping updated'))
+            onClose()
+        } catch {
+            /* hook surfaces the toast */
+        }
+    }
+
+    return (
+        <Dialog open={!!mapping} onOpenChange={(v) => !v && onClose()}>
+            <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden">
+                <DialogHeader className="space-y-0 p-6 pb-4 border-b bg-gradient-to-br from-sky-50/60 to-indigo-50/40 dark:from-sky-950/20 dark:to-indigo-950/15">
+                    <div className="flex items-start gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-sm shadow-indigo-500/20">
+                            <Pencil className="size-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <DialogTitle className="text-base font-semibold">
+                                {t('biometric.mapping.editTitle', 'Edit user ID mapping')}
+                            </DialogTitle>
+                            <DialogDescription className="mt-0.5 text-xs">
+                                {t('biometric.mapping.editDesc',
+                                    'Rename the mapper ID or update the device label. Re-assigning to a different employee requires removing and recreating the mapping.')}
+                            </DialogDescription>
+                        </div>
+                    </div>
+                </DialogHeader>
+
+                <div className="px-6 py-4 space-y-4 bg-muted/20">
+                    {/* Read-only employee panel — re-binding the mapping
+                        to a different employee would rewrite punch history,
+                        so the field is locked. */}
+                    {mapping && (
+                        <div className="rounded-md border bg-card p-3">
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
+                                {t('biometric.mapping.field.employee', 'Employee')}
+                            </div>
+                            <div className="font-medium">{mapping.employeeName}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                                {mapping.employeeNo}{mapping.department ? ` · ${mapping.department}` : ''}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-medium">
+                            {t('biometric.mapping.field.mapperId', 'Mapper ID')}
+                            <span className="ms-0.5 text-rose-600">*</span>
+                        </Label>
+                        <Input
+                            value={mapperId}
+                            onChange={(e) => setMapperId(e.target.value)}
+                            placeholder={t('biometric.mapping.field.mapperIdPlaceholder', 'e.g. 101, BIO-A1, EMP_007') as string}
+                            autoFocus
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                            {t('biometric.mapping.field.mapperIdHint', 'The exact ID the device or external system uses for this person.')}
+                        </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-medium">{t('biometric.mapping.field.label', 'Label (optional)')}</Label>
+                        <Input
+                            value={label}
+                            onChange={(e) => setLabel(e.target.value)}
+                            placeholder={t('biometric.mapping.field.labelPlaceholder', 'e.g. Office finger reader') as string}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-2 border-t bg-background px-6 py-3">
+                    <Button variant="ghost" onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
+                    <Button
+                        onClick={handleSubmit}
+                        disabled={!canSubmit}
+                        loading={update.isPending}
+                        className="gap-1.5"
+                    >
+                        <Send className="size-3.5" />
+                        {t('biometric.mapping.saveChanges', 'Save changes')}
                     </Button>
                 </div>
             </DialogContent>

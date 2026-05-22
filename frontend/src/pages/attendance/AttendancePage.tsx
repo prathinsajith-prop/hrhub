@@ -824,11 +824,15 @@ export function AttendancePage() {
                 <ImportAttendancePunchesDialog
                     open={importOpen}
                     onOpenChange={setImportOpen}
-                    employees={empList.map((e) => ({
-                        id: e.id,
-                        name: (empMap.get(e.id)?.name ?? '—'),
-                        employeeNo: (e.employeeNo as string | undefined) ?? null,
-                    }))}
+                    employees={empList.map((e) => {
+                        const m = empMap.get(e.id)
+                        return {
+                            id: e.id,
+                            name: m?.name ?? '—',
+                            employeeNo: (e.employeeNo as string | undefined) ?? null,
+                            avatarUrl: m?.avatarUrl ?? null,
+                        }
+                    })}
                 />
             )}
         </PageWrapper>
@@ -957,6 +961,7 @@ interface ImportRow {
 /** ImportRow after the resolver pass — populated employeeId + display fields. */
 interface ResolvedImportRow extends ImportRow {
     resolvedName: string | null
+    resolvedAvatarUrl: string | null
     resolvedVia: 'employee_no' | 'mapper_id' | null
 }
 
@@ -965,7 +970,7 @@ function ImportAttendancePunchesDialog({
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
-    employees: Array<{ id: string; name: string; employeeNo: string | null }>
+    employees: Array<{ id: string; name: string; employeeNo: string | null; avatarUrl: string | null }>
 }) {
     const [fileName, setFileName] = useState<string | null>(null)
     const [fileSize, setFileSize] = useState<number>(0)
@@ -993,14 +998,28 @@ function ImportAttendancePunchesDialog({
      * back to the one the user actually supplied).
      */
     const lookup = useMemo(() => {
-        const m = new Map<string, { id: string; name: string; via: 'employee_no' | 'mapper_id' }>()
+        const m = new Map<string, { id: string; name: string; avatarUrl: string | null; via: 'employee_no' | 'mapper_id' }>()
+        // Side index from employeeId → avatar so mapper_id hits (which
+        // come from the mappings table, not `employees`) can still pick up
+        // the right avatar to render in the preview.
+        const avatarByEmpId = new Map<string, string | null>()
         for (const e of employees) {
-            if (e.employeeNo) m.set(e.employeeNo.trim().toLowerCase(), { id: e.id, name: e.name, via: 'employee_no' })
+            avatarByEmpId.set(e.id, e.avatarUrl)
+            if (e.employeeNo) {
+                m.set(e.employeeNo.trim().toLowerCase(), {
+                    id: e.id, name: e.name, avatarUrl: e.avatarUrl, via: 'employee_no',
+                })
+            }
         }
         for (const map of mappings ?? []) {
             // mapper_id wins over a coincidental employee_no match only when
             // the user supplied it explicitly — see resolveImportRow below.
-            m.set(map.mapperId.trim().toLowerCase(), { id: map.employeeId, name: map.employeeName, via: 'mapper_id' })
+            m.set(map.mapperId.trim().toLowerCase(), {
+                id: map.employeeId,
+                name: map.employeeName,
+                avatarUrl: avatarByEmpId.get(map.employeeId) ?? null,
+                via: 'mapper_id',
+            })
         }
         return m
     }, [employees, mappings])
@@ -1041,39 +1060,104 @@ function ImportAttendancePunchesDialog({
         setRows([])
     }
 
-    /** Shared CSV → rows pipeline used by both the file input and drag/drop.
-     *  Centralising it keeps validation + state writes consistent regardless
-     *  of how the user supplied the file. */
+    /** Shared file → rows pipeline used by both the file input and drag/drop.
+     *
+     *  Accepts CSV, TXT, XLSX and XLS. Excel files are converted to a CSV
+     *  string via SheetJS before hitting the existing `parseImportCsv` —
+     *  one parser, two file formats, no duplicate validation logic. */
     async function processFile(file: File) {
-        if (!/\.(csv|txt)$/i.test(file.name)) {
-            toast.error('Invalid file', 'Please upload a CSV file (.csv)')
+        const isCsv = /\.(csv|txt)$/i.test(file.name)
+        const isExcel = /\.(xlsx|xls)$/i.test(file.name)
+        if (!isCsv && !isExcel) {
+            toast.error('Invalid file', 'Upload a CSV (.csv) or Excel (.xlsx, .xls) file.')
             return
         }
-        const text = await file.text()
+
+        let text: string
+        try {
+            if (isCsv) {
+                text = await file.text()
+            } else {
+                // Dynamic import — the xlsx bundle is heavy (~500 KB) and
+                // only this code path needs it. Vite splits it into its own
+                // chunk so the attendance page doesn't carry the weight on
+                // first paint.
+                const XLSX = await import('xlsx')
+                const buffer = await file.arrayBuffer()
+                const wb = XLSX.read(buffer, { type: 'array', cellDates: false })
+                const sheet = wb.Sheets[wb.SheetNames[0]]
+                if (!sheet) {
+                    toast.error('Empty workbook', 'No sheets found in the Excel file.')
+                    return
+                }
+                // sheet_to_csv emits a normal CSV string — including blank
+                // cells as empty fields — that the existing parser handles
+                // unchanged. Force UTF-8 BOM off so the date header isn't
+                // mistaken for "﻿date".
+                text = XLSX.utils.sheet_to_csv(sheet, { blankrows: false })
+            }
+        } catch (err) {
+            toast.error('Could not read file', err instanceof Error ? err.message : 'Unknown error')
+            return
+        }
+
         const parsed = parseImportCsv(text)
         setFileName(file.name)
         setFileSize(file.size)
         setRows(parsed)
-        if (parsed.length === 0) toast.error('Empty file', 'No data rows found in the CSV.')
+        if (parsed.length === 0) {
+            toast.error('Empty file', 'No data rows found in the file.')
+        }
     }
 
-    function downloadSample() {
-        // Sample covers both ways to identify an employee — by HRHub
-        // employee_no AND by biometric mapper_id. HR can use whichever
-        // their export tool emits; supplying both is also fine (mapper_id
-        // wins).
-        const csv = [
-            'employee_no,mapper_id,date,in_time,out_time,in_notes,out_notes,location',
-            'EMP-001,,2026-05-19,09:00,18:00,On-time,End of shift,Office',
-            'EMP-001,,2026-05-19,19:00,21:30,Overtime in,Overtime out,Office',
-            ',101,2026-05-20,08:55,17:30,Biometric punch,Auto out,Site A',
-            'EMP-002,,2026-05-20,09:10,,Forgot punch-out,,Site B',
-        ].join('\n')
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    /**
+     * Sample rows that cover both identity columns:
+     *   - employee_no  (HRHub's own employee code)
+     *   - mapper_id    (biometric device user id; takes precedence when both are set)
+     *
+     * Same canonical rows feed both the CSV and the XLSX sample so HR sees
+     * an identical layout regardless of which format they prefer.
+     */
+    const SAMPLE_HEADER = ['employee_no', 'mapper_id', 'date', 'in_time', 'out_time', 'in_notes', 'out_notes', 'location']
+    const SAMPLE_ROWS: ReadonlyArray<ReadonlyArray<string>> = [
+        ['EMP-001', '', '2026-05-19', '09:00', '18:00', 'On-time', 'End of shift', 'Office'],
+        ['EMP-001', '', '2026-05-19', '19:00', '21:30', 'Overtime in', 'Overtime out', 'Office'],
+        ['', '101', '2026-05-20', '08:55', '17:30', 'Biometric punch', 'Auto out', 'Site A'],
+        ['EMP-002', '', '2026-05-20', '09:10', '', 'Forgot punch-out', '', 'Site B'],
+    ]
+
+    async function downloadSample(format: 'csv' | 'xlsx' = 'csv') {
+        let blob: Blob
+        let filename: string
+        if (format === 'xlsx') {
+            // Lazy-load xlsx for the same reason as the import path —
+            // it's a heavy chunk we shouldn't ship until HR actually
+            // asks for it.
+            const XLSX = await import('xlsx')
+            const sheet = XLSX.utils.aoa_to_sheet([[...SAMPLE_HEADER], ...SAMPLE_ROWS.map((r) => [...r])])
+            // Column widths sized to the longest header so the file opens
+            // looking presentable instead of every column being 8.43 wide.
+            sheet['!cols'] = [
+                { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
+                { wch: 22 }, { wch: 22 }, { wch: 14 },
+            ]
+            const wb = XLSX.utils.book_new()
+            XLSX.utils.book_append_sheet(wb, sheet, 'Attendance')
+            const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
+            blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+            filename = 'attendance-import-sample.xlsx'
+        } else {
+            const csv = [
+                SAMPLE_HEADER.join(','),
+                ...SAMPLE_ROWS.map((r) => r.join(',')),
+            ].join('\n')
+            blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+            filename = 'attendance-import-sample.csv'
+        }
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = 'attendance-import-sample.csv'
+        a.download = filename
         a.click()
         URL.revokeObjectURL(url)
     }
@@ -1182,17 +1266,38 @@ function ImportAttendancePunchesDialog({
                     {/* Single-step flow now — the CSV carries identity per
                         row, no employee picker required. */}
                     <section className="rounded-lg border bg-card p-4">
-                        <header className="mb-3 flex items-center justify-between gap-2">
+                        <header className="mb-3 flex items-center justify-between gap-2 flex-wrap">
                             <div className="flex items-center gap-2 min-w-0">
                                 <StepChip n={1} active={!fileName} done={!!fileName} />
                                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                                    Upload CSV
+                                    Upload CSV or Excel
                                 </h3>
                             </div>
-                            <Button size="sm" variant="ghost" onClick={downloadSample} className="gap-1.5 h-7 text-[11px]">
-                                <Download className="size-3" />
-                                Download sample
-                            </Button>
+                            {/* Two sample-download options — same data,
+                                different format. The CSV path stays
+                                instant; the XLSX path lazy-loads the
+                                heavy xlsx chunk before writing the file. */}
+                            <div className="flex items-center gap-1">
+                                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground hidden sm:inline">Sample</span>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => downloadSample('csv')}
+                                    className="gap-1 h-7 text-[11px]"
+                                >
+                                    <Download className="size-3" />
+                                    .csv
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => downloadSample('xlsx')}
+                                    className="gap-1 h-7 text-[11px]"
+                                >
+                                    <Download className="size-3" />
+                                    .xlsx
+                                </Button>
+                            </div>
                         </header>
 
                         {!fileName ? (
@@ -1215,13 +1320,18 @@ function ImportAttendancePunchesDialog({
                                 <FileSpreadsheet className="size-8 text-muted-foreground/60" />
                                 <div className="text-center">
                                     <p className="text-sm font-medium">
-                                        {dragOver ? 'Drop to upload' : 'Drag a CSV here or click to browse'}
+                                        {dragOver ? 'Drop to upload' : 'Drag a CSV or Excel file here, or click to browse'}
                                     </p>
                                     <p className="mt-0.5 text-[10px] text-muted-foreground">
-                                        Max 1,000 rows · UTF-8 encoding recommended
+                                        Max 1,000 rows · .csv, .xlsx or .xls accepted
                                     </p>
                                 </div>
-                                <input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" />
+                                <input
+                                    type="file"
+                                    accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                                    onChange={onFile}
+                                    className="hidden"
+                                />
                             </label>
                         ) : (
                             <div className="flex items-center gap-3 rounded-md border bg-background p-3">
@@ -1291,14 +1401,37 @@ function ImportAttendancePunchesDialog({
                                                 <td className="px-2 py-1.5 tabular-nums text-muted-foreground">{r.rowNum}</td>
                                                 <td className="px-2 py-1.5">
                                                     {r.resolvedName ? (
-                                                        <div className="min-w-0">
-                                                            <p className="truncate font-medium">{r.resolvedName}</p>
-                                                            <p className="text-[9px] uppercase tracking-wider text-muted-foreground mt-0.5">
-                                                                {r.employeeKey} · via {r.resolvedVia === 'mapper_id' ? 'biometric' : 'employee no'}
-                                                            </p>
+                                                        // Resolved row — avatar + name + identity tag.
+                                                        // Avatar makes the preview scannable: HR sees
+                                                        // a face/initial pair, not just a wall of names.
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <InitialsAvatar
+                                                                name={r.resolvedName}
+                                                                src={r.resolvedAvatarUrl}
+                                                                size="sm"
+                                                            />
+                                                            <div className="min-w-0">
+                                                                <p className="truncate font-medium leading-tight">{r.resolvedName}</p>
+                                                                <p className="text-[9px] uppercase tracking-wider text-muted-foreground mt-0.5">
+                                                                    {r.employeeKey} · via {r.resolvedVia === 'mapper_id' ? 'biometric' : 'employee no'}
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                     ) : (
-                                                        <span className="font-mono text-muted-foreground">{r.employeeKey ?? '—'}</span>
+                                                        // Unresolved — placeholder circle + raw key so
+                                                        // the column doesn't visually jump between
+                                                        // resolved and unresolved rows.
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <span
+                                                                aria-hidden
+                                                                className="size-7 shrink-0 rounded-full border border-dashed border-rose-300 bg-rose-50/40 flex items-center justify-center text-rose-400 dark:border-rose-900/60 dark:bg-rose-950/20"
+                                                            >
+                                                                <AlertCircle className="size-3.5" />
+                                                            </span>
+                                                            <span className="font-mono text-xs text-muted-foreground truncate">
+                                                                {r.employeeKey ?? '—'}
+                                                            </span>
+                                                        </div>
                                                     )}
                                                 </td>
                                                 <td className="px-2 py-1.5 tabular-nums">{r.date || '—'}</td>
@@ -1353,7 +1486,7 @@ function ImportAttendancePunchesDialog({
                         {resolvedRows.length === 0 ? (
                             <>
                                 <Upload className="size-3.5 text-sky-500" />
-                                <span>Choose a CSV file to preview</span>
+                                <span>Choose a CSV or Excel file to preview</span>
                             </>
                         ) : errorCount > 0 ? (
                             <>
@@ -1485,13 +1618,14 @@ function parseImportCsv(text: string): ImportRow[] {
  */
 function resolveImportRow(
     row: ImportRow,
-    lookup: Map<string, { id: string; name: string; via: 'employee_no' | 'mapper_id' }>,
+    lookup: Map<string, { id: string; name: string; avatarUrl: string | null; via: 'employee_no' | 'mapper_id' }>,
 ): ResolvedImportRow {
     if (!row.employeeKey) {
         return {
             ...row,
             employeeId: null,
             resolvedName: null,
+            resolvedAvatarUrl: null,
             resolvedVia: null,
         }
     }
@@ -1507,6 +1641,7 @@ function resolveImportRow(
             errors,
             employeeId: null,
             resolvedName: null,
+            resolvedAvatarUrl: null,
             resolvedVia: null,
         }
     }
@@ -1514,6 +1649,7 @@ function resolveImportRow(
         ...row,
         employeeId: hit.id,
         resolvedName: hit.name,
+        resolvedAvatarUrl: hit.avatarUrl,
         resolvedVia: hit.via,
     }
 }

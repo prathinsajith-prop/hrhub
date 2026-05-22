@@ -845,10 +845,27 @@ function DayDetailDialog({
                       <p className="text-sm mt-0.5">
                         <span className="text-primary font-medium">You</span>{' '}
                         {p.punchType === 'in' ? 'checked in' : 'checked out'}
-                        {p.locationName && (
-                          <span className="text-muted-foreground"> · {p.locationName}</span>
-                        )}
                       </p>
+                      {/* Location row — prefers human-readable name, falls
+                          back to GPS coordinates with a tappable Maps link
+                          so HR can verify the punch site. */}
+                      {(p.locationName || (p.latitude && p.longitude)) && (
+                        <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <MapPin className="size-3 shrink-0" />
+                          {p.locationName ? (
+                            <span className="truncate">{p.locationName}</span>
+                          ) : (
+                            <a
+                              href={`https://maps.google.com/?q=${p.latitude},${p.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-mono tabular-nums hover:text-primary hover:underline"
+                            >
+                              {Number(p.latitude).toFixed(4)}, {Number(p.longitude).toFixed(4)}
+                            </a>
+                          )}
+                        </div>
+                      )}
                       {p.notes && (
                         <p className="text-[11px] text-muted-foreground mt-0.5 italic">"{p.notes}"</p>
                       )}
@@ -975,19 +992,29 @@ function sumPairHours(pairs: PunchPair[]): string {
 
 function PunchMeta({ punch, align = 'start' }: { punch: AttendancePunch; align?: 'start' | 'end' }) {
   const items: ReactNode[] = []
+  // Prefer the human-readable location label. When only coordinates exist,
+  // render them as a tappable Maps link so HR can verify the punch site
+  // without copy-pasting the lat/lng pair.
   if (punch.locationName) {
     items.push(
-      <span key="loc" className="inline-flex items-center gap-1">
+      <span key="loc" className="inline-flex items-center gap-1 text-foreground/70">
         <MapPin className="size-3" />
         <span className="truncate max-w-[140px]">{punch.locationName}</span>
       </span>,
     )
   } else if (punch.latitude && punch.longitude) {
     items.push(
-      <span key="latlng" className="inline-flex items-center gap-1 tabular-nums">
+      <a
+        key="latlng"
+        href={`https://maps.google.com/?q=${punch.latitude},${punch.longitude}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 tabular-nums text-foreground/70 hover:text-primary hover:underline"
+        title="Open in Maps"
+      >
         <MapPin className="size-3" />
         {Number(punch.latitude).toFixed(3)}, {Number(punch.longitude).toFixed(3)}
-      </span>,
+      </a>,
     )
   }
   items.push(
