@@ -17,11 +17,12 @@
  * that period become read-only — the numbers on the payslip are the
  * historical record and HR shouldn't be able to drift them after the fact.
  */
-import { and, eq, gte, inArray, lte, sql, desc } from 'drizzle-orm'
+import { and, eq, gte, inArray, isNull, lte, sql, desc } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import {
     payrollAdjustments,
     payrollAdjustmentImports,
+    payrollAdjustmentCategories,
     payrollRuns,
     employees,
     employeeSalaryComponents,
@@ -43,12 +44,24 @@ export type AdjustmentCategory =
     | 'manual'
 export type AdjustmentSource = 'manual' | 'leave_engine' | 'loan_engine' | 'expense_engine'
 
-// Default kind for each category, so the HR UI only has to pick "Overtime"
-// rather than picking "addition" + "overtime". Single source of truth.
+// Default kind for built-in categories. Used as a synchronous classifier when
+// the caller already knows it's dealing with a built-in. Custom categories
+// resolve their kind through resolveCategory() (async, DB-backed).
 const ADDITION_CATEGORIES = new Set<AdjustmentCategory>(['overtime', 'commission', 'bonus'])
 
 export function kindForCategory(category: AdjustmentCategory): AdjustmentKind {
     return ADDITION_CATEGORIES.has(category) ? 'addition' : 'deduction'
+}
+
+/** Async variant — handles built-ins and tenant-registered custom categories.
+ *  Falls back to 'deduction' as the safe default when the category is unknown
+ *  (the route layer rejects unknown categories before reaching the service,
+ *  so this branch only fires on race conditions). */
+async function kindForCategoryAsync(tenantId: string, category: string): Promise<AdjustmentKind> {
+    if (ADDITION_CATEGORIES.has(category as AdjustmentCategory)) return 'addition'
+    if (BUILTIN_CATEGORIES.some((c) => c.value === category)) return 'deduction'
+    const resolved = await resolveCategory(tenantId, category)
+    return resolved?.kind ?? 'deduction'
 }
 
 /**
@@ -79,7 +92,7 @@ export async function createAdjustment(
     input: CreateAdjustmentInput,
     createdBy: string | null,
 ) {
-    const kind = kindForCategory(input.category)
+    const kind = await kindForCategoryAsync(tenantId, input.category)
     const [row] = await db
         .insert(payrollAdjustments)
         .values({
@@ -185,33 +198,75 @@ export interface BulkCreateAdjustmentsInput {
     rows: BulkAdjustmentRow[]
 }
 
+/**
+ * Per-row action resolved by the comparison engine.
+ *
+ *   new        — no existing manual adjustment for (employee, period, category).
+ *                Will be inserted.
+ *   unchanged  — existing row found with identical amount + notes. Will be skipped.
+ *   updated    — existing row found with different amount or notes. Will be UPDATEd.
+ *   duplicate  — same employee appears more than once in this batch (after
+ *                the first occurrence). Will be skipped on import.
+ *   invalid    — row failed validation (bad amount, employee not found, etc.).
+ */
+export type BulkRowAction = 'new' | 'unchanged' | 'updated' | 'duplicate' | 'invalid'
+
+export interface FieldChange<T> {
+    old: T
+    new: T
+}
+
+/** Field-level diff returned when action === 'updated'. */
+export interface RowChanges {
+    amount?: FieldChange<number>
+    notes?: FieldChange<string | null>
+}
+
 export interface BulkCreateAdjustmentsResult {
+    /** Rows inserted as brand-new adjustments. */
     created: number
+    /** Existing rows whose amount or notes were updated. */
+    updated: number
+    /** Existing rows that matched exactly — silently skipped. */
+    unchanged: number
+    /** Within-batch duplicates beyond the first occurrence — silently skipped. */
+    duplicate: number
+    /** Rows that failed validation (resolution / amount / category etc.). */
     failed: number
     errors: Array<{ row: number; error: string }>
 }
 
 export interface BulkValidateRowResult {
     rowNumber: number
+    /** Legacy field — kept so older callers don't break. New code should use `action`. */
     status: 'valid' | 'invalid'
+    /** The comparison engine's verdict for this row. */
+    action: BulkRowAction
+    /** Hard error message when action === 'invalid'. */
     error: string | null
-    /** Non-blocking warning — surfaced in the preview but doesn't disable
-     *  submit. Currently set for duplicate (employee × batch) entries. */
+    /** Non-blocking warning (e.g. within-batch duplicate). */
     warning: string | null
-    /** Server-resolved employee id (only on `valid`). */
     employeeId: string | null
-    /** Display name from the matched record so the preview can show the
-     *  authoritative value alongside what the spreadsheet contained. */
     resolvedName: string | null
     resolvedEmployeeNo: string | null
+    /** Matched existing manual adjustment (set when action is updated/unchanged). */
+    existing: { id: string; amount: number; notes: string | null } | null
+    /** Field-level diff (set only when action === 'updated'). */
+    changes: RowChanges | null
 }
 
 export interface BulkValidateResult {
     total: number
+    /** Rows that will commit (new + updated). Excludes unchanged + duplicate + invalid. */
     valid: number
     invalid: number
     /** Count of valid rows that also carry a non-blocking warning. */
     warned: number
+    /** Per-action counters — feeds the preview summary cards. */
+    newCount: number
+    updatedCount: number
+    unchangedCount: number
+    duplicateCount: number
     /** Period-level guard — populated when the caller supplied periodYear /
      *  periodMonth. Lets the preview dialog show "this period is already
      *  locked" before HR clicks Submit and gets a 409. */
@@ -317,70 +372,223 @@ async function resolveBulkRows(
     return rows.map((r) => matchBulkRow(r, { byEmployeeNo, byEmail, byPhone }))
 }
 
+/**
+ * Two numbers are treated as equal at currency precision (2 decimals). Avoids
+ * float-noise false positives where the parsed Excel value comes back as
+ * `5000.0000000001` and would otherwise flag every row as "updated".
+ */
+function moneyEquals(a: number, b: number): boolean {
+    return Math.round(a * 100) === Math.round(b * 100)
+}
+
+/** Notes are compared after a trim + null-coalesce so blank cells don't differ from NULL. */
+function notesEqual(a: string | null, b: string | null): boolean {
+    return (a?.trim() || null) === (b?.trim() || null)
+}
+
+/**
+ * Fetch existing manual adjustments for the rows we're about to validate.
+ * Scoped tight: only the resolved employee ids, only the current category,
+ * only the current period, only non-deleted manual rows. One round-trip.
+ */
+async function loadExistingAdjustments(
+    tenantId: string,
+    periodYear: number,
+    periodMonth: number,
+    category: string,
+    employeeIds: string[],
+): Promise<Map<string, { id: string; amount: number; notes: string | null }>> {
+    const map = new Map<string, { id: string; amount: number; notes: string | null }>()
+    if (employeeIds.length === 0) return map
+    // The column type narrows to the built-in category union, but the runtime
+    // accepts any tenant-registered category (migration 0057). Pass through SQL
+    // template to keep this column comparison working for custom categories.
+    const rows = await db
+        .select({
+            id: payrollAdjustments.id,
+            employeeId: payrollAdjustments.employeeId,
+            amount: payrollAdjustments.amount,
+            notes: payrollAdjustments.notes,
+        })
+        .from(payrollAdjustments)
+        .where(and(
+            eq(payrollAdjustments.tenantId, tenantId),
+            eq(payrollAdjustments.periodYear, periodYear),
+            eq(payrollAdjustments.periodMonth, periodMonth),
+            sql`${payrollAdjustments.category} = ${category}`,
+            eq(payrollAdjustments.source, 'manual'),
+            isNull(payrollAdjustments.deletedAt),
+            inArray(payrollAdjustments.employeeId, employeeIds),
+        ))
+    for (const r of rows) {
+        map.set(r.employeeId, { id: r.id, amount: Number(r.amount), notes: r.notes ?? null })
+    }
+    return map
+}
+
+/**
+ * Validate + compare each row in a bulk upload against the existing ledger.
+ *
+ * The comparison engine produces a per-row `action`:
+ *   • new        – inserts on submit
+ *   • updated    – overwrites the existing row (with field-level diff)
+ *   • unchanged  – skipped on submit (already in DB exactly)
+ *   • duplicate  – skipped on submit (same employee appeared earlier in batch)
+ *   • invalid    – blocking error; row will not commit
+ *
+ * The route layer can render this directly: badges, red/green diffs, filter chips.
+ * Submit is a no-op when (newCount + updatedCount) === 0.
+ */
 export async function validateBulkAdjustments(
     tenantId: string,
     rows: BulkAdjustmentRow[],
-    opts: { periodYear?: number; periodMonth?: number } = {},
+    opts: { periodYear?: number; periodMonth?: number; category?: string } = {},
 ): Promise<BulkValidateResult> {
     const resolved = await resolveBulkRows(tenantId, rows)
 
-    // Detect within-batch duplicates by resolved employeeId. Same employee
-    // appearing more than once in a single upload is almost always a copy-
-    // paste mistake; rare cases (e.g. splitting a bonus into two lines)
-    // can keep going since this is a warning, not a blocker.
-    const seenByEmp = new Map<string, number>()
-    for (const r of resolved) {
-        if (!r.employeeId) continue
-        seenByEmp.set(r.employeeId, (seenByEmp.get(r.employeeId) ?? 0) + 1)
-    }
+    // Load existing rows ONCE — only if we have a fully-qualified period+category
+    // (the comparison engine has no anchor without it). Older callers omitting
+    // these get `existing=null` for every row, which means everything looks `new`.
+    const empIds = [...new Set(resolved.filter((r) => r.employeeId).map((r) => r.employeeId as string))]
+    const existingByEmp = (opts.periodYear && opts.periodMonth && opts.category)
+        ? await loadExistingAdjustments(tenantId, opts.periodYear, opts.periodMonth, opts.category, empIds)
+        : new Map<string, { id: string; amount: number; notes: string | null }>()
+
+    // Within-batch duplicate detection. First occurrence per employee wins —
+    // every later row for the same employee becomes `action: duplicate` and is
+    // skipped on commit. Prevents a single upload from creating N rows for the
+    // same person (common copy-paste mistake) AND keeps the comparison engine
+    // single-anchored: there's exactly one "intended value" per employee.
+    const seenEmp = new Set<string>()
 
     const rowResults: BulkValidateRowResult[] = resolved.map((r) => {
-        const duplicateCount = r.employeeId ? seenByEmp.get(r.employeeId) ?? 0 : 0
-        const warning = !r.error && duplicateCount > 1
-            ? `Employee ${r.resolvedEmployeeNo ?? ''} appears ${duplicateCount} times in this batch — these will create separate adjustment lines.`
-            : null
+        // Invalid rows short-circuit — no comparison needed.
+        if (r.error) {
+            return {
+                rowNumber: r.rowNumber,
+                status: 'invalid' as const,
+                action: 'invalid' as const,
+                error: r.error,
+                warning: null,
+                employeeId: r.employeeId,
+                resolvedName: r.resolvedName,
+                resolvedEmployeeNo: r.resolvedEmployeeNo,
+                existing: null,
+                changes: null,
+            }
+        }
+
+        const empId = r.employeeId as string
+        // 2nd+ occurrence of this employee in this batch → duplicate.
+        if (seenEmp.has(empId)) {
+            return {
+                rowNumber: r.rowNumber,
+                status: 'valid' as const,
+                action: 'duplicate' as const,
+                error: null,
+                warning: `Duplicate of an earlier row for ${r.resolvedEmployeeNo ?? r.resolvedName ?? 'this employee'} — will be skipped on import.`,
+                employeeId: empId,
+                resolvedName: r.resolvedName,
+                resolvedEmployeeNo: r.resolvedEmployeeNo,
+                existing: null,
+                changes: null,
+            }
+        }
+        seenEmp.add(empId)
+
+        // Compare against existing DB row, if any.
+        const existing = existingByEmp.get(empId) ?? null
+        if (!existing) {
+            return {
+                rowNumber: r.rowNumber,
+                status: 'valid' as const,
+                action: 'new' as const,
+                error: null,
+                warning: null,
+                employeeId: empId,
+                resolvedName: r.resolvedName,
+                resolvedEmployeeNo: r.resolvedEmployeeNo,
+                existing: null,
+                changes: null,
+            }
+        }
+
+        const amountSame = moneyEquals(existing.amount, r.amount)
+        const notesSame = notesEqual(existing.notes, r.notes)
+        if (amountSame && notesSame) {
+            return {
+                rowNumber: r.rowNumber,
+                status: 'valid' as const,
+                action: 'unchanged' as const,
+                error: null,
+                warning: null,
+                employeeId: empId,
+                resolvedName: r.resolvedName,
+                resolvedEmployeeNo: r.resolvedEmployeeNo,
+                existing,
+                changes: null,
+            }
+        }
+
+        // Updated — record field-level diff so the UI can render red/green.
+        const changes: RowChanges = {}
+        if (!amountSame) changes.amount = { old: existing.amount, new: r.amount }
+        if (!notesSame) changes.notes = { old: existing.notes, new: r.notes }
         return {
             rowNumber: r.rowNumber,
-            status: r.error ? 'invalid' : 'valid',
-            error: r.error,
-            warning,
-            employeeId: r.employeeId,
+            status: 'valid' as const,
+            action: 'updated' as const,
+            error: null,
+            warning: null,
+            employeeId: empId,
             resolvedName: r.resolvedName,
             resolvedEmployeeNo: r.resolvedEmployeeNo,
+            existing,
+            changes,
         }
     })
-    const invalid = rowResults.filter((r) => r.status === 'invalid').length
-    const warned = rowResults.filter((r) => r.status === 'valid' && r.warning).length
 
-    // Parity with the create endpoint: if the period is already locked,
-    // surface that on the preview so HR sees the blocker before clicking
-    // Submit. Only checks when the caller passes the period — older
-    // callers that omit it just get periodLocked=false.
+    const newCount = rowResults.filter((r) => r.action === 'new').length
+    const updatedCount = rowResults.filter((r) => r.action === 'updated').length
+    const unchangedCount = rowResults.filter((r) => r.action === 'unchanged').length
+    const duplicateCount = rowResults.filter((r) => r.action === 'duplicate').length
+    const invalid = rowResults.filter((r) => r.status === 'invalid').length
+    const warned = rowResults.filter((r) => r.warning).length
+
     const periodLocked = (opts.periodYear && opts.periodMonth)
         ? await isPeriodLocked(tenantId, opts.periodYear, opts.periodMonth)
         : false
 
     return {
         total: rowResults.length,
-        valid: rowResults.length - invalid,
+        valid: newCount + updatedCount,
         invalid,
         warned,
+        newCount,
+        updatedCount,
+        unchangedCount,
+        duplicateCount,
         periodLocked,
         rows: rowResults,
     }
 }
 
 /**
- * Bulk-create manual payroll adjustments from a spreadsheet upload.
+ * Bulk-upsert manual payroll adjustments from a spreadsheet upload.
  *
- * Resolution: each row is matched to an employee by `employeeNo` first, then
- * `employeeEmail`. Tenant ownership is enforced — rows pointing at employees
- * outside the caller's tenant are rejected with a row-level error (and never
- * exposed in the response).
+ * Resolution: each row is matched to an employee by `employeeNo` → `employeeEmail`
+ * → `employeePhone`. Tenant ownership is enforced — rows pointing at employees
+ * outside the caller's tenant are rejected with a row-level error.
  *
- * Atomicity: all valid rows are inserted in a single transaction. If any row
- * fails resolution or validation, the entire batch is aborted and `errors`
- * lists every problem found. Callers must fix the spreadsheet and retry.
+ * Per-row action (computed by the comparison engine, same logic as validate):
+ *   • new        — INSERT a new adjustment row.
+ *   • updated    — UPDATE the existing row (amount and/or notes).
+ *   • unchanged  — skipped (existing row already matches exactly).
+ *   • duplicate  — skipped (same employee already handled earlier in batch).
+ *
+ * Atomicity: all writes happen inside a single transaction. If any row fails
+ * resolution (employee not found / bad amount), the entire batch is aborted and
+ * `errors` lists every problem found — the caller must fix the sheet and retry.
  */
 export async function bulkCreateAdjustments(
     tenantId: string,
@@ -393,33 +601,101 @@ export async function bulkCreateAdjustments(
         .map((r) => ({ row: r.rowNumber, error: r.error as string }))
 
     if (errors.length > 0) {
-        return { created: 0, failed: errors.length, errors }
+        return { created: 0, updated: 0, unchanged: 0, duplicate: 0, failed: errors.length, errors }
+    }
+    if (resolved.length === 0) {
+        return { created: 0, updated: 0, unchanged: 0, duplicate: 0, failed: 0, errors: [] }
     }
 
-    const kind = kindForCategory(input.category)
-    const toInsert: Array<typeof payrollAdjustments.$inferInsert> = resolved.map((r) => ({
+    const kind = await kindForCategoryAsync(tenantId, input.category)
+
+    // Load existing rows in one query so the comparison engine doesn't fan out
+    // to N queries inside the transaction.
+    const empIds = [...new Set(resolved.map((r) => r.employeeId as string))]
+    const existingByEmp = await loadExistingAdjustments(
         tenantId,
-        employeeId: r.employeeId as string,
-        periodYear: input.periodYear,
-        periodMonth: input.periodMonth,
-        kind,
-        category: input.category,
-        amount: r.amount.toFixed(2),
-        notes: r.notes,
-        source: 'manual',
-        sourceRef: null,
-        createdBy,
-    }))
+        input.periodYear,
+        input.periodMonth,
+        input.category,
+        empIds,
+    )
 
-    if (toInsert.length === 0) {
-        return { created: 0, failed: 0, errors: [] }
+    // Classify each row into one of four buckets. Within-batch duplicates
+    // (same employee twice in the upload) are silently skipped past the first
+    // occurrence — matches validateBulkAdjustments' contract.
+    const inserts: Array<typeof payrollAdjustments.$inferInsert> = []
+    const updates: Array<{ id: string; amount: string; notes: string | null }> = []
+    let unchanged = 0
+    let duplicate = 0
+    const seenEmp = new Set<string>()
+
+    for (const r of resolved) {
+        const empId = r.employeeId as string
+        if (seenEmp.has(empId)) {
+            duplicate++
+            continue
+        }
+        seenEmp.add(empId)
+
+        const existing = existingByEmp.get(empId) ?? null
+        if (!existing) {
+            inserts.push({
+                tenantId,
+                employeeId: empId,
+                periodYear: input.periodYear,
+                periodMonth: input.periodMonth,
+                kind,
+                category: input.category,
+                amount: r.amount.toFixed(2),
+                notes: r.notes,
+                source: 'manual',
+                sourceRef: null,
+                createdBy,
+            })
+            continue
+        }
+        if (moneyEquals(existing.amount, r.amount) && notesEqual(existing.notes, r.notes)) {
+            unchanged++
+            continue
+        }
+        updates.push({ id: existing.id, amount: r.amount.toFixed(2), notes: r.notes })
     }
 
+    if (inserts.length === 0 && updates.length === 0) {
+        return { created: 0, updated: 0, unchanged, duplicate, failed: 0, errors: [] }
+    }
+
+    // Inserts batch easily. Updates need one statement per row since each has
+    // a different id — but that's fine for typical batch sizes (≤500). For
+    // larger batches we could switch to UPDATE … FROM (VALUES …) but it's
+    // not worth the complexity at current scale.
     await db.transaction(async (tx) => {
-        await tx.insert(payrollAdjustments).values(toInsert)
+        if (inserts.length > 0) {
+            await tx.insert(payrollAdjustments).values(inserts)
+        }
+        for (const u of updates) {
+            await tx.update(payrollAdjustments)
+                .set({ amount: u.amount, notes: u.notes, updatedAt: new Date() })
+                .where(and(
+                    eq(payrollAdjustments.tenantId, tenantId),
+                    eq(payrollAdjustments.id, u.id),
+                    // Defence in depth: never touch auto-imported rows even if
+                    // the comparison engine somehow matched one (shouldn't —
+                    // loadExistingAdjustments filters source='manual').
+                    eq(payrollAdjustments.source, 'manual'),
+                    isNull(payrollAdjustments.deletedAt),
+                ))
+        }
     })
 
-    return { created: toInsert.length, failed: 0, errors: [] }
+    return {
+        created: inserts.length,
+        updated: updates.length,
+        unchanged,
+        duplicate,
+        failed: 0,
+        errors: [],
+    }
 }
 
 export interface UpdateAdjustmentInput {
@@ -434,7 +710,7 @@ export async function updateAdjustment(tenantId: string, id: string, patch: Upda
     if (patch.notes !== undefined) set.notes = patch.notes
     if (patch.category !== undefined) {
         set.category = patch.category
-        set.kind = kindForCategory(patch.category)
+        set.kind = await kindForCategoryAsync(tenantId, patch.category)
     }
     const [row] = await db
         .update(payrollAdjustments)
@@ -445,19 +721,25 @@ export async function updateAdjustment(tenantId: string, id: string, patch: Upda
             // Auto-imported rows must not be hand-edited — re-sync would clobber
             // any manual change anyway, so block it cleanly here.
             eq(payrollAdjustments.source, 'manual'),
+            isNull(payrollAdjustments.deletedAt),
         ))
         .returning()
     return row ?? null
 }
 
 export async function deleteAdjustment(tenantId: string, id: string) {
+    // Soft delete — sets deleted_at, leaves the row in place. The list/sum
+    // queries filter on `deleted_at IS NULL` so the row disappears from the
+    // UI but stays available for audit ("who entered this, who removed it").
     const [row] = await db
-        .delete(payrollAdjustments)
+        .update(payrollAdjustments)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(and(
             eq(payrollAdjustments.tenantId, tenantId),
             eq(payrollAdjustments.id, id),
             // Manual rows only — clearing leave/loan rows happens via syncAdjustmentsForPeriod
             eq(payrollAdjustments.source, 'manual'),
+            isNull(payrollAdjustments.deletedAt),
         ))
         .returning()
     return row ?? null
@@ -495,6 +777,7 @@ export async function listAdjustments(tenantId: string, year: number, month: num
             eq(payrollAdjustments.tenantId, tenantId),
             eq(payrollAdjustments.periodYear, year),
             eq(payrollAdjustments.periodMonth, month),
+            isNull(payrollAdjustments.deletedAt),
         ))
         .orderBy(desc(payrollAdjustments.createdAt))
 }
@@ -700,12 +983,16 @@ export interface EmployeeAdjustmentTotals {
     employeeId: string
     overtime: number
     commission: number       // commission + bonus categories pooled
+    /** Catch-all bucket for tenant-defined custom addition categories
+     *  (e.g. "site_allowance", "ramadan_bonus"). Counts toward gross. */
+    otherAddition: number
     unpaidLeaveDeduction: number
     unpaidLeaveDays: number
     sickHalfPayDeduction: number
     sickHalfPayDays: number
     loanDeduction: number    // loan_repayment + salary_advance
-    otherDeduction: number   // manual
+    /** "manual" built-in + any custom deduction category. Reduces net. */
+    otherDeduction: number
 }
 
 export async function getAdjustmentTotalsByEmployee(
@@ -713,14 +1000,15 @@ export async function getAdjustmentTotalsByEmployee(
     year: number,
     month: number,
 ): Promise<Map<string, EmployeeAdjustmentTotals>> {
-    // Two independent queries — the sums query doesn't need the leave_requests
-    // join, the day-count query does. Run them in parallel so we pay one
-    // round-trip not two (matters on remote DBs like Neon).
+    // Three independent queries — the sums query groups by (employee,
+    // category, kind), the day-count query joins leave_requests, and
+    // listCategories pulls the tenant's custom catalog. Parallelise.
     const [rows, dayRows] = await Promise.all([
         db
             .select({
                 employeeId: payrollAdjustments.employeeId,
                 category: payrollAdjustments.category,
+                kind: payrollAdjustments.kind,
                 total: sql<string>`SUM(${payrollAdjustments.amount})`,
             })
             .from(payrollAdjustments)
@@ -728,8 +1016,9 @@ export async function getAdjustmentTotalsByEmployee(
                 eq(payrollAdjustments.tenantId, tenantId),
                 eq(payrollAdjustments.periodYear, year),
                 eq(payrollAdjustments.periodMonth, month),
+                isNull(payrollAdjustments.deletedAt),
             ))
-            .groupBy(payrollAdjustments.employeeId, payrollAdjustments.category),
+            .groupBy(payrollAdjustments.employeeId, payrollAdjustments.category, payrollAdjustments.kind),
         db
             .select({
                 employeeId: payrollAdjustments.employeeId,
@@ -743,6 +1032,7 @@ export async function getAdjustmentTotalsByEmployee(
                 eq(payrollAdjustments.periodYear, year),
                 eq(payrollAdjustments.periodMonth, month),
                 eq(payrollAdjustments.source, 'leave_engine'),
+                isNull(payrollAdjustments.deletedAt),
             ))
             .groupBy(payrollAdjustments.employeeId, payrollAdjustments.category),
     ])
@@ -752,6 +1042,7 @@ export async function getAdjustmentTotalsByEmployee(
         employeeId,
         overtime: 0,
         commission: 0,
+        otherAddition: 0,
         unpaidLeaveDeduction: 0,
         unpaidLeaveDays: 0,
         sickHalfPayDeduction: 0,
@@ -763,15 +1054,22 @@ export async function getAdjustmentTotalsByEmployee(
     for (const r of rows) {
         const t = totals.get(r.employeeId) ?? blank(r.employeeId)
         const amount = Number(r.total ?? 0)
+        // Built-in categories with semantic payslip slots:
         switch (r.category) {
-            case 'overtime': t.overtime += amount; break
+            case 'overtime':       t.overtime += amount; break
             case 'commission':
-            case 'bonus': t.commission += amount; break
-            case 'unpaid_leave': t.unpaidLeaveDeduction += amount; break
-            case 'sick_half_pay': t.sickHalfPayDeduction += amount; break
+            case 'bonus':          t.commission += amount; break
+            case 'unpaid_leave':   t.unpaidLeaveDeduction += amount; break
+            case 'sick_half_pay':  t.sickHalfPayDeduction += amount; break
             case 'loan_repayment':
             case 'salary_advance': t.loanDeduction += amount; break
-            case 'manual': t.otherDeduction += amount; break
+            case 'manual':         t.otherDeduction += amount; break
+            default:
+                // Custom tenant category — route by kind. The DB-stored kind
+                // is authoritative (set at insert time from kindForCategoryAsync),
+                // so we don't need to re-query the catalog here.
+                if (r.kind === 'addition') t.otherAddition += amount
+                else t.otherDeduction += amount
         }
         totals.set(r.employeeId, t)
     }
@@ -835,25 +1133,6 @@ export async function recordImport(
     return row
 }
 
-export async function findImportByHash(
-    tenantId: string,
-    periodYear: number,
-    periodMonth: number,
-    fileHash: string,
-) {
-    const [row] = await db
-        .select({ id: payrollAdjustmentImports.id, createdAt: payrollAdjustmentImports.createdAt })
-        .from(payrollAdjustmentImports)
-        .where(and(
-            eq(payrollAdjustmentImports.tenantId, tenantId),
-            eq(payrollAdjustmentImports.periodYear, periodYear),
-            eq(payrollAdjustmentImports.periodMonth, periodMonth),
-            eq(payrollAdjustmentImports.fileHash, fileHash),
-        ))
-        .limit(1)
-    return row ?? null
-}
-
 export async function listImports(
     tenantId: string,
     filter: { year?: number; month?: number; limit?: number } = {},
@@ -891,4 +1170,126 @@ export async function getImportById(tenantId: string, id: string) {
         ))
         .limit(1)
     return row ?? null
+}
+
+// ─── Adjustment category catalog ─────────────────────────────────────────────
+//
+// HR can extend the 8 built-in categories with their own labels (e.g.
+// "site_allowance", "ramadan_bonus"). Custom categories pool into the same
+// addition / deduction kind buckets in runPayroll — only their `kind` field
+// matters for the payslip math; the label is for display.
+
+export const BUILTIN_CATEGORIES: Array<{ value: AdjustmentCategory; label: string; kind: AdjustmentKind; builtin: true; manual: boolean }> = [
+    { value: 'overtime', label: 'Overtime', kind: 'addition', builtin: true, manual: true },
+    { value: 'commission', label: 'Commission', kind: 'addition', builtin: true, manual: true },
+    { value: 'bonus', label: 'Bonus', kind: 'addition', builtin: true, manual: true },
+    { value: 'salary_advance', label: 'Salary advance', kind: 'deduction', builtin: true, manual: true },
+    { value: 'manual', label: 'Manual deduction', kind: 'deduction', builtin: true, manual: true },
+    // Auto-driven by syncAdjustmentsForPeriod — not pickable by HR, but
+    // returned so the UI can render their labels.
+    { value: 'loan_repayment', label: 'Loan repayment', kind: 'deduction', builtin: true, manual: false },
+    { value: 'unpaid_leave', label: 'Loss of pay', kind: 'deduction', builtin: true, manual: false },
+    { value: 'sick_half_pay', label: 'Sick half-pay', kind: 'deduction', builtin: true, manual: false },
+]
+
+export interface AdjustmentCategoryOption {
+    value: string
+    label: string
+    kind: AdjustmentKind
+    builtin: boolean
+    /** False for auto-only categories (loan_repayment, unpaid_leave, sick_half_pay). */
+    manual: boolean
+}
+
+/** Slug a free-form label so two custom names that look the same compare equal. */
+export function slugifyCategory(input: string): string {
+    return input.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+}
+
+/**
+ * Built-in + tenant-defined adjustment categories, sorted with HR's manual
+ * picks first (built-ins) then custom additions. The frontend renders this
+ * directly into the category Select / Combobox.
+ */
+export async function listCategories(tenantId: string): Promise<AdjustmentCategoryOption[]> {
+    const custom = await db
+        .select({
+            value: payrollAdjustmentCategories.value,
+            label: payrollAdjustmentCategories.label,
+            kind: payrollAdjustmentCategories.kind,
+        })
+        .from(payrollAdjustmentCategories)
+        .where(eq(payrollAdjustmentCategories.tenantId, tenantId))
+    const customOpts: AdjustmentCategoryOption[] = custom.map((c) => ({
+        value: c.value,
+        label: c.label,
+        kind: c.kind as AdjustmentKind,
+        builtin: false,
+        manual: true,
+    }))
+    return [...BUILTIN_CATEGORIES, ...customOpts]
+}
+
+export interface CreateCategoryInput {
+    label: string
+    kind: AdjustmentKind
+}
+
+/**
+ * Create a tenant-scoped custom category. Returns the existing record (and a
+ * `created: false` flag) when the slug already exists in the tenant — that
+ * way the picker's "Create '…'" flow is idempotent on rapid double-clicks.
+ */
+export async function createCategory(
+    tenantId: string,
+    input: CreateCategoryInput,
+    createdBy: string | null,
+): Promise<{ option: AdjustmentCategoryOption; created: boolean }> {
+    const value = slugifyCategory(input.label)
+    if (!value) throw new Error('Category label cannot be empty.')
+    if (BUILTIN_CATEGORIES.some((c) => c.value === value)) {
+        const b = BUILTIN_CATEGORIES.find((c) => c.value === value)!
+        return { option: { value: b.value, label: b.label, kind: b.kind, builtin: true, manual: b.manual }, created: false }
+    }
+    const existing = await db
+        .select({ value: payrollAdjustmentCategories.value, label: payrollAdjustmentCategories.label, kind: payrollAdjustmentCategories.kind })
+        .from(payrollAdjustmentCategories)
+        .where(and(
+            eq(payrollAdjustmentCategories.tenantId, tenantId),
+            eq(payrollAdjustmentCategories.value, value),
+        ))
+        .limit(1)
+    if (existing[0]) {
+        return {
+            option: { value: existing[0].value, label: existing[0].label, kind: existing[0].kind as AdjustmentKind, builtin: false, manual: true },
+            created: false,
+        }
+    }
+    const [row] = await db
+        .insert(payrollAdjustmentCategories)
+        .values({ tenantId, value, label: input.label.trim(), kind: input.kind, createdBy })
+        .returning()
+    return {
+        option: { value: row.value, label: row.label, kind: row.kind as AdjustmentKind, builtin: false, manual: true },
+        created: true,
+    }
+}
+
+/**
+ * Resolve a category string to its (kind, isKnown). Used by the create routes
+ * to allow either a built-in or a tenant-registered custom category through.
+ */
+export async function resolveCategory(tenantId: string, value: string): Promise<{ kind: AdjustmentKind; builtin: boolean } | null> {
+    const builtin = BUILTIN_CATEGORIES.find((c) => c.value === value)
+    if (builtin) return { kind: builtin.kind, builtin: true }
+    const slug = slugifyCategory(value)
+    const [custom] = await db
+        .select({ kind: payrollAdjustmentCategories.kind })
+        .from(payrollAdjustmentCategories)
+        .where(and(
+            eq(payrollAdjustmentCategories.tenantId, tenantId),
+            eq(payrollAdjustmentCategories.value, slug),
+        ))
+        .limit(1)
+    return custom ? { kind: custom.kind as AdjustmentKind, builtin: false } : null
 }

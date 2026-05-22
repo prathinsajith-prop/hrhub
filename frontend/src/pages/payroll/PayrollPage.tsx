@@ -6,9 +6,11 @@ import {
   TrendingUp, RefreshCcw, Plus, Calculator, DollarSign,
   CircleDot, ArrowRight, Banknote, Users, BarChart3,
   Sparkles, Trash2, Lock, AlertTriangle, AlertCircle, ExternalLink,
-  Upload, FileSpreadsheet, X, XCircle, Loader2,
+  Upload, FileSpreadsheet, X, XCircle, Loader2, ChevronRight,
+  Copy, Info, PencilLine, MinusCircle,
 } from 'lucide-react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import type { PayrollReadinessEmployee } from '@/hooks/usePayroll'
 import {
@@ -41,9 +43,11 @@ import {
   useAdjustments, useCreateAdjustment, useDeleteAdjustment, useSyncAdjustments,
   useBulkCreateAdjustments, useValidateBulkAdjustments,
   useBulkImportHistory, useDownloadImportFile,
+  useAdjustmentCategories, useCreateAdjustmentCategory,
   useDeletePayrollRun, useReadiness,
   type BulkAdjustmentRow, type BulkCreateAdjustmentsResult, type BulkValidateRow,
-  type BulkImportHistoryRow,
+  type BulkRowAction, type RowChanges,
+  type BulkImportHistoryRow, type AdjustmentCategoryOption,
 } from '@/hooks/usePayroll'
 import { api } from '@/lib/api'
 import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
@@ -952,15 +956,7 @@ function firstAvailableMonth(runs: PayrollRun[], maxMonth: number): number {
 // sick-half-pay) and loan-installment rows are imported automatically by the
 // Sync button. See backend/src/modules/payroll/adjustments.service.ts.
 
-const ADJUSTMENT_PICKABLE_CATEGORIES: { value: PayrollAdjustmentCategory; label: string; kind: 'addition' | 'deduction' }[] = [
-  { value: 'overtime', label: 'Overtime', kind: 'addition' },
-  { value: 'commission', label: 'Commission', kind: 'addition' },
-  { value: 'bonus', label: 'Bonus', kind: 'addition' },
-  { value: 'salary_advance', label: 'Salary advance', kind: 'deduction' },
-  { value: 'manual', label: 'Manual deduction', kind: 'deduction' },
-]
-
-const CATEGORY_LABELS: Record<PayrollAdjustmentCategory, string> = {
+const CATEGORY_LABELS: Record<string, string> = {
   overtime: 'Overtime',
   commission: 'Commission',
   bonus: 'Bonus',
@@ -969,6 +965,13 @@ const CATEGORY_LABELS: Record<PayrollAdjustmentCategory, string> = {
   unpaid_leave: 'Loss of pay',
   sick_half_pay: 'Sick half-pay',
   manual: 'Manual deduction',
+}
+
+/** Display label for any category — built-in via CATEGORY_LABELS, else titlecase
+ *  the slug so a custom "site_allowance" renders as "Site Allowance". */
+function categoryLabel(value: string): string {
+  if (CATEGORY_LABELS[value]) return CATEGORY_LABELS[value]
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 function AdjustmentsSection() {
@@ -1140,7 +1143,7 @@ function AdjustmentsTable({
                 </p>
                 <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                   <Badge variant="outline" className="text-[10px]">
-                    {CATEGORY_LABELS[row.category]}
+                    {categoryLabel(row.category)}
                   </Badge>
                   {row.source !== 'manual' && (
                     <Badge variant="secondary" className="text-[10px]">
@@ -1189,6 +1192,195 @@ interface ParsedRow {
   error: string | null
 }
 
+// ─── Category picker (with inline add) ───────────────────────────────────────
+//
+// Replaces the locked shadcn Select. Built-in + tenant-custom categories
+// stream from the server; when the typed text doesn't match any existing
+// label, two "Create new category" entries appear so HR can add additions or
+// deductions without leaving the dialog.
+
+function AdjustmentCategoryPicker({
+  value, onValueChange, allowAutoCategories = false,
+}: {
+  value: string
+  onValueChange: (v: string) => void
+  /** If true, also show auto-driven categories (loan_repayment, unpaid_leave,
+   *  sick_half_pay). Default false — HR can't manually create those. */
+  allowAutoCategories?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const { data: catalog, isLoading } = useAdjustmentCategories()
+  const create = useCreateAdjustmentCategory()
+
+  const allCategories = catalog ?? []
+  const pickable = allowAutoCategories ? allCategories : allCategories.filter((c) => c.manual)
+  const selected = pickable.find((c) => c.value === value) ?? null
+
+  // Server-side slug normalisation — keep it identical so the "exists" check
+  // matches what createCategory() does.
+  const slug = search.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  const trimmed = search.trim()
+  const matchesAny = trimmed.length > 0 && pickable.some(
+    (c) => c.value === slug || c.label.toLowerCase() === trimmed.toLowerCase(),
+  )
+  const canCreate = trimmed.length > 0 && !matchesAny && !isLoading
+
+  const filtered = trimmed
+    ? pickable.filter((c) =>
+        c.label.toLowerCase().includes(trimmed.toLowerCase())
+        || c.value.toLowerCase().includes(trimmed.toLowerCase()),
+      )
+    : pickable
+
+  const additions = filtered.filter((c) => c.kind === 'addition')
+  const deductions = filtered.filter((c) => c.kind === 'deduction')
+
+  function handleCreate(kind: 'addition' | 'deduction') {
+    create.mutate({ label: trimmed, kind }, {
+      onSuccess: (res) => {
+        onValueChange(res.data.value)
+        setSearch('')
+        setOpen(false)
+        if (res.created) toast.success('Category added', `"${res.data.label}" is now available for everyone in this tenant.`)
+      },
+    })
+  }
+
+  function handleSelect(option: AdjustmentCategoryOption) {
+    onValueChange(option.value)
+    setSearch('')
+    setOpen(false)
+  }
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setSearch('') }}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            'flex h-9 w-full items-center justify-between rounded-md border bg-background px-3 py-2 text-sm transition-colors',
+            open ? 'border-ring ring-2 ring-ring/20' : 'border-input hover:border-input/80',
+            'focus:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+          )}
+        >
+          <span className="flex items-center gap-2 truncate text-left">
+            {selected ? (
+              <>
+                <span>{selected.label}</span>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-[9px] py-0 px-1.5',
+                    selected.kind === 'addition' ? 'text-emerald-700 border-emerald-300/60' : 'text-rose-700 border-rose-300/60',
+                  )}
+                >
+                  {selected.kind}
+                </Badge>
+                {!selected.builtin && <span className="text-[10px] text-muted-foreground">· custom</span>}
+              </>
+            ) : (
+              <span className="text-muted-foreground">Pick or create a category…</span>
+            )}
+          </span>
+          <ChevronRight className={cn('size-4 text-muted-foreground/60 transition-transform', open && 'rotate-90')} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="p-0 overflow-hidden border border-border shadow-lg"
+        align="start"
+        sideOffset={2}
+        style={{ width: 'var(--radix-popover-trigger-width)' }}
+      >
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search or type a new category…"
+            value={search}
+            onValueChange={setSearch}
+            className="h-9 text-sm"
+          />
+          <CommandList className="max-h-72 overflow-y-auto">
+            {isLoading ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                Loading…
+              </div>
+            ) : filtered.length === 0 && !canCreate ? (
+              <CommandEmpty className="py-6 text-xs text-muted-foreground text-center">
+                No categories found.
+              </CommandEmpty>
+            ) : null}
+
+            {additions.length > 0 && (
+              <CommandGroup heading="Additions" className="p-1">
+                {additions.map((c) => (
+                  <CommandItem
+                    key={c.value}
+                    value={c.value}
+                    onSelect={() => handleSelect(c)}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer"
+                  >
+                    <CheckCircle2 className={cn('size-3.5 shrink-0 text-emerald-600 transition-opacity', value === c.value ? 'opacity-100' : 'opacity-30')} />
+                    <span className="flex-1 truncate">{c.label}</span>
+                    {!c.builtin && <span className="text-[10px] text-muted-foreground">custom</span>}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+
+            {deductions.length > 0 && (
+              <CommandGroup heading="Deductions" className="p-1">
+                {deductions.map((c) => (
+                  <CommandItem
+                    key={c.value}
+                    value={c.value}
+                    onSelect={() => handleSelect(c)}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer"
+                  >
+                    <CheckCircle2 className={cn('size-3.5 shrink-0 text-rose-600 transition-opacity', value === c.value ? 'opacity-100' : 'opacity-30')} />
+                    <span className="flex-1 truncate">{c.label}</span>
+                    {!c.builtin && <span className="text-[10px] text-muted-foreground">custom</span>}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+
+            {canCreate && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading={`Create "${trimmed}"`} className="p-1">
+                  <CommandItem
+                    value={`__create_addition_${slug}`}
+                    onSelect={() => handleCreate('addition')}
+                    disabled={create.isPending}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer"
+                  >
+                    <Plus className="size-3.5 shrink-0 text-emerald-600" />
+                    <span className="flex-1 truncate">Add as <strong>addition</strong></span>
+                    {create.isPending && create.variables?.kind === 'addition' && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+                  </CommandItem>
+                  <CommandItem
+                    value={`__create_deduction_${slug}`}
+                    onSelect={() => handleCreate('deduction')}
+                    disabled={create.isPending}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer"
+                  >
+                    <Plus className="size-3.5 shrink-0 text-rose-600" />
+                    <span className="flex-1 truncate">Add as <strong>deduction</strong></span>
+                    {create.isPending && create.variables?.kind === 'deduction' && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 // Stages for the bulk-import workflow. Each transition is one-way (or back to
 // idle via Replace), so the UI state stays predictable.
 type BulkStage =
@@ -1203,16 +1395,21 @@ type BulkStage =
 interface MergedRow extends ParsedRow {
   serverStatus: 'pending' | 'valid' | 'invalid'
   serverError: string | null
-  /** Non-blocking warning from the validator (e.g. duplicate employee). */
+  /** Non-blocking warning from the validator (e.g. duplicate-in-batch). */
   serverWarning: string | null
   resolvedName: string | null
   resolvedEmployeeNo: string | null
+  /** Verdict from the row-level comparison engine. `pending` covers the
+   *  window between local parse and the server's response. */
+  action: BulkRowAction | 'pending'
+  /** Field-level diff when action === 'updated'. */
+  changes: RowChanges | null
+  /** Snapshot of the existing DB row when action === 'updated' or 'unchanged'. */
+  existing: { id: string; amount: number; notes: string | null } | null
 }
 
-async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
-  const hash = await crypto.subtle.digest('SHA-256', buffer)
-  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('')
-}
+/** Filter chips on the preview table — let HR focus on a single bucket. */
+type RowFilter = 'all' | 'new' | 'updated' | 'unchanged' | 'duplicate' | 'invalid'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -1245,6 +1442,287 @@ function StepBadge({ active, done, label, num }: { active: boolean; done: boolea
   )
 }
 
+// ─── Bulk-import row visuals (action badges + diff rendering) ───────────────
+
+/** Visual config keyed by action — keeps every consumer (badge, card, row
+ *  styling) in lock-step. Adding a new action means adding one entry here. */
+const ACTION_VISUAL: Record<BulkRowAction, {
+  label: string
+  badgeClass: string
+  rowClass: string
+  Icon: typeof CheckCircle2
+}> = {
+  new: {
+    label: 'New',
+    badgeClass: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300/60 dark:bg-emerald-900/40 dark:text-emerald-300 dark:ring-emerald-800/60',
+    rowClass: '',
+    Icon: Sparkles,
+  },
+  updated: {
+    label: 'Updated',
+    badgeClass: 'bg-amber-100 text-amber-800 ring-1 ring-amber-300/60 dark:bg-amber-900/40 dark:text-amber-300 dark:ring-amber-800/60',
+    rowClass: 'bg-amber-50/30 dark:bg-amber-950/10',
+    Icon: PencilLine,
+  },
+  unchanged: {
+    label: 'No change',
+    badgeClass: 'bg-muted text-muted-foreground ring-1 ring-border',
+    rowClass: 'opacity-70',
+    Icon: MinusCircle,
+  },
+  duplicate: {
+    label: 'Duplicate',
+    badgeClass: 'bg-slate-200 text-slate-600 ring-1 ring-slate-300/60 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700/60',
+    rowClass: 'bg-muted/40 text-muted-foreground line-through decoration-muted-foreground/40',
+    Icon: Copy,
+  },
+  invalid: {
+    label: 'Invalid',
+    badgeClass: 'bg-rose-100 text-rose-700 ring-1 ring-rose-300/60 dark:bg-rose-950/30 dark:text-rose-300 dark:ring-rose-900/60',
+    rowClass: 'bg-rose-50/60 dark:bg-rose-950/20',
+    Icon: XCircle,
+  },
+}
+
+/** Pill badge used in the row table + summary headers. */
+function ActionBadge({ action }: { action: BulkRowAction }) {
+  const v = ACTION_VISUAL[action]
+  return (
+    <span className={cn('inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide', v.badgeClass)}>
+      <v.Icon className="size-3" />
+      {v.label}
+    </span>
+  )
+}
+
+/** Clickable summary card — one per action bucket. Clicking filters the table.
+ *  The active card is highlighted with a darker ring. */
+function ActionSummary({
+  total, buckets, active, onFilter,
+}: {
+  total: number
+  buckets: Record<'new' | 'updated' | 'unchanged' | 'duplicate' | 'invalid', number>
+  active: RowFilter
+  onFilter: (f: RowFilter) => void
+}) {
+  // Total card sits separately on the left — clicking it resets the filter.
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+      <SummaryCard label="Total" value={total} active={active === 'all'} onClick={() => onFilter('all')} tone="neutral" />
+      <SummaryCard label="New" value={buckets.new} active={active === 'new'} onClick={() => onFilter('new')} tone="emerald" disabled={buckets.new === 0} />
+      <SummaryCard label="Updated" value={buckets.updated} active={active === 'updated'} onClick={() => onFilter('updated')} tone="amber" disabled={buckets.updated === 0} />
+      <SummaryCard label="No change" value={buckets.unchanged} active={active === 'unchanged'} onClick={() => onFilter('unchanged')} tone="muted" disabled={buckets.unchanged === 0} />
+      <SummaryCard label="Duplicate" value={buckets.duplicate} active={active === 'duplicate'} onClick={() => onFilter('duplicate')} tone="slate" disabled={buckets.duplicate === 0} />
+      <SummaryCard label="Invalid" value={buckets.invalid} active={active === 'invalid'} onClick={() => onFilter('invalid')} tone="rose" disabled={buckets.invalid === 0} />
+    </div>
+  )
+}
+
+function SummaryCard({
+  label, value, active, onClick, tone, disabled,
+}: {
+  label: string
+  value: number
+  active: boolean
+  onClick: () => void
+  tone: 'neutral' | 'emerald' | 'amber' | 'muted' | 'slate' | 'rose'
+  disabled?: boolean
+}) {
+  const toneClass = {
+    neutral: 'border-border bg-card text-foreground',
+    emerald: 'border-emerald-200/60 bg-emerald-50/40 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/15 dark:text-emerald-300',
+    amber: 'border-amber-200/60 bg-amber-50/40 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/15 dark:text-amber-300',
+    muted: 'border-border bg-muted/20 text-muted-foreground',
+    slate: 'border-slate-200/60 bg-slate-50/60 text-slate-700 dark:border-slate-800/40 dark:bg-slate-900/30 dark:text-slate-300',
+    rose: 'border-rose-200/60 bg-rose-50/40 text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/15 dark:text-rose-300',
+  }[tone]
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        'rounded-lg border p-2.5 text-left transition-all',
+        toneClass,
+        active && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
+        disabled ? 'opacity-50 cursor-default' : 'hover:shadow-sm cursor-pointer',
+      )}
+    >
+      <p className="text-[10px] font-bold uppercase tracking-widest">{label}</p>
+      <p className="mt-0.5 text-lg font-bold tabular-nums leading-none">{value}</p>
+    </button>
+  )
+}
+
+/** Single row in the preview table. Renders amount as a red→green diff when
+ *  the action is `updated`. */
+function BulkRowItem({
+  row, action, statusMessage, pending,
+}: {
+  row: MergedRow
+  action: BulkRowAction
+  statusMessage: string | null
+  pending: boolean
+}) {
+  const v = ACTION_VISUAL[action]
+  const employeeLine = row.resolvedName ?? row.employeeName ?? row.employeeNo ?? row.employeeEmail ?? '—'
+  const subLine = row.resolvedEmployeeNo ?? row.employeeNo ?? null
+
+  // Detail line under the row: prefer error, then warning, then notes.
+  const detail: { tone: 'error' | 'warn' | 'muted'; text: string } | null = action === 'invalid' && statusMessage
+    ? { tone: 'error', text: statusMessage }
+    : row.serverWarning
+      ? { tone: 'warn', text: row.serverWarning }
+      : row.notes
+        ? { tone: 'muted', text: row.notes }
+        : null
+
+  return (
+    <tr className={cn(v.rowClass)}>
+      <td className="px-2 py-2 text-muted-foreground tabular-nums align-top">{row.rowNumber}</td>
+      <td className="px-2 py-2 align-top">
+        {pending
+          ? <Loader2 className="size-3.5 text-muted-foreground animate-spin" />
+          : <ActionBadge action={action} />}
+      </td>
+      <td className="px-2 py-2 align-top">
+        <p className="truncate font-medium">{employeeLine}</p>
+        {subLine && <p className="text-[10px] text-muted-foreground truncate">{subLine}</p>}
+      </td>
+      <td className="px-2 py-2 text-right tabular-nums align-top">
+        <AmountCell row={row} action={action} />
+      </td>
+      <td className="px-2 py-2 align-top">
+        {detail ? (
+          <span className={cn(
+            detail.tone === 'error' && 'text-rose-600 dark:text-rose-400',
+            detail.tone === 'warn' && 'text-amber-700 dark:text-amber-400',
+            detail.tone === 'muted' && 'text-muted-foreground',
+          )}>{detail.text}</span>
+        ) : (
+          <span className="text-muted-foreground/40">—</span>
+        )}
+        {action === 'updated' && row.changes?.notes && (
+          <NotesDiff change={row.changes.notes} />
+        )}
+      </td>
+    </tr>
+  )
+}
+
+/** Amount cell: shows red strike-through old → bold green new on `updated`,
+ *  plain value otherwise. */
+function AmountCell({ row, action }: { row: MergedRow; action: BulkRowAction }) {
+  if (!Number.isFinite(row.amount) || row.amount <= 0) {
+    return <span className="text-rose-600">—</span>
+  }
+  if (action === 'updated' && row.changes?.amount) {
+    const { old, new: next } = row.changes.amount
+    return (
+      <span className="inline-flex flex-col items-end gap-0.5">
+        <span className="text-rose-600 dark:text-rose-400 line-through text-[11px]">
+          {formatCurrency(old)}
+        </span>
+        <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
+          {formatCurrency(next)}
+        </span>
+      </span>
+    )
+  }
+  // Unchanged + same-amount-updated (only notes differ): single value, neutral.
+  return <span>{formatCurrency(row.amount)}</span>
+}
+
+/** Inline notes diff rendered under the row's detail line when notes change. */
+function NotesDiff({ change }: { change: { old: string | null; new: string | null } }) {
+  return (
+    <div className="mt-1 space-y-0.5 text-[10px]">
+      {change.old && (
+        <div className="text-rose-600 dark:text-rose-400 line-through">
+          {change.old}
+        </div>
+      )}
+      {change.new && (
+        <div className="text-emerald-700 dark:text-emerald-400">
+          {change.new}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Renders after a successful bulk-create. Mirrors the layout of the live
+ * ActionSummary cards but pulls counts from the server's response so HR sees
+ * the *committed* numbers (not the previewed ones — which can drift if any
+ * row was duplicate-skipped server-side).
+ *
+ * The parent PayrollPage's "Total additions" KPI has already refreshed by
+ * the time this renders — see useBulkCreateAdjustments.onSuccess which
+ * invalidates ['payroll-adjustments', y, m] and the broader ['payroll']
+ * prefix. The header copy here confirms that for the user.
+ */
+function ImportResultPanel({
+  result,
+  category,
+}: {
+  result: BulkCreateAdjustmentsResult
+  category: PayrollAdjustmentCategory
+}) {
+  const committed = result.created + result.updated
+  const headline = committed > 0
+    ? `${committed} ${category} adjustment${committed === 1 ? '' : 's'} committed`
+    : 'Nothing changed'
+  return (
+    <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/15">
+      <div className="flex items-start gap-2">
+        <CheckCircle2 className="size-4 mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+            Import complete — {headline}
+          </p>
+          <p className="mt-0.5 text-[11px] text-emerald-800/80 dark:text-emerald-200/80">
+            Total additions / deductions on the payroll page have refreshed to reflect this import.
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <ResultStat label="Created" value={result.created} tone="emerald" />
+        <ResultStat label="Updated" value={result.updated} tone="amber" />
+        <ResultStat label="Unchanged" value={result.unchanged} tone="muted" />
+        <ResultStat label="Skipped (duplicate)" value={result.duplicate} tone="slate" />
+        <ResultStat label="Failed" value={result.failed} tone="rose" />
+      </div>
+    </div>
+  )
+}
+
+function ResultStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: number
+  tone: 'emerald' | 'amber' | 'muted' | 'slate' | 'rose'
+}) {
+  // Faded out when zero so the eye lands on the buckets that actually changed.
+  const dim = value === 0
+  const toneClass = {
+    emerald: 'text-emerald-700 dark:text-emerald-300',
+    amber: 'text-amber-700 dark:text-amber-300',
+    muted: 'text-muted-foreground',
+    slate: 'text-slate-700 dark:text-slate-300',
+    rose: 'text-rose-700 dark:text-rose-300',
+  }[tone]
+  return (
+    <div className={cn('rounded-md border bg-card p-2', dim && 'opacity-50')}>
+      <p className={cn('text-[10px] font-bold uppercase tracking-widest', toneClass)}>{label}</p>
+      <p className="mt-0.5 text-lg font-bold tabular-nums leading-none">{value}</p>
+    </div>
+  )
+}
+
 function AddAdjustmentDialog({
   open, onOpenChange, year, month,
 }: {
@@ -1266,13 +1744,19 @@ function AddAdjustmentDialog({
   // Bulk-mode state
   const [stage, setStage] = useState<BulkStage>('idle')
   const [file, setFile] = useState<File | null>(null)
-  const [fileHash, setFileHash] = useState<string | null>(null)
   const [rows, setRows] = useState<MergedRow[]>([])
+  /** Filter chip selection — drives which rows render in the preview table. */
+  const [rowFilter, setRowFilter] = useState<RowFilter>('all')
   const [parseError, setParseError] = useState<string | null>(null)
   // Submit-time error from the server (vs parseError which covers client-side
   // .xlsx issues). Rendered inline at the bottom of the bulk tab so HR can
   // see the exact failure reason without hunting the toast.
   const [submitError, setSubmitError] = useState<string | null>(null)
+  // Result returned by the bulk-create mutation. We render this in the dialog
+  // after a successful import so HR sees exactly what changed (created /
+  // updated / unchanged / skipped) before closing — instead of the dialog
+  // disappearing and forcing them to hunt for a toast.
+  const [submittedResult, setSubmittedResult] = useState<BulkCreateAdjustmentsResult | null>(null)
   const [downloading, setDownloading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
 
@@ -1289,10 +1773,11 @@ function AddAdjustmentDialog({
     setNotes('')
     setStage('idle')
     setFile(null)
-    setFileHash(null)
     setRows([])
+    setRowFilter('all')
     setParseError(null)
     setSubmitError(null)
+    setSubmittedResult(null)
     setDragOver(false)
   }
 
@@ -1352,10 +1837,11 @@ function AddAdjustmentDialog({
           amount: r.amount,
           notes: r.notes || null,
         })),
-        // Pass the selected period so the validator can also report
-        // periodLocked — same blocker the bulk-create endpoint enforces.
+        // Period + category anchor the comparison engine — without all three
+        // every row falls back to action='new', which would hide updates.
         periodYear: year,
         periodMonth: month,
+        category,
       })
       const byRow = new Map<number, BulkValidateRow>(result.rows.map((r) => [r.rowNumber, r]))
       setRows((prev) =>
@@ -1369,6 +1855,9 @@ function AddAdjustmentDialog({
             serverWarning: v.warning,
             resolvedName: v.resolvedName,
             resolvedEmployeeNo: v.resolvedEmployeeNo,
+            action: v.action,
+            changes: v.changes,
+            existing: v.existing,
           }
         }),
       )
@@ -1404,24 +1893,12 @@ function AddAdjustmentDialog({
       return
     }
 
-    // Duplicate-content guard. We hash the file bytes (not name + size) so HR
-    // can't sneak in the same data twice by renaming it.
-    let hash: string
-    try {
-      hash = await sha256Hex(buffer)
-    } catch (err) {
-      setParseError(err instanceof Error ? err.message : 'Could not hash file.')
-      setStage('idle')
-      return
-    }
-    if (file && fileHash === hash) {
-      toast.error('Same file already uploaded', 'Pick a different .xlsx or use Replace to start over.')
-      setStage(rows.length > 0 ? 'ready' : 'idle')
-      return
-    }
-
+    // No hash-based dedupe: re-uploading the same file is now an explicit
+    // action HR may want (re-confirming state, after a manual DB edit).
+    // The comparison engine will mark each row as new/updated/unchanged
+    // so the user sees exactly what the upload changes.
     setFile(picked)
-    setFileHash(hash)
+    setRowFilter('all')
 
     try {
       const XLSX = await import('xlsx')
@@ -1468,6 +1945,9 @@ function AddAdjustmentDialog({
           serverWarning: null,
           resolvedName: null,
           resolvedEmployeeNo: null,
+          action: error ? ('invalid' as const) : ('pending' as const),
+          changes: null,
+          existing: null,
         }
       })
       setRows(parsed)
@@ -1488,8 +1968,8 @@ function AddAdjustmentDialog({
 
   const clearFile = () => {
     setFile(null)
-    setFileHash(null)
     setRows([])
+    setRowFilter('all')
     setParseError(null)
     setStage('idle')
   }
@@ -1500,9 +1980,28 @@ function AddAdjustmentDialog({
     if (r.serverStatus === 'invalid') return { invalid: true, message: r.serverError }
     return { invalid: false, message: null }
   }
-  const validRows = useMemo(() => rows.filter((r) => !rowStatus(r).invalid), [rows])
-  const invalidRows = useMemo(() => rows.filter((r) => rowStatus(r).invalid), [rows])
+  // Derive per-action buckets in one pass so the summary cards + filter chips
+  // share the same source of truth.
+  const buckets = useMemo(() => {
+    const out = { new: [] as MergedRow[], updated: [] as MergedRow[], unchanged: [] as MergedRow[], duplicate: [] as MergedRow[], invalid: [] as MergedRow[] }
+    for (const r of rows) {
+      if (rowStatus(r).invalid) { out.invalid.push(r); continue }
+      const a = r.action
+      if (a === 'new') out.new.push(r)
+      else if (a === 'updated') out.updated.push(r)
+      else if (a === 'unchanged') out.unchanged.push(r)
+      else if (a === 'duplicate') out.duplicate.push(r)
+    }
+    return out
+  }, [rows])
+  const validRows = useMemo(() => [...buckets.new, ...buckets.updated], [buckets])
+  const invalidRows = buckets.invalid
   const totalRows = rows.length
+  // Rows currently visible in the preview table — filtered by the active chip.
+  const visibleRows = useMemo(() => {
+    if (rowFilter === 'all') return rows
+    return buckets[rowFilter] ?? []
+  }, [rowFilter, rows, buckets])
 
   const handleBulkSubmit = () => {
     if (validRows.length === 0 || invalidRows.length > 0) return
@@ -1529,10 +2028,19 @@ function AddAdjustmentDialog({
       },
       {
         onSuccess: (res: BulkCreateAdjustmentsResult) => {
+          // Park the result in dialog state so the success panel can render
+          // the per-action breakdown. The dialog does NOT auto-close — HR
+          // needs a moment to read the result against the period totals
+          // refreshing behind the dialog (cache-invalidated by the hook).
           setStage('submitted')
-          toast.success('Adjustments imported', `${res.created} row${res.created === 1 ? '' : 's'} created.`)
-          reset()
-          onOpenChange(false)
+          setSubmittedResult(res)
+          const parts: string[] = []
+          if (res.created > 0) parts.push(`${res.created} created`)
+          if (res.updated > 0) parts.push(`${res.updated} updated`)
+          if (res.unchanged > 0) parts.push(`${res.unchanged} unchanged`)
+          if (res.duplicate > 0) parts.push(`${res.duplicate} duplicates skipped`)
+          const detail = parts.length > 0 ? parts.join(' · ') : 'Nothing to import.'
+          toast.success('Import complete', detail)
         },
         onError: (err: unknown) => {
           // ApiError shape: { statusCode, message, data: <server body> }
@@ -1572,7 +2080,18 @@ function AddAdjustmentDialog({
   // Surface period-locked as a blocker on the dialog (same contract as
   // bulk-create — better to fail validation than to fail the submit).
   const bulkCanSubmit = stage === 'ready' && validRows.length > 0 && invalidRows.length === 0 && !periodLocked
-  const warnedRows = rows.filter(r => r.serverWarning)
+
+  // The comparison engine is anchored on category — when HR flips the category
+  // chip the existing per-row verdicts are stale. Re-validate so the badges
+  // reflect the new comparison. State-during-render avoids a flicker.
+  const [lastValidatedCategory, setLastValidatedCategory] = useState<PayrollAdjustmentCategory>(category)
+  if (lastValidatedCategory !== category) {
+    setLastValidatedCategory(category)
+    if (stage === 'ready' && rows.some((r) => !r.error)) {
+      // Fire-and-forget — validateOnServer updates stage internally.
+      void validateOnServer(rows)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -1601,20 +2120,15 @@ function AddAdjustmentDialog({
             </TabsTrigger>
           </TabsList>
 
-          {/* Category - shared between both modes so switching tabs preserves intent. */}
+          {/* Category - shared between both modes so switching tabs preserves intent.
+              HR can pick a built-in, a previously-created tenant custom category,
+              or type a new name and add it from the picker itself. */}
           <div className="space-y-1.5 pt-4">
             <Label>Category {mode === 'bulk' && <span className="text-[10px] font-normal text-muted-foreground">(applies to every row)</span>}</Label>
-            <Select value={category} onValueChange={(v) => setCategory(v as PayrollAdjustmentCategory)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {ADJUSTMENT_PICKABLE_CATEGORIES.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>
-                    {c.label}
-                    <span className="ms-1.5 text-[10px] text-muted-foreground">({c.kind})</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <AdjustmentCategoryPicker
+              value={category}
+              onValueChange={(v) => setCategory(v as PayrollAdjustmentCategory)}
+            />
           </div>
 
           <TabsContent value="single" className="mt-4 space-y-3 focus-visible:outline-none">
@@ -1775,113 +2289,63 @@ function AddAdjustmentDialog({
               )}
             </div>
 
-            {/* Validation summary */}
+            {/* Validation summary — one card per action bucket. Click a card
+                to filter the preview table to just that bucket. */}
             {totalRows > 0 && (
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-lg border bg-card p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Total</p>
-                  <p className="mt-1 text-xl font-bold tabular-nums">{totalRows}</p>
-                </div>
-                <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/40 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/15">
-                  <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
-                    <CheckCircle2 className="size-3" />
-                    Valid
-                  </p>
-                  <p className="mt-1 text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{validRows.length}</p>
-                </div>
-                <div className={cn(
-                  'rounded-lg border p-3',
-                  invalidRows.length > 0
-                    ? 'border-rose-200/60 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-950/15'
-                    : 'border-border bg-muted/20',
-                )}>
-                  <p className={cn(
-                    'flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest',
-                    invalidRows.length > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground',
-                  )}>
-                    <XCircle className="size-3" />
-                    Invalid
-                  </p>
-                  <p className={cn(
-                    'mt-1 text-xl font-bold tabular-nums',
-                    invalidRows.length > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground',
-                  )}>{invalidRows.length}</p>
-                </div>
-              </div>
+              <ActionSummary
+                total={totalRows}
+                buckets={{
+                  new: buckets.new.length,
+                  updated: buckets.updated.length,
+                  unchanged: buckets.unchanged.length,
+                  duplicate: buckets.duplicate.length,
+                  invalid: buckets.invalid.length,
+                }}
+                active={rowFilter}
+                onFilter={setRowFilter}
+              />
             )}
 
-            {/* Preview table */}
+            {/* Preview table — rows filtered by the active chip; styling
+                varies per action (gray duplicate, red→green updated, etc.). */}
             {totalRows > 0 && (
               <div className="space-y-2">
                 <div className="rounded-lg border overflow-hidden">
-                  <div className="max-h-72 overflow-y-auto">
+                  <div className="max-h-80 overflow-y-auto">
                     <table className="w-full text-xs">
-                      <thead className="bg-muted/50 sticky top-0">
+                      <thead className="bg-muted/50 sticky top-0 z-10">
                         <tr>
                           <th className="px-2 py-1.5 text-left font-medium w-8">#</th>
-                          <th className="px-2 py-1.5 text-left font-medium w-7"></th>
+                          <th className="px-2 py-1.5 text-left font-medium w-24">Status</th>
                           <th className="px-2 py-1.5 text-left font-medium">Employee</th>
-                          <th className="px-2 py-1.5 text-left font-medium w-40">Email</th>
-                          <th className="px-2 py-1.5 text-left font-medium w-36">Phone</th>
-                          <th className="px-2 py-1.5 text-right font-medium w-24">Amount</th>
+                          <th className="px-2 py-1.5 text-right font-medium w-44">Amount</th>
                           <th className="px-2 py-1.5 text-left font-medium">Note / Issue</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
-                        {rows.map((r) => {
-                          const status = rowStatus(r)
-                          return (
-                            <tr
-                              key={r.rowNumber}
-                              className={cn(status.invalid && 'bg-rose-50/60 dark:bg-rose-950/20')}
-                            >
-                              <td className="px-2 py-1.5 text-muted-foreground tabular-nums align-top">{r.rowNumber}</td>
-                              <td className="px-2 py-1.5 align-top">
-                                {status.invalid ? (
-                                  <XCircle className="size-3.5 text-rose-600 dark:text-rose-400" />
-                                ) : r.serverStatus === 'valid' ? (
-                                  <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                                ) : (
-                                  <Loader2 className="size-3.5 text-muted-foreground/50 animate-spin" />
-                                )}
-                              </td>
-                              <td className="px-2 py-1.5 align-top">
-                                <div className="min-w-0">
-                                  <p className="truncate">
-                                    {r.resolvedName ?? r.employeeName ?? r.employeeNo ?? r.employeeEmail ?? <span className="text-muted-foreground">—</span>}
-                                  </p>
-                                  {(r.resolvedEmployeeNo || r.employeeNo) && (
-                                    <p className="text-[10px] text-muted-foreground truncate">
-                                      {r.resolvedEmployeeNo ?? r.employeeNo}
-                                    </p>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-2 py-1.5 align-top truncate max-w-[12rem]">
-                                {r.employeeEmail
-                                  ? <span className="text-muted-foreground" title={r.employeeEmail}>{r.employeeEmail}</span>
-                                  : <span className="text-muted-foreground/40">—</span>}
-                              </td>
-                              <td className="px-2 py-1.5 align-top tabular-nums">
-                                {r.employeePhone
-                                  ? <span className="text-muted-foreground">{r.employeePhone}</span>
-                                  : <span className="text-muted-foreground/40">—</span>}
-                              </td>
-                              <td className="px-2 py-1.5 text-right tabular-nums align-top">
-                                {Number.isFinite(r.amount) && r.amount > 0
-                                  ? formatCurrency(r.amount)
-                                  : <span className="text-rose-600">—</span>}
-                              </td>
-                              <td className="px-2 py-1.5 align-top">
-                                {status.invalid ? (
-                                  <span className="text-rose-600 dark:text-rose-400">{status.message}</span>
-                                ) : (
-                                  r.notes || <span className="text-muted-foreground">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          )
-                        })}
+                        {visibleRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">
+                              No rows match this filter.
+                            </td>
+                          </tr>
+                        ) : (
+                          visibleRows.map((r) => {
+                            const status = rowStatus(r)
+                            const action: BulkRowAction = status.invalid
+                              ? 'invalid'
+                              : (r.action === 'pending' ? 'new' : r.action)
+                            return (
+                              <BulkRowItem
+                                key={r.rowNumber}
+                                row={r}
+                                action={action}
+                                statusMessage={status.message}
+                                pending={r.serverStatus === 'pending' && !status.invalid}
+                              />
+                            )
+                          })
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1899,10 +2363,16 @@ function AddAdjustmentDialog({
                     Payroll for this period has already been processed — adjustments are locked. Pick an open period to import into.
                   </p>
                 )}
-                {warnedRows.length > 0 && stage === 'ready' && invalidRows.length === 0 && !periodLocked && (
-                  <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                {buckets.duplicate.length > 0 && stage === 'ready' && invalidRows.length === 0 && !periodLocked && (
+                  <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
                     <AlertCircle className="size-3 mt-0.5 shrink-0" />
-                    {warnedRows.length} row{warnedRows.length === 1 ? '' : 's'} flagged — same employee appears more than once in this batch. They will create separate adjustment lines. Continue if intentional.
+                    {buckets.duplicate.length} duplicate row{buckets.duplicate.length === 1 ? '' : 's'} will be skipped — only the first occurrence of each employee imports.
+                  </p>
+                )}
+                {buckets.unchanged.length > 0 && stage === 'ready' && (
+                  <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <Info className="size-3 mt-0.5 shrink-0" />
+                    {buckets.unchanged.length} row{buckets.unchanged.length === 1 ? '' : 's'} already match the existing values — skipped on import.
                   </p>
                 )}
               </div>
@@ -1921,33 +2391,57 @@ function AddAdjustmentDialog({
               </div>
             )}
 
+            {/* Post-import result panel — renders after the bulk-create
+                mutation resolves successfully. Lays out exactly which
+                action buckets committed so HR sees what changed before
+                hitting Done. The Total additions KPI behind the dialog
+                has already refreshed by the time this is shown (the hook
+                invalidates ['payroll-adjustments', year, month] in its
+                onSuccess and active queries refetch in the same tick). */}
+            {stage === 'submitted' && submittedResult && (
+              <ImportResultPanel result={submittedResult} category={category} />
+            )}
+
             <ImportHistorySection year={year} month={month} />
           </TabsContent>
         </Tabs>
 
         <Separator />
         <div className="flex justify-end gap-2 pt-1">
-          <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={submitting || stage === 'parsing' || stage === 'validating'}>
-            Cancel
-          </Button>
-          {mode === 'single' ? (
-            <Button
-              onClick={handleSingleSubmit}
-              loading={create.isPending}
-              disabled={!singleCanSubmit || submitting}
-            >
-              Save adjustment
-            </Button>
+          {/* After a successful import the dialog stays open with the result
+              panel rendered — collapse the footer to a single "Done" button
+              so HR can read the breakdown then dismiss explicitly. */}
+          {stage === 'submitted' && submittedResult ? (
+            <Button onClick={() => handleOpenChange(false)}>Done</Button>
           ) : (
-            <Button
-              onClick={handleBulkSubmit}
-              loading={bulk.isPending}
-              disabled={!bulkCanSubmit || submitting}
-            >
-              {validRows.length > 0
-                ? `Import ${validRows.length} row${validRows.length === 1 ? '' : 's'}`
-                : 'Import rows'}
-            </Button>
+            <>
+              <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={submitting || stage === 'parsing' || stage === 'validating'}>
+                Cancel
+              </Button>
+              {mode === 'single' ? (
+                <Button
+                  onClick={handleSingleSubmit}
+                  loading={create.isPending}
+                  disabled={!singleCanSubmit || submitting}
+                >
+                  Save adjustment
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleBulkSubmit}
+                  loading={bulk.isPending}
+                  disabled={!bulkCanSubmit || submitting}
+                >
+                  {(() => {
+                    const n = buckets.new.length, u = buckets.updated.length
+                    if (n === 0 && u === 0) return 'Import rows'
+                    if (u === 0) return `Import ${n} new row${n === 1 ? '' : 's'}`
+                    if (n === 0) return `Apply ${u} update${u === 1 ? '' : 's'}`
+                    return `Import ${n} new + ${u} update${u === 1 ? '' : 's'}`
+                  })()}
+                </Button>
+              )}
+            </>
           )}
         </div>
       </DialogContent>
@@ -2015,7 +2509,7 @@ function ImportHistorySection({ year, month }: { year: number; month: number }) 
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium truncate">{row.fileName}</p>
                 <p className="text-[10px] text-muted-foreground">
-                  {CATEGORY_LABELS_FOR_IMPORT[row.category] ?? row.category}
+                  {CATEGORY_LABELS_FOR_IMPORT[row.category] ?? categoryLabel(row.category)}
                   {' · '}{row.rowsCreated} row{row.rowsCreated === 1 ? '' : 's'}
                   {' · '}{formatImportBytes(row.fileSize)}
                   {row.createdByName && ` · by ${row.createdByName}`}

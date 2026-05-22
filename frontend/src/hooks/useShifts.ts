@@ -2,16 +2,22 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
-import type { Shift, WeekDay } from '@/types'
+import type { Shift, ShiftCoreHoursWindow, WeekDay } from '@/types'
 
 type ShiftCreate = {
     name: string
+    color?: string | null
     startTime: string
     endTime: string
     weeklyOffDays?: WeekDay[]
+    shiftMarginBeforeMinutes?: number | null
+    shiftMarginAfterMinutes?: number | null
+    coreWorkingHours?: ShiftCoreHoursWindow[]
+    restrictBreaksDuringCoreHours?: boolean
     sortOrder?: number
 }
 type ShiftUpdate = Partial<ShiftCreate> & { isActive?: boolean }
+export type { ShiftCreate, ShiftUpdate }
 
 export function useShifts(opts?: { includeInactive?: boolean }) {
     const query = opts?.includeInactive ? '?includeInactive=true' : ''

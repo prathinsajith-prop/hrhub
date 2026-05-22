@@ -39,6 +39,7 @@ import { exitRoutes } from './modules/exit/exit.routes.js'
 import { interviewRoutes } from './modules/recruitment/interview.routes.js'
 import { performanceRoutes } from './modules/performance/performance.routes.js'
 import { attendanceRoutes } from './modules/attendance/attendance.routes.js'
+import biometricRoutes from './modules/attendance/biometric.routes.js'
 import { auditRoutes } from './modules/audit/audit.routes.js'
 import { notificationsRoutes } from './modules/notifications/notifications.routes.js'
 import assetsRoutes from './modules/assets/assets.routes.js'
@@ -63,6 +64,7 @@ import calendarRoutes from './modules/calendar/calendar.routes.js'
 import teamsModuleRoutes from './modules/teams/teams.routes.js'
 import { complaintsRoutes } from './modules/complaints/complaints.routes.js'
 import trainingRoutes from './modules/training/training.routes.js'
+import travelRoutes from './modules/travel/travel.routes.js'
 import loansRoutes from './modules/loans/loans.routes.js'
 import { diagnosticsRoutes } from './modules/admin/diagnostics.routes.js'
 
@@ -362,6 +364,7 @@ async function bootstrap() {
     await app.register(interviewRoutes, { prefix: '/api/v1' })
     await app.register(performanceRoutes, { prefix: '/api/v1' })
     await app.register(attendanceRoutes, { prefix: '/api/v1' })
+    await app.register(biometricRoutes, { prefix: '/api/v1/attendance' })
     await app.register(auditRoutes, { prefix: '/api/v1/audit' })
     await app.register(notificationsRoutes, { prefix: '/api/v1/notifications' })
     await app.register(assetsRoutes, { prefix: '/api/v1/assets' })
@@ -386,6 +389,7 @@ async function bootstrap() {
     await app.register(teamsModuleRoutes, { prefix: '/api/v1' })
     await app.register(complaintsRoutes, { prefix: '/api/v1' })
     await app.register(trainingRoutes, { prefix: '/api/v1/training' })
+    await app.register(travelRoutes, { prefix: '/api/v1/travel' })
     await app.register(loansRoutes, { prefix: '/api/v1/loans' })
     await app.register(diagnosticsRoutes, { prefix: '/api/v1/admin/diagnostics' })
 

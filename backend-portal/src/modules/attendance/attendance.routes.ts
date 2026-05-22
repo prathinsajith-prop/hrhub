@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify'
 import { db } from '../../db/client.js'
 import {
     attendanceRecords,
+    attendancePunches,
     employees,
     leaveRequests,
     orgUnits,
@@ -364,118 +365,257 @@ export default async function attendanceRoutes(fastify: FastifyInstance) {
         })
     })
 
+    // ─── Check-in / Check-out ────────────────────────────────────────────────
+    //
+    // Multi-punch model: an employee can check in and out multiple times in
+    // a single day (lunch break, customer visit, errand, etc.). Each event
+    // is a row in `attendance_punches`. The `attendance_records` row stays
+    // as a daily rollup so calendar/dashboard views don't have to change:
+    //   - checkIn  = FIRST 'in' punch of the day
+    //   - checkOut = LAST 'out' punch of the day (only when the last punch
+    //     IS an 'out' — i.e., the employee is no longer on-site)
+    //   - hoursWorked = sum of every closed (in,out) pair
+    //
+    // Alternation rule:
+    //   - check-in is allowed only when the last punch of the day was 'out'
+    //     (or there are no punches yet). Two check-ins in a row → 400.
+    //   - check-out is allowed only when the last punch was 'in'. Two check-
+    //     outs in a row → 400.
+    //
     // POST /api/v1/attendance/check-in
     fastify.post('/check-in', { ...auth }, async (request: any, reply: any) => {
-        const body = (validate(checkInOutSchema, request.body) ?? {}) as { employeeId?: string }
-        const user = request.user
-        const targetEmpId = body.employeeId ?? user.employeeId
-        if (!targetEmpId) return reply.code(404).send(e404('No employee record linked'))
-
-        if (!(await canAccessEmployee(user, targetEmpId, request))) {
-            return reply.code(403).send(e403('Not authorized to check in for this employee'))
-        }
-
-        const date = todayISO()
-        const now = new Date()
-        const [existing] = await db
-            .select()
-            .from(attendanceRecords)
-            .where(
-                and(
-                    eq(attendanceRecords.tenantId, user.tenantId),
-                    eq(attendanceRecords.employeeId, targetEmpId),
-                    eq(attendanceRecords.date, date),
-                ),
-            )
-            .limit(1)
-
-        if (existing?.checkIn) return reply.code(400).send(e400('Already checked in today'))
-
-        const row = existing
-            ? (
-                  await db
-                      .update(attendanceRecords)
-                      .set({ checkIn: now, status: 'present', updatedAt: now })
-                      .where(eq(attendanceRecords.id, existing.id))
-                      .returning()
-              )[0]
-            : (
-                  await db
-                      .insert(attendanceRecords)
-                      .values({
-                          tenantId: user.tenantId,
-                          employeeId: targetEmpId,
-                          date,
-                          checkIn: now,
-                          status: 'present',
-                      } as any)
-                      .returning()
-              )[0]
-
-        recordActivity({
-            tenantId: user.tenantId,
-            userId: user.id,
-            actorName: user.name,
-            actorRole: user.role,
-            entityType: 'attendance',
-            entityId: row.id,
-            action: 'submit',
-            metadata: { event: 'check_in', employeeId: targetEmpId },
-            ipAddress: request.ip,
-            userAgent: request.headers['user-agent'],
-        }).catch(() => {})
-
-        return reply.send({ data: row })
+        return handlePunch(request, reply, 'in')
     })
 
     // POST /api/v1/attendance/check-out
     fastify.post('/check-out', { ...auth }, async (request: any, reply: any) => {
-        const body = (validate(checkInOutSchema, request.body) ?? {}) as { employeeId?: string }
-        const user = request.user
-        const targetEmpId = body.employeeId ?? user.employeeId
-        if (!targetEmpId) return reply.code(404).send(e404('No employee record linked'))
+        return handlePunch(request, reply, 'out')
+    })
 
+    // GET /api/v1/attendance/punches?date=YYYY-MM-DD[&employeeId=...]
+    //
+    // Returns every check-in / check-out event for a single calendar day,
+    // ordered oldest-first so the FE can pair them in order (in → out →
+    // in → out → …). Powers the "day detail" modal on the portal's
+    // attendance page that lists individual punches under each rollup row.
+    //
+    // Scope: same canAccessEmployee guard as the punch writers — employees
+    // see their own, dept_heads see their subtree, HR sees all.
+    fastify.get('/punches', { ...auth }, async (request: any, reply: any) => {
+        const qs = request.query as { date?: string; employeeId?: string }
+        const date = qs.date
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return reply.code(400).send(e400('date is required (YYYY-MM-DD)'))
+        }
+        const user = request.user
+        const targetEmpId = qs.employeeId ?? user.employeeId
+        if (!targetEmpId) return reply.code(404).send(e404('No employee record linked'))
         if (!(await canAccessEmployee(user, targetEmpId, request))) {
-            return reply.code(403).send(e403('Not authorized'))
+            return reply.code(403).send(e403('Not authorized to view this employee\'s punches'))
         }
 
-        const date = todayISO()
-        const now = new Date()
-        const [existing] = await db
-            .select()
-            .from(attendanceRecords)
+        const data = await db
+            .select({
+                id: attendancePunches.id,
+                tenantId: attendancePunches.tenantId,
+                employeeId: attendancePunches.employeeId,
+                date: attendancePunches.date,
+                punchType: attendancePunches.punchType,
+                recordedAt: attendancePunches.recordedAt,
+                locationName: attendancePunches.locationName,
+                latitude: attendancePunches.latitude,
+                longitude: attendancePunches.longitude,
+                source: attendancePunches.source,
+                deviceId: attendancePunches.deviceId,
+                notes: attendancePunches.notes,
+                createdBy: attendancePunches.createdBy,
+                createdAt: attendancePunches.createdAt,
+            })
+            .from(attendancePunches)
             .where(
                 and(
-                    eq(attendanceRecords.tenantId, user.tenantId),
-                    eq(attendanceRecords.employeeId, targetEmpId),
-                    eq(attendanceRecords.date, date),
+                    eq(attendancePunches.tenantId, user.tenantId),
+                    eq(attendancePunches.employeeId, targetEmpId),
+                    eq(attendancePunches.date, date),
                 ),
             )
-            .limit(1)
+            .orderBy(asc(attendancePunches.recordedAt))
 
-        if (!existing?.checkIn) return reply.code(400).send(e400('No check-in found for today'))
-        if (existing.checkOut) return reply.code(400).send(e400('Already checked out today'))
-
-        const hoursWorked = diffHours(existing.checkIn, now).toFixed(2)
-        const [updated] = await db
-            .update(attendanceRecords)
-            .set({ checkOut: now, hoursWorked, updatedAt: now })
-            .where(eq(attendanceRecords.id, existing.id))
-            .returning()
-
-        recordActivity({
-            tenantId: user.tenantId,
-            userId: user.id,
-            actorName: user.name,
-            actorRole: user.role,
-            entityType: 'attendance',
-            entityId: updated.id,
-            action: 'submit',
-            metadata: { event: 'check_out', employeeId: targetEmpId, hoursWorked },
-            ipAddress: request.ip,
-            userAgent: request.headers['user-agent'],
-        }).catch(() => {})
-
-        return reply.send({ data: updated })
+        return reply.send({ data })
     })
+}
+
+/**
+ * Shared handler for both check-in and check-out. Inserts a row in
+ * `attendance_punches`, then rebuilds the daily rollup in
+ * `attendance_records` so reads downstream don't need to know about
+ * punches.
+ */
+async function handlePunch(
+    request: any,
+    reply: any,
+    punchType: 'in' | 'out',
+): Promise<unknown> {
+    const body = (validate(checkInOutSchema, request.body) ?? {}) as {
+        employeeId?: string
+        latitude?: number | null
+        longitude?: number | null
+        locationName?: string | null
+        notes?: string | null
+    }
+    const user = request.user
+    const targetEmpId = body.employeeId ?? user.employeeId
+    if (!targetEmpId) return reply.code(404).send(e404('No employee record linked'))
+    if (!(await canAccessEmployee(user, targetEmpId, request))) {
+        return reply.code(403).send(e403(`Not authorized to check ${punchType} for this employee`))
+    }
+
+    const date = todayISO()
+    const now = new Date()
+
+    // Look up the last punch today to validate alternation. The
+    // (employee_id, recorded_at) index makes this O(log n).
+    const [last] = await db
+        .select({ punchType: attendancePunches.punchType })
+        .from(attendancePunches)
+        .where(
+            and(
+                eq(attendancePunches.tenantId, user.tenantId),
+                eq(attendancePunches.employeeId, targetEmpId),
+                eq(attendancePunches.date, date),
+            ),
+        )
+        .orderBy(desc(attendancePunches.recordedAt))
+        .limit(1)
+
+    // Alternation guard. "Already checked in" and "Already checked out"
+    // both come from the same predicate — phrasing differs per verb.
+    if (punchType === 'in' && last?.punchType === 'in') {
+        return reply.code(400).send(e400('You are already checked in. Check out before checking in again.'))
+    }
+    if (punchType === 'out' && !last) {
+        return reply.code(400).send(e400('No check-in found for today.'))
+    }
+    if (punchType === 'out' && last?.punchType === 'out') {
+        return reply.code(400).send(e400('You are already checked out. Check in before checking out again.'))
+    }
+
+    // Insert the punch event.
+    const [punch] = await db
+        .insert(attendancePunches)
+        .values({
+            tenantId: user.tenantId,
+            employeeId: targetEmpId,
+            date,
+            punchType,
+            recordedAt: now,
+            locationName: body.locationName ?? null,
+            latitude: body.latitude != null ? String(body.latitude) : null,
+            longitude: body.longitude != null ? String(body.longitude) : null,
+            source: 'web',
+            notes: body.notes ?? null,
+            createdBy: user.id,
+        } as any)
+        .returning()
+
+    // Rebuild the daily rollup so downstream consumers (calendar / payroll
+    // / dashboard) keep working without learning about punches. Same
+    // transaction would be cleaner but two queries is fine for typical
+    // sub-20-punches-per-day volume.
+    const todayPunches = await db
+        .select({
+            punchType: attendancePunches.punchType,
+            recordedAt: attendancePunches.recordedAt,
+        })
+        .from(attendancePunches)
+        .where(
+            and(
+                eq(attendancePunches.tenantId, user.tenantId),
+                eq(attendancePunches.employeeId, targetEmpId),
+                eq(attendancePunches.date, date),
+            ),
+        )
+        .orderBy(asc(attendancePunches.recordedAt))
+
+    const firstIn = todayPunches.find((p) => p.punchType === 'in')?.recordedAt ?? null
+    // Last 'out' only counts as checkOut when it follows the last 'in' —
+    // otherwise the employee is still on-site and the column should be NULL.
+    const lastPunch = todayPunches[todayPunches.length - 1] ?? null
+    const lastOut = lastPunch?.punchType === 'out' ? lastPunch.recordedAt : null
+
+    // Sum every closed (in, out) pair. Unpaired tail 'in' contributes 0.
+    let totalMs = 0
+    let pairOpenAt: Date | null = null
+    for (const p of todayPunches) {
+        if (p.punchType === 'in' && !pairOpenAt) {
+            pairOpenAt = p.recordedAt as Date
+        } else if (p.punchType === 'out' && pairOpenAt) {
+            totalMs += (p.recordedAt as Date).getTime() - pairOpenAt.getTime()
+            pairOpenAt = null
+        }
+    }
+    const hoursWorked = totalMs > 0 ? (totalMs / 3_600_000).toFixed(2) : null
+
+    const [existingRollup] = await db
+        .select({ id: attendanceRecords.id })
+        .from(attendanceRecords)
+        .where(
+            and(
+                eq(attendanceRecords.tenantId, user.tenantId),
+                eq(attendanceRecords.employeeId, targetEmpId),
+                eq(attendanceRecords.date, date),
+            ),
+        )
+        .limit(1)
+
+    let rollup
+    if (existingRollup) {
+        ;[rollup] = await db
+            .update(attendanceRecords)
+            .set({
+                checkIn: firstIn,
+                checkOut: lastOut,
+                hoursWorked,
+                status: 'present',
+                updatedAt: now,
+            })
+            .where(eq(attendanceRecords.id, existingRollup.id))
+            .returning()
+    } else {
+        ;[rollup] = await db
+            .insert(attendanceRecords)
+            .values({
+                tenantId: user.tenantId,
+                employeeId: targetEmpId,
+                date,
+                checkIn: firstIn,
+                checkOut: lastOut,
+                hoursWorked,
+                status: 'present',
+            } as any)
+            .returning()
+    }
+
+    recordActivity({
+        tenantId: user.tenantId,
+        userId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        entityType: 'attendance',
+        entityId: rollup.id,
+        action: 'submit',
+        metadata: {
+            event: punchType === 'in' ? 'check_in' : 'check_out',
+            employeeId: targetEmpId,
+            punchId: punch.id,
+            // Per-call count so the audit log surfaces "3rd check-in of the day"
+            punchSequence: todayPunches.length,
+        },
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+    }).catch(() => {})
+
+    // Return the rollup row (same shape the FE expects) plus the latest
+    // punch so the client can render a confirmation pill if it wants to.
+    return reply.send({ data: rollup, punch })
 }

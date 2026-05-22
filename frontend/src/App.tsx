@@ -28,6 +28,7 @@ const PayrollPage = lazy(() => import('@/pages/payroll/PayrollPage').then(m => (
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage').then(m => ({ default: m.SettingsPage })))
 const ExitPage = lazy(() => import('@/pages/employees/ExitPage').then(m => ({ default: m.ExitPage })))
 const AttendancePage = lazy(() => import('@/pages/attendance/AttendancePage').then(m => ({ default: m.AttendancePage })))
+const BiometricImportPage = lazy(() => import('@/pages/attendance/BiometricImportPage'))
 const PerformancePage = lazy(() => import('@/pages/performance/PerformancePage').then(m => ({ default: m.PerformancePage })))
 const OrgChartPage = lazy(() => import('@/pages/employees/OrgChartPage').then(m => ({ default: m.OrgChartPage })))
 const AuditLogPage = lazy(() => import('@/pages/misc/AuditLogPage').then(m => ({ default: m.AuditLogPage })))
@@ -42,6 +43,7 @@ const OnboardingDetailPage = lazy(() => import('@/pages/misc/OnboardingDetailPag
 const CompliancePage = lazy(() => import('@/pages/misc/CompliancePage').then(m => ({ default: m.CompliancePage })))
 const ReportsPage = lazy(() => import('@/pages/misc/ReportsPage').then(m => ({ default: m.ReportsPage })))
 const AssetsPage = lazy(() => import('@/pages/assets/AssetsPage').then(m => ({ default: m.AssetsPage })))
+const TravelPage = lazy(() => import('@/pages/travel/TravelPage'))
 const OrganizationsPage = lazy(() => import('@/pages/organizations/OrganizationsPage').then(m => ({ default: m.OrganizationsPage })))
 const TeamPage = lazy(() => import('@/pages/organizations/TeamPage').then(m => ({ default: m.TeamPage })))
 const UsersPage = lazy(() => import('@/pages/settings/UsersPage').then(m => ({ default: m.UsersPage })))
@@ -55,6 +57,7 @@ const MyLeavePage = lazy(() => import('@/pages/my/MyLeavePage').then(m => ({ def
 const MyPayslipsPage = lazy(() => import('@/pages/my/MyPayslipsPage').then(m => ({ default: m.MyPayslipsPage })))
 const MyProfilePage = lazy(() => import('@/pages/my/MyProfilePage').then(m => ({ default: m.MyProfilePage })))
 const MyAccountPage = lazy(() => import('@/pages/my/MyAccountPage').then(m => ({ default: m.MyAccountPage })))
+const MyAttendancePage = lazy(() => import('@/pages/my/MyAttendancePage').then(m => ({ default: m.MyAttendancePage })))
 const ComplaintsPage = lazy(() => import('@/pages/misc/ComplaintsPage').then(m => ({ default: m.ComplaintsPage })))
 const MyComplaintsPage = lazy(() => import('@/pages/my/MyComplaintsPage').then(m => ({ default: m.MyComplaintsPage })))
 const TrainingPage = lazy(() => import('@/pages/misc/TrainingPage').then(m => ({ default: m.TrainingPage })))
@@ -99,6 +102,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/my/leave': 'myLeave.title',
   '/my/payslips': 'myPayslips.title',
   '/my/profile': 'myProfile.title',
+  '/my/attendance': 'myAttendance.title',
   '/organizations': 'organizations.title',
   '/team': 'team.title',
   '/apps': 'apps.title',
@@ -108,6 +112,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/my/loans': 'loans.myPageTitle',
   '/leave-adjustments': 'leaveAdjustments.title',
   '/assets': 'assets.title',
+  '/travel': 'travel.title',
   '/calendar': 'calendar.title',
   '/complaints': 'complaints.pageTitle',
   '/my/complaints': 'complaints.pageTitle',
@@ -194,6 +199,7 @@ export default function App() {
               <Route path="exit" element={<RoleRoute routeKey="exit"><ExitPage /></RoleRoute>} />
               <Route path="calendar" element={<RoleRoute routeKey="calendar"><CalendarPage /></RoleRoute>} />
               <Route path="attendance" element={<RoleRoute routeKey="attendance"><AttendancePage /></RoleRoute>} />
+              <Route path="attendance/biometric" element={<RoleRoute routeKey="attendance/biometric"><BiometricImportPage /></RoleRoute>} />
               <Route path="performance" element={<RoleRoute routeKey="performance"><PerformancePage /></RoleRoute>} />
               <Route path="org-chart" element={<RoleRoute routeKey="org-chart"><OrgChartPage /></RoleRoute>} />
               <Route path="audit" element={<RoleRoute routeKey="audit"><AuditLogPage /></RoleRoute>} />
@@ -203,7 +209,9 @@ export default function App() {
               <Route path="my/leave" element={<RoleRoute routeKey="my/leave"><MyLeavePage /></RoleRoute>} />
               <Route path="my/payslips" element={<RoleRoute routeKey="my/payslips"><MyPayslipsPage /></RoleRoute>} />
               <Route path="my/profile" element={<RoleRoute routeKey="my/profile"><MyProfilePage /></RoleRoute>} />
+              <Route path="my/attendance" element={<RoleRoute routeKey="my/attendance"><MyAttendancePage /></RoleRoute>} />
               <Route path="assets" element={<RoleRoute routeKey="assets"><AssetsPage /></RoleRoute>} />
+              <Route path="travel" element={<RoleRoute routeKey="travel"><TravelPage /></RoleRoute>} />
               <Route path="organizations" element={<RoleRoute routeKey="organizations"><OrganizationsPage /></RoleRoute>} />
               <Route path="team" element={<RoleRoute routeKey="team"><TeamPage /></RoleRoute>} />
               <Route path="users" element={<RoleRoute routeKey="users"><UsersPage /></RoleRoute>} />

@@ -40,6 +40,10 @@ export const payrollAdjustments = pgTable('payroll_adjustments', {
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    // Soft delete — set when a manual adjustment is removed. The portal MUST
+    // filter on `deletedAt IS NULL` for every query so deleted rows don't
+    // resurface. Added in migration 0058.
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (t) => ({
     tenantPeriodIdx: index('idx_payroll_adj_tenant_period').on(t.tenantId, t.periodYear, t.periodMonth),
     tenantEmpPeriodIdx: index('idx_payroll_adj_tenant_employee_period')
