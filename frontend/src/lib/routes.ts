@@ -31,8 +31,10 @@ export const ROUTES = {
     payroll: '/payroll',
     leave: '/leave',
     attendance: '/attendance',
+    attendanceBiometric: '/attendance/biometric',
     performance: '/performance',
     assets: '/assets',
+    travel: '/travel',
 
     // Insights
     reports: '/reports',
@@ -55,6 +57,7 @@ export const ROUTES = {
     myLeave: '/my/leave',
     myPayslips: '/my/payslips',
     myProfile: '/my/profile',
+    myAttendance: '/my/attendance',
 } as const
 
 export type RouteKey = keyof typeof ROUTES
@@ -79,6 +82,7 @@ export const ROOT_NAV_LABELS: Record<string, string> = {
     attendance: 'nav.attendance',
     performance: 'nav.performance',
     assets: 'nav.assets',
+    travel: 'nav.travel',
     reports: 'nav.reports',
     audit: 'nav.auditLog',
     'login-history': 'loginHistory.title',
@@ -93,4 +97,5 @@ export const ROOT_NAV_LABELS: Record<string, string> = {
     'my/leave': 'myLeave.title',
     'my/payslips': 'myPayslips.title',
     'my/profile': 'myProfile.title',
+    'my/attendance': 'myAttendance.title',
 }

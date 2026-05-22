@@ -52,6 +52,11 @@ export const payrollAdjustments = pgTable('payroll_adjustments', {
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Soft-delete timestamp. Manual rows that HR deletes are marked here,
+     *  not removed — preserves the audit trail of who entered what and when
+     *  it was retracted. Auto-imported rows (leave_engine, loan_engine) are
+     *  still hard-deleted because they're regenerated from source data. */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (t) => ({
     tenantPeriodIdx: index('idx_payroll_adj_tenant_period').on(t.tenantId, t.periodYear, t.periodMonth),
     tenantEmpPeriodIdx: index('idx_payroll_adj_tenant_employee_period')

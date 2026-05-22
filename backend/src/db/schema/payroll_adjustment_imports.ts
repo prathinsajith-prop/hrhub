@@ -1,23 +1,23 @@
-import { pgTable, uuid, text, integer, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, timestamp, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { users } from './users.js'
 
 /**
  * payroll_adjustment_imports — audit + recovery trail for bulk Excel uploads
- * to payroll_adjustments. One row per successful batch.
+ * to payroll_adjustments. One row per upload that changed state (new + updated
+ * rows). Uploads where everything was already in DB (`unchanged`) do NOT write
+ * a row here.
  *
  * Why we keep the original file:
  *  - HR can re-download to confirm exactly what was imported (auditor needs).
- *  - Disputes ("did this bonus row come from a spreadsheet I uploaded?") can
- *    be answered by hashing the questioned file against the stored hash.
  *  - If a future schema migration changes how rows are interpreted, we can
  *    replay the original sheet.
  *
- * Dedupe: the unique index on (tenantId, periodYear, periodMonth, fileHash)
- * means re-uploading the same file inside the same period is rejected with
- * a 409 at the route layer. Different periods or a re-saved file (different
- * bytes ⇒ different hash) are allowed through.
+ * Dedupe: NO file-hash dedupe — comparison happens row-by-row inside
+ * bulkCreateAdjustments. Re-uploading the same file is a no-op (every row is
+ * `unchanged`), not a 409. `file_hash` is kept on the table purely as a
+ * forensic checksum for stored file integrity.
  */
 export const payrollAdjustmentImports = pgTable('payroll_adjustment_imports', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -36,8 +36,6 @@ export const payrollAdjustmentImports = pgTable('payroll_adjustment_imports', {
 }, (t) => ({
     tenantPeriodIdx: index('idx_payroll_adj_imports_tenant_period').on(t.tenantId, t.periodYear, t.periodMonth),
     tenantCreatedIdx: index('idx_payroll_adj_imports_tenant_created').on(t.tenantId, t.createdAt),
-    dedupeUniq: uniqueIndex('uq_payroll_adj_imports_dedupe')
-        .on(t.tenantId, t.periodYear, t.periodMonth, t.fileHash),
 }))
 
 export const payrollAdjustmentImportsRelations = relations(payrollAdjustmentImports, ({ one }) => ({

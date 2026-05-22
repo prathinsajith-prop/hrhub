@@ -2,13 +2,15 @@ import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, del
 import {
     bulkCreateAdjustments,
     createAdjustment,
+    createCategory,
     deleteAdjustment,
-    findImportByHash,
     getImportById,
     isPeriodLocked,
     listAdjustments,
+    listCategories,
     listImports,
     recordImport,
+    resolveCategory,
     syncAdjustmentsForPeriod,
     updateAdjustment,
     validateBulkAdjustments,
@@ -403,8 +405,12 @@ export default async function (fastify: any): Promise<void> {
             || periodMonth < 1 || periodMonth > 12) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId + periodYear + periodMonth required' })
         }
-        if (!ADJUSTMENT_CATEGORIES.includes(category)) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `category must be one of: ${ADJUSTMENT_CATEGORIES.join(', ')}` })
+        // Built-in or tenant-registered custom category. The auto-driven
+        // built-ins (loan_repayment / unpaid_leave / sick_half_pay) are
+        // still rejected here — HR isn't allowed to hand-create them.
+        const resolved = await resolveCategory(request.user.tenantId, category)
+        if (!resolved || (resolved.builtin && ['loan_repayment', 'unpaid_leave', 'sick_half_pay'].includes(category))) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Unknown category "${category}". Create the category first or pick one from the list.` })
         }
         if (!Number.isFinite(amount) || amount <= 0) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'amount must be a positive number' })
@@ -444,6 +450,53 @@ export default async function (fastify: any): Promise<void> {
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
         return reply.code(201).send({ data: row })
+    })
+
+    // ─── Adjustment categories ──────────────────────────────────────────
+    //
+    // Built-in (overtime, commission, bonus, salary_advance, manual) + tenant-
+    // defined custom categories (e.g. "Site Allowance", "Ramadan Bonus"). The
+    // single + bulk create dialogs render this list as the category picker.
+
+    fastify.get('/adjustments/categories', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const data = await listCategories(request.user.tenantId)
+        return reply.send({ data })
+    })
+
+    fastify.post('/adjustments/categories', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
+        const body = request.body as Record<string, unknown>
+        const label = typeof body.label === 'string' ? body.label.trim() : ''
+        const kindRaw = typeof body.kind === 'string' ? body.kind : ''
+        if (!label) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Category label is required.' })
+        }
+        if (label.length > 80) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Category label is too long (max 80 characters).' })
+        }
+        if (kindRaw !== 'addition' && kindRaw !== 'deduction') {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Category kind must be "addition" or "deduction".' })
+        }
+        try {
+            const result = await createCategory(request.user.tenantId, { label, kind: kindRaw }, request.user.id)
+            if (result.created) {
+                recordActivity({
+                    tenantId: request.user.tenantId,
+                    userId: request.user.id,
+                    actorName: request.user.name,
+                    actorRole: request.user.role,
+                    entityType: 'payroll_adjustment_category',
+                    entityId: result.option.value,
+                    entityName: result.option.label,
+                    action: 'create',
+                    ipAddress: (request as any).ip,
+                    userAgent: request.headers['user-agent'],
+                }).catch(() => { })
+            }
+            return reply.code(result.created ? 201 : 200).send({ data: result.option, created: result.created })
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Could not create category.'
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: msg })
+        }
     })
 
     // GET /adjustments/bulk-template — download a starter .xlsx.
@@ -547,7 +600,13 @@ export default async function (fastify: any): Promise<void> {
         const periodMonth = Number.isInteger(periodMonthRaw) && periodMonthRaw >= 1 && periodMonthRaw <= 12
             ? periodMonthRaw
             : undefined
-        const result = await validateBulkAdjustments(request.user.tenantId, normalized, { periodYear, periodMonth })
+        // Category anchors the comparison engine — without it every row is `new`
+        // because the validator has nothing to compare against in the DB.
+        const categoryRaw = body.category != null ? String(body.category) : null
+        const category = categoryRaw && ADJUSTMENT_CATEGORIES.includes(categoryRaw as AdjustmentCategory)
+            ? categoryRaw
+            : undefined
+        const result = await validateBulkAdjustments(request.user.tenantId, normalized, { periodYear, periodMonth, category })
         return reply.send(result)
     })
 
@@ -626,8 +685,9 @@ export default async function (fastify: any): Promise<void> {
         if (!Number.isInteger(periodYear) || !Number.isInteger(periodMonth) || periodMonth < 1 || periodMonth > 12) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'A valid year and month (1–12) are required.' })
         }
-        if (!ADJUSTMENT_CATEGORIES.includes(category)) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Category must be one of: ${ADJUSTMENT_CATEGORIES.join(', ')}.` })
+        const resolvedBulk = await resolveCategory(request.user.tenantId, category)
+        if (!resolvedBulk || (resolvedBulk.builtin && ['loan_repayment', 'unpaid_leave', 'sick_half_pay'].includes(category))) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Unknown category "${category}". Create the category first or pick one from the list.` })
         }
         if (rows.length === 0) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'The spreadsheet has no rows to import.' })
@@ -642,22 +702,14 @@ export default async function (fastify: any): Promise<void> {
             return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Payroll for this period has already been processed — adjustments are locked.' })
         }
 
-        // Server-side duplicate-file guard. Same bytes, same period, same
-        // tenant → 409. Catches the rare case where two HR users grab the
-        // same sheet and both upload it.
-        let fileHash: string | null = null
-        if (fileBuffer) {
-            fileHash = createHash('sha256').update(fileBuffer).digest('hex')
-            const dupe = await findImportByHash(request.user.tenantId, periodYear, periodMonth, fileHash)
-            if (dupe) {
-                return reply.code(409).send({
-                    statusCode: 409,
-                    error: 'Conflict',
-                    message: 'This file was already imported for this period.',
-                    importedAt: dupe.createdAt,
-                })
-            }
-        }
+        // File-hash dedupe was removed in favour of row-level comparison: the
+        // comparison engine inside bulkCreateAdjustments decides what to insert,
+        // update, skip-as-unchanged, or skip-as-duplicate. Re-uploading the same
+        // file is now a no-op (everything is `unchanged`) rather than a 409.
+        // The S3 audit trail still captures every upload — see below.
+        const fileHash: string | null = fileBuffer
+            ? createHash('sha256').update(fileBuffer).digest('hex')
+            : null
 
         const normalized: BulkAdjustmentRow[] = rows.map((r, i) => ({
             rowNumber: Number(r.rowNumber) || i + 1,
@@ -675,10 +727,12 @@ export default async function (fastify: any): Promise<void> {
             request.user.id,
         )
 
-        // Only record the import + persist the file when rows actually
-        // committed. A 400 response (validation errors, rollback) means there
-        // is no DB state to keep an audit trail for.
-        if (result.created > 0) {
+        // Persist the file + log activity whenever the upload actually changed
+        // state. An all-`unchanged` upload (HR re-running the same sheet to
+        // double-check) intentionally writes nothing — no S3 blob, no audit
+        // row, no activity log.
+        const committed = result.created + result.updated
+        if (committed > 0) {
             if (fileBuffer && fileHash && fileName) {
                 // S3 key namespaces by tenant so cross-tenant access is
                 // impossible at the bucket level (defence in depth on top of
@@ -693,7 +747,7 @@ export default async function (fastify: any): Promise<void> {
                             periodYear,
                             periodMonth,
                             category,
-                            rowsCreated: result.created,
+                            rowsCreated: committed,
                             fileName,
                             fileSize: fileBuffer.length,
                             fileMime: fileMime ?? 'application/octet-stream',
@@ -703,11 +757,9 @@ export default async function (fastify: any): Promise<void> {
                         request.user.id,
                     )
                 } catch (err) {
-                    // S3 failure shouldn't undo the DB insert — payroll rows
+                    // S3 failure shouldn't undo the DB writes — payroll rows
                     // are the source of truth. Log + continue; HR sees the
-                    // adjustments but the history entry is missing. Better
-                    // than rolling back a successful insert that would have
-                    // to be re-typed.
+                    // adjustments but the history entry is missing.
                     request.log.warn({ err }, 'payroll bulk-import: failed to store original file')
                 }
             }
@@ -718,9 +770,15 @@ export default async function (fastify: any): Promise<void> {
                 actorRole: request.user.role,
                 entityType: 'payroll_adjustment',
                 entityId: `${periodYear}-${periodMonth}`,
-                entityName: `Bulk import ${result.created} ${category} rows for ${periodMonth}/${periodYear}`,
+                entityName: `Bulk import: +${result.created} new, ${result.updated} updated ${category} rows for ${periodMonth}/${periodYear}`,
                 action: 'create',
-                metadata: { created: result.created, category },
+                metadata: {
+                    created: result.created,
+                    updated: result.updated,
+                    unchanged: result.unchanged,
+                    duplicate: result.duplicate,
+                    category,
+                },
                 ipAddress: (request as any).ip,
                 userAgent: request.headers['user-agent'],
             }).catch(() => { })
@@ -785,8 +843,9 @@ export default async function (fastify: any): Promise<void> {
         if (body.notes !== undefined) patch.notes = body.notes == null ? null : String(body.notes)
         if (body.category !== undefined) {
             const c = String(body.category) as AdjustmentCategory
-            if (!ADJUSTMENT_CATEGORIES.includes(c)) {
-                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'invalid category' })
+            const r = await resolveCategory(request.user.tenantId, c)
+            if (!r || (r.builtin && ['loan_repayment', 'unpaid_leave', 'sick_half_pay'].includes(c))) {
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Unknown category "${c}". Create the category first or pick one from the list.` })
             }
             patch.category = c
         }
