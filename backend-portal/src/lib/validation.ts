@@ -72,6 +72,11 @@ export const leaveActionSchema = z.object({
 })
 
 export const listLeaveSchema = paginationSchema.extend({
+    // Manager dashboards (HomePage "team leave history") fetch up to 200 rows
+    // at a time so the 6-month timeline shows in one render. The default 100
+    // cap from paginationSchema was too low — override here. Hard ceiling of
+    // 500 matches the main backend's employee-list endpoint.
+    limit: z.coerce.number().int().min(1).max(500).default(20),
     employeeId: uuidSchema.optional(),
     status: z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional(),
     leaveType: z.string().optional(),
@@ -89,6 +94,12 @@ export const listAttendanceSchema = paginationSchema.extend({
 
 export const checkInOutSchema = z.object({
     employeeId: uuidSchema.optional(),
+    // Optional geolocation captured by the portal app — kept on the punch
+    // for audit so HR can later verify the punch happened on-site.
+    latitude: z.number().min(-90).max(90).optional().nullable(),
+    longitude: z.number().min(-180).max(180).optional().nullable(),
+    locationName: z.string().max(200).optional().nullable(),
+    notes: z.string().max(500).optional().nullable(),
 }).optional()
 
 export function validate<T>(schema: z.ZodType<T>, data: unknown): T {

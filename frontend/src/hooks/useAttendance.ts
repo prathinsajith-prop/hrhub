@@ -148,3 +148,30 @@ export function useExternalPunch() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
     })
 }
+
+export interface ManualPunchBody {
+    employeeId?: string
+    date: string
+    inTime: string
+    outTime?: string
+    inDayOffset?: number
+    outDayOffset?: number
+    inNotes?: string
+    outNotes?: string
+    locationName?: string
+    latitude?: number
+    longitude?: number
+}
+
+/** Insert a paired in/out manual punch via /attendance/punches.
+ *  Used by the bulk-import modal — also useful for ad-hoc HR entry. */
+export function useAddManualPunch() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (body: ManualPunchBody) => api.post('/attendance/punches', body),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['attendance'] })
+            qc.invalidateQueries({ queryKey: ['attendance-calendar'] })
+        },
+    })
+}

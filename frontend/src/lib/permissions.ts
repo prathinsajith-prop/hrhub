@@ -73,6 +73,9 @@ export type Permission =
   // Loans / Salary Advances
   | 'manage_loans'
   | 'view_own_loans'
+  // Travel — requests + expenses with full HR approval lifecycle
+  | 'manage_travel'
+  | 'view_own_travel'
   // Workspace / app management
   | 'manage_team'
   | 'manage_org'
@@ -99,6 +102,7 @@ export type RouteKey =
   | 'exit'
   | 'calendar'
   | 'attendance'
+  | 'attendance/biometric'
   | 'performance'
   | 'org-chart'
   | 'audit'
@@ -108,6 +112,7 @@ export type RouteKey =
   | 'my/leave'
   | 'my/payslips'
   | 'my/profile'
+  | 'my/attendance'
   | 'assets'
   | 'organizations'
   | 'team'
@@ -123,6 +128,8 @@ export type RouteKey =
   | 'my/training'
   | 'loans'
   | 'my/loans'
+  | 'travel'
+  | 'my/travel'
   | 'leave-adjustments'
 
 // ─── Permission matrix ────────────────────────────────────────────────────────
@@ -163,6 +170,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'manage_training', 'view_own_training',
     // Loans
     'manage_loans', 'view_own_loans',
+    // Travel
+    'manage_travel', 'view_own_travel',
     // Workspace management
     'manage_team', 'manage_org', 'manage_apps', 'invite_members',
   ],
@@ -202,6 +211,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'manage_training', 'view_own_training',
     // Loans
     'manage_loans', 'view_own_loans',
+    // Travel
+    'manage_travel', 'view_own_travel',
     // Workspace management
     'manage_team', 'manage_org', 'manage_apps', 'invite_members',
   ],
@@ -222,6 +233,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_own_performance',
     'view_own_training',
     'view_own_loans',
+    'view_own_travel',
     // Misc
     'view_org_chart',
   ],
@@ -246,9 +258,10 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_org_chart',
     // Teams (manage dept-scoped teams)
     'manage_team',
-    // Own training + loans
+    // Own training + loans + travel
     'view_own_training',
     'view_own_loans',
+    'view_own_travel',
   ],
   employee: [
     'view_own_leave',
@@ -257,6 +270,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_org_chart',
     'view_own_training',
     'view_own_loans',
+    'view_own_travel',
   ],
 }
 
@@ -284,6 +298,7 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   payroll: ['super_admin', 'hr_manager'],
   leave: ['super_admin', 'hr_manager', 'dept_head'],
   attendance: ['super_admin', 'hr_manager', 'dept_head'],
+  'attendance/biometric': ['super_admin', 'hr_manager'],
   performance: ['super_admin', 'hr_manager', 'dept_head'],
   assets: ['super_admin', 'hr_manager', 'dept_head'],
 
@@ -303,6 +318,7 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   complaints: ['super_admin', 'hr_manager'],
   training: ['super_admin', 'hr_manager'],
   loans: ['super_admin', 'hr_manager'],
+  travel: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'leave-adjustments': ['super_admin', 'hr_manager'],
 
   // Self-service (all authenticated roles)
@@ -310,9 +326,11 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   'my/leave': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/payslips': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/profile': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'my/attendance': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/complaints': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/training': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/loans': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'my/travel': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -354,6 +372,8 @@ export const ALL_PERMISSIONS: Permission[] = [
   'manage_training', 'view_own_training',
   // Loans
   'manage_loans', 'view_own_loans',
+  // Travel
+  'manage_travel', 'view_own_travel',
   // Workspace management
   'manage_team', 'manage_org', 'manage_apps', 'invite_members',
 ]
@@ -403,6 +423,7 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/attendance': 'attendance',
     '/performance': 'performance',
     '/assets': 'assets',
+    '/travel': 'travel',
     '/reports': 'reports',
     '/audit': 'audit',
     '/settings': 'settings',
@@ -412,6 +433,7 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/my/leave': 'my/leave',
     '/my/payslips': 'my/payslips',
     '/my/profile': 'my/profile',
+    '/my/attendance': 'my/attendance',
     '/organizations': 'organizations',
     '/team': 'team',
     '/users': 'users',

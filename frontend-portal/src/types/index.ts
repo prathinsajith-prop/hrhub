@@ -18,6 +18,10 @@ export interface Tenant {
     id: string
     name: string
     tradeLicenseNo?: string
+    // Renamed from `jurisdiction` in migration 0051 to match the field name the
+    // signup page collects. Optional `jurisdiction` kept as a fallback for any
+    // cached old responses but new code should use businessType.
+    businessType?: 'mainland' | 'freezone'
     jurisdiction?: 'mainland' | 'freezone'
     industryType?: string
     subscriptionPlan?: string

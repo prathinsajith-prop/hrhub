@@ -2,7 +2,7 @@
 // Keep this in sync with the main backend whenever the schema changes.
 // Migrations live in backend/migrations/ only — do not generate migrations here.
 
-import { pgTable, uuid, text, boolean, timestamp, numeric, date, index, uniqueIndex, check, type AnyPgColumn } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, boolean, timestamp, numeric, date, jsonb, index, uniqueIndex, check, type AnyPgColumn } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
 import { tenants, entities } from './tenants.js'
 import { orgUnits } from './orgUnits.js'
@@ -79,6 +79,15 @@ export const employees = pgTable('employees', {
     departmentId: uuid('department_id').references(() => orgUnits.id, { onDelete: 'set null' }),
     branchId: uuid('branch_id').references(() => orgUnits.id, { onDelete: 'set null' }),
     isArchived: boolean('is_archived').notNull().default(false),
+    // Per-employee privacy overrides — beats the tenant-wide privacyPolicy when set.
+    // Added in migration 0050. The portal MUST honour these so the directory and
+    // colleague views don't leak data an employee opted out of sharing.
+    privacyOverrides: jsonb('privacy_overrides').$type<{
+        showBirthday?: boolean
+        showWorkAnniversary?: boolean
+        showMobile?: boolean
+        searchableInDirectory?: boolean
+    }>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

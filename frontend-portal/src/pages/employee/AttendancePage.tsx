@@ -1,176 +1,1386 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { CalendarRange, Clock, List, LogIn, LogOut } from 'lucide-react'
+import {
+  CalendarRange, Calendar, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon,
+  CalendarDays, Filter, MoreHorizontal, X, FileClock, MonitorSmartphone, LogIn, LogOut,
+  MapPin, Plus, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download,
+} from 'lucide-react'
 
-import { useAttendance, useAttendanceCalendar, useCheckIn, useCheckOut } from '@/hooks/useAttendance'
+import {
+  useAttendanceCalendar, useCheckIn, useCheckOut,
+  usePunchesForDay, useAddManualPunch, useDeletePunch,
+  type CalendarCell, type CalendarEmployee, type AttendancePunch, type PunchBody,
+} from '@/hooks/useAttendance'
 import { useAuthStore } from '@/store/authStore'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { EmptyState } from '@/components/shared/EmptyState'
-import { GlassCard } from '@/components/shared/GlassCard'
 import { AttendanceMonthCalendar } from '@/components/shared/AttendanceMonthCalendar'
 import { MonthPicker } from '@/components/shared/MonthPicker'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn, formatDate } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
 
-function isoMonth(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+// ─── Helpers (mirror main app's MyAttendancePage) ─────────────────────────
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+function toISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+function formatDayLabel(d: Date): string {
+  return `${String(d.getDate()).padStart(2, '0')}-${MONTHS_SHORT[d.getMonth()]}-${d.getFullYear()}`
+}
+function startOfWeek(d: Date): Date {
+  const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  out.setDate(out.getDate() - out.getDay())
+  return out
+}
+function addDays(d: Date, n: number): Date {
+  const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  out.setDate(out.getDate() + n)
+  return out
+}
+function isoMonth(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+/** Ticks every second so the check-in / check-out button can show a live
+ *  H:MM:SS timer. When `endIso` is set, the duration is frozen at end−start;
+ *  when only `startIso` is set, it counts up from now. */
+function useLiveDuration(startIso: string | null | undefined, endIso: string | null | undefined): string {
+    const [now, setNow] = useState(() => Date.now())
+    const running = !!startIso && !endIso
+    useEffect(() => {
+        if (!running) return
+        const id = setInterval(() => setNow(Date.now()), 1000)
+        return () => clearInterval(id)
+    }, [running])
+    if (!startIso) return '0:00:00'
+    const startMs = Date.parse(startIso)
+    if (Number.isNaN(startMs)) return '0:00:00'
+    const endMs = endIso ? Date.parse(endIso) : now
+    const secs = Math.max(0, Math.floor((endMs - startMs) / 1000))
+    const h = Math.floor(secs / 3600)
+    const m = Math.floor((secs % 3600) / 60)
+    const s = secs % 60
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
+
+/** Try to read the browser's current geolocation, but never block the
+ *  punch — we resolve with `null` after 6s if the user hasn't granted
+ *  permission so check-in still goes through on a kiosk / desktop. */
+function readGeolocation(): Promise<{ latitude: number; longitude: number } | null> {
+    return new Promise((resolve) => {
+        if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(null)
+        let settled = false
+        const timer = setTimeout(() => {
+            if (settled) return
+            settled = true
+            resolve(null)
+        }, 6_000)
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                if (settled) return
+                settled = true
+                clearTimeout(timer)
+                resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
+            },
+            () => {
+                if (settled) return
+                settled = true
+                clearTimeout(timer)
+                resolve(null)
+            },
+            { enableHighAccuracy: false, maximumAge: 60_000, timeout: 5_000 },
+        )
+    })
+}
+
+function formatTime(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+type DayClassification =
+  | 'weekend' | 'holiday' | 'present' | 'late' | 'short' | 'absent' | 'wfh' | 'on_leave' | 'future'
+
+interface DayInfo {
+  date: Date
+  iso: string
+  cell: CalendarCell | null
+  label: { weekday: string; day: string }
+  classification: DayClassification
+}
+
+function classify(cell: CalendarCell | null, date: Date, today: Date): DayClassification {
+  if (date > today) return 'future'
+  if (!cell) return 'absent'
+  if (cell.code === 'WO') return 'weekend'
+  if (cell.code === 'H') return 'holiday'
+  if (cell.code === 'A' || cell.code === 'N/A') return 'absent'
+  if (cell.code === 'WFH') return 'wfh'
+  if (cell.code === 'P-late') return 'late'
+  if (cell.code === 'P-short') return 'short'
+  if (cell.code.endsWith('L')) return 'on_leave'
+  return 'present'
+}
+
+function statusLabel(c: DayClassification): string {
+  switch (c) {
+    case 'weekend': return 'Weekend'
+    case 'holiday': return 'Holiday'
+    case 'present': return 'Present'
+    case 'late': return 'Late'
+    case 'short': return 'Early out'
+    case 'absent': return 'Absent'
+    case 'wfh': return 'WFH'
+    case 'on_leave': return 'On leave'
+    case 'future': return ''
+  }
+}
+
+function statusTone(c: DayClassification): { bar: string; pill: string } {
+  switch (c) {
+    case 'weekend': return { bar: 'bg-amber-200/60 dark:bg-amber-900/30', pill: 'border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/30' }
+    case 'holiday': return { bar: 'bg-sky-200/60 dark:bg-sky-900/30', pill: 'border-sky-300 text-sky-800 dark:text-sky-300 bg-sky-50/70 dark:bg-sky-950/30' }
+    case 'present':
+    case 'late':
+    case 'short':
+      return { bar: 'bg-emerald-200/60 dark:bg-emerald-900/30', pill: 'border-emerald-300 text-emerald-800 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/30' }
+    case 'absent': return { bar: 'bg-rose-200/60 dark:bg-rose-900/30', pill: 'border-rose-300 text-rose-700 dark:text-rose-300 bg-rose-50/70 dark:bg-rose-950/30' }
+    case 'wfh': return { bar: 'bg-violet-200/60 dark:bg-violet-900/30', pill: 'border-violet-300 text-violet-800 dark:text-violet-300 bg-violet-50/70 dark:bg-violet-950/30' }
+    case 'on_leave': return { bar: 'bg-blue-200/60 dark:bg-blue-900/30', pill: 'border-blue-300 text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/30' }
+    case 'future': return { bar: 'bg-muted/40', pill: 'border-border text-muted-foreground' }
+  }
+}
+
+interface Stats {
+  payable: number
+  present: number
+  onDuty: number
+  paidLeave: number
+  holidays: number
+  weekend: number
+}
+
+function computeStats(days: DayInfo[]): Stats {
+  const s: Stats = { payable: 0, present: 0, onDuty: 0, paidLeave: 0, holidays: 0, weekend: 0 }
+  for (const d of days) {
+    if (d.classification === 'future') continue
+    if (d.classification === 'present' || d.classification === 'late' || d.classification === 'short') { s.present++; s.payable++; s.onDuty++ }
+    if (d.classification === 'wfh') { s.present++; s.payable++; s.onDuty++ }
+    if (d.classification === 'on_leave') { s.paidLeave++; s.payable++ }
+    if (d.classification === 'holiday') { s.holidays++; s.payable++ }
+    if (d.classification === 'weekend') s.weekend++
+  }
+  return s
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────
+
+type ViewMode = 'timeline' | 'list' | 'calendar'
 
 export function EmployeeAttendancePage() {
-    const { t } = useTranslation()
-    const user = useAuthStore((s) => s.user)
-    const employeeId = user?.employeeId ?? undefined
+  const { t } = useTranslation()
+  const user = useAuthStore((s) => s.user)
+  const employeeId = user?.employeeId ?? undefined
 
-    const today = new Date().toISOString().slice(0, 10)
-    const { data: todayList } = useAttendance({ employeeId, startDate: today, endDate: today, limit: 1 })
-    const { data: history, isLoading } = useAttendance({ employeeId, limit: 30 })
-    const checkIn = useCheckIn()
-    const checkOut = useCheckOut()
+  const today = useMemo(() => new Date(), [])
+  const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(today))
+  const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
+  const [view, setView] = useState<ViewMode>('timeline')
+  const [detail, setDetail] = useState<DayInfo | null>(null)
+  const [note, setNote] = useState('')
+  const [importOpen, setImportOpen] = useState(false)
 
-    const todayRecord = todayList?.data?.[0]
-    const isCheckedIn = !!todayRecord?.checkIn && !todayRecord?.checkOut
+  const monthQuery = isoMonth(weekStart)
+  const { data: calendar, isLoading } = useAttendanceCalendar(monthQuery, 'me')
+  const myRow = (calendar?.employees?.[0] ?? null) as CalendarEmployee | null
 
-    return (
-        <div className="space-y-6">
-            <PageHeader title={t('attendance.title')} />
+  const days: DayInfo[] = useMemo(() => {
+    const out: DayInfo[] = []
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(weekStart, i)
+      const iso = toISODate(d)
+      const cell = (myRow && d.getMonth() === weekStart.getMonth() && d.getFullYear() === weekStart.getFullYear())
+        ? myRow.cells[d.getDate() - 1] ?? null
+        : null
+      out.push({
+        date: d,
+        iso,
+        cell,
+        label: { weekday: WEEKDAYS[d.getDay()], day: String(d.getDate()) },
+        classification: classify(cell, d, todayDate),
+      })
+    }
+    return out
+  }, [weekStart, myRow, today])
 
-            <GlassCard tone={isCheckedIn ? 'success' : 'primary'} className="p-5">
-                <div className="flex items-center justify-between gap-3">
-                    <div>
-                        <div className="text-xs font-semibold uppercase tracking-wider opacity-80">
-                            {formatDate(today, { weekday: 'long', day: '2-digit', month: 'long' })}
-                        </div>
-                        <div className="mt-2 text-sm">
-                            {todayRecord?.checkIn ? (
-                                <>
-                                    {t('home.checkedInAt', {
-                                        time: new Date(todayRecord.checkIn).toLocaleTimeString([], {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                        }),
-                                    })}
-                                    {todayRecord.checkOut ? (
-                                        <>
-                                            {' '}
-                                            ·{' '}
-                                            {new Date(todayRecord.checkOut).toLocaleTimeString([], {
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                            })}
-                                        </>
-                                    ) : null}
-                                </>
-                            ) : (
-                                t('home.checkInPrompt')
-                            )}
-                        </div>
-                    </div>
-                    {isCheckedIn ? (
-                        <Button
-                            onClick={() =>
-                                checkOut.mutate(undefined, {
-                                    onSuccess: () => toast.success(t('attendance.checkOut')),
-                                })
-                            }
-                            loading={checkOut.isPending}
-                        >
-                            <LogOut className="size-4" /> {t('attendance.checkOut')}
-                        </Button>
-                    ) : !todayRecord?.checkIn ? (
-                        <Button
-                            onClick={() =>
-                                checkIn.mutate(undefined, {
-                                    onSuccess: () => toast.success(t('attendance.checkIn')),
-                                })
-                            }
-                            loading={checkIn.isPending}
-                        >
-                            <LogIn className="size-4" /> {t('attendance.checkIn')}
-                        </Button>
-                    ) : (
-                        <Badge variant="secondary">{t('attendance.alreadyCheckedIn')}</Badge>
-                    )}
-                </div>
-            </GlassCard>
+  const stats = useMemo(() => computeStats(days), [days])
 
-            <Tabs defaultValue="calendar">
-                <TabsList>
-                    <TabsTrigger value="calendar" className="gap-1.5">
-                        <CalendarRange className="size-3.5" /> Calendar
-                    </TabsTrigger>
-                    <TabsTrigger value="list" className="gap-1.5">
-                        <List className="size-3.5" /> List
-                    </TabsTrigger>
-                </TabsList>
+  const checkIn = useCheckIn()
+  const checkOut = useCheckOut()
+  const todayInfo = useMemo(() => {
+    const t = toISODate(today)
+    return days.find((d) => d.iso === t) ?? null
+  }, [days, today])
+  const isCheckedIn = !!todayInfo?.cell?.checkIn && !todayInfo?.cell?.checkOut
+  const liveTimer = useLiveDuration(todayInfo?.cell?.checkIn, todayInfo?.cell?.checkOut)
 
-                <TabsContent value="list">
-                    {isLoading ? (
-                        <div className="space-y-3">
-                            <Skeleton className="h-16" />
-                            <Skeleton className="h-16" />
-                        </div>
-                    ) : !history?.data?.length ? (
-                        <EmptyState icon={<Clock className="size-8" />} title={t('attendance.noRecords')} />
-                    ) : (
-                        <div className="space-y-2">
-                            {history.data.map((r) => (
-                                <Card key={r.id} className="border-border/70">
-                                    <CardContent className="flex items-center justify-between gap-3 p-3">
-                                        <div>
-                                            <div className="text-sm font-medium">{formatDate(r.date)}</div>
-                                            <div className="mt-0.5 text-xs text-muted-foreground">
-                                                {r.checkIn
-                                                    ? new Date(r.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                                    : '—'}
-                                                {' → '}
-                                                {r.checkOut
-                                                    ? new Date(r.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                                    : '—'}
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-sm font-medium tabular-figures">{r.hoursWorked ?? '—'}</div>
-                                            <Badge
-                                                className={cn(
-                                                    'border-0 text-[10px] uppercase tracking-wider',
-                                                    r.status === 'present'
-                                                        ? 'bg-emerald-100 text-emerald-800'
-                                                        : r.status === 'on_leave'
-                                                          ? 'bg-amber-100 text-amber-800'
-                                                          : 'bg-muted text-muted-foreground',
-                                                )}
-                                            >
-                                                {r.status}
-                                            </Badge>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    )}
-                </TabsContent>
+  const shiftBand = `General [ 09:00 AM – 06:00 PM ]`
 
-                <TabsContent value="calendar">
-                    <MyMonthGrid />
-                </TabsContent>
-            </Tabs>
+  return (
+    <div className="space-y-4">
+      <PageHeader title={t('attendance.title')} />
+
+      {/* Tabs row + week navigator + view switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-2">
+        <div className="flex gap-4">
+          <button type="button" className="px-1 py-1 text-sm font-semibold border-b-2 border-primary text-primary">
+            Attendance Summary
+          </button>
         </div>
-    )
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 rounded-lg border bg-card px-2 py-1 shadow-sm">
+          <Button size="icon" variant="ghost" className="size-7" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="Previous week">
+            <ChevronLeft className="size-4" />
+          </Button>
+          <Button size="icon" variant="ghost" className="size-7" onClick={() => setWeekStart(startOfWeek(new Date()))} aria-label="Pick week">
+            <Calendar className="size-4" />
+          </Button>
+          <Button size="icon" variant="ghost" className="size-7" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Next week">
+            <ChevronRight className="size-4" />
+          </Button>
+          <span className="px-2 text-sm font-medium tabular-nums">
+            {formatDayLabel(weekStart)} – {formatDayLabel(weekEnd)}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1 rounded-lg border bg-card p-1 shadow-sm">
+          <Button size="icon" variant={view === 'timeline' ? 'secondary' : 'ghost'} className="size-7" onClick={() => setView('timeline')} aria-label="Timeline view">
+            <LayoutGrid className="size-3.5" />
+          </Button>
+          <Button size="icon" variant={view === 'list' ? 'secondary' : 'ghost'} className="size-7" onClick={() => setView('list')} aria-label="List view">
+            <ListIcon className="size-3.5" />
+          </Button>
+          <Button size="icon" variant={view === 'calendar' ? 'secondary' : 'ghost'} className="size-7" onClick={() => setView('calendar')} aria-label="Calendar view">
+            <CalendarDays className="size-3.5" />
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            onClick={() => setImportOpen(true)}
+          >
+            <Upload className="size-3.5" />
+            <span className="text-xs">Import</span>
+          </Button>
+          <Button size="icon" variant="outline" className="size-8" aria-label="Filter">
+            <Filter className="size-3.5" />
+          </Button>
+          <Button size="icon" variant="outline" className="size-8" aria-label="More">
+            <MoreHorizontal className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Check-in band */}
+      <div className="flex flex-wrap items-stretch justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
+        <div className="flex-1 min-w-[200px] self-center">
+          <p className="text-sm font-semibold">{shiftBand}</p>
+        </div>
+        <Input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder={isCheckedIn ? 'Add notes for check-out' : 'Add notes for check-in'}
+          className="flex-[2] min-w-[180px] h-9"
+        />
+        {isCheckedIn ? (
+          <Button
+            onClick={async () => {
+              const geo = await readGeolocation()
+              const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
+              checkOut.mutate(body, {
+                onSuccess: () => { toast.success(t('attendance.checkOut')); setNote('') },
+                onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check out'),
+              })
+            }}
+            loading={checkOut.isPending}
+            className="bg-rose-600 hover:bg-rose-700 text-white"
+          >
+            <LogOut className="size-4 me-2" />
+            <div className="flex flex-col items-start leading-tight">
+              <span className="text-xs">Check-out</span>
+              <span className="text-xs tabular-nums">{liveTimer}</span>
+            </div>
+          </Button>
+        ) : (
+          <Button
+            onClick={async () => {
+              const geo = await readGeolocation()
+              const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
+              checkIn.mutate(body, {
+                onSuccess: () => { toast.success(t('attendance.checkIn')); setNote('') },
+                onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check in'),
+              })
+            }}
+            loading={checkIn.isPending}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            <LogIn className="size-4 me-2" />
+            <div className="flex flex-col items-start leading-tight">
+              <span className="text-xs">Check-in</span>
+              <span className="text-xs tabular-nums">{liveTimer}</span>
+            </div>
+          </Button>
+        )}
+      </div>
+
+      {/* Body */}
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+        </div>
+      ) : view === 'timeline' ? (
+        <TimelineView days={days} onPick={setDetail} today={today} />
+      ) : view === 'list' ? (
+        <ListView days={days} />
+      ) : (
+        <MonthCalendar month={monthQuery} setMonth={(m) => {
+          const [y, mm] = m.split('-').map(Number)
+          setWeekStart(startOfWeek(new Date(y!, (mm! - 1), 1)))
+        }} />
+      )}
+
+      <FooterStats stats={stats} shift={shiftBand} />
+
+      {detail && (
+        <DayDetailDialog
+          info={detail}
+          shift={shiftBand}
+          employeeId={employeeId}
+          onClose={() => setDetail(null)}
+        />
+      )}
+
+      {importOpen && (
+        <ImportPunchesDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          employeeId={employeeId}
+        />
+      )}
+    </div>
+  )
 }
 
-function MyMonthGrid() {
-    const [month, setMonth] = useState(() => isoMonth(new Date()))
-    const { data, isLoading } = useAttendanceCalendar(month, 'me')
+// ─── Timeline view ────────────────────────────────────────────────────────
 
-    return (
-        <div className="space-y-4">
-            <MonthPicker value={month} onChange={setMonth} />
-            <AttendanceMonthCalendar data={data} loading={isLoading} />
+function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: DayInfo) => void; today: Date }) {
+  const startMin = 8 * 60
+  const endMin = 19 * 60
+  const span = endMin - startMin
+
+  const slots: string[] = []
+  for (let m = startMin; m <= endMin; m += 60) {
+    const h = Math.floor(m / 60)
+    slots.push(`${String(h).padStart(2, '0')}AM`.replace(/^(\d{2})AM$/, (_, hh) => Number(hh) >= 12 ? `${Number(hh) === 12 ? 12 : Number(hh) - 12}PM` : `${Number(hh)}AM`))
+  }
+
+  const isToday = (d: Date) =>
+    d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
+
+  return (
+    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+      {days.map((d) => {
+        const tone = statusTone(d.classification)
+        const checkInPct = d.cell?.checkIn
+          ? ((new Date(d.cell.checkIn).getHours() * 60 + new Date(d.cell.checkIn).getMinutes()) - startMin) / span * 100
+          : null
+        const checkOutPct = d.cell?.checkOut
+          ? ((new Date(d.cell.checkOut).getHours() * 60 + new Date(d.cell.checkOut).getMinutes()) - startMin) / span * 100
+          : null
+        return (
+          <button
+            key={d.iso}
+            type="button"
+            onClick={() => onPick(d)}
+            className={cn(
+              'group grid grid-cols-[3.5rem_8rem_1fr_8rem_5rem] sm:grid-cols-[4rem_9rem_1fr_9rem_5.5rem] items-center gap-2 sm:gap-3 px-3 py-3 border-b last:border-b-0 hover:bg-muted/30 transition-colors text-left w-full',
+              isToday(d.date) && 'bg-primary/5',
+            )}
+          >
+            <div>
+              <p className="text-xs text-muted-foreground">{d.label.weekday}</p>
+              <p className={cn('text-base font-semibold tabular-nums', isToday(d.date) && 'text-primary')}>{d.label.day}</p>
+            </div>
+            <div className="text-left">
+              {d.cell?.checkIn ? (
+                <p className="text-sm font-medium tabular-nums">{formatTime(d.cell.checkIn)}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">—</p>
+              )}
+            </div>
+            <div className="relative h-5">
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border" />
+              {d.classification !== 'future' && (
+                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center pointer-events-none">
+                  <span className={cn('rounded-md border px-2 py-0.5 text-[10px] font-medium', tone.pill)}>
+                    {statusLabel(d.classification)}
+                  </span>
+                </div>
+              )}
+              {checkInPct != null && checkInPct >= 0 && checkInPct <= 100 && (
+                <div className="absolute top-1/2 -translate-y-1/2 size-2.5 rounded-full bg-emerald-500 ring-2 ring-background" style={{ left: `${checkInPct}%` }} />
+              )}
+              {checkOutPct != null && checkOutPct >= 0 && checkOutPct <= 100 && (
+                <div className="absolute top-1/2 -translate-y-1/2 size-2.5 rounded-full bg-rose-500 ring-2 ring-background" style={{ left: `${checkOutPct}%` }} />
+              )}
+            </div>
+            <div className="text-right">
+              {d.cell?.checkOut ? (
+                <p className="text-sm font-medium tabular-nums">{formatTime(d.cell.checkOut)}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">—</p>
+              )}
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold tabular-nums">{d.cell?.hoursWorked ?? '00:00'}</p>
+              <p className="text-[10px] text-muted-foreground">Hrs worked</p>
+            </div>
+          </button>
+        )
+      })}
+      {/* Slot axis */}
+      <div className="grid grid-cols-[3.5rem_8rem_1fr_8rem_5rem] sm:grid-cols-[4rem_9rem_1fr_9rem_5.5rem] items-center gap-2 sm:gap-3 px-3 py-2 border-t bg-muted/40">
+        <span />
+        <span />
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+          {slots.map((s) => <span key={s} className="tabular-nums">{s}</span>)}
         </div>
+        <span />
+        <span />
+      </div>
+    </div>
+  )
+}
+
+// ─── List view ────────────────────────────────────────────────────────────
+
+function ListView({ days }: { days: DayInfo[] }) {
+  return (
+    <div className="rounded-xl border bg-card shadow-sm overflow-hidden overflow-x-auto">
+      <table className="w-full text-sm min-w-[800px]">
+        <thead className="bg-muted/50">
+          <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+            <th className="px-4 py-2.5 font-medium">Date</th>
+            <th className="px-4 py-2.5 font-medium">First In</th>
+            <th className="px-4 py-2.5 font-medium">Last Out</th>
+            <th className="px-4 py-2.5 font-medium">Total Hours</th>
+            <th className="px-4 py-2.5 font-medium">Status</th>
+            <th className="px-4 py-2.5 font-medium">Shift(s)</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {days.map((d) => {
+            const tone = statusTone(d.classification)
+            return (
+              <tr key={d.iso} className="hover:bg-muted/30 transition-colors">
+                <td className="px-4 py-2.5 whitespace-nowrap">
+                  {d.label.weekday}, {formatDayLabel(d.date)}
+                </td>
+                <td className="px-4 py-2.5 tabular-nums">{d.cell?.checkIn ? formatTime(d.cell.checkIn) : '—'}</td>
+                <td className="px-4 py-2.5 tabular-nums">{d.cell?.checkOut ? formatTime(d.cell.checkOut) : '—'}</td>
+                <td className="px-4 py-2.5 tabular-nums">{d.cell?.hoursWorked ?? '—'}</td>
+                <td className="px-4 py-2.5">
+                  {d.classification !== 'future' && (
+                    <span className={cn('inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium', tone.pill)}>
+                      <span className={cn('size-2 rounded-sm', tone.bar)} aria-hidden />
+                      {statusLabel(d.classification)}
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-muted-foreground">General</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ─── Month calendar ───────────────────────────────────────────────────────
+
+function MonthCalendar({ month, setMonth }: { month: string; setMonth: (m: string) => void }) {
+  const { data, isLoading } = useAttendanceCalendar(month, 'me')
+  return (
+    <div className="space-y-4 rounded-xl border bg-card p-4 shadow-sm">
+      <MonthPicker value={month} onChange={setMonth} />
+      <AttendanceMonthCalendar data={data} loading={isLoading} />
+    </div>
+  )
+}
+
+// ─── Footer stats ─────────────────────────────────────────────────────────
+
+function FooterStats({ stats, shift }: { stats: Stats; shift: string }) {
+  const entries = [
+    { label: 'Payable Days', value: stats.payable, tone: 'bg-emerald-500' },
+    { label: 'Present', value: stats.present, tone: 'bg-green-500' },
+    { label: 'On Duty', value: stats.onDuty, tone: 'bg-violet-500' },
+    { label: 'Paid leave', value: stats.paidLeave, tone: 'bg-amber-500' },
+    { label: 'Holidays', value: stats.holidays, tone: 'bg-sky-500' },
+    { label: 'Weekend', value: stats.weekend, tone: 'bg-blue-400' },
+  ]
+  return (
+    <div className="rounded-xl border bg-card shadow-sm">
+      <div className="flex flex-wrap items-stretch gap-4 px-4 py-3">
+        <div className="flex flex-col text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          <span className="border-l-2 border-blue-500 ps-2 text-foreground">Days</span>
+          <span className="border-l-2 border-transparent ps-2 mt-1">Hours</span>
+        </div>
+        {entries.map((e) => (
+          <div key={e.label} className="flex items-center gap-2 border-l border-border/60 ps-3">
+            <span className={cn('w-1 h-8 rounded-full', e.tone)} />
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">{e.label}</p>
+              <p className="text-sm font-semibold tabular-nums">
+                {e.value}{' '}<span className="text-xs text-muted-foreground font-normal">Day</span>
+              </p>
+            </div>
+          </div>
+        ))}
+        <div className="ms-auto self-center text-xs text-muted-foreground">{shift}</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Day detail dialog ────────────────────────────────────────────────────
+
+// Hero icons + tone for the centered status panel. Keeps the body of the
+// modal from feeling empty when there are no punches to show.
+function statusHero(klass: DayClassification): {
+  icon: typeof Calendar
+  tone: string
+  title: string
+  body: string
+} {
+  switch (klass) {
+    case 'weekend': return { icon: CalendarDays, tone: 'text-amber-600 bg-amber-50 dark:bg-amber-950/30', title: 'Weekend', body: 'No work scheduled for this day.' }
+    case 'holiday': return { icon: CalendarDays, tone: 'text-sky-600 bg-sky-50 dark:bg-sky-950/30', title: 'Public holiday', body: 'Office is closed today.' }
+    case 'on_leave': return { icon: CalendarRange, tone: 'text-blue-600 bg-blue-50 dark:bg-blue-950/30', title: 'On leave', body: 'You are on an approved leave.' }
+    case 'future': return { icon: Calendar, tone: 'text-muted-foreground bg-muted/40', title: 'Future date', body: 'Attendance not recorded yet.' }
+    case 'absent': return { icon: X, tone: 'text-rose-600 bg-rose-50 dark:bg-rose-950/30', title: 'Marked absent', body: 'You were marked absent for the day.' }
+    case 'present':
+    case 'late':
+    case 'short':
+    case 'wfh':
+      return { icon: LogIn, tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30', title: statusLabel(klass), body: '' }
+  }
+}
+
+function DayDetailDialog({
+  info, shift, employeeId, onClose,
+}: {
+  info: DayInfo
+  shift: string
+  employeeId: string | undefined
+  onClose: () => void
+}) {
+  const cell = info.cell
+  const klass = info.classification
+  const hero = statusHero(klass)
+  const HeroIcon = hero.icon
+  const headerDate = `${info.label.weekday}, ${formatDayLabel(info.date)}`
+
+  const punchesQuery = usePunchesForDay(info.iso, employeeId)
+  const pairs = useMemo(() => pairPunches(punchesQuery.data ?? []), [punchesQuery.data])
+  const totalHours = useMemo(() => sumPairHours(pairs), [pairs])
+  const firstIn = pairs[0]?.inPunch?.recordedAt ?? null
+  const lastOut = pairs.slice().reverse().find((p) => p.outPunch)?.outPunch?.recordedAt ?? null
+  // Inline audit timeline (collapsed by default) replaces the separate
+  // AuditHistoryDialog — keeps every piece of context about the day on one
+  // surface and avoids modal-over-modal stacking.
+  const [auditOpen, setAuditOpen] = useState(false)
+  const punches = punchesQuery.data ?? []
+
+  const addManual = useAddManualPunch()
+  const deletePunch = useDeletePunch()
+
+  const [manualOpen, setManualOpen] = useState(false)
+  const [mIn, setMIn] = useState('')
+  const [mInOffset, setMInOffset] = useState<'0' | '1'>('0')
+  const [mInNotes, setMInNotes] = useState('')
+  const [mOut, setMOut] = useState('')
+  const [mOutOffset, setMOutOffset] = useState<'0' | '1'>('0')
+  const [mOutNotes, setMOutNotes] = useState('')
+
+  function resetManual() {
+    setManualOpen(false)
+    setMIn(''); setMInOffset('0'); setMInNotes('')
+    setMOut(''); setMOutOffset('0'); setMOutNotes('')
+  }
+
+  const submitManual = () => {
+    if (!/^\d{2}:\d{2}$/.test(mIn)) {
+      toast.error('Enter check-in time as HH:MM')
+      return
+    }
+    if (mOut && !/^\d{2}:\d{2}$/.test(mOut)) {
+      toast.error('Enter check-out time as HH:MM')
+      return
+    }
+    addManual.mutate(
+      {
+        employeeId,
+        date: info.iso,
+        inTime: mIn,
+        outTime: mOut || undefined,
+        inDayOffset: Number(mInOffset),
+        outDayOffset: mOut ? Number(mOutOffset) : undefined,
+        inNotes: mInNotes || undefined,
+        outNotes: mOutNotes || undefined,
+      },
+      {
+        onSuccess: () => { toast.success('Entry added'); resetManual() },
+        onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not add entry'),
+      },
     )
+  }
+
+  const showHero = pairs.length === 0 && (
+    klass === 'weekend' || klass === 'holiday' || klass === 'on_leave' || klass === 'absent' || klass === 'future'
+  )
+
+  return (
+    <Dialog open={true} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg flex flex-col p-0 gap-0 overflow-hidden max-h-[90vh]">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b bg-muted/30">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-lg font-semibold leading-tight">{headerDate}</DialogTitle>
+              <DialogDescription className="mt-1 text-xs text-muted-foreground flex items-center gap-1.5">
+                <Calendar className="size-3 shrink-0" />
+                <span className="truncate">{shift}</span>
+              </DialogDescription>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAuditOpen((v) => !v)}
+              aria-expanded={auditOpen}
+              className={cn(
+                'shrink-0 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1',
+                auditOpen
+                  ? 'border-primary/40 bg-primary/10 text-primary'
+                  : 'border-border bg-background text-primary hover:bg-muted/60',
+              )}
+            >
+              <FileClock className="size-3" />
+              Audit History
+              <ChevronDown className={cn('size-3 transition-transform', auditOpen && 'rotate-180')} />
+            </button>
+          </div>
+        </DialogHeader>
+
+        <div className="px-6 py-5 space-y-4 overflow-y-auto">
+          {showHero && (
+            <div className={cn('rounded-xl px-4 py-5 flex flex-col items-center gap-2 text-center', hero.tone)}>
+              <div className="size-10 rounded-full bg-background flex items-center justify-center shadow-sm">
+                <HeroIcon className="size-4" />
+              </div>
+              <p className="text-sm font-semibold">{hero.title}</p>
+              {hero.body && <p className="text-xs text-muted-foreground max-w-[280px]">{hero.body}</p>}
+              {klass === 'absent' && (
+                <Button asChild variant="outline" size="sm" className="mt-2">
+                  <a href="/leave">Apply Leave</a>
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Punch pair list (screenshot 10 style) */}
+          {pairs.length > 0 && (
+            <ul className="space-y-2">
+              {pairs.map((p, idx) => (
+                <li
+                  key={p.inPunch?.id ?? p.outPunch?.id ?? idx}
+                  className="rounded-xl border bg-card overflow-hidden"
+                >
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
+                    {/* IN */}
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                        Check-in
+                      </span>
+                      {p.inPunch ? (
+                        <>
+                          <span className="text-base font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                            {formatTime(p.inPunch.recordedAt)}
+                          </span>
+                          <PunchMeta punch={p.inPunch} />
+                        </>
+                      ) : (
+                        <span className="text-sm text-muted-foreground/70">—</span>
+                      )}
+                    </div>
+
+                    {/* Connector */}
+                    <span className="hidden sm:block border-t border-dashed border-muted-foreground/40 w-12" />
+
+                    {/* OUT */}
+                    <div className="flex flex-col items-end text-right">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-rose-700 dark:text-rose-400">
+                        Check-out
+                      </span>
+                      {p.outPunch ? (
+                        <>
+                          <span className="text-base font-semibold text-rose-700 dark:text-rose-400 tabular-nums">
+                            {formatTime(p.outPunch.recordedAt)}
+                          </span>
+                          <PunchMeta punch={p.outPunch} align="end" />
+                        </>
+                      ) : (
+                        <span className="text-sm text-muted-foreground/70 italic">In progress</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Per-pair actions */}
+                  <div className="flex items-center justify-between border-t bg-muted/20 px-3 py-1.5">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Pair {idx + 1} · {p.duration}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {p.inPunch && (
+                        <button
+                          type="button"
+                          onClick={() => deletePunch.mutate({ id: p.inPunch!.id, employeeId }, {
+                            onSuccess: () => toast.success('Check-in removed'),
+                            onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not remove'),
+                          })}
+                          className="text-[10px] text-rose-600 hover:underline flex items-center gap-1 px-1.5 py-0.5"
+                          aria-label="Delete check-in"
+                        >
+                          <Trash2 className="size-3" /> In
+                        </button>
+                      )}
+                      {p.outPunch && (
+                        <button
+                          type="button"
+                          onClick={() => deletePunch.mutate({ id: p.outPunch!.id, employeeId }, {
+                            onSuccess: () => toast.success('Check-out removed'),
+                            onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not remove'),
+                          })}
+                          className="text-[10px] text-rose-600 hover:underline flex items-center gap-1 px-1.5 py-0.5"
+                          aria-label="Delete check-out"
+                        >
+                          <Trash2 className="size-3" /> Out
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Empty-pairs state for working days */}
+          {pairs.length === 0 && !showHero && (
+            <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
+              No check-ins recorded for this day.
+            </div>
+          )}
+
+          {/* Inline audit timeline — toggled by the header button. Replaces
+              the standalone AuditHistoryDialog so the day's data stays on
+              one surface. Shows EVERY punch (not just first-in/last-out)
+              because the new multi-punch model can have several pairs. */}
+          {auditOpen && (
+            <section className="rounded-xl border bg-muted/10 p-4 animate-in fade-in-50 slide-in-from-top-1 duration-200">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                  <FileClock className="size-3.5" />
+                  Audit timeline
+                </h3>
+                <span className="text-[10px] text-muted-foreground tabular-nums">
+                  {punches.length} event{punches.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              {punches.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-3">
+                  No punch events recorded for this day yet.
+                </p>
+              ) : (
+                <ol className="relative border-l-2 border-border ms-3 pt-1 space-y-3">
+                  {punches.map((p) => (
+                    <li key={p.id} className="ms-5 relative">
+                      <span className={cn(
+                        'absolute -start-[1.9rem] top-0.5 size-6 rounded-full border-2 border-background flex items-center justify-center shadow-sm',
+                        p.punchType === 'in'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                          : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
+                      )}>
+                        {p.punchType === 'in' ? <LogIn className="size-3" /> : <LogOut className="size-3" />}
+                      </span>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs tabular-nums text-muted-foreground">
+                          {formatTime(p.recordedAt)}
+                        </p>
+                        <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70">
+                          via {p.source}
+                        </span>
+                      </div>
+                      <p className="text-sm mt-0.5">
+                        <span className="text-primary font-medium">You</span>{' '}
+                        {p.punchType === 'in' ? 'checked in' : 'checked out'}
+                        {p.locationName && (
+                          <span className="text-muted-foreground"> · {p.locationName}</span>
+                        )}
+                      </p>
+                      {p.notes && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5 italic">"{p.notes}"</p>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          )}
+
+          {/* Manual entry expandable */}
+          {!manualOpen ? (
+            <button
+              type="button"
+              onClick={() => setManualOpen(true)}
+              className="w-full rounded-xl border border-dashed py-2.5 text-xs font-medium text-primary hover:bg-muted/40 transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Plus className="size-3.5" />
+              Add Check-in / Check-out Entry
+            </button>
+          ) : (
+            <div className="rounded-xl border bg-card p-4 space-y-3">
+              <p className="text-sm font-semibold">Add manual entry</p>
+              <div className="grid grid-cols-2 gap-3">
+                <ManualTimeField
+                  label="Check-in"
+                  value={mIn} onChange={setMIn}
+                  offset={mInOffset} onOffsetChange={setMInOffset}
+                  notes={mInNotes} onNotesChange={setMInNotes}
+                  tone="emerald"
+                />
+                <ManualTimeField
+                  label="Check-out"
+                  value={mOut} onChange={setMOut}
+                  offset={mOutOffset} onOffsetChange={setMOutOffset}
+                  notes={mOutNotes} onNotesChange={setMOutNotes}
+                  tone="rose"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <Button size="sm" variant="ghost" onClick={resetManual}>Cancel</Button>
+                <Button size="sm" onClick={submitManual} loading={addManual.isPending}>
+                  Save entry
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t bg-muted/30 px-6 py-4 grid grid-cols-3 gap-3">
+          <div className="border-l-2 border-emerald-500 ps-2.5">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">First Check-In</p>
+            <p className="text-sm font-semibold tabular-nums mt-1">{firstIn ? formatTime(firstIn) : (cell?.checkIn ? formatTime(cell.checkIn) : '—')}</p>
+          </div>
+          <div className="border-l-2 border-rose-500 ps-2.5">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Last Check-Out</p>
+            <p className="text-sm font-semibold tabular-nums mt-1">{lastOut ? formatTime(lastOut) : (cell?.checkOut ? formatTime(cell.checkOut) : '—')}</p>
+          </div>
+          <div className="border-l-2 border-blue-500 ps-2.5 text-right">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Total Hours</p>
+            <p className="text-sm font-semibold tabular-nums mt-1">{totalHours || cell?.hoursWorked || '00:00'}</p>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+interface PunchPair {
+  inPunch: AttendancePunch | null
+  outPunch: AttendancePunch | null
+  duration: string
+}
+
+function pairPunches(punches: AttendancePunch[]): PunchPair[] {
+  const sorted = [...punches].sort((a, b) =>
+    new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime(),
+  )
+  const out: PunchPair[] = []
+  let pending: AttendancePunch | null = null
+  for (const p of sorted) {
+    if (p.punchType === 'in') {
+      if (pending) out.push({ inPunch: pending, outPunch: null, duration: '—' })
+      pending = p
+    } else {
+      if (pending) {
+        const ms = new Date(p.recordedAt).getTime() - new Date(pending.recordedAt).getTime()
+        out.push({ inPunch: pending, outPunch: p, duration: formatDuration(ms) })
+        pending = null
+      } else {
+        out.push({ inPunch: null, outPunch: p, duration: '—' })
+      }
+    }
+  }
+  if (pending) out.push({ inPunch: pending, outPunch: null, duration: '—' })
+  return out
+}
+
+function formatDuration(ms: number): string {
+  if (ms <= 0) return '—'
+  const total = Math.round(ms / 60000)
+  const h = Math.floor(total / 60).toString().padStart(2, '0')
+  const m = (total % 60).toString().padStart(2, '0')
+  return `${h}h ${m}m`
+}
+
+function sumPairHours(pairs: PunchPair[]): string {
+  let totalMin = 0
+  for (const p of pairs) {
+    if (p.inPunch && p.outPunch) {
+      totalMin += Math.max(
+        0,
+        Math.round(
+          (new Date(p.outPunch.recordedAt).getTime() - new Date(p.inPunch.recordedAt).getTime()) / 60000,
+        ),
+      )
+    }
+  }
+  if (totalMin === 0) return ''
+  const h = Math.floor(totalMin / 60).toString().padStart(2, '0')
+  const m = (totalMin % 60).toString().padStart(2, '0')
+  return `${h}:${m}`
+}
+
+function PunchMeta({ punch, align = 'start' }: { punch: AttendancePunch; align?: 'start' | 'end' }) {
+  const items: ReactNode[] = []
+  if (punch.locationName) {
+    items.push(
+      <span key="loc" className="inline-flex items-center gap-1">
+        <MapPin className="size-3" />
+        <span className="truncate max-w-[140px]">{punch.locationName}</span>
+      </span>,
+    )
+  } else if (punch.latitude && punch.longitude) {
+    items.push(
+      <span key="latlng" className="inline-flex items-center gap-1 tabular-nums">
+        <MapPin className="size-3" />
+        {Number(punch.latitude).toFixed(3)}, {Number(punch.longitude).toFixed(3)}
+      </span>,
+    )
+  }
+  items.push(
+    <span key="src" className="inline-flex items-center gap-1 capitalize">
+      <MonitorSmartphone className="size-3" />
+      {punch.source}
+    </span>,
+  )
+  return (
+    <p
+      className={cn(
+        'mt-0.5 text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5',
+        align === 'end' && 'justify-end',
+      )}
+    >
+      {items}
+    </p>
+  )
+}
+
+function ManualTimeField({
+  label, value, onChange, offset, onOffsetChange, notes, onNotesChange, tone,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  offset: '0' | '1'
+  onOffsetChange: (v: '0' | '1') => void
+  notes: string
+  onNotesChange: (v: string) => void
+  tone: 'emerald' | 'rose'
+}) {
+  const toneClass = tone === 'emerald'
+    ? 'text-emerald-700 dark:text-emerald-400'
+    : 'text-rose-700 dark:text-rose-400'
+  return (
+    <div className="space-y-1.5">
+      <p className={cn('text-[10px] font-medium uppercase tracking-wider', toneClass)}>{label}</p>
+      <div className="flex items-center gap-1.5">
+        <Input
+          type="time"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-8 text-xs"
+        />
+        <select
+          value={offset}
+          onChange={(e) => onOffsetChange(e.target.value as '0' | '1')}
+          className="h-8 rounded-md border bg-background px-1.5 text-xs"
+          aria-label={`${label} day offset`}
+        >
+          <option value="0">Same Day</option>
+          <option value="1">Next Day</option>
+        </select>
+      </div>
+      <Input
+        value={notes}
+        onChange={(e) => onNotesChange(e.target.value)}
+        placeholder="Notes (optional)"
+        className="h-7 text-xs"
+      />
+    </div>
+  )
+}
+
+// ─── Import punches modal ─────────────────────────────────────────────────
+
+interface ParsedRow {
+  rowNum: number
+  date: string
+  inTime: string
+  outTime: string | null
+  inNotes: string | null
+  outNotes: string | null
+  locationName: string | null
+  errors: string[]
+}
+
+function ImportPunchesDialog({
+  open, onOpenChange, employeeId,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  employeeId: string | undefined
+}) {
+  const [fileName, setFileName] = useState<string | null>(null)
+  const [rows, setRows] = useState<ParsedRow[]>([])
+  const [submitting, setSubmitting] = useState(false)
+  const [progress, setProgress] = useState({ done: 0, total: 0, failed: 0 })
+  const addManual = useAddManualPunch()
+
+  const validCount = rows.filter((r) => r.errors.length === 0).length
+  const errorCount = rows.length - validCount
+
+  function reset() {
+    setFileName(null)
+    setRows([])
+    setProgress({ done: 0, total: 0, failed: 0 })
+  }
+
+  function downloadSample() {
+    const csv = [
+      'date,in_time,out_time,in_notes,out_notes,location',
+      '2026-05-19,09:00,18:00,On-time,End of shift,Office',
+      '2026-05-19,19:00,21:30,Overtime in,Overtime out,Office',
+      '2026-05-20,08:55,,Forgot punch-out,,Site A',
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'attendance-import-sample.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!/\.(csv|txt)$/i.test(file.name)) {
+      toast.error('Please upload a CSV file')
+      return
+    }
+    const text = await file.text()
+    const parsed = parseCsv(text)
+    setFileName(file.name)
+    setRows(parsed)
+    if (parsed.length === 0) toast.error('No data rows found in file')
+  }
+
+  async function submit() {
+    const valid = rows.filter((r) => r.errors.length === 0)
+    if (valid.length === 0) {
+      toast.error('No valid rows to import')
+      return
+    }
+    setSubmitting(true)
+    setProgress({ done: 0, total: valid.length, failed: 0 })
+    let done = 0
+    let failed = 0
+    for (const r of valid) {
+      try {
+        await addManual.mutateAsync({
+          employeeId,
+          date: r.date,
+          inTime: r.inTime,
+          outTime: r.outTime ?? undefined,
+          inNotes: r.inNotes ?? undefined,
+          outNotes: r.outNotes ?? undefined,
+          locationName: r.locationName ?? undefined,
+        })
+      } catch {
+        failed += 1
+      }
+      done += 1
+      setProgress({ done, total: valid.length, failed })
+    }
+    setSubmitting(false)
+    if (failed === 0) {
+      toast.success(`Imported ${done} ${done === 1 ? 'entry' : 'entries'}`)
+      reset()
+      onOpenChange(false)
+    } else {
+      toast.error(`Imported ${done - failed}, ${failed} failed`)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) reset()
+        onOpenChange(o)
+      }}
+    >
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b bg-muted/30">
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+            <Upload className="size-4" />
+            Import attendance entries
+          </DialogTitle>
+          <DialogDescription className="text-xs mt-1">
+            Upload a CSV with the columns:{' '}
+            <code className="text-[11px] bg-background border rounded px-1 py-0.5">date, in_time, out_time, in_notes, out_notes, location</code>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {/* Picker / sample */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="size-9 rounded-md bg-muted/60 flex items-center justify-center">
+                <FileSpreadsheet className="size-4 text-muted-foreground" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{fileName ?? 'No file selected'}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {rows.length > 0
+                    ? `${rows.length} row${rows.length === 1 ? '' : 's'} parsed`
+                    : 'CSV only, max 1,000 rows'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" onClick={downloadSample} className="gap-1.5">
+                <Download className="size-3.5" />
+                Sample
+              </Button>
+              <label className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium cursor-pointer hover:bg-muted/60">
+                <Upload className="size-3.5" />
+                Choose file
+                <input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" />
+              </label>
+            </div>
+          </div>
+
+          {/* Preview */}
+          {rows.length > 0 && (
+            <div className="rounded-xl border overflow-hidden">
+              <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2 text-xs">
+                <span className="font-semibold">Preview</span>
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 className="size-3.5" />
+                    {validCount} valid
+                  </span>
+                  {errorCount > 0 && (
+                    <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-400">
+                      <AlertCircle className="size-3.5" />
+                      {errorCount} error{errorCount === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="max-h-72 overflow-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/20 sticky top-0">
+                    <tr className="text-left text-muted-foreground">
+                      <th className="px-2 py-1.5 font-medium">#</th>
+                      <th className="px-2 py-1.5 font-medium">Date</th>
+                      <th className="px-2 py-1.5 font-medium">In</th>
+                      <th className="px-2 py-1.5 font-medium">Out</th>
+                      <th className="px-2 py-1.5 font-medium">Location</th>
+                      <th className="px-2 py-1.5 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr
+                        key={r.rowNum}
+                        className={cn(
+                          'border-t',
+                          r.errors.length > 0 && 'bg-rose-50/40 dark:bg-rose-950/10',
+                        )}
+                      >
+                        <td className="px-2 py-1.5 tabular-nums text-muted-foreground">{r.rowNum}</td>
+                        <td className="px-2 py-1.5 tabular-nums">{r.date || '—'}</td>
+                        <td className="px-2 py-1.5 tabular-nums text-emerald-700 dark:text-emerald-400">{r.inTime || '—'}</td>
+                        <td className="px-2 py-1.5 tabular-nums text-rose-700 dark:text-rose-400">{r.outTime ?? '—'}</td>
+                        <td className="px-2 py-1.5 truncate max-w-[140px]">{r.locationName ?? '—'}</td>
+                        <td className="px-2 py-1.5">
+                          {r.errors.length === 0 ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                              <CheckCircle2 className="size-3" /> OK
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-400" title={r.errors.join('; ')}>
+                              <AlertCircle className="size-3" /> {r.errors[0]}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Progress */}
+          {submitting && progress.total > 0 && (
+            <div className="rounded-xl border bg-card p-3 text-xs">
+              <div className="flex justify-between mb-1.5">
+                <span>Importing…</span>
+                <span className="tabular-nums">
+                  {progress.done} / {progress.total}
+                  {progress.failed > 0 && (
+                    <span className="text-rose-600 ms-2">({progress.failed} failed)</span>
+                  )}
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t bg-muted/20 px-6 py-3 flex items-center justify-between">
+          <p className="text-[11px] text-muted-foreground">
+            {rows.length > 0
+              ? `Ready to import ${validCount} of ${rows.length} rows`
+              : 'Choose a CSV file to preview'}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={submit} loading={submitting} disabled={validCount === 0}>
+              Import {validCount > 0 ? `(${validCount})` : ''}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function parseCsv(text: string): ParsedRow[] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0)
+  if (lines.length === 0) return []
+  const headerCells = splitCsvLine(lines[0]!).map((h) => h.trim().toLowerCase())
+  const idx = (name: string) => headerCells.indexOf(name)
+  const dateIdx = idx('date')
+  const inIdx = idx('in_time') !== -1 ? idx('in_time') : idx('in')
+  const outIdx = idx('out_time') !== -1 ? idx('out_time') : idx('out')
+  const inNotesIdx = idx('in_notes')
+  const outNotesIdx = idx('out_notes')
+  const locIdx = idx('location') !== -1 ? idx('location') : idx('location_name')
+
+  const dataLines = dateIdx === -1 ? lines : lines.slice(1)
+  const out: ParsedRow[] = []
+  for (let i = 0; i < dataLines.length; i += 1) {
+    if (i >= 1000) break
+    const cells = splitCsvLine(dataLines[i]!)
+    const get = (j: number) => (j >= 0 && j < cells.length ? cells[j]!.trim() : '')
+    const date = dateIdx === -1 ? get(0) : get(dateIdx)
+    const inTime = normalizeTime(get(inIdx))
+    const outTimeRaw = get(outIdx)
+    const outTime = outTimeRaw ? normalizeTime(outTimeRaw) : null
+    const inNotes = get(inNotesIdx) || null
+    const outNotes = get(outNotesIdx) || null
+    const locationName = get(locIdx) || null
+
+    const errors: string[] = []
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push('Invalid date (YYYY-MM-DD)')
+    if (!inTime || !/^\d{2}:\d{2}$/.test(inTime)) errors.push('Invalid in_time (HH:MM)')
+    if (outTime && !/^\d{2}:\d{2}$/.test(outTime)) errors.push('Invalid out_time (HH:MM)')
+
+    out.push({
+      rowNum: i + 2,
+      date,
+      inTime: inTime || '',
+      outTime,
+      inNotes,
+      outNotes,
+      locationName,
+      errors,
+    })
+  }
+  return out
+}
+
+function splitCsvLine(line: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  let quoted = false
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i]!
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i += 1 }
+      else if (ch === '"') quoted = false
+      else cur += ch
+    } else {
+      if (ch === ',') { out.push(cur); cur = '' }
+      else if (ch === '"') quoted = true
+      else cur += ch
+    }
+  }
+  out.push(cur)
+  return out
+}
+
+function normalizeTime(raw: string): string {
+  const s = raw.trim()
+  if (!s) return ''
+  // Accept HH:MM, H:MM, or HHMM
+  if (/^\d{2}:\d{2}$/.test(s)) return s
+  if (/^\d{1}:\d{2}$/.test(s)) return `0${s}`
+  if (/^\d{4}$/.test(s)) return `${s.slice(0, 2)}:${s.slice(2)}`
+  return s
 }

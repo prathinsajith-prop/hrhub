@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
     CalendarDays, Clock, UserCheck, UserX,
-    AlarmClock, Home, CalendarOff, TrendingUp, Edit2, RefreshCcw, Zap,
+    AlarmClock, Home, CalendarOff, TrendingUp, Edit2, RefreshCcw, Zap, Fingerprint,
+    Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, X, Check,
 } from 'lucide-react'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -28,11 +29,12 @@ import {
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
-import { useAttendance, useAttendanceCalendar, useUpsertAttendance, useExternalPunch, type AttendanceRecord } from '@/hooks/useAttendance'
+import { useAttendance, useAttendanceCalendar, useUpsertAttendance, useExternalPunch, useAddManualPunch, type AttendanceRecord } from '@/hooks/useAttendance'
 import { AttendanceCalendarGrid } from '@/components/shared/AttendanceCalendarGrid'
 import { MonthSwitcher } from '@/components/shared/MonthSwitcher'
 import { resolveMonthFromOffset } from '@/lib/monthRange'
 import { useEmployees } from '@/hooks/useEmployees'
+import { useBiometricMappings } from '@/hooks/useBiometric'
 import { EmployeeSelect } from '@/components/shared/EmployeeSelect'
 import { useOrgUnits } from '@/hooks/useOrgUnits'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -42,6 +44,7 @@ import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, buildFilterQueryString, type FilterConfig } from '@/lib/filters'
 import { ATTENDANCE_STATUS_OPTIONS } from '@/lib/options'
 import { exportAttendance } from '@/lib/export'
+import { cn } from '@/lib/utils'
 
 const ATTENDANCE_FILTERS: FilterConfig[] = [
     { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
@@ -102,6 +105,7 @@ export function AttendancePage() {
     const [punchType, setPunchType] = useState<'in' | 'out'>('in')
     const [punchTimestamp, setPunchTimestamp] = useState('')
     const externalPunch = useExternalPunch()
+    const [importOpen, setImportOpen] = useState(false)
 
     const { month: calendarMonth, label, start, end } = useMemo(() => resolveMonthFromOffset(monthOffset), [monthOffset])
     const { data: calendarData, isLoading: calendarLoading } = useAttendanceCalendar(calendarMonth)
@@ -446,6 +450,30 @@ export function AttendancePage() {
                 actions={
                     <div className="flex items-center gap-2">
                         <MonthSwitcher offset={monthOffset} onChange={setMonthOffset} label={label} />
+                        {can('manage_attendance') && (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setImportOpen(true)}
+                                    className="gap-1.5"
+                                    title={t('attendance.importEntries', 'Import attendance entries') as string}
+                                >
+                                    <Upload className="size-3.5" />
+                                    {t('attendance.importAction', 'Import')}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => navigate('/attendance/biometric')}
+                                    className="gap-1.5"
+                                    title={t('attendance.biometricImport', 'Biometric mapping & punch import') as string}
+                                >
+                                    <Fingerprint className="size-3.5" />
+                                    {t('attendance.integrationsAction', 'Integrations')}
+                                </Button>
+                            </>
+                        )}
                         <Button
                             variant="outline"
                             size="sm"
@@ -791,6 +819,18 @@ export function AttendancePage() {
                 }}
                 saving={upsert.isPending}
             />
+
+            {importOpen && (
+                <ImportAttendancePunchesDialog
+                    open={importOpen}
+                    onOpenChange={setImportOpen}
+                    employees={empList.map((e) => ({
+                        id: e.id,
+                        name: (empMap.get(e.id)?.name ?? '—'),
+                        employeeNo: (e.employeeNo as string | undefined) ?? null,
+                    }))}
+                />
+            )}
         </PageWrapper>
     )
 }
@@ -894,4 +934,615 @@ function EditAttendanceDialog({
             </DialogContent>
         </Dialog>
     )
+}
+
+// ─── Import Attendance Punches Dialog ─────────────────────────────────────
+
+interface ImportRow {
+    rowNum: number
+    date: string
+    inTime: string
+    outTime: string | null
+    inNotes: string | null
+    outNotes: string | null
+    locationName: string | null
+    /** Whatever the CSV's `mapper_id` / `employee_no` column held — the raw
+     *  lookup token before resolution. Stays available for error messages
+     *  even after a successful resolve. */
+    employeeKey: string | null
+    employeeId: string | null
+    errors: string[]
+}
+
+/** ImportRow after the resolver pass — populated employeeId + display fields. */
+interface ResolvedImportRow extends ImportRow {
+    resolvedName: string | null
+    resolvedVia: 'employee_no' | 'mapper_id' | null
+}
+
+function ImportAttendancePunchesDialog({
+    open, onOpenChange, employees,
+}: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    employees: Array<{ id: string; name: string; employeeNo: string | null }>
+}) {
+    const [fileName, setFileName] = useState<string | null>(null)
+    const [fileSize, setFileSize] = useState<number>(0)
+    const [rows, setRows] = useState<ImportRow[]>([])
+    const [submitting, setSubmitting] = useState(false)
+    const [progress, setProgress] = useState({ done: 0, total: 0, failed: 0 })
+    /** Drag-over visual state — drives the dashed border highlight on the
+     *  drop zone so the user knows the drop will be accepted. */
+    const [dragOver, setDragOver] = useState(false)
+    const addManual = useAddManualPunch()
+    // Biometric mappings let rows reference an external device user id
+    // instead of the HRHub employee_no — same dual-key import that the
+    // /attendance/biometric page supports.
+    const { data: mappings } = useBiometricMappings()
+
+    /**
+     * Build a single lookup map keyed by lowercase employee_no OR mapper_id.
+     * Each entry carries the resolved employee id + display name so per-row
+     * validation can populate `employeeId` AND render the canonical name in
+     * the preview table without a second walk.
+     *
+     * Both keys live in the same map because either can resolve a row — and
+     * the values they point to don't conflict in practice (a mapper_id like
+     * "101" can coexist with an employee_no like "EMP-101"; the lookup falls
+     * back to the one the user actually supplied).
+     */
+    const lookup = useMemo(() => {
+        const m = new Map<string, { id: string; name: string; via: 'employee_no' | 'mapper_id' }>()
+        for (const e of employees) {
+            if (e.employeeNo) m.set(e.employeeNo.trim().toLowerCase(), { id: e.id, name: e.name, via: 'employee_no' })
+        }
+        for (const map of mappings ?? []) {
+            // mapper_id wins over a coincidental employee_no match only when
+            // the user supplied it explicitly — see resolveImportRow below.
+            m.set(map.mapperId.trim().toLowerCase(), { id: map.employeeId, name: map.employeeName, via: 'mapper_id' })
+        }
+        return m
+    }, [employees, mappings])
+
+    // Re-resolve every row whenever the lookup changes (mappings finish
+    // loading after the dialog opens, for instance). State-during-render
+    // beats useEffect for this simple sync.
+    const [lookupVersion, setLookupVersion] = useState(0)
+    const [lastSize, setLastSize] = useState(0)
+    if (lookup.size !== lastSize) {
+        setLastSize(lookup.size)
+        setLookupVersion((v) => v + 1)
+    }
+
+    const resolvedRows = useMemo(
+        () => rows.map((r) => resolveImportRow(r, lookup)),
+        // lookupVersion forces a recompute even though `lookup` is stable
+        // by reference within the same render tick.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [rows, lookup, lookupVersion],
+    )
+
+    const validCount = resolvedRows.filter((r) => r.errors.length === 0).length
+    const errorCount = resolvedRows.length - validCount
+    const canImport = validCount > 0 && !submitting
+
+    function reset() {
+        setFileName(null)
+        setFileSize(0)
+        setRows([])
+        setProgress({ done: 0, total: 0, failed: 0 })
+        setDragOver(false)
+    }
+
+    function clearFile() {
+        setFileName(null)
+        setFileSize(0)
+        setRows([])
+    }
+
+    /** Shared CSV → rows pipeline used by both the file input and drag/drop.
+     *  Centralising it keeps validation + state writes consistent regardless
+     *  of how the user supplied the file. */
+    async function processFile(file: File) {
+        if (!/\.(csv|txt)$/i.test(file.name)) {
+            toast.error('Invalid file', 'Please upload a CSV file (.csv)')
+            return
+        }
+        const text = await file.text()
+        const parsed = parseImportCsv(text)
+        setFileName(file.name)
+        setFileSize(file.size)
+        setRows(parsed)
+        if (parsed.length === 0) toast.error('Empty file', 'No data rows found in the CSV.')
+    }
+
+    function downloadSample() {
+        // Sample covers both ways to identify an employee — by HRHub
+        // employee_no AND by biometric mapper_id. HR can use whichever
+        // their export tool emits; supplying both is also fine (mapper_id
+        // wins).
+        const csv = [
+            'employee_no,mapper_id,date,in_time,out_time,in_notes,out_notes,location',
+            'EMP-001,,2026-05-19,09:00,18:00,On-time,End of shift,Office',
+            'EMP-001,,2026-05-19,19:00,21:30,Overtime in,Overtime out,Office',
+            ',101,2026-05-20,08:55,17:30,Biometric punch,Auto out,Site A',
+            'EMP-002,,2026-05-20,09:10,,Forgot punch-out,,Site B',
+        ].join('\n')
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'attendance-import-sample.csv'
+        a.click()
+        URL.revokeObjectURL(url)
+    }
+
+    async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0]
+        e.target.value = ''
+        if (!file) return
+        await processFile(file)
+    }
+
+    async function submit() {
+        // Each row carries its own employeeId (populated by resolveImportRow
+        // during validation). We loop them and call addManual per-row —
+        // failures on individual rows don't abort the rest. Network-level
+        // errors increment the `failed` counter; the row stays visible in
+        // the preview so HR can see exactly which line broke.
+        const valid = resolvedRows.filter((r) => r.errors.length === 0 && r.employeeId)
+        if (valid.length === 0) return
+        setSubmitting(true)
+        setProgress({ done: 0, total: valid.length, failed: 0 })
+        let done = 0
+        let failed = 0
+        for (const r of valid) {
+            try {
+                await addManual.mutateAsync({
+                    employeeId: r.employeeId as string,
+                    date: r.date,
+                    inTime: r.inTime,
+                    outTime: r.outTime ?? undefined,
+                    inNotes: r.inNotes ?? undefined,
+                    outNotes: r.outNotes ?? undefined,
+                    locationName: r.locationName ?? undefined,
+                })
+            } catch {
+                failed += 1
+            }
+            done += 1
+            setProgress({ done, total: valid.length, failed })
+        }
+        setSubmitting(false)
+        if (failed === 0) {
+            toast.success('Import complete', `${done} ${done === 1 ? 'entry' : 'entries'} imported.`)
+            reset()
+            onOpenChange(false)
+        } else {
+            toast.error('Some rows failed', `${done - failed} succeeded, ${failed} failed.`)
+        }
+    }
+
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={(o) => {
+                if (!o) reset()
+                onOpenChange(o)
+            }}
+        >
+            <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+                {/* Branded header — gradient + icon avatar, same design
+                    language as the travel + biometric dialogs so the whole
+                    HR app reads as one product. */}
+                <DialogHeader className="space-y-0 p-6 pb-4 border-b bg-gradient-to-br from-sky-50/60 to-cyan-50/40 dark:from-sky-950/20 dark:to-cyan-950/15">
+                    <div className="flex items-start gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-sm shadow-cyan-500/20">
+                            <Upload className="size-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <DialogTitle className="text-base font-semibold">Import attendance entries</DialogTitle>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                Each row carries its own employee — supply <code className="font-mono">employee_no</code> or biometric <code className="font-mono">mapper_id</code>.
+                            </p>
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                {/* required columns first (highlighted ring), optional after */}
+                                {[
+                                    { col: 'employee_no', required: true },
+                                    { col: 'mapper_id', required: true },
+                                    { col: 'date', required: true },
+                                    { col: 'in_time', required: true },
+                                    { col: 'out_time', required: false },
+                                    { col: 'in_notes', required: false },
+                                    { col: 'out_notes', required: false },
+                                    { col: 'location', required: false },
+                                ].map((c) => (
+                                    <code
+                                        key={c.col}
+                                        className={cn(
+                                            'rounded border px-1.5 py-0.5 text-[10px] font-mono font-medium',
+                                            c.required
+                                                ? 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-800/60 dark:bg-sky-950/40 dark:text-sky-300'
+                                                : 'bg-background text-foreground/60',
+                                        )}
+                                    >
+                                        {c.col}
+                                    </code>
+                                ))}
+                            </div>
+                            <p className="mt-1 text-[10px] text-muted-foreground">
+                                Either <code className="font-mono">employee_no</code> or <code className="font-mono">mapper_id</code> is required per row.
+                            </p>
+                        </div>
+                    </div>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-muted/20">
+                    {/* Single-step flow now — the CSV carries identity per
+                        row, no employee picker required. */}
+                    <section className="rounded-lg border bg-card p-4">
+                        <header className="mb-3 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <StepChip n={1} active={!fileName} done={!!fileName} />
+                                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                                    Upload CSV
+                                </h3>
+                            </div>
+                            <Button size="sm" variant="ghost" onClick={downloadSample} className="gap-1.5 h-7 text-[11px]">
+                                <Download className="size-3" />
+                                Download sample
+                            </Button>
+                        </header>
+
+                        {!fileName ? (
+                            <label
+                                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                                onDragLeave={() => setDragOver(false)}
+                                onDrop={async (e) => {
+                                    e.preventDefault()
+                                    setDragOver(false)
+                                    const f = e.dataTransfer.files?.[0]
+                                    if (f) await processFile(f)
+                                }}
+                                className={cn(
+                                    'flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed p-6 cursor-pointer transition-colors',
+                                    dragOver
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-border bg-muted/20 hover:bg-muted/30',
+                                )}
+                            >
+                                <FileSpreadsheet className="size-8 text-muted-foreground/60" />
+                                <div className="text-center">
+                                    <p className="text-sm font-medium">
+                                        {dragOver ? 'Drop to upload' : 'Drag a CSV here or click to browse'}
+                                    </p>
+                                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                                        Max 1,000 rows · UTF-8 encoding recommended
+                                    </p>
+                                </div>
+                                <input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" />
+                            </label>
+                        ) : (
+                            <div className="flex items-center gap-3 rounded-md border bg-background p-3">
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                    <FileSpreadsheet className="size-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium truncate">{fileName}</p>
+                                    <p className="text-[11px] text-muted-foreground tabular-nums">
+                                        {formatFileSize(fileSize)}
+                                        {rows.length > 0 && ` · ${rows.length} row${rows.length === 1 ? '' : 's'} parsed`}
+                                    </p>
+                                </div>
+                                <Button size="sm" variant="ghost" onClick={clearFile} className="gap-1 text-muted-foreground hover:text-foreground">
+                                    <X className="size-3.5" />
+                                    Replace
+                                </Button>
+                            </div>
+                        )}
+                    </section>
+
+                    {/* Preview — KPI strip + table. Row colouring already
+                        reflects errors so HR can scan for problems at a
+                        glance before clicking Import. */}
+                    {resolvedRows.length > 0 && (
+                        <section className="rounded-lg border bg-card overflow-hidden">
+                            <header className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-4 py-2.5">
+                                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                                    Preview · {resolvedRows.length} row{resolvedRows.length === 1 ? '' : 's'}
+                                </h3>
+                                <div className="flex items-center gap-2">
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                        <CheckCircle2 className="size-3" />
+                                        {validCount} valid
+                                    </span>
+                                    {errorCount > 0 && (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                                            <AlertCircle className="size-3" />
+                                            {errorCount} error{errorCount === 1 ? '' : 's'}
+                                        </span>
+                                    )}
+                                </div>
+                            </header>
+                            <div className="max-h-80 overflow-auto">
+                                <table className="w-full text-xs">
+                                    <thead className="bg-muted/20 sticky top-0">
+                                        <tr className="text-left text-muted-foreground">
+                                            <th className="px-2 py-1.5 font-medium">#</th>
+                                            <th className="px-2 py-1.5 font-medium">Employee</th>
+                                            <th className="px-2 py-1.5 font-medium">Date</th>
+                                            <th className="px-2 py-1.5 font-medium">In</th>
+                                            <th className="px-2 py-1.5 font-medium">Out</th>
+                                            <th className="px-2 py-1.5 font-medium">Location</th>
+                                            <th className="px-2 py-1.5 font-medium">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {resolvedRows.map((r) => (
+                                            <tr
+                                                key={r.rowNum}
+                                                className={
+                                                    r.errors.length > 0
+                                                        ? 'border-t bg-rose-50/40 dark:bg-rose-950/10'
+                                                        : 'border-t'
+                                                }
+                                            >
+                                                <td className="px-2 py-1.5 tabular-nums text-muted-foreground">{r.rowNum}</td>
+                                                <td className="px-2 py-1.5">
+                                                    {r.resolvedName ? (
+                                                        <div className="min-w-0">
+                                                            <p className="truncate font-medium">{r.resolvedName}</p>
+                                                            <p className="text-[9px] uppercase tracking-wider text-muted-foreground mt-0.5">
+                                                                {r.employeeKey} · via {r.resolvedVia === 'mapper_id' ? 'biometric' : 'employee no'}
+                                                            </p>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="font-mono text-muted-foreground">{r.employeeKey ?? '—'}</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-2 py-1.5 tabular-nums">{r.date || '—'}</td>
+                                                <td className="px-2 py-1.5 tabular-nums text-emerald-700 dark:text-emerald-400">{r.inTime || '—'}</td>
+                                                <td className="px-2 py-1.5 tabular-nums text-rose-700 dark:text-rose-400">{r.outTime ?? '—'}</td>
+                                                <td className="px-2 py-1.5 truncate max-w-[160px]">{r.locationName ?? '—'}</td>
+                                                <td className="px-2 py-1.5">
+                                                    {r.errors.length === 0 ? (
+                                                        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                                                            <CheckCircle2 className="size-3" /> OK
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-400" title={r.errors.join('; ')}>
+                                                            <AlertCircle className="size-3" /> {r.errors[0]}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Progress */}
+                    {submitting && progress.total > 0 && (
+                        <div className="rounded-xl border bg-card p-3 text-xs">
+                            <div className="flex justify-between mb-1.5">
+                                <span>Importing…</span>
+                                <span className="tabular-nums">
+                                    {progress.done} / {progress.total}
+                                    {progress.failed > 0 && (
+                                        <span className="text-rose-600 ms-2">({progress.failed} failed)</span>
+                                    )}
+                                </span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div
+                                    className="h-full bg-primary transition-all"
+                                    style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter className="border-t bg-background px-6 py-3 sm:flex-row sm:justify-between">
+                    {/* Contextual hint icon switches with the state so the
+                        user always sees a precise next-action prompt. */}
+                    <div className="flex items-center gap-2 self-center text-[11px] text-muted-foreground">
+                        {resolvedRows.length === 0 ? (
+                            <>
+                                <Upload className="size-3.5 text-sky-500" />
+                                <span>Choose a CSV file to preview</span>
+                            </>
+                        ) : errorCount > 0 ? (
+                            <>
+                                <AlertCircle className="size-3.5 text-rose-500" />
+                                <span>{errorCount} row{errorCount === 1 ? '' : 's'} will be skipped — fix and re-upload to import them</span>
+                            </>
+                        ) : (
+                            <>
+                                <CheckCircle2 className="size-3.5 text-emerald-500" />
+                                <span>Ready to import {validCount} row{validCount === 1 ? '' : 's'}</span>
+                            </>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+                            Cancel
+                        </Button>
+                        <Button size="sm" onClick={submit} disabled={!canImport} className="gap-1.5">
+                            <Upload className="size-3.5" />
+                            {submitting ? 'Importing…' : `Import${validCount > 0 ? ` ${validCount} row${validCount === 1 ? '' : 's'}` : ''}`}
+                        </Button>
+                    </div>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+/**
+ * Small numbered step indicator used in the import dialog. Three visual
+ * states drive HR's eye through the two-step flow:
+ *   - active  (current step)      → primary background, white digit
+ *   - done    (completed earlier) → emerald background, check icon
+ *   - default (future / inert)    → muted background
+ */
+function StepChip({ n, active, done }: { n: number; active?: boolean; done?: boolean }) {
+    return (
+        <div
+            className={cn(
+                'flex size-5 items-center justify-center rounded-full text-[10px] font-bold transition-colors',
+                done
+                    ? 'bg-emerald-500 text-white'
+                    : active
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground',
+            )}
+        >
+            {done ? <Check className="size-3" /> : n}
+        </div>
+    )
+}
+
+/** Human-readable file size used in the "file selected" card. */
+function formatFileSize(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function parseImportCsv(text: string): ImportRow[] {
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0)
+    if (lines.length === 0) return []
+    const header = splitImportCsvLine(lines[0]!).map((h) => h.trim().toLowerCase())
+    const idx = (name: string) => header.indexOf(name)
+    // Identity columns — accept either or both. Mapper id wins (used by
+    // biometric devices; one external ID per device user).
+    const empNoIdx = idx('employee_no') !== -1 ? idx('employee_no') : idx('employee_code')
+    const mapperIdx = idx('mapper_id') !== -1 ? idx('mapper_id') : idx('biometric_id')
+    const dateIdx = idx('date')
+    const inIdx = idx('in_time') !== -1 ? idx('in_time') : idx('in')
+    const outIdx = idx('out_time') !== -1 ? idx('out_time') : idx('out')
+    const inNotesIdx = idx('in_notes')
+    const outNotesIdx = idx('out_notes')
+    const locIdx = idx('location') !== -1 ? idx('location') : idx('location_name')
+
+    const dataLines = dateIdx === -1 ? lines : lines.slice(1)
+    const out: ImportRow[] = []
+    for (let i = 0; i < dataLines.length; i += 1) {
+        if (i >= 1000) break
+        const cells = splitImportCsvLine(dataLines[i]!)
+        const get = (j: number) => (j >= 0 && j < cells.length ? cells[j]!.trim() : '')
+        const mapperRaw = get(mapperIdx)
+        const empNoRaw = get(empNoIdx)
+        // employeeKey carries the raw lookup token — preference order:
+        //   mapper_id (if present) → employee_no
+        // The resolver tries both; this just records which one to display
+        // in error messages.
+        const employeeKey = mapperRaw || empNoRaw || null
+        const date = dateIdx === -1 ? get(0) : get(dateIdx)
+        const inTime = normalizeImportTime(get(inIdx))
+        const outRaw = get(outIdx)
+        const outTime = outRaw ? normalizeImportTime(outRaw) : null
+        const inNotes = get(inNotesIdx) || null
+        const outNotes = get(outNotesIdx) || null
+        const locationName = get(locIdx) || null
+
+        const errors: string[] = []
+        if (!employeeKey) errors.push('Missing employee_no or mapper_id')
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push('Invalid date (YYYY-MM-DD)')
+        if (!inTime || !/^\d{2}:\d{2}$/.test(inTime)) errors.push('Invalid in_time (HH:MM)')
+        if (outTime && !/^\d{2}:\d{2}$/.test(outTime)) errors.push('Invalid out_time (HH:MM)')
+
+        out.push({
+            rowNum: i + 2,
+            date,
+            inTime: inTime || '',
+            outTime,
+            inNotes,
+            outNotes,
+            locationName,
+            employeeKey,
+            employeeId: null,
+            errors,
+        })
+    }
+    return out
+}
+
+/**
+ * Post-parse resolver — populates `employeeId` and (on failure) appends an
+ * error to the row. Pure function so React's `useMemo` can re-run it
+ * whenever the lookup map changes (e.g., mappings finish loading after the
+ * dialog opened).
+ *
+ * The resolver also annotates `resolvedName` and `resolvedVia` so the
+ * preview table can render the canonical employee + tag "(via biometric)"
+ * without re-doing the lookup at render time.
+ */
+function resolveImportRow(
+    row: ImportRow,
+    lookup: Map<string, { id: string; name: string; via: 'employee_no' | 'mapper_id' }>,
+): ResolvedImportRow {
+    if (!row.employeeKey) {
+        return {
+            ...row,
+            employeeId: null,
+            resolvedName: null,
+            resolvedVia: null,
+        }
+    }
+    const hit = lookup.get(row.employeeKey.trim().toLowerCase())
+    if (!hit) {
+        // Only add the error if the row hasn't already failed on something
+        // upstream — keeps the per-row error list short & actionable.
+        const errors = row.errors.includes('Missing employee_no or mapper_id')
+            ? row.errors
+            : [...row.errors, `No employee found for "${row.employeeKey}"`]
+        return {
+            ...row,
+            errors,
+            employeeId: null,
+            resolvedName: null,
+            resolvedVia: null,
+        }
+    }
+    return {
+        ...row,
+        employeeId: hit.id,
+        resolvedName: hit.name,
+        resolvedVia: hit.via,
+    }
+}
+
+function splitImportCsvLine(line: string): string[] {
+    const out: string[] = []
+    let cur = ''
+    let quoted = false
+    for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i]!
+        if (quoted) {
+            if (ch === '"' && line[i + 1] === '"') { cur += '"'; i += 1 }
+            else if (ch === '"') quoted = false
+            else cur += ch
+        } else {
+            if (ch === ',') { out.push(cur); cur = '' }
+            else if (ch === '"') quoted = true
+            else cur += ch
+        }
+    }
+    out.push(cur)
+    return out
+}
+
+function normalizeImportTime(raw: string): string {
+    const s = raw.trim()
+    if (!s) return ''
+    if (/^\d{2}:\d{2}$/.test(s)) return s
+    if (/^\d{1}:\d{2}$/.test(s)) return `0${s}`
+    if (/^\d{4}$/.test(s)) return `${s.slice(0, 2)}:${s.slice(2)}`
+    return s
 }

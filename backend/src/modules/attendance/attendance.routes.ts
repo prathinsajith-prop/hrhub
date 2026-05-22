@@ -1,4 +1,4 @@
-import { checkIn, checkOut, getAttendance, upsertAttendance, getAttendanceSummary, externalPunch } from './attendance.service.js'
+import { checkIn, checkOut, getAttendance, upsertAttendance, getAttendanceSummary, externalPunch, getPunchesForDay, recordPunch, deletePunch } from './attendance.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
 import {
@@ -314,7 +314,15 @@ export async function attendanceRoutes(fastify: any) {
     // POST /api/v1/attendance/check-in
     // Non-admins may only check in for themselves. dept_head is limited to their own department.
     fastify.post('/attendance/check-in', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
-        const { employeeId } = request.body as { employeeId?: string }
+        const body = (request.body ?? {}) as {
+            employeeId?: string
+            locationName?: string
+            latitude?: number | string
+            longitude?: number | string
+            notes?: string
+            deviceId?: string
+        }
+        const employeeId = body.employeeId
         const role = request.user.role
         const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
         const isDeptHead = role === 'dept_head'
@@ -331,14 +339,33 @@ export async function attendanceRoutes(fastify: any) {
                 return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only manage attendance for employees in your department.' })
             }
         }
-        const data = await checkIn(request.user.tenantId, resolvedEmployeeId)
-        return reply.code(201).send({ data })
+        try {
+            const data = await checkIn(request.user.tenantId, resolvedEmployeeId, {
+                locationName: body.locationName ?? null,
+                latitude: body.latitude ?? null,
+                longitude: body.longitude ?? null,
+                notes: body.notes ?? null,
+                deviceId: body.deviceId ?? null,
+                source: 'web',
+            }, request.user.id)
+            return reply.code(201).send({ data })
+        } catch (err: any) {
+            const code = err?.statusCode ?? 500
+            return reply.code(code).send({ statusCode: code, error: code === 409 ? 'Conflict' : 'Bad Request', message: err?.message ?? 'Unexpected error' })
+        }
     })
 
     // POST /api/v1/attendance/check-out
-    // Non-admins may only check out for themselves. dept_head is limited to their own department.
     fastify.post('/attendance/check-out', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
-        const { employeeId } = request.body as { employeeId?: string }
+        const body = (request.body ?? {}) as {
+            employeeId?: string
+            locationName?: string
+            latitude?: number | string
+            longitude?: number | string
+            notes?: string
+            deviceId?: string
+        }
+        const employeeId = body.employeeId
         const role = request.user.role
         const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
         const isDeptHead = role === 'dept_head'
@@ -355,8 +382,135 @@ export async function attendanceRoutes(fastify: any) {
                 return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only manage attendance for employees in your department.' })
             }
         }
-        const data = await checkOut(request.user.tenantId, resolvedEmployeeId)
+        try {
+            const data = await checkOut(request.user.tenantId, resolvedEmployeeId, {
+                locationName: body.locationName ?? null,
+                latitude: body.latitude ?? null,
+                longitude: body.longitude ?? null,
+                notes: body.notes ?? null,
+                deviceId: body.deviceId ?? null,
+                source: 'web',
+            }, request.user.id)
+            return reply.send({ data })
+        } catch (err: any) {
+            const code = err?.statusCode ?? 500
+            return reply.code(code).send({ statusCode: code, error: code === 409 ? 'Conflict' : 'Bad Request', message: err?.message ?? 'Unexpected error' })
+        }
+    })
+
+    // GET /api/v1/attendance/punches?date=YYYY-MM-DD&employeeId=
+    // Returns every individual check-in / out for a single day. Employees
+    // see their own; admins / dept_head respect scoping.
+    fastify.get('/attendance/punches', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
+        const q = (request.query ?? {}) as { date?: string; employeeId?: string }
+        const date = q.date
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'date query param required (YYYY-MM-DD)' })
+        }
+        const role = request.user.role
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isDeptHead = role === 'dept_head'
+        const resolvedEmployeeId = (isHrAdmin || isDeptHead) && q.employeeId ? q.employeeId : request.user.employeeId
+        if (!resolvedEmployeeId) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
+        }
+        if (isDeptHead && q.employeeId && q.employeeId !== request.user.employeeId) {
+            const emp = await findById(request.user.tenantId, resolvedEmployeeId)
+            if (!emp || emp.department !== request.user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only view punches for employees in your department.' })
+            }
+        }
+        const data = await getPunchesForDay(request.user.tenantId, resolvedEmployeeId, date)
         return reply.send({ data })
+    })
+
+    // POST /api/v1/attendance/punches — manual HR entry (paired in + out).
+    // Body: { employeeId, date, inTime: 'HH:MM', outTime?: 'HH:MM',
+    //   inDayOffset?: 0|1, outDayOffset?: 0|1, inNotes?, outNotes?,
+    //   locationName?, latitude?, longitude? }
+    fastify.post('/attendance/punches', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
+        const body = (request.body ?? {}) as {
+            employeeId?: string
+            date?: string
+            inTime?: string
+            outTime?: string
+            inDayOffset?: number
+            outDayOffset?: number
+            inNotes?: string
+            outNotes?: string
+            locationName?: string
+            latitude?: number
+            longitude?: number
+        }
+        const role = request.user.role
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isDeptHead = role === 'dept_head'
+        const resolvedEmployeeId = (isHrAdmin || isDeptHead) && body.employeeId ? body.employeeId : request.user.employeeId
+        if (!resolvedEmployeeId) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
+
+        const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
+        if (!body.date || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'date is required (YYYY-MM-DD)' })
+        }
+        if (!body.inTime || !HHMM.test(body.inTime)) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'inTime required (HH:MM)' })
+        }
+        if (body.outTime && !HHMM.test(body.outTime)) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'outTime must be HH:MM' })
+        }
+
+        const baseDate = new Date(`${body.date}T00:00:00`)
+        const [inH, inM] = body.inTime.split(':').map(Number) as [number, number]
+        const inDate = new Date(baseDate.getTime() + (body.inDayOffset ?? 0) * 86_400_000)
+        inDate.setHours(inH, inM, 0, 0)
+        const inPunch = await recordPunch(
+            request.user.tenantId, resolvedEmployeeId, 'in',
+            {
+                recordedAt: inDate,
+                locationName: body.locationName ?? null,
+                latitude: body.latitude ?? null,
+                longitude: body.longitude ?? null,
+                notes: body.inNotes ?? null,
+                source: 'manual',
+            },
+            request.user.id,
+        )
+        let outPunch: typeof inPunch | null = null
+        if (body.outTime) {
+            const [outH, outM] = body.outTime.split(':').map(Number) as [number, number]
+            const outDate = new Date(baseDate.getTime() + (body.outDayOffset ?? 0) * 86_400_000)
+            outDate.setHours(outH, outM, 0, 0)
+            if (outDate <= inDate) {
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Check-out must be after check-in.' })
+            }
+            outPunch = await recordPunch(
+                request.user.tenantId, resolvedEmployeeId, 'out',
+                {
+                    recordedAt: outDate,
+                    locationName: body.locationName ?? null,
+                    latitude: body.latitude ?? null,
+                    longitude: body.longitude ?? null,
+                    notes: body.outNotes ?? null,
+                    source: 'manual',
+                },
+                request.user.id,
+            )
+        }
+        return reply.code(201).send({ data: { inPunch, outPunch } })
+    })
+
+    // DELETE /api/v1/attendance/punches/:id — undo a stray clock action.
+    fastify.delete('/attendance/punches/:id', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const role = request.user.role
+        const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
+        const isDeptHead = role === 'dept_head'
+        const q = (request.query ?? {}) as { employeeId?: string }
+        const resolvedEmployeeId = (isHrAdmin || isDeptHead) && q.employeeId ? q.employeeId : request.user.employeeId
+        if (!resolvedEmployeeId) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
+        const row = await deletePunch(request.user.tenantId, resolvedEmployeeId, id)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Punch not found' })
+        return reply.code(204).send()
     })
 
     // PATCH /api/v1/attendance — admin upsert

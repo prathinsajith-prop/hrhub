@@ -170,7 +170,9 @@ export async function issueTokens(fastify: AnyFastify, user: any, meta: { ipAddr
                   id: tenant.id,
                   name: tenant.name,
                   tradeLicenseNo: tenant.tradeLicenseNo,
-                  jurisdiction: tenant.jurisdiction,
+                  // Renamed from `jurisdiction` in migration 0051 — keep the
+                  // response field name aligned with the main backend.
+                  businessType: tenant.businessType,
                   industryType: tenant.industryType,
                   subscriptionPlan: tenant.subscriptionPlan,
                   logoUrl: tenant.logoUrl,

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -84,6 +85,7 @@ export function EmployeeHomePage() {
     const todayRecord = todayAttendance?.data?.[0]
     const isCheckedIn = !!todayRecord?.checkIn && !todayRecord?.checkOut
     const checkedOutToday = !!todayRecord?.checkOut
+    const liveTimer = useLiveDuration(todayRecord?.checkIn, todayRecord?.checkOut)
 
     const pendingLeaveCount = leaveList?.data.filter((l) => l.status === 'pending').length ?? 0
 
@@ -163,24 +165,26 @@ export function EmployeeHomePage() {
                         ) : isCheckedIn ? (
                             <Button
                                 onClick={() =>
-                                    checkOut.mutate(undefined, {
+                                    checkOut.mutate({}, {
                                         onSuccess: () => toast.success(t('attendance.checkOut')),
                                     })
                                 }
                                 loading={checkOut.isPending}
                             >
                                 <LogOut className="size-4" /> {t('attendance.checkOut')}
+                                <span className="ms-1.5 text-xs tabular-nums opacity-90">{liveTimer}</span>
                             </Button>
                         ) : (
                             <Button
                                 onClick={() =>
-                                    checkIn.mutate(undefined, {
+                                    checkIn.mutate({}, {
                                         onSuccess: () => toast.success(t('attendance.checkIn')),
                                     })
                                 }
                                 loading={checkIn.isPending}
                             >
                                 <LogIn className="size-4" /> {t('attendance.checkIn')}
+                                <span className="ms-1.5 text-xs tabular-nums opacity-90">{liveTimer}</span>
                             </Button>
                         )}
                     </div>
@@ -542,4 +546,26 @@ function Legend({ swatch, label, value }: { swatch: string; label: string; value
             {label} <span className="font-semibold tabular-figures text-foreground">{value}</span>
         </span>
     )
+}
+
+/** Ticks every second so the check-in / check-out button can show a live
+ *  H:MM:SS timer. When `endIso` is set, the duration is frozen at end−start;
+ *  when only `startIso` is set, it counts up from now. */
+function useLiveDuration(startIso: string | null | undefined, endIso: string | null | undefined): string {
+    const [now, setNow] = useState(() => Date.now())
+    const running = !!startIso && !endIso
+    useEffect(() => {
+        if (!running) return
+        const id = setInterval(() => setNow(Date.now()), 1000)
+        return () => clearInterval(id)
+    }, [running])
+    if (!startIso) return '0:00:00'
+    const startMs = Date.parse(startIso)
+    if (Number.isNaN(startMs)) return '0:00:00'
+    const endMs = endIso ? Date.parse(endIso) : now
+    const secs = Math.max(0, Math.floor((endMs - startMs) / 1000))
+    const h = Math.floor(secs / 3600)
+    const m = Math.floor((secs % 3600) / 60)
+    const s = secs % 60
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
