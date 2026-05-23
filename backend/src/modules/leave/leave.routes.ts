@@ -67,6 +67,19 @@ export default async function (fastify: any): Promise<void> {
         }
         const leave = await createLeaveRequest(request.user.tenantId, body as never)
 
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'leave',
+            entityId: (leave as { id: string }).id,
+            action: 'create',
+            metadata: { leaveType: body.leaveType, startDate: body.startDate, endDate: body.endDate },
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+
         // Notify HR managers, super admins, and the employee's dept_head (fire-and-forget)
         ;(async () => {
             try {
