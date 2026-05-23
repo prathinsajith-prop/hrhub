@@ -135,22 +135,28 @@ export async function initiateExit(tenantId: string, body: {
     deductions?: number
 }) {
     const deductions = Number(body.deductions ?? 0)
-    const settlement = await calculateSettlement(tenantId, body.employeeId, body.exitDate, body.exitType, deductions)
+    // Settlement + offboarding-settings + employee.reportingTo are all
+    // independent reads — run them concurrently so the create path waits
+    // for the slowest one rather than serializing.
+    const [settlement, offboardingSettings, empRow] = await Promise.all([
+        calculateSettlement(tenantId, body.employeeId, body.exitDate, body.exitType, deductions),
+        getOffboardingSettings(tenantId).catch(() => null),
+        db.select({ reportingTo: employees.reportingTo }).from(employees)
+            .where(and(eq(employees.id, body.employeeId), eq(employees.tenantId, tenantId)))
+            .then(rows => rows[0] ?? null),
+    ])
 
     // Resolve default notice period from org Offboarding Flow settings when
     // the caller didn't supply one. The flow can disable notice period
     // entirely; in that case we still record 0 to satisfy NOT NULL.
     let resolvedNotice = body.noticePeriodDays
     if (resolvedNotice == null) {
-        try {
-            const settings = await getOffboardingSettings(tenantId)
-            if (settings.noticePeriodEnabled) {
-                const v = settings.noticePeriodValue ?? 30
-                resolvedNotice = settings.noticePeriodUnit === 'months' ? v * 30 : v
-            } else {
-                resolvedNotice = 0
-            }
-        } catch {
+        if (offboardingSettings?.noticePeriodEnabled) {
+            const v = offboardingSettings.noticePeriodValue ?? 30
+            resolvedNotice = offboardingSettings.noticePeriodUnit === 'months' ? v * 30 : v
+        } else if (offboardingSettings) {
+            resolvedNotice = 0
+        } else {
             resolvedNotice = 30
         }
     }
@@ -173,15 +179,23 @@ export async function initiateExit(tenantId: string, body: {
 
     // Auto-instantiate clearance items + fire on_request_added workflows. Both
     // are best-effort: any failure here must not block exit creation, so we
-    // swallow errors with a warn-level log.
+    // swallow errors with a warn-level log. The pre-fetched settings is
+    // passed through so neither call re-queries the row.
     try {
-        const [emp] = await db.select({ reportingTo: employees.reportingTo }).from(employees)
-            .where(and(eq(employees.id, body.employeeId), eq(employees.tenantId, tenantId)))
-        await instantiateClearancesForExit(tenantId, req.id, body.lastWorkingDay, emp?.reportingTo ?? null)
+        await instantiateClearancesForExit(
+            tenantId,
+            req.id,
+            body.lastWorkingDay,
+            empRow?.reportingTo ?? null,
+            offboardingSettings ?? undefined,
+        )
     } catch (err) {
         log.warn({ err: err instanceof Error ? err.message : String(err), exitId: req.id }, 'failed to instantiate clearance items')
     }
-    fireWorkflows(tenantId, 'on_request_added', { exitRequestId: req.id }).catch((err) => {
+    fireWorkflows(tenantId, 'on_request_added', {
+        exitRequestId: req.id,
+        prefetchedSettings: offboardingSettings ?? undefined,
+    }).catch((err) => {
         log.warn({ err: err instanceof Error ? err.message : String(err), exitId: req.id }, 'on_request_added workflow firing failed')
     })
 

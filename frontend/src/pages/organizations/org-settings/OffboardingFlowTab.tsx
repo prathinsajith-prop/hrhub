@@ -576,6 +576,12 @@ function ClearanceDialog({ open, onOpenChange, editing }: { open: boolean; onOpe
     const create = useCreateClearance()
     const update = useUpdateClearance()
     const usersQ = useTenantUsers()
+    // Used to warn admins when they pick "HR partner" as owner but haven't
+    // actually nominated any HR partner users in Preferences. Without that
+    // list, the clearance instance lands with ownerUserId=NULL at runtime
+    // and only HR can act on it.
+    const settingsQ = useOffboardingSettings()
+    const hrPartnerCount = settingsQ.data?.hrPartnerUserIds.length ?? 0
     const isEdit = !!editing
 
     const [name, setName] = useState('')
@@ -653,6 +659,21 @@ function ClearanceDialog({ open, onOpenChange, editing }: { open: boolean; onOpe
                                     <SelectItem value="specific_user">{t('orgSettings.offboardingFlow.clearances.ownerSpecificUser')}</SelectItem>
                                 </SelectContent>
                             </Select>
+                            {/* Owner-resolution warnings — surface the cases
+                                where instantiateClearancesForExit() would
+                                land the clearance with ownerUserId=NULL. */}
+                            {ownerType === 'hr_partner' && hrPartnerCount === 0 && (
+                                <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1.5 flex items-start gap-1.5">
+                                    <span className="size-3.5 rounded-full bg-amber-200 dark:bg-amber-950 text-amber-800 dark:text-amber-200 flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5">!</span>
+                                    {t('orgSettings.offboardingFlow.clearances.noHrPartnerWarning', { defaultValue: 'No HR partner is configured under Preferences. New exit requests will create this clearance with no assigned owner — only HR can complete it.' })}
+                                </p>
+                            )}
+                            {ownerType === 'reporting_manager' && (
+                                <p className="text-[11px] text-muted-foreground mt-1.5 flex items-start gap-1.5">
+                                    <span className="size-3.5 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5">i</span>
+                                    {t('orgSettings.offboardingFlow.clearances.reportingManagerNote', { defaultValue: "Resolves at runtime to the exiting employee's reporting manager. Employees with no reporting manager will get an unowned clearance — HR can reassign." })}
+                                </p>
+                            )}
                         </div>
                         {ownerType === 'specific_user' && (
                             <div>

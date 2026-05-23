@@ -331,6 +331,23 @@ export function useUpdateClearanceItem(exitId: string) {
     })
 }
 
+/**
+ * Add an ad-hoc clearance item to an in-flight exit. HR-only on the server
+ * (admin auth) — surfaced as the "Add item" affordance in the Clearance panel.
+ */
+export function useAddClearanceItem(exitId: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (body: { name: string; description?: string | null; ownerUserId?: string | null; startDate?: string | null; dueDate?: string | null }) =>
+            api.post<{ data: ExitClearanceItem }>(`/exit/${exitId}/clearances`, body).then(r => r.data),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['exit', exitId, 'clearances'] })
+            // Also invalidate the list view so the progress badge updates.
+            qc.invalidateQueries({ queryKey: ['exit'] })
+        },
+    })
+}
+
 // ─── Per-exit interview responses ───────────────────────────────────────────
 
 export function useExitInterviewResponses(exitId: string | null | undefined) {

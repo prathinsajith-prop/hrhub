@@ -368,6 +368,32 @@ export async function deleteWorkflow(tenantId: string, id: string) {
 // ─── Runtime helpers (called by exit module) ────────────────────────────────
 
 /**
+ * Pure owner-resolution helper (exported for unit testing). Maps a clearance
+ * template's ownerType to a concrete `users.id` given the runtime context.
+ * Returns `null` when no owner can be resolved — callers must handle that
+ * downstream (route layer rejects non-HR mutations on null-owner items).
+ */
+export function resolveClearanceOwnerId(
+    template: { ownerType: 'hr_partner' | 'reporting_manager' | 'specific_user'; ownerUserId: string | null },
+    ctx: { firstHrPartner: string | null; managerUserId: string | null },
+): string | null {
+    if (template.ownerType === 'specific_user') return template.ownerUserId
+    if (template.ownerType === 'reporting_manager') return ctx.managerUserId
+    return ctx.firstHrPartner
+}
+
+/**
+ * Pure date helper (exported for unit testing). Returns ISO `YYYY-MM-DD` for
+ * `relievingDate − offsetDays`. Offsets are clamped to non-negative so a
+ * fat-fingered config doesn't push dates into the future.
+ */
+export function subtractClearanceOffset(relievingDate: string, offsetDays: number): string {
+    const d = new Date(relievingDate)
+    d.setDate(d.getDate() - Math.max(0, offsetDays))
+    return d.toISOString().slice(0, 10)
+}
+
+/**
  * Materialise the tenant's clearance templates into concrete `exit_clearance_items`
  * rows for a freshly-created exit request. Owner resolution rules:
  *   - hr_partner       → first HR-partner user ID from settings (or null)
@@ -375,26 +401,24 @@ export async function deleteWorkflow(tenantId: string, id: string) {
  *   - specific_user    → template.ownerUserId
  *
  * Dates: startOffsetDays / endOffsetDays are subtracted from the relieving date.
+ *
+ * `prefetchedSettings` lets the caller pass an already-fetched settings row
+ * to avoid an extra DB hit during exit creation — see initiateExit() in
+ * the exit module.
  */
 export async function instantiateClearancesForExit(
     tenantId: string,
     exitRequestId: string,
     relievingDate: string,
     reportingToEmployeeId: string | null,
+    prefetchedSettings?: Awaited<ReturnType<typeof getSettings>>,
 ): Promise<void> {
     const [settings, templates] = await Promise.all([
-        getSettings(tenantId),
+        prefetchedSettings ? Promise.resolve(prefetchedSettings) : getSettings(tenantId),
         listClearanceTemplates(tenantId),
     ])
     const active = templates.filter(t => t.isActive)
     if (active.length === 0) return
-
-    const reliefDate = new Date(relievingDate)
-    const subtractDays = (d: Date, n: number) => {
-        const out = new Date(d)
-        out.setDate(out.getDate() - n)
-        return out.toISOString().slice(0, 10)
-    }
 
     // Resolve owner user IDs in one pass
     const firstHrPartner = settings.hrPartnerUserIds?.[0] ?? null
@@ -407,23 +431,17 @@ export async function instantiateClearancesForExit(
         managerUserId = u?.id ?? null
     }
 
-    const rows = active.map((tpl, i) => {
-        const ownerUserId =
-            tpl.ownerType === 'specific_user' ? tpl.ownerUserId :
-            tpl.ownerType === 'reporting_manager' ? managerUserId :
-            firstHrPartner
-        return {
-            tenantId,
-            exitRequestId,
-            templateId: tpl.id,
-            name: tpl.name,
-            description: tpl.description,
-            ownerUserId,
-            startDate: subtractDays(reliefDate, Math.max(0, tpl.startOffsetDays)),
-            dueDate: subtractDays(reliefDate, Math.max(0, tpl.endOffsetDays)),
-            position: tpl.position ?? i,
-        }
-    })
+    const rows = active.map((tpl, i) => ({
+        tenantId,
+        exitRequestId,
+        templateId: tpl.id,
+        name: tpl.name,
+        description: tpl.description,
+        ownerUserId: resolveClearanceOwnerId(tpl, { firstHrPartner, managerUserId }),
+        startDate: subtractClearanceOffset(relievingDate, tpl.startOffsetDays),
+        dueDate: subtractClearanceOffset(relievingDate, tpl.endOffsetDays),
+        position: tpl.position ?? i,
+    }))
 
     await db.insert(exitClearanceItems).values(rows)
 }
@@ -481,6 +499,44 @@ export async function getExitApprovalReadiness(
         interviewSubmitted: responses.length > 0,
         documentsConfigured: documents.length,
     }
+}
+
+/**
+ * Add an ad-hoc clearance item to an in-flight exit. Used when HR needs to
+ * tack on a check that wasn't in the standard template set (one-off
+ * equipment recovery, regulatory sign-off, etc.). The new item is placed at
+ * the end of the list and inherits a NULL owner unless the caller specifies
+ * one — HR can reassign from the detail panel.
+ */
+export async function addClearanceItem(
+    tenantId: string,
+    exitRequestId: string,
+    body: {
+        name: string
+        description?: string | null
+        ownerUserId?: string | null
+        startDate?: string | null
+        dueDate?: string | null
+    },
+) {
+    const existing = await db.select({ position: exitClearanceItems.position }).from(exitClearanceItems)
+        .where(and(
+            eq(exitClearanceItems.tenantId, tenantId),
+            eq(exitClearanceItems.exitRequestId, exitRequestId),
+        ))
+    const nextPos = existing.reduce((m, r) => Math.max(m, r.position ?? 0), -1) + 1
+
+    const [row] = await db.insert(exitClearanceItems).values({
+        tenantId,
+        exitRequestId,
+        name: body.name,
+        description: body.description ?? null,
+        ownerUserId: body.ownerUserId ?? null,
+        startDate: body.startDate ?? null,
+        dueDate: body.dueDate ?? null,
+        position: nextPos,
+    }).returning()
+    return row
 }
 
 export async function updateClearanceItem(
@@ -542,13 +598,31 @@ export async function submitInterviewResponses(
     answers: Array<{ questionId: string; questionSnapshot: string; answerText?: string; answerValue?: unknown }>,
 ) {
     if (answers.length === 0) return []
+    // Filter answers to questionIds that belong to THIS tenant. Without this
+    // check a tenant-A caller could post a tenant-B question UUID and the
+    // foreign key (`ON DELETE SET NULL`) would silently accept it — the
+    // resulting row would carry tenantId=A but questionId=B, a cross-tenant
+    // data confusion. Belt and braces alongside the route-level exit-request
+    // tenant check.
+    const questionIds = Array.from(new Set(answers.map(a => a.questionId)))
+    const ownedQuestions = await db
+        .select({ id: offboardingInterviewQuestions.id })
+        .from(offboardingInterviewQuestions)
+        .where(and(
+            eq(offboardingInterviewQuestions.tenantId, tenantId),
+            inArray(offboardingInterviewQuestions.id, questionIds),
+        ))
+    const ownedSet = new Set(ownedQuestions.map(q => q.id))
+    const filtered = answers.filter(a => ownedSet.has(a.questionId))
+    if (filtered.length === 0) return []
+
     // Wipe prior answers then re-insert — simpler than reconciling and the
     // unique (exit_request_id, question_id) constraint would block re-submits.
     await db.delete(exitInterviewResponses).where(and(
         eq(exitInterviewResponses.tenantId, tenantId),
         eq(exitInterviewResponses.exitRequestId, exitRequestId),
     ))
-    const rows = await db.insert(exitInterviewResponses).values(answers.map(a => ({
+    const rows = await db.insert(exitInterviewResponses).values(filtered.map(a => ({
         tenantId,
         exitRequestId,
         questionId: a.questionId,
@@ -563,6 +637,9 @@ export async function submitInterviewResponses(
 
 interface WorkflowContext {
     exitRequestId: string
+    /** Pass-through to avoid an extra `getSettings()` query during exit
+     *  creation. Optional — falls back to a fresh read when omitted. */
+    prefetchedSettings?: Awaited<ReturnType<typeof getSettings>>
 }
 
 /**
@@ -577,35 +654,38 @@ export async function fireWorkflows(
     trigger: WorkflowTrigger,
     ctx: WorkflowContext,
 ): Promise<void> {
-    const list = await db.select().from(offboardingWorkflows).where(and(
-        eq(offboardingWorkflows.tenantId, tenantId),
-        eq(offboardingWorkflows.trigger, trigger),
-        eq(offboardingWorkflows.enabled, true),
-    ))
+    // Look up workflows + settings + exit context concurrently — they don't
+    // depend on each other. Settings is reused if the caller already loaded
+    // it (saving one round trip per fireWorkflows() call).
+    const [list, settings, ctxRow] = await Promise.all([
+        db.select().from(offboardingWorkflows).where(and(
+            eq(offboardingWorkflows.tenantId, tenantId),
+            eq(offboardingWorkflows.trigger, trigger),
+            eq(offboardingWorkflows.enabled, true),
+        )),
+        ctx.prefetchedSettings
+            ? Promise.resolve(ctx.prefetchedSettings)
+            : getSettings(tenantId),
+        db.select({
+            exitId: exitRequests.id,
+            employeeId: exitRequests.employeeId,
+            exitDate: exitRequests.exitDate,
+            lastWorkingDay: exitRequests.lastWorkingDay,
+            exitType: exitRequests.exitType,
+            firstName: employees.firstName,
+            lastName: employees.lastName,
+            email: employees.email,
+            workEmail: employees.workEmail,
+            employeeNo: employees.employeeNo,
+            reportingTo: employees.reportingTo,
+        }).from(exitRequests)
+            .leftJoin(employees, eq(employees.id, exitRequests.employeeId))
+            .where(and(eq(exitRequests.id, ctx.exitRequestId), eq(exitRequests.tenantId, tenantId)))
+            .limit(1)
+            .then(rows => rows[0]),
+    ])
     if (list.length === 0) return
-
-    // Fetch the exit + employee + manager context once, share across workflows
-    const [ctxRow] = await db.select({
-        exitId: exitRequests.id,
-        employeeId: exitRequests.employeeId,
-        exitDate: exitRequests.exitDate,
-        lastWorkingDay: exitRequests.lastWorkingDay,
-        exitType: exitRequests.exitType,
-        firstName: employees.firstName,
-        lastName: employees.lastName,
-        email: employees.email,
-        workEmail: employees.workEmail,
-        employeeNo: employees.employeeNo,
-        reportingTo: employees.reportingTo,
-    }).from(exitRequests)
-        .leftJoin(employees, eq(employees.id, exitRequests.employeeId))
-        .where(and(eq(exitRequests.id, ctx.exitRequestId), eq(exitRequests.tenantId, tenantId)))
-        .limit(1)
-
     if (!ctxRow) return
-
-    // Resolve manager + HR-partner emails once
-    const settings = await getSettings(tenantId)
     let managerEmail: string | null = null
     let managerUserId: string | null = null
     if (ctxRow.reportingTo) {

@@ -428,7 +428,12 @@ export async function attendanceRoutes(fastify: any) {
     // Body: { employeeId, date, inTime: 'HH:MM', outTime?: 'HH:MM',
     //   inDayOffset?: 0|1, outDayOffset?: 0|1, inNotes?, outNotes?,
     //   locationName?, latitude?, longitude? }
-    fastify.post('/attendance/punches', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
+    //
+    // HR/super_admin only — the route accepts arbitrary `date` + `inDayOffset`
+    // so a non-elevated caller could backfill historical attendance for
+    // themselves. Gating to HR matches the rest of the manual-entry surface
+    // (PATCH /attendance, biometric import).
+    fastify.post('/attendance/punches', { ...adminAuth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const body = (request.body ?? {}) as {
             employeeId?: string
             date?: string
@@ -519,7 +524,10 @@ export async function attendanceRoutes(fastify: any) {
     })
 
     // DELETE /api/v1/attendance/punches/:id — undo a stray clock action.
-    fastify.delete('/attendance/punches/:id', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
+    //
+    // HR/super_admin only — without this gate, employees could remove their
+    // own punches and rewrite attendance history, defeating audit integrity.
+    fastify.delete('/attendance/punches/:id', { ...adminAuth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         const role = request.user.role
         const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)

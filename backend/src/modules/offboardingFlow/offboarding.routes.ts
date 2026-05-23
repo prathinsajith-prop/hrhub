@@ -27,9 +27,11 @@ import {
     deleteWorkflow,
     listClearancesForExit,
     updateClearanceItem,
+    addClearanceItem,
     listInterviewResponses,
     submitInterviewResponses,
 } from './offboarding.service.js'
+import { getExitRequest } from '../exit/exit.service.js'
 
 // ─── Validation schemas ─────────────────────────────────────────────────────
 
@@ -95,6 +97,14 @@ const workflowSchema = z.object({
 const clearanceItemPatchSchema = z.object({
     status: z.enum(['pending', 'in_progress', 'completed', 'waived']).optional(),
     notes: z.string().optional(),
+})
+
+const clearanceItemAddSchema = z.object({
+    name: z.string().min(1).max(200),
+    description: z.string().nullable().optional(),
+    ownerUserId: z.string().uuid().nullable().optional(),
+    startDate: z.string().nullable().optional(),
+    dueDate: z.string().nullable().optional(),
 })
 
 const responseSubmitSchema = z.object({
@@ -239,11 +249,35 @@ export async function offboardingFlowRoutes(fastify: any) {
     })
 
     // ── Per-exit clearance items ────────────────────────────────────────────
-    // Reachable by HR and by the assigned owner (the route checks owner-id
-    // server-side to keep clearance updates correctly scoped).
-    fastify.get('/exit/:exitId/clearances', { ...auth, schema: { tags: TAG } }, async (request: any) => {
-        const data = await listClearancesForExit(request.user.tenantId, request.params.exitId)
+    // Reachable by:
+    //   - HR / super_admin  (see every item)
+    //   - dept_head         (see every item — needed for the team view)
+    //   - clearance owner   (see only items they own — needed to action them)
+    //   - exit subject      (see only their own exit's items)
+    // Tenant scoping is enforced by the service.
+    fastify.get('/exit/:exitId/clearances', { ...auth, schema: { tags: TAG } }, async (request: any, reply: any) => {
+        const exit = await getExitRequest(request.user.tenantId, request.params.exitId)
+        if (!exit) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found' })
+        const role = request.user.role
+        const isElevated = ['hr_manager', 'super_admin', 'dept_head'].includes(role)
+        const isExitSubject = exit.employeeId === request.user.employeeId
+        const all = await listClearancesForExit(request.user.tenantId, request.params.exitId)
+        const data = isElevated || isExitSubject
+            ? all
+            : all.filter((i) => i.ownerUserId === request.user.id)
         return { data }
+    })
+
+    // Ad-hoc clearance item — HR-only. Used when an exit needs a one-off
+    // check that wasn't part of the standard template set.
+    fastify.post('/exit/:exitId/clearances', { ...adminAuth, schema: { tags: TAG } }, async (request: any, reply: any) => {
+        const parse = clearanceItemAddSchema.safeParse(request.body)
+        if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
+        const exit = await getExitRequest(request.user.tenantId, request.params.exitId)
+        if (!exit) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found' })
+        const data = await addClearanceItem(request.user.tenantId, request.params.exitId, parse.data)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_clearance_item', entityId: data.id, entityName: data.name, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        return reply.code(201).send({ data })
     })
 
     fastify.patch('/exit/:exitId/clearances/:itemId', { ...auth, schema: { tags: TAG } }, async (request: any, reply: any) => {
@@ -269,7 +303,17 @@ export async function offboardingFlowRoutes(fastify: any) {
     })
 
     // ── Per-exit interview responses ────────────────────────────────────────
-    fastify.get('/exit/:exitId/interview-responses', { ...auth, schema: { tags: TAG } }, async (request: any) => {
+    // Exit-interview answers are confidential by design — only HR and the
+    // exit subject themselves can read them. POST is for the leaver to fill
+    // in (HR may also submit on the leaver's behalf).
+    fastify.get('/exit/:exitId/interview-responses', { ...auth, schema: { tags: TAG } }, async (request: any, reply: any) => {
+        const exit = await getExitRequest(request.user.tenantId, request.params.exitId)
+        if (!exit) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found' })
+        const isElevated = ['hr_manager', 'super_admin'].includes(request.user.role)
+        const isExitSubject = exit.employeeId === request.user.employeeId
+        if (!isElevated && !isExitSubject) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Not authorized to view this exit interview.' })
+        }
         const data = await listInterviewResponses(request.user.tenantId, request.params.exitId)
         return { data }
     })
@@ -277,6 +321,13 @@ export async function offboardingFlowRoutes(fastify: any) {
     fastify.post('/exit/:exitId/interview-responses', { ...auth, schema: { tags: TAG } }, async (request: any, reply: any) => {
         const parse = responseSubmitSchema.safeParse(request.body)
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
+        const exit = await getExitRequest(request.user.tenantId, request.params.exitId)
+        if (!exit) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found' })
+        const isElevated = ['hr_manager', 'super_admin'].includes(request.user.role)
+        const isExitSubject = exit.employeeId === request.user.employeeId
+        if (!isElevated && !isExitSubject) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Not authorized to submit this exit interview.' })
+        }
         const data = await submitInterviewResponses(request.user.tenantId, request.params.exitId, parse.data.answers)
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_interview_response', entityId: request.params.exitId, entityName: 'Exit interview', action: 'submit', metadata: { count: data.length }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(201).send({ data })

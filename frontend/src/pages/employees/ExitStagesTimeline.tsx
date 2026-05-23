@@ -65,7 +65,17 @@ export function deriveStages(e: ExitRequest): StageInfo[] {
     return stages
 }
 
-export function ExitStagesTimeline({ exit, compact }: { exit: ExitRequest; compact?: boolean }) {
+export function ExitStagesTimeline({
+    exit,
+    compact,
+    onStageClick,
+}: {
+    exit: ExitRequest
+    compact?: boolean
+    /** When set, each stage becomes a button that calls back with its key.
+     *  Used by the detail dialog to scroll to the corresponding section. */
+    onStageClick?: (stage: StageInfo['key']) => void
+}) {
     const stages = deriveStages(exit)
     return (
         <div className={cn(
@@ -76,7 +86,7 @@ export function ExitStagesTimeline({ exit, compact }: { exit: ExitRequest; compa
                 const isLast = idx === stages.length - 1
                 return (
                     <div key={s.key} className="flex-1 flex items-center min-w-0">
-                        <StageNode info={s} compact={compact} />
+                        <StageNode info={s} compact={compact} onClick={onStageClick ? () => onStageClick(s.key) : undefined} />
                         {!isLast && (
                             <span className={cn(
                                 'flex-1 h-px',
@@ -90,7 +100,7 @@ export function ExitStagesTimeline({ exit, compact }: { exit: ExitRequest; compa
     )
 }
 
-function StageNode({ info, compact }: { info: StageInfo; compact?: boolean }) {
+function StageNode({ info, compact, onClick }: { info: StageInfo; compact?: boolean; onClick?: () => void }) {
     const tone =
         info.state === 'done'
             ? 'bg-emerald-500 text-white border-emerald-500'
@@ -98,8 +108,8 @@ function StageNode({ info, compact }: { info: StageInfo; compact?: boolean }) {
                 ? 'bg-primary text-primary-foreground border-primary ring-4 ring-primary/15'
                 : 'bg-background text-muted-foreground border-border'
 
-    return (
-        <div className="flex flex-col items-center gap-1 shrink-0">
+    const inner = (
+        <>
             <div
                 className={cn(
                     'rounded-full border-2 flex items-center justify-center transition-colors',
@@ -120,8 +130,22 @@ function StageNode({ info, compact }: { info: StageInfo; compact?: boolean }) {
                     {info.label}
                 </span>
             )}
-        </div>
+        </>
     )
+
+    if (onClick) {
+        return (
+            <button
+                type="button"
+                onClick={onClick}
+                className="flex flex-col items-center gap-1 shrink-0 cursor-pointer rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 hover:opacity-80 transition-opacity"
+                aria-label={`Jump to ${info.label} section`}
+            >
+                {inner}
+            </button>
+        )
+    }
+    return <div className="flex flex-col items-center gap-1 shrink-0">{inner}</div>
 }
 
 /**
