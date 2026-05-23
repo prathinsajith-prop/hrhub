@@ -57,6 +57,9 @@ interface WizardForm {
     reason: string
     notes: string
     deductions: number
+    /** True once the user picks a Last Working Day manually — stops the
+     *  auto-compute (exit date + notice) from overwriting their choice. */
+    lwdManuallySet: boolean
 }
 
 const EMPTY: WizardForm = {
@@ -68,6 +71,16 @@ const EMPTY: WizardForm = {
     reason: '',
     notes: '',
     deductions: 0,
+    lwdManuallySet: false,
+}
+
+/** Returns YYYY-MM-DD for `start + days`, or '' if start is empty or invalid. */
+function addDaysIso(start: string, days: number): string {
+    if (!start || !Number.isFinite(days)) return ''
+    const d = new Date(start)
+    if (Number.isNaN(d.getTime())) return ''
+    d.setDate(d.getDate() + Math.max(0, days))
+    return d.toISOString().slice(0, 10)
 }
 
 type StepKey = 'employee' | 'dates' | 'process' | 'notes' | 'settlement'
@@ -158,6 +171,9 @@ export function InitiateExitWizard({
 
     function set<K extends keyof WizardForm>(key: K, value: WizardForm[K]) {
         setForm((prev) => ({ ...prev, [key]: value }))
+    }
+    function setMany(patch: Partial<WizardForm>) {
+        setForm((prev) => ({ ...prev, ...patch }))
     }
 
     function goNext() {
@@ -268,7 +284,7 @@ export function InitiateExitWizard({
                         <EmployeeStep form={form} set={set} touched={visited.employee} />
                     )}
                     {currentStep.key === 'dates' && (
-                        <DatesStep form={form} set={set} touched={visited.dates} configuredNoticeDays={configuredNoticeDays} noticeEnabled={!!offboardingSettings.data?.noticePeriodEnabled} />
+                        <DatesStep form={form} set={set} setMany={setMany} touched={visited.dates} configuredNoticeDays={configuredNoticeDays} noticeEnabled={!!offboardingSettings.data?.noticePeriodEnabled} />
                     )}
                     {currentStep.key === 'process' && (
                         <ProcessStep />
@@ -347,29 +363,88 @@ function EmployeeStep({ form, set, touched }: { form: WizardForm; set: <K extend
 function DatesStep({
     form,
     set,
+    setMany,
     touched,
     configuredNoticeDays,
     noticeEnabled,
 }: {
     form: WizardForm
     set: <K extends keyof WizardForm>(k: K, v: WizardForm[K]) => void
+    setMany: (patch: Partial<WizardForm>) => void
     touched: boolean
     configuredNoticeDays: number
     noticeEnabled: boolean
 }) {
     const exitMissing = touched && !form.exitDate
     const lwdMissing = touched && !form.lastWorkingDay
+
+    // Auto-compute LWD = exitDate + noticePeriodDays whenever the inputs
+    // change, unless the user has manually overridden the LWD field. The
+    // override stops as soon as they pick a date directly; clearing the
+    // override re-enables auto-compute.
+    function changeExitDate(v: string) {
+        if (form.lwdManuallySet) {
+            set('exitDate', v)
+            return
+        }
+        setMany({ exitDate: v, lastWorkingDay: addDaysIso(v, form.noticePeriodDays) })
+    }
+    function changeNotice(n: number) {
+        if (form.lwdManuallySet || !form.exitDate) {
+            set('noticePeriodDays', n)
+            return
+        }
+        setMany({ noticePeriodDays: n, lastWorkingDay: addDaysIso(form.exitDate, n) })
+    }
+    function changeLwd(v: string) {
+        // User picked a date directly → freeze it. They can clear and
+        // re-enable auto-compute via the small "Reset" link below.
+        setMany({ lastWorkingDay: v, lwdManuallySet: !!v })
+    }
+    function resetLwdToComputed() {
+        setMany({
+            lastWorkingDay: addDaysIso(form.exitDate, form.noticePeriodDays),
+            lwdManuallySet: false,
+        })
+    }
+
+    const computed = addDaysIso(form.exitDate, form.noticePeriodDays)
+    const lwdMatchesComputed = form.lastWorkingDay === computed && !!computed
+
     return (
         <div className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                     <Label required>Exit Date</Label>
-                    <DatePicker value={form.exitDate} onChange={(v) => set('exitDate', v)} />
+                    <DatePicker value={form.exitDate} onChange={changeExitDate} />
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                        Day the resignation / termination takes effect.
+                    </p>
                     {exitMissing && <p className="text-[11px] text-rose-600">Required.</p>}
                 </div>
                 <div className="space-y-1.5">
-                    <Label required>Last Working Day</Label>
-                    <DatePicker value={form.lastWorkingDay} min={form.exitDate || undefined} onChange={(v) => set('lastWorkingDay', v)} />
+                    <div className="flex items-center justify-between">
+                        <Label required>Last Working Day</Label>
+                        {form.lwdManuallySet && form.exitDate && form.noticePeriodDays > 0 && (
+                            <button
+                                type="button"
+                                onClick={resetLwdToComputed}
+                                className="text-[10px] text-primary hover:underline"
+                            >
+                                Reset to notice period
+                            </button>
+                        )}
+                    </div>
+                    <DatePicker value={form.lastWorkingDay} min={form.exitDate || undefined} onChange={changeLwd} />
+                    {lwdMatchesComputed && !form.lwdManuallySet ? (
+                        <p className="text-[10px] text-muted-foreground leading-tight">
+                            Auto-computed from exit date + notice period.
+                        </p>
+                    ) : form.lwdManuallySet ? (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-tight">
+                            Manually set — won't auto-update from notice period.
+                        </p>
+                    ) : null}
                     {lwdMissing && <p className="text-[11px] text-rose-600">Required.</p>}
                 </div>
             </div>
@@ -378,7 +453,7 @@ function DatesStep({
                 <NumericInput
                     decimal={false}
                     value={form.noticePeriodDays}
-                    onChange={(e) => set('noticePeriodDays', Number(e.target.value) || 0)}
+                    onChange={(e) => changeNotice(Number(e.target.value) || 0)}
                 />
                 {form.noticePeriodDays === configuredNoticeDays && noticeEnabled && (
                     <p className="text-[10px] text-muted-foreground leading-tight">

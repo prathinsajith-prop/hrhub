@@ -159,7 +159,7 @@ export function OffboardingFlowTab() {
                 </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)] 3xl:grid-cols-[300px_minmax(0,1fr)]">
                 <StepperRail steps={STEPS} active={step} statuses={statuses} onChange={setStep} />
                 <div className="min-w-0">
                     {step === 'preferences' && <PreferencesStep />}
@@ -518,7 +518,8 @@ function ClearancesStep() {
                 <EmptyState text={t('orgSettings.offboardingFlow.clearances.empty')} />
             ) : (
                 <div className="overflow-hidden rounded-lg border">
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-sm">
                         <thead className="bg-muted/30">
                             <tr>
                                 <th className="px-4 py-2.5 text-start font-medium text-muted-foreground">{t('orgSettings.offboardingFlow.clearances.colName')}</th>
@@ -551,6 +552,7 @@ function ClearancesStep() {
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             )}
             <ClearanceDialog open={open} onOpenChange={setOpen} editing={editing} />
@@ -690,7 +692,7 @@ function ClearanceDialog({ open, onOpenChange, editing }: { open: boolean; onOpe
                                 </Select>
                             </div>
                         )}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <Label className="text-sm font-medium">
                                     {t('orgSettings.offboardingFlow.clearances.startDate')} <span className="text-rose-500">*</span>
@@ -925,6 +927,18 @@ function SortableQuestionRow({
             <Badge variant="outline" className="text-[10px] uppercase shrink-0">
                 {questionTypeLabel(question.questionType, t)}
             </Badge>
+            {question.required && (
+                <Badge
+                    variant="secondary"
+                    className="text-[10px] shrink-0 bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200/60 dark:border-rose-900/40"
+                    title={t('orgSettings.offboardingFlow.interview.requiredHint', {
+                        defaultValue: 'Blocks exit approval until answered',
+                    })}
+                >
+                    <span className="size-1 rounded-full bg-rose-500 me-1" />
+                    {t('orgSettings.offboardingFlow.interview.required', { defaultValue: 'Required' })}
+                </Badge>
+            )}
             <span className="text-sm flex-1 min-w-0 truncate">{question.questionText}</span>
             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button variant="ghost" size="icon" onClick={onEdit} aria-label="Edit">
@@ -1005,7 +1019,7 @@ function QuestionDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
                             <Label>{t('orgSettings.offboardingFlow.interview.questionText')} <span className="text-rose-500">*</span></Label>
                             <Textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <Label>{t('orgSettings.offboardingFlow.interview.questionType')}</Label>
                                 <Select value={type} onValueChange={(v: QuestionType) => setType(v)}>
@@ -1020,10 +1034,26 @@ function QuestionDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <label className="flex items-center gap-2 cursor-pointer self-end pb-2">
-                                <Checkbox checked={required} onCheckedChange={(v) => setRequired(!!v)} />
-                                <span className="text-sm">{t('orgSettings.offboardingFlow.interview.required')}</span>
-                            </label>
+                        </div>
+                        <div className={cn(
+                            'flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5 transition-colors',
+                            required ? 'bg-rose-50/50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/40' : 'bg-muted/20',
+                        )}>
+                            <div className="min-w-0">
+                                <Label htmlFor="required-toggle" className="cursor-pointer text-sm font-medium">
+                                    {t('orgSettings.offboardingFlow.interview.required', { defaultValue: 'Mandatory question' })}
+                                </Label>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    {t('orgSettings.offboardingFlow.interview.requiredHint', {
+                                        defaultValue: 'Blocks exit approval until the employee answers this question.',
+                                    })}
+                                </p>
+                            </div>
+                            <Switch
+                                id="required-toggle"
+                                checked={required}
+                                onCheckedChange={setRequired}
+                            />
                         </div>
                         {needsOptions && (
                             <div>
@@ -1227,7 +1257,7 @@ function DocumentEditorDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-4xl 3xl:max-w-6xl">
                 <DialogHeader>
                     <div className="flex items-center justify-between gap-3 pe-8">
                         <DialogTitle className="flex items-center gap-2">
@@ -1494,7 +1524,7 @@ function WorkflowDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
                             <Label>{t('orgSettings.offboardingFlow.workflows.fieldName')} <span className="text-rose-500">*</span></Label>
                             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('orgSettings.offboardingFlow.workflows.fieldNamePh')} />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <Label>{t('orgSettings.offboardingFlow.workflows.trigger')}</Label>
                                 <Select value={trigger} onValueChange={(v: WorkflowTrigger) => setTrigger(v)}>

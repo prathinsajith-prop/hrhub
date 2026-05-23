@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { calculateSettlement, initiateExit, getExitRequests, getExitRequest, approveExit, rejectExit, markSettlementPaid } from './exit.service.js'
-import { getExitApprovalReadiness } from '../offboardingFlow/offboarding.service.js'
+import { calculateSettlement, initiateExit, getExitRequests, getExitRequest, approveExit, rejectExit, markSettlementPaid, getMyOpenExit } from './exit.service.js'
+import { getExitApprovalReadiness, listInterviewQuestions, listInterviewResponses, submitInterviewResponses } from '../offboardingFlow/offboarding.service.js'
+import { verifyExitInterviewToken } from '../../lib/exit-interview-tokens.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
 import { tenants } from '../../db/schema/index.js'
@@ -21,6 +22,35 @@ const initiateExitSchema = z.object({
 export async function exitRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
     const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')] }
+
+    // GET /api/v1/my-exit — the current employee's most recent non-rejected
+    // exit, or null if none exists. Drives the employee-portal exit-interview
+    // page + Home CTA. Auth-only (no role gate) because every authenticated
+    // user can read their own row.
+    fastify.get('/my-exit', { ...auth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
+        if (!request.user.employeeId) {
+            return reply.send({ data: null })
+        }
+        const data = await getMyOpenExit(request.user.tenantId, request.user.employeeId)
+        return reply.send({ data })
+    })
+
+    // GET /api/v1/my-exit/interview — questions catalog + the employee's own
+    // prior responses, bundled in one call so the portal page can render with
+    // a single round trip. Resolves the exitId from the user's own employeeId;
+    // returns 404 when no open exit exists.
+    fastify.get('/my-exit/interview', { ...auth, schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
+        if (!request.user.employeeId) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'No exit on file' })
+        }
+        const exit = await getMyOpenExit(request.user.tenantId, request.user.employeeId)
+        if (!exit) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'No exit on file' })
+        const [questions, responses] = await Promise.all([
+            listInterviewQuestions(request.user.tenantId),
+            listInterviewResponses(request.user.tenantId, exit.id),
+        ])
+        return reply.send({ data: { exit, questions: questions.filter(q => q.isActive), responses } })
+    })
 
     // GET /api/v1/exit/settlement-preview?employeeId=&exitDate=&exitType=&deductions=
     // Employees may only preview their own settlement; HR roles can preview any employee's.
@@ -142,5 +172,97 @@ export async function exitRoutes(fastify: any) {
         reply.header('Content-Type', 'text/csv; charset=utf-8')
         reply.header('Content-Disposition', `attachment; filename="exit-export-${dateStr}.csv"`)
         return reply.send(lines.join('\r\n'))
+    })
+
+    // ── Public token-validated routes ─────────────────────────────────────
+    // Lets HR send "complete your exit interview" emails with a one-click
+    // link. The token carries the tenant + exit + employee context — no JWT
+    // / session needed. Routes are intentionally outside `auth` and instead
+    // verify the signed token themselves.
+    //
+    // GET  /exit-interview/by-token/:token  → returns the bundle
+    // POST /exit-interview/by-token/:token  → submits answers
+
+    const tokenAnswersSchema = z.object({
+        answers: z.array(z.object({
+            questionId: z.string().uuid(),
+            questionSnapshot: z.string().min(1),
+            answerText: z.string().optional(),
+            answerValue: z.unknown().optional(),
+        })),
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function verifyOrReject(token: string, reply: any) {
+        const result = verifyExitInterviewToken(token)
+        if (result.ok === true) return result.payload
+        // result is the error variant here. Manual cast keeps tsc happy on
+        // configs that don't narrow on negated discriminants reliably.
+        const reason = (result as { ok: false; reason: string }).reason
+        const message = reason === 'expired'
+            ? 'This exit-interview link has expired. Please ask HR for a new one.'
+            : 'Invalid exit-interview link.'
+        reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message, reason })
+        return null
+    }
+
+    fastify.get('/exit-interview/by-token/:token', { schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
+        const payload = verifyOrReject(request.params.token, reply)
+        if (!payload) return
+        const exit = await getExitRequest(payload.tenantId, payload.exitRequestId)
+        if (!exit) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit not found.' })
+        // Defense in depth: the token carries the employeeId but we still
+        // verify the exit actually belongs to that employee (in case someone
+        // crafts a token with mismatched ids using a stolen secret).
+        if (exit.employeeId !== payload.employeeId) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Link does not match this exit.' })
+        }
+        const [questions, responses] = await Promise.all([
+            listInterviewQuestions(payload.tenantId),
+            listInterviewResponses(payload.tenantId, payload.exitRequestId),
+        ])
+        return reply.send({
+            data: {
+                exit: {
+                    id: exit.id,
+                    exitType: exit.exitType,
+                    exitDate: exit.exitDate,
+                    lastWorkingDay: exit.lastWorkingDay,
+                    employeeName: exit.employeeName,
+                    status: exit.status,
+                },
+                questions: questions.filter(q => q.isActive),
+                responses,
+            },
+        })
+    })
+
+    fastify.post('/exit-interview/by-token/:token', { schema: { tags: ['Exit'] } }, async (request: any, reply: any) => {
+        const payload = verifyOrReject(request.params.token, reply)
+        if (!payload) return
+        const parse = tokenAnswersSchema.safeParse(request.body)
+        if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
+        const exit = await getExitRequest(payload.tenantId, payload.exitRequestId)
+        if (!exit || exit.employeeId !== payload.employeeId) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Link does not match this exit.' })
+        }
+        const data = await submitInterviewResponses(payload.tenantId, payload.exitRequestId, parse.data.answers)
+        // No actor user in this flow (the employee signed in via the token,
+        // not via the user table) — log the activity attributed to the
+        // tenant level with a synthetic actor name.
+        recordActivity({
+            tenantId: payload.tenantId,
+            userId: null,
+            actorName: exit.employeeName ?? 'Exit subject',
+            actorRole: 'employee',
+            entityType: 'exit_interview_response',
+            entityId: payload.exitRequestId,
+            entityName: 'Exit interview (via link)',
+            action: 'submit',
+            metadata: { count: data.length, via: 'email-link' },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(201).send({ data })
     })
 }

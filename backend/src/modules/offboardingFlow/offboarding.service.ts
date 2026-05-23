@@ -24,6 +24,7 @@ import { ServiceError } from '../../lib/errors.js'
 import { createNotification } from '../notifications/notifications.service.js'
 import { sendEmail } from '../../plugins/email.js'
 import { log } from '../../lib/logger.js'
+import { signExitInterviewToken, buildExitInterviewLink } from '../../lib/exit-interview-tokens.js'
 import { DEFAULT_INTERVIEW_QUESTIONS, DEFAULT_EXIT_DOCUMENTS } from './offboarding.defaults.js'
 
 // ─── Type aliases ───────────────────────────────────────────────────────────
@@ -460,21 +461,28 @@ export async function listClearancesForExit(tenantId: string, exitRequestId: str
 
 /**
  * Approval-readiness check used by exit.service.approveExit() and the
- * Exit-detail UI. The rule: every clearance item must reach a terminal state
- * (completed or waived) before the request can move to approved. HR users can
- * pass `override: true` to bypass — that path is reserved for emergencies and
- * is logged in the audit trail.
+ * Exit-detail UI. Two gates:
+ *   1. Every clearance item must reach a terminal state (completed/waived)
+ *   2. If the tenant has configured exit-interview questions, the interview
+ *      must be submitted (at least one response row)
  *
- * Interview submission + document issuance are *informational* — surfaced to
- * the UI so HR can see overall progress, but they don't block approval (an
- * exiting employee may legitimately decline to answer the interview).
+ * HR users can pass `override: true` to bypass both gates — reserved for
+ * emergencies and audit-logged.
  */
 export interface ExitApprovalReadiness {
     canApprove: boolean
     totalClearances: number
     completedClearances: number
     pendingClearances: Array<{ id: string; name: string; status: string }>
+    /** True when the tenant has at least one ACTIVE REQUIRED interview question.
+     *  Optional-only catalogs never block approval. */
+    interviewRequired: boolean
+    /** True when any interview response row exists for this exit (used by the
+     *  timeline visualisation; the gate uses `pendingRequiredQuestions`). */
     interviewSubmitted: boolean
+    /** Names of required questions still missing a non-empty answer. Empty
+     *  array ⇒ all required questions answered. */
+    pendingRequiredQuestions: string[]
     documentsConfigured: number
 }
 
@@ -482,21 +490,49 @@ export async function getExitApprovalReadiness(
     tenantId: string,
     exitRequestId: string,
 ): Promise<ExitApprovalReadiness> {
-    const [clearances, responses, documents] = await Promise.all([
+    const [clearances, responses, documents, activeQuestions] = await Promise.all([
         listClearancesForExit(tenantId, exitRequestId),
-        db.select({ id: exitInterviewResponses.id }).from(exitInterviewResponses).where(and(
+        db.select({
+            questionId: exitInterviewResponses.questionId,
+            answerText: exitInterviewResponses.answerText,
+            answerValue: exitInterviewResponses.answerValue,
+        }).from(exitInterviewResponses).where(and(
             eq(exitInterviewResponses.tenantId, tenantId),
             eq(exitInterviewResponses.exitRequestId, exitRequestId),
-        )).limit(1),
+        )),
         listExitDocuments(tenantId),
+        db.select({
+            id: offboardingInterviewQuestions.id,
+            questionText: offboardingInterviewQuestions.questionText,
+            questionType: offboardingInterviewQuestions.questionType,
+            required: offboardingInterviewQuestions.required,
+        }).from(offboardingInterviewQuestions).where(and(
+            eq(offboardingInterviewQuestions.tenantId, tenantId),
+            eq(offboardingInterviewQuestions.isActive, true),
+        )),
     ])
     const pending = clearances.filter(c => c.status !== 'completed' && c.status !== 'waived')
+
+    // The interview gate is now "every required question has a non-empty
+    // answer", not "any response row exists". Optional catalogs don't block.
+    const answerByQid = new Map(responses.map(r => [r.questionId ?? '', r]))
+    const requiredQuestions = activeQuestions.filter(q => q.required)
+    const interviewRequired = requiredQuestions.length > 0
+    const interviewSubmitted = responses.length > 0
+    const pendingRequiredQuestions = requiredQuestions
+        .filter(q => !isAnswerNonEmpty(q.questionType, answerByQid.get(q.id)))
+        .map(q => q.questionText)
+
+    const clearanceOk = pending.length === 0
+    const interviewOk = !interviewRequired || pendingRequiredQuestions.length === 0
     return {
-        canApprove: pending.length === 0,
+        canApprove: clearanceOk && interviewOk,
         totalClearances: clearances.length,
         completedClearances: clearances.length - pending.length,
         pendingClearances: pending.map(c => ({ id: c.id, name: c.name, status: c.status })),
-        interviewSubmitted: responses.length > 0,
+        interviewRequired,
+        interviewSubmitted,
+        pendingRequiredQuestions,
         documentsConfigured: documents.length,
     }
 }
@@ -592,6 +628,45 @@ export async function listInterviewResponses(tenantId: string, exitRequestId: st
         ))
 }
 
+/**
+ * Pure helper (exported for tests): given a question type + a submitted
+ * answer payload, decide whether it counts as "answered". A required
+ * question that fails this check causes submitInterviewResponses() to 400
+ * and stops the readiness gate from flipping to canApprove=true.
+ *
+ * Semantics, per type:
+ *   short_text / long_text — non-blank `answerText`
+ *   rating                  — `answerValue` is a number, or `answerText` parses to one
+ *   yes_no                  — `answerValue` is boolean, OR text is "yes"/"no"
+ *   single_choice           — non-empty string (text or value)
+ *   multi_choice            — `answerValue` is a non-empty array
+ */
+export function isAnswerNonEmpty(
+    type: 'short_text' | 'long_text' | 'rating' | 'single_choice' | 'multi_choice' | 'yes_no',
+    a: { answerText?: string | null; answerValue?: unknown } | undefined,
+): boolean {
+    if (!a) return false
+    if (type === 'short_text' || type === 'long_text') {
+        return typeof a.answerText === 'string' && a.answerText.trim().length > 0
+    }
+    if (type === 'rating') {
+        if (typeof a.answerValue === 'number') return Number.isFinite(a.answerValue) && a.answerValue > 0
+        const parsed = Number(a.answerText ?? '')
+        return Number.isFinite(parsed) && parsed > 0
+    }
+    if (type === 'yes_no') {
+        if (typeof a.answerValue === 'boolean') return true
+        const raw = (a.answerText ?? '').toString().toLowerCase()
+        return raw === 'yes' || raw === 'no' || raw === 'true' || raw === 'false'
+    }
+    if (type === 'single_choice') {
+        if (typeof a.answerValue === 'string') return a.answerValue.length > 0
+        return typeof a.answerText === 'string' && a.answerText.length > 0
+    }
+    // multi_choice
+    return Array.isArray(a.answerValue) && a.answerValue.length > 0
+}
+
 export async function submitInterviewResponses(
     tenantId: string,
     exitRequestId: string,
@@ -606,7 +681,13 @@ export async function submitInterviewResponses(
     // tenant check.
     const questionIds = Array.from(new Set(answers.map(a => a.questionId)))
     const ownedQuestions = await db
-        .select({ id: offboardingInterviewQuestions.id })
+        .select({
+            id: offboardingInterviewQuestions.id,
+            questionType: offboardingInterviewQuestions.questionType,
+            required: offboardingInterviewQuestions.required,
+            isActive: offboardingInterviewQuestions.isActive,
+            questionText: offboardingInterviewQuestions.questionText,
+        })
         .from(offboardingInterviewQuestions)
         .where(and(
             eq(offboardingInterviewQuestions.tenantId, tenantId),
@@ -615,6 +696,34 @@ export async function submitInterviewResponses(
     const ownedSet = new Set(ownedQuestions.map(q => q.id))
     const filtered = answers.filter(a => ownedSet.has(a.questionId))
     if (filtered.length === 0) return []
+
+    // Server-side enforcement: every ACTIVE REQUIRED question that the
+    // tenant has configured must have a non-empty answer in this batch.
+    // Without this gate, a hand-rolled curl could POST `{ answers: [] }`
+    // and the readiness check would mistakenly flip to canApprove=true.
+    const allActiveRequired = await db
+        .select({
+            id: offboardingInterviewQuestions.id,
+            questionType: offboardingInterviewQuestions.questionType,
+            questionText: offboardingInterviewQuestions.questionText,
+        })
+        .from(offboardingInterviewQuestions)
+        .where(and(
+            eq(offboardingInterviewQuestions.tenantId, tenantId),
+            eq(offboardingInterviewQuestions.isActive, true),
+            eq(offboardingInterviewQuestions.required, true),
+        ))
+    const answerByQid = new Map(filtered.map(a => [a.questionId, a]))
+    const missing = allActiveRequired
+        .filter(q => !isAnswerNonEmpty(q.questionType, answerByQid.get(q.id)))
+        .map(q => q.questionText)
+    if (missing.length > 0) {
+        throw new ServiceError(
+            400,
+            'REQUIRED_MISSING',
+            `Please answer every required question before submitting. Missing: ${missing.slice(0, 3).join('; ')}${missing.length > 3 ? `; +${missing.length - 3} more` : ''}.`,
+        )
+    }
 
     // Wipe prior answers then re-insert — simpler than reconciling and the
     // unique (exit_request_id, question_id) constraint would block re-submits.
@@ -710,7 +819,21 @@ export async function fireWorkflows(
     const employeeEmail = ctxRow.workEmail || ctxRow.email || null
     const employeeName = `${ctxRow.firstName ?? ''} ${ctxRow.lastName ?? ''}`.trim()
 
-    // Variable substitution: {{employeeName}}, {{exitDate}}, {{lastWorkingDay}}, {{exitType}}
+    // Sign one exit-interview token per fireWorkflows() call. We only build
+    // the URL when a workflow body actually references {{interviewLink}}, so
+    // the signing cost is negligible (HMAC-SHA256 is fast). The same link is
+    // reused across all workflows fired in this run so the user sees a stable
+    // URL if multiple emails go out.
+    let interviewLinkCache: string | null = null
+    const interviewLink = (): string => {
+        if (interviewLinkCache) return interviewLinkCache
+        const token = signExitInterviewToken(tenantId, ctx.exitRequestId, ctxRow.employeeId)
+        interviewLinkCache = buildExitInterviewLink(token)
+        return interviewLinkCache
+    }
+
+    // Variable substitution: {{employeeName}}, {{exitDate}}, {{lastWorkingDay}},
+    // {{exitType}}, {{employeeNo}}, {{interviewLink}}
     const substitute = (s: string | undefined | null): string => {
         if (!s) return ''
         return s
@@ -719,6 +842,7 @@ export async function fireWorkflows(
             .replace(/\{\{exitDate\}\}/g, ctxRow.exitDate ?? '')
             .replace(/\{\{lastWorkingDay\}\}/g, ctxRow.lastWorkingDay ?? '')
             .replace(/\{\{exitType\}\}/g, ctxRow.exitType ?? '')
+            .replace(/\{\{interviewLink\}\}/g, interviewLink())
     }
 
     for (const wf of list) {

@@ -128,7 +128,14 @@ export interface ExitApprovalReadiness {
     totalClearances: number
     completedClearances: number
     pendingClearances: Array<{ id: string; name: string; status: string }>
+    /** True when the tenant has at least one ACTIVE REQUIRED interview question.
+     *  Optional-only catalogs never block approval. */
+    interviewRequired: boolean
+    /** True when any response row exists (used for the timeline visual). */
     interviewSubmitted: boolean
+    /** Names of required questions still missing an answer. Empty when every
+     *  required question is satisfied. */
+    pendingRequiredQuestions: string[]
     documentsConfigured: number
 }
 

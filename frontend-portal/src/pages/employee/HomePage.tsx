@@ -11,6 +11,7 @@ import {
     FileText,
     LogIn,
     LogOut,
+    MessageSquare,
     PieChart,
     Receipt,
     TrendingUp,
@@ -33,6 +34,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useMyEmployee } from '@/hooks/useMe'
 import { useLeaveBalance, useLeaveRequests } from '@/hooks/useLeave'
 import { useMyPayslips } from '@/hooks/usePayslips'
+import { useMyOpenExit } from '@/hooks/useMyExit'
 import { useAttendance, useCheckIn, useCheckOut } from '@/hooks/useAttendance'
 import { GlassCard } from '@/components/shared/GlassCard'
 import { ChartCard } from '@/components/shared/ChartCard'
@@ -69,6 +71,9 @@ export function EmployeeHomePage() {
     const { data: balance, isLoading: balanceLoading } = useLeaveBalance(employeeId)
     const { data: payslips } = useMyPayslips()
     const { data: leaveList } = useLeaveRequests({ employeeId, limit: 4 })
+    // Detect an in-flight exit so we can surface a "complete your exit
+    // interview" CTA. Null when no exit is on file.
+    const { data: myExit } = useMyOpenExit()
 
     const today = new Date().toISOString().slice(0, 10)
     const { data: todayAttendance } = useAttendance({
@@ -97,7 +102,7 @@ export function EmployeeHomePage() {
                     <p className="text-sm text-muted-foreground">
                         {t(`home.${greetingKey(new Date().getHours())}`)},
                     </p>
-                    <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+                    <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl lg:text-4xl 3xl:text-5xl">
                         {me ? `${me.firstName} ${me.lastName}`.trim() : (user?.name ?? '')} 👋
                     </h1>
                 </div>
@@ -108,6 +113,35 @@ export function EmployeeHomePage() {
                     </div>
                 </div>
             </header>
+
+            {/* ── Exit interview CTA ─────────────────────────────────────
+                Only shown when the signed-in employee has an open exit and
+                the interview is not yet submitted. We use an amber tone so
+                it's clearly a "needs your attention" prompt without alarming. */}
+            {myExit && !myExit.interviewSubmitted && (
+                <Link
+                    to={ROUTES.employeeExitInterview}
+                    className="block rounded-2xl border border-amber-300/60 bg-amber-50/80 dark:bg-amber-950/30 px-4 py-3 hover:bg-amber-100/80 dark:hover:bg-amber-950/40 transition-colors"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="size-10 rounded-full bg-amber-200/60 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+                            <MessageSquare className="size-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                                {t('home.exitInterview.title', { defaultValue: 'Complete your exit interview' })}
+                            </p>
+                            <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
+                                {t('home.exitInterview.body', {
+                                    defaultValue: 'Last working day {{date}}. Your feedback helps us improve.',
+                                    date: myExit.lastWorkingDay,
+                                })}
+                            </p>
+                        </div>
+                        <ChevronRight className="size-5 text-amber-700 dark:text-amber-300 shrink-0" />
+                    </div>
+                </Link>
+            )}
 
             {/* ── Hero: today's attendance ──────────────────────────────── */}
             <GlassCard
@@ -192,7 +226,7 @@ export function EmployeeHomePage() {
             </GlassCard>
 
             {/* ── Stats: leave + payslip ────────────────────────────────── */}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 3xl:grid-cols-4">
                 <StatCard
                     tone="primary"
                     icon={<Calendar className="size-4" />}
@@ -246,7 +280,7 @@ export function EmployeeHomePage() {
             </div>
 
             {/* ── Charts row ────────────────────────────────────────────── */}
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2 3xl:grid-cols-3">
                 <LeaveUsageChart balance={annualBalance} />
                 <PayslipTrendChart payslips={payslips ?? []} />
             </div>
@@ -298,7 +332,7 @@ export function EmployeeHomePage() {
                 today?" — which teams I'm part of, who has a birthday today,
                 what hardware I'm holding. Two-column on lg, single-column
                 on smaller viewports. */}
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-2 3xl:grid-cols-3">
                 <MyTeamsCard variant="me" />
                 <BirthdaysCard title="Department birthdays today" />
             </div>
@@ -309,7 +343,7 @@ export function EmployeeHomePage() {
                 <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     {t('home.quickActions')}
                 </h2>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 3xl:grid-cols-6">
                     <ActionLink to={ROUTES.employeeLeave} icon={<Calendar className="size-5" />} label={t('home.requestLeave')} />
                     <ActionLink to={ROUTES.employeePayslips} icon={<Receipt className="size-5" />} label={t('home.viewPayslips')} />
                     <ActionLink to={ROUTES.employeeAttendance} icon={<Clock className="size-5" />} label={t('home.viewAttendance')} />

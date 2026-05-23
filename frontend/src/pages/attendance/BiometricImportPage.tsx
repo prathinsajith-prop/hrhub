@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Card, Input, Label, Separator } from '@/components/ui/primitives'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -701,19 +702,17 @@ function AttendanceImportTab() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[10rem_10rem_1fr_auto] sm:items-end">
                     <div className="space-y-1.5">
                         <Label className="text-[11px] uppercase tracking-wide">{t('biometric.export.from', 'From')}</Label>
-                        <Input
-                            type="date"
+                        <DatePicker
                             value={exportFrom}
-                            onChange={(e) => setExportFrom(e.target.value)}
+                            onChange={setExportFrom}
                             max={exportTo}
                         />
                     </div>
                     <div className="space-y-1.5">
                         <Label className="text-[11px] uppercase tracking-wide">{t('biometric.export.to', 'To')}</Label>
-                        <Input
-                            type="date"
+                        <DatePicker
                             value={exportTo}
-                            onChange={(e) => setExportTo(e.target.value)}
+                            onChange={setExportTo}
                             min={exportFrom}
                             max={today}
                         />

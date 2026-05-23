@@ -18,6 +18,7 @@ import { ListChecks, Check, Clock as ClockIcon, Plus, Settings2 } from 'lucide-r
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
@@ -120,7 +121,7 @@ export function ExitClearancePanel({ exitId, sectionId }: Props) {
                     </ul>
                 </>
             ) : (
-                <div className="px-6 py-6 text-center">
+                <div className="p-6 text-center">
                     <div className="size-9 rounded-full bg-muted text-muted-foreground flex items-center justify-center mx-auto mb-2">
                         <ListChecks className="size-4" />
                     </div>
@@ -209,7 +210,7 @@ function AddItemDialog({ exitId, open, onOpenChange }: { exitId: string; open: b
                         </div>
                         <div className="space-y-1">
                             <Label className="text-xs">{t('exit.clearancePanel.fieldDueDate', { defaultValue: 'Due date (optional)' })}</Label>
-                            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                            <DatePicker value={dueDate} onChange={setDueDate} />
                         </div>
                     </DialogBody>
                     <DialogFooter>

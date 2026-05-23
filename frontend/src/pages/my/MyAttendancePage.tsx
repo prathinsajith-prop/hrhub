@@ -513,7 +513,8 @@ function TimelineView({
 function ListView({ days }: { days: DayInfo[] }) {
   return (
     <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[800px] text-sm">
         <thead className="bg-muted/50">
           <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
             <th className="px-4 py-2.5 font-medium">Date</th>
@@ -558,6 +559,7 @@ function ListView({ days }: { days: DayInfo[] }) {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }

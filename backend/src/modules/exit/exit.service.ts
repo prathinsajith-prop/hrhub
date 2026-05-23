@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js'
 import { exitRequests, employees, leaveRequests, leaveBalances, exitClearanceItems, exitInterviewResponses } from '../../db/schema/index.js'
-import { eq, and, sql, desc } from 'drizzle-orm'
+import { eq, and, sql, desc, inArray } from 'drizzle-orm'
 import { resolveAvatarUrl, resolveAvatarUrls } from '../../plugins/s3.js'
 import { Conditions } from '../../lib/filters.js'
 import { resolveEmployeeEarnings } from '../payroll/payroll.service.js'
@@ -260,6 +260,41 @@ export async function getExitRequests(tenantId: string, opts: { limit?: number; 
     return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 
+/**
+ * Returns the most-recent non-rejected exit for a given employee, with the
+ * same shape as `getExitRequest`. Used by the employee portal to surface a
+ * "you have an open exit interview to complete" CTA + dedicated page. The
+ * employee resolves their own employeeId from the JWT — never trust the
+ * client to pass it.
+ */
+export async function getMyOpenExit(tenantId: string, employeeId: string) {
+    const [row] = await db
+        .select({
+            id: exitRequests.id,
+            tenantId: exitRequests.tenantId,
+            employeeId: exitRequests.employeeId,
+            exitType: exitRequests.exitType,
+            exitDate: exitRequests.exitDate,
+            lastWorkingDay: exitRequests.lastWorkingDay,
+            reason: exitRequests.reason,
+            noticePeriodDays: exitRequests.noticePeriodDays,
+            status: exitRequests.status,
+            createdAt: exitRequests.createdAt,
+            updatedAt: exitRequests.updatedAt,
+            interviewSubmitted: sql<boolean>`EXISTS (SELECT 1 FROM ${exitInterviewResponses} WHERE ${exitInterviewResponses.exitRequestId} = ${exitRequests.id})`,
+        })
+        .from(exitRequests)
+        .where(and(
+            eq(exitRequests.tenantId, tenantId),
+            eq(exitRequests.employeeId, employeeId),
+            // Exclude rejected exits — those don't need any further action.
+            inArray(exitRequests.status, ['pending', 'approved', 'completed']),
+        ))
+        .orderBy(desc(exitRequests.createdAt))
+        .limit(1)
+    return row ?? null
+}
+
 export async function getExitRequest(tenantId: string, id: string) {
     const [row] = await db
         .select({
@@ -313,11 +348,22 @@ export async function approveExit(
     if (!opts.override) {
         const readiness = await getExitApprovalReadiness(tenantId, id)
         if (!readiness.canApprove) {
-            const pending = readiness.pendingClearances.map(p => p.name).join(', ')
+            const blockers: string[] = []
+            if (readiness.pendingClearances.length > 0) {
+                const names = readiness.pendingClearances.map(p => p.name).join(', ')
+                blockers.push(`${readiness.pendingClearances.length} clearance item${readiness.pendingClearances.length === 1 ? '' : 's'} still pending (${names})`)
+            }
+            if (readiness.interviewRequired && readiness.pendingRequiredQuestions.length > 0) {
+                const sample = readiness.pendingRequiredQuestions.slice(0, 2).join('; ')
+                const extra = readiness.pendingRequiredQuestions.length > 2
+                    ? `; +${readiness.pendingRequiredQuestions.length - 2} more`
+                    : ''
+                blockers.push(`${readiness.pendingRequiredQuestions.length} required interview question${readiness.pendingRequiredQuestions.length === 1 ? '' : 's'} unanswered (${sample}${extra})`)
+            }
             throw new ServiceError(
                 409,
-                'CLEARANCE_PENDING',
-                `Cannot approve: ${readiness.pendingClearances.length} clearance item${readiness.pendingClearances.length === 1 ? '' : 's'} still pending (${pending}). Mark them completed first, or use override.`,
+                'APPROVAL_BLOCKED',
+                `Cannot approve: ${blockers.join('; ')}. Complete these first, or use override.`,
             )
         }
     }

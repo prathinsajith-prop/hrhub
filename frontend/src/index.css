@@ -66,6 +66,16 @@
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
 
+  /* Ultra-wide / TV breakpoints.
+     Tailwind ships sm/md/lg/xl/2xl by default (640/768/1024/1280/1536).
+     We extend with:
+       3xl — 1920px (1080p TVs, ultra-wide monitors)
+       4xl — 2560px (4K / 27"+ studio displays)
+     Use sparingly: cap max content width, scale dashboards to more
+     columns, or bump typography at these sizes. */
+  --breakpoint-3xl: 1920px;
+  --breakpoint-4xl: 2560px;
+
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));
