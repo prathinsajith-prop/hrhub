@@ -4,8 +4,8 @@ const PAGE_SIZE = 10
 import { useTranslation } from 'react-i18next'
 import { type ColumnDef } from '@tanstack/react-table'
 import {
-    LogOut, DollarSign, CheckCircle2, Clock, UserMinus, Eye, CalendarDays,
-    FileText, RefreshCcw, XCircle, AlertTriangle, Scale,
+    LogOut, DollarSign, CheckCircle2, Clock, UserMinus, Eye,
+    RefreshCcw, AlertTriangle,
 } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -13,19 +13,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
-import { NumericInput } from '@/components/ui/numeric-input'
-import { DatePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { DataTable } from '@/components/ui/data-table'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import {
-    useExitRequests, useInitiateExit, useApproveExit, useRejectExit, useMarkSettlementPaid,
-    useSettlementPreview, type ExitRequest,
+    useExitRequests, useApproveExit, useRejectExit, useMarkSettlementPaid,
+    useExitApprovalReadiness, type ExitRequest,
 } from '@/hooks/useExit'
-import { EmployeeSelect } from '@/components/shared'
+import { ConfirmDialog } from '@/components/ui/overlays'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig } from '@/lib/filters'
@@ -34,10 +31,19 @@ import { formatDate, formatCurrency } from '@/lib/utils'
 import { toast } from '@/components/ui/overlays'
 import { ApiError } from '@/lib/api'
 import { EXIT_TYPE_LABELS } from '@/lib/enums'
-import { EXIT_TYPE_OPTIONS } from '@/lib/options'
+import { ExitProgressBadge } from './ExitStagesTimeline'
+import { InitiateExitWizard } from './InitiateExitWizard'
+import { ExitDetailWizard } from './ExitDetailWizard'
+
+const EXIT_TYPE_FILTER_OPTIONS = [
+    { value: 'resignation', label: 'Resignation' },
+    { value: 'termination', label: 'Termination' },
+    { value: 'contract_end', label: 'Contract End' },
+    { value: 'retirement', label: 'Retirement' },
+] as const
 
 const EXIT_FILTERS: FilterConfig[] = [
-    { name: 'exitType', label: 'Exit type', type: 'multi_select', field: 'exitType', options: EXIT_TYPE_OPTIONS },
+    { name: 'exitType', label: 'Exit type', type: 'multi_select', field: 'exitType', options: [...EXIT_TYPE_FILTER_OPTIONS] },
     {
         name: 'status', label: 'Status', type: 'multi_select', field: 'status',
         options: [
@@ -64,28 +70,6 @@ const exitTypeColor: Record<string, string> = {
     retirement: 'bg-emerald-100 text-emerald-700',
 }
 
-interface InitiateForm {
-    employeeId: string
-    exitType: 'resignation' | 'termination' | 'contract_end' | 'retirement'
-    exitDate: string
-    lastWorkingDay: string
-    noticePeriodDays: number
-    reason: string
-    notes: string
-    deductions: number
-}
-
-const defaultForm: InitiateForm = {
-    employeeId: '',
-    exitType: 'resignation',
-    exitDate: '',
-    lastWorkingDay: '',
-    noticePeriodDays: 30,
-    reason: '',
-    notes: '',
-    deductions: 0,
-}
-
 function fmt(n: string | number | undefined | null) {
     if (n === undefined || n === null) return '—'
     const num = Number(n)
@@ -93,59 +77,27 @@ function fmt(n: string | number | undefined | null) {
     return formatCurrency(num)
 }
 
-function DetailRow({ label, value, highlight }: { label: string; value: React.ReactNode; highlight?: boolean }) {
-    return (
-        <div className={`flex justify-between items-start py-2.5 border-b last:border-0 ${highlight ? 'bg-muted/30 px-4 -mx-4' : ''}`}>
-            <span className={`text-sm ${highlight ? 'font-semibold' : 'text-muted-foreground'}`}>{label}</span>
-            <span className={`text-sm font-medium text-right max-w-[60%] ${highlight ? 'text-primary font-bold text-base' : ''}`}>{value ?? '—'}</span>
-        </div>
-    )
-}
-
-function GratuityBreakdown({ preview }: { preview: NonNullable<ReturnType<typeof useSettlementPreview>['data']> }) {
-    const yrs = preview.yearsOfService
-    const dailyWage = preview.basicSalary / 30
-    const first5 = Math.min(yrs, 5)
-    const beyond5 = Math.max(0, yrs - 5)
-
-    return (
-        <div className="rounded-lg border bg-muted/20 p-3 space-y-1.5 text-xs">
-            <p className="font-semibold text-muted-foreground uppercase tracking-wide text-[10px] flex items-center gap-1">
-                <Scale className="size-3" /> Gratuity Calculation (UAE Labour Law 2022)
-            </p>
-            <div className="space-y-1 text-muted-foreground">
-                <p>Daily wage: <span className="font-medium text-foreground">{fmt(dailyWage)}</span> (basic ÷ 30)</p>
-                <p>Service: <span className="font-medium text-foreground">{yrs} years</span></p>
-                {first5 > 0 && (
-                    <p>First {first5.toFixed(2)}y × 21 days: <span className="font-medium text-foreground">{fmt(dailyWage * 21 * first5)}</span></p>
-                )}
-                {beyond5 > 0 && (
-                    <p>Next {beyond5.toFixed(2)}y × 30 days: <span className="font-medium text-foreground">{fmt(dailyWage * 30 * beyond5)}</span></p>
-                )}
-                {preview.basicSalary * 24 < (dailyWage * 21 * first5 + dailyWage * 30 * beyond5) && (
-                    <p className="text-amber-600">Cap applied: 2-year salary maximum ({fmt(preview.basicSalary * 24)})</p>
-                )}
-            </div>
-        </div>
-    )
-}
-
 export function ExitPage() {
     const { t } = useTranslation()
     const { can } = usePermissions()
     const canManage = can('manage_exit')
 
-    const initiate = useInitiateExit()
     const approve = useApproveExit()
     const reject = useRejectExit()
     const markPaid = useMarkSettlementPaid()
 
     const [showDialog, setShowDialog] = useState(false)
-    const [form, setForm] = useState<InitiateForm>(defaultForm)
-    const [step, setStep] = useState<'form' | 'preview'>('form')
     const [viewingExit, setViewingExit] = useState<ExitRequest | null>(null)
     const [rejectTarget, setRejectTarget] = useState<ExitRequest | null>(null)
     const [rejectReason, setRejectReason] = useState('')
+    const [overrideConfirm, setOverrideConfirm] = useState(false)
+
+    // Live readiness check for the open exit detail dialog. canApprove === false
+    // when clearance items are still pending — the Approve button is then
+    // disabled and a "Force approve" path appears for HR.
+    const readinessQ = useExitApprovalReadiness(viewingExit?.status === 'pending' ? viewingExit.id : null)
+    const readiness = readinessQ.data
+
 
     const exitSearch = useSearchFilters({
         storageKey: 'hrhub.exit.searchHistory',
@@ -168,33 +120,6 @@ export function ExitPage() {
         offset,
     })
     const exitTotal = exitsData?.total ?? 0
-
-    const previewEnabled = !!form.employeeId && !!form.exitDate && !!form.exitType
-    const { data: preview, isLoading: previewLoading } = useSettlementPreview(
-        previewEnabled ? form.employeeId : undefined,
-        previewEnabled ? form.exitDate : undefined,
-        previewEnabled ? form.exitType : undefined,
-        previewEnabled ? form.deductions : undefined,
-    )
-
-    const set = (k: keyof InitiateForm, v: string | number) => setForm(f => ({ ...f, [k]: v }))
-
-    async function handleSubmit() {
-        if (!form.reason?.trim()) {
-            toast.warning('Reason required', 'Please provide a reason for the exit.')
-            setStep('form')
-            return
-        }
-        try {
-            await initiate.mutateAsync({ ...form, reason: form.reason.trim() })
-            toast.success('Exit initiated', 'Employee exit request submitted successfully.')
-            setShowDialog(false)
-            setForm(defaultForm)
-            setStep('form')
-        } catch (err) {
-            toast.error('Failed', err instanceof ApiError ? err.message : 'Could not initiate exit.')
-        }
-    }
 
     const exitList: ExitRequest[] = useMemo(
         () => exitsData?.data ?? [],
@@ -283,6 +208,12 @@ export function ExitPage() {
             size: 110,
         },
         {
+            id: 'progress',
+            header: 'Offboarding',
+            cell: ({ row: { original: e } }) => <ExitProgressBadge exit={e} />,
+            size: 170,
+        },
+        {
             id: 'actions',
             header: '',
             cell: ({ row: { original: e } }) => (
@@ -303,9 +234,21 @@ export function ExitPage() {
                                 className="h-7 text-xs"
                                 onClick={(ev) => {
                                     ev.stopPropagation()
-                                    approve.mutate(e.id, {
+                                    approve.mutate({ id: e.id }, {
                                         onSuccess: () => toast.success('Approved', 'Exit request approved and employee marked as terminated.'),
-                                        onError: () => toast.error('Failed', 'Could not approve exit.'),
+                                        // Show the backend message so HR sees "3 clearance items
+                                        // still pending …" instead of a generic failure toast.
+                                        // They can then click the row to open the detail view
+                                        // and either complete clearances or use Force Approve.
+                                        onError: (err) => {
+                                            const apiErr = err as ApiError
+                                            const msg = apiErr?.message ?? 'Could not approve exit.'
+                                            if (apiErr?.statusCode === 409) {
+                                                toast.error('Approval blocked', msg)
+                                            } else {
+                                                toast.error('Failed', msg)
+                                            }
+                                        },
                                     })
                                 }}
                                 disabled={approve.isPending}
@@ -360,7 +303,7 @@ export function ExitPage() {
                             Refresh
                         </Button>
                         {canManage && (
-                            <Button size="sm" leftIcon={<UserMinus className="size-3.5" />} onClick={() => { setShowDialog(true); setStep('form') }}>
+                            <Button size="sm" leftIcon={<UserMinus className="size-3.5" />} onClick={() => setShowDialog(true)}>
                                 Initiate Exit
                             </Button>
                         )}
@@ -400,140 +343,48 @@ export function ExitPage() {
                 </CardContent>
             </Card>
 
-            {/* Detail view dialog */}
-            <Dialog open={!!viewingExit} onOpenChange={(o) => { if (!o) setViewingExit(null) }}>
-                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <FileText className="size-4" /> Exit Request Details
-                        </DialogTitle>
-                        <DialogDescription>Full details and settlement breakdown.</DialogDescription>
-                    </DialogHeader>
-                    {viewingExit && (
-                        <div className="space-y-4 py-1">
-                            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40">
-                                <InitialsAvatar name={viewingExit.employeeName ?? '—'} src={viewingExit.employeeAvatarUrl ?? undefined} size="md" />
-                                <div>
-                                    <p className="text-sm font-semibold">{viewingExit.employeeName}</p>
-                                    {viewingExit.employeeDesignation && (
-                                        <p className="text-xs text-muted-foreground">{viewingExit.employeeDesignation}</p>
-                                    )}
-                                    {viewingExit.employeeDepartment && (
-                                        <p className="text-xs text-muted-foreground">{viewingExit.employeeDepartment}</p>
-                                    )}
-                                </div>
-                                <div className="ml-auto">
-                                    <Badge variant={statusVariant[viewingExit.status] ?? 'secondary'} className="capitalize">
-                                        {viewingExit.status}
-                                    </Badge>
-                                </div>
-                            </div>
+            {/* Detail view — multi-step wizard. HR walks through the 5
+                offboarding stages with Prev/Next, with each stage's actions
+                inline. The Reject and Force-Approve dialogs are still owned
+                by this page (state below). */}
+            {viewingExit && (
+                <ExitDetailWizard
+                    exit={viewingExit}
+                    open={!!viewingExit}
+                    onClose={() => setViewingExit(null)}
+                    onRequestReject={() => {
+                        setRejectTarget(viewingExit)
+                        setRejectReason('')
+                        setViewingExit(null)
+                    }}
+                    onRequestForceApprove={() => setOverrideConfirm(true)}
+                />
+            )}
 
-                            <div className="rounded-lg border divide-y text-sm">
-                                <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30">
-                                    <CalendarDays className="size-3.5 text-muted-foreground" />
-                                    <span className="font-medium text-xs uppercase tracking-wide text-muted-foreground">Exit Information</span>
-                                </div>
-                                <div className="px-4">
-                                    <DetailRow label="Exit Type" value={
-                                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${exitTypeColor[viewingExit.exitType] ?? 'bg-gray-100 text-gray-700'}`}>
-                                            {EXIT_TYPE_LABELS[viewingExit.exitType] ?? viewingExit.exitType}
-                                        </span>
-                                    } />
-                                    <DetailRow label="Exit Date" value={formatDate(viewingExit.exitDate)} />
-                                    <DetailRow label="Last Working Day" value={formatDate(viewingExit.lastWorkingDay)} />
-                                    <DetailRow label="Notice Period" value={`${viewingExit.noticePeriodDays} days`} />
-                                    {viewingExit.reason && <DetailRow label="Reason" value={viewingExit.reason} />}
-                                    {viewingExit.notes && <DetailRow label="Notes" value={viewingExit.notes} />}
-                                </div>
-                            </div>
-
-                            {viewingExit.totalSettlement && (
-                                <div className="rounded-lg border divide-y text-sm overflow-hidden">
-                                    <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/30">
-                                        <DollarSign className="size-3.5 text-muted-foreground" />
-                                        <span className="font-medium text-xs uppercase tracking-wide text-muted-foreground">Settlement Breakdown</span>
-                                        {viewingExit.settlementPaid && (
-                                            <Badge variant="success" className="ml-auto text-[10px]">Paid</Badge>
-                                        )}
-                                    </div>
-                                    <div className="px-4">
-                                        <DetailRow label="Gratuity (UAE Labour Law 2022)" value={fmt(viewingExit.gratuityAmount)} />
-                                        <DetailRow label="Leave Encashment" value={fmt(viewingExit.leaveEncashmentAmount)} />
-                                        <DetailRow label="Unpaid Salary" value={fmt(viewingExit.unpaidSalaryAmount)} />
-                                        {Number(viewingExit.deductions ?? 0) > 0 && (
-                                            <DetailRow label="Deductions" value={`− ${fmt(viewingExit.deductions)}`} />
-                                        )}
-                                    </div>
-                                    <div className="flex justify-between items-center px-4 py-3 bg-muted/50">
-                                        <span className="font-semibold">Total Settlement</span>
-                                        <span className="font-bold text-primary text-base">{fmt(viewingExit.totalSettlement)}</span>
-                                    </div>
-                                    {viewingExit.settlementPaidDate && (
-                                        <div className="px-4">
-                                            <DetailRow label="Paid On" value={formatDate(viewingExit.settlementPaidDate)} />
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    <DialogFooter className="gap-2 flex-wrap">
-                        {canManage && viewingExit?.status === 'pending' && (
-                            <>
-                                <Button
-                                    size="sm"
-                                    onClick={() => {
-                                        if (!viewingExit) return
-                                        approve.mutate(viewingExit.id, {
-                                            onSuccess: () => {
-                                                toast.success('Approved', 'Exit request approved.')
-                                                setViewingExit(null)
-                                            },
-                                            onError: () => toast.error('Failed', 'Could not approve exit.'),
-                                        })
-                                    }}
-                                    disabled={approve.isPending}
-                                >
-                                    Approve Exit
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                                    onClick={() => {
-                                        setRejectTarget(viewingExit)
-                                        setRejectReason('')
-                                        setViewingExit(null)
-                                    }}
-                                >
-                                    <XCircle className="size-3.5 mr-1" /> Reject
-                                </Button>
-                            </>
-                        )}
-                        {canManage && viewingExit?.status === 'approved' && !viewingExit?.settlementPaid && (
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                    if (!viewingExit) return
-                                    markPaid.mutate(viewingExit.id, {
-                                        onSuccess: () => {
-                                            toast.success('Settlement paid', 'Settlement marked as paid.')
-                                            setViewingExit(null)
-                                        },
-                                        onError: () => toast.error('Failed', 'Could not update settlement.'),
-                                    })
-                                }}
-                                disabled={markPaid.isPending}
-                            >
-                                <DollarSign className="size-3.5 mr-1" /> Mark Settlement Paid
-                            </Button>
-                        )}
-                        <Button variant="outline" onClick={() => setViewingExit(null)}>Close</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            {/* Force-approve confirm (when clearance items are pending) */}
+            <ConfirmDialog
+                open={overrideConfirm}
+                onOpenChange={setOverrideConfirm}
+                title="Force approve with pending clearances?"
+                description={
+                    readiness
+                        ? `${readiness.pendingClearances.length} clearance item${readiness.pendingClearances.length === 1 ? '' : 's'} ${readiness.pendingClearances.length === 1 ? 'is' : 'are'} still pending. The override will be recorded in the audit log. Continue?`
+                        : 'Some offboarding steps are still pending. Continue anyway?'
+                }
+                variant="warning"
+                confirmLabel="Force Approve"
+                onConfirm={async () => {
+                    if (!viewingExit) return
+                    try {
+                        await approve.mutateAsync({ id: viewingExit.id, override: true })
+                        toast.success('Approved', 'Exit request approved (override).')
+                        setViewingExit(null)
+                        setOverrideConfirm(false)
+                    } catch (e) {
+                        toast.error('Failed', e instanceof Error ? e.message : 'Could not approve exit.')
+                    }
+                }}
+            />
 
             {/* Reject dialog */}
             <Dialog open={!!rejectTarget} onOpenChange={o => { if (!o) setRejectTarget(null) }}>
@@ -580,146 +431,13 @@ export function ExitPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* Initiate Exit Dialog */}
-            <Dialog open={showDialog} onOpenChange={(o) => { if (!initiate.isPending) setShowDialog(o) }}>
-                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>
-                            {step === 'form' ? 'Initiate Employee Exit' : 'Settlement Preview'}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {step === 'form'
-                                ? 'Fill in the exit details. Preview the settlement calculation before confirming.'
-                                : 'Review the calculated settlement (UAE Labour Law 2022) before submitting.'}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    {step === 'form' && (
-                        <div className="space-y-4 py-2">
-                            <div className="space-y-1.5">
-                                <Label required>Employee</Label>
-                                <EmployeeSelect value={form.employeeId} onValueChange={v => set('employeeId', v)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label required>Exit Type</Label>
-                                <Select value={form.exitType} onValueChange={v => set('exitType', v)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {EXIT_TYPE_OPTIONS.map(o => (
-                                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label required>Exit Date</Label>
-                                    <DatePicker value={form.exitDate} onChange={v => set('exitDate', v)} />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label required>Last Working Day</Label>
-                                    <DatePicker value={form.lastWorkingDay} min={form.exitDate || undefined} onChange={v => set('lastWorkingDay', v)} />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <Label>Notice Period (days)</Label>
-                                    <NumericInput decimal={false} value={form.noticePeriodDays} onChange={e => set('noticePeriodDays', Number(e.target.value))} />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label>Deductions (AED)</Label>
-                                    <NumericInput decimal value={form.deductions} onChange={e => set('deductions', Number(e.target.value))} placeholder="0.00" />
-                                </div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label required>Reason</Label>
-                                <Textarea value={form.reason} onChange={e => set('reason', e.target.value)} rows={2} placeholder="Reason for exit…" />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Notes</Label>
-                                <Textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} placeholder="Additional notes…" />
-                            </div>
-                        </div>
-                    )}
-
-                    {step === 'preview' && previewLoading && (
-                        <div className="py-10 text-center text-sm text-muted-foreground">
-                            <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-3" />
-                            Calculating settlement…
-                        </div>
-                    )}
-
-                    {step === 'preview' && preview && !previewLoading && (
-                        <div className="space-y-4 py-2">
-                            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40">
-                                <InitialsAvatar name={preview.employeeName} size="sm" />
-                                <div>
-                                    <p className="text-sm font-semibold">{preview.employeeName}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {preview.yearsOfService} years of service · {EXIT_TYPE_LABELS[form.exitType] ?? form.exitType}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">Basic: {fmt(preview.basicSalary)} · Total: {fmt(preview.totalSalary)}</p>
-                                </div>
-                            </div>
-
-                            <GratuityBreakdown preview={preview} />
-
-                            <div className="divide-y rounded-lg border overflow-hidden text-sm">
-                                {[
-                                    ['Gratuity (UAE Labour Law 2022)', fmt(preview.gratuityAmount)],
-                                    [`Leave Encashment (${preview.unusedLeaveDays} unused days)`, fmt(preview.leaveEncashmentAmount)],
-                                    ['Unpaid Salary (current month prorate)', fmt(preview.unpaidSalaryAmount)],
-                                    ...(preview.deductions > 0 ? [['Deductions', `− ${fmt(preview.deductions)}`]] : []),
-                                ].map(([label, val]) => (
-                                    <div key={label} className="flex justify-between px-4 py-2.5">
-                                        <span className="text-muted-foreground">{label}</span>
-                                        <span className="font-medium">{val}</span>
-                                    </div>
-                                ))}
-                                <div className="flex justify-between px-4 py-3 bg-muted/50 font-semibold">
-                                    <span>Total Settlement</span>
-                                    <span className="text-primary text-base">{fmt(preview.totalSettlement)}</span>
-                                </div>
-                            </div>
-
-                            {preview.yearsOfService < 1 && (
-                                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2.5 text-xs text-amber-700">
-                                    <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
-                                    <span>Employee has less than 1 year of service - gratuity is not payable under UAE Labour Law.</span>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {step === 'preview' && !previewLoading && !preview && (
-                        <div className="py-8 text-center text-sm text-muted-foreground">
-                            Could not load settlement preview. Please go back and verify the details.
-                        </div>
-                    )}
-
-                    <DialogFooter>
-                        {step === 'form' && (
-                            <>
-                                <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
-                                <Button
-                                    onClick={() => setStep('preview')}
-                                    disabled={!form.employeeId || !form.exitDate || !form.lastWorkingDay || !form.reason?.trim()}
-                                >
-                                    Preview Settlement
-                                </Button>
-                            </>
-                        )}
-                        {step === 'preview' && (
-                            <>
-                                <Button variant="outline" onClick={() => setStep('form')}>Back</Button>
-                                <Button onClick={handleSubmit} disabled={initiate.isPending || previewLoading}>
-                                    {initiate.isPending ? 'Submitting…' : 'Confirm & Submit'}
-                                </Button>
-                            </>
-                        )}
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            {/* Initiate Exit — multi-step wizard. Owns its own form state, so
+                Prev/Next never drops user input. Settlement is the final
+                step; submission happens there. */}
+            <InitiateExitWizard
+                open={showDialog}
+                onOpenChange={setShowDialog}
+            />
         </PageWrapper>
     )
 }

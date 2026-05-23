@@ -14,6 +14,7 @@ import {
     Workflow,
     Clock,
     ShieldCheck,
+    LogOut,
 } from 'lucide-react'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -35,6 +36,7 @@ import { RecruitmentStagesTab } from './org-settings/RecruitmentStagesTab'
 import { ShiftsTab } from './org-settings/ShiftsTab'
 import { SalaryComponentsTab } from './org-settings/SalaryComponentsTab'
 import { OrganizationPolicyTab } from './org-settings/OrganizationPolicyTab'
+import { OffboardingFlowTab } from './org-settings/OffboardingFlowTab'
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 // Label/description resolved via `t()` per-render so they react to language changes.
@@ -46,6 +48,7 @@ const TAB_KEYS = [
     { value: 'holidays',      i18nKey: 'orgSettings.tabs.holidays',      icon: CalendarDays,  requires: 'manage_settings' as Permission | null },
     { value: 'leave',         i18nKey: 'orgSettings.tabs.leave',         icon: CalendarClock, requires: 'manage_settings' as Permission | null },
     { value: 'onboarding',    i18nKey: 'orgSettings.tabs.onboarding',    icon: ListOrdered,   requires: 'manage_settings' as Permission | null },
+    { value: 'offboarding-flow', i18nKey: 'orgSettings.tabs.offboardingFlow', icon: LogOut,    requires: 'manage_settings' as Permission | null },
     { value: 'recruitment-stages', i18nKey: 'orgSettings.tabs.recruitmentStages', icon: Workflow,  requires: 'manage_settings' as Permission | null },
     { value: 'shifts',        i18nKey: 'orgSettings.tabs.shifts',        icon: Clock,         requires: 'manage_settings' as Permission | null },
     { value: 'salary-components', i18nKey: 'orgSettings.tabs.salaryComponents', icon: Coins,    requires: 'manage_payroll'  as Permission | null },
@@ -143,6 +146,7 @@ export function OrganizationSettingsPage() {
                     <TabsContent value="holidays"     className="mt-0"><HolidaysTab /></TabsContent>
                     <TabsContent value="leave"        className="mt-0"><LeaveSettingsTab /></TabsContent>
                     <TabsContent value="onboarding"   className="mt-0"><OnboardingTemplateTab /></TabsContent>
+                    <TabsContent value="offboarding-flow" className="mt-0"><OffboardingFlowTab /></TabsContent>
                     <TabsContent value="recruitment-stages" className="mt-0"><RecruitmentStagesTab /></TabsContent>
                     <TabsContent value="shifts"       className="mt-0"><ShiftsTab /></TabsContent>
                     <TabsContent value="salary-components" className="mt-0"><SalaryComponentsTab /></TabsContent>

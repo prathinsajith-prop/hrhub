@@ -428,7 +428,12 @@ export async function attendanceRoutes(fastify: any) {
     // Body: { employeeId, date, inTime: 'HH:MM', outTime?: 'HH:MM',
     //   inDayOffset?: 0|1, outDayOffset?: 0|1, inNotes?, outNotes?,
     //   locationName?, latitude?, longitude? }
-    fastify.post('/attendance/punches', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
+    //
+    // HR/super_admin only — the route accepts arbitrary `date` + `inDayOffset`
+    // so a non-elevated caller could backfill historical attendance for
+    // themselves. Gating to HR matches the rest of the manual-entry surface
+    // (PATCH /attendance, biometric import).
+    fastify.post('/attendance/punches', { ...adminAuth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const body = (request.body ?? {}) as {
             employeeId?: string
             date?: string
@@ -463,7 +468,11 @@ export async function attendanceRoutes(fastify: any) {
         const [inH, inM] = body.inTime.split(':').map(Number) as [number, number]
         const inDate = new Date(baseDate.getTime() + (body.inDayOffset ?? 0) * 86_400_000)
         inDate.setHours(inH, inM, 0, 0)
-        const inPunch = await recordPunch(
+        // recordPunch now returns { row, created } — the created flag tells
+        // us whether this was a fresh insert or a no-op against an existing
+        // identical punch. Surface it in the response so bulk-import
+        // callers can count duplicates separately.
+        const inResult = await recordPunch(
             request.user.tenantId, resolvedEmployeeId, 'in',
             {
                 recordedAt: inDate,
@@ -475,7 +484,7 @@ export async function attendanceRoutes(fastify: any) {
             },
             request.user.id,
         )
-        let outPunch: typeof inPunch | null = null
+        let outResult: { row: typeof inResult.row; created: boolean } | null = null
         if (body.outTime) {
             const [outH, outM] = body.outTime.split(':').map(Number) as [number, number]
             const outDate = new Date(baseDate.getTime() + (body.outDayOffset ?? 0) * 86_400_000)
@@ -483,7 +492,7 @@ export async function attendanceRoutes(fastify: any) {
             if (outDate <= inDate) {
                 return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Check-out must be after check-in.' })
             }
-            outPunch = await recordPunch(
+            outResult = await recordPunch(
                 request.user.tenantId, resolvedEmployeeId, 'out',
                 {
                     recordedAt: outDate,
@@ -496,11 +505,29 @@ export async function attendanceRoutes(fastify: any) {
                 request.user.id,
             )
         }
-        return reply.code(201).send({ data: { inPunch, outPunch } })
+        // Two booleans roll into one "wasDuplicate" status per call:
+        //   - Both punches were no-ops → duplicate (entire row skipped)
+        //   - At least one was fresh → not a duplicate
+        const wasDuplicate = !inResult.created && (!outResult || !outResult.created)
+        return reply.code(201).send({
+            data: {
+                inPunch: inResult.row,
+                outPunch: outResult?.row ?? null,
+                // Per-punch flags so the importer can show "5 rows imported,
+                // 2 skipped as duplicates" instead of pretending everything
+                // wrote fresh.
+                inCreated: inResult.created,
+                outCreated: outResult ? outResult.created : null,
+                duplicate: wasDuplicate,
+            },
+        })
     })
 
     // DELETE /api/v1/attendance/punches/:id — undo a stray clock action.
-    fastify.delete('/attendance/punches/:id', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
+    //
+    // HR/super_admin only — without this gate, employees could remove their
+    // own punches and rewrite attendance history, defeating audit integrity.
+    fastify.delete('/attendance/punches/:id', { ...adminAuth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         const role = request.user.role
         const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)

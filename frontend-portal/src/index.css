@@ -66,6 +66,13 @@
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
 
+  /* Extra breakpoints for ultra-wide / TV displays — Tailwind ships only
+     up to 2xl (1536px). Keep usage targeted: cap max widths, expand
+     dashboard grids, scale typography. */
+  --breakpoint-3xl: 1920px;
+  --breakpoint-4xl: 2560px;
+
+
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));

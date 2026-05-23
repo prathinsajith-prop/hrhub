@@ -384,7 +384,7 @@ function RequestRow({
                         </Button>
                     )}
                     {canManage && (
-                        <Button size="sm" variant="ghost" onClick={onDelete} className="h-7 w-7 p-0 text-rose-600">
+                        <Button size="sm" variant="ghost" onClick={onDelete} className="size-7 p-0 text-rose-600">
                             <Trash2 className="size-3.5" />
                         </Button>
                     )}
@@ -1288,7 +1288,7 @@ function FormSection({
                 <div className="flex size-6 items-center justify-center rounded-md bg-muted text-muted-foreground">
                     <Icon className="size-3.5" />
                 </div>
-                <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{title}</h3>
+                <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{title}</h3>
             </header>
             {children}
         </section>

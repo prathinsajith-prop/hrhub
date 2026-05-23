@@ -112,13 +112,26 @@ async function rebuildDayRollup(tenantId: string, employeeId: string, day: strin
 }
 
 /** Insert a punch and rebuild the day's rollup atomically. */
+/**
+ * Result of `recordPunch`. The `created` flag distinguishes a fresh insert
+ * from a duplicate-suppressed call — letting bulk-import callers count
+ * "skipped" rows separately without N round-trips.
+ */
+export interface RecordPunchResult {
+    row: typeof attendancePunches.$inferSelect
+    /** `true` when the row was inserted; `false` when an identical punch
+     *  already existed at the same `(employeeId, recordedAt, punchType)`
+     *  triple and the existing row was returned instead. */
+    created: boolean
+}
+
 export async function recordPunch(
     tenantId: string,
     employeeId: string,
     punchType: 'in' | 'out',
     input: PunchInput = {},
     createdBy: string | null = null,
-) {
+): Promise<RecordPunchResult> {
     const recordedAt = input.recordedAt
         ? (typeof input.recordedAt === 'string' ? new Date(input.recordedAt) : input.recordedAt)
         : new Date()
@@ -127,10 +140,37 @@ export async function recordPunch(
     }
     const day = toDateISO(recordedAt)
 
+    // Idempotency guard. If a punch already exists at the EXACT
+    // `(employee, recordedAt, punchType)` triple — regardless of source —
+    // return it instead of inserting a second one. This is what makes
+    // bulk-imports safe to re-run: a CSV uploaded twice produces the same
+    // DB state, not duplicate punches.
+    //
+    // We compare on `recordedAt` (full timestamp, not just the date) so HR
+    // can still log multiple sessions per day at different minutes. Two
+    // rows that just happen to land in the same second on the same day
+    // for the same person are virtually always operator error.
+    const [existingSameTriple] = await db
+        .select()
+        .from(attendancePunches)
+        .where(and(
+            eq(attendancePunches.tenantId, tenantId),
+            eq(attendancePunches.employeeId, employeeId),
+            eq(attendancePunches.punchType, punchType),
+            eq(attendancePunches.recordedAt, recordedAt),
+        ))
+        .limit(1)
+    if (existingSameTriple) {
+        // Same triple already on disk — return it. Rollup stays consistent
+        // because no new row joined the day.
+        return { row: existingSameTriple, created: false }
+    }
+
     // Enforce alternation against the last punch of the day. Two 'in' in a
     // row or two 'out' in a row are almost always operator error, so we
-    // reject them with a clear message. HR's manual entry route bypasses
-    // this when source='manual'.
+    // reject them with a clear message — UNLESS the call originated from
+    // HR's manual entry / bulk-import path, where back-filling a forgotten
+    // out-punch sandwiched between two in-punches is a legitimate workflow.
     if (input.source !== 'manual') {
         const [last] = await db
             .select({ punchType: attendancePunches.punchType })
@@ -152,23 +192,45 @@ export async function recordPunch(
         }
     }
 
-    const [row] = await db.insert(attendancePunches).values({
-        tenantId,
-        employeeId,
-        date: day,
-        punchType,
-        recordedAt,
-        locationName: input.locationName ?? null,
-        latitude: input.latitude != null ? String(input.latitude) : null,
-        longitude: input.longitude != null ? String(input.longitude) : null,
-        source: input.source ?? 'web',
-        deviceId: input.deviceId ?? null,
-        notes: input.notes ?? null,
-        createdBy,
-    }).returning()
-
-    await rebuildDayRollup(tenantId, employeeId, day)
-    return row
+    try {
+        const [row] = await db.insert(attendancePunches).values({
+            tenantId,
+            employeeId,
+            date: day,
+            punchType,
+            recordedAt,
+            locationName: input.locationName ?? null,
+            latitude: input.latitude != null ? String(input.latitude) : null,
+            longitude: input.longitude != null ? String(input.longitude) : null,
+            source: input.source ?? 'web',
+            deviceId: input.deviceId ?? null,
+            notes: input.notes ?? null,
+            createdBy,
+        }).returning()
+        await rebuildDayRollup(tenantId, employeeId, day)
+        return { row: row!, created: true }
+    } catch (err) {
+        // Race guard. Two concurrent imports of the same row pass the
+        // pre-check together, then both try to INSERT. The first wins;
+        // the second hits the unique index (uq_attendance_punches_triple)
+        // and Postgres throws 23505. We treat that the same as the
+        // pre-check duplicate path: fetch the existing row, return it.
+        const pgErr = err as { code?: string }
+        if (pgErr.code === '23505') {
+            const [existing] = await db
+                .select()
+                .from(attendancePunches)
+                .where(and(
+                    eq(attendancePunches.tenantId, tenantId),
+                    eq(attendancePunches.employeeId, employeeId),
+                    eq(attendancePunches.punchType, punchType),
+                    eq(attendancePunches.recordedAt, recordedAt),
+                ))
+                .limit(1)
+            if (existing) return { row: existing, created: false }
+        }
+        throw err
+    }
 }
 
 export async function getPunchesForDay(tenantId: string, employeeId: string, day: string) {

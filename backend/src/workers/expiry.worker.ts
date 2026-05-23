@@ -1,7 +1,8 @@
 import { Queue, Worker } from 'bullmq'
 import { log } from '../lib/logger.js'
 import { db } from '../db/index.js'
-import { employees, notifications, documents, users, onboardingSteps } from '../db/schema/index.js'
+import { employees, notifications, documents, users, onboardingSteps, exitRequests } from '../db/schema/index.js'
+import { fireWorkflows } from '../modules/offboardingFlow/offboarding.service.js'
 import { and, eq, lt, lte, gte, ne, inArray } from 'drizzle-orm'
 import { loadEnv } from '../config/env.js'
 import { sendEmail, visaExpiryAlertEmail, documentExpiryAlertEmail } from '../plugins/email.js'
@@ -28,6 +29,7 @@ export let contractExpiryQueue: Queue | null = null
 export let passportExpiryQueue: Queue | null = null
 export let subscriptionExpiryQueue: Queue | null = null
 export let onboardingOverdueQueue: Queue | null = null
+export let exitRelievingDateQueue: Queue | null = null
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function daysFromNow(days: number): Date {
@@ -343,6 +345,45 @@ async function runOnboardingOverdueCheck() {
     log.info({ updated: rowCount ?? 0 }, 'worker: onboarding overdue check complete')
 }
 
+// ─── Exit Relieving Date Worker ───────────────────────────────────────────────
+// Fires the `on_relieving_date` offboarding workflow trigger for every exit
+// whose lastWorkingDay matches today. Daily at 02:00 UTC alongside the other
+// expiry workers — sits in the same scheduler so admins only configure one
+// cron schedule.
+//
+// Skips:
+//   - rejected exits (workflow doesn't apply)
+//   - completed exits already past their relieving date
+//   - exits whose tenant has no `on_relieving_date` workflows configured
+//     (fireWorkflows() short-circuits on empty list, so no harm)
+async function runExitRelievingDateCheck() {
+    log.info('worker: firing on_relieving_date workflows')
+    const today = new Date().toISOString().split('T')[0]
+    const due = await db.select({
+        id: exitRequests.id,
+        tenantId: exitRequests.tenantId,
+    }).from(exitRequests)
+        .where(and(
+            eq(exitRequests.lastWorkingDay, today),
+            inArray(exitRequests.status, ['pending', 'approved'] as never[]),
+        ))
+
+    if (due.length === 0) {
+        log.info('worker: no exits relieving today')
+        return
+    }
+
+    // Fire workflows concurrently — per-exit failures are already swallowed
+    // inside fireWorkflows().
+    await Promise.all(due.map(d =>
+        fireWorkflows(d.tenantId, 'on_relieving_date', { exitRequestId: d.id })
+            .catch((err) => {
+                log.warn({ err: err instanceof Error ? err.message : String(err), exitId: d.id }, 'on_relieving_date worker failed for one exit')
+            }),
+    ))
+    log.info({ fired: due.length }, 'worker: on_relieving_date workflows fired')
+}
+
 // ─── Scheduler: Register all daily workers ────────────────────────────────────
 export async function startExpiryWorkers() {
     const env = loadEnv()
@@ -375,6 +416,7 @@ export async function startExpiryWorkers() {
         passportExpiryQueue = new Queue('passport-expiry', { connection })
         subscriptionExpiryQueue = new Queue('subscription-expiry', { connection })
         onboardingOverdueQueue = new Queue('onboarding-overdue', { connection })
+        exitRelievingDateQueue = new Queue('exit-relieving-date', { connection })
 
         // Enqueue recurring daily jobs at 06:00 UAE time (UTC+4 = 02:00 UTC)
         await visaExpiryQueue.upsertJobScheduler('daily-visa-check', { pattern: '0 2 * * *' }, { name: 'visa-expiry' })
@@ -383,6 +425,7 @@ export async function startExpiryWorkers() {
         await passportExpiryQueue.upsertJobScheduler('daily-passport-check', { pattern: '0 2 * * *' }, { name: 'passport-expiry' })
         await subscriptionExpiryQueue.upsertJobScheduler('daily-subscription-check', { pattern: '0 2 * * *' }, { name: 'subscription-expiry' })
         await onboardingOverdueQueue.upsertJobScheduler('daily-onboarding-overdue', { pattern: '0 2 * * *' }, { name: 'onboarding-overdue' })
+        await exitRelievingDateQueue.upsertJobScheduler('daily-exit-relieving-date', { pattern: '0 2 * * *' }, { name: 'exit-relieving-date' })
 
         // Process workers
         new Worker('visa-expiry', runVisaExpiryCheck, { connection })
@@ -391,6 +434,7 @@ export async function startExpiryWorkers() {
         new Worker('passport-expiry', runPassportExpiryCheck, { connection })
         new Worker('subscription-expiry', runSubscriptionExpiryCheck, { connection })
         new Worker('onboarding-overdue', runOnboardingOverdueCheck, { connection })
+        new Worker('exit-relieving-date', runExitRelievingDateCheck, { connection })
 
         log.info('expiry alert workers started (daily 06:00 UAE)')
     } catch (err) {

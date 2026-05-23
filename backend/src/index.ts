@@ -36,6 +36,7 @@ import dashboardRoutes from './modules/dashboard/dashboard.routes.js'
 import reportsRoutes from './modules/reports/reports.routes.js'
 import settingsRoutes from './modules/settings/settings.routes.js'
 import { exitRoutes } from './modules/exit/exit.routes.js'
+import { offboardingFlowRoutes } from './modules/offboardingFlow/offboarding.routes.js'
 import { interviewRoutes } from './modules/recruitment/interview.routes.js'
 import { performanceRoutes } from './modules/performance/performance.routes.js'
 import { attendanceRoutes } from './modules/attendance/attendance.routes.js'
@@ -163,8 +164,11 @@ async function bootstrap() {
         sign: { expiresIn: env.JWT_EXPIRES_IN as never },
     })
 
-    // API documentation — only enabled when ENABLE_API_DOCS=true.
-    const docsEnabled = env.ENABLE_API_DOCS
+    // API documentation — always on in development, opt-in via
+    // ENABLE_API_DOCS=true for staging/prod. This matches CLAUDE.md's
+    // documented behaviour: HR engineers shouldn't have to set an env
+    // var just to view Swagger locally.
+    const docsEnabled = env.ENABLE_API_DOCS || env.NODE_ENV !== 'production'
     if (docsEnabled) {
         await app.register(swagger, {
             openapi: {
@@ -361,6 +365,7 @@ async function bootstrap() {
     await app.register(reportsRoutes, { prefix: '/api/v1/reports' })
     await app.register(settingsRoutes, { prefix: '/api/v1/settings' })
     await app.register(exitRoutes, { prefix: '/api/v1' })
+    await app.register(offboardingFlowRoutes, { prefix: '/api/v1' })
     await app.register(interviewRoutes, { prefix: '/api/v1' })
     await app.register(performanceRoutes, { prefix: '/api/v1' })
     await app.register(attendanceRoutes, { prefix: '/api/v1' })

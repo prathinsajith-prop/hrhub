@@ -284,7 +284,7 @@ export function AttendancePage() {
         const rows = list.map((r) => [
             r.date,
             empMap.get(r.employeeId)?.name ?? '—',
-            STATUS_LABEL[r.status],
+            STATUS_LABEL[r.status as keyof typeof STATUS_LABEL],
             fmtTime(r.checkIn),
             fmtTime(r.checkOut),
             r.hoursWorked ?? '',
@@ -1024,22 +1024,14 @@ function ImportAttendancePunchesDialog({
         return m
     }, [employees, mappings])
 
-    // Re-resolve every row whenever the lookup changes (mappings finish
-    // loading after the dialog opens, for instance). State-during-render
-    // beats useEffect for this simple sync.
-    const [lookupVersion, setLookupVersion] = useState(0)
-    const [lastSize, setLastSize] = useState(0)
-    if (lookup.size !== lastSize) {
-        setLastSize(lookup.size)
-        setLookupVersion((v) => v + 1)
-    }
-
+    // `lookup` is a fresh Map on every change to `employees` / `mappings`
+    // (built inside the useMemo above), so its reference flips automatically
+    // when the data finishes loading. That makes the bookkeeping counter
+    // and `lastSize` unnecessary — the useMemo below will recompute on its
+    // own as soon as the lookup identity changes.
     const resolvedRows = useMemo(
         () => rows.map((r) => resolveImportRow(r, lookup)),
-        // lookupVersion forces a recompute even though `lookup` is stable
-        // by reference within the same render tick.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [rows, lookup, lookupVersion],
+        [rows, lookup],
     )
 
     const validCount = resolvedRows.filter((r) => r.errors.length === 0).length
@@ -1093,7 +1085,7 @@ function ImportAttendancePunchesDialog({
                 // sheet_to_csv emits a normal CSV string — including blank
                 // cells as empty fields — that the existing parser handles
                 // unchanged. Force UTF-8 BOM off so the date header isn't
-                // mistaken for "﻿date".
+                // mistaken for "\uFEFFdate".
                 text = XLSX.utils.sheet_to_csv(sheet, { blankrows: false })
             }
         } catch (err) {
@@ -1111,12 +1103,13 @@ function ImportAttendancePunchesDialog({
     }
 
     /**
-     * Sample rows that cover both identity columns:
+     * Sample template rows. Covers both identity columns:
      *   - employee_no  (HRHub's own employee code)
      *   - mapper_id    (biometric device user id; takes precedence when both are set)
      *
-     * Same canonical rows feed both the CSV and the XLSX sample so HR sees
-     * an identical layout regardless of which format they prefer.
+     * One file format for the sample (.xlsx) keeps the UI uncluttered. The
+     * parser still accepts CSV uploads — only the sample-download surface
+     * is xlsx-only.
      */
     const SAMPLE_HEADER = ['employee_no', 'mapper_id', 'date', 'in_time', 'out_time', 'in_notes', 'out_notes', 'location']
     const SAMPLE_ROWS: ReadonlyArray<ReadonlyArray<string>> = [
@@ -1126,34 +1119,22 @@ function ImportAttendancePunchesDialog({
         ['EMP-002', '', '2026-05-20', '09:10', '', 'Forgot punch-out', '', 'Site B'],
     ]
 
-    async function downloadSample(format: 'csv' | 'xlsx' = 'csv') {
-        let blob: Blob
-        let filename: string
-        if (format === 'xlsx') {
-            // Lazy-load xlsx for the same reason as the import path —
-            // it's a heavy chunk we shouldn't ship until HR actually
-            // asks for it.
-            const XLSX = await import('xlsx')
-            const sheet = XLSX.utils.aoa_to_sheet([[...SAMPLE_HEADER], ...SAMPLE_ROWS.map((r) => [...r])])
-            // Column widths sized to the longest header so the file opens
-            // looking presentable instead of every column being 8.43 wide.
-            sheet['!cols'] = [
-                { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
-                { wch: 22 }, { wch: 22 }, { wch: 14 },
-            ]
-            const wb = XLSX.utils.book_new()
-            XLSX.utils.book_append_sheet(wb, sheet, 'Attendance')
-            const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
-            blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-            filename = 'attendance-import-sample.xlsx'
-        } else {
-            const csv = [
-                SAMPLE_HEADER.join(','),
-                ...SAMPLE_ROWS.map((r) => r.join(',')),
-            ].join('\n')
-            blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-            filename = 'attendance-import-sample.csv'
-        }
+    async function downloadSample() {
+        // Lazy-load xlsx — same reason as the import path: it's a heavy
+        // chunk we shouldn't ship until HR actually asks for it.
+        const XLSX = await import('xlsx')
+        const sheet = XLSX.utils.aoa_to_sheet([[...SAMPLE_HEADER], ...SAMPLE_ROWS.map((r) => [...r])])
+        // Column widths sized to the longest header so the file opens
+        // looking presentable instead of every column being 8.43 wide.
+        sheet['!cols'] = [
+            { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
+            { wch: 22 }, { wch: 22 }, { wch: 14 },
+        ]
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, sheet, 'Attendance')
+        const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+        const filename = 'attendance-import-sample.xlsx'
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
@@ -1173,17 +1154,24 @@ function ImportAttendancePunchesDialog({
         // Each row carries its own employeeId (populated by resolveImportRow
         // during validation). We loop them and call addManual per-row —
         // failures on individual rows don't abort the rest. Network-level
-        // errors increment the `failed` counter; the row stays visible in
-        // the preview so HR can see exactly which line broke.
+        // errors increment `failed`; the row stays visible in the preview
+        // so HR can see exactly which line broke.
+        //
+        // The backend now returns a `duplicate` flag per call indicating
+        // that the (employee, timestamp, punchType) already existed on
+        // disk. We count those separately so the final toast tells HR
+        // "5 imported, 2 skipped as duplicates" — re-uploads stay safe.
         const valid = resolvedRows.filter((r) => r.errors.length === 0 && r.employeeId)
         if (valid.length === 0) return
         setSubmitting(true)
         setProgress({ done: 0, total: valid.length, failed: 0 })
         let done = 0
         let failed = 0
+        let created = 0
+        let duplicate = 0
         for (const r of valid) {
             try {
-                await addManual.mutateAsync({
+                const res = await addManual.mutateAsync({
                     employeeId: r.employeeId as string,
                     date: r.date,
                     inTime: r.inTime,
@@ -1191,7 +1179,9 @@ function ImportAttendancePunchesDialog({
                     inNotes: r.inNotes ?? undefined,
                     outNotes: r.outNotes ?? undefined,
                     locationName: r.locationName ?? undefined,
-                })
+                }) as { data?: { duplicate?: boolean } } | undefined
+                if (res?.data?.duplicate) duplicate += 1
+                else created += 1
             } catch {
                 failed += 1
             }
@@ -1199,12 +1189,21 @@ function ImportAttendancePunchesDialog({
             setProgress({ done, total: valid.length, failed })
         }
         setSubmitting(false)
-        if (failed === 0) {
-            toast.success('Import complete', `${done} ${done === 1 ? 'entry' : 'entries'} imported.`)
+        // Build a single summary string covering every action bucket so
+        // the user sees exactly what landed in the DB.
+        if (failed > 0) {
+            toast.error('Some rows failed', `${created} imported · ${duplicate} duplicate · ${failed} failed.`)
+        } else if (duplicate > 0 && created === 0) {
+            toast.success('Nothing new to import',
+                `All ${duplicate} row${duplicate === 1 ? '' : 's'} already existed in the system.`)
             reset()
             onOpenChange(false)
         } else {
-            toast.error('Some rows failed', `${done - failed} succeeded, ${failed} failed.`)
+            const parts: string[] = [`${created} ${created === 1 ? 'entry' : 'entries'} imported`]
+            if (duplicate > 0) parts.push(`${duplicate} skipped as duplicate${duplicate === 1 ? '' : 's'}`)
+            toast.success('Import complete', parts.join(' · '))
+            reset()
+            onOpenChange(false)
         }
     }
 
@@ -1273,31 +1272,20 @@ function ImportAttendancePunchesDialog({
                                     Upload CSV or Excel
                                 </h3>
                             </div>
-                            {/* Two sample-download options — same data,
-                                different format. The CSV path stays
-                                instant; the XLSX path lazy-loads the
-                                heavy xlsx chunk before writing the file. */}
-                            <div className="flex items-center gap-1">
-                                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground hidden sm:inline">Sample</span>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => downloadSample('csv')}
-                                    className="gap-1 h-7 text-[11px]"
-                                >
-                                    <Download className="size-3" />
-                                    .csv
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => downloadSample('xlsx')}
-                                    className="gap-1 h-7 text-[11px]"
-                                >
-                                    <Download className="size-3" />
-                                    .xlsx
-                                </Button>
-                            </div>
+                            {/* Single .xlsx sample — Excel is the format
+                                biometric devices and HR teams both export
+                                natively. Keeping two buttons would clutter
+                                the header for no real benefit (the parser
+                                accepts both formats either way). */}
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => { void downloadSample() }}
+                                className="gap-1.5 h-7 text-[11px]"
+                            >
+                                <Download className="size-3" />
+                                Download sample
+                            </Button>
                         </header>
 
                         {!fileName ? (

@@ -14,9 +14,14 @@ interface CodeMeta {
 }
 
 const CODE_META: Record<string, CodeMeta> = {
-    P: { label: 'Present', short: 'P', bg: '', text: 'text-foreground', weight: 'plain' },
-    'P-late': { label: 'Late', short: 'P', bg: '', text: 'text-rose-600 dark:text-rose-300', weight: 'plain' },
-    'P-short': { label: 'Short Hours', short: 'P', bg: '', text: 'text-amber-600 dark:text-amber-300', weight: 'plain' },
+    // Present + its sub-states get vivid tints so HR can scan a month's
+    // grid and spot the regular working days at a glance. Plain "P" was
+    // invisible against the page background — emerald-100 reads as a
+    // calm "everything was fine" badge that stays out of the way of more
+    // urgent rose / amber cells.
+    P: { label: 'Present', short: 'P', bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-800 dark:text-emerald-100', weight: 'badge' },
+    'P-late': { label: 'Late', short: 'P', bg: 'bg-rose-100 dark:bg-rose-950/40', text: 'text-rose-700 dark:text-rose-300', weight: 'badge' },
+    'P-short': { label: 'Short Hours', short: 'P', bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-300', weight: 'badge' },
     A: { label: 'Absent / Unpaid Leave / Only Punch In', short: 'A', bg: 'bg-rose-500', text: 'text-white', weight: 'badge' },
     AL: { label: 'Annual Leave', short: 'AL', bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-800 dark:text-amber-200', weight: 'badge' },
     SL: { label: 'Sick Leave', short: 'SL', bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-800 dark:text-amber-200', weight: 'badge' },

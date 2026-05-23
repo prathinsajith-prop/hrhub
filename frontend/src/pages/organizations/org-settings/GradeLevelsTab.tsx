@@ -395,7 +395,8 @@ function GradeLevelsSection() {
                     </div>
                 ) : (
                     <div className="rounded-xl border bg-card overflow-hidden">
-                        <table className="w-full text-sm">
+                        <div className="overflow-x-auto">
+                        <table className="w-full min-w-[640px] text-sm">
                             <thead>
                                 <tr className="border-b bg-muted/40">
                                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground w-16">{t('orgSettings.gradeLevels.codeCol')}</th>
@@ -483,6 +484,7 @@ function GradeLevelsSection() {
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 )}
             </Section>

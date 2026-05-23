@@ -19,7 +19,12 @@ interface CodeMeta {
 }
 
 const CODE_META: Record<string, CodeMeta> = {
-    P: { label: 'Present', short: 'P', bg: 'bg-emerald-50 dark:bg-emerald-950/30', text: 'text-emerald-800 dark:text-emerald-200', fill: true },
+    // Present cells get a vivid emerald fill — bumped from `emerald-50` so
+    // a "good" day stands out at a glance from weekends, leaves, and any
+    // other muted-tone status. Picked green (not blue) to match the
+    // universal positive-status convention; matches the portal's chart
+    // colours so the whole attendance surface tells the same story.
+    P: { label: 'Present', short: 'P', bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-800 dark:text-emerald-100', fill: true },
     'P-late': { label: 'Late', short: 'Late', bg: 'bg-rose-50 dark:bg-rose-950/30', text: 'text-rose-700 dark:text-rose-300', fill: true },
     'P-short': { label: 'Short Hours', short: 'Short', bg: 'bg-amber-50 dark:bg-amber-950/30', text: 'text-amber-700 dark:text-amber-300', fill: true },
     A: { label: 'Absent', short: 'A', bg: 'bg-rose-500', text: 'text-white', fill: true },

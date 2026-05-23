@@ -1579,20 +1579,20 @@ function BulkRowItem({
 
   return (
     <tr className={cn(v.rowClass)}>
-      <td className="px-2 py-2 text-muted-foreground tabular-nums align-top">{row.rowNumber}</td>
-      <td className="px-2 py-2 align-top">
+      <td className="p-2 text-muted-foreground tabular-nums align-top">{row.rowNumber}</td>
+      <td className="p-2 align-top">
         {pending
           ? <Loader2 className="size-3.5 text-muted-foreground animate-spin" />
           : <ActionBadge action={action} />}
       </td>
-      <td className="px-2 py-2 align-top">
+      <td className="p-2 align-top">
         <p className="truncate font-medium">{employeeLine}</p>
         {subLine && <p className="text-[10px] text-muted-foreground truncate">{subLine}</p>}
       </td>
-      <td className="px-2 py-2 text-right tabular-nums align-top">
+      <td className="p-2 text-right tabular-nums align-top">
         <AmountCell row={row} action={action} />
       </td>
-      <td className="px-2 py-2 align-top">
+      <td className="p-2 align-top">
         {detail ? (
           <span className={cn(
             detail.tone === 'error' && 'text-rose-600 dark:text-rose-400',

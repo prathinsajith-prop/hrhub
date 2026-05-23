@@ -15,12 +15,14 @@ import { useTranslation } from 'react-i18next'
 import {
     Fingerprint, Upload, ArrowLeft, Plus, Trash2, Loader2, FileSpreadsheet,
     CheckCircle2, XCircle, AlertCircle, Copy, Download, X, Send, Pencil,
+    Webhook, ExternalLink, KeyRound,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge, Card, Input, Label, Separator } from '@/components/ui/primitives'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -62,6 +64,10 @@ export default function BiometricImportPage() {
                         <Upload className="size-3.5" />
                         {t('biometric.tabs.import', 'Check-in/out Import')}
                     </TabsTrigger>
+                    <TabsTrigger value="external" className="gap-1.5">
+                        <Webhook className="size-3.5" />
+                        {t('biometric.tabs.external', 'External API')}
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="mapping" className="space-y-4">
@@ -70,6 +76,10 @@ export default function BiometricImportPage() {
 
                 <TabsContent value="import" className="space-y-4">
                     <AttendanceImportTab />
+                </TabsContent>
+
+                <TabsContent value="external" className="space-y-4">
+                    <ExternalApiTab />
                 </TabsContent>
             </Tabs>
         </PageWrapper>
@@ -692,19 +702,17 @@ function AttendanceImportTab() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-[10rem_10rem_1fr_auto] sm:items-end">
                     <div className="space-y-1.5">
                         <Label className="text-[11px] uppercase tracking-wide">{t('biometric.export.from', 'From')}</Label>
-                        <Input
-                            type="date"
+                        <DatePicker
                             value={exportFrom}
-                            onChange={(e) => setExportFrom(e.target.value)}
+                            onChange={setExportFrom}
                             max={exportTo}
                         />
                     </div>
                     <div className="space-y-1.5">
                         <Label className="text-[11px] uppercase tracking-wide">{t('biometric.export.to', 'To')}</Label>
-                        <Input
-                            type="date"
+                        <DatePicker
                             value={exportTo}
-                            onChange={(e) => setExportTo(e.target.value)}
+                            onChange={setExportTo}
                             min={exportFrom}
                             max={today}
                         />
@@ -1016,3 +1024,180 @@ function normalizeDate(value: unknown): string {
 void Badge
 /** And separator — kept available for future expansions. */
 void Separator
+
+// ─── External API integration ───────────────────────────────────────────────
+//
+// Surfaces the public endpoint URL a biometric device vendor (or any third
+// party) needs to POST punch events into HRHub. Without this view HR had no
+// way to discover the URL short of reading the API docs — which is the
+// problem the user reported: "integration of external application URL is
+// not visible in attendance".
+function ExternalApiTab() {
+    const { t } = useTranslation()
+
+    // The frontend already knows the API origin: either `VITE_API_URL`
+    // (deployed) or the dev proxy origin. Either way, surface the full,
+    // copy-pasteable URL — no need for the user to guess.
+    const apiBase = useMemo(() => {
+        const env = import.meta.env.VITE_API_URL as string | undefined
+        if (env && env.trim().length > 0) return env.replace(/\/$/, '')
+        if (typeof window !== 'undefined') return `${window.location.origin}/api/v1`
+        return '/api/v1'
+    }, [])
+    const endpoint = `${apiBase}/attendance/external-punch`
+    const docsUrl = `${apiBase.replace(/\/api\/v1$/, '')}/api/docs`
+
+    const samplePayload = `{
+  "employeeId": "00000000-0000-0000-0000-000000000000",
+  "punchType": "in",
+  "timestamp": "${new Date().toISOString()}",
+  "deviceId": "device-01",
+  "source": "biometric"
+}`
+
+    const sampleCurl = `curl -X POST '${endpoint}' \\
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \\
+  -H 'Content-Type: application/json' \\
+  -d '${samplePayload.replace(/\n/g, ' ').replace(/\s+/g, ' ')}'`
+
+    const copy = async (value: string, label: string) => {
+        try {
+            await navigator.clipboard.writeText(value)
+            toast.success(t('biometric.external.copied', 'Copied'), label)
+        } catch {
+            toast.error(t('biometric.external.copyFailed', 'Copy failed'), label)
+        }
+    }
+
+    return (
+        <div className="space-y-4">
+            <div>
+                <h2 className="text-sm font-semibold">
+                    {t('biometric.external.title', 'External application endpoint')}
+                </h2>
+                <p className="text-[11px] text-muted-foreground">
+                    {t(
+                        'biometric.external.subtitle',
+                        'Share this URL with your biometric vendor or any third-party app to push punch events directly into HRHub.',
+                    )}
+                </p>
+            </div>
+
+            {/* Endpoint URL */}
+            <Card className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                    <Webhook className="size-4 text-muted-foreground" />
+                    <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {t('biometric.external.urlLabel', 'POST endpoint')}
+                    </Label>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <code className="flex-1 min-w-0 truncate rounded-md border bg-muted/30 px-3 py-2 text-xs font-mono">
+                        {endpoint}
+                    </code>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 shrink-0"
+                        onClick={() => copy(endpoint, endpoint)}
+                    >
+                        <Copy className="size-3.5" />
+                        {t('biometric.external.copy', 'Copy')}
+                    </Button>
+                    <Button asChild size="sm" variant="ghost" className="gap-1.5 shrink-0">
+                        <a href={docsUrl} target="_blank" rel="noreferrer">
+                            <ExternalLink className="size-3.5" />
+                            {t('biometric.external.docs', 'API docs')}
+                        </a>
+                    </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                    {t(
+                        'biometric.external.method',
+                        'Method: POST · Content-Type: application/json · Authorization: Bearer <token>',
+                    )}
+                </p>
+            </Card>
+
+            {/* Auth note */}
+            <Card className="p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                    <KeyRound className="size-4 text-muted-foreground" />
+                    <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {t('biometric.external.authLabel', 'Authorization')}
+                    </Label>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                    {t(
+                        'biometric.external.authHint',
+                        'Authenticate every request with a Bearer access token issued for a service account in your organization. The token scopes the call to your tenant — no cross-tenant access is possible. Treat the token as a secret; rotate it from Organization → Connected Apps if it leaks.',
+                    )}
+                </p>
+            </Card>
+
+            {/* Sample payload */}
+            <Card className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="size-4 text-muted-foreground" />
+                        <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {t('biometric.external.payloadLabel', 'Request body')}
+                        </Label>
+                    </div>
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1.5"
+                        onClick={() => copy(samplePayload, t('biometric.external.payloadLabel', 'Request body') as string)}
+                    >
+                        <Copy className="size-3.5" />
+                        {t('biometric.external.copy', 'Copy')}
+                    </Button>
+                </div>
+                <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-[11px] font-mono leading-relaxed">
+{samplePayload}
+                </pre>
+                <ul className="text-[11px] text-muted-foreground space-y-1">
+                    <li>
+                        <code className="font-mono text-foreground">employeeId</code> —{' '}
+                        {t('biometric.external.field.employeeId', 'Required. HRHub employee UUID. Use the Biometric ID mapping tab to translate device IDs.')}
+                    </li>
+                    <li>
+                        <code className="font-mono text-foreground">punchType</code> —{' '}
+                        {t('biometric.external.field.punchType', "Required. Either 'in' or 'out'.")}
+                    </li>
+                    <li>
+                        <code className="font-mono text-foreground">timestamp</code> —{' '}
+                        {t('biometric.external.field.timestamp', 'Optional ISO-8601 UTC time. Defaults to "now" if omitted.')}
+                    </li>
+                    <li>
+                        <code className="font-mono text-foreground">deviceId</code> /{' '}
+                        <code className="font-mono text-foreground">source</code> —{' '}
+                        {t('biometric.external.field.deviceMeta', 'Optional device label / source ("biometric", "api", "mobile") stored on the audit trail.')}
+                    </li>
+                </ul>
+            </Card>
+
+            {/* Sample curl */}
+            <Card className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                    <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {t('biometric.external.curlLabel', 'cURL example')}
+                    </Label>
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1.5"
+                        onClick={() => copy(sampleCurl, 'cURL')}
+                    >
+                        <Copy className="size-3.5" />
+                        {t('biometric.external.copy', 'Copy')}
+                    </Button>
+                </div>
+                <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-[11px] font-mono leading-relaxed whitespace-pre-wrap">
+{sampleCurl}
+                </pre>
+            </Card>
+        </div>
+    )
+}
