@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js'
 import { publicHolidays } from '../../db/schema/index.js'
-import { eq, and, asc, inArray, sql } from 'drizzle-orm'
+import { eq, and, asc, inArray } from 'drizzle-orm'
 import { asBool, asDate, asString, buildTemplateXlsx, validateRows, type RowResult } from '../../lib/bulk-import.js'
 
 // UAE default public holidays (month-day format, applied per year)
@@ -227,7 +227,3 @@ export default async function publicHolidaysRoutes(fastify: any): Promise<void> 
         })
     })
 }
-
-// Suppress unused-import warning when the file's tsc strictness flags it —
-// `sql` is exported for future use.
-void sql

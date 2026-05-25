@@ -25,8 +25,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast,
 } from '@/components/ui/overlays'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
-import { CheckCircle2, AlertCircle, Copy, Upload, FileSpreadsheet, Download, Loader2, X } from 'lucide-react'
+import { CheckCircle2, AlertCircle, Copy, Upload, FileSpreadsheet, Download, Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -497,9 +496,3 @@ function Badge({ tone, icon, children }: { tone: 'emerald' | 'amber' | 'rose'; i
         </span>
     )
 }
-
-// Re-exports for any future callers that want to suppress the unused warning
-// on the `Skeleton`/`X` icons (kept in the import for visual parity with the
-// existing dialogs).
-void Skeleton
-void X
