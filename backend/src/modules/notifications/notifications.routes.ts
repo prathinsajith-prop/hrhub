@@ -1,20 +1,21 @@
+import { z } from 'zod'
 import { getNotifications, markNotificationRead, markAllNotificationsRead, getUnreadCount } from './notifications.service.js'
+import { e404 } from '../../lib/errors.js'
+import { validate, parseUuidParam } from '../../lib/validation.js'
+
+const listQuerySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    offset: z.coerce.number().int().min(0).default(0),
+    unreadOnly: z.preprocess(v => v === 'true' || v === true, z.boolean()).optional().default(false),
+})
 
 export async function notificationsRoutes(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
 
     // GET /api/v1/notifications?limit=&offset=&unreadOnly=
     fastify.get('/', { ...auth, schema: { tags: ['Notifications'] } }, async (request: any, reply: any) => {
-        const { limit = '20', offset = '0', unreadOnly } = request.query as Record<string, string>
-        const result = await getNotifications(
-            request.user.tenantId,
-            request.user.id,
-            {
-                limit: Math.min(Number(limit), 100),
-                offset: Number(offset),
-                unreadOnly: unreadOnly === 'true',
-            },
-        )
+        const query = validate(listQuerySchema, request.query)
+        const result = await getNotifications(request.user.tenantId, request.user.id, query)
         return reply.send(result)
     })
 
@@ -26,9 +27,10 @@ export async function notificationsRoutes(fastify: any): Promise<void> {
 
     // PATCH /api/v1/notifications/:id/read
     fastify.patch('/:id/read', { ...auth, schema: { tags: ['Notifications'] } }, async (request: any, reply: any) => {
-        const { id } = request.params as { id: string }
+        const id = parseUuidParam(request.params as Record<string, unknown>, 'id', reply)
+        if (!id) return
         const updated = await markNotificationRead(request.user.tenantId, request.user.id, id)
-        if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Notification not found' })
+        if (!updated) return reply.code(404).send(e404('Notification not found'))
         return reply.send({ data: updated })
     })
 

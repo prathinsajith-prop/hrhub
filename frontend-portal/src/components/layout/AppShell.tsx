@@ -21,7 +21,14 @@ export function AppShell() {
 
             <TopBar />
 
-            <div className="mx-auto flex max-w-6xl gap-6 px-4 pb-28 pt-6 sm:px-6 md:pb-12">
+            {/* Responsive container — grows in tiers so we use the screen
+                without letting line lengths get unreadable:
+                  base mobile : edge-to-edge
+                  sm         : 6xl  (1152px)
+                  xl         : 7xl  (1280px)
+                  2xl        : 1536
+                  3xl (TV)   : 1760  */}
+            <div className="mx-auto flex max-w-6xl xl:max-w-7xl 2xl:max-w-[1536px] 3xl:max-w-[1760px] gap-6 xl:gap-8 px-4 pb-28 pt-6 sm:px-6 md:pb-12">
                 <SideNav />
                 <main className="min-w-0 flex-1 page-slide-up">
                     <Outlet />

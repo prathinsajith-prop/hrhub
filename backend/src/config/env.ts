@@ -38,6 +38,10 @@ const envSchema = z.object({
     REDIS_URL: z.string().default(''),
     // App
     APP_URL: z.string().url().default('http://localhost:5174'),
+    // Public employee portal — used in tokenised email links like the
+    // exit-interview "complete via link" flow. Defaults to the Vite-dev
+    // port the portal runs on locally.
+    PORTAL_URL: z.string().url().default('http://localhost:5173'),
     // Sales / subscription
     SALES_EMAIL: z.string().email().default('sales@hrhub.ae'),
     // Stripe — leave empty to disable self-service checkout (falls back to email request flow)

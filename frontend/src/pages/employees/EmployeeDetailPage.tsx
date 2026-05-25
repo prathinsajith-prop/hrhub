@@ -69,7 +69,7 @@ import { toast } from '@/components/ui/overlays'
 import { api } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { CopyableEmail, CopyablePhone, ActionBadge, MetaItem } from '@/components/shared'
-import { resolveCountryIso } from '@/components/shared/PhoneInput'
+import { resolveCountryIso, countryNameFromIso, CountrySelect } from '@/components/shared/PhoneInput'
 
 /** Convert an ISO-2 country code into its regional-indicator flag emoji. */
 function isoToFlag(iso: string | null | undefined): string {
@@ -3439,11 +3439,14 @@ function DependentFormDialog({
         <DialogHeader>
           <DialogTitle>{dependent ? 'Edit Dependent' : 'Add Dependent'}</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
-          <div className="sm:col-span-2 space-y-1.5">
+        {/* Single-column stack: every field gets the full dialog width so the
+            form reads as a single vertical flow instead of a busy grid. */}
+        <div className="flex flex-col gap-4 py-2">
+          <div className="space-y-1.5">
             <Label>Full Name *</Label>
             <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Sarah Johnson" />
           </div>
+
           <div className="space-y-1.5">
             <Label>Relation *</Label>
             <Select value={form.relation} onValueChange={v => set('relation', v)}>
@@ -3455,20 +3458,32 @@ function DependentFormDialog({
               </SelectContent>
             </Select>
           </div>
+
           <div className="space-y-1.5">
             <Label>Date of Birth</Label>
             <DatePicker value={form.birthDate ?? ''} onChange={v => set('birthDate', v ?? '')} />
           </div>
+
           <div className="space-y-1.5">
             <Label>Nationality</Label>
-            <Input value={form.nationality ?? ''} onChange={e => set('nationality', e.target.value)} placeholder="e.g. UAE" />
+            <CountrySelect
+              value={resolveCountryIso(form.nationality ?? '')}
+              onChange={(iso) => set('nationality', countryNameFromIso(iso))}
+              placeholder="Select nationality"
+            />
           </div>
+
           <div className="space-y-1.5">
-            <Label>Visa Number</Label>
-            <Input value={form.visaNumber ?? ''} onChange={e => set('visaNumber', e.target.value)} placeholder="Optional" />
+            <Label>
+              Visa Number <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+            </Label>
+            <Input value={form.visaNumber ?? ''} onChange={e => set('visaNumber', e.target.value)} placeholder="784-XXXX" />
           </div>
-          <div className="sm:col-span-2 space-y-1.5">
-            <Label>Medical Insurance</Label>
+
+          <div className="space-y-1.5">
+            <Label>
+              Medical Insurance <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+            </Label>
             <Input value={form.medicalInsurance ?? ''} onChange={e => set('medicalInsurance', e.target.value)} placeholder="Policy number or provider" />
           </div>
         </div>

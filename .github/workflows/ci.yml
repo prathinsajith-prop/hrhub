@@ -1,24 +1,43 @@
 name: CI
 
+# Main-app CI — runs only when the `backend/` or `frontend/` workspaces (or
+# shared root configs / this workflow file) change. Portal-only and
+# docs-only commits skip this pipeline entirely.
+
 on:
   push:
-    branches: [ main, staging, development ]
+    branches: [main, staging, development]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'biome.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/ci.yml'
   pull_request:
-    branches: [ main, staging, development ]
+    branches: [main, staging, development]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'biome.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/ci.yml'
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  PNPM_VERSION: "10.30.0"
-  NODE_VERSION: "22"
+  PNPM_VERSION: '10.30.0'
+  NODE_VERSION: '22'
 
 jobs:
   # ─── Backend ────────────────────────────────────────────────────────────────
   backend:
     name: Backend — Type-check, Lint & Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
@@ -37,7 +56,7 @@ jobs:
           cache-dependency-path: backend/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Type-check
         run: pnpm exec tsc --noEmit
@@ -45,21 +64,26 @@ jobs:
       - name: Lint (zero errors)
         run: pnpm lint
 
-      - name: Build
-        run: pnpm build
-
       - name: Test
-        run: pnpm test
+        # Pure-function tests — no DB needed; stubs satisfy zod env validation.
         env:
-          # Tests use pure functions — no DB needed; stub the URL to satisfy dotenv
           DATABASE_URL: postgresql://stub:stub@localhost:5432/stub
           JWT_SECRET: ci-test-secret-at-least-32-characters-long
           REFRESH_TOKEN_SECRET: ci-test-refresh-secret-at-least-32-characters-long
+        run: pnpm test
+
+      - name: Build
+        env:
+          DATABASE_URL: postgresql://stub:stub@localhost:5432/stub
+          JWT_SECRET: ci-test-secret-at-least-32-characters-long
+          REFRESH_TOKEN_SECRET: ci-test-refresh-secret-at-least-32-characters-long
+        run: pnpm build
 
   # ─── Frontend ───────────────────────────────────────────────────────────────
   frontend:
     name: Frontend — Type-check, Lint, Test & Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -78,14 +102,15 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Type-check
         run: pnpm exec tsc -p tsconfig.app.json --noEmit
 
       - name: Lint (zero errors)
-        # Exit code 1 only on actual errors; warnings are allowed
-        run: pnpm exec eslint src --ext .ts,.tsx
+        # `pnpm lint` runs `eslint .` and exits 1 only on actual errors —
+        # warnings are allowed. Same script local devs run.
+        run: pnpm lint
 
       - name: Test
         run: pnpm test
@@ -95,8 +120,25 @@ jobs:
 
       - name: Upload build artefact
         uses: actions/upload-artifact@v5
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
         with:
-          name: frontend-dist
+          name: frontend-dist-${{ github.ref_name }}
           path: frontend/dist
           retention-days: 7
+
+  # ─── Aggregate status check ─────────────────────────────────────────────────
+  # Single required status for branch-protection rules. Add this job name to
+  # the ruleset instead of editing protections every time a job is added.
+  ci-success:
+    name: CI success
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: always()
+    steps:
+      - name: Verify all jobs succeeded
+        run: |
+          if [ "${{ needs.backend.result }}" != "success" ] || [ "${{ needs.frontend.result }}" != "success" ]; then
+            echo "One or more required jobs failed: backend=${{ needs.backend.result }}, frontend=${{ needs.frontend.result }}"
+            exit 1
+          fi
+          echo "All required jobs passed."

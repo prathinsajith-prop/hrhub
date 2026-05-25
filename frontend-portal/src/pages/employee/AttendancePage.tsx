@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
-  CalendarRange, Calendar, ChevronDown, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon,
-  CalendarDays, Filter, MoreHorizontal, X, FileClock, MonitorSmartphone, LogIn, LogOut,
+  CalendarRange, Calendar, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon,
+  CalendarDays, Filter, MoreHorizontal, X, MonitorSmartphone, LogIn, LogOut,
   MapPin, Plus, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download,
 } from 'lucide-react'
 
@@ -21,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { ROUTES } from '@/lib/routes'
 
 // ─── Helpers (mirror main app's MyAttendancePage) ─────────────────────────
 
@@ -610,11 +612,6 @@ function DayDetailDialog({
   const totalHours = useMemo(() => sumPairHours(pairs), [pairs])
   const firstIn = pairs[0]?.inPunch?.recordedAt ?? null
   const lastOut = pairs.slice().reverse().find((p) => p.outPunch)?.outPunch?.recordedAt ?? null
-  // Inline audit timeline (collapsed by default) replaces the separate
-  // AuditHistoryDialog — keeps every piece of context about the day on one
-  // surface and avoids modal-over-modal stacking.
-  const [auditOpen, setAuditOpen] = useState(false)
-  const punches = punchesQuery.data ?? []
 
   const addManual = useAddManualPunch()
   const deletePunch = useDeletePunch()
@@ -660,51 +657,88 @@ function DayDetailDialog({
     )
   }
 
-  const showHero = pairs.length === 0 && (
-    klass === 'weekend' || klass === 'holiday' || klass === 'on_leave' || klass === 'absent' || klass === 'future'
-  )
+  // Is this day in a "special" classification (leave / holiday / weekend /
+  // absent / future)? When it is we always surface a banner so the employee
+  // sees the day's context — even when they ALSO have punches (e.g. a
+  // half-day leave with a partial check-in). The visual differs by intensity:
+  //  - no punches → big centered hero (the original card)
+  //  - has punches → slim banner with icon + status badge above the list
+  const isSpecial = klass === 'weekend' || klass === 'holiday'
+    || klass === 'on_leave' || klass === 'absent' || klass === 'future'
+  const showHero = isSpecial && pairs.length === 0
+  const showSlimBanner = isSpecial && pairs.length > 0
+
+  // Optional context the calendar API attaches to special days. Showing
+  // these makes the banner self-explanatory ("Sick leave" vs. just "On leave").
+  const leaveType = cell?.leaveType
+  const holidayName = cell?.holidayName
 
   return (
     <Dialog open={true} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg flex flex-col p-0 gap-0 overflow-hidden max-h-[90vh]">
+      <DialogContent className="sm:max-w-2xl flex flex-col p-0 gap-0 overflow-hidden max-h-[92vh]">
         <DialogHeader className="px-6 pt-5 pb-4 border-b bg-muted/30">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <DialogTitle className="text-lg font-semibold leading-tight">{headerDate}</DialogTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <DialogTitle className="text-lg font-semibold leading-tight">{headerDate}</DialogTitle>
+                {isSpecial && (
+                  <span className={cn(
+                    'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
+                    hero.tone,
+                  )}>
+                    <HeroIcon className="size-3" />
+                    {hero.title}
+                  </span>
+                )}
+              </div>
               <DialogDescription className="mt-1 text-xs text-muted-foreground flex items-center gap-1.5">
                 <Calendar className="size-3 shrink-0" />
                 <span className="truncate">{shift}</span>
               </DialogDescription>
             </div>
-            <button
-              type="button"
-              onClick={() => setAuditOpen((v) => !v)}
-              aria-expanded={auditOpen}
-              className={cn(
-                'shrink-0 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1',
-                auditOpen
-                  ? 'border-primary/40 bg-primary/10 text-primary'
-                  : 'border-border bg-background text-primary hover:bg-muted/60',
-              )}
-            >
-              <FileClock className="size-3" />
-              Audit History
-              <ChevronDown className={cn('size-3 transition-transform', auditOpen && 'rotate-180')} />
-            </button>
           </div>
         </DialogHeader>
 
         <div className="px-6 py-5 space-y-4 overflow-y-auto">
-          {showHero && (
-            <div className={cn('rounded-xl px-4 py-5 flex flex-col items-center gap-2 text-center', hero.tone)}>
-              <div className="size-10 rounded-full bg-background flex items-center justify-center shadow-sm">
+          {/* Slim status banner — shown alongside punches when the day is
+              also marked as leave / holiday / weekend so the context is
+              never hidden by the punch list. */}
+          {showSlimBanner && (
+            <div className={cn(
+              'flex items-center gap-3 rounded-lg border px-3 py-2.5',
+              hero.tone,
+            )}>
+              <div className="size-8 rounded-full bg-background/80 flex items-center justify-center shrink-0">
                 <HeroIcon className="size-4" />
               </div>
-              <p className="text-sm font-semibold">{hero.title}</p>
-              {hero.body && <p className="text-xs text-muted-foreground max-w-[280px]">{hero.body}</p>}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold leading-tight">
+                  {leaveType ? `${hero.title} · ${leaveType}` : holidayName ? `${hero.title} · ${holidayName}` : hero.title}
+                </p>
+                {hero.body && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{hero.body}</p>
+                )}
+              </div>
+              {klass === 'absent' && (
+                <Button asChild size="sm" variant="outline" className="shrink-0">
+                  <Link to={ROUTES.employeeLeave}>Apply Leave</Link>
+                </Button>
+              )}
+            </div>
+          )}
+
+          {showHero && (
+            <div className={cn('rounded-xl px-4 py-6 flex flex-col items-center gap-2 text-center border', hero.tone)}>
+              <div className="size-11 rounded-full bg-background flex items-center justify-center shadow-sm">
+                <HeroIcon className="size-5" />
+              </div>
+              <p className="text-base font-semibold">
+                {leaveType ? `${hero.title} · ${leaveType}` : holidayName ? `${hero.title} · ${holidayName}` : hero.title}
+              </p>
+              {hero.body && <p className="text-xs text-muted-foreground max-w-[320px]">{hero.body}</p>}
               {klass === 'absent' && (
                 <Button asChild variant="outline" size="sm" className="mt-2">
-                  <a href="/leave">Apply Leave</a>
+                  <Link to={ROUTES.employeeLeave}>Apply Leave</Link>
                 </Button>
               )}
             </div>
@@ -801,79 +835,6 @@ function DayDetailDialog({
             <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
               No check-ins recorded for this day.
             </div>
-          )}
-
-          {/* Inline audit timeline — toggled by the header button. Replaces
-              the standalone AuditHistoryDialog so the day's data stays on
-              one surface. Shows EVERY punch (not just first-in/last-out)
-              because the new multi-punch model can have several pairs. */}
-          {auditOpen && (
-            <section className="rounded-xl border bg-muted/10 p-4 animate-in fade-in-50 slide-in-from-top-1 duration-200">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                  <FileClock className="size-3.5" />
-                  Audit timeline
-                </h3>
-                <span className="text-[10px] text-muted-foreground tabular-nums">
-                  {punches.length} event{punches.length === 1 ? '' : 's'}
-                </span>
-              </div>
-              {punches.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-3">
-                  No punch events recorded for this day yet.
-                </p>
-              ) : (
-                <ol className="relative border-l-2 border-border ms-3 pt-1 space-y-3">
-                  {punches.map((p) => (
-                    <li key={p.id} className="ms-5 relative">
-                      <span className={cn(
-                        'absolute -start-[1.9rem] top-0.5 size-6 rounded-full border-2 border-background flex items-center justify-center shadow-sm',
-                        p.punchType === 'in'
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                          : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
-                      )}>
-                        {p.punchType === 'in' ? <LogIn className="size-3" /> : <LogOut className="size-3" />}
-                      </span>
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs tabular-nums text-muted-foreground">
-                          {formatTime(p.recordedAt)}
-                        </p>
-                        <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70">
-                          via {p.source}
-                        </span>
-                      </div>
-                      <p className="text-sm mt-0.5">
-                        <span className="text-primary font-medium">You</span>{' '}
-                        {p.punchType === 'in' ? 'checked in' : 'checked out'}
-                      </p>
-                      {/* Location row — prefers human-readable name, falls
-                          back to GPS coordinates with a tappable Maps link
-                          so HR can verify the punch site. */}
-                      {(p.locationName || (p.latitude && p.longitude)) && (
-                        <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-                          <MapPin className="size-3 shrink-0" />
-                          {p.locationName ? (
-                            <span className="truncate">{p.locationName}</span>
-                          ) : (
-                            <a
-                              href={`https://maps.google.com/?q=${p.latitude},${p.longitude}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-mono tabular-nums hover:text-primary hover:underline"
-                            >
-                              {Number(p.latitude).toFixed(4)}, {Number(p.longitude).toFixed(4)}
-                            </a>
-                          )}
-                        </div>
-                      )}
-                      {p.notes && (
-                        <p className="text-[11px] text-muted-foreground mt-0.5 italic">"{p.notes}"</p>
-                      )}
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </section>
           )}
 
           {/* Manual entry expandable */}

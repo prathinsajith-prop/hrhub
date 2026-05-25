@@ -344,7 +344,8 @@ export function ComplaintsPage() {
 
             {/* Table */}
             <div className="rounded-xl border overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm">
                     <thead className="bg-muted/50 border-b">
                         <tr>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.complaint')}</th>
@@ -380,6 +381,7 @@ export function ComplaintsPage() {
                         }
                     </tbody>
                 </table>
+                </div>
             </div>
 
             <TablePagination
