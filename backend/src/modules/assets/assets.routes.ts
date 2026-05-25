@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx'
 import { recordActivity } from '../audit/audit.service.js'
 import {
     listAssets,
@@ -16,10 +17,13 @@ import {
     listCategories,
     createCategory,
     deleteCategory,
+    validateBulkAssetRows,
+    bulkCreateAssets,
+    type BulkAssetInputRow,
 } from './assets.service.js'
 import { db } from '../../db/index.js'
-import { employees, tenants } from '../../db/schema/index.js'
-import { eq, and, sql } from 'drizzle-orm'
+import { employees, tenants, assetCategories } from '../../db/schema/index.js'
+import { eq, and, sql, isNull } from 'drizzle-orm'
 import { generateReportPdf } from '../../lib/pdf.js'
 
 export default async function assetsRoutes(fastify: any): Promise<void> {
@@ -418,5 +422,174 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
         reply.header('Content-Type', 'text/csv; charset=utf-8')
         reply.header('Content-Disposition', `attachment; filename="assets-export-${dateStr}.csv"`)
         return reply.send(lines.join('\r\n'))
+    })
+
+    // ─── Bulk import ─────────────────────────────────────────────────────────
+    //
+    // Three-step UX (mirrors the payroll bulk-adjustment dialog):
+    //   1. GET  /bulk-template      → HR downloads an .xlsx with the column
+    //                                 contract + (optionally) the tenant's
+    //                                 categories listed in a separate sheet.
+    //   2. POST /bulk-validate      → HR uploads the file, the parser sends
+    //                                 normalized rows, the server returns a
+    //                                 per-row preview (green / red) WITHOUT
+    //                                 writing anything.
+    //   3. POST /bulk               → only after the preview looks good, HR
+    //                                 commits. The server re-runs validation
+    //                                 and inserts all good rows in a single
+    //                                 transaction.
+    // Skipping step 2 is allowed but the UI calls it before enabling Save.
+
+    const hrOnlyAssets = {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+    }
+
+    // GET /bulk-template — download a starter .xlsx.
+    //
+    // Sheet 1 ("Assets"): the column contract + one synthetic example row
+    // showing the expected shape (status / condition come from the enums
+    // listed in the schema). HR types over the example with their real
+    // assets.
+    // Sheet 2 ("Categories"): a read-only reference of the tenant's
+    // category names. The `category_name` column on sheet 1 has to match
+    // one of these exactly (case-insensitive) — listing them here saves a
+    // tab-out to the Categories page.
+    fastify.get('/bulk-template', { ...hrOnlyAssets, schema: { tags: ['Assets'] } }, async (request: any, reply: any) => {
+        const header = [
+            'asset_code',
+            'name',
+            'category_name',
+            'brand',
+            'model',
+            'serial_number',
+            'purchase_date',
+            'purchase_cost',
+            'status',
+            'condition',
+            'notes',
+        ]
+        // Example row makes the column shape obvious without forcing HR to
+        // hunt for docs. The category_name field intentionally references
+        // a value that might not exist in this tenant — the validator will
+        // flag it so HR sees that lookups happen against their own list.
+        const sample = [
+            '',                              // assetCode auto-generated when blank
+            'MacBook Pro 14"',
+            'Laptops',
+            'Apple',
+            'M3 Pro',
+            'C02XXXXXXXXX',
+            '2024-01-15',
+            8500,
+            'available',
+            'new',
+            'Issued to new hire',
+        ]
+        const wb = XLSX.utils.book_new()
+
+        const assetSheet = XLSX.utils.aoa_to_sheet([header, sample])
+        assetSheet['!cols'] = [
+            { wch: 14 }, { wch: 28 }, { wch: 18 }, { wch: 16 }, { wch: 16 },
+            { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 32 },
+        ]
+        XLSX.utils.book_append_sheet(wb, assetSheet, 'Assets')
+
+        // Categories reference sheet — tenant-scoped.
+        const cats = await db
+            .select({ name: assetCategories.name })
+            .from(assetCategories)
+            .where(and(eq(assetCategories.tenantId, request.user.tenantId), isNull(assetCategories.deletedAt)))
+            .orderBy(assetCategories.name)
+        const catSheet = XLSX.utils.aoa_to_sheet([
+            ['Available category names — use one of these exactly (case-insensitive) in the category_name column.'],
+            [],
+            ...cats.map((c) => [c.name]),
+            ...(cats.length === 0
+                ? [['(No categories yet — create them under Assets → Categories first, or leave the column blank.)']]
+                : []),
+        ])
+        catSheet['!cols'] = [{ wch: 80 }]
+        XLSX.utils.book_append_sheet(wb, catSheet, 'Categories')
+
+        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+        reply
+            .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            .header('Content-Disposition', `attachment; filename="assets-bulk-template.xlsx"`)
+            .send(buf)
+    })
+
+    // POST /bulk-validate — preview without persisting. Body: { rows: [...] }.
+    // Cap matches payroll's bulk-validate ceiling so HR can't accidentally
+    // hammer the server with a 10 000-row sheet.
+    fastify.post('/bulk-validate', { ...hrOnlyAssets, schema: { tags: ['Assets'] } }, async (request: any, reply: any) => {
+        const body = request.body as Record<string, unknown>
+        const rows = Array.isArray(body.rows) ? (body.rows as Array<Record<string, unknown>>) : []
+        if (rows.length === 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must contain at least one entry' })
+        }
+        if (rows.length > 500) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'maximum 500 rows per import' })
+        }
+        const normalized: BulkAssetInputRow[] = rows.map((r, i) => ({
+            rowNumber: Number(r.rowNumber) || i + 1,
+            assetCode: r.assetCode != null ? String(r.assetCode) : null,
+            name: r.name != null ? String(r.name) : null,
+            categoryName: r.categoryName != null ? String(r.categoryName) : null,
+            brand: r.brand != null ? String(r.brand) : null,
+            model: r.model != null ? String(r.model) : null,
+            serialNumber: r.serialNumber != null ? String(r.serialNumber) : null,
+            purchaseDate: r.purchaseDate != null ? String(r.purchaseDate) : null,
+            purchaseCost: (r.purchaseCost as number | string | null | undefined) ?? null,
+            status: r.status != null ? String(r.status) : null,
+            condition: r.condition != null ? String(r.condition) : null,
+            notes: r.notes != null ? String(r.notes) : null,
+        }))
+        const result = await validateBulkAssetRows(request.user.tenantId, normalized)
+        return reply.send(result)
+    })
+
+    // POST /bulk — commit. Same row shape as /bulk-validate. Re-validates
+    // server-side, drops invalid rows silently (the UI told HR about them
+    // in step 2), inserts valid rows in one transaction, and posts a single
+    // audit event capturing the batch size.
+    fastify.post('/bulk', { ...hrOnlyAssets, schema: { tags: ['Assets'] } }, async (request: any, reply: any) => {
+        const body = request.body as Record<string, unknown>
+        const rows = Array.isArray(body.rows) ? (body.rows as Array<Record<string, unknown>>) : []
+        if (rows.length === 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must contain at least one entry' })
+        }
+        if (rows.length > 500) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'maximum 500 rows per import' })
+        }
+        const normalized: BulkAssetInputRow[] = rows.map((r, i) => ({
+            rowNumber: Number(r.rowNumber) || i + 1,
+            assetCode: r.assetCode != null ? String(r.assetCode) : null,
+            name: r.name != null ? String(r.name) : null,
+            categoryName: r.categoryName != null ? String(r.categoryName) : null,
+            brand: r.brand != null ? String(r.brand) : null,
+            model: r.model != null ? String(r.model) : null,
+            serialNumber: r.serialNumber != null ? String(r.serialNumber) : null,
+            purchaseDate: r.purchaseDate != null ? String(r.purchaseDate) : null,
+            purchaseCost: (r.purchaseCost as number | string | null | undefined) ?? null,
+            status: r.status != null ? String(r.status) : null,
+            condition: r.condition != null ? String(r.condition) : null,
+            notes: r.notes != null ? String(r.notes) : null,
+        }))
+        const result = await bulkCreateAssets(request.user.tenantId, normalized)
+        if (result.created > 0) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'asset',
+                entityId: null,
+                entityName: `bulk import: ${result.created} asset(s)`,
+                action: 'create',
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
+        return reply.code(201).send(result)
     })
 }

@@ -555,6 +555,7 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                 className="hidden"
                                 accept={ALLOWED_FILE_TYPES}
                                 onChange={(e) => pickFile(e.target.files?.[0])}
+                                aria-label="Upload document file"
                             />
                             {file ? (
                                 <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">

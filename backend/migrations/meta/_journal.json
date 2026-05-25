@@ -491,6 +491,27 @@
       "when": 1780848000000,
       "tag": "0069_exit_progress_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1780934400000,
+      "tag": "0070_users_attendance_punch_enabled",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1781020800000,
+      "tag": "0071_offboarding_workflow_actions",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1781107200000,
+      "tag": "0072_default_general_shift_backfill",
+      "breakpoints": true
     }
   ]
 }

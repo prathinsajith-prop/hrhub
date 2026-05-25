@@ -31,6 +31,12 @@ export const users = pgTable('users', {
     department: text('department'),
     avatarUrl: text('avatar_url'),
     isActive: boolean('is_active').notNull().default(true),
+    // Per-user attendance switches. Both default to true so existing
+    // accounts behave as before. HR toggles these from the main app's
+    // Users → Manage Access — the portal reads them via /auth/me so the
+    // check-in / manual-entry UI can hide itself when revoked.
+    attendancePunchEnabled: boolean('attendance_punch_enabled').notNull().default(true),
+    attendanceManualEntryEnabled: boolean('attendance_manual_entry_enabled').notNull().default(true),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     // Account lockout — incremented on every failed login, reset on success
     failedLoginCount: integer('failed_login_count').notNull().default(0),

@@ -77,7 +77,7 @@ export function NotificationsBell() {
     // at the top of the dropdown regardless of when each arrived.
     const sortedItems = useMemo(() => {
         if (items.length === 0) return items
-        return [...items].sort((a, b) => {
+        return items.toSorted((a, b) => {
             if (a.isRead !== b.isRead) return a.isRead ? 1 : -1
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         })

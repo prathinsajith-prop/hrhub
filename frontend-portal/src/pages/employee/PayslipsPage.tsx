@@ -124,10 +124,14 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                                 // Same priority order as the admin payslip
                                 // breakdown — Basic first, then statutory
                                 // allowances, then custom components.
+                                type BreakdownRow = { componentId: string; category: string; name: string; amount: number }
                                 const breakdown = (data.earningsBreakdown ?? [])
-                                    .map((b) => ({ ...b, amount: Number(b.amount) }))
-                                    .filter((b) => b.amount > 0)
-                                    .sort((a, b) => {
+                                    .reduce<BreakdownRow[]>((acc, b) => {
+                                        const amount = Number(b.amount)
+                                        if (amount > 0) acc.push({ ...b, amount })
+                                        return acc
+                                    }, [])
+                                    .toSorted((a, b) => {
                                         const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
                                         const ra = rank[a.category] ?? 99
                                         const rb = rank[b.category] ?? 99

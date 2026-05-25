@@ -1,3 +1,23 @@
+// ─── Employee Search Select ─────────────────────────────────────────────────
+// Project-wide convention for picking an employee. Every employee-listing
+// dropdown should use this — no inline `<Select>` over `employees.map(...)`.
+//
+// Contract:
+//   • API-backed search   → 300ms debounce, server-side `?search=` query.
+//                            No client-side filter (Command's `shouldFilter` is
+//                            off) — what the API returns is what's shown.
+//   • Initial limit = 25  → first open fetches the most recent 25 active
+//                            employees. To see more, the user must type.
+//   • Status filter       → defaults to `active`. Pass status="onboarding" or
+//                            "inactive" if your context needs those.
+//   • Hydration safe      → when `value` is set to an employee outside the
+//                            current 25, we issue a one-off `useEmployee(id)`
+//                            fetch so the trigger button can render the name
+//                            without forcing a search.
+//
+// If you find yourself prefetching a big employee list elsewhere just so you
+// can render a `<Select>` of names, swap it for this component instead.
+
 import { useId, useState, useEffect } from 'react'
 import { Check, ChevronDown, X, Loader2 } from 'lucide-react'
 import { useEmployees, useEmployee } from '@/hooks/useEmployees'
@@ -22,7 +42,12 @@ interface EmployeeSelectProps {
     clearable?: boolean
     /** Exclude a specific employee ID from the results (e.g. exclude self in handover selects) */
     excludeId?: string
-    /** Number of employees shown before the user types. Default 25. */
+    /**
+     * Number of employees fetched on first open and on every keystroke. Default 25.
+     *
+     * Don't override this for visual reasons. The whole point of the typeahead
+     * is that the list is bounded — bumping the limit defeats the contract.
+     */
     initialLimit?: number
 }
 
@@ -69,6 +94,12 @@ export function EmployeeSelect({
 
     const employees = (data?.data ?? []).filter(e => !excludeId || e.id !== excludeId)
     const selectedInResults = employees.find(e => e.id === value)
+
+    // Distinguish "loading initial 25" from "fetching matches as the user
+    // types" — the trailing footer copy and overlay both depend on it.
+    const isSearching = isFetching && debouncedSearch.length > 0
+    const total = data?.total ?? employees.length
+    const hasMoreOnServer = !debouncedSearch && total > employees.length
 
     // Pre-fetch selected employee name if not in current search results
     const { data: resolvedEmployee } = useEmployee(value && !selectedInResults ? value : '')
@@ -145,14 +176,18 @@ export function EmployeeSelect({
                         className="h-9 text-sm"
                     />
                     <CommandList id={listboxId} className="max-h-56 overflow-y-auto">
-                        {isFetching ? (
+                        {isFetching && employees.length === 0 ? (
                             <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
                                 <Loader2 className="size-3.5 animate-spin" />
-                                {t('common.loading', 'Loading…')}
+                                {isSearching
+                                    ? t('common.searching', { defaultValue: 'Searching…' })
+                                    : t('common.loading', 'Loading…')}
                             </div>
                         ) : employees.length === 0 ? (
                             <CommandEmpty className="py-6 text-sm text-muted-foreground text-center">
-                                {t('common.noResults', 'No employees found.')}
+                                {debouncedSearch
+                                    ? t('common.noEmployeeMatches', { q: debouncedSearch, defaultValue: 'No employees match "{{q}}".' })
+                                    : t('common.noResults', 'No employees found.')}
                             </CommandEmpty>
                         ) : (
                             <CommandGroup className="p-1">
@@ -188,6 +223,24 @@ export function EmployeeSelect({
                             </CommandGroup>
                         )}
                     </CommandList>
+                    {/* Footer hint: tells the user the list is bounded and that
+                        typing narrows the server query. Only shown when the
+                        first page is back AND the server has more matches the
+                        user hasn't seen — otherwise the chrome is noise. */}
+                    {employees.length > 0 && hasMoreOnServer && (
+                        <div className="border-t px-3 py-1.5 text-[11px] text-muted-foreground flex items-center justify-between gap-2">
+                            <span>
+                                {t('common.employeeSelect.showingFirst', {
+                                    shown: employees.length,
+                                    total,
+                                    defaultValue: 'Showing first {{shown}} of {{total}}',
+                                })}
+                            </span>
+                            <span className="italic">
+                                {t('common.employeeSelect.typeToFilter', { defaultValue: 'Type to search' })}
+                            </span>
+                        </div>
+                    )}
                 </Command>
             </PopoverContent>
         </Popover>

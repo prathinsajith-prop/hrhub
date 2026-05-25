@@ -378,7 +378,7 @@ function NewLeaveDialog({
                             </Select>
                         ) : (
                             <p className="rounded-md border border-dashed border-border bg-card/40 px-3 py-2 text-xs text-muted-foreground">
-                                No colleagues in your department — handover not required.
+                                No colleagues in your department: handover not required.
                             </p>
                         )}
                     </div>

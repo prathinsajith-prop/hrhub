@@ -8,7 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { usePerformanceReviews, useUpdateReview, type PerformanceReview } from '@/hooks/usePerformance'
 import { useEmployees } from '@/hooks/useEmployees'
-import { Star, TrendingUp, Plus, CheckCircle2, Clock, Send, FileText, RefreshCcw } from 'lucide-react'
+import { Star, TrendingUp, Plus, CheckCircle2, Clock, Send, FileText, RefreshCcw, Upload } from 'lucide-react'
+import { BulkImportDialog } from '@/components/shared/BulkImportDialog'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from '@/components/ui/overlays'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
@@ -76,6 +79,8 @@ export function PerformancePage() {
     const updateReview = useUpdateReview()
 
     const [showDialog, setShowDialog] = useState(!!lockedEmployeeId)
+    const [importOpen, setImportOpen] = useState(false)
+    const qc = useQueryClient()
 
     const perfSearch = useSearchFilters({
         storageKey: 'hrhub.performance.searchHistory',
@@ -137,6 +142,9 @@ export function PerformancePage() {
                             onExportCsv={() => exportPerformance({ format: 'csv' })}
                             onExportPdf={() => exportPerformance({ format: 'pdf' })}
                         />
+                        <Button variant="outline" size="sm" leftIcon={<Upload className="size-3.5" />} onClick={() => setImportOpen(true)}>
+                            Bulk import
+                        </Button>
                         <Button onClick={() => setShowDialog(true)}>
                             <Plus className="size-4 mr-2" /> New Review
                         </Button>
@@ -221,6 +229,39 @@ export function PerformancePage() {
                 open={showDialog}
                 onOpenChange={handleDialogChange}
                 lockedEmployeeId={lockedEmployeeId || undefined}
+            />
+
+            {/* Bulk import — template / upload / preview / commit wizard */}
+            <BulkImportDialog
+                open={importOpen}
+                onOpenChange={setImportOpen}
+                config={{
+                    title: 'Import performance reviews',
+                    description: 'Upload an .xlsx or .csv of one cycle’s reviews. Each row is validated against your employee list before saving.',
+                    fileLabel: 'reviews file',
+                    templateUrl: '/performance/import/template',
+                    validateUrl: '/performance/import/validate',
+                    commitUrl: '/performance/import/commit',
+                    columns: [
+                        { key: 'employeeNo', label: 'Employee #', hint: 'Required. Must match an employee in your tenant.' },
+                        { key: 'period', label: 'Period', hint: 'Required. e.g. 2026-Q1 or H1-2026.' },
+                        { key: 'reviewDate', label: 'Date', hint: 'Optional YYYY-MM-DD.' },
+                        { key: 'overallRating', label: 'Overall', hint: '1–5.' },
+                        { key: 'qualityScore', label: 'Quality', hint: '1–5.' },
+                        { key: 'productivityScore', label: 'Productivity', hint: '1–5.' },
+                        { key: 'teamworkScore', label: 'Teamwork', hint: '1–5.' },
+                        { key: 'attendanceScore', label: 'Attendance', hint: '1–5.' },
+                        { key: 'initiativeScore', label: 'Initiative', hint: '1–5.' },
+                        { key: 'strengths', label: 'Strengths' },
+                        { key: 'improvements', label: 'Improvements' },
+                        { key: 'goals', label: 'Goals' },
+                        { key: 'managerComments', label: 'Manager comments' },
+                    ],
+                    onCommitted: () => {
+                        qc.invalidateQueries({ queryKey: ['performance'] })
+                        toast.success('Reviews imported', 'The performance list is now up to date.')
+                    },
+                }}
             />
         </PageWrapper>
     )

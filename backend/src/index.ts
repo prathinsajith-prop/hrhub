@@ -164,11 +164,12 @@ async function bootstrap() {
         sign: { expiresIn: env.JWT_EXPIRES_IN as never },
     })
 
-    // API documentation — always on in development, opt-in via
-    // ENABLE_API_DOCS=true for staging/prod. This matches CLAUDE.md's
-    // documented behaviour: HR engineers shouldn't have to set an env
-    // var just to view Swagger locally.
-    const docsEnabled = env.ENABLE_API_DOCS || env.NODE_ENV !== 'production'
+    // API documentation — opt-in via ENABLE_API_DOCS=true in every
+    // environment. Swagger lists the entire API surface, so leaving it on
+    // by default (even in dev) widens the attack window for any reachable
+    // deploy (preview branches, leaked dev URLs). Developers who want it
+    // can set ENABLE_API_DOCS=true in their .env; nothing else changes.
+    const docsEnabled = env.ENABLE_API_DOCS
     if (docsEnabled) {
         await app.register(swagger, {
             openapi: {

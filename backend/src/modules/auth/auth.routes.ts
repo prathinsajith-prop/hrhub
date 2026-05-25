@@ -182,11 +182,30 @@ export default async function (fastify: any): Promise<void> {
     })
 
     // GET /api/v1/auth/me
+    //
+    // Enrich the JWT-derived `request.user` with the small set of per-user
+    // flags that aren't carried in the token (e.g. attendancePunchEnabled).
+    // These flags change rarely but need to reflect HR overrides without
+    // forcing a re-login, so we fetch fresh from the DB here.
     fastify.get('/me', {
         schema: { tags: ['Auth'] },
         preHandler: [fastify.authenticate],
     }, async (request, reply) => {
-        return reply.send({ data: request.user })
+        const [row] = await db
+            .select({
+                attendancePunchEnabled: users.attendancePunchEnabled,
+                attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+            })
+            .from(users)
+            .where(eq(users.id, request.user.id))
+            .limit(1)
+        return reply.send({
+            data: {
+                ...request.user,
+                attendancePunchEnabled: row?.attendancePunchEnabled ?? true,
+                attendanceManualEntryEnabled: row?.attendanceManualEntryEnabled ?? true,
+            },
+        })
     })
 
     // POST /api/v1/auth/forgot-password

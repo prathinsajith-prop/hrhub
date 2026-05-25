@@ -507,19 +507,32 @@ export default async function (fastify: any): Promise<void> {
     // every row, keeping HR's per-row data entry focused on identifiers and
     // amounts.
     //
-    // `?withSample=true` pre-fills up to 10 real active employees from the
-    // tenant so HR can edit-and-upload immediately for end-to-end testing.
-    // The default (no query param) returns headers + one example row so HR
-    // can build a fresh sheet.
+    // Default behavior: pre-populated with every active, non-archived
+    // employee in the tenant — identifying columns filled in, `amount` and
+    // `note` left blank for HR to fill. This is what HR wants 99% of the
+    // time: open the file, type an amount next to each employee, save,
+    // re-upload. No more hunting for employee numbers.
+    //
+    // `?empty=true` returns just the header row + one synthetic example
+    // (Jane Doe) for HR who want a blank starting sheet — handy when the
+    // adjustment only applies to a handful of people they'll paste in
+    // themselves.
     fastify.get('/adjustments/bulk-template', { ...hrOnly, schema: { tags: ['Payroll'] } }, async (request, reply) => {
         const q = request.query as Record<string, string | undefined>
-        const withSample = q.withSample === 'true' || q.withSample === '1'
+        const empty = q.empty === 'true' || q.empty === '1'
 
         const header = ['employee_no', 'employee_name', 'employee_email', 'employee_phone', 'amount', 'note']
         const aoa: unknown[][] = [header]
 
-        if (withSample) {
-            const sampleEmps = await db
+        if (empty) {
+            // Minimal sheet — one synthetic example row for HR to clone.
+            aoa.push(['EMP-0001', 'Jane Doe', 'jane.doe@example.com', '+971501234567', '', ''])
+        } else {
+            // Pre-populated with the full active roster. We order by employee_no
+            // so the file matches the natural sort HR sees in the directory.
+            // Amount and note left blank — HR fills the cells they care about
+            // and uploads; rows left blank are skipped server-side.
+            const roster = await db
                 .select({
                     employeeNo: employees.employeeNo,
                     firstName: employees.firstName,
@@ -535,24 +548,22 @@ export default async function (fastify: any): Promise<void> {
                     eq(employees.isArchived, false),
                     eq(employees.status, 'active'),
                 ))
-                .limit(10)
-            for (const e of sampleEmps) {
+                .orderBy(employees.employeeNo)
+            for (const e of roster) {
                 aoa.push([
                     e.employeeNo ?? '',
                     `${e.firstName} ${e.lastName}`.trim(),
                     e.workEmail ?? e.email ?? '',
                     e.mobileNo ?? e.phone ?? '',
-                    100,
+                    '',
                     '',
                 ])
             }
-            // If the tenant has no employees yet, fall back to the static row
-            // so the downloaded file still has demonstrable content.
-            if (sampleEmps.length === 0) {
-                aoa.push(['EMP-0001', 'Jane Doe', 'jane.doe@example.com', '+971501234567', 500, 'Optional note'])
+            // Tenant has zero employees yet — keep the file demonstrable so
+            // HR sees the column shape rather than a header-only download.
+            if (roster.length === 0) {
+                aoa.push(['EMP-0001', 'Jane Doe', 'jane.doe@example.com', '+971501234567', '', ''])
             }
-        } else {
-            aoa.push(['EMP-0001', 'Jane Doe', 'jane.doe@example.com', '+971501234567', 500, 'Optional note'])
         }
 
         const sheet = XLSX.utils.aoa_to_sheet(aoa)
@@ -560,8 +571,8 @@ export default async function (fastify: any): Promise<void> {
         const workbook = XLSX.utils.book_new()
         XLSX.utils.book_append_sheet(workbook, sheet, 'Adjustments')
         const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
-        const filename = withSample
-            ? 'payroll-adjustments-sample.xlsx'
+        const filename = empty
+            ? 'payroll-adjustments-template-empty.xlsx'
             : 'payroll-adjustments-template.xlsx'
         reply
             .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

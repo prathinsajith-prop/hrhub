@@ -218,6 +218,74 @@ export function useUploadResume() {
     })
 }
 
+// ─── Bulk import (job listings) ──────────────────────────────────────────────
+//
+// Same shape as the bulk-asset hooks: a no-cache validate mutation
+// for the preview step, and a create mutation that invalidates the
+// jobs list on success.
+
+export type BulkJobType = 'full_time' | 'part_time' | 'contract'
+export type BulkJobStatus = 'draft' | 'open' | 'closed' | 'on_hold'
+
+export interface BulkJobRowInput {
+    rowNumber: number
+    title?: string | null
+    department?: string | null
+    location?: string | null
+    type?: string | null
+    status?: string | null
+    openings?: number | string | null
+    minSalary?: number | string | null
+    maxSalary?: number | string | null
+    industry?: string | null
+    closingDate?: string | null
+}
+
+export interface BulkJobRowResult {
+    rowNumber: number
+    ok: boolean
+    errors: string[]
+    resolved?: {
+        title: string
+        department: string | null
+        location: string | null
+        type: BulkJobType
+        status: BulkJobStatus
+        openings: number
+        minSalary: string | null
+        maxSalary: string | null
+        industry: string | null
+        closingDate: string | null
+    }
+}
+
+export interface BulkJobValidationResponse {
+    rows: BulkJobRowResult[]
+    summary: { total: number; valid: number; invalid: number }
+}
+
+export interface BulkJobCreateResponse extends BulkJobValidationResponse {
+    created: number
+    skipped: number
+}
+
+export function useValidateBulkJobs() {
+    return useMutation({
+        mutationFn: (rows: BulkJobRowInput[]) =>
+            api.post<BulkJobValidationResponse>('/jobs/bulk-validate', { rows }),
+    })
+}
+
+export function useBulkCreateJobs() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (rows: BulkJobRowInput[]) =>
+            api.post<BulkJobCreateResponse>('/jobs/bulk', { rows }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['jobs'] }),
+        onError: (err: Error) => toast.error('Bulk import failed', err.message),
+    })
+}
+
 /* ─── Recruitment pipeline stages (per-tenant settings) ───────────────────── */
 
 const STAGES_KEY = ['recruitment-stages'] as const
