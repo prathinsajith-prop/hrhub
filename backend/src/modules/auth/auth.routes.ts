@@ -7,6 +7,51 @@ import { users, employees } from '../../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
 import { uploadObject, buildS3Key, generateDownloadUrl, resolveAvatarUrl } from '../../plugins/s3.js'
 import { fileTypeFromBuffer } from 'file-type'
+import { z } from 'zod'
+
+// ── Local Zod schemas for routes lacking a shared schema ─────────────────────
+const registerTenantSchema = z.object({
+    firstName: z.string().min(1).max(60),
+    lastName: z.string().min(1).max(60),
+    email: z.string().email(),
+    password: z.string().min(8).max(128),
+    company: z.string().min(2).max(200),
+    industry: z.string().max(100).optional(),
+    jurisdiction: z.enum(['mainland', 'freezone']).optional(),
+    businessType: z.enum(['mainland', 'freezone']).optional(),
+    tradeLicenseNo: z.string().max(100).optional(),
+    phone: z.string().max(30).optional(),
+    companySize: z.string().max(50).optional(),
+})
+
+const refreshTokenSchema = z.object({
+    refreshToken: z.string().min(1),
+})
+
+const logoutSchema = z.object({
+    refreshToken: z.string().min(1).optional(),
+}).optional()
+
+const mfaChallengeSchema = z.object({
+    mfaToken: z.string().min(1),
+    code: z.string().min(6).max(6),
+})
+
+const mfaBackupChallengeSchema = z.object({
+    mfaToken: z.string().min(1),
+    code: z.string().min(8).max(32),
+})
+
+const totpTokenSchema = z.object({
+    token: z.string().min(6).max(8),
+})
+
+const updateMeSchema = z.object({
+    firstName: z.string().min(1).max(60).optional(),
+    lastName: z.string().min(1).max(60).optional(),
+    name: z.string().min(2).max(120).optional(),
+    department: z.string().max(120).nullable().optional(),
+}).strict()
 
 export default async function (fastify: any): Promise<void> {
     // POST /api/v1/auth/login
@@ -80,12 +125,8 @@ export default async function (fastify: any): Promise<void> {
             },
         },
     }, async (request, reply) => {
-        const { firstName, lastName, email, password, company, industry, jurisdiction, tradeLicenseNo, phone, companySize } = request.body as {
-            firstName: string; lastName: string; email: string; password: string; company: string
-            industry?: string; jurisdiction?: 'mainland' | 'freezone'
-            tradeLicenseNo?: string; phone?: string; companySize?: string
-        }
-        const result = await registerTenant({ firstName, lastName, email, password, company, industry, jurisdiction, tradeLicenseNo, phone, companySize })
+        const { firstName, lastName, email, password, company, industry, jurisdiction, businessType, tradeLicenseNo, phone, companySize } = validate(registerTenantSchema, request.body)
+        const result = await registerTenant({ firstName, lastName, email, password, company, industry, jurisdiction, businessType, tradeLicenseNo, phone, companySize })
         if (!result.ok) {
             const reason = (result as { ok: false; reason: string }).reason
             if (reason === 'email_taken') {
@@ -107,7 +148,7 @@ export default async function (fastify: any): Promise<void> {
             },
         },
     }, async (request, reply) => {
-        const { refreshToken } = request.body as { refreshToken: string }
+        const { refreshToken } = validate(refreshTokenSchema, request.body)
 
         const result = await refreshAccessToken(fastify, refreshToken)
         if (!result) {
@@ -122,7 +163,8 @@ export default async function (fastify: any): Promise<void> {
         schema: { tags: ['Auth'] },
         preHandler: [fastify.authenticate],
     }, async (request, reply) => {
-        const { refreshToken } = request.body as { refreshToken?: string }
+        const parsed = validate(logoutSchema, request.body ?? {})
+        const refreshToken = parsed?.refreshToken
         if (refreshToken) await revokeRefreshToken(refreshToken)
         // Record logout
         const u = (request as any).user
