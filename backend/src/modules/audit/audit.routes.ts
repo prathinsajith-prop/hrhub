@@ -1,8 +1,39 @@
+import { z } from 'zod'
 import { getLoginHistory, getActivityLogs } from './audit.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
 import { tenants } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
+import { e400 } from '../../lib/errors.js'
+import { validate } from '../../lib/validation.js'
+
+const loginHistoryQuerySchema = z.object({
+    userId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+})
+
+const activityQuerySchema = z.object({
+    entityType: z.string().max(100).optional(),
+    entityId: z.string().max(100).optional(),
+    userId: z.string().uuid().optional(),
+    action: z.string().max(50).optional(),
+    actorRole: z.string().max(50).optional(),
+    actorName: z.string().max(200).optional(),
+    entityName: z.string().max(200).optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    ipAddress: z.string().max(64).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+})
+
+const exportQuerySchema = z.object({
+    format: z.enum(['csv', 'pdf']).default('csv'),
+    entityType: z.string().max(100).optional(),
+    entityId: z.string().max(100).optional(),
+    userId: z.string().uuid().optional(),
+})
 
 export async function auditRoutes(fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -11,29 +42,28 @@ export async function auditRoutes(fastify: any): Promise<void> {
     // GET /api/v1/audit/login-history?userId=&limit=&offset=
     // Admins may query any userId; non-admins always see their own.
     fastify.get('/login-history', { ...auth, schema: { tags: ['Audit'] } }, async (request: any, reply: any) => {
-        const { userId, limit = '50', offset = '0' } = request.query as Record<string, string>
+        const query = validate(loginHistoryQuerySchema, request.query)
         const role = request.user.role
         const isAdmin = ['hr_manager', 'super_admin'].includes(role)
-        const resolvedUserId = isAdmin ? userId : request.user.id
-        const data = await getLoginHistory(request.user.tenantId, resolvedUserId, Number(limit), Number(offset))
-        return reply.send({ data })
+        const resolvedUserId = isAdmin ? query.userId : request.user.id
+        const result = await getLoginHistory(request.user.tenantId, resolvedUserId, query.limit, query.offset)
+        return reply.send(result)
     })
 
     // GET /api/v1/audit/activity?entityType=&entityId=&userId=&limit=&offset=
     fastify.get('/activity', { ...adminAuth, schema: { tags: ['Audit'] } }, async (request: any, reply: any) => {
-        const { entityType, entityId, userId, action, actorRole, actorName, entityName, from, to, ipAddress, limit = '50', offset = '0' } = request.query as Record<string, string>
-        const data = await getActivityLogs(request.user.tenantId, {
-            entityType, entityId, userId, action, actorRole, actorName, entityName, from, to, ipAddress, limit: Number(limit), offset: Number(offset),
-        })
-        return reply.send({ data })
+        const query = validate(activityQuerySchema, request.query)
+        const result = await getActivityLogs(request.user.tenantId, query)
+        return reply.send(result)
     })
 
     // GET /api/v1/audit/export?format=csv|pdf
     fastify.get('/export', { ...adminAuth, schema: { tags: ['Audit'] } }, async (request: any, reply: any) => {
-        const { format = 'csv', entityType, entityId, userId } = request.query as Record<string, string>
-        if (format !== 'csv' && format !== 'pdf') return reply.code(400).send({ message: 'Invalid format. Must be csv or pdf.' })
-        const { data } = await getActivityLogs(request.user.tenantId, { entityType, entityId, userId, limit: 10000, offset: 0 }) as any
-        const rows = (data ?? []) as any[]
+        const parsed = exportQuerySchema.safeParse(request.query)
+        if (!parsed.success) return reply.code(400).send(e400('Invalid format. Must be csv or pdf.'))
+        const { format, entityType, entityId, userId } = parsed.data
+        const { data } = await getActivityLogs(request.user.tenantId, { entityType, entityId, userId, limit: 10000, offset: 0 })
+        const rows = data as any[]
         const dateStr = new Date().toISOString().slice(0, 10)
 
         if (format === 'pdf') {

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from '@/components/ui/overlays'
 import { useSocketEvent } from '@/hooks/useSocket'
+import { useAuthStore } from '@/store/authStore'
 
 export interface Notification {
     id: string
@@ -42,10 +43,11 @@ function useNotificationsSocketInvalidation() {
 
 export function useNotificationsList(params?: { limit?: number; offset?: number; unreadOnly?: boolean }) {
     const { limit = 20, offset = 0, unreadOnly = false } = params ?? {}
+    const tenantId = useAuthStore(s => s.tenant?.id)
     useNotificationsSocketInvalidation()
 
     return useQuery({
-        queryKey: ['notifications', { limit, offset, unreadOnly }],
+        queryKey: ['notifications', tenantId, { limit, offset, unreadOnly }],
         queryFn: () =>
             api.get<NotificationsResponse>(
                 `/notifications?limit=${limit}&offset=${offset}&unreadOnly=${unreadOnly}`,
@@ -54,18 +56,21 @@ export function useNotificationsList(params?: { limit?: number; offset?: number;
         // Fallback poll for environments where the socket can't connect.
         refetchInterval: 60_000,
         refetchOnWindowFocus: true,
+        enabled: !!tenantId,
     })
 }
 
 export function useUnreadCount() {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     useNotificationsSocketInvalidation()
 
     return useQuery({
-        queryKey: ['notifications', 'unread-count'],
+        queryKey: ['notifications', tenantId, 'unread-count'],
         queryFn: () => api.get<UnreadCountResponse>('/notifications/unread-count').then(r => r.data.count),
         staleTime: 30_000,
         // 5-minute fallback poll in case the WebSocket is temporarily down.
         refetchInterval: 5 * 60_000,
+        enabled: !!tenantId,
     })
 }
 

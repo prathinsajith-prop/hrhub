@@ -14,6 +14,21 @@ import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { findById } from '../../repositories/employees.repo.js'
 import { e400, e403 } from '../../lib/errors.js'
 import { buildAppOrJwtAuth } from './external-auth.js'
+import { z } from 'zod'
+import { validate, uuidSchema } from '../../lib/validation.js'
+
+// External-punch payload schema — kept up here so the route handler
+// can stay focused on the dual-auth + tenant-scope logic. UUID +
+// enums catch malformed devices early; the timestamp is required to
+// be RFC 3339 with offset so we can store a deterministic UTC value.
+const externalPunchSchema = z.object({
+    employeeId: uuidSchema,
+    punchType: z.enum(['in', 'out']),
+    timestamp: z.string().datetime({ offset: true }).optional(),
+    deviceId: z.string().max(200).optional(),
+    deviceName: z.string().max(200).optional(),
+    source: z.enum(['biometric', 'api', 'mobile']).optional(),
+})
 
 // ─── Calendar helpers (single tenant-scoped read model) ──────────────────
 
@@ -611,25 +626,21 @@ export async function attendanceRoutes(fastify: any) {
 
     // POST /api/v1/attendance/external-punch — biometric / mobile device integration
     //
-    // Dual auth: accepts either an HR JWT (Authorization: Bearer <jwt>) or a
-    // Connected-App key pair (X-App-Key + X-API-Secret) with the
-    // `attendance:write` scope. Vendor devices should use the app-key path —
-    // see Org → Connected Apps for issuance + rotation.
+    // Dual auth (from feature branch): accepts either an HR JWT
+    // (Authorization: Bearer <jwt>) or a Connected-App key pair
+    // (X-App-Key + X-API-Secret) with the `attendance:write` scope.
+    // Vendor biometric devices should use the app-key path — see
+    // Org → Connected Apps for issuance + rotation.
+    //
+    // Body validation (from development): Zod schema rejects malformed
+    // payloads at the edge (bad UUID, unknown punchType, garbage
+    // timestamp) so the service layer can trust its inputs.
     fastify.post('/attendance/external-punch', {
         preHandler: [buildAppOrJwtAuth(fastify, 'attendance:write')],
         schema: { tags: ['Attendance'] },
     }, async (request: any, reply: any) => {
-        const { employeeId, timestamp, deviceId, deviceName, punchType, source } = request.body as {
-            employeeId: string
-            timestamp?: string
-            deviceId?: string
-            deviceName?: string
-            punchType: 'in' | 'out'
-            source?: 'biometric' | 'api' | 'mobile'
-        }
-        if (!employeeId || !punchType) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId and punchType are required' })
-        }
+        const { employeeId, timestamp, deviceId, deviceName, punchType, source } =
+            validate(externalPunchSchema, request.body)
         // Verify the employee belongs to the caller's tenant before accepting any punch —
         // without this an attacker from tenant A could punch in/out for employees in tenant B.
         const emp = await findById(request.user.tenantId, employeeId)

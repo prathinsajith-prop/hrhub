@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js'
 import { loginHistory, activityLogs } from '../../db/schema/index.js'
-import { desc } from 'drizzle-orm'
+import { desc, sql } from 'drizzle-orm'
 import { Conditions } from '../../lib/filters.js'
 
 /** Parse basic browser/OS info from User-Agent string */
@@ -73,11 +73,19 @@ export async function recordLoginEvent(params: RecordLoginParams): Promise<void>
 }
 
 export async function getLoginHistory(tenantId: string, userId?: string, limit = 50, offset = 0) {
-    return db.select().from(loginHistory)
+    const effectiveLimit = Math.min(limit, 200)
+    const effectiveOffset = Math.max(offset, 0)
+    const rows = await db.select({
+        row: loginHistory,
+        totalCount: sql<number>`COUNT(*) OVER()`.as('total_count'),
+    }).from(loginHistory)
         .where(Conditions.create().tenant(loginHistory.tenantId, tenantId).match(loginHistory.userId, userId).where())
         .orderBy(desc(loginHistory.createdAt))
-        .limit(Math.min(limit, 200))
-        .offset(Math.max(offset, 0))
+        .limit(effectiveLimit)
+        .offset(effectiveOffset)
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    const data = rows.map(r => r.row)
+    return { data, total, limit: effectiveLimit, offset: effectiveOffset, hasMore: effectiveOffset + data.length < total }
 }
 
 export interface RecordActivityParams {
@@ -129,9 +137,17 @@ export async function getActivityLogs(tenantId: string, params: {
         .like(activityLogs.entityName, entityName)
         .dateRange(activityLogs.createdAt, from || null, to || null)
 
-    return db.select().from(activityLogs)
+    const effectiveLimit = Math.min(limit, 10000)
+    const effectiveOffset = Math.max(offset, 0)
+    const rows = await db.select({
+        row: activityLogs,
+        totalCount: sql<number>`COUNT(*) OVER()`.as('total_count'),
+    }).from(activityLogs)
         .where(conds.where())
         .orderBy(desc(activityLogs.createdAt))
-        .limit(Math.min(limit, 200))
-        .offset(offset)
+        .limit(effectiveLimit)
+        .offset(effectiveOffset)
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    const data = rows.map(r => r.row)
+    return { data, total, limit: effectiveLimit, offset: effectiveOffset, hasMore: effectiveOffset + data.length < total }
 }
