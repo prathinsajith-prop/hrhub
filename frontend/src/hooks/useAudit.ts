@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/store/authStore'
 
 export interface LoginHistoryRecord {
     id: string
@@ -35,48 +36,63 @@ export interface ActivityLog {
     createdAt: string
 }
 
+interface PaginatedAuditResponse<T> {
+    data: T[]
+    total: number
+    limit: number
+    offset: number
+    hasMore: boolean
+}
+
 export function useLoginHistory(params: { userId?: string; limit?: number } = {}) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const qs = new URLSearchParams()
     if (params.userId) qs.set('userId', params.userId)
     if (params.limit) qs.set('limit', String(params.limit))
     return useQuery({
-        queryKey: ['login-history', params],
-        queryFn: () => api.get<{ data: LoginHistoryRecord[] }>(`/audit/login-history?${qs}`).then(r => r.data),
+        queryKey: ['login-history', tenantId, params],
+        queryFn: () => api.get<PaginatedAuditResponse<LoginHistoryRecord>>(`/audit/login-history?${qs}`).then(r => r.data),
+        enabled: !!tenantId,
     })
 }
 
 export function useInfiniteLoginHistory(params: { userId?: string; pageSize?: number } = {}) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const pageSize = params.pageSize ?? 10
     return useInfiniteQuery({
-        queryKey: ['login-history-infinite', params.userId, pageSize],
+        queryKey: ['login-history-infinite', tenantId, params.userId, pageSize],
         initialPageParam: 0,
         queryFn: ({ pageParam }) => {
             const qs = new URLSearchParams()
             if (params.userId) qs.set('userId', params.userId)
             qs.set('limit', String(pageSize))
             qs.set('offset', String(pageParam))
-            return api.get<{ data: LoginHistoryRecord[] }>(`/audit/login-history?${qs}`).then(r => r.data)
+            return api.get<PaginatedAuditResponse<LoginHistoryRecord>>(`/audit/login-history?${qs}`).then(r => r.data)
         },
         getNextPageParam: (lastPage, allPages) => {
             if (!lastPage || lastPage.length < pageSize) return undefined
             return allPages.reduce((sum, p) => sum + p.length, 0)
         },
+        enabled: !!tenantId,
     })
 }
 
 export function useActivityLogs(params: { entityType?: string; entityId?: string; userId?: string; action?: string; actorRole?: string; actorName?: string; entityName?: string; from?: string; to?: string; ipAddress?: string; limit?: number } = {}) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const qs = new URLSearchParams()
     Object.entries(params).forEach(([k, v]) => v !== undefined && qs.set(k, String(v)))
     return useQuery({
-        queryKey: ['activity-logs', params],
-        queryFn: () => api.get<{ data: ActivityLog[] }>(`/audit/activity?${qs}`).then(r => r.data),
+        queryKey: ['activity-logs', tenantId, params],
+        queryFn: () => api.get<PaginatedAuditResponse<ActivityLog>>(`/audit/activity?${qs}`).then(r => r.data),
+        enabled: !!tenantId,
     })
 }
 
 export function useInfiniteActivityLogs(params: { entityType?: string; entityId?: string; userId?: string; action?: string; actorRole?: string; actorName?: string; entityName?: string; from?: string; to?: string; ipAddress?: string; pageSize?: number } = {}) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
     const pageSize = params.pageSize ?? 30
     return useInfiniteQuery({
-        queryKey: ['activity-logs-infinite', params.entityType, params.entityId, params.userId, params.action, params.actorRole, params.actorName, params.entityName, params.from, params.to, params.ipAddress, pageSize],
+        queryKey: ['activity-logs-infinite', tenantId, params.entityType, params.entityId, params.userId, params.action, params.actorRole, params.actorName, params.entityName, params.from, params.to, params.ipAddress, pageSize],
         initialPageParam: 0,
         queryFn: ({ pageParam }) => {
             const qs = new URLSearchParams()
@@ -92,11 +108,12 @@ export function useInfiniteActivityLogs(params: { entityType?: string; entityId?
             if (params.ipAddress) qs.set('ipAddress', params.ipAddress)
             qs.set('limit', String(pageSize))
             qs.set('offset', String(pageParam))
-            return api.get<{ data: ActivityLog[] }>(`/audit/activity?${qs}`).then(r => r.data)
+            return api.get<PaginatedAuditResponse<ActivityLog>>(`/audit/activity?${qs}`).then(r => r.data)
         },
         getNextPageParam: (lastPage, allPages) => {
             if (!lastPage || lastPage.length < pageSize) return undefined
             return allPages.reduce((sum, p) => sum + p.length, 0)
         },
+        enabled: !!tenantId,
     })
 }
