@@ -233,6 +233,29 @@ export function EmployeeAttendancePage() {
   const accountFlags = useAccountFlags()
   const punchAllowed = accountFlags.attendancePunchEnabled
   const manualEntryAllowed = accountFlags.attendanceManualEntryEnabled
+
+  // Live geolocation preview for the check-in band. We resolve once on mount
+  // (and on demand via a "Refresh" click) so the employee can SEE the
+  // coordinates that will be recorded with their punch — both for trust
+  // ("this is where my check-in will be tagged") and policy compliance.
+  // Permission state: 'pending' (asking) | 'ok' (resolved) | 'denied' (user
+  // blocked or device has no GPS).
+  const [geo, setGeo] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [geoState, setGeoState] = useState<'pending' | 'ok' | 'denied'>('pending')
+  const refreshGeo = useMemo(() => async () => {
+    setGeoState('pending')
+    const result = await readGeolocation()
+    if (result) {
+      setGeo(result)
+      setGeoState('ok')
+    } else {
+      setGeo(null)
+      setGeoState('denied')
+    }
+  }, [])
+  useEffect(() => {
+    if (punchAllowed) void refreshGeo()
+  }, [punchAllowed, refreshGeo])
   const todayInfo = useMemo(() => {
     const t = toISODate(today)
     return days.find((d) => d.iso === t) ?? null
@@ -295,57 +318,101 @@ export function EmployeeAttendancePage() {
             check-in / check-out + manual entry. */}
       </div>
 
-      {/* Check-in band — only rendered when HR has not revoked self-punch. */}
+      {/* Check-in band — only rendered when HR has not revoked self-punch.
+          Layout: two rows on small screens, one row on wide. Top row shows
+          shift name, notes input, and the action button. Bottom row gives
+          a clear "this is where your punch will be tagged" preview with
+          coords + a Maps link + refresh, so there's no surprise about
+          where the location was sampled. */}
       {punchAllowed && (
-        <div className="flex flex-wrap items-stretch justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
-          <div className="flex-1 min-w-[200px] self-center">
-            <p className="text-sm font-semibold">{shiftBand}</p>
+        <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
+          <div className="flex flex-wrap items-stretch justify-between gap-3">
+            <div className="flex-1 min-w-[200px] self-center">
+              <p className="text-sm font-semibold">{shiftBand}</p>
+            </div>
+            <Input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={isCheckedIn ? 'Add notes for check-out' : 'Add notes for check-in'}
+              className="flex-[2] min-w-[180px] h-9"
+            />
+            {isCheckedIn ? (
+              <Button
+                onClick={() => {
+                  const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
+                  checkOut.mutate(body, {
+                    onSuccess: () => { toast.success(t('attendance.checkOut')); setNote(''); void refreshGeo() },
+                    onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check out'),
+                  })
+                }}
+                loading={checkOut.isPending}
+                className="bg-rose-600 hover:bg-rose-700 text-white"
+              >
+                <LogOut className="size-4 me-2" />
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="text-xs">Check-out</span>
+                  <span className="text-xs tabular-nums">{liveTimer}</span>
+                </div>
+              </Button>
+            ) : (
+              <Button
+                onClick={() => {
+                  const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
+                  checkIn.mutate(body, {
+                    onSuccess: () => { toast.success(t('attendance.checkIn')); setNote(''); void refreshGeo() },
+                    onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check in'),
+                  })
+                }}
+                loading={checkIn.isPending}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <LogIn className="size-4 me-2" />
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="text-xs">Check-in</span>
+                  <span className="text-xs tabular-nums">{liveTimer}</span>
+                </div>
+              </Button>
+            )}
           </div>
-          <Input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder={isCheckedIn ? 'Add notes for check-out' : 'Add notes for check-in'}
-            className="flex-[2] min-w-[180px] h-9"
-          />
-          {isCheckedIn ? (
-            <Button
-              onClick={async () => {
-                const geo = await readGeolocation()
-                const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
-                checkOut.mutate(body, {
-                  onSuccess: () => { toast.success(t('attendance.checkOut')); setNote('') },
-                  onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check out'),
-                })
-              }}
-              loading={checkOut.isPending}
-              className="bg-rose-600 hover:bg-rose-700 text-white"
+          {/* Location strip — read-only preview of where the punch will be
+              tagged. Renders coordinates as a Maps link so the employee can
+              verify the GPS reading. Refresh re-queries the device. */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-1.5 text-[11px]">
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <MapPin className={cn(
+                'size-3.5',
+                geoState === 'ok' ? 'text-emerald-600' : geoState === 'denied' ? 'text-rose-500' : 'text-muted-foreground',
+              )} />
+              {geoState === 'pending' && <span>Resolving your location…</span>}
+              {geoState === 'denied' && (
+                <span>
+                  Location unavailable — punch will be recorded without coordinates.
+                </span>
+              )}
+              {geoState === 'ok' && geo && (
+                <>
+                  <span>Location:</span>
+                  <a
+                    href={`https://maps.google.com/?q=${geo.latitude},${geo.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono tabular-nums text-foreground hover:text-primary hover:underline"
+                    title="Open in Google Maps"
+                  >
+                    {geo.latitude.toFixed(4)}, {geo.longitude.toFixed(4)}
+                  </a>
+                </>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => void refreshGeo()}
+              className="text-primary hover:underline disabled:opacity-50"
+              disabled={geoState === 'pending'}
             >
-              <LogOut className="size-4 me-2" />
-              <div className="flex flex-col items-start leading-tight">
-                <span className="text-xs">Check-out</span>
-                <span className="text-xs tabular-nums">{liveTimer}</span>
-              </div>
-            </Button>
-          ) : (
-            <Button
-              onClick={async () => {
-                const geo = await readGeolocation()
-                const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
-                checkIn.mutate(body, {
-                  onSuccess: () => { toast.success(t('attendance.checkIn')); setNote('') },
-                  onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check in'),
-                })
-              }}
-              loading={checkIn.isPending}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              <LogIn className="size-4 me-2" />
-              <div className="flex flex-col items-start leading-tight">
-                <span className="text-xs">Check-in</span>
-                <span className="text-xs tabular-nums">{liveTimer}</span>
-              </div>
-            </Button>
-          )}
+              {geoState === 'pending' ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
         </div>
       )}
 

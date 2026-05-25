@@ -344,3 +344,220 @@ export async function resetRecruitmentStages(tenantId: string) {
             .orderBy(recruitmentStages.stageOrder)
     })
 }
+
+// ─── Bulk import — job listings ────────────────────────────────────────────
+//
+// Two-stage flow, identical contract to the assets bulk import:
+//   1. validateBulkJobRowsSync()   — pure shape check + enum coercion +
+//      numeric/date parsing. Tested in isolation.
+//   2. bulkCreateJobs()            — re-validates and inserts everything
+//      in a single transaction. Drops rows that fail validation.
+//
+// `recruitment_jobs` has no FK columns to resolve (department / location
+// are freeform text), so the validator doesn't need any pre-loaded
+// lookups — the call signature stays simple.
+
+export type BulkJobType = 'full_time' | 'part_time' | 'contract'
+export type BulkJobStatus = 'draft' | 'open' | 'closed' | 'on_hold'
+
+const VALID_JOB_TYPES = new Set<BulkJobType>(['full_time', 'part_time', 'contract'])
+const VALID_JOB_STATUSES = new Set<BulkJobStatus>(['draft', 'open', 'closed', 'on_hold'])
+
+export interface BulkJobInputRow {
+    rowNumber: number
+    title?: string | null
+    department?: string | null
+    location?: string | null
+    type?: string | null
+    status?: string | null
+    openings?: number | string | null
+    minSalary?: number | string | null
+    maxSalary?: number | string | null
+    industry?: string | null
+    closingDate?: string | null
+}
+
+export interface BulkJobRowResult {
+    rowNumber: number
+    ok: boolean
+    errors: string[]
+    /** Set when `ok` — normalized row ready for DB insert. */
+    resolved?: {
+        title: string
+        department: string | null
+        location: string | null
+        type: BulkJobType
+        status: BulkJobStatus
+        openings: number
+        minSalary: string | null
+        maxSalary: string | null
+        industry: string | null
+        closingDate: string | null
+    }
+}
+
+export interface BulkJobValidationResult {
+    rows: BulkJobRowResult[]
+    summary: { total: number; valid: number; invalid: number }
+}
+
+/**
+ * Pure row-validation core. Same testing pattern as the bulk-assets
+ * validator — extracted so we can hit every branch without spinning up
+ * a database. Rules:
+ *   • title is required
+ *   • type defaults to 'full_time', status defaults to 'draft'
+ *   • openings defaults to 1, must be a positive integer
+ *   • min/maxSalary optional non-negative numbers; if both set, max ≥ min
+ *   • closingDate optional ISO YYYY-MM-DD (or anything `new Date(...)`
+ *     can parse — coerced to ISO)
+ */
+export function validateBulkJobRowsSync(rows: BulkJobInputRow[]): BulkJobValidationResult {
+    const results: BulkJobRowResult[] = rows.map((r) => {
+        const errors: string[] = []
+
+        // ── title (required) ────────────────────────────────────────
+        const title = (r.title ?? '').trim()
+        if (!title) errors.push('title is required')
+
+        // ── type enum (default full_time) ────────────────────────────
+        const type = (r.type ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_') || 'full_time'
+        if (!VALID_JOB_TYPES.has(type as BulkJobType)) {
+            errors.push(`type must be one of: ${Array.from(VALID_JOB_TYPES).join(', ')}`)
+        }
+
+        // ── status enum (default draft) ──────────────────────────────
+        const status = (r.status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_') || 'draft'
+        if (!VALID_JOB_STATUSES.has(status as BulkJobStatus)) {
+            errors.push(`status must be one of: ${Array.from(VALID_JOB_STATUSES).join(', ')}`)
+        }
+
+        // ── openings (default 1, positive integer) ───────────────────
+        let openings = 1
+        if (r.openings !== null && r.openings !== undefined && r.openings !== '') {
+            const n = typeof r.openings === 'number' ? r.openings : Number(String(r.openings).trim())
+            if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1) {
+                errors.push('openings must be a positive whole number')
+            } else {
+                openings = n
+            }
+        }
+
+        // ── numeric salary parsing ───────────────────────────────────
+        const parseAmt = (raw: number | string | null | undefined, label: string): string | null => {
+            if (raw === null || raw === undefined || raw === '') return null
+            const n = typeof raw === 'number' ? raw : Number(String(raw).trim())
+            if (!Number.isFinite(n) || n < 0) {
+                errors.push(`${label} must be a non-negative number`)
+                return null
+            }
+            return n.toFixed(2)
+        }
+        const minSalary = parseAmt(r.minSalary, 'min_salary')
+        const maxSalary = parseAmt(r.maxSalary, 'max_salary')
+
+        // Range check only when both parsed cleanly. We compare on the
+        // numeric form so "500.00" vs "1500.00" string compare doesn't
+        // bite us.
+        if (minSalary !== null && maxSalary !== null && Number(maxSalary) < Number(minSalary)) {
+            errors.push('max_salary must be greater than or equal to min_salary')
+        }
+
+        // ── closingDate (optional, ISO) ──────────────────────────────
+        let closingDate: string | null = null
+        if (r.closingDate) {
+            const raw = String(r.closingDate).trim()
+            const iso = raw.match(/^\d{4}-\d{2}-\d{2}$/)
+                ? raw
+                : (() => {
+                    const d = new Date(raw)
+                    return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
+                })()
+            if (!iso) errors.push('closing_date must be a valid date (YYYY-MM-DD)')
+            else closingDate = iso
+        }
+
+        const ok = errors.length === 0
+        return {
+            rowNumber: r.rowNumber,
+            ok,
+            errors,
+            resolved: ok
+                ? {
+                      title,
+                      department: (r.department ?? '').trim() || null,
+                      location: (r.location ?? '').trim() || null,
+                      type: type as BulkJobType,
+                      status: status as BulkJobStatus,
+                      openings,
+                      minSalary,
+                      maxSalary,
+                      industry: (r.industry ?? '').trim() || null,
+                      closingDate,
+                  }
+                : undefined,
+        }
+    })
+
+    return {
+        rows: results,
+        summary: {
+            total: results.length,
+            valid: results.filter((r) => r.ok).length,
+            invalid: results.filter((r) => !r.ok).length,
+        },
+    }
+}
+
+/**
+ * Thin async wrapper for routes — keeps the call signature parallel with
+ * the assets bulk validator (`validateBulkAssetRows`) so the route layer
+ * looks identical. Currently no DB lookups needed; this is just an
+ * `await` on the sync core for shape symmetry.
+ */
+export async function validateBulkJobRows(
+    _tenantId: string,
+    rows: BulkJobInputRow[],
+): Promise<BulkJobValidationResult> {
+    return Promise.resolve(validateBulkJobRowsSync(rows))
+}
+
+/**
+ * Insert all valid rows in one transaction. Re-runs validation server-
+ * side and silently drops invalid rows — the UI told HR which rows
+ * those were at the preview step.
+ */
+export async function bulkCreateJobs(
+    tenantId: string,
+    rows: BulkJobInputRow[],
+    postedBy: string | null,
+): Promise<BulkJobValidationResult & { created: number; skipped: number }> {
+    const validation = validateBulkJobRowsSync(rows)
+    const insertable = validation.rows.filter((r) => r.ok && r.resolved)
+    if (insertable.length === 0) {
+        return { ...validation, created: 0, skipped: validation.summary.invalid }
+    }
+    await db.transaction(async (tx) => {
+        const values = insertable.map((r) => {
+            const x = r.resolved!
+            return {
+                tenantId,
+                title: x.title,
+                department: x.department,
+                location: x.location,
+                type: x.type,
+                status: x.status,
+                openings: x.openings,
+                minSalary: x.minSalary,
+                maxSalary: x.maxSalary,
+                industry: x.industry,
+                // Schema default [] applies — requirements/description
+                // come from later per-row edits.
+                closingDate: x.closingDate,
+                postedBy,
+            }
+        })
+        await tx.insert(recruitmentJobs).values(values)
+    })
+    return { ...validation, created: insertable.length, skipped: validation.summary.invalid }
+}

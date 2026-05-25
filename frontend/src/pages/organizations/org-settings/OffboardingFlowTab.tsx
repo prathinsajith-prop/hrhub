@@ -1521,7 +1521,18 @@ function WorkflowDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-xl">
                 <DialogHeader>
-                    <DialogTitle>{editing ? t('orgSettings.offboardingFlow.workflows.editTitle') : t('orgSettings.offboardingFlow.workflows.addTitle')}</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2 min-w-0 pe-8">
+                        {editing ? (
+                            <span className="flex items-baseline gap-2 min-w-0">
+                                <span className="text-muted-foreground text-sm font-normal shrink-0">
+                                    {t('orgSettings.offboardingFlow.workflows.editTitle')}:
+                                </span>
+                                <span className="truncate">{editing.name}</span>
+                            </span>
+                        ) : (
+                            t('orgSettings.offboardingFlow.workflows.addTitle')
+                        )}
+                    </DialogTitle>
                 </DialogHeader>
                 <form onSubmit={submit}>
                     <DialogBody className="space-y-4">

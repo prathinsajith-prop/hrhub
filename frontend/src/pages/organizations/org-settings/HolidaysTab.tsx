@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CalendarDays, Plus, Trash2, ChevronLeft, ChevronRight, Repeat2 } from 'lucide-react'
+import { CalendarDays, Plus, Trash2, ChevronLeft, ChevronRight, Repeat2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -14,6 +14,8 @@ import {
     useDeletePublicHoliday,
     useSeedUaeHolidays,
 } from '@/hooks/useHr'
+import { BulkImportDialog } from '@/components/shared/BulkImportDialog'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card } from './_shared'
 
 // ─── Holidays Tab ─────────────────────────────────────────────────────────────
@@ -26,6 +28,8 @@ export function HolidaysTab() {
     const [showForm, setShowForm] = useState(false)
     const [form, setForm] = useState({ name: '', date: '', isRecurring: false, notes: '' })
     const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+    const [importOpen, setImportOpen] = useState(false)
+    const qc = useQueryClient()
 
     const { data: holidays, isLoading } = usePublicHolidays(year)
     const createHoliday = useCreatePublicHoliday()
@@ -120,6 +124,14 @@ export function HolidaysTab() {
                         )}
                     </div>
                     <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<Upload className="size-3.5" />}
+                            onClick={() => setImportOpen(true)}
+                        >
+                            Bulk import
+                        </Button>
                         <Button
                             variant="outline"
                             size="sm"
@@ -289,6 +301,31 @@ export function HolidaysTab() {
                 confirmLabel={deleteHoliday.isPending ? t('orgSettings.holidays.removing') : t('orgSettings.holidays.remove')}
                 onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
                 variant="destructive"
+            />
+
+            {/* Bulk import — template / upload / preview / commit wizard */}
+            <BulkImportDialog
+                open={importOpen}
+                onOpenChange={setImportOpen}
+                config={{
+                    title: 'Import public holidays',
+                    description: 'Upload an .xlsx or .csv of holidays. Validates each row before saving.',
+                    fileLabel: 'holidays file',
+                    templateUrl: '/hr/public-holidays/import/template',
+                    validateUrl: '/hr/public-holidays/import/validate',
+                    commitUrl: '/hr/public-holidays/import/commit',
+                    columns: [
+                        { key: 'date', label: 'Date', hint: 'YYYY-MM-DD (e.g. 2026-12-02)' },
+                        { key: 'name', label: 'Name', hint: 'Required. Max 200 chars.' },
+                        { key: 'country', label: 'Country', hint: 'Optional. Defaults to UAE.' },
+                        { key: 'isRecurring', label: 'Recurring', hint: 'true / false. True = auto-seed every year.' },
+                        { key: 'notes', label: 'Notes', hint: 'Optional free text.' },
+                    ],
+                    onCommitted: () => {
+                        qc.invalidateQueries({ queryKey: ['public-holidays'] })
+                        toast.success('Holidays imported', 'Your holiday list is now up to date.')
+                    },
+                }}
             />
         </div>
     )
