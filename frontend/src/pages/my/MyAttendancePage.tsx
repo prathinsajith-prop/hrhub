@@ -45,6 +45,7 @@ import {
 } from '@/hooks/useAttendance'
 import { useShifts } from '@/hooks/useShifts'
 import { useGeolocationPermission } from '@/hooks/useGeolocationPermission'
+import { useAccountFlags } from '@/hooks/useAccountFlags'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -209,6 +210,16 @@ export function MyAttendancePage() {
   const checkOut = useCheckOut()
   const isCheckedIn = !!todayInfo?.cell?.checkIn && !todayInfo?.cell?.checkOut
 
+  // HR-controlled per-user override (Users → Manage Access → "Attendance
+  // check-in / check-out"). When false, the buttons disappear entirely —
+  // the only way to punch is via a biometric device or HR's External Punch
+  // widget. We read this through useAccountFlags (which hits /auth/me with
+  // proper cache-busting) rather than the auth store, because the auth
+  // store only loads at login and would never reflect mid-session HR
+  // toggles otherwise.
+  const accountFlags = useAccountFlags()
+  const punchAllowed = accountFlags.attendancePunchEnabled
+
   // Geolocation gate — employee can only check in when the device's location
   // permission is granted. Mirrors the policy on physical biometric devices
   // (you can't punch in without being at the reader). Check-out is still
@@ -327,7 +338,8 @@ export function MyAttendancePage() {
         </div>
       </div>
 
-      {/* Today check-in / check-out + shift band */}
+      {/* Today check-in / check-out + shift band — the entire row collapses
+          to just the shift band when HR has revoked the punch privilege. */}
       <div className="mt-4 flex flex-wrap items-stretch justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
         <div className="flex-1 min-w-[200px]">
           <p className="text-sm font-semibold">
@@ -336,14 +348,21 @@ export function MyAttendancePage() {
               [ {myShift?.startTime ?? '09:00'} – {myShift?.endTime ?? '18:00'} ]
             </span>
           </p>
+          {!punchAllowed && (
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Self check-in is disabled for your account. Attendance is recorded by your biometric device or HR.
+            </p>
+          )}
         </div>
-        <Input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder={isCheckedIn ? 'Add notes for check-out' : 'Add notes for check-in'}
-          className="flex-[2] min-w-[180px] h-9"
-        />
-        {isCheckedIn ? (
+        {punchAllowed && (
+          <Input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={isCheckedIn ? 'Add notes for check-out' : 'Add notes for check-in'}
+            className="flex-[2] min-w-[180px] h-9"
+          />
+        )}
+        {punchAllowed && (isCheckedIn ? (
           <Button
             onClick={handleCheckOut}
             loading={checkOut.isPending}
@@ -409,9 +428,9 @@ export function MyAttendancePage() {
               </span>
             </Button>
           </div>
-        )}
+        ))}
       </div>
-      {!isCheckedIn && !locationReady && (
+      {punchAllowed && !isCheckedIn && !locationReady && (
         // Helper text under the widget so users understand why the action is
         // gated. Kept short — the button title="" carries the long-form hint.
         <p className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1.5">

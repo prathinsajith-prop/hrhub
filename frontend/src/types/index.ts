@@ -15,6 +15,12 @@ export interface User {
   entityId?: string
   department?: string
   employeeId?: string | null
+  /** HR-controlled per-user override that hides the check-in/out buttons on
+   *  the employee portal when false. Populated by GET /auth/me. */
+  attendancePunchEnabled?: boolean
+  /** Hides the manual-entry attendance panel on the employee portal when
+   *  false. Populated by GET /auth/me. */
+  attendanceManualEntryEnabled?: boolean
 }
 
 export interface Tenant {

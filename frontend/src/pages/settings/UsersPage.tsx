@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
 import {
-    Users, Plus, XCircle, CheckCircle2, Shield,
-    Search, MailCheck, UserPlus, Check,
-    AlertCircle, MinusCircle, KeyRound,
+    Users, Plus, CheckCircle2, Shield, ShieldOff, ShieldCheck,
+    Search, MailCheck, UserPlus, Check, Mail, Clock,
+    AlertCircle, MinusCircle, KeyRound, Timer, Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -10,7 +10,9 @@ import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Switch } from '@/components/ui/switch'
+import { cn, formatDate } from '@/lib/utils'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
 import { useAuthStore } from '@/store/authStore'
 import {
@@ -21,7 +23,7 @@ import {
 import { usePermissions } from '@/hooks/usePermissions'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
-import { CopyableEmail, MultiRoleToggle, MULTI_ROLE_OPTIONS } from '@/components/shared'
+import { CopyableEmail, MultiRoleToggle, MULTI_ROLE_OPTIONS, MULTI_ROLE_OPTIONS_WITH_SUPER } from '@/components/shared'
 import {
     ALL_ROLES, ALL_PERMISSIONS, getRolePermissionMatrix,
     type Permission,
@@ -479,6 +481,10 @@ export function UsersPage() {
     const [showInvite, setShowInvite] = useState(false)
     const [manageRoles, setManageRoles] = useState<{ open: boolean; initialRole: UserRole }>({ open: false, initialRole: 'super_admin' })
     const [deactivateTarget, setDeactivateTarget] = useState<{ id: string; name: string; active: boolean } | null>(null)
+    // Per-user "Manage Access" dialog — opened from a row-level button so all
+    // access actions (roles, activate/deactivate) live in one focused place
+    // instead of being spread across inline controls.
+    const [accessTarget, setAccessTarget] = useState<TenantUser | null>(null)
 
     // ─── Filter state ────────────────────────────────────────────────────────
     const [search, setSearch] = useState('')
@@ -516,15 +522,6 @@ export function UsersPage() {
         setSearch('')
         setRoleFilter(null)
         setStatusFilter('all')
-    }
-
-    async function handleRolesChange(userId: string, newRoles: string[]) {
-        try {
-            await updateUser.mutateAsync({ id: userId, roles: newRoles, role: newRoles[0] })
-            toast.success(t('settingsDetail.users.rolesUpdated'))
-        } catch {
-            toast.error(t('settingsDetail.users.rolesUpdateFailed'))
-        }
     }
 
     async function handleToggleActive() {
@@ -725,40 +722,46 @@ export function UsersPage() {
                                                 {formatLastLogin(u.lastLoginAt, t)}
                                             </span>
 
-                                            <MultiRoleToggle
-                                                roles={u.roles?.length ? u.roles : [u.role]}
-                                                onChange={canManageUsers && !isSelf ? (newRoles) => handleRolesChange(u.id, newRoles) : () => {}}
-                                                disabled={!canManageUsers || isSelf || updateUser.isPending}
+                                            {/* Feature switches — small icon chips so HR can see
+                                                punch / manual-entry state at a glance without
+                                                opening Manage Access. Green = on, slate = off.
+                                                Tooltip surfaces the long-form label on hover. */}
+                                            <FeatureFlagChip
+                                                icon={Timer}
+                                                enabled={u.attendancePunchEnabled !== false}
+                                                onLabel={t('settingsDetail.users.flagPunchOn', { defaultValue: 'Self check-in / check-out enabled' })}
+                                                offLabel={t('settingsDetail.users.flagPunchOff', { defaultValue: 'Self check-in / check-out disabled' })}
+                                            />
+                                            <FeatureFlagChip
+                                                icon={Pencil}
+                                                enabled={u.attendanceManualEntryEnabled !== false}
+                                                onLabel={t('settingsDetail.users.flagManualOn', { defaultValue: 'Manual attendance entry enabled' })}
+                                                offLabel={t('settingsDetail.users.flagManualOff', { defaultValue: 'Manual attendance entry disabled' })}
                                             />
 
-                                            {canManageUsers && !isSelf && !u.isActive && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-7 text-xs text-sky-600 hover:bg-sky-50"
-                                                    title={t('settingsDetail.users.resendInvite')}
-                                                    onClick={() => handleResendInvite(u.employeeId, u.name)}
-                                                    disabled={resendInvite.isPending}
-                                                >
-                                                    <MailCheck className="size-3.5" />
-                                                </Button>
-                                            )}
+                                            {/* Roles popover — click to see the full assigned set.
+                                                Keeps the row tidy when employees stack many roles. */}
+                                            <RolesPopoverButton
+                                                roles={(u.roles?.length ? u.roles : [u.role]) as string[]}
+                                            />
 
-                                            {canManageUsers && !isSelf && (
+                                            {canManageUsers && !isSelf ? (
                                                 <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    title={u.isActive ? t('settingsDetail.users.deactivate') : t('settingsDetail.users.activate')}
-                                                    className={cn('h-7 text-xs', u.isActive
-                                                        ? 'text-destructive hover:text-destructive hover:bg-destructive/10'
-                                                        : 'text-emerald-600 hover:bg-emerald-50',
-                                                    )}
-                                                    onClick={() => setDeactivateTarget({ id: u.id, name: u.name, active: u.isActive })}
+                                                    variant="info"
+                                                    size="icon"
+                                                    className="size-8"
+                                                    title={t('settingsDetail.users.manageAccess', 'Manage Access')}
+                                                    aria-label={t('settingsDetail.users.manageAccess', 'Manage Access')}
+                                                    onClick={() => setAccessTarget(u)}
                                                 >
-                                                    {u.isActive
-                                                        ? <XCircle className="size-3.5" />
-                                                        : <CheckCircle2 className="size-3.5" />}
+                                                    <Shield className="size-4" />
                                                 </Button>
+                                            ) : (
+                                                <Badge variant="secondary" className="text-[10px]">
+                                                    {isSelf
+                                                        ? t('settingsDetail.users.youLabel')
+                                                        : t('settingsDetail.users.readOnly', 'Read-only')}
+                                                </Badge>
                                             )}
                                         </div>
                                     </div>
@@ -838,6 +841,12 @@ export function UsersPage() {
                 open={manageRoles.open}
                 initialRole={manageRoles.initialRole}
                 onClose={() => setManageRoles((s) => ({ ...s, open: false }))}
+            />
+            <ManageUserAccessModal
+                user={accessTarget}
+                onClose={() => setAccessTarget(null)}
+                onResendInvite={(employeeId, name) => handleResendInvite(employeeId, name)}
+                onToggleActive={(u) => setDeactivateTarget({ id: u.id, name: u.name, active: u.isActive })}
             />
             <ConfirmDialog
                 open={!!deactivateTarget}
@@ -922,5 +931,305 @@ function StatusFilterChip({
             )}
             {label}
         </button>
+    )
+}
+
+// ─── Small row-level components ──────────────────────────────────────────────
+
+/**
+ * Compact status chip for the per-user feature switches (attendance check-in,
+ * manual entry). Visually:
+ *   - enabled  → emerald background + emerald icon + check dot in the corner
+ *   - disabled → muted background + muted icon + faint "off" slash
+ * Tooltip carries the human label so HR doesn't have to memorise the icons.
+ */
+function FeatureFlagChip({
+    icon: Icon,
+    enabled,
+    onLabel,
+    offLabel,
+}: {
+    icon: React.ComponentType<{ className?: string }>
+    enabled: boolean
+    onLabel: string
+    offLabel: string
+}) {
+    return (
+        <span
+            title={enabled ? onLabel : offLabel}
+            aria-label={enabled ? onLabel : offLabel}
+            className={cn(
+                'relative inline-flex items-center justify-center size-7 rounded-md border transition-colors',
+                enabled
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-900/60 dark:text-emerald-300'
+                    : 'bg-muted/40 border-border text-muted-foreground/60',
+            )}
+        >
+            <Icon className="size-3.5" />
+            {enabled ? (
+                <span className="absolute -top-1 -right-1 inline-flex size-3 items-center justify-center rounded-full bg-emerald-500 text-white shadow ring-2 ring-background">
+                    <Check className="size-2" />
+                </span>
+            ) : (
+                <span className="absolute -top-1 -right-1 inline-flex size-3 items-center justify-center rounded-full bg-muted text-muted-foreground border border-border">
+                    <MinusCircle className="size-2" />
+                </span>
+            )}
+        </span>
+    )
+}
+
+/**
+ * Click-to-reveal popover that surfaces a user's full role list. Lives on the
+ * row instead of inline chips so HR stays focused on the user's *identity*
+ * and can drill into roles only when they need to.
+ */
+function RolesPopoverButton({ roles }: { roles: string[] }) {
+    const { t } = useTranslation()
+    if (roles.length === 0) return null
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border bg-background text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                >
+                    <KeyRound className="size-3" />
+                    {t('settingsDetail.users.rolesCount', { count: roles.length, defaultValue: '{{count}} role(s)' })}
+                </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 p-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1 pb-1.5">
+                    {t('settingsDetail.users.assignedRoles', { defaultValue: 'Assigned roles' })}
+                </p>
+                <div className="flex flex-col gap-1">
+                    {roles.map((r) => (
+                        <span
+                            key={r}
+                            className={cn(
+                                'text-[11px] font-semibold px-2 py-1 rounded-md border',
+                                ROLE_BADGE_STYLE[r as UserRole] ?? 'bg-muted text-muted-foreground border-border',
+                            )}
+                        >
+                            {ROLE_LABEL[r as UserRole] ?? r}
+                        </span>
+                    ))}
+                </div>
+            </PopoverContent>
+        </Popover>
+    )
+}
+
+// ─── Per-user Manage Access modal ────────────────────────────────────────────
+//
+// Mirrors the InviteEmployeeDialog pattern used on EmployeeDetailPage: opens
+// against a single user, shows the access summary, and consolidates role +
+// active-state edits into one focused surface. The row remains read-only —
+// HR opens this modal whenever they want to *change* anything.
+
+function ManageUserAccessModal({
+    user,
+    onClose,
+    onResendInvite,
+    onToggleActive,
+}: {
+    user: TenantUser | null
+    onClose: () => void
+    onResendInvite: (employeeId: string, name: string) => void
+    onToggleActive: (u: TenantUser) => void
+}) {
+    const { t } = useTranslation()
+    const updateUser = useUpdateUser()
+    const callerRole = useAuthStore(s => s.user?.role)
+    const callerIsSuperAdmin = callerRole === 'super_admin'
+    const availableOptions = callerIsSuperAdmin ? MULTI_ROLE_OPTIONS_WITH_SUPER : MULTI_ROLE_OPTIONS
+
+    // Local draft of the user's roles. Reset whenever the modal target changes
+    // (different user clicked) — using a "lastSyncedId" sentinel rather than
+    // useEffect to avoid the double-render.
+    const initialRoles = useMemo<string[]>(
+        () => (user?.roles?.length ? user.roles : user?.role ? [user.role] : ['employee']),
+        [user],
+    )
+    const [draftRoles, setDraftRoles] = useState<string[]>(initialRoles)
+    const initialPunchEnabled = user?.attendancePunchEnabled ?? true
+    const initialManualEnabled = user?.attendanceManualEntryEnabled ?? true
+    const [draftPunchEnabled, setDraftPunchEnabled] = useState<boolean>(initialPunchEnabled)
+    const [draftManualEnabled, setDraftManualEnabled] = useState<boolean>(initialManualEnabled)
+    const [syncedId, setSyncedId] = useState<string | null>(null)
+    if (user && user.id !== syncedId) {
+        setSyncedId(user.id)
+        setDraftRoles(initialRoles)
+        setDraftPunchEnabled(user.attendancePunchEnabled ?? true)
+        setDraftManualEnabled(user.attendanceManualEntryEnabled ?? true)
+    }
+
+    if (!user) return null
+
+    const rolesDirty = JSON.stringify([...draftRoles].sort()) !== JSON.stringify([...initialRoles].sort())
+    const punchDirty = draftPunchEnabled !== initialPunchEnabled
+    const manualDirty = draftManualEnabled !== initialManualEnabled
+    const isDirty = rolesDirty || punchDirty || manualDirty
+
+    async function handleSave() {
+        if (!user) return
+        try {
+            await updateUser.mutateAsync({
+                id: user.id,
+                ...(rolesDirty ? { roles: draftRoles, role: draftRoles[0] } : {}),
+                ...(punchDirty ? { attendancePunchEnabled: draftPunchEnabled } : {}),
+                ...(manualDirty ? { attendanceManualEntryEnabled: draftManualEnabled } : {}),
+            })
+            toast.success(t('settingsDetail.users.accessUpdated', { defaultValue: 'Access updated' }))
+            onClose()
+        } catch {
+            toast.error(t('settingsDetail.users.rolesUpdateFailed'))
+        }
+    }
+
+    return (
+        <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+            <DialogContent className="sm:max-w-lg p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col">
+                {/* Header */}
+                <DialogHeader className="px-6 py-5 border-b">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <Avatar className="size-10 shrink-0">
+                            {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
+                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                                {initials(user.name)}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                            <DialogTitle className="text-sm font-semibold truncate">{user.name}</DialogTitle>
+                            <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5">
+                                <Mail className="size-3 shrink-0" />
+                                {user.email}
+                            </p>
+                        </div>
+                        <Badge
+                            variant={user.isActive ? 'success' : 'destructive'}
+                            className="text-[10px] shrink-0"
+                        >
+                            {user.isActive ? t('common.active') : t('common.inactive')}
+                        </Badge>
+                    </div>
+                </DialogHeader>
+
+                {/* Body */}
+                <div className="overflow-y-auto px-6 py-5 space-y-5">
+                    {/* Meta strip */}
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <Clock className="size-3.5 shrink-0" />
+                        <span>
+                            {t('settingsDetail.users.lastLogin', { defaultValue: 'Last login' })}:{' '}
+                            {user.lastLoginAt ? formatDate(user.lastLoginAt) : t('settingsDetail.users.lastLoginNever')}
+                        </span>
+                    </div>
+
+                    {/* Roles */}
+                    <div className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {t('settingsDetail.users.assignRoles')}
+                        </p>
+                        <MultiRoleToggle
+                            roles={draftRoles}
+                            onChange={setDraftRoles}
+                            availableRoles={availableOptions}
+                            disabled={updateUser.isPending}
+                        />
+                    </div>
+
+                    {/* Feature switches — both default ON. Toggling either pushes
+                        immediately to the employee portal via /auth/me. */}
+                    <div className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {t('settingsDetail.users.featuresLabel', { defaultValue: 'Features' })}
+                        </p>
+                        <div className="rounded-lg border bg-muted/20 divide-y">
+                            <label
+                                htmlFor="punch-switch"
+                                className="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer"
+                            >
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium">
+                                        {t('settingsDetail.users.allowSelfPunchTitle', { defaultValue: 'Attendance check-in / check-out' })}
+                                    </p>
+                                    <p className="text-[11px] text-muted-foreground leading-snug">
+                                        {t('settingsDetail.users.allowSelfPunchDesc', { defaultValue: 'When off, the live check-in / check-out buttons are hidden on the employee portal.' })}
+                                    </p>
+                                </div>
+                                <Switch
+                                    id="punch-switch"
+                                    checked={draftPunchEnabled}
+                                    onCheckedChange={setDraftPunchEnabled}
+                                    disabled={updateUser.isPending}
+                                />
+                            </label>
+                            <label
+                                htmlFor="manual-switch"
+                                className="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer"
+                            >
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium">
+                                        {t('settingsDetail.users.allowManualEntryTitle', { defaultValue: 'Manual entry' })}
+                                    </p>
+                                    <p className="text-[11px] text-muted-foreground leading-snug">
+                                        {t('settingsDetail.users.allowManualEntryDesc', { defaultValue: 'When off, the back-fill panel that lets the user add a past check-in / check-out is hidden on the employee portal.' })}
+                                    </p>
+                                </div>
+                                <Switch
+                                    id="manual-switch"
+                                    checked={draftManualEnabled}
+                                    onCheckedChange={setDraftManualEnabled}
+                                    disabled={updateUser.isPending}
+                                />
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer — destructive actions on the left, primary on the right */}
+                <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/30">
+                    <div className="flex items-center gap-2">
+                        {!user.isActive && (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40"
+                                leftIcon={<MailCheck className="size-3.5" />}
+                                onClick={() => onResendInvite(user.employeeId, user.name)}
+                            >
+                                {t('settingsDetail.users.resendInvite')}
+                            </Button>
+                        )}
+                        <Button
+                            size="sm"
+                            variant={user.isActive ? 'destructive' : 'success'}
+                            leftIcon={user.isActive
+                                ? <ShieldOff className="size-3.5" />
+                                : <ShieldCheck className="size-3.5" />}
+                            onClick={() => onToggleActive(user)}
+                        >
+                            {user.isActive
+                                ? t('settingsDetail.users.deactivate')
+                                : t('settingsDetail.users.activate')}
+                        </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button size="sm" variant="ghost" onClick={onClose}>
+                            {t('common.cancel')}
+                        </Button>
+                        <Button
+                            size="sm"
+                            disabled={!isDirty || draftRoles.length === 0}
+                            loading={updateUser.isPending}
+                            onClick={handleSave}
+                        >
+                            {t('common.save')}
+                        </Button>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
     )
 }

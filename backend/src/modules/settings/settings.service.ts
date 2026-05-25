@@ -94,6 +94,8 @@ export async function listTenantUsers(tenantId: string) {
             role: users.role,
             roles: users.roles,
             isActive: users.isActive,
+            attendancePunchEnabled: users.attendancePunchEnabled,
+            attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
             lastLoginAt: users.lastLoginAt,
             createdAt: users.createdAt,
             employeeId: users.employeeId,
@@ -119,9 +121,15 @@ export async function listTenantUsers(tenantId: string) {
 
 const ROLE_HIERARCHY: Record<string, number> = { super_admin: 5, hr_manager: 4, pro_officer: 3, dept_head: 2, employee: 1 }
 
-export async function updateUserStatus(tenantId: string, userId: string, data: { isActive?: boolean; role?: string; roles?: string[] }) {
+export async function updateUserStatus(
+    tenantId: string,
+    userId: string,
+    data: { isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean },
+) {
     const patch: Record<string, unknown> = { updatedAt: new Date() }
     if (data.isActive !== undefined) patch.isActive = data.isActive
+    if (data.attendancePunchEnabled !== undefined) patch.attendancePunchEnabled = data.attendancePunchEnabled
+    if (data.attendanceManualEntryEnabled !== undefined) patch.attendanceManualEntryEnabled = data.attendanceManualEntryEnabled
     if (data.roles && data.roles.length > 0) {
         const effectiveRole = data.roles.reduce((best, r) => (ROLE_HIERARCHY[r] ?? 0) > (ROLE_HIERARCHY[best] ?? 0) ? r : best, data.roles[0])
         patch.role = effectiveRole as UserRole
@@ -134,7 +142,16 @@ export async function updateUserStatus(tenantId: string, userId: string, data: {
         .update(users)
         .set(patch as Parameters<ReturnType<typeof db.update>['set']>[0])
         .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)))
-        .returning({ id: users.id, name: users.name, email: users.email, role: users.role, roles: users.roles, isActive: users.isActive })
+        .returning({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+            role: users.role,
+            roles: users.roles,
+            isActive: users.isActive,
+            attendancePunchEnabled: users.attendancePunchEnabled,
+            attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+        })
     return updated ?? null
 }
 

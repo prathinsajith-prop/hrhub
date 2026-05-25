@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { eq } from 'drizzle-orm'
 import {
     changePassword,
     loginUser,
@@ -16,9 +17,32 @@ import {
     validate,
 } from '../../lib/validation.js'
 import { e400, e401 } from '../../lib/errors.js'
+import { db } from '../../db/client.js'
+import { users } from '../../db/schema/index.js'
 
 export default async function authRoutes(fastify: FastifyInstance) {
     const auth = { preHandler: [(fastify as any).authenticate] }
+
+    // GET /api/v1/auth/me — returns the JWT-derived identity enriched with
+    // the per-user attendance switches (read fresh from the DB so HR toggles
+    // take effect without a re-login).
+    fastify.get('/me', { ...auth }, async (request: any, reply: any) => {
+        const [row] = await db
+            .select({
+                attendancePunchEnabled: users.attendancePunchEnabled,
+                attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+            })
+            .from(users)
+            .where(eq(users.id, request.user.id))
+            .limit(1)
+        return reply.send({
+            data: {
+                ...request.user,
+                attendancePunchEnabled: row?.attendancePunchEnabled ?? true,
+                attendanceManualEntryEnabled: row?.attendanceManualEntryEnabled ?? true,
+            },
+        })
+    })
 
     fastify.post('/login', async (request: any, reply: any) => {
         const body = validate(loginSchema, request.body)

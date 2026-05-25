@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
+import { Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CalendarCell, CalendarEmployee, CalendarResponse } from '@/hooks/useAttendance'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 // ─── Legend definitions ──────────────────────────────────────────────────
 //
@@ -21,31 +24,43 @@ interface CodeMeta {
     weight: 'badge' | 'plain'
 }
 
+// Palette mirrors the admin HR Manager attendance grid so the same status
+// reads the same colour on both surfaces. Each row of the legend is a
+// distinct hue family so the eye can scan a month's grid without
+// consulting the legend constantly: green = present, orange/amber =
+// degraded-present (late/short), red-solid = hard absence, sky/red/pink/
+// indigo/stone/violet = leave variants, cyan/teal = working-away,
+// fuchsia-solid = holiday, neutrals = calendar markers.
 const CODE_META: Record<string, CodeMeta> = {
-    // Present cells now wear a vivid emerald fill so a "good" day pops out
-    // of the team-grid background — matches the employee-side calendar's
-    // colour vocabulary so HR and the employee see the same green for a
-    // present day.
-    P: { label: 'Present', short: 'P', bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-800 dark:text-emerald-100', weight: 'badge' },
-    'P-late': { label: 'Late', short: 'P', bg: 'bg-rose-100 dark:bg-rose-950/40', text: 'text-rose-700 dark:text-rose-300', weight: 'badge' },
-    'P-short': { label: 'Short Hours', short: 'P', bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-300', weight: 'badge' },
-    A: { label: 'Absent / Unpaid Leave / Only Punch In', short: 'A', bg: 'bg-rose-500', text: 'text-white', weight: 'badge' },
-    AL: { label: 'Annual Leave', short: 'AL', bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-800 dark:text-amber-200', weight: 'badge' },
-    SL: { label: 'Sick Leave', short: 'SL', bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-800 dark:text-amber-200', weight: 'badge' },
-    ML: { label: 'Maternity Leave', short: 'ML', bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-800 dark:text-amber-200', weight: 'badge' },
-    PL: { label: 'Paternity Leave', short: 'PL', bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-800 dark:text-amber-200', weight: 'badge' },
-    BL: { label: 'Bereavement Leave', short: 'BL', bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-800 dark:text-amber-200', weight: 'badge' },
-    HJ: { label: 'Hajj Leave', short: 'HJ', bg: 'bg-amber-100 dark:bg-amber-950/40', text: 'text-amber-800 dark:text-amber-200', weight: 'badge' },
-    BT: { label: 'Business Trip', short: 'BT', bg: 'bg-white dark:bg-transparent', text: 'text-foreground', weight: 'plain' },
-    WFH: { label: 'Work from home', short: 'WFH', bg: 'bg-white dark:bg-transparent', text: 'text-foreground', weight: 'plain' },
-    E: { label: 'Excuse', short: 'E', bg: 'bg-white dark:bg-transparent', text: 'text-foreground', weight: 'plain' },
-    H: { label: 'Holiday', short: 'H', bg: 'bg-rose-500', text: 'text-white', weight: 'badge' },
-    WO: { label: 'Week Off', short: 'WO', bg: 'bg-muted', text: 'text-muted-foreground', weight: 'badge' },
-    OS: { label: 'Offset', short: 'OS', bg: 'bg-muted', text: 'text-muted-foreground', weight: 'badge' },
-    'N/A': { label: 'New Employees', short: 'N/A', bg: 'bg-slate-200 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', weight: 'badge' },
+    // Present (green family)
+    P:         { label: 'Present',       short: 'P',  bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-800 dark:text-emerald-100', weight: 'badge' },
+    'P-late':  { label: 'Late',          short: 'P',  bg: 'bg-orange-100 dark:bg-orange-950/40',   text: 'text-orange-800 dark:text-orange-200',   weight: 'badge' },
+    'P-short': { label: 'Short Hours',   short: 'P',  bg: 'bg-amber-100 dark:bg-amber-950/40',     text: 'text-amber-800 dark:text-amber-200',     weight: 'badge' },
+
+    // Hard absence (filled red)
+    A:         { label: 'Absent / Unpaid Leave / Only Punch In', short: 'A', bg: 'bg-rose-600', text: 'text-white', weight: 'badge' },
+
+    // Leaves (each a distinct hue)
+    AL:        { label: 'Annual Leave',     short: 'AL', bg: 'bg-sky-100 dark:bg-sky-950/40',       text: 'text-sky-800 dark:text-sky-200',          weight: 'badge' },
+    SL:        { label: 'Sick Leave',       short: 'SL', bg: 'bg-red-100 dark:bg-red-950/40',       text: 'text-red-800 dark:text-red-200',          weight: 'badge' },
+    ML:        { label: 'Maternity Leave',  short: 'ML', bg: 'bg-pink-100 dark:bg-pink-950/40',     text: 'text-pink-800 dark:text-pink-200',        weight: 'badge' },
+    PL:        { label: 'Paternity Leave',  short: 'PL', bg: 'bg-indigo-100 dark:bg-indigo-950/40', text: 'text-indigo-800 dark:text-indigo-200',    weight: 'badge' },
+    BL:        { label: 'Bereavement Leave',short: 'BL', bg: 'bg-stone-200 dark:bg-stone-800/60',   text: 'text-stone-800 dark:text-stone-200',      weight: 'badge' },
+    HJ:        { label: 'Hajj Leave',       short: 'HJ', bg: 'bg-violet-100 dark:bg-violet-950/40', text: 'text-violet-800 dark:text-violet-200',    weight: 'badge' },
+
+    // Working away from the office (cool tints)
+    BT:        { label: 'Business Trip',    short: 'BT', bg: 'bg-cyan-100 dark:bg-cyan-950/40',     text: 'text-cyan-800 dark:text-cyan-200',        weight: 'badge' },
+    WFH:       { label: 'Work from home',   short: 'WFH',bg: 'bg-teal-100 dark:bg-teal-950/40',     text: 'text-teal-800 dark:text-teal-200',        weight: 'badge' },
+    E:         { label: 'Excuse',           short: 'E',  bg: 'bg-yellow-100 dark:bg-yellow-950/40', text: 'text-yellow-800 dark:text-yellow-200',    weight: 'badge' },
+
+    // Calendar markers (filled fuchsia for holidays, neutral grays)
+    H:         { label: 'Holiday',          short: 'H',  bg: 'bg-fuchsia-600',                      text: 'text-white',                              weight: 'badge' },
+    WO:        { label: 'Week Off',         short: 'WO', bg: 'bg-zinc-200 dark:bg-zinc-800/60',     text: 'text-zinc-700 dark:text-zinc-300',        weight: 'badge' },
+    OS:        { label: 'Offset',           short: 'OS', bg: 'bg-neutral-200 dark:bg-neutral-800/60', text: 'text-neutral-700 dark:text-neutral-300', weight: 'badge' },
+    'N/A':     { label: 'New Employees',    short: 'N/A',bg: 'bg-slate-200 dark:bg-slate-800',      text: 'text-slate-700 dark:text-slate-300',      weight: 'badge' },
 }
 
-const LEGEND_ORDER: string[] = ['P', 'P-late', 'P-short', 'A', 'AL', 'SL', 'ML', 'PL', 'BL', 'BT', 'WFH', 'E', 'H', 'WO', 'OS', 'N/A']
+const LEGEND_ORDER: string[] = ['P', 'P-late', 'P-short', 'A', 'AL', 'SL', 'ML', 'PL', 'BL', 'HJ', 'BT', 'WFH', 'E', 'H', 'WO', 'OS', 'N/A']
 
 function formatTime(iso: string | null): string | null {
     if (!iso) return null
@@ -83,7 +98,9 @@ export function AttendanceCalendarGrid({ data, loading, hideEmployeeColumn }: Pr
 
     return (
         <div className="space-y-4">
-            <Legend />
+            <div className="flex items-center justify-end">
+                <Legend />
+            </div>
             <div className="overflow-x-auto rounded-xl border border-border/70 bg-card/40">
                 <table className="min-w-full border-separate border-spacing-0 text-xs">
                     <thead>
@@ -206,28 +223,47 @@ function Cell({ cell }: { cell: CalendarCell }) {
     )
 }
 
+// Popover-backed legend (replaces the old inline horizontal strip that
+// crowded the page header). Click the "Legend" pill to reveal the full
+// status-code key in a focused two-column grid. Stays out of the way on
+// small screens and stops re-flowing the calendar when the legend grows.
 function Legend() {
     return (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border/70 bg-card/40 px-3 py-2 text-[11px]">
-            {LEGEND_ORDER.map((code) => {
-                const meta = CODE_META[code]
-                if (!meta) return null
-                return (
-                    <span key={code} className="inline-flex items-center gap-1.5">
-                        <span
-                            className={cn(
-                                'flex h-5 min-w-[1.5rem] items-center justify-center rounded px-1 text-[10px] font-semibold',
-                                meta.weight === 'badge' ? meta.bg : 'bg-transparent',
-                                meta.text,
-                            )}
-                        >
-                            {meta.short}
-                        </span>
-                        <span className="text-muted-foreground">{meta.label}</span>
-                    </span>
-                )
-            })}
-        </div>
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                    <Info className="size-3.5" />
+                    Legend
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[320px] p-4">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Status codes
+                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
+                    {LEGEND_ORDER.map((code) => {
+                        const meta = CODE_META[code]
+                        if (!meta) return null
+                        return (
+                            <span key={code} className="inline-flex items-center gap-2 min-w-0">
+                                <span
+                                    className={cn(
+                                        'flex h-5 min-w-[1.75rem] items-center justify-center rounded px-1 text-[10px] font-semibold shrink-0',
+                                        meta.weight === 'badge' ? meta.bg : 'bg-transparent',
+                                        meta.text,
+                                    )}
+                                >
+                                    {meta.short}
+                                </span>
+                                <span className="text-muted-foreground truncate" title={meta.label}>
+                                    {meta.label}
+                                </span>
+                            </span>
+                        )
+                    })}
+                </div>
+            </PopoverContent>
+        </Popover>
     )
 }
 
