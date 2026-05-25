@@ -21,6 +21,13 @@ export default defineConfig({
         target: 'http://localhost:4000',
         changeOrigin: true,
       },
+      // Swagger UI lives at /api/docs on the backend. The proxy forwards
+      // the page + its static assets (CSS / JS) so http://localhost:5173/api/docs
+      // works in development without the user having to switch ports.
+      '/api/docs': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
     },
   },
   build: {

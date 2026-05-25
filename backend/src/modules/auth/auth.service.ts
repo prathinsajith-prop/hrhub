@@ -2,8 +2,13 @@ import bcrypt from 'bcrypt'
 import { eq, and, lt, sql } from 'drizzle-orm'
 import crypto from 'node:crypto'
 import { db } from '../../db/index.js'
-import { users, refreshTokens, tenants, passwordResetTokens, entities, employees, onboardingTemplateSteps, recruitmentStages, salaryComponents } from '../../db/schema/index.js'
+import { users, refreshTokens, tenants, passwordResetTokens, entities, employees, onboardingTemplateSteps, recruitmentStages, salaryComponents, offboardingInterviewQuestions, offboardingExitDocuments, offboardingFlowSettings } from '../../db/schema/index.js'
 import { buildDefaultOnboardingTemplateRows } from '../onboarding/onboarding.defaults.js'
+import {
+    buildDefaultInterviewQuestionRows,
+    buildDefaultExitDocumentRows,
+    buildDefaultOffboardingSettingsRow,
+} from '../offboardingFlow/offboarding.defaults.js'
 import { buildDefaultRecruitmentStageRows } from '../recruitment/recruitment.defaults.js'
 import { buildDefaultSalaryComponentRows } from '../salary-components/salary-components.defaults.js'
 import { sendEmail, passwordResetEmail } from '../../plugins/email.js'
@@ -377,6 +382,14 @@ export async function registerTenant(input: {
         // allowances, deductions, medical insurance, and the common correction
         // kinds. Tenant can extend or disable from Org Settings → Salary Components.
         await tx.insert(salaryComponents).values(buildDefaultSalaryComponentRows(tenant.id))
+
+        // Offboarding Flow defaults — singleton settings row, the 13 exit-
+        // interview questions, and the two standard letters (Experience +
+        // Relieving). HR can edit / reorder / delete any of them later from
+        // Org Settings → Offboarding Flow.
+        await tx.insert(offboardingFlowSettings).values(buildDefaultOffboardingSettingsRow(tenant.id))
+        await tx.insert(offboardingInterviewQuestions).values(buildDefaultInterviewQuestionRows(tenant.id))
+        await tx.insert(offboardingExitDocuments).values(buildDefaultExitDocumentRows(tenant.id))
 
         return { ok: true as const }
     })

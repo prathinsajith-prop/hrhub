@@ -1,7 +1,8 @@
 name: Portal CI
 
-# Runs the same type-check + lint + build sweep that scripts/portal-ci.sh runs locally.
-# Path-filtered so a docs-only or main-app-only change doesn't trigger this pipeline.
+# Mirrors the type-check + lint + build sweep `scripts/portal-ci.sh` runs
+# locally, plus a schema-drift check against the main backend. Path-filtered
+# so a main-app-only or docs-only change skips this pipeline entirely.
 
 on:
   push:
@@ -9,12 +10,18 @@ on:
     paths:
       - 'backend-portal/**'
       - 'frontend-portal/**'
+      # The drift check reads the main backend's schema files, so a schema
+      # change there must re-run portal CI even if no portal file moved.
+      - 'backend/src/db/schema/**'
+      - 'scripts/check-portal-schema-drift.sh'
       - '.github/workflows/portal-ci.yml'
   pull_request:
     branches: [main, staging, development]
     paths:
       - 'backend-portal/**'
       - 'frontend-portal/**'
+      - 'backend/src/db/schema/**'
+      - 'scripts/check-portal-schema-drift.sh'
       - '.github/workflows/portal-ci.yml'
 
 concurrency:
@@ -26,10 +33,23 @@ env:
   NODE_VERSION: '22'
 
 jobs:
+  # ─── Schema drift check ─────────────────────────────────────────────────────
+  # Cheap (no install needed) — runs first so a portal/main schema mismatch
+  # fails fast before either workspace boots its full lint / build pipeline.
+  schema-drift:
+    name: Portal ↔ main schema drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run drift check
+        run: bash scripts/check-portal-schema-drift.sh
+
   # ─── Backend portal ─────────────────────────────────────────────────────────
   backend-portal:
     name: Backend portal — Type-check, Lint & Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend-portal
@@ -48,7 +68,7 @@ jobs:
           cache-dependency-path: backend-portal/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Type-check
         run: pnpm exec tsc --noEmit
@@ -57,17 +77,18 @@ jobs:
         run: pnpm lint
 
       - name: Build
-        run: pnpm build
         env:
-          # Stubs to satisfy zod env validation during build smoke test.
+          # Stubs satisfy zod env validation during the build smoke test.
           DATABASE_URL: postgresql://stub:stub@localhost:5432/stub
           JWT_SECRET: ci-stub-secret-at-least-32-characters-long
           REFRESH_TOKEN_SECRET: ci-stub-refresh-secret-at-least-32-characters-long
+        run: pnpm build
 
   # ─── Frontend portal ────────────────────────────────────────────────────────
   frontend-portal:
     name: Frontend portal — Type-check, Lint & Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend-portal
@@ -86,22 +107,40 @@ jobs:
           cache-dependency-path: frontend-portal/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Type-check
         run: pnpm exec tsc -p tsconfig.app.json --noEmit
 
       - name: Lint (zero errors)
-        # Warnings are allowed; errors fail the build.
-        run: pnpm exec eslint src --ext .ts,.tsx
+        # `pnpm lint` runs `eslint .` and exits 1 only on actual errors.
+        run: pnpm lint
 
       - name: Build
         run: pnpm build
 
       - name: Upload build artefact
         uses: actions/upload-artifact@v5
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
         with:
-          name: frontend-portal-dist
+          name: frontend-portal-dist-${{ github.ref_name }}
           path: frontend-portal/dist
           retention-days: 7
+
+  # ─── Aggregate status check ─────────────────────────────────────────────────
+  # Single required status for branch-protection rules.
+  portal-ci-success:
+    name: Portal CI success
+    runs-on: ubuntu-latest
+    needs: [schema-drift, backend-portal, frontend-portal]
+    if: always()
+    steps:
+      - name: Verify all jobs succeeded
+        run: |
+          if [ "${{ needs.schema-drift.result }}" != "success" ] \
+             || [ "${{ needs.backend-portal.result }}" != "success" ] \
+             || [ "${{ needs.frontend-portal.result }}" != "success" ]; then
+            echo "One or more required jobs failed: schema-drift=${{ needs.schema-drift.result }}, backend-portal=${{ needs.backend-portal.result }}, frontend-portal=${{ needs.frontend-portal.result }}"
+            exit 1
+          fi
+          echo "All required jobs passed."

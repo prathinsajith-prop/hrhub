@@ -1,7 +1,10 @@
 import bcrypt from 'bcrypt'
+import { z } from 'zod'
 import { eq, and, gte, desc, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { connectedApps, appRequestLogs } from '../../db/schema/index.js'
+import { recordActivity } from '../audit/audit.service.js'
+import { e400, e401, e403, e404 } from '../../lib/errors.js'
 import {
     listApps,
     getApp,
@@ -10,6 +13,28 @@ import {
     regenerateAppSecret,
     deleteApp,
 } from './apps.service.js'
+
+// ── Zod schemas ─────────────────────────────────────────────────────────────
+const createAppSchema = z.object({
+    name: z.string().trim().min(1, 'name is required').max(120),
+    description: z.string().trim().max(1000).optional(),
+    scopes: z.array(z.string()).optional(),
+    ipAllowlist: z.array(z.string()).optional(),
+})
+
+const updateAppSchema = z.object({
+    name: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(1000).nullable().optional(),
+    scopes: z.array(z.string()).optional(),
+    ipAllowlist: z.array(z.string()).optional(),
+    status: z.enum(['active', 'revoked']).optional(),
+})
+
+const requestLogsQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    status: z.enum(['errors']).optional(),
+})
 
 export default async function appsRoutes(fastify: any): Promise<void> {
     /**
@@ -30,18 +55,18 @@ export default async function appsRoutes(fastify: any): Promise<void> {
         if (rawSecret) {
             const { id } = request.params as { id: string }
             if (!id.startsWith('app_')) {
-                return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'App-secret auth requires an appKey (app_live_...) in the URL, not a UUID' })
+                return reply.code(401).send(e401('App-secret auth requires an appKey (app_live_...) in the URL, not a UUID'))
             }
             const [app] = await db.select().from(connectedApps).where(eq(connectedApps.appKey, id)).limit(1)
             if (!app) {
-                return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid app key' })
+                return reply.code(401).send(e401('Invalid app key'))
             }
             const valid = await bcrypt.compare(rawSecret, app.secretHash)
             if (!valid) {
-                return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid app secret' })
+                return reply.code(401).send(e401('Invalid app secret'))
             }
             if (app.status !== 'active') {
-                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'This app has been revoked' })
+                return reply.code(403).send(e403('This app has been revoked'))
             }
             request.user = { tenantId: app.tenantId, id: app.createdBy }
             return // authenticated
@@ -52,6 +77,24 @@ export default async function appsRoutes(fastify: any): Promise<void> {
         if (reply.sent) return
         await fastify.requireRole('hr_manager', 'super_admin')(request, reply)
     }
+
+    // Local audit helper — every app mutation goes through this.
+    // Fire-and-forget so an audit failure never breaks the user-facing op.
+    type AuditAction = 'create' | 'update' | 'delete'
+    const audit = (req: any, action: AuditAction, entityId: string, entityName?: string, meta?: Record<string, unknown>) =>
+        recordActivity({
+            tenantId: req.user.tenantId,
+            userId: req.user.id,
+            actorName: req.user.name,
+            actorRole: req.user.role,
+            entityType: 'connected_app',
+            entityId,
+            entityName,
+            action,
+            metadata: meta,
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+        }).catch(() => { })
 
     fastify.get('/', {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
@@ -65,20 +108,19 @@ export default async function appsRoutes(fastify: any): Promise<void> {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['ConnectedApps'] },
     }, async (request: any, reply: any) => {
-        const body = request.body as {
-            name: string
-            description?: string
-            scopes?: string[]
-            ipAllowlist?: string[]
+        const parsed = createAppSchema.safeParse(request.body)
+        if (!parsed.success) {
+            return reply.code(400).send({ ...e400('Invalid input'), validationErrors: parsed.error.issues })
         }
         const result = await createApp({
             tenantId: request.user.tenantId,
             actorUserId: request.user.id,
-            name: body.name,
-            description: body.description,
-            scopes: body.scopes,
-            ipAllowlist: body.ipAllowlist,
+            name: parsed.data.name,
+            description: parsed.data.description,
+            scopes: parsed.data.scopes,
+            ipAllowlist: parsed.data.ipAllowlist,
         })
+        audit(request, 'create', result.app.id, result.app.name, { scopes: parsed.data.scopes ?? [] })
         return reply.code(201).send({ data: result })
     })
 
@@ -96,11 +138,16 @@ export default async function appsRoutes(fastify: any): Promise<void> {
         schema: { tags: ['ConnectedApps'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
+        const parsed = updateAppSchema.safeParse(request.body ?? {})
+        if (!parsed.success) {
+            return reply.code(400).send({ ...e400('Invalid input'), validationErrors: parsed.error.issues })
+        }
         const data = await updateApp({
             tenantId: request.user.tenantId,
             appId: id,
-            patch: request.body ?? {},
+            patch: parsed.data,
         })
+        audit(request, 'update', data.id, data.name, { fields: Object.keys(parsed.data) })
         return reply.send({ data })
     })
 
@@ -110,6 +157,7 @@ export default async function appsRoutes(fastify: any): Promise<void> {
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         const data = await regenerateAppSecret(request.user.tenantId, id)
+        audit(request, 'update', data.app.id, data.app.name, { action: 'regenerate_secret' })
         return reply.send({ data })
     })
 
@@ -118,7 +166,10 @@ export default async function appsRoutes(fastify: any): Promise<void> {
         schema: { tags: ['ConnectedApps'] },
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
+        // Read for entityName before delete so the audit row has context.
+        const existing = await getApp(request.user.tenantId, id).catch(() => null)
         await deleteApp(request.user.tenantId, id)
+        if (existing) audit(request, 'delete', existing.id, existing.name)
         return reply.code(204).send()
     })
 
@@ -134,14 +185,14 @@ export default async function appsRoutes(fastify: any): Promise<void> {
             .from(connectedApps)
             .where(and(eq(connectedApps.id, id), eq(connectedApps.tenantId, tenantId)))
             .limit(1)
-        if (!app) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'App not found' })
+        if (!app) return reply.code(404).send(e404('App not found'))
 
         const now = new Date()
         const h24ago = new Date(now.getTime() - 24 * 60 * 60 * 1000)
         const d7ago = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
         const d30ago = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
-        const appWhere = eq(appRequestLogs.appId, id)
+        const appWhere = and(eq(appRequestLogs.appId, id), eq(appRequestLogs.tenantId, tenantId))
 
         const [[r24h], [r7d], [errRow], [latRow], dailyVolume, byPath, byStatusCode] = await Promise.all([
             // Last 24h count
@@ -210,17 +261,24 @@ export default async function appsRoutes(fastify: any): Promise<void> {
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         const tenantId = request.user.tenantId
-        const q = request.query as { page?: string; limit?: string; status?: string }
+
+        const qParsed = requestLogsQuerySchema.safeParse(request.query)
+        if (!qParsed.success) {
+            return reply.code(400).send({ ...e400('Invalid query'), validationErrors: qParsed.error.issues })
+        }
+        const q = qParsed.data
 
         const [app] = await db.select({ id: connectedApps.id }).from(connectedApps)
             .where(and(eq(connectedApps.id, id), eq(connectedApps.tenantId, tenantId))).limit(1)
-        if (!app) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'App not found' })
+        if (!app) return reply.code(404).send(e404('App not found'))
 
-        const limitN = Math.min(100, Math.max(1, Number(q.limit ?? 50)))
-        const offset = (Math.max(1, Number(q.page ?? 1)) - 1) * limitN
+        const limitN = q.limit ?? 50
+        const page = q.page ?? 1
+        const offset = (page - 1) * limitN
 
         const baseWhere = and(
             eq(appRequestLogs.appId, id),
+            eq(appRequestLogs.tenantId, tenantId),
             q.status === 'errors' ? sql`${appRequestLogs.statusCode} >= 400` : undefined,
         )
 
@@ -233,7 +291,7 @@ export default async function appsRoutes(fastify: any): Promise<void> {
 
         return reply.send({
             data: logs,
-            meta: { page: Number(q.page ?? 1), limit: limitN, total: total ?? 0 },
+            meta: { page, limit: limitN, total: total ?? 0 },
         })
     })
 }

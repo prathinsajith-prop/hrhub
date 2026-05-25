@@ -1,9 +1,17 @@
 import { db } from '../../db/index.js'
-import { exitRequests, employees, leaveRequests, leaveBalances } from '../../db/schema/index.js'
-import { eq, and, sql, desc } from 'drizzle-orm'
+import { exitRequests, employees, leaveRequests, leaveBalances, exitClearanceItems, exitInterviewResponses } from '../../db/schema/index.js'
+import { eq, and, sql, desc, inArray } from 'drizzle-orm'
 import { resolveAvatarUrl, resolveAvatarUrls } from '../../plugins/s3.js'
 import { Conditions } from '../../lib/filters.js'
 import { resolveEmployeeEarnings } from '../payroll/payroll.service.js'
+import {
+    getSettings as getOffboardingSettings,
+    instantiateClearancesForExit,
+    fireWorkflows,
+    getExitApprovalReadiness,
+} from '../offboardingFlow/offboarding.service.js'
+import { log } from '../../lib/logger.js'
+import { ServiceError } from '../../lib/errors.js'
 
 const EXIT_FIELD_MAP = {
     exitType: exitRequests.exitType,
@@ -127,7 +135,31 @@ export async function initiateExit(tenantId: string, body: {
     deductions?: number
 }) {
     const deductions = Number(body.deductions ?? 0)
-    const settlement = await calculateSettlement(tenantId, body.employeeId, body.exitDate, body.exitType, deductions)
+    // Settlement + offboarding-settings + employee.reportingTo are all
+    // independent reads — run them concurrently so the create path waits
+    // for the slowest one rather than serializing.
+    const [settlement, offboardingSettings, empRow] = await Promise.all([
+        calculateSettlement(tenantId, body.employeeId, body.exitDate, body.exitType, deductions),
+        getOffboardingSettings(tenantId).catch(() => null),
+        db.select({ reportingTo: employees.reportingTo }).from(employees)
+            .where(and(eq(employees.id, body.employeeId), eq(employees.tenantId, tenantId)))
+            .then(rows => rows[0] ?? null),
+    ])
+
+    // Resolve default notice period from org Offboarding Flow settings when
+    // the caller didn't supply one. The flow can disable notice period
+    // entirely; in that case we still record 0 to satisfy NOT NULL.
+    let resolvedNotice = body.noticePeriodDays
+    if (resolvedNotice == null) {
+        if (offboardingSettings?.noticePeriodEnabled) {
+            const v = offboardingSettings.noticePeriodValue ?? 30
+            resolvedNotice = offboardingSettings.noticePeriodUnit === 'months' ? v * 30 : v
+        } else if (offboardingSettings) {
+            resolvedNotice = 0
+        } else {
+            resolvedNotice = 30
+        }
+    }
 
     const [req] = await db.insert(exitRequests).values({
         tenantId,
@@ -136,7 +168,7 @@ export async function initiateExit(tenantId: string, body: {
         exitDate: body.exitDate,
         lastWorkingDay: body.lastWorkingDay,
         reason: body.reason,
-        noticePeriodDays: String(body.noticePeriodDays ?? 30),
+        noticePeriodDays: String(resolvedNotice ?? 30),
         gratuityAmount: String(settlement.gratuityAmount),
         leaveEncashmentAmount: String(settlement.leaveEncashmentAmount),
         unpaidSalaryAmount: String(settlement.unpaidSalaryAmount),
@@ -144,6 +176,28 @@ export async function initiateExit(tenantId: string, body: {
         totalSettlement: String(settlement.totalSettlement),
         notes: body.notes,
     }).returning()
+
+    // Auto-instantiate clearance items + fire on_request_added workflows. Both
+    // are best-effort: any failure here must not block exit creation, so we
+    // swallow errors with a warn-level log. The pre-fetched settings is
+    // passed through so neither call re-queries the row.
+    try {
+        await instantiateClearancesForExit(
+            tenantId,
+            req.id,
+            body.lastWorkingDay,
+            empRow?.reportingTo ?? null,
+            offboardingSettings ?? undefined,
+        )
+    } catch (err) {
+        log.warn({ err: err instanceof Error ? err.message : String(err), exitId: req.id }, 'failed to instantiate clearance items')
+    }
+    fireWorkflows(tenantId, 'on_request_added', {
+        exitRequestId: req.id,
+        prefetchedSettings: offboardingSettings ?? undefined,
+    }).catch((err) => {
+        log.warn({ err: err instanceof Error ? err.message : String(err), exitId: req.id }, 'on_request_added workflow firing failed')
+    })
 
     return { request: req, settlement }
 }
@@ -184,6 +238,12 @@ export async function getExitRequests(tenantId: string, opts: { limit?: number; 
             employeeDesignation: employees.designation,
             employeeDepartment: employees.department,
             employeeAvatarUrl: employees.avatarUrl,
+            // Per-row offboarding-flow progress summary — drives the
+            // "Progress" column on the list page and the badge in the
+            // detail header.
+            clearanceTotal: sql<number>`(SELECT COUNT(*)::int FROM ${exitClearanceItems} WHERE ${exitClearanceItems.exitRequestId} = ${exitRequests.id})`,
+            clearanceCompleted: sql<number>`(SELECT COUNT(*)::int FROM ${exitClearanceItems} WHERE ${exitClearanceItems.exitRequestId} = ${exitRequests.id} AND ${exitClearanceItems.status} IN ('completed', 'waived'))`,
+            interviewSubmitted: sql<boolean>`EXISTS (SELECT 1 FROM ${exitInterviewResponses} WHERE ${exitInterviewResponses.exitRequestId} = ${exitRequests.id})`,
             total: sql<number>`COUNT(*) OVER()`,
         })
         .from(exitRequests)
@@ -198,6 +258,41 @@ export async function getExitRequests(tenantId: string, opts: { limit?: number; 
     const avatarUrls = await resolveAvatarUrls(stripped.map(r => r.employeeAvatarUrl))
     const data = stripped.map((r, i) => ({ ...r, employeeAvatarUrl: avatarUrls[i] }))
     return { data, total, limit, offset, hasMore: offset + limit < total }
+}
+
+/**
+ * Returns the most-recent non-rejected exit for a given employee, with the
+ * same shape as `getExitRequest`. Used by the employee portal to surface a
+ * "you have an open exit interview to complete" CTA + dedicated page. The
+ * employee resolves their own employeeId from the JWT — never trust the
+ * client to pass it.
+ */
+export async function getMyOpenExit(tenantId: string, employeeId: string) {
+    const [row] = await db
+        .select({
+            id: exitRequests.id,
+            tenantId: exitRequests.tenantId,
+            employeeId: exitRequests.employeeId,
+            exitType: exitRequests.exitType,
+            exitDate: exitRequests.exitDate,
+            lastWorkingDay: exitRequests.lastWorkingDay,
+            reason: exitRequests.reason,
+            noticePeriodDays: exitRequests.noticePeriodDays,
+            status: exitRequests.status,
+            createdAt: exitRequests.createdAt,
+            updatedAt: exitRequests.updatedAt,
+            interviewSubmitted: sql<boolean>`EXISTS (SELECT 1 FROM ${exitInterviewResponses} WHERE ${exitInterviewResponses.exitRequestId} = ${exitRequests.id})`,
+        })
+        .from(exitRequests)
+        .where(and(
+            eq(exitRequests.tenantId, tenantId),
+            eq(exitRequests.employeeId, employeeId),
+            // Exclude rejected exits — those don't need any further action.
+            inArray(exitRequests.status, ['pending', 'approved', 'completed']),
+        ))
+        .orderBy(desc(exitRequests.createdAt))
+        .limit(1)
+    return row ?? null
 }
 
 export async function getExitRequest(tenantId: string, id: string) {
@@ -228,6 +323,9 @@ export async function getExitRequest(tenantId: string, id: string) {
             employeeDesignation: employees.designation,
             employeeDepartment: employees.department,
             employeeAvatarUrl: employees.avatarUrl,
+            clearanceTotal: sql<number>`(SELECT COUNT(*)::int FROM ${exitClearanceItems} WHERE ${exitClearanceItems.exitRequestId} = ${exitRequests.id})`,
+            clearanceCompleted: sql<number>`(SELECT COUNT(*)::int FROM ${exitClearanceItems} WHERE ${exitClearanceItems.exitRequestId} = ${exitRequests.id} AND ${exitClearanceItems.status} IN ('completed', 'waived'))`,
+            interviewSubmitted: sql<boolean>`EXISTS (SELECT 1 FROM ${exitInterviewResponses} WHERE ${exitInterviewResponses.exitRequestId} = ${exitRequests.id})`,
         })
         .from(exitRequests)
         .leftJoin(employees, eq(employees.id, exitRequests.employeeId))
@@ -236,8 +334,40 @@ export async function getExitRequest(tenantId: string, id: string) {
     return { ...row, employeeAvatarUrl: await resolveAvatarUrl(row.employeeAvatarUrl) }
 }
 
-export async function approveExit(tenantId: string, id: string, approverId: string) {
-    return db.transaction(async (tx) => {
+/**
+ * Approve an exit request. Refuses the move when offboarding clearance items
+ * are still open, unless the caller passes `override: true` — an HR-only
+ * escape hatch logged separately in the audit trail.
+ */
+export async function approveExit(
+    tenantId: string,
+    id: string,
+    approverId: string,
+    opts: { override?: boolean } = {},
+) {
+    if (!opts.override) {
+        const readiness = await getExitApprovalReadiness(tenantId, id)
+        if (!readiness.canApprove) {
+            const blockers: string[] = []
+            if (readiness.pendingClearances.length > 0) {
+                const names = readiness.pendingClearances.map(p => p.name).join(', ')
+                blockers.push(`${readiness.pendingClearances.length} clearance item${readiness.pendingClearances.length === 1 ? '' : 's'} still pending (${names})`)
+            }
+            if (readiness.interviewRequired && readiness.pendingRequiredQuestions.length > 0) {
+                const sample = readiness.pendingRequiredQuestions.slice(0, 2).join('; ')
+                const extra = readiness.pendingRequiredQuestions.length > 2
+                    ? `; +${readiness.pendingRequiredQuestions.length - 2} more`
+                    : ''
+                blockers.push(`${readiness.pendingRequiredQuestions.length} required interview question${readiness.pendingRequiredQuestions.length === 1 ? '' : 's'} unanswered (${sample}${extra})`)
+            }
+            throw new ServiceError(
+                409,
+                'APPROVAL_BLOCKED',
+                `Cannot approve: ${blockers.join('; ')}. Complete these first, or use override.`,
+            )
+        }
+    }
+    const result = await db.transaction(async (tx) => {
         const [req] = await tx.update(exitRequests)
             .set({ status: 'approved', approvedBy: approverId, updatedAt: new Date() })
             .where(and(eq(exitRequests.id, id), eq(exitRequests.tenantId, tenantId), eq(exitRequests.status, 'pending')))
@@ -250,6 +380,12 @@ export async function approveExit(tenantId: string, id: string, approverId: stri
         }
         return req ?? null
     })
+    if (result) {
+        fireWorkflows(tenantId, 'on_approved', { exitRequestId: id }).catch((err) => {
+            log.warn({ err: err instanceof Error ? err.message : String(err), exitId: id }, 'on_approved workflow firing failed')
+        })
+    }
+    return result
 }
 
 export async function rejectExit(tenantId: string, id: string, approverId: string, reason?: string) {
@@ -257,6 +393,11 @@ export async function rejectExit(tenantId: string, id: string, approverId: strin
         .set({ status: 'rejected', approvedBy: approverId, notes: reason, updatedAt: new Date() })
         .where(and(eq(exitRequests.id, id), eq(exitRequests.tenantId, tenantId), eq(exitRequests.status, 'pending')))
         .returning()
+    if (req) {
+        fireWorkflows(tenantId, 'on_rejected', { exitRequestId: id }).catch((err) => {
+            log.warn({ err: err instanceof Error ? err.message : String(err), exitId: id }, 'on_rejected workflow firing failed')
+        })
+    }
     return req ?? null
 }
 
@@ -270,5 +411,10 @@ export async function markSettlementPaid(tenantId: string, id: string) {
         })
         .where(and(eq(exitRequests.id, id), eq(exitRequests.tenantId, tenantId), eq(exitRequests.status, 'approved')))
         .returning()
+    if (req) {
+        fireWorkflows(tenantId, 'on_settlement_paid', { exitRequestId: id }).catch((err) => {
+            log.warn({ err: err instanceof Error ? err.message : String(err), exitId: id }, 'on_settlement_paid workflow firing failed')
+        })
+    }
     return req ?? null
 }
