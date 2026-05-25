@@ -4,8 +4,9 @@ import { type ColumnDef } from '@tanstack/react-table'
 import { labelFor } from '@/lib/enums'
 import {
     Package, Plus, CheckCircle2, Wrench,
-    Edit2, Trash2, UserPlus, RotateCcw, History, RefreshCcw, Tags,
+    Edit2, Trash2, UserPlus, RotateCcw, History, RefreshCcw, Tags, Upload,
 } from 'lucide-react'
+import { BulkImportAssetsDialog } from './BulkImportAssetsDialog'
 import { DataTable } from '@/components/ui/data-table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -625,6 +626,7 @@ export function AssetsPage() {
     const deleteAsset = useDeleteAsset()
 
     const [createOpen, setCreateOpen] = useState(false)
+    const [bulkOpen, setBulkOpen] = useState(false)
     const [editTarget, setEditTarget] = useState<Asset | null>(null)
     const [assignTarget, setAssignTarget] = useState<Asset | null>(null)
     const [returnTarget, setReturnTarget] = useState<Asset | null>(null)
@@ -748,6 +750,12 @@ export function AssetsPage() {
                             onExportPdf={() => exportAssets({ format: 'pdf' })}
                         />
                         {canManageAssets && (
+                            <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)}>
+                                <Upload className="size-4 me-1.5" />
+                                {t('assets.bulkImport.button', { defaultValue: 'Bulk import' })}
+                            </Button>
+                        )}
+                        {canManageAssets && (
                             <Button onClick={() => setCreateOpen(true)}>
                                 <Plus className="size-4 mr-1.5" />
                                 {t('assets.newAsset')}
@@ -858,6 +866,10 @@ export function AssetsPage() {
             {/* Dialogs */}
             {canManageAssets && (
                 <AssetFormDialog open={createOpen} onOpenChange={setCreateOpen} />
+            )}
+
+            {canManageAssets && (
+                <BulkImportAssetsDialog open={bulkOpen} onOpenChange={setBulkOpen} />
             )}
 
             {editTarget && (

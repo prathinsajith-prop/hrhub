@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react'
+import { Info, LogIn, LogOut } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -248,28 +248,45 @@ function Cell({ cell, isWeekend, compact }: { cell: CalendarCell; isWeekend?: bo
                             </div>
                         </button>
                     </TooltipTrigger>
+                    {/* Tooltip side defaults to `top` so it stays clear of the
+                        dialog's bottom edge (the old `bottom` placement
+                        clipped Time In/Out times). Radix auto-flips back to
+                        bottom for the first row if `top` would clip there.
+                        Design: clean card on the popover/dialog's own
+                        surface, with a green "in" chip and red "out" chip
+                        so the punch direction reads at a glance. */}
                     <TooltipContent
-                        side="bottom"
+                        side="top"
                         align="center"
-                        sideOffset={4}
+                        sideOffset={6}
                         collisionPadding={12}
-                        className="border-emerald-700/40 bg-emerald-600 px-3 py-1.5 text-[10px] font-medium text-white shadow-lg"
+                        className="rounded-md border bg-popover px-3 py-2 text-popover-foreground shadow-md min-w-[180px]"
                     >
                         {checkInLabel || checkOutLabel ? (
-                            <>
-                                <div className="flex items-center gap-4">
-                                    <span className="opacity-80">Time In</span>
-                                    <span className="opacity-80">Time Out</span>
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                                        <LogIn className="size-3" aria-hidden />
+                                        Time In
+                                    </span>
+                                    <span className="text-xs font-semibold tabular-figures text-foreground">
+                                        {checkInLabel ?? '—'}
+                                    </span>
                                 </div>
-                                <div className="mt-0.5 flex items-center gap-4 text-xs tabular-figures">
-                                    <span>{checkInLabel ?? '–'}</span>
-                                    <span>{checkOutLabel ?? '–'}</span>
+                                <div className="flex items-center justify-between gap-4">
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-rose-700 dark:text-rose-400">
+                                        <LogOut className="size-3" aria-hidden />
+                                        Time Out
+                                    </span>
+                                    <span className="text-xs font-semibold tabular-figures text-foreground">
+                                        {checkOutLabel ?? '—'}
+                                    </span>
                                 </div>
-                            </>
+                            </div>
                         ) : cell.holidayName ? (
-                            <span>{cell.holidayName}</span>
+                            <span className="text-xs font-medium">{cell.holidayName}</span>
                         ) : cell.leaveType ? (
-                            <span className="capitalize">{cell.leaveType.replace(/_/g, ' ')} leave</span>
+                            <span className="text-xs font-medium capitalize">{cell.leaveType.replace(/_/g, ' ')} leave</span>
                         ) : null}
                     </TooltipContent>
                 </Tooltip>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Info } from 'lucide-react'
+import { Info, LogIn, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CalendarCell, CalendarEmployee, CalendarResponse } from '@/hooks/useAttendance'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -199,23 +199,39 @@ function Cell({ cell }: { cell: CalendarCell }) {
             >
                 {meta ? meta.short : ''}
             </div>
+            {/* Tooltip renders ABOVE the cell (bottom-full + mb-1) so it
+                stays clear of the dialog / page bottom edge — the old
+                "below" placement clipped Time In/Out values inside
+                modals. Clean card on the popover surface with a green
+                "in" chip and red "out" chip so the punch direction reads
+                at a glance. */}
             {hasTooltip && open ? (
-                <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 whitespace-nowrap rounded-md border border-border/70 bg-emerald-600 px-3 py-1.5 text-[10px] font-medium text-white shadow-lg">
+                <div className="pointer-events-none absolute left-1/2 bottom-full z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-3 py-2 text-popover-foreground shadow-md min-w-[180px]">
                     {checkInLabel || checkOutLabel ? (
-                        <>
-                            <div className="flex items-center gap-4">
-                                <span className="opacity-80">Time In</span>
-                                <span className="opacity-80">Time Out</span>
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-4">
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                                    <LogIn className="size-3" aria-hidden />
+                                    Time In
+                                </span>
+                                <span className="text-xs font-semibold tabular-figures text-foreground">
+                                    {checkInLabel ?? '—'}
+                                </span>
                             </div>
-                            <div className="mt-0.5 flex items-center gap-4 text-xs tabular-figures">
-                                <span>{checkInLabel ?? '—'}</span>
-                                <span>{checkOutLabel ?? '—'}</span>
+                            <div className="flex items-center justify-between gap-4">
+                                <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-rose-700 dark:text-rose-400">
+                                    <LogOut className="size-3" aria-hidden />
+                                    Time Out
+                                </span>
+                                <span className="text-xs font-semibold tabular-figures text-foreground">
+                                    {checkOutLabel ?? '—'}
+                                </span>
                             </div>
-                        </>
+                        </div>
                     ) : cell.holidayName ? (
-                        <span>{cell.holidayName}</span>
+                        <span className="text-xs font-medium">{cell.holidayName}</span>
                     ) : cell.leaveType ? (
-                        <span className="capitalize">{cell.leaveType.replace(/_/g, ' ')} leave</span>
+                        <span className="text-xs font-medium capitalize">{cell.leaveType.replace(/_/g, ' ')} leave</span>
                     ) : null}
                 </div>
             ) : null}
