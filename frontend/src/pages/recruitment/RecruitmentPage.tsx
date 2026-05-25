@@ -2,7 +2,8 @@ import { useEffect, useRef, useMemo, useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
-import { Plus, Briefcase, Users, Clock, TrendingUp, Star, Mail, Phone, Eye, Edit2, UserCheck, RefreshCcw, LayoutList, LayoutGrid, ChevronRight, Loader2, AlertCircle, FileText, XCircle } from 'lucide-react'
+import { Plus, Briefcase, Users, Clock, TrendingUp, Star, Mail, Phone, Eye, Edit2, UserCheck, RefreshCcw, LayoutList, LayoutGrid, ChevronRight, Loader2, AlertCircle, FileText, XCircle, Upload } from 'lucide-react'
+import { BulkImportJobsDialog } from './BulkImportJobsDialog'
 import {
   DndContext,
   PointerSensor,
@@ -712,6 +713,7 @@ export function RecruitmentPage() {
   const [pipelineView, setPipelineView] = useState<'kanban' | 'list'>('kanban')
   const [listStageFilter, setListStageFilter] = useState<ApplicationStage | 'all'>('all')
   const [jobDialogOpen, setJobDialogOpen] = useState(false)
+  const [bulkJobsOpen, setBulkJobsOpen] = useState(false)
   const [editJob, setEditJob] = useState<Job | null>(null)
   const [closeConfirm, setCloseConfirm] = useState<string[] | null>(null)
   const [addCandidateOpen, setAddCandidateOpen] = useState(false)
@@ -844,6 +846,10 @@ export function RecruitmentPage() {
             <Button variant="outline" className="gap-2" onClick={() => setAddCandidateOpen(true)} disabled={jobs.filter((j) => j.status === 'open').length === 0}>
               <Plus className="size-4" />
               <span className="hidden sm:inline">Add Candidate</span>
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={() => setBulkJobsOpen(true)}>
+              <Upload className="size-4" />
+              <span className="hidden sm:inline">Bulk import</span>
             </Button>
             <Button className="gap-2" onClick={() => setJobDialogOpen(true)}>
               <Plus className="size-4" />
@@ -1088,6 +1094,7 @@ export function RecruitmentPage() {
       )}
 
       <NewJobDialog open={jobDialogOpen} onOpenChange={setJobDialogOpen} />
+      <BulkImportJobsDialog open={bulkJobsOpen} onOpenChange={setBulkJobsOpen} />
       <AddCandidateDialog
         open={addCandidateOpen}
         onOpenChange={setAddCandidateOpen}

@@ -258,6 +258,10 @@ export interface EmployeeAccount {
         isActive: boolean
         lastLoginAt: string | null
         createdAt: string
+        /** HR-controlled — when false, hides live check-in/out on the portal. */
+        attendancePunchEnabled?: boolean
+        /** HR-controlled — when false, hides the manual-entry panel on the portal. */
+        attendanceManualEntryEnabled?: boolean
     } | null
 }
 

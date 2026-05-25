@@ -77,10 +77,14 @@ const documentSchema = z.object({
     isActive: z.boolean().optional(),
 })
 
+// Workflow shape. `actions` is the multi-select set of action types ([email_alert,
+// notification]). The legacy single `actionType` and `custom_function` action
+// have been removed — fan-out is expressed as multiple checked actions on the
+// same row, which matches what HR users actually want to configure.
 const workflowSchema = z.object({
     name: z.string().min(1).max(200),
     trigger: z.enum(['on_request_added', 'on_approved', 'on_rejected', 'on_clearance_complete', 'on_settlement_paid', 'on_relieving_date']),
-    actionType: z.enum(['email_alert', 'notification', 'custom_function']),
+    actions: z.array(z.enum(['email_alert', 'notification'])).min(1, 'Pick at least one action'),
     config: z.object({
         recipients: z.array(z.enum(['employee', 'reporting_manager', 'hr_partner', 'custom'])).optional(),
         customEmails: z.array(z.string().email()).optional(),
@@ -88,7 +92,6 @@ const workflowSchema = z.object({
         body: z.string().optional(),
         message: z.string().optional(),
         actionUrl: z.string().optional(),
-        code: z.string().optional(),
     }),
     enabled: z.boolean().optional(),
     position: z.number().int().optional(),

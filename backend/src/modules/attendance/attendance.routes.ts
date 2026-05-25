@@ -8,14 +8,19 @@ import {
     publicHolidays,
     shifts,
     tenants,
+    users,
 } from '../../db/schema/index.js'
 import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { findById } from '../../repositories/employees.repo.js'
 import { e400, e403 } from '../../lib/errors.js'
+import { buildAppOrJwtAuth } from './external-auth.js'
 import { z } from 'zod'
 import { validate, uuidSchema } from '../../lib/validation.js'
 
-// ── External punch (biometric / mobile / API) ─────────────────────────
+// External-punch payload schema — kept up here so the route handler
+// can stay focused on the dual-auth + tenant-scope logic. UUID +
+// enums catch malformed devices early; the timestamp is required to
+// be RFC 3339 with offset so we can store a deterministic UTC value.
 const externalPunchSchema = z.object({
     employeeId: uuidSchema,
     punchType: z.enum(['in', 'out']),
@@ -67,6 +72,40 @@ function attendanceCode(
 export async function attendanceRoutes(fastify: any) {
     const auth = { preHandler: [fastify.authenticate] }
     const adminAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'dept_head', 'super_admin')] }
+
+    // Server-side enforcement of HR's per-user attendance policy switches
+    // (Users → Manage Access). The UI already hides the buttons when these
+    // are off, but the policy MUST also block the API — otherwise the gate
+    // is bypassable via curl/devtools. Looks up the *target* employee's
+    // linked user row (not the caller's), so HR back-filling a punch for a
+    // disabled employee is also blocked.
+    //
+    // `flag` selects which switch to check.
+    // Returns `null` on allow, or a Fastify-reply tuple to short-circuit.
+    async function enforceAttendanceFlag(
+        tenantId: string,
+        employeeId: string,
+        flag: 'punch' | 'manual',
+    ): Promise<{ code: number; message: string } | null> {
+        const [row] = await db
+            .select({
+                punch: users.attendancePunchEnabled,
+                manual: users.attendanceManualEntryEnabled,
+            })
+            .from(users)
+            .where(and(eq(users.tenantId, tenantId), eq(users.employeeId, employeeId)))
+            .limit(1)
+        // No linked user account → nothing to gate (this is a punch-only
+        // employee, e.g. biometric-device worker without portal access).
+        if (!row) return null
+        if (flag === 'punch' && row.punch === false) {
+            return { code: 403, message: 'Attendance check-in / check-out is disabled for this employee.' }
+        }
+        if (flag === 'manual' && row.manual === false) {
+            return { code: 403, message: 'Manual attendance entry is disabled for this employee.' }
+        }
+        return null
+    }
 
     // GET /api/v1/attendance
     // hr_manager/super_admin see all; dept_head scoped to their department; employees see own only.
@@ -351,6 +390,8 @@ export async function attendanceRoutes(fastify: any) {
                 return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only manage attendance for employees in your department.' })
             }
         }
+        const punchDenied = await enforceAttendanceFlag(request.user.tenantId, resolvedEmployeeId, 'punch')
+        if (punchDenied) return reply.code(punchDenied.code).send({ statusCode: punchDenied.code, error: 'Forbidden', message: punchDenied.message })
         try {
             const data = await checkIn(request.user.tenantId, resolvedEmployeeId, {
                 locationName: body.locationName ?? null,
@@ -394,6 +435,8 @@ export async function attendanceRoutes(fastify: any) {
                 return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only manage attendance for employees in your department.' })
             }
         }
+        const punchDenied = await enforceAttendanceFlag(request.user.tenantId, resolvedEmployeeId, 'punch')
+        if (punchDenied) return reply.code(punchDenied.code).send({ statusCode: punchDenied.code, error: 'Forbidden', message: punchDenied.message })
         try {
             const data = await checkOut(request.user.tenantId, resolvedEmployeeId, {
                 locationName: body.locationName ?? null,
@@ -464,6 +507,10 @@ export async function attendanceRoutes(fastify: any) {
         const isDeptHead = role === 'dept_head'
         const resolvedEmployeeId = (isHrAdmin || isDeptHead) && body.employeeId ? body.employeeId : request.user.employeeId
         if (!resolvedEmployeeId) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
+
+        // Honour HR's per-user manual-entry switch (Users → Manage Access).
+        const manualDenied = await enforceAttendanceFlag(request.user.tenantId, resolvedEmployeeId, 'manual')
+        if (manualDenied) return reply.code(manualDenied.code).send({ statusCode: manualDenied.code, error: 'Forbidden', message: manualDenied.message })
 
         const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
         if (!body.date || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
@@ -578,17 +625,42 @@ export async function attendanceRoutes(fastify: any) {
     })
 
     // POST /api/v1/attendance/external-punch — biometric / mobile device integration
-    fastify.post('/attendance/external-punch', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
-        const { employeeId, timestamp, deviceId, deviceName, punchType, source } = validate(externalPunchSchema, request.body)
+    //
+    // Dual auth (from feature branch): accepts either an HR JWT
+    // (Authorization: Bearer <jwt>) or a Connected-App key pair
+    // (X-App-Key + X-API-Secret) with the `attendance:write` scope.
+    // Vendor biometric devices should use the app-key path — see
+    // Org → Connected Apps for issuance + rotation.
+    //
+    // Body validation (from development): Zod schema rejects malformed
+    // payloads at the edge (bad UUID, unknown punchType, garbage
+    // timestamp) so the service layer can trust its inputs.
+    fastify.post('/attendance/external-punch', {
+        preHandler: [buildAppOrJwtAuth(fastify, 'attendance:write')],
+        schema: { tags: ['Attendance'] },
+    }, async (request: any, reply: any) => {
+        const { employeeId, timestamp, deviceId, deviceName, punchType, source } =
+            validate(externalPunchSchema, request.body)
         // Verify the employee belongs to the caller's tenant before accepting any punch —
         // without this an attacker from tenant A could punch in/out for employees in tenant B.
         const emp = await findById(request.user.tenantId, employeeId)
         if (!emp) return reply.code(403).send(e403('Employee not found in your organization'))
 
-        // Non-elevated roles can only punch for themselves.
-        const isElevated = ['hr_manager', 'super_admin', 'pro_officer'].includes(request.user.role)
-        if (!isElevated && request.user.employeeId !== employeeId) {
-            return reply.code(403).send(e403('You can only record attendance for yourself'))
+        // App-key callers are scoped at app creation time (attendance:write) and
+        // bypass the per-user role gate. JWT callers retain the existing
+        // role-based check (employees can only punch for themselves).
+        const isAppCall = !!request.appCtx
+        if (!isAppCall) {
+            const isElevated = ['hr_manager', 'super_admin', 'pro_officer'].includes(request.user.role)
+            if (!isElevated && request.user.employeeId !== employeeId) {
+                return reply.code(403).send(e403('You can only record attendance for yourself'))
+            }
+            // JWT path: honour HR's per-user attendance switch. App-key callers
+            // (biometric devices) are an HR-blessed alternative — they remain
+            // allowed even when the self-punch flag is off, since that flag
+            // exists to *redirect* employees toward the device, not block it.
+            const punchDenied = await enforceAttendanceFlag(request.user.tenantId, employeeId, 'punch')
+            if (punchDenied) return reply.code(punchDenied.code).send({ statusCode: punchDenied.code, error: 'Forbidden', message: punchDenied.message })
         }
         const data = await externalPunch(request.user.tenantId, { employeeId, timestamp, deviceId, deviceName, punchType, source })
         return reply.send({ data })

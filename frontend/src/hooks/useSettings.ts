@@ -28,6 +28,13 @@ export interface TenantUser {
     role: string
     roles: string[]
     isActive: boolean
+    /** HR-controlled switch — when false, the employee portal hides the
+     *  check-in / check-out buttons for this user. Defaults to true. */
+    attendancePunchEnabled: boolean
+    /** HR-controlled switch — when false, the employee portal hides the
+     *  manual-entry panel that lets the user back-fill missed punches.
+     *  Defaults to true. */
+    attendanceManualEntryEnabled: boolean
     lastLoginAt: string | null
     createdAt: string
     employeeId: string
@@ -81,7 +88,7 @@ export function useTenantUsers() {
 export function useUpdateUser() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: ({ id, ...data }: { id: string; isActive?: boolean; role?: string; roles?: string[] }) =>
+        mutationFn: ({ id, ...data }: { id: string; isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean }) =>
             api.patch<{ data: TenantUser }>(`/settings/users/${id}`, data).then((r) => r.data),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'users'] }),
     })

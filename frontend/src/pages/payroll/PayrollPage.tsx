@@ -1925,20 +1925,37 @@ function AddAdjustmentDialog({
         setStage('idle')
         return
       }
-      const parsed: MergedRow[] = json.map((row, idx) => {
+      // The template ships pre-populated with the full employee roster so HR
+      // doesn't have to look up employee numbers. Rows where amount is left
+      // blank are "HR didn't want to adjust this employee this run" — skip
+      // them silently rather than flagging every untouched row as invalid.
+      // A row with a corrupt amount (e.g. "abc", -100) still errors so HR
+      // sees the typo.
+      const parsed: MergedRow[] = json.reduce<MergedRow[]>((acc, row, idx) => {
         const employeeNo = String(row.employee_no ?? '').trim()
         const employeeName = String(row.employee_name ?? '').trim()
         const employeeEmail = String(row.employee_email ?? '').trim()
         const employeePhone = String(row.employee_phone ?? '').trim()
         const amountRaw = row.amount
-        const am = typeof amountRaw === 'number' ? amountRaw : Number(String(amountRaw ?? '').trim())
+        const amountStr = typeof amountRaw === 'number' ? String(amountRaw) : String(amountRaw ?? '').trim()
         const n = String(row.note ?? '').trim()
         // rowNumber refers to the spreadsheet line (header is row 1).
         const rowNumber = idx + 2
+
+        // Skip rows the user left blank — empty amount + empty note means
+        // "no adjustment for this employee". This keeps the preview focused
+        // on rows that actually carry a change.
+        if (amountStr === '' && n === '') return acc
+
+        const am = Number(amountStr)
         let error: string | null = null
-        if (!employeeNo && !employeeEmail && !employeePhone) error = 'one of employee_no, employee_email, or employee_phone is required'
-        else if (!Number.isFinite(am) || am <= 0) error = 'amount must be a positive number'
-        return {
+        if (!employeeNo && !employeeEmail && !employeePhone) {
+          error = 'one of employee_no, employee_email, or employee_phone is required'
+        } else if (!Number.isFinite(am) || am <= 0) {
+          error = 'amount must be a positive number'
+        }
+
+        acc.push({
           rowNumber, employeeNo, employeeName, employeeEmail, employeePhone, amount: am, notes: n, error,
           serverStatus: 'pending' as const,
           serverError: null,
@@ -1948,8 +1965,18 @@ function AddAdjustmentDialog({
           action: error ? ('invalid' as const) : ('pending' as const),
           changes: null,
           existing: null,
-        }
-      })
+        })
+        return acc
+      }, [])
+      // The template ships with every employee but most rows will be
+      // blank. If HR uploaded without filling any cell, give a specific
+      // hint instead of a silent "nothing to import" state.
+      if (parsed.length === 0) {
+        setParseError('No rows with an amount were found. Fill the amount column for at least one employee before uploading.')
+        setRows([])
+        setStage('idle')
+        return
+      }
       setRows(parsed)
       setStage('parsed')
       // Auto-validate server-side. Skip the network call if every row already

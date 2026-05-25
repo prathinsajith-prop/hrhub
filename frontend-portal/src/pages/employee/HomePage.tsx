@@ -31,7 +31,7 @@ import {
 } from 'recharts'
 
 import { useAuthStore } from '@/store/authStore'
-import { useMyEmployee } from '@/hooks/useMe'
+import { useMyEmployee, useAccountFlags } from '@/hooks/useMe'
 import { useLeaveBalance, useLeaveRequests } from '@/hooks/useLeave'
 import { useMyPayslips } from '@/hooks/usePayslips'
 import { useMyOpenExit } from '@/hooks/useMyExit'
@@ -84,6 +84,9 @@ export function EmployeeHomePage() {
     })
     const checkIn = useCheckIn()
     const checkOut = useCheckOut()
+    // HR-controlled override — hide the live check-in/out widget entirely
+    // when self-punch is revoked for this user.
+    const { attendancePunchEnabled } = useAccountFlags()
 
     const annualBalance = balance?.balance?.annual
     const latestSlip = payslips?.[0]
@@ -191,37 +194,39 @@ export function EmployeeHomePage() {
                         )}
                     </div>
 
-                    <div className="shrink-0">
-                        {checkedOutToday ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                <CheckCircle2 className="size-3.5" /> Done for the day
-                            </span>
-                        ) : isCheckedIn ? (
-                            <Button
-                                onClick={() =>
-                                    checkOut.mutate({}, {
-                                        onSuccess: () => toast.success(t('attendance.checkOut')),
-                                    })
-                                }
-                                loading={checkOut.isPending}
-                            >
-                                <LogOut className="size-4" /> {t('attendance.checkOut')}
-                                <span className="ms-1.5 text-xs tabular-nums opacity-90">{liveTimer}</span>
-                            </Button>
-                        ) : (
-                            <Button
-                                onClick={() =>
-                                    checkIn.mutate({}, {
-                                        onSuccess: () => toast.success(t('attendance.checkIn')),
-                                    })
-                                }
-                                loading={checkIn.isPending}
-                            >
-                                <LogIn className="size-4" /> {t('attendance.checkIn')}
-                                <span className="ms-1.5 text-xs tabular-nums opacity-90">{liveTimer}</span>
-                            </Button>
-                        )}
-                    </div>
+                    {attendancePunchEnabled && (
+                        <div className="shrink-0">
+                            {checkedOutToday ? (
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                    <CheckCircle2 className="size-3.5" /> Done for the day
+                                </span>
+                            ) : isCheckedIn ? (
+                                <Button
+                                    onClick={() =>
+                                        checkOut.mutate({}, {
+                                            onSuccess: () => toast.success(t('attendance.checkOut')),
+                                        })
+                                    }
+                                    loading={checkOut.isPending}
+                                >
+                                    <LogOut className="size-4" /> {t('attendance.checkOut')}
+                                    <span className="ms-1.5 text-xs tabular-nums opacity-90">{liveTimer}</span>
+                                </Button>
+                            ) : (
+                                <Button
+                                    onClick={() =>
+                                        checkIn.mutate({}, {
+                                            onSuccess: () => toast.success(t('attendance.checkIn')),
+                                        })
+                                    }
+                                    loading={checkIn.isPending}
+                                >
+                                    <LogIn className="size-4" /> {t('attendance.checkIn')}
+                                    <span className="ms-1.5 text-xs tabular-nums opacity-90">{liveTimer}</span>
+                                </Button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </GlassCard>
 

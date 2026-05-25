@@ -33,10 +33,11 @@ export function TopBar() {
     // Track scroll past the first ~8px so the header can drop its border and
     // sit cleanly over the page when at the top, then snap a subtle border
     // and shadow on scroll. Cheap listener (passive, scoped to window).
-    const [scrolled, setScrolled] = useState(false)
+    const [scrolled, setScrolled] = useState(() =>
+        typeof window !== 'undefined' && window.scrollY > 8,
+    )
     useEffect(() => {
         const onScroll = () => setScrolled(window.scrollY > 8)
-        onScroll()
         window.addEventListener('scroll', onScroll, { passive: true })
         return () => window.removeEventListener('scroll', onScroll)
     }, [])

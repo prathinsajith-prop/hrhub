@@ -126,7 +126,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     // PATCH /settings/users/:id — deactivate/reactivate a user or change their role
     fastify.patch('/users/:id', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const { isActive, role, roles } = request.body as { isActive?: boolean; role?: string; roles?: string[] }
+        const { isActive, role, roles, attendancePunchEnabled, attendanceManualEntryEnabled } = request.body as { isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean }
 
         // Prevent anyone from deactivating themselves
         if (id === request.user.id && isActive === false) {
@@ -157,7 +157,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             }
         }
 
-        const updated = await updateUserStatus(request.user.tenantId, id, { isActive, role, roles })
+        const updated = await updateUserStatus(request.user.tenantId, id, { isActive, role, roles, attendancePunchEnabled, attendanceManualEntryEnabled })
         if (!updated) return reply.code(404).send({ message: 'User not found' })
 
         // Invalidate the isActive cache for this user so the change is effective immediately

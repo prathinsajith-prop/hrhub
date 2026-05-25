@@ -2,9 +2,10 @@ import { z } from 'zod'
 import { getReviews, createReview, updateReview, deleteReview } from './performance.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
-import { tenants } from '../../db/schema/index.js'
-import { eq } from 'drizzle-orm'
+import { tenants, employees, performanceReviews } from '../../db/schema/index.js'
+import { eq, and, inArray } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
+import { asDate, asInt, asString, buildTemplateXlsx, validateRows } from '../../lib/bulk-import.js'
 
 const createReviewSchema = z.object({
     employeeId: z.string().uuid(),
@@ -121,5 +122,205 @@ export async function performanceRoutes(fastify: any) {
         reply.header('Content-Type', 'text/csv; charset=utf-8')
         reply.header('Content-Disposition', `attachment; filename="performance-export-${dateStr}.csv"`)
         return reply.send(lines.join('\r\n'))
+    })
+
+    // ─── Bulk Import: template + validate + commit ────────────────────────
+    // Period-end workflow: HR exports the grader's spreadsheet, batch-uploads
+    // it here, previews errors, and commits one cycle's worth of reviews in
+    // a single round trip. Identifies employees by employee_no (the column
+    // HR actually has in their grading sheet) rather than UUID.
+
+    const TEMPLATE_COLUMNS = [
+        { key: 'employeeNo', width: 14 },
+        { key: 'period', width: 12 },
+        { key: 'reviewDate', width: 14 },
+        { key: 'overallRating', width: 12 },
+        { key: 'qualityScore', width: 12 },
+        { key: 'productivityScore', width: 14 },
+        { key: 'teamworkScore', width: 12 },
+        { key: 'attendanceScore', width: 14 },
+        { key: 'initiativeScore', width: 12 },
+        { key: 'strengths', width: 30 },
+        { key: 'improvements', width: 30 },
+        { key: 'goals', width: 30 },
+        { key: 'managerComments', width: 30 },
+    ]
+    const SAMPLE_ROWS = [
+        {
+            employeeNo: 'EMP-1001', period: '2026-Q1', reviewDate: '2026-04-15',
+            overallRating: 4, qualityScore: 4, productivityScore: 5,
+            teamworkScore: 4, attendanceScore: 5, initiativeScore: 3,
+            strengths: 'Strong delivery, mentors juniors',
+            improvements: 'Time-boxing scope on R&D spikes',
+            goals: 'Lead the payroll module migration', managerComments: '',
+        },
+        {
+            employeeNo: 'EMP-1002', period: '2026-Q1', reviewDate: '2026-04-15',
+            overallRating: 3, qualityScore: 3, productivityScore: 3,
+            teamworkScore: 4, attendanceScore: 4, initiativeScore: 3,
+            strengths: 'Reliable on BAU', improvements: 'Communicate blockers earlier',
+            goals: 'Complete certification', managerComments: '',
+        },
+    ]
+
+    interface ValidatedReview {
+        employeeNo: string
+        period: string
+        reviewDate: string | null
+        overallRating: number | null
+        qualityScore: number | null
+        productivityScore: number | null
+        teamworkScore: number | null
+        attendanceScore: number | null
+        initiativeScore: number | null
+        strengths: string | null
+        improvements: string | null
+        goals: string | null
+        managerComments: string | null
+        /** Resolved server-side during validation from employeeNo lookup. */
+        employeeId?: string
+    }
+
+    function validateReviewRow(row: Record<string, unknown>): { ok: true; value: ValidatedReview } | { ok: false; errors: string[] } {
+        const errors: string[] = []
+        const employeeNo = asString(row.employeeNo)
+        const period = asString(row.period)
+        if (!employeeNo) errors.push('employeeNo is required')
+        if (!period) errors.push('period is required (e.g. 2026-Q1)')
+        let reviewDate: string | null = null
+        if (row.reviewDate != null && row.reviewDate !== '') {
+            const d = asDate(row.reviewDate)
+            if (d.ok === false) errors.push(`reviewDate: ${d.error}`)
+            else reviewDate = d.value
+        }
+        const intField = (name: string, v: unknown): number | null => {
+            if (v == null || v === '') return null
+            const r = asInt(v, { min: 1, max: 5 })
+            if (r.ok === false) { errors.push(`${name}: ${r.error}`); return null }
+            return r.value
+        }
+        const overallRating = intField('overallRating', row.overallRating)
+        const qualityScore = intField('qualityScore', row.qualityScore)
+        const productivityScore = intField('productivityScore', row.productivityScore)
+        const teamworkScore = intField('teamworkScore', row.teamworkScore)
+        const attendanceScore = intField('attendanceScore', row.attendanceScore)
+        const initiativeScore = intField('initiativeScore', row.initiativeScore)
+        if (errors.length > 0 || !employeeNo || !period) {
+            return { ok: false, errors }
+        }
+        return {
+            ok: true,
+            value: {
+                employeeNo,
+                period,
+                reviewDate,
+                overallRating,
+                qualityScore,
+                productivityScore,
+                teamworkScore,
+                attendanceScore,
+                initiativeScore,
+                strengths: asString(row.strengths),
+                improvements: asString(row.improvements),
+                goals: asString(row.goals),
+                managerComments: asString(row.managerComments),
+            },
+        }
+    }
+
+    // GET /performance/import/template
+    fastify.get('/performance/import/template', { ...adminAuth, schema: { tags: ['Performance'] } }, async (_request: any, reply: any) => {
+        const buf = buildTemplateXlsx({
+            sheetName: 'Performance Reviews',
+            columns: TEMPLATE_COLUMNS,
+            sampleRows: SAMPLE_ROWS,
+        })
+        return reply
+            .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            .header('Content-Disposition', 'attachment; filename="performance-reviews-template.xlsx"')
+            .send(buf)
+    })
+
+    // POST /performance/import/validate
+    fastify.post('/performance/import/validate', { ...adminAuth, schema: { tags: ['Performance'] } }, async (request: any, reply: any) => {
+        const body = (request.body ?? {}) as { rows?: Array<Record<string, unknown>> }
+        if (!Array.isArray(body.rows)) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must be an array' })
+        }
+        const validated = validateRows(body.rows, validateReviewRow)
+
+        // Resolve employeeNo → employeeId in one query, then flag unknown
+        // codes per-row. Two-pass approach keeps the hot path single-query
+        // even for big spreadsheets.
+        const okNos = Array.from(new Set(validated.filter((r) => r.ok && r.value).map((r) => (r.value as ValidatedReview).employeeNo)))
+        const empMap = new Map<string, string>()
+        if (okNos.length > 0) {
+            const rows = await db
+                .select({ id: employees.id, employeeNo: employees.employeeNo })
+                .from(employees)
+                .where(and(eq(employees.tenantId, request.user.tenantId), inArray(employees.employeeNo, okNos)))
+            rows.forEach((r) => { if (r.employeeNo) empMap.set(r.employeeNo, r.id) })
+        }
+
+        const enriched = validated.map((r) => {
+            if (!r.ok || !r.value) return r
+            const empNo = (r.value as ValidatedReview).employeeNo
+            if (!empMap.has(empNo)) {
+                return { ...r, ok: false, errors: [...r.errors, `employeeNo "${empNo}" not found in your tenant`] }
+            }
+            return { ...r, value: { ...(r.value as ValidatedReview), employeeId: empMap.get(empNo)! } }
+        })
+
+        const summary = {
+            total: enriched.length,
+            ok: enriched.filter((r) => r.ok).length,
+            invalid: enriched.filter((r) => !r.ok).length,
+        }
+        return reply.send({ data: { rows: enriched, summary } })
+    })
+
+    // POST /performance/import/commit
+    fastify.post('/performance/import/commit', { ...adminAuth, schema: { tags: ['Performance'] } }, async (request: any, reply: any) => {
+        const body = (request.body ?? {}) as { rows?: Array<Record<string, unknown>> }
+        if (!Array.isArray(body.rows) || body.rows.length === 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must be a non-empty array' })
+        }
+        const validated = validateRows(body.rows, validateReviewRow)
+        const okNos = Array.from(new Set(validated.filter((r) => r.ok && r.value).map((r) => (r.value as ValidatedReview).employeeNo)))
+        if (okNos.length === 0) return reply.send({ data: { inserted: 0 } })
+
+        const rows = await db
+            .select({ id: employees.id, employeeNo: employees.employeeNo })
+            .from(employees)
+            .where(and(eq(employees.tenantId, request.user.tenantId), inArray(employees.employeeNo, okNos)))
+        const empMap = new Map(rows.filter((r) => r.employeeNo).map((r) => [r.employeeNo as string, r.id]))
+
+        const toInsert = validated
+            .filter((r) => r.ok && r.value && empMap.has((r.value as ValidatedReview).employeeNo))
+            .map((r) => {
+                const v = r.value as ValidatedReview
+                return {
+                    tenantId: request.user.tenantId,
+                    employeeId: empMap.get(v.employeeNo)!,
+                    reviewerId: request.user.id,
+                    period: v.period,
+                    reviewDate: v.reviewDate,
+                    status: 'submitted' as const,
+                    overallRating: v.overallRating,
+                    qualityScore: v.qualityScore,
+                    productivityScore: v.productivityScore,
+                    teamworkScore: v.teamworkScore,
+                    attendanceScore: v.attendanceScore,
+                    initiativeScore: v.initiativeScore,
+                    strengths: v.strengths,
+                    improvements: v.improvements,
+                    goals: v.goals,
+                    managerComments: v.managerComments,
+                }
+            })
+        if (toInsert.length === 0) return reply.send({ data: { inserted: 0 } })
+
+        const inserted = await db.insert(performanceReviews).values(toInsert).returning({ id: performanceReviews.id })
+        return reply.code(201).send({ data: { inserted: inserted.length } })
     })
 }
