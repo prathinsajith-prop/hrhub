@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
   CalendarRange, Calendar, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon,
-  CalendarDays, Filter, MoreHorizontal, X, MonitorSmartphone, LogIn, LogOut,
-  MapPin, Plus, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download,
+  CalendarDays, X, MonitorSmartphone, LogIn, LogOut,
+  MapPin, Plus, Trash2,
 } from 'lucide-react'
 
 import {
@@ -14,6 +14,7 @@ import {
   type CalendarCell, type CalendarEmployee, type AttendancePunch, type PunchBody,
 } from '@/hooks/useAttendance'
 import { useAuthStore } from '@/store/authStore'
+import { useAccountFlags } from '@/hooks/useMe'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { AttendanceMonthCalendar } from '@/components/shared/AttendanceMonthCalendar'
 import { MonthPicker } from '@/components/shared/MonthPicker'
@@ -197,7 +198,6 @@ export function EmployeeAttendancePage() {
   const [view, setView] = useState<ViewMode>('timeline')
   const [detail, setDetail] = useState<DayInfo | null>(null)
   const [note, setNote] = useState('')
-  const [importOpen, setImportOpen] = useState(false)
 
   const monthQuery = isoMonth(weekStart)
   const { data: calendar, isLoading } = useAttendanceCalendar(monthQuery, 'me')
@@ -227,6 +227,35 @@ export function EmployeeAttendancePage() {
 
   const checkIn = useCheckIn()
   const checkOut = useCheckOut()
+  // HR-controlled overrides — when off, the relevant UI is removed entirely
+  // from this page. Defaults to "everything enabled" so first paint matches
+  // the historical behavior even before the /auth/me call lands.
+  const accountFlags = useAccountFlags()
+  const punchAllowed = accountFlags.attendancePunchEnabled
+  const manualEntryAllowed = accountFlags.attendanceManualEntryEnabled
+
+  // Live geolocation preview for the check-in band. We resolve once on mount
+  // (and on demand via a "Refresh" click) so the employee can SEE the
+  // coordinates that will be recorded with their punch — both for trust
+  // ("this is where my check-in will be tagged") and policy compliance.
+  // Permission state: 'pending' (asking) | 'ok' (resolved) | 'denied' (user
+  // blocked or device has no GPS).
+  const [geo, setGeo] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [geoState, setGeoState] = useState<'pending' | 'ok' | 'denied'>('pending')
+  const refreshGeo = useMemo(() => async () => {
+    setGeoState('pending')
+    const result = await readGeolocation()
+    if (result) {
+      setGeo(result)
+      setGeoState('ok')
+    } else {
+      setGeo(null)
+      setGeoState('denied')
+    }
+  }, [])
+  useEffect(() => {
+    if (punchAllowed) void refreshGeo()
+  }, [punchAllowed, refreshGeo])
   const todayInfo = useMemo(() => {
     const t = toISODate(today)
     return days.find((d) => d.iso === t) ?? null
@@ -243,11 +272,16 @@ export function EmployeeAttendancePage() {
       {/* Tabs row + week navigator + view switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-2">
         <div className="flex gap-4">
-          <button type="button" className="px-1 py-1 text-sm font-semibold border-b-2 border-primary text-primary">
+          <button type="button" className="p-1 text-sm font-semibold border-b-2 border-primary text-primary">
             Attendance Summary
           </button>
         </div>
       </div>
+
+      {/* Stats strip — at-a-glance counters for the visible week. Moved
+          above the calendar/list so the headline numbers land in the
+          natural scan path before the per-day rows. */}
+      <FooterStats stats={stats} shift={shiftBand} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 rounded-lg border bg-card px-2 py-1 shadow-sm">
@@ -277,76 +311,110 @@ export function EmployeeAttendancePage() {
           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 gap-1.5"
-            onClick={() => setImportOpen(true)}
-          >
-            <Upload className="size-3.5" />
-            <span className="text-xs">Import</span>
-          </Button>
-          <Button size="icon" variant="outline" className="size-8" aria-label="Filter">
-            <Filter className="size-3.5" />
-          </Button>
-          <Button size="icon" variant="outline" className="size-8" aria-label="More">
-            <MoreHorizontal className="size-3.5" />
-          </Button>
-        </div>
+        {/* Employees see only the view switcher up here. Bulk import is an
+            HR-only flow (lives in the main HR app's Attendance tab); the
+            Filter / More icons were inert placeholders inherited from the
+            HR layout. Removed so the row matches the actual feature set:
+            check-in / check-out + manual entry. */}
       </div>
 
-      {/* Check-in band */}
-      <div className="flex flex-wrap items-stretch justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm">
-        <div className="flex-1 min-w-[200px] self-center">
-          <p className="text-sm font-semibold">{shiftBand}</p>
+      {/* Check-in band — only rendered when HR has not revoked self-punch.
+          Layout: two rows on small screens, one row on wide. Top row shows
+          shift name, notes input, and the action button. Bottom row gives
+          a clear "this is where your punch will be tagged" preview with
+          coords + a Maps link + refresh, so there's no surprise about
+          where the location was sampled. */}
+      {punchAllowed && (
+        <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
+          <div className="flex flex-wrap items-stretch justify-between gap-3">
+            <div className="flex-1 min-w-[200px] self-center">
+              <p className="text-sm font-semibold">{shiftBand}</p>
+            </div>
+            <Input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={isCheckedIn ? 'Add notes for check-out' : 'Add notes for check-in'}
+              className="flex-[2] min-w-[180px] h-9"
+            />
+            {isCheckedIn ? (
+              <Button
+                onClick={() => {
+                  const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
+                  checkOut.mutate(body, {
+                    onSuccess: () => { toast.success(t('attendance.checkOut')); setNote(''); void refreshGeo() },
+                    onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check out'),
+                  })
+                }}
+                loading={checkOut.isPending}
+                className="bg-rose-600 hover:bg-rose-700 text-white"
+              >
+                <LogOut className="size-4 me-2" />
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="text-xs">Check-out</span>
+                  <span className="text-xs tabular-nums">{liveTimer}</span>
+                </div>
+              </Button>
+            ) : (
+              <Button
+                onClick={() => {
+                  const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
+                  checkIn.mutate(body, {
+                    onSuccess: () => { toast.success(t('attendance.checkIn')); setNote(''); void refreshGeo() },
+                    onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check in'),
+                  })
+                }}
+                loading={checkIn.isPending}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <LogIn className="size-4 me-2" />
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="text-xs">Check-in</span>
+                  <span className="text-xs tabular-nums">{liveTimer}</span>
+                </div>
+              </Button>
+            )}
+          </div>
+          {/* Location strip — read-only preview of where the punch will be
+              tagged. Renders coordinates as a Maps link so the employee can
+              verify the GPS reading. Refresh re-queries the device. */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-1.5 text-[11px]">
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <MapPin className={cn(
+                'size-3.5',
+                geoState === 'ok' ? 'text-emerald-600' : geoState === 'denied' ? 'text-rose-500' : 'text-muted-foreground',
+              )} />
+              {geoState === 'pending' && <span>Resolving your location…</span>}
+              {geoState === 'denied' && (
+                <span>
+                  Location unavailable — punch will be recorded without coordinates.
+                </span>
+              )}
+              {geoState === 'ok' && geo && (
+                <>
+                  <span>Location:</span>
+                  <a
+                    href={`https://maps.google.com/?q=${geo.latitude},${geo.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono tabular-nums text-foreground hover:text-primary hover:underline"
+                    title="Open in Google Maps"
+                  >
+                    {geo.latitude.toFixed(4)}, {geo.longitude.toFixed(4)}
+                  </a>
+                </>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => void refreshGeo()}
+              className="text-primary hover:underline disabled:opacity-50"
+              disabled={geoState === 'pending'}
+            >
+              {geoState === 'pending' ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
         </div>
-        <Input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder={isCheckedIn ? 'Add notes for check-out' : 'Add notes for check-in'}
-          className="flex-[2] min-w-[180px] h-9"
-        />
-        {isCheckedIn ? (
-          <Button
-            onClick={async () => {
-              const geo = await readGeolocation()
-              const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
-              checkOut.mutate(body, {
-                onSuccess: () => { toast.success(t('attendance.checkOut')); setNote('') },
-                onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check out'),
-              })
-            }}
-            loading={checkOut.isPending}
-            className="bg-rose-600 hover:bg-rose-700 text-white"
-          >
-            <LogOut className="size-4 me-2" />
-            <div className="flex flex-col items-start leading-tight">
-              <span className="text-xs">Check-out</span>
-              <span className="text-xs tabular-nums">{liveTimer}</span>
-            </div>
-          </Button>
-        ) : (
-          <Button
-            onClick={async () => {
-              const geo = await readGeolocation()
-              const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
-              checkIn.mutate(body, {
-                onSuccess: () => { toast.success(t('attendance.checkIn')); setNote('') },
-                onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check in'),
-              })
-            }}
-            loading={checkIn.isPending}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-          >
-            <LogIn className="size-4 me-2" />
-            <div className="flex flex-col items-start leading-tight">
-              <span className="text-xs">Check-in</span>
-              <span className="text-xs tabular-nums">{liveTimer}</span>
-            </div>
-          </Button>
-        )}
-      </div>
+      )}
 
       {/* Body */}
       {isLoading ? (
@@ -364,24 +432,16 @@ export function EmployeeAttendancePage() {
         }} />
       )}
 
-      <FooterStats stats={stats} shift={shiftBand} />
-
       {detail && (
         <DayDetailDialog
           info={detail}
           shift={shiftBand}
           employeeId={employeeId}
+          manualEntryAllowed={manualEntryAllowed}
           onClose={() => setDetail(null)}
         />
       )}
 
-      {importOpen && (
-        <ImportPunchesDialog
-          open={importOpen}
-          onOpenChange={setImportOpen}
-          employeeId={employeeId}
-        />
-      )}
     </div>
   )
 }
@@ -430,7 +490,7 @@ function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: Da
               {d.cell?.checkIn ? (
                 <p className="text-sm font-medium tabular-nums">{formatTime(d.cell.checkIn)}</p>
               ) : (
-                <p className="text-sm text-muted-foreground">—</p>
+                <p className="text-sm text-muted-foreground">–</p>
               )}
             </div>
             <div className="relative h-5">
@@ -453,7 +513,7 @@ function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: Da
               {d.cell?.checkOut ? (
                 <p className="text-sm font-medium tabular-nums">{formatTime(d.cell.checkOut)}</p>
               ) : (
-                <p className="text-sm text-muted-foreground">—</p>
+                <p className="text-sm text-muted-foreground">–</p>
               )}
             </div>
             <div className="text-right">
@@ -594,11 +654,12 @@ function statusHero(klass: DayClassification): {
 }
 
 function DayDetailDialog({
-  info, shift, employeeId, onClose,
+  info, shift, employeeId, manualEntryAllowed, onClose,
 }: {
   info: DayInfo
   shift: string
   employeeId: string | undefined
+  manualEntryAllowed: boolean
   onClose: () => void
 }) {
   const cell = info.cell
@@ -766,7 +827,7 @@ function DayDetailDialog({
                           <PunchMeta punch={p.inPunch} />
                         </>
                       ) : (
-                        <span className="text-sm text-muted-foreground/70">—</span>
+                        <span className="text-sm text-muted-foreground/70">–</span>
                       )}
                     </div>
 
@@ -837,8 +898,9 @@ function DayDetailDialog({
             </div>
           )}
 
-          {/* Manual entry expandable */}
-          {!manualOpen ? (
+          {/* Manual entry expandable — only when HR has not revoked the
+              "Manual entry" switch for this user. */}
+          {manualEntryAllowed && (!manualOpen ? (
             <button
               type="button"
               onClick={() => setManualOpen(true)}
@@ -873,7 +935,7 @@ function DayDetailDialog({
                 </Button>
               </div>
             </div>
-          )}
+          ))}
         </div>
 
         <div className="border-t bg-muted/30 px-6 py-4 grid grid-cols-3 gap-3">
@@ -902,7 +964,7 @@ interface PunchPair {
 }
 
 function pairPunches(punches: AttendancePunch[]): PunchPair[] {
-  const sorted = [...punches].sort((a, b) =>
+  const sorted = punches.toSorted((a, b) =>
     new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime(),
   )
   const out: PunchPair[] = []
@@ -1041,334 +1103,3 @@ function ManualTimeField({
   )
 }
 
-// ─── Import punches modal ─────────────────────────────────────────────────
-
-interface ParsedRow {
-  rowNum: number
-  date: string
-  inTime: string
-  outTime: string | null
-  inNotes: string | null
-  outNotes: string | null
-  locationName: string | null
-  errors: string[]
-}
-
-function ImportPunchesDialog({
-  open, onOpenChange, employeeId,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  employeeId: string | undefined
-}) {
-  const [fileName, setFileName] = useState<string | null>(null)
-  const [rows, setRows] = useState<ParsedRow[]>([])
-  const [submitting, setSubmitting] = useState(false)
-  const [progress, setProgress] = useState({ done: 0, total: 0, failed: 0 })
-  const addManual = useAddManualPunch()
-
-  const validCount = rows.filter((r) => r.errors.length === 0).length
-  const errorCount = rows.length - validCount
-
-  function reset() {
-    setFileName(null)
-    setRows([])
-    setProgress({ done: 0, total: 0, failed: 0 })
-  }
-
-  function downloadSample() {
-    const csv = [
-      'date,in_time,out_time,in_notes,out_notes,location',
-      '2026-05-19,09:00,18:00,On-time,End of shift,Office',
-      '2026-05-19,19:00,21:30,Overtime in,Overtime out,Office',
-      '2026-05-20,08:55,,Forgot punch-out,,Site A',
-    ].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'attendance-import-sample.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    if (!/\.(csv|txt)$/i.test(file.name)) {
-      toast.error('Please upload a CSV file')
-      return
-    }
-    const text = await file.text()
-    const parsed = parseCsv(text)
-    setFileName(file.name)
-    setRows(parsed)
-    if (parsed.length === 0) toast.error('No data rows found in file')
-  }
-
-  async function submit() {
-    const valid = rows.filter((r) => r.errors.length === 0)
-    if (valid.length === 0) {
-      toast.error('No valid rows to import')
-      return
-    }
-    setSubmitting(true)
-    setProgress({ done: 0, total: valid.length, failed: 0 })
-    let done = 0
-    let failed = 0
-    for (const r of valid) {
-      try {
-        await addManual.mutateAsync({
-          employeeId,
-          date: r.date,
-          inTime: r.inTime,
-          outTime: r.outTime ?? undefined,
-          inNotes: r.inNotes ?? undefined,
-          outNotes: r.outNotes ?? undefined,
-          locationName: r.locationName ?? undefined,
-        })
-      } catch {
-        failed += 1
-      }
-      done += 1
-      setProgress({ done, total: valid.length, failed })
-    }
-    setSubmitting(false)
-    if (failed === 0) {
-      toast.success(`Imported ${done} ${done === 1 ? 'entry' : 'entries'}`)
-      reset()
-      onOpenChange(false)
-    } else {
-      toast.error(`Imported ${done - failed}, ${failed} failed`)
-    }
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) reset()
-        onOpenChange(o)
-      }}
-    >
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-5 pb-4 border-b bg-muted/30">
-          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
-            <Upload className="size-4" />
-            Import attendance entries
-          </DialogTitle>
-          <DialogDescription className="text-xs mt-1">
-            Upload a CSV with the columns:{' '}
-            <code className="text-[11px] bg-background border rounded px-1 py-0.5">date, in_time, out_time, in_notes, out_notes, location</code>
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {/* Picker / sample */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="size-9 rounded-md bg-muted/60 flex items-center justify-center">
-                <FileSpreadsheet className="size-4 text-muted-foreground" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{fileName ?? 'No file selected'}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {rows.length > 0
-                    ? `${rows.length} row${rows.length === 1 ? '' : 's'} parsed`
-                    : 'CSV only, max 1,000 rows'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="ghost" onClick={downloadSample} className="gap-1.5">
-                <Download className="size-3.5" />
-                Sample
-              </Button>
-              <label className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium cursor-pointer hover:bg-muted/60">
-                <Upload className="size-3.5" />
-                Choose file
-                <input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" />
-              </label>
-            </div>
-          </div>
-
-          {/* Preview */}
-          {rows.length > 0 && (
-            <div className="rounded-xl border overflow-hidden">
-              <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2 text-xs">
-                <span className="font-semibold">Preview</span>
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
-                    <CheckCircle2 className="size-3.5" />
-                    {validCount} valid
-                  </span>
-                  {errorCount > 0 && (
-                    <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-400">
-                      <AlertCircle className="size-3.5" />
-                      {errorCount} error{errorCount === 1 ? '' : 's'}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="max-h-72 overflow-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-muted/20 sticky top-0">
-                    <tr className="text-left text-muted-foreground">
-                      <th className="px-2 py-1.5 font-medium">#</th>
-                      <th className="px-2 py-1.5 font-medium">Date</th>
-                      <th className="px-2 py-1.5 font-medium">In</th>
-                      <th className="px-2 py-1.5 font-medium">Out</th>
-                      <th className="px-2 py-1.5 font-medium">Location</th>
-                      <th className="px-2 py-1.5 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr
-                        key={r.rowNum}
-                        className={cn(
-                          'border-t',
-                          r.errors.length > 0 && 'bg-rose-50/40 dark:bg-rose-950/10',
-                        )}
-                      >
-                        <td className="px-2 py-1.5 tabular-nums text-muted-foreground">{r.rowNum}</td>
-                        <td className="px-2 py-1.5 tabular-nums">{r.date || '—'}</td>
-                        <td className="px-2 py-1.5 tabular-nums text-emerald-700 dark:text-emerald-400">{r.inTime || '—'}</td>
-                        <td className="px-2 py-1.5 tabular-nums text-rose-700 dark:text-rose-400">{r.outTime ?? '—'}</td>
-                        <td className="px-2 py-1.5 truncate max-w-[140px]">{r.locationName ?? '—'}</td>
-                        <td className="px-2 py-1.5">
-                          {r.errors.length === 0 ? (
-                            <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
-                              <CheckCircle2 className="size-3" /> OK
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-400" title={r.errors.join('; ')}>
-                              <AlertCircle className="size-3" /> {r.errors[0]}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Progress */}
-          {submitting && progress.total > 0 && (
-            <div className="rounded-xl border bg-card p-3 text-xs">
-              <div className="flex justify-between mb-1.5">
-                <span>Importing…</span>
-                <span className="tabular-nums">
-                  {progress.done} / {progress.total}
-                  {progress.failed > 0 && (
-                    <span className="text-rose-600 ms-2">({progress.failed} failed)</span>
-                  )}
-                </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="border-t bg-muted/20 px-6 py-3 flex items-center justify-between">
-          <p className="text-[11px] text-muted-foreground">
-            {rows.length > 0
-              ? `Ready to import ${validCount} of ${rows.length} rows`
-              : 'Choose a CSV file to preview'}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={submit} loading={submitting} disabled={validCount === 0}>
-              Import {validCount > 0 ? `(${validCount})` : ''}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function parseCsv(text: string): ParsedRow[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0)
-  if (lines.length === 0) return []
-  const headerCells = splitCsvLine(lines[0]!).map((h) => h.trim().toLowerCase())
-  const idx = (name: string) => headerCells.indexOf(name)
-  const dateIdx = idx('date')
-  const inIdx = idx('in_time') !== -1 ? idx('in_time') : idx('in')
-  const outIdx = idx('out_time') !== -1 ? idx('out_time') : idx('out')
-  const inNotesIdx = idx('in_notes')
-  const outNotesIdx = idx('out_notes')
-  const locIdx = idx('location') !== -1 ? idx('location') : idx('location_name')
-
-  const dataLines = dateIdx === -1 ? lines : lines.slice(1)
-  const out: ParsedRow[] = []
-  for (let i = 0; i < dataLines.length; i += 1) {
-    if (i >= 1000) break
-    const cells = splitCsvLine(dataLines[i]!)
-    const get = (j: number) => (j >= 0 && j < cells.length ? cells[j]!.trim() : '')
-    const date = dateIdx === -1 ? get(0) : get(dateIdx)
-    const inTime = normalizeTime(get(inIdx))
-    const outTimeRaw = get(outIdx)
-    const outTime = outTimeRaw ? normalizeTime(outTimeRaw) : null
-    const inNotes = get(inNotesIdx) || null
-    const outNotes = get(outNotesIdx) || null
-    const locationName = get(locIdx) || null
-
-    const errors: string[] = []
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push('Invalid date (YYYY-MM-DD)')
-    if (!inTime || !/^\d{2}:\d{2}$/.test(inTime)) errors.push('Invalid in_time (HH:MM)')
-    if (outTime && !/^\d{2}:\d{2}$/.test(outTime)) errors.push('Invalid out_time (HH:MM)')
-
-    out.push({
-      rowNum: i + 2,
-      date,
-      inTime: inTime || '',
-      outTime,
-      inNotes,
-      outNotes,
-      locationName,
-      errors,
-    })
-  }
-  return out
-}
-
-function splitCsvLine(line: string): string[] {
-  const out: string[] = []
-  let cur = ''
-  let quoted = false
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i]!
-    if (quoted) {
-      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i += 1 }
-      else if (ch === '"') quoted = false
-      else cur += ch
-    } else {
-      if (ch === ',') { out.push(cur); cur = '' }
-      else if (ch === '"') quoted = true
-      else cur += ch
-    }
-  }
-  out.push(cur)
-  return out
-}
-
-function normalizeTime(raw: string): string {
-  const s = raw.trim()
-  if (!s) return ''
-  // Accept HH:MM, H:MM, or HHMM
-  if (/^\d{2}:\d{2}$/.test(s)) return s
-  if (/^\d{1}:\d{2}$/.test(s)) return `0${s}`
-  if (/^\d{4}$/.test(s)) return `${s.slice(0, 2)}:${s.slice(2)}`
-  return s
-}

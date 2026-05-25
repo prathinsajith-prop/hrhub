@@ -233,6 +233,7 @@ export function LoginPage() {
                                 checked={keepSignedIn}
                                 onChange={(e) => setKeepSignedIn(e.target.checked)}
                                 className="size-4 rounded border-border accent-primary"
+                                aria-label={t('auth.keepSignedIn')}
                             />
                             <span>{t('auth.keepSignedIn')}</span>
                         </label>

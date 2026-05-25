@@ -210,13 +210,13 @@ describe('useCreateWorkflow', () => {
             await result.current.mutateAsync({
                 name: 'Notify manager',
                 trigger: 'on_request_added',
-                actionType: 'email_alert',
+                actions: ['email_alert'],
                 config: { recipients: ['reporting_manager'], subject: 'Hello', body: 'Body' },
                 enabled: true,
                 position: 0,
             })
         })
-        expect(apiMock.post).toHaveBeenCalledWith('/offboarding-flow/workflows', expect.objectContaining({ trigger: 'on_request_added', actionType: 'email_alert' }))
+        expect(apiMock.post).toHaveBeenCalledWith('/offboarding-flow/workflows', expect.objectContaining({ trigger: 'on_request_added', actions: ['email_alert'] }))
     })
 })
 

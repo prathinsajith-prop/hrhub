@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, integer, boolean, timestamp, date, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { users } from './users.js'
 import { exitRequests } from './exit.js'
@@ -122,15 +123,33 @@ export const offboardingExitDocuments = pgTable('offboarding_exit_documents', {
     tenantIdx: index('idx_offboarding_exit_documents_tenant').on(t.tenantId, t.position),
 }))
 
-// ─── 7. Workflow triggers (email / notification / custom function) ─────────
+// ─── 7. Workflow triggers (email + notification fan-out) ─────────────────
+//
+// `actions` carries the set of action types the workflow fans out into when
+// its trigger fires. The 2026-05-25 migration 0071 introduced this array
+// shape and dropped the legacy single-valued custom_function action — the
+// sandboxed code runner was never finished and the column was kept only as
+// a "stored, not executed" placeholder, so removing it simplifies the data
+// model without losing real functionality.
+//
+// `actionType` stays as a backwards-compatibility shim that mirrors
+// `actions[0]`. Reads/writes go through `actions`; `actionType` is kept
+// populated so any straggling query still works while the new column is
+// adopted.
 export const offboardingWorkflows = pgTable('offboarding_workflows', {
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     trigger: text('trigger').notNull()
         .$type<'on_request_added' | 'on_approved' | 'on_rejected' | 'on_clearance_complete' | 'on_settlement_paid' | 'on_relieving_date'>(),
+    // `actionType` retains the full historical union (incl. custom_function)
+    // so legacy rows still type-narrow correctly. Only email_alert and
+    // notification are exposed in the UI now — custom_function is hidden,
+    // not removed, so any pre-existing rows continue to be readable.
     actionType: text('action_type').notNull()
         .$type<'email_alert' | 'notification' | 'custom_function'>(),
+    actions: text('actions').array().notNull().default(sql`ARRAY['email_alert']::text[]`)
+        .$type<('email_alert' | 'notification' | 'custom_function')[]>(),
     config: jsonb('config').$type<{
         recipients?: ('employee' | 'reporting_manager' | 'hr_partner' | 'custom')[]
         customEmails?: string[]
@@ -138,7 +157,6 @@ export const offboardingWorkflows = pgTable('offboarding_workflows', {
         body?: string
         message?: string
         actionUrl?: string
-        code?: string
     }>().notNull().default({}),
     enabled: boolean('enabled').notNull().default(true),
     position: integer('position').notNull().default(0),

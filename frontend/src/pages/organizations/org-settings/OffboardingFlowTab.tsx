@@ -22,7 +22,6 @@ import {
     Pencil,
     Trash2,
     Check,
-    X,
     GripVertical,
 } from 'lucide-react'
 import {
@@ -61,6 +60,7 @@ import {
 } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { RichTextEditor } from '@/components/ui/rich-text-editor'
 import {
     Dialog,
     DialogContent,
@@ -104,6 +104,7 @@ import {
     type Recipient,
 } from '@/hooks/useOffboardingFlow'
 import { useTenantUsers } from '@/hooks/useSettings'
+import { UserSelect } from '@/components/shared/UserSelect'
 
 // ─── Step navigation rail ───────────────────────────────────────────────────
 //
@@ -320,13 +321,9 @@ function StepHeader({
 function PreferencesStep() {
     const { t } = useTranslation()
     const { data, isLoading } = useOffboardingSettings()
-    const usersQ = useTenantUsers()
     const update = useUpdateOffboardingSettings()
 
     if (isLoading || !data) return <Skeleton className="h-64 w-full" />
-
-    const hrPartnerUsers = (usersQ.data ?? []).filter(u => data.hrPartnerUserIds.includes(u.id))
-    const availableUsers = (usersQ.data ?? []).filter(u => !data.hrPartnerUserIds.includes(u.id) && u.isActive)
 
     const toggleNotice = (next: boolean) => {
         update.mutate({ noticePeriodEnabled: next }, {
@@ -334,12 +331,8 @@ function PreferencesStep() {
         })
     }
 
-    const removeHrPartner = (userId: string) => {
-        update.mutate({ hrPartnerUserIds: data.hrPartnerUserIds.filter(id => id !== userId) })
-    }
-
-    const addHrPartner = (userId: string) => {
-        update.mutate({ hrPartnerUserIds: [...data.hrPartnerUserIds, userId] })
+    const setHrPartners = (ids: string[]) => {
+        update.mutate({ hrPartnerUserIds: ids })
     }
 
     return (
@@ -401,46 +394,18 @@ function PreferencesStep() {
 
                 {/* Two-column row: HR partner + Approval, on wide screens */}
                 <div className="grid md:grid-cols-2 gap-4">
-                    {/* HR partner */}
+                    {/* HR partner — typeahead multi-picker (shared UserSelect) */}
                     <div className="rounded-lg border bg-muted/20 p-4">
                         <Label className="font-medium text-sm">{t('orgSettings.offboardingFlow.preferences.hrPartner')}</Label>
                         <p className="text-[11px] text-muted-foreground mt-0.5 mb-3">
                             {t('orgSettings.offboardingFlow.preferences.hrPartnerHint')}
                         </p>
-                        <div className="flex flex-wrap gap-1.5 min-h-[2.25rem] mb-2">
-                            {hrPartnerUsers.length === 0 && (
-                                <span className="text-xs text-muted-foreground italic py-1.5">
-                                    {t('orgSettings.offboardingFlow.preferences.noHrPartner')}
-                                </span>
-                            )}
-                            {hrPartnerUsers.map(u => (
-                                <Badge key={u.id} variant="secondary" className="gap-1 ps-2 pe-1 py-1">
-                                    <span className="text-xs">{u.name}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => removeHrPartner(u.id)}
-                                        className="hover:bg-background/50 rounded p-0.5"
-                                        aria-label="Remove"
-                                    >
-                                        <X className="size-3" />
-                                    </button>
-                                </Badge>
-                            ))}
-                        </div>
-                        {availableUsers.length > 0 && (
-                            <Select onValueChange={addHrPartner} value="">
-                                <SelectTrigger className="h-9 text-sm">
-                                    <SelectValue placeholder={t('orgSettings.offboardingFlow.preferences.addHrPartner')} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {availableUsers.map(u => (
-                                        <SelectItem key={u.id} value={u.id}>
-                                            {u.name} <span className="text-muted-foreground text-xs">— {u.email}</span>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
+                        <UserSelect
+                            multiple
+                            value={data.hrPartnerUserIds}
+                            onValueChange={setHrPartners}
+                            placeholder={t('orgSettings.offboardingFlow.preferences.addHrPartner')}
+                        />
                     </div>
 
                     {/* Approval */}
@@ -577,7 +542,6 @@ function ClearanceDialog({ open, onOpenChange, editing }: { open: boolean; onOpe
     const { t } = useTranslation()
     const create = useCreateClearance()
     const update = useUpdateClearance()
-    const usersQ = useTenantUsers()
     // Used to warn admins when they pick "HR partner" as owner but haven't
     // actually nominated any HR partner users in Preferences. Without that
     // list, the clearance instance lands with ownerUserId=NULL at runtime
@@ -680,16 +644,12 @@ function ClearanceDialog({ open, onOpenChange, editing }: { open: boolean; onOpe
                         {ownerType === 'specific_user' && (
                             <div>
                                 <Label className="text-sm font-medium">{t('orgSettings.offboardingFlow.clearances.pickUser')}</Label>
-                                <Select value={ownerUserId ?? ''} onValueChange={(v) => setOwnerUserId(v || null)}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={t('orgSettings.offboardingFlow.clearances.pickUserPh')} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {(usersQ.data ?? []).filter(u => u.isActive).map(u => (
-                                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <UserSelect
+                                    value={ownerUserId ?? ''}
+                                    onValueChange={(v) => setOwnerUserId(v || null)}
+                                    placeholder={t('orgSettings.offboardingFlow.clearances.pickUserPh')}
+                                    clearable
+                                />
                             </div>
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1106,7 +1066,7 @@ function DocumentsStep() {
             ) : !data || data.length === 0 ? (
                 <EmptyState text={t('orgSettings.offboardingFlow.documents.empty')} />
             ) : (
-                <ul className="grid sm:grid-cols-2 gap-3">
+                <ul className="flex flex-col gap-2">
                     {data.map(d => (
                         <li
                             key={d.id}
@@ -1260,11 +1220,18 @@ function DocumentEditorDialog({
             <DialogContent className="max-w-4xl 3xl:max-w-6xl">
                 <DialogHeader>
                     <div className="flex items-center justify-between gap-3 pe-8">
-                        <DialogTitle className="flex items-center gap-2">
-                            <FileText className="size-4 text-muted-foreground" />
-                            {editing
-                                ? t('orgSettings.offboardingFlow.documents.editTitle')
-                                : t('orgSettings.offboardingFlow.documents.addTitle')}
+                        <DialogTitle className="flex items-center gap-2 min-w-0">
+                            <FileText className="size-4 text-muted-foreground shrink-0" />
+                            {editing ? (
+                                <span className="flex items-baseline gap-2 min-w-0">
+                                    <span className="text-muted-foreground text-sm font-normal shrink-0">
+                                        {t('orgSettings.offboardingFlow.documents.editTitle')}:
+                                    </span>
+                                    <span className="truncate">{editing.name}</span>
+                                </span>
+                            ) : (
+                                t('orgSettings.offboardingFlow.documents.addTitle')
+                            )}
                         </DialogTitle>
                         <div className="flex items-center gap-1 rounded-md border bg-muted/30 p-0.5">
                             <button
@@ -1301,23 +1268,32 @@ function DocumentEditorDialog({
                             </div>
                             <div>
                                 <Label className="text-xs">
-                                    {t('orgSettings.offboardingFlow.documents.bodyTemplate', { defaultValue: 'Letter body (HTML)' })}
+                                    {t('orgSettings.offboardingFlow.documents.bodyTemplate', { defaultValue: 'Letter body' })}
                                 </Label>
-                                <Textarea
-                                    rows={16}
+                                <RichTextEditor
                                     value={bodyTemplate}
-                                    onChange={(e) => setBodyTemplate(e.target.value)}
-                                    className="font-mono text-xs leading-relaxed"
-                                    placeholder={'<p>{{today}}</p>\n<p>Dear {{employeeName}}, …</p>'}
+                                    onChange={setBodyTemplate}
+                                    placeholder={t('orgSettings.offboardingFlow.documents.bodyPlaceholder', { defaultValue: 'Write the letter body. Use the variables below to insert dynamic fields.' })}
+                                    minHeight={300}
                                 />
                                 <p className="text-[11px] text-muted-foreground mt-1.5">
-                                    {t('orgSettings.offboardingFlow.documents.vars', { defaultValue: 'Variables:' })}{' '}
+                                    {t('orgSettings.offboardingFlow.documents.vars', { defaultValue: 'Click a variable to insert at the end:' })}{' '}
                                     {Object.keys(SAMPLE_VARS).map(k => (
                                         <button
                                             key={k}
                                             type="button"
                                             className="font-mono mx-0.5 px-1.5 py-0.5 rounded border bg-muted/40 hover:bg-muted text-[10px] cursor-pointer"
-                                            onClick={() => setBodyTemplate(prev => `${prev}{{${k}}}`)}
+                                            onClick={() => setBodyTemplate(prev => {
+                                                // Append the {{var}} token at the end of the HTML. Tiptap
+                                                // normalises loose text into a paragraph on re-sync, so the
+                                                // editor stays well-formed regardless of where the existing
+                                                // content ends.
+                                                const token = `{{${k}}}`
+                                                if (!prev) return `<p>${token}</p>`
+                                                return prev.replace(/(<\/p>)\s*$/, ` ${token}$1`) === prev
+                                                    ? `${prev}<p>${token}</p>`
+                                                    : prev.replace(/(<\/p>)\s*$/, ` ${token}$1`)
+                                            })}
                                         >
                                             {`{{${k}}}`}
                                         </button>
@@ -1393,9 +1369,12 @@ function WorkflowsStep() {
                                 'size-9 rounded-lg flex items-center justify-center shrink-0',
                                 w.enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
                             )}>
-                                {w.actionType === 'email_alert' ? <FileText className="size-4" /> :
-                                    w.actionType === 'notification' ? <MessageSquare className="size-4" /> :
-                                        <Workflow className="size-4" />}
+                                {(() => {
+                                    const primary = (w.actions && w.actions.length > 0 ? w.actions[0] : w.actionType) as WorkflowActionType | undefined
+                                    if (primary === 'email_alert') return <FileText className="size-4" />
+                                    if (primary === 'notification') return <MessageSquare className="size-4" />
+                                    return <Workflow className="size-4" />
+                                })()}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 text-sm font-medium">
@@ -1405,7 +1384,7 @@ function WorkflowsStep() {
                                 <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
                                     <span>{triggerLabel(w.trigger, t)}</span>
                                     <span className="text-muted-foreground/50">→</span>
-                                    <span>{actionLabel(w.actionType, t)}</span>
+                                    <span>{(w.actions && w.actions.length > 0 ? w.actions : (w.actionType ? [w.actionType] : [])).map(a => actionLabel(a, t)).join(' + ')}</span>
                                 </div>
                             </div>
                             <Switch
@@ -1449,7 +1428,10 @@ function WorkflowDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
 
     const [name, setName] = useState('')
     const [trigger, setTrigger] = useState<WorkflowTrigger>('on_request_added')
-    const [actionType, setActionType] = useState<WorkflowActionType>('email_alert')
+    // `actions` is now multi-select — HR can fan out to email AND in-app
+    // notification on the same trigger. Custom function was retired (no
+    // sandboxed runtime), so the only two options are email + notification.
+    const [actions, setActions] = useState<WorkflowActionType[]>(['email_alert'])
     const [recipients, setRecipients] = useState<Recipient[]>(['employee', 'hr_partner'])
     const [subject, setSubject] = useState('')
     const [body, setBody] = useState('')
@@ -1462,7 +1444,15 @@ function WorkflowDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
         if (open) {
             setName(editing?.name ?? '')
             setTrigger((editing?.trigger as WorkflowTrigger) ?? 'on_request_added')
-            setActionType((editing?.actionType as WorkflowActionType) ?? 'email_alert')
+            // Read `actions` array; fall back to legacy `actionType` for rows
+            // saved before migration 0071. Filter out any retired values.
+            const loaded = (editing?.actions && editing.actions.length > 0)
+                ? editing.actions
+                : (editing?.actionType ? [editing.actionType] : ['email_alert'])
+            const filtered = loaded.filter((a): a is WorkflowActionType =>
+                a === 'email_alert' || a === 'notification'
+            )
+            setActions(filtered.length > 0 ? filtered : ['email_alert'])
             setRecipients((editing?.config.recipients as Recipient[]) ?? ['employee', 'hr_partner'])
             setSubject(editing?.config.subject ?? '')
             setBody(editing?.config.body ?? editing?.config.message ?? '')
@@ -1472,6 +1462,17 @@ function WorkflowDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
 
     const toggleRecipient = (r: Recipient) => {
         setRecipients(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r])
+    }
+
+    const toggleAction = (a: WorkflowActionType) => {
+        setActions(prev => {
+            if (prev.includes(a)) {
+                // Don't allow zero actions — keep the last one selected.
+                if (prev.length === 1) return prev
+                return prev.filter(x => x !== a)
+            }
+            return [...prev, a]
+        })
     }
 
     async function submit(e: { preventDefault(): void }) {
@@ -1486,18 +1487,20 @@ function WorkflowDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
                 })
                 : [],
         }
-        if (actionType === 'email_alert') {
+        // Shared body across actions: email reads { subject, body }; in-app
+        // notification reads { message } — populating both is harmless and
+        // keeps the form simple.
+        if (actions.includes('email_alert')) {
             config.subject = subject.trim() || undefined
             config.body = body.trim() || undefined
-        } else if (actionType === 'notification') {
+        }
+        if (actions.includes('notification')) {
             config.message = body.trim() || undefined
-        } else {
-            config.code = body
         }
         const payload = {
             name: name.trim(),
             trigger,
-            actionType,
+            actions,
             config,
             enabled: true,
             position: editing?.position ?? 0,
@@ -1512,11 +1515,24 @@ function WorkflowDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
         }
     }
 
+    const sendsEmail = actions.includes('email_alert')
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-xl">
                 <DialogHeader>
-                    <DialogTitle>{editing ? t('orgSettings.offboardingFlow.workflows.editTitle') : t('orgSettings.offboardingFlow.workflows.addTitle')}</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2 min-w-0 pe-8">
+                        {editing ? (
+                            <span className="flex items-baseline gap-2 min-w-0">
+                                <span className="text-muted-foreground text-sm font-normal shrink-0">
+                                    {t('orgSettings.offboardingFlow.workflows.editTitle')}:
+                                </span>
+                                <span className="truncate">{editing.name}</span>
+                            </span>
+                        ) : (
+                            t('orgSettings.offboardingFlow.workflows.addTitle')
+                        )}
+                    </DialogTitle>
                 </DialogHeader>
                 <form onSubmit={submit}>
                     <DialogBody className="space-y-4">
@@ -1524,55 +1540,54 @@ function WorkflowDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
                             <Label>{t('orgSettings.offboardingFlow.workflows.fieldName')} <span className="text-rose-500">*</span></Label>
                             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('orgSettings.offboardingFlow.workflows.fieldNamePh')} />
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                                <Label>{t('orgSettings.offboardingFlow.workflows.trigger')}</Label>
-                                <Select value={trigger} onValueChange={(v: WorkflowTrigger) => setTrigger(v)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="on_request_added">{triggerLabel('on_request_added', t)}</SelectItem>
-                                        <SelectItem value="on_approved">{triggerLabel('on_approved', t)}</SelectItem>
-                                        <SelectItem value="on_rejected">{triggerLabel('on_rejected', t)}</SelectItem>
-                                        <SelectItem value="on_clearance_complete">{triggerLabel('on_clearance_complete', t)}</SelectItem>
-                                        <SelectItem value="on_settlement_paid">{triggerLabel('on_settlement_paid', t)}</SelectItem>
-                                        <SelectItem value="on_relieving_date">{triggerLabel('on_relieving_date', t)}</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label>{t('orgSettings.offboardingFlow.workflows.action')}</Label>
-                                <Select value={actionType} onValueChange={(v: WorkflowActionType) => setActionType(v)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="email_alert">{actionLabel('email_alert', t)}</SelectItem>
-                                        <SelectItem value="notification">{actionLabel('notification', t)}</SelectItem>
-                                        <SelectItem value="custom_function">{actionLabel('custom_function', t)}</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <div>
+                            <Label>{t('orgSettings.offboardingFlow.workflows.trigger')}</Label>
+                            <Select value={trigger} onValueChange={(v: WorkflowTrigger) => setTrigger(v)}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="on_request_added">{triggerLabel('on_request_added', t)}</SelectItem>
+                                    <SelectItem value="on_approved">{triggerLabel('on_approved', t)}</SelectItem>
+                                    <SelectItem value="on_rejected">{triggerLabel('on_rejected', t)}</SelectItem>
+                                    <SelectItem value="on_clearance_complete">{triggerLabel('on_clearance_complete', t)}</SelectItem>
+                                    <SelectItem value="on_settlement_paid">{triggerLabel('on_settlement_paid', t)}</SelectItem>
+                                    <SelectItem value="on_relieving_date">{triggerLabel('on_relieving_date', t)}</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
-                        {actionType !== 'custom_function' && (
-                            <div>
-                                <Label>{t('orgSettings.offboardingFlow.workflows.recipients')}</Label>
-                                <div className="flex flex-wrap gap-3 rounded-lg border bg-muted/30 p-2.5">
-                                    {(['employee', 'reporting_manager', 'hr_partner', 'custom'] as Recipient[]).map(r => (
-                                        <label key={r} className="flex items-center gap-1.5 cursor-pointer text-sm">
-                                            <Checkbox checked={recipients.includes(r)} onCheckedChange={() => toggleRecipient(r)} />
-                                            <span>{recipientLabel(r, t)}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                                {recipients.includes('custom') && (
-                                    <Input
-                                        className="mt-2"
-                                        value={customEmails}
-                                        onChange={(e) => setCustomEmails(e.target.value)}
-                                        placeholder={t('orgSettings.offboardingFlow.workflows.customEmailsPh')}
-                                    />
-                                )}
+                        <div>
+                            <Label>{t('orgSettings.offboardingFlow.workflows.action')}</Label>
+                            <div className="flex flex-wrap gap-3 rounded-lg border bg-muted/30 p-2.5">
+                                {(['email_alert', 'notification'] as WorkflowActionType[]).map(a => (
+                                    <label key={a} className="flex items-center gap-1.5 cursor-pointer text-sm">
+                                        <Checkbox checked={actions.includes(a)} onCheckedChange={() => toggleAction(a)} />
+                                        <span>{actionLabel(a, t)}</span>
+                                    </label>
+                                ))}
                             </div>
-                        )}
-                        {actionType === 'email_alert' && (
+                            <p className="text-[10px] text-muted-foreground mt-1">
+                                {t('orgSettings.offboardingFlow.workflows.actionsHint', { defaultValue: 'Pick one or both — both fire on the same trigger.' })}
+                            </p>
+                        </div>
+                        <div>
+                            <Label>{t('orgSettings.offboardingFlow.workflows.recipients')}</Label>
+                            <div className="flex flex-wrap gap-3 rounded-lg border bg-muted/30 p-2.5">
+                                {(['employee', 'reporting_manager', 'hr_partner', 'custom'] as Recipient[]).map(r => (
+                                    <label key={r} className="flex items-center gap-1.5 cursor-pointer text-sm">
+                                        <Checkbox checked={recipients.includes(r)} onCheckedChange={() => toggleRecipient(r)} />
+                                        <span>{recipientLabel(r, t)}</span>
+                                    </label>
+                                ))}
+                            </div>
+                            {recipients.includes('custom') && (
+                                <Input
+                                    className="mt-2"
+                                    value={customEmails}
+                                    onChange={(e) => setCustomEmails(e.target.value)}
+                                    placeholder={t('orgSettings.offboardingFlow.workflows.customEmailsPh')}
+                                />
+                            )}
+                        </div>
+                        {sendsEmail && (
                             <div>
                                 <Label>{t('orgSettings.offboardingFlow.workflows.subject')}</Label>
                                 <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="{{employeeName}} has initiated offboarding" />
@@ -1580,11 +1595,9 @@ function WorkflowDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
                         )}
                         <div>
                             <Label>
-                                {actionType === 'email_alert'
+                                {sendsEmail
                                     ? t('orgSettings.offboardingFlow.workflows.emailBody')
-                                    : actionType === 'notification'
-                                        ? t('orgSettings.offboardingFlow.workflows.message')
-                                        : t('orgSettings.offboardingFlow.workflows.code')}
+                                    : t('orgSettings.offboardingFlow.workflows.message')}
                             </Label>
                             <Textarea rows={5} value={body} onChange={(e) => setBody(e.target.value)} />
                             <p className="text-[10px] text-muted-foreground mt-1">

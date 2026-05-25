@@ -18,6 +18,9 @@ export type WorkflowTrigger =
     | 'on_clearance_complete'
     | 'on_settlement_paid'
     | 'on_relieving_date'
+// `custom_function` is kept in the union for backwards compatibility with
+// legacy workflow rows. The Workflow editor UI only exposes email_alert and
+// notification — custom_function is read-only for existing rows.
 export type WorkflowActionType = 'email_alert' | 'notification' | 'custom_function'
 export type Recipient = 'employee' | 'reporting_manager' | 'hr_partner' | 'custom'
 
@@ -80,7 +83,11 @@ export interface OffboardingWorkflow {
     tenantId: string
     name: string
     trigger: WorkflowTrigger
-    actionType: WorkflowActionType
+    /** Multi-select set of actions fired when the trigger hits. Replaces the
+     *  legacy single `actionType`; `actionType` is still returned by the
+     *  backend (mirrors `actions[0]`) for backwards compat. */
+    actions: WorkflowActionType[]
+    actionType?: WorkflowActionType
     config: {
         recipients?: Recipient[]
         customEmails?: string[]
@@ -88,7 +95,6 @@ export interface OffboardingWorkflow {
         body?: string
         message?: string
         actionUrl?: string
-        code?: string
     }
     enabled: boolean
     position: number

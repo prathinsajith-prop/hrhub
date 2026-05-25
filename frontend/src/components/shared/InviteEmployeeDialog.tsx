@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/primitives'
+import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/utils'
 import { useEmployeeAccount, useInviteEmployee, useResendInvite } from '@/hooks/useEmployees'
@@ -46,6 +47,85 @@ function RoleSelector({ userId, currentRoles, selectedRoles, availableOptions, o
                     </Button>
                 )}
             </div>
+        </div>
+    )
+}
+
+interface FeatureFlagsSectionProps {
+    userId: string
+    initialPunch: boolean
+    initialManual: boolean
+    onSave: (userId: string, patch: { attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean }) => void
+    isSaving: boolean
+}
+
+/**
+ * Two-switch panel for the per-user attendance toggles. Mirrors the layout
+ * used on the Users page so HR sees the same control wherever they reach
+ * Manage Access from. State is local-draft-with-Save (dirty-only) to match
+ * the RoleSelector pattern above.
+ */
+function FeatureFlagsSection({ userId, initialPunch, initialManual, onSave, isSaving }: FeatureFlagsSectionProps) {
+    const [punch, setPunch] = useState(initialPunch)
+    const [manual, setManual] = useState(initialManual)
+    // Reset draft state if the underlying user changes (e.g. dialog reopened
+    // for a different employee).
+    const [syncKey, setSyncKey] = useState(`${userId}:${initialPunch}:${initialManual}`)
+    const nextKey = `${userId}:${initialPunch}:${initialManual}`
+    if (nextKey !== syncKey) {
+        setSyncKey(nextKey)
+        setPunch(initialPunch)
+        setManual(initialManual)
+    }
+    const dirty = punch !== initialPunch || manual !== initialManual
+    return (
+        <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Features</p>
+            <div className="rounded-lg border bg-muted/20 divide-y">
+                <label htmlFor={`punch-${userId}`} className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer">
+                    <div className="min-w-0">
+                        <p className="text-sm font-medium">Attendance check-in / check-out</p>
+                        <p className="text-[11px] text-muted-foreground leading-snug">
+                            When off, the live check-in / check-out buttons are hidden on the employee portal.
+                        </p>
+                    </div>
+                    <Switch
+                        id={`punch-${userId}`}
+                        checked={punch}
+                        onCheckedChange={setPunch}
+                        disabled={isSaving}
+                    />
+                </label>
+                <label htmlFor={`manual-${userId}`} className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer">
+                    <div className="min-w-0">
+                        <p className="text-sm font-medium">Manual entry</p>
+                        <p className="text-[11px] text-muted-foreground leading-snug">
+                            When off, the back-fill panel that lets the user add a past check-in / check-out is hidden.
+                        </p>
+                    </div>
+                    <Switch
+                        id={`manual-${userId}`}
+                        checked={manual}
+                        onCheckedChange={setManual}
+                        disabled={isSaving}
+                    />
+                </label>
+            </div>
+            {dirty && (
+                <div className="flex justify-end">
+                    <Button
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={() => onSave(userId, {
+                            ...(punch !== initialPunch ? { attendancePunchEnabled: punch } : {}),
+                            ...(manual !== initialManual ? { attendanceManualEntryEnabled: manual } : {}),
+                        })}
+                        loading={isSaving}
+                    >
+                        Save
+                    </Button>
+                </div>
+            )}
         </div>
     )
 }
@@ -151,9 +231,22 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
         }
     }
 
+    async function handleSaveFeatureFlags(
+        userId: string,
+        patch: { attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean },
+    ) {
+        if (Object.keys(patch).length === 0) return
+        try {
+            await updateUser.mutateAsync({ id: userId, ...patch })
+            toast.success('Features updated')
+        } catch {
+            toast.error('Update failed', 'Could not update the feature switches.')
+        }
+    }
+
     return (
         <Dialog open={open} onOpenChange={o => !o && close()}>
-            <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden gap-0">
+            <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden gap-0">
 
                 {/* Header */}
                 <div className="flex items-center gap-3.5 px-6 py-5 border-b">
@@ -250,7 +343,16 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     )}
                                 </div>
                             </div>
-                            {account && <RoleSelector userId={account.id} currentRoles={account.roles?.length ? account.roles : [account.role]} selectedRoles={selectedRoles} availableOptions={availableOptions} onRolesChange={setSelectedRoles} onSave={handleSaveRoles} isSaving={updateUser.isPending} />}
+                            {account && <>
+                                <RoleSelector userId={account.id} currentRoles={account.roles?.length ? account.roles : [account.role]} selectedRoles={selectedRoles} availableOptions={availableOptions} onRolesChange={setSelectedRoles} onSave={handleSaveRoles} isSaving={updateUser.isPending} />
+                                <FeatureFlagsSection
+                                    userId={account.id}
+                                    initialPunch={account.attendancePunchEnabled ?? true}
+                                    initialManual={account.attendanceManualEntryEnabled ?? true}
+                                    onSave={handleSaveFeatureFlags}
+                                    isSaving={updateUser.isPending}
+                                />
+                            </>}
                         </div>
                     ) : state === 'invite-pending' ? (
                         <div className="space-y-4">
@@ -278,7 +380,16 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     </div>
                                 </div>
                             </div>
-                            {account && <RoleSelector userId={account.id} currentRoles={account.roles?.length ? account.roles : [account.role]} selectedRoles={selectedRoles} availableOptions={availableOptions} onRolesChange={setSelectedRoles} onSave={handleSaveRoles} isSaving={updateUser.isPending} />}
+                            {account && <>
+                                <RoleSelector userId={account.id} currentRoles={account.roles?.length ? account.roles : [account.role]} selectedRoles={selectedRoles} availableOptions={availableOptions} onRolesChange={setSelectedRoles} onSave={handleSaveRoles} isSaving={updateUser.isPending} />
+                                <FeatureFlagsSection
+                                    userId={account.id}
+                                    initialPunch={account.attendancePunchEnabled ?? true}
+                                    initialManual={account.attendanceManualEntryEnabled ?? true}
+                                    onSave={handleSaveFeatureFlags}
+                                    isSaving={updateUser.isPending}
+                                />
+                            </>}
                         </div>
                     ) : (
                         <div className="space-y-3.5">
@@ -301,7 +412,16 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     <span>Created {formatDate(account?.createdAt ?? '')}</span>
                                 </div>
                             </div>
-                            {account && <RoleSelector userId={account.id} currentRoles={account.roles?.length ? account.roles : [account.role]} selectedRoles={selectedRoles} availableOptions={availableOptions} onRolesChange={setSelectedRoles} onSave={handleSaveRoles} isSaving={updateUser.isPending} />}
+                            {account && <>
+                                <RoleSelector userId={account.id} currentRoles={account.roles?.length ? account.roles : [account.role]} selectedRoles={selectedRoles} availableOptions={availableOptions} onRolesChange={setSelectedRoles} onSave={handleSaveRoles} isSaving={updateUser.isPending} />
+                                <FeatureFlagsSection
+                                    userId={account.id}
+                                    initialPunch={account.attendancePunchEnabled ?? true}
+                                    initialManual={account.attendanceManualEntryEnabled ?? true}
+                                    onSave={handleSaveFeatureFlags}
+                                    isSaving={updateUser.isPending}
+                                />
+                            </>}
                         </div>
                     )}
                 </div>

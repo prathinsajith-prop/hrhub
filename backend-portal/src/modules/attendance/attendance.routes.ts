@@ -9,6 +9,7 @@ import {
     orgUnits,
     publicHolidays,
     shifts,
+    users,
 } from '../../db/schema/index.js'
 import { e400, e403, e404 } from '../../lib/errors.js'
 import { checkInOutSchema, listAttendanceSchema, validate } from '../../lib/validation.js'
@@ -443,6 +444,161 @@ export default async function attendanceRoutes(fastify: FastifyInstance) {
 
         return reply.send({ data })
     })
+
+    // POST /api/v1/attendance/punches
+    //
+    // Back-fill a missed check-in (and optional check-out) for a given day.
+    // Powers the "Add Check-in / Check-out Entry" panel inside the day-
+    // detail modal. Employees can only back-fill their own day; dept_heads
+    // can back-fill their subtree; HR can back-fill anyone. The
+    // `attendanceManualEntryEnabled` flag on the target employee's user
+    // gates this endpoint server-side — the UI also hides the panel, but
+    // the API must be authoritative.
+    fastify.post('/punches', { ...auth }, async (request: any, reply: any) => {
+        const body = (request.body ?? {}) as {
+            employeeId?: string
+            date?: string
+            inTime?: string
+            outTime?: string | null
+            inDayOffset?: number
+            outDayOffset?: number
+            inNotes?: string | null
+            outNotes?: string | null
+            locationName?: string | null
+            latitude?: number | null
+            longitude?: number | null
+        }
+        const user = request.user
+        const targetEmpId = body.employeeId ?? user.employeeId
+        if (!targetEmpId) return reply.code(404).send(e404('No employee record linked'))
+        if (!(await canAccessEmployee(user, targetEmpId, request))) {
+            return reply.code(403).send(e403('Not authorized to add a punch for this employee'))
+        }
+        const denied = await isAttendanceFlagDisabled(user.tenantId, targetEmpId, 'manual')
+        if (denied) return reply.code(403).send(e403(denied))
+
+        const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
+        if (!body.date || !/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+            return reply.code(400).send(e400('date is required (YYYY-MM-DD)'))
+        }
+        if (!body.inTime || !HHMM.test(body.inTime)) {
+            return reply.code(400).send(e400('inTime required (HH:MM)'))
+        }
+        if (body.outTime && !HHMM.test(body.outTime)) {
+            return reply.code(400).send(e400('outTime must be HH:MM'))
+        }
+
+        const baseDate = new Date(`${body.date}T00:00:00`)
+        const [inH, inM] = body.inTime.split(':').map(Number) as [number, number]
+        const inDate = new Date(baseDate.getTime() + (body.inDayOffset ?? 0) * 86_400_000)
+        inDate.setHours(inH, inM, 0, 0)
+
+        const [inPunch] = await db
+            .insert(attendancePunches)
+            .values({
+                tenantId: user.tenantId,
+                employeeId: targetEmpId,
+                date: body.date,
+                punchType: 'in',
+                recordedAt: inDate,
+                locationName: body.locationName ?? null,
+                latitude: body.latitude != null ? String(body.latitude) : null,
+                longitude: body.longitude != null ? String(body.longitude) : null,
+                source: 'manual',
+                notes: body.inNotes ?? null,
+                createdBy: user.id,
+            } as any)
+            .returning()
+
+        let outPunch: typeof inPunch | null = null
+        if (body.outTime) {
+            const [outH, outM] = body.outTime.split(':').map(Number) as [number, number]
+            const outDate = new Date(baseDate.getTime() + (body.outDayOffset ?? 0) * 86_400_000)
+            outDate.setHours(outH, outM, 0, 0)
+            if (outDate <= inDate) {
+                return reply.code(400).send(e400('Check-out must be after check-in'))
+            }
+            const [row] = await db
+                .insert(attendancePunches)
+                .values({
+                    tenantId: user.tenantId,
+                    employeeId: targetEmpId,
+                    date: body.date,
+                    punchType: 'out',
+                    recordedAt: outDate,
+                    locationName: body.locationName ?? null,
+                    latitude: body.latitude != null ? String(body.latitude) : null,
+                    longitude: body.longitude != null ? String(body.longitude) : null,
+                    source: 'manual',
+                    notes: body.outNotes ?? null,
+                    createdBy: user.id,
+                } as any)
+                .returning()
+            outPunch = row
+        }
+
+        return reply.code(201).send({ data: { inPunch, outPunch } })
+    })
+
+    // DELETE /api/v1/attendance/punches/:id
+    //
+    // Remove a specific punch event (e.g. clicked the "In" trash button on
+    // the day-detail modal). Same scoping + manual-entry policy gate as the
+    // POST above — deleting a punch is a manual modification.
+    fastify.delete('/punches/:id', { ...auth }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const user = request.user
+
+        const [existing] = await db
+            .select({
+                id: attendancePunches.id,
+                employeeId: attendancePunches.employeeId,
+            })
+            .from(attendancePunches)
+            .where(and(eq(attendancePunches.tenantId, user.tenantId), eq(attendancePunches.id, id)))
+            .limit(1)
+        if (!existing) return reply.code(404).send(e404('Punch not found'))
+        if (!(await canAccessEmployee(user, existing.employeeId, request))) {
+            return reply.code(403).send(e403('Not authorized to delete this punch'))
+        }
+        const denied = await isAttendanceFlagDisabled(user.tenantId, existing.employeeId, 'manual')
+        if (denied) return reply.code(403).send(e403(denied))
+
+        await db
+            .delete(attendancePunches)
+            .where(and(eq(attendancePunches.tenantId, user.tenantId), eq(attendancePunches.id, id)))
+        return reply.send({ data: { ok: true } })
+    })
+}
+
+/**
+ * Server-side enforcement of HR's per-user attendance switches (Users →
+ * Manage Access on the main app). Returns a message string when the action
+ * should be denied, `null` to allow. Looks up the *target* employee's
+ * linked user row, so a punch on behalf of someone else honours their
+ * policy too.
+ */
+async function isAttendanceFlagDisabled(
+    tenantId: string,
+    employeeId: string,
+    flag: 'punch' | 'manual',
+): Promise<string | null> {
+    const [row] = await db
+        .select({
+            punch: users.attendancePunchEnabled,
+            manual: users.attendanceManualEntryEnabled,
+        })
+        .from(users)
+        .where(and(eq(users.tenantId, tenantId), eq(users.employeeId, employeeId)))
+        .limit(1)
+    if (!row) return null
+    if (flag === 'punch' && row.punch === false) {
+        return 'Attendance check-in / check-out is disabled for this employee.'
+    }
+    if (flag === 'manual' && row.manual === false) {
+        return 'Manual attendance entry is disabled for this employee.'
+    }
+    return null
 }
 
 /**
@@ -469,6 +625,13 @@ async function handlePunch(
     if (!(await canAccessEmployee(user, targetEmpId, request))) {
         return reply.code(403).send(e403(`Not authorized to check ${punchType} for this employee`))
     }
+
+    // Honour HR's per-user attendance switch (Users → Manage Access on the
+    // main app). When it's off, the live check-in / check-out buttons are
+    // hidden in the portal — but a curl or devtools replay would otherwise
+    // sneak past, so enforce server-side too.
+    const denied = await isAttendanceFlagDisabled(user.tenantId, targetEmpId, 'punch')
+    if (denied) return reply.code(403).send(e403(denied))
 
     const date = todayISO()
     const now = new Date()

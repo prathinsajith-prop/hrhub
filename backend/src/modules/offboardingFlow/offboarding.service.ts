@@ -37,6 +37,9 @@ export type WorkflowTrigger =
     | 'on_clearance_complete'
     | 'on_settlement_paid'
     | 'on_relieving_date'
+// `custom_function` is kept in the union to honour legacy rows; it just
+// isn't surfaced in the UI anymore. fireWorkflows() simply skips it (logs
+// once) since the sandboxed runtime was never finished.
 export type WorkflowActionType = 'email_alert' | 'notification' | 'custom_function'
 export type Recipient = 'employee' | 'reporting_manager' | 'hr_partner' | 'custom'
 
@@ -323,7 +326,10 @@ export async function listWorkflows(tenantId: string) {
 export interface WorkflowPayload {
     name: string
     trigger: WorkflowTrigger
-    actionType: WorkflowActionType
+    /** One or more action types fired in parallel when the trigger hits.
+     *  Stored as the canonical `actions` array; `actionType` is derived
+     *  for backwards compatibility. */
+    actions: WorkflowActionType[]
     config: {
         recipients?: Recipient[]
         customEmails?: string[]
@@ -331,22 +337,29 @@ export interface WorkflowPayload {
         body?: string
         message?: string
         actionUrl?: string
-        code?: string
     }
     enabled?: boolean
     position?: number
 }
 
 export async function createWorkflow(tenantId: string, body: WorkflowPayload) {
+    const actions = body.actions?.length ? body.actions : ['email_alert' as const]
     const [row] = await db.insert(offboardingWorkflows)
-        .values({ tenantId, ...body })
+        .values({ tenantId, ...body, actions, actionType: actions[0] })
         .returning()
     return row
 }
 
 export async function updateWorkflow(tenantId: string, id: string, patch: Partial<WorkflowPayload>) {
+    // Keep the legacy single-value `actionType` in sync with the canonical
+    // array so any stragglers reading the old column still see a valid value.
+    const set: Record<string, unknown> = { ...patch, updatedAt: new Date() }
+    if (patch.actions && patch.actions.length > 0) {
+        set.actions = patch.actions
+        set.actionType = patch.actions[0]
+    }
     const [row] = await db.update(offboardingWorkflows)
-        .set({ ...patch, updatedAt: new Date() })
+        .set(set as Parameters<ReturnType<typeof db.update>['set']>[0])
         .where(and(
             eq(offboardingWorkflows.id, id),
             eq(offboardingWorkflows.tenantId, tenantId),
@@ -752,11 +765,10 @@ interface WorkflowContext {
 }
 
 /**
- * Find enabled workflows for a trigger and execute them. Email + in-app
- * notifications are sent; custom_function rows are stored but NOT executed
- * (the sandboxed runtime is not implemented in this revision).
- *
- * Errors are swallowed per-workflow so one failure doesn't block the rest.
+ * Find enabled workflows for a trigger and execute them. Each workflow can
+ * fan out to multiple action types (`actions` array) — both an email alert
+ * and an in-app notification, for example. Errors are swallowed per-action
+ * so one failure (e.g. unreachable SMTP) doesn't block the others.
  */
 export async function fireWorkflows(
     tenantId: string,
@@ -846,50 +858,58 @@ export async function fireWorkflows(
     }
 
     for (const wf of list) {
-        try {
-            const cfg = wf.config ?? {}
-            if (wf.actionType === 'email_alert') {
-                const recipients = new Set<string>()
-                const targets = (cfg.recipients ?? []) as Recipient[]
-                if (targets.includes('employee') && employeeEmail) recipients.add(employeeEmail)
-                if (targets.includes('reporting_manager') && managerEmail) recipients.add(managerEmail)
-                if (targets.includes('hr_partner')) hrPartnerEmails.forEach(e => recipients.add(e))
-                if (targets.includes('custom')) (cfg.customEmails ?? []).forEach(e => recipients.add(e))
-                if (recipients.size === 0) continue
-                await sendEmail({
-                    to: Array.from(recipients).join(','),
-                    subject: substitute(cfg.subject) || `Offboarding update for ${employeeName}`,
-                    html: substitute(cfg.body) || `<p>Offboarding update for <strong>${employeeName}</strong>.</p>`,
-                    tenantId,
-                })
-            } else if (wf.actionType === 'notification') {
-                const userIds = new Set<string>()
-                const targets = (cfg.recipients ?? []) as Recipient[]
-                if (targets.includes('reporting_manager') && managerUserId) userIds.add(managerUserId)
-                if (targets.includes('hr_partner')) hrPartnerIds.forEach(id => userIds.add(id))
-                // 'employee' deliberately needs employee→user lookup; if their
-                // user record exists, push to it (otherwise skip silently).
-                if (targets.includes('employee')) {
-                    const [u] = await db.select({ id: users.id }).from(users)
-                        .where(and(eq(users.tenantId, tenantId), eq(users.employeeId, ctxRow.employeeId)))
-                        .limit(1)
-                    if (u?.id) userIds.add(u.id)
+        const cfg = wf.config ?? {}
+        // `actions` is the canonical multi-value column; we fall back to the
+        // legacy `actionType` if a row predates migration 0071.
+        const actions: WorkflowActionType[] = (wf.actions && wf.actions.length > 0
+            ? wf.actions
+            : [wf.actionType]) as WorkflowActionType[]
+        for (const action of actions) {
+            try {
+                if (action === 'email_alert') {
+                    const recipients = new Set<string>()
+                    const targets = (cfg.recipients ?? []) as Recipient[]
+                    if (targets.includes('employee') && employeeEmail) recipients.add(employeeEmail)
+                    if (targets.includes('reporting_manager') && managerEmail) recipients.add(managerEmail)
+                    if (targets.includes('hr_partner')) hrPartnerEmails.forEach(e => recipients.add(e))
+                    if (targets.includes('custom')) (cfg.customEmails ?? []).forEach(e => recipients.add(e))
+                    if (recipients.size === 0) continue
+                    await sendEmail({
+                        to: Array.from(recipients).join(','),
+                        subject: substitute(cfg.subject) || `Offboarding update for ${employeeName}`,
+                        html: substitute(cfg.body) || `<p>Offboarding update for <strong>${employeeName}</strong>.</p>`,
+                        tenantId,
+                    })
+                } else if (action === 'custom_function') {
+                    // Legacy action kept for backwards compat — sandboxed
+                    // execution was never implemented, so log and continue.
+                    log.info({ tenantId, workflowId: wf.id }, 'custom_function workflow skipped (execution not yet implemented)')
+                } else if (action === 'notification') {
+                    const userIds = new Set<string>()
+                    const targets = (cfg.recipients ?? []) as Recipient[]
+                    if (targets.includes('reporting_manager') && managerUserId) userIds.add(managerUserId)
+                    if (targets.includes('hr_partner')) hrPartnerIds.forEach(id => userIds.add(id))
+                    // 'employee' needs an employee→user lookup; skip silently
+                    // when the employee has no portal account.
+                    if (targets.includes('employee')) {
+                        const [u] = await db.select({ id: users.id }).from(users)
+                            .where(and(eq(users.tenantId, tenantId), eq(users.employeeId, ctxRow.employeeId)))
+                            .limit(1)
+                        if (u?.id) userIds.add(u.id)
+                    }
+                    if (userIds.size === 0) continue
+                    await Promise.all(Array.from(userIds).map(uid => createNotification({
+                        tenantId,
+                        userId: uid,
+                        type: 'info',
+                        title: wf.name,
+                        message: substitute(cfg.message) || substitute(cfg.body) || `Offboarding update for ${employeeName}`,
+                        actionUrl: cfg.actionUrl ?? `/exit`,
+                    })))
                 }
-                if (userIds.size === 0) continue
-                await Promise.all(Array.from(userIds).map(uid => createNotification({
-                    tenantId,
-                    userId: uid,
-                    type: 'info',
-                    title: wf.name,
-                    message: substitute(cfg.message) || substitute(cfg.body) || `Offboarding update for ${employeeName}`,
-                    actionUrl: cfg.actionUrl ?? `/exit`,
-                })))
-            } else if (wf.actionType === 'custom_function') {
-                // Stored for visibility; sandboxed execution is a follow-up.
-                log.info({ tenantId, workflowId: wf.id }, 'custom_function workflow skipped (execution not yet implemented)')
+            } catch (err) {
+                log.warn({ err: err instanceof Error ? err.message : String(err), workflowId: wf.id, trigger, action }, 'offboarding workflow action failed')
             }
-        } catch (err) {
-            log.warn({ err: err instanceof Error ? err.message : String(err), workflowId: wf.id, trigger }, 'offboarding workflow execution failed')
         }
     }
 }

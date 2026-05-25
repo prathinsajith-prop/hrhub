@@ -301,3 +301,73 @@ export function useUpdateMaintenanceRecord() {
         onError: (err: Error) => toast.error('Failed to update maintenance record', err.message),
     })
 }
+
+// ─── Bulk import ──────────────────────────────────────────────────────────────
+//
+// Two endpoints, same row shape. `useValidateBulkAssets` runs the
+// server-side preview (no DB writes) so the dialog can show green/red
+// per row before HR commits. `useBulkCreateAssets` does the actual insert
+// — only after the preview looks good.
+
+export interface BulkAssetRowInput {
+    rowNumber: number
+    assetCode?: string | null
+    name?: string | null
+    categoryName?: string | null
+    brand?: string | null
+    model?: string | null
+    serialNumber?: string | null
+    purchaseDate?: string | null
+    purchaseCost?: number | string | null
+    status?: string | null
+    condition?: string | null
+    notes?: string | null
+}
+
+export interface BulkAssetRowResult {
+    rowNumber: number
+    ok: boolean
+    errors: string[]
+    duplicateCode?: boolean
+    resolved?: {
+        assetCode: string | null
+        name: string
+        categoryId: string | null
+        categoryName: string | null
+        brand: string | null
+        model: string | null
+        serialNumber: string | null
+        purchaseDate: string | null
+        purchaseCost: string | null
+        status: Asset['status']
+        condition: Asset['condition']
+        notes: string | null
+    }
+}
+
+export interface BulkAssetValidationResponse {
+    rows: BulkAssetRowResult[]
+    summary: { total: number; valid: number; invalid: number }
+}
+
+export interface BulkAssetCreateResponse extends BulkAssetValidationResponse {
+    created: number
+    skipped: number
+}
+
+export function useValidateBulkAssets() {
+    return useMutation({
+        mutationFn: (rows: BulkAssetRowInput[]) =>
+            api.post<BulkAssetValidationResponse>('/assets/bulk-validate', { rows }),
+    })
+}
+
+export function useBulkCreateAssets() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (rows: BulkAssetRowInput[]) =>
+            api.post<BulkAssetCreateResponse>('/assets/bulk', { rows }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['assets'] }),
+        onError: (err: Error) => toast.error('Bulk import failed', err.message),
+    })
+}

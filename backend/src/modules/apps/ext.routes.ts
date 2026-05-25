@@ -14,7 +14,8 @@ import { extAuthenticate, requireScope, clientIp } from './ext.middleware.js'
 import { listEmployees, getEmployee } from '../employees/employees.service.js'
 import { listPayrollRuns, getPayrollRun, getPayslipsWithEmployees } from '../payroll/payroll.service.js'
 import { listLeaveRequests } from '../leave/leave.service.js'
-import { getAttendance } from '../attendance/attendance.service.js'
+import { getAttendance, externalPunch } from '../attendance/attendance.service.js'
+import { findById as findEmployeeById } from '../../repositories/employees.repo.js'
 import { listDocuments } from '../documents/documents.service.js'
 import { db } from '../../db/index.js'
 import { employees, tenants, appRequestLogs } from '../../db/schema/index.js'
@@ -190,6 +191,47 @@ export default async function extRoutes(fastify: any): Promise<void> {
             data: result.items,
             meta: { page: Math.floor(offset / limit) + 1, limit, total: result.total ?? result.items.length },
         })
+    })
+
+    // POST /api/ext/:appKey/attendance/punch  (scope: attendance:write)
+    //
+    // Canonical attendance-write endpoint for biometric devices and vendor
+    // integrations. Path-keyed app + header-borne secret matches every other
+    // /api/ext/* route, so vendors have one consistent shape to learn.
+    //
+    // Body: { employeeId, punchType: 'in' | 'out', timestamp?, deviceId?, deviceName?, source? }
+    fastify.post('/:appKey/attendance/punch', {
+        preHandler: [...auth, requireScope('attendance:write')],
+        schema: { tags: ['External API'] },
+    }, async (request: any, reply: any) => {
+        const body = (request.body ?? {}) as {
+            employeeId?: string
+            punchType?: 'in' | 'out'
+            timestamp?: string
+            deviceId?: string
+            deviceName?: string
+            source?: 'biometric' | 'api' | 'mobile'
+        }
+        if (!body.employeeId || !body.punchType) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId and punchType are required' })
+        }
+        // Cross-tenant guard — every other /api/ext/* route is implicitly tenant-
+        // scoped (its service reads request.appCtx.tenantId), but a punch
+        // additionally carries an arbitrary employeeId, so confirm it belongs
+        // to the app's tenant before touching attendance.
+        const emp = await findEmployeeById(request.appCtx.tenantId, body.employeeId)
+        if (!emp) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Employee not found in your organization' })
+        }
+        const data = await externalPunch(request.appCtx.tenantId, {
+            employeeId: body.employeeId,
+            punchType: body.punchType,
+            timestamp: body.timestamp,
+            deviceId: body.deviceId,
+            deviceName: body.deviceName,
+            source: body.source,
+        })
+        return reply.code(201).send({ data })
     })
 
     // ─────────────────────────────────────────────────────────────────────────

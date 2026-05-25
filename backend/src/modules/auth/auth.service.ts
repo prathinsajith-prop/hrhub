@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt'
 import { eq, and, lt, sql } from 'drizzle-orm'
 import crypto from 'node:crypto'
 import { db } from '../../db/index.js'
-import { users, refreshTokens, tenants, passwordResetTokens, entities, employees, onboardingTemplateSteps, recruitmentStages, salaryComponents, offboardingInterviewQuestions, offboardingExitDocuments, offboardingFlowSettings } from '../../db/schema/index.js'
+import { users, refreshTokens, tenants, passwordResetTokens, entities, employees, onboardingTemplateSteps, recruitmentStages, salaryComponents, offboardingInterviewQuestions, offboardingExitDocuments, offboardingFlowSettings, shifts } from '../../db/schema/index.js'
 import { buildDefaultOnboardingTemplateRows } from '../onboarding/onboarding.defaults.js'
 import {
     buildDefaultInterviewQuestionRows,
@@ -10,6 +10,7 @@ import {
     buildDefaultOffboardingSettingsRow,
 } from '../offboardingFlow/offboarding.defaults.js'
 import { buildDefaultRecruitmentStageRows } from '../recruitment/recruitment.defaults.js'
+import { buildDefaultShiftRow } from '../shifts/shifts.defaults.js'
 import { buildDefaultSalaryComponentRows } from '../salary-components/salary-components.defaults.js'
 import { sendEmail, passwordResetEmail } from '../../plugins/email.js'
 import { loadEnv } from '../../config/env.js'
@@ -390,6 +391,11 @@ export async function registerTenant(input: {
         await tx.insert(offboardingFlowSettings).values(buildDefaultOffboardingSettingsRow(tenant.id))
         await tx.insert(offboardingInterviewQuestions).values(buildDefaultInterviewQuestionRows(tenant.id))
         await tx.insert(offboardingExitDocuments).values(buildDefaultExitDocumentRows(tenant.id))
+
+        // Default "General" shift (09:00–18:00, Fri/Sat off). Gives the
+        // portal a sensible default to show before HR has done any
+        // attendance setup; editable from Org Settings → Shifts.
+        await tx.insert(shifts).values(buildDefaultShiftRow(tenant.id))
 
         return { ok: true as const }
     })

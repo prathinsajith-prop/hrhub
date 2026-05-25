@@ -12,6 +12,12 @@ export interface User {
     tenantId: string
     department?: string | null
     employeeId?: string | null
+    /** HR-controlled — when false, hides the live check-in / check-out
+     *  buttons on the portal. Defaults to true. */
+    attendancePunchEnabled?: boolean
+    /** HR-controlled — when false, hides the manual back-fill panel on the
+     *  portal. Defaults to true. */
+    attendanceManualEntryEnabled?: boolean
 }
 
 export interface Tenant {

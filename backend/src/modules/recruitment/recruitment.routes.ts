@@ -1,4 +1,5 @@
-import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages } from './recruitment.service.js'
+import * as XLSX from 'xlsx'
+import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, validateBulkJobRows, bulkCreateJobs, type BulkJobInputRow } from './recruitment.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
@@ -220,6 +221,164 @@ export default async function (fastify: any): Promise<void> {
             payload: { jobId: job.id, action: 'create', actorId: request.user.id, actorSocketId: request.headers['x-socket-id'] ?? null },
         })
         return reply.code(201).send({ data: job })
+    })
+
+    // ─── Bulk import for Job Listings ────────────────────────────────────────
+    //
+    // Three-step UX, identical contract to /assets/bulk-template:
+    //   1. GET  /jobs/bulk-template   → download .xlsx with the column shape
+    //   2. POST /jobs/bulk-validate   → preview (no writes)
+    //   3. POST /jobs/bulk            → commit (one transaction, audit + WS)
+    //
+    // No FK lookups on this table — `department` and `location` are
+    // freeform — so the validator doesn't need a categories sheet on the
+    // template (unlike assets). Keep the template lean: 10 columns.
+
+    // GET /api/v1/jobs/bulk-template
+    fastify.get('/jobs/bulk-template', writeAuth, async (_request: any, reply: any) => {
+        const header = [
+            'title',
+            'department',
+            'location',
+            'type',
+            'status',
+            'openings',
+            'min_salary',
+            'max_salary',
+            'industry',
+            'closing_date',
+        ]
+        // Synthetic example so HR can see the expected shape at a glance
+        // — including the enum values. Comments in the cells are not
+        // supported by XLSX.aoa_to_sheet; the second sheet documents
+        // allowed enums instead.
+        const sample = [
+            'Senior Backend Engineer',
+            'Engineering',
+            'Dubai',
+            'full_time',
+            'open',
+            2,
+            18000,
+            28000,
+            'Software',
+            '2025-03-31',
+        ]
+
+        const wb = XLSX.utils.book_new()
+
+        const jobSheet = XLSX.utils.aoa_to_sheet([header, sample])
+        jobSheet['!cols'] = [
+            { wch: 28 }, { wch: 20 }, { wch: 16 }, { wch: 12 }, { wch: 10 },
+            { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 14 },
+        ]
+        XLSX.utils.book_append_sheet(wb, jobSheet, 'Jobs')
+
+        // Enum reference sheet — the two enum columns plus a short note
+        // on what to write. Saves HR from tabbing out to find the allowed
+        // values.
+        const enumSheet = XLSX.utils.aoa_to_sheet([
+            ['Enum values reference — copy one of these into the matching column on the Jobs sheet.'],
+            [],
+            ['type'],
+            ['full_time'],
+            ['part_time'],
+            ['contract'],
+            [],
+            ['status'],
+            ['draft'],
+            ['open'],
+            ['closed'],
+            ['on_hold'],
+            [],
+            ['Notes:'],
+            ['• title is required.'],
+            ['• type defaults to "full_time" when blank.'],
+            ['• status defaults to "draft" when blank.'],
+            ['• openings defaults to 1; must be a positive whole number.'],
+            ['• min_salary / max_salary are AED amounts; if both are filled, max must be ≥ min.'],
+            ['• closing_date: YYYY-MM-DD format.'],
+        ])
+        enumSheet['!cols'] = [{ wch: 80 }]
+        XLSX.utils.book_append_sheet(wb, enumSheet, 'Reference')
+
+        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+        reply
+            .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            .header('Content-Disposition', `attachment; filename="jobs-bulk-template.xlsx"`)
+            .send(buf)
+    })
+
+    // POST /api/v1/jobs/bulk-validate
+    fastify.post('/jobs/bulk-validate', writeAuth, async (request: any, reply: any) => {
+        const body = request.body as Record<string, unknown>
+        const rows = Array.isArray(body.rows) ? (body.rows as Array<Record<string, unknown>>) : []
+        if (rows.length === 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must contain at least one entry' })
+        }
+        if (rows.length > 500) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'maximum 500 rows per import' })
+        }
+        const normalized: BulkJobInputRow[] = rows.map((r, i) => ({
+            rowNumber: Number(r.rowNumber) || i + 1,
+            title: r.title != null ? String(r.title) : null,
+            department: r.department != null ? String(r.department) : null,
+            location: r.location != null ? String(r.location) : null,
+            type: r.type != null ? String(r.type) : null,
+            status: r.status != null ? String(r.status) : null,
+            openings: (r.openings as number | string | null | undefined) ?? null,
+            minSalary: (r.minSalary as number | string | null | undefined) ?? null,
+            maxSalary: (r.maxSalary as number | string | null | undefined) ?? null,
+            industry: r.industry != null ? String(r.industry) : null,
+            closingDate: r.closingDate != null ? String(r.closingDate) : null,
+        }))
+        const result = await validateBulkJobRows(request.user.tenantId, normalized)
+        return reply.send(result)
+    })
+
+    // POST /api/v1/jobs/bulk
+    fastify.post('/jobs/bulk', writeAuth, async (request: any, reply: any) => {
+        const body = request.body as Record<string, unknown>
+        const rows = Array.isArray(body.rows) ? (body.rows as Array<Record<string, unknown>>) : []
+        if (rows.length === 0) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must contain at least one entry' })
+        }
+        if (rows.length > 500) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'maximum 500 rows per import' })
+        }
+        const normalized: BulkJobInputRow[] = rows.map((r, i) => ({
+            rowNumber: Number(r.rowNumber) || i + 1,
+            title: r.title != null ? String(r.title) : null,
+            department: r.department != null ? String(r.department) : null,
+            location: r.location != null ? String(r.location) : null,
+            type: r.type != null ? String(r.type) : null,
+            status: r.status != null ? String(r.status) : null,
+            openings: (r.openings as number | string | null | undefined) ?? null,
+            minSalary: (r.minSalary as number | string | null | undefined) ?? null,
+            maxSalary: (r.maxSalary as number | string | null | undefined) ?? null,
+            industry: r.industry != null ? String(r.industry) : null,
+            closingDate: r.closingDate != null ? String(r.closingDate) : null,
+        }))
+        const result = await bulkCreateJobs(request.user.tenantId, normalized, request.user.id)
+        if (result.created > 0) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'job',
+                entityId: null,
+                entityName: `bulk import: ${result.created} job(s)`,
+                action: 'create',
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+            broadcastToTenant(request.user.tenantId, {
+                type: 'recruitment:job-changed',
+                payload: { jobId: null, action: 'bulk', actorId: request.user.id, actorSocketId: request.headers['x-socket-id'] ?? null },
+            })
+        }
+        return reply.code(201).send(result)
     })
 
     // PATCH /api/v1/jobs/:id

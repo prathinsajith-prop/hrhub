@@ -26,6 +26,7 @@ import {
   KeyRoundIcon,
   Settings2Icon,
   NetworkIcon,
+  Plug2Icon,
 } from "lucide-react"
 import { NavUser } from "@/components/layout/NavUser"
 import {
@@ -109,6 +110,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       items: [
         { title: t('nav.team', { defaultValue: 'Org & Team' }),             url: "/team",                  icon: Users2Icon },
         { title: t('nav.users', { defaultValue: 'Users & Roles' }),         url: "/users",                 icon: KeyRoundIcon },
+        { title: t('nav.apps', { defaultValue: 'Connected Apps' }),         url: "/apps",                  icon: Plug2Icon },
         { title: t('nav.orgSettings', { defaultValue: 'Org Settings' }),    url: "/organization-settings", icon: Settings2Icon },
       ],
     },
