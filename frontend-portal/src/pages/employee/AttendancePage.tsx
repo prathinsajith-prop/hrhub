@@ -243,7 +243,7 @@ export function EmployeeAttendancePage() {
       {/* Tabs row + week navigator + view switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-2">
         <div className="flex gap-4">
-          <button type="button" className="px-1 py-1 text-sm font-semibold border-b-2 border-primary text-primary">
+          <button type="button" className="p-1 text-sm font-semibold border-b-2 border-primary text-primary">
             Attendance Summary
           </button>
         </div>
@@ -430,7 +430,7 @@ function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: Da
               {d.cell?.checkIn ? (
                 <p className="text-sm font-medium tabular-nums">{formatTime(d.cell.checkIn)}</p>
               ) : (
-                <p className="text-sm text-muted-foreground">—</p>
+                <p className="text-sm text-muted-foreground">–</p>
               )}
             </div>
             <div className="relative h-5">
@@ -453,7 +453,7 @@ function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: Da
               {d.cell?.checkOut ? (
                 <p className="text-sm font-medium tabular-nums">{formatTime(d.cell.checkOut)}</p>
               ) : (
-                <p className="text-sm text-muted-foreground">—</p>
+                <p className="text-sm text-muted-foreground">–</p>
               )}
             </div>
             <div className="text-right">
@@ -766,7 +766,7 @@ function DayDetailDialog({
                           <PunchMeta punch={p.inPunch} />
                         </>
                       ) : (
-                        <span className="text-sm text-muted-foreground/70">—</span>
+                        <span className="text-sm text-muted-foreground/70">–</span>
                       )}
                     </div>
 
@@ -902,7 +902,7 @@ interface PunchPair {
 }
 
 function pairPunches(punches: AttendancePunch[]): PunchPair[] {
-  const sorted = [...punches].sort((a, b) =>
+  const sorted = punches.toSorted((a, b) =>
     new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime(),
   )
   const out: PunchPair[] = []
@@ -1188,7 +1188,7 @@ function ImportPunchesDialog({
               <label className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium cursor-pointer hover:bg-muted/60">
                 <Upload className="size-3.5" />
                 Choose file
-                <input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" />
+                <input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" aria-label="Choose CSV file" />
               </label>
             </div>
           </div>

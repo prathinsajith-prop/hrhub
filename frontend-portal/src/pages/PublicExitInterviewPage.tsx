@@ -251,8 +251,8 @@ function AnswerInput({ question, value, onChange }: { question: InterviewQuestio
     if (type === 'yes_no') {
         return (
             <div className="flex items-center gap-2">
-                <Button type="button" size="sm" variant={value === 'yes' ? 'default' : 'outline'} onClick={() => onChange('yes')}>Yes</Button>
-                <Button type="button" size="sm" variant={value === 'no' ? 'default' : 'outline'} onClick={() => onChange('no')}>No</Button>
+                <Button type="button" size="sm" variant={value === 'yes' ? 'default' : 'outline'} onClick={() => onChange('yes')} aria-label="Answer Yes">Yes</Button>
+                <Button type="button" size="sm" variant={value === 'no' ? 'default' : 'outline'} onClick={() => onChange('no')} aria-label="Answer No">No</Button>
             </div>
         )
     }
@@ -287,7 +287,7 @@ function AnswerInput({ question, value, onChange }: { question: InterviewQuestio
             <div className="flex flex-col gap-1.5">
                 {(question.options ?? []).map((o) => (
                     <label key={o} className="flex items-center gap-2 cursor-pointer text-sm">
-                        <input type="radio" name={question.id} checked={value === o} onChange={() => onChange(o)} className="size-4 accent-primary" />
+                        <input type="radio" name={question.id} checked={value === o} onChange={() => onChange(o)} className="size-4 accent-primary" aria-label={o} />
                         <span>{o}</span>
                     </label>
                 ))}
@@ -306,6 +306,7 @@ function AnswerInput({ question, value, onChange }: { question: InterviewQuestio
                             checked={checked}
                             onChange={() => onChange(checked ? arr.filter((x) => x !== o) : [...arr, o])}
                             className="size-4 accent-primary"
+                            aria-label={o}
                         />
                         <span>{o}</span>
                     </label>

@@ -22,7 +22,7 @@ import { Link } from 'react-router-dom'
 import {
   Calendar, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon,
   CalendarDays, Filter, MoreHorizontal, X, FileClock, MonitorSmartphone,
-  LogIn, LogOut,
+  LogIn, LogOut, MapPin, MapPinOff,
 } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -44,6 +44,7 @@ import {
   type CalendarCell, type CalendarEmployee,
 } from '@/hooks/useAttendance'
 import { useShifts } from '@/hooks/useShifts'
+import { useGeolocationPermission } from '@/hooks/useGeolocationPermission'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -208,8 +209,22 @@ export function MyAttendancePage() {
   const checkOut = useCheckOut()
   const isCheckedIn = !!todayInfo?.cell?.checkIn && !todayInfo?.cell?.checkOut
 
+  // Geolocation gate — employee can only check in when the device's location
+  // permission is granted. Mirrors the policy on physical biometric devices
+  // (you can't punch in without being at the reader). Check-out is still
+  // allowed without location since the user is already on premises.
+  const geo = useGeolocationPermission()
+  const locationReady = geo.status === 'granted'
+  const locationUnsupported = geo.status === 'unsupported'
+
   const handleCheckIn = () => {
     if (!employeeId) return
+    if (!locationReady) {
+      // Defensive — the button is disabled in this state, but a stray call
+      // shouldn't slip through.
+      void geo.request()
+      return
+    }
     checkIn.mutate(employeeId)
   }
   const handleCheckOut = () => {
@@ -340,7 +355,7 @@ export function MyAttendancePage() {
               <span className="text-xs leading-none tabular-nums">{liveTimer}</span>
             </div>
           </Button>
-        ) : (
+        ) : locationReady ? (
           <Button
             onClick={handleCheckIn}
             loading={checkIn.isPending}
@@ -352,8 +367,62 @@ export function MyAttendancePage() {
               <span className="text-xs leading-none tabular-nums">{liveTimer}</span>
             </div>
           </Button>
+        ) : (
+          // Location not granted — block check-in and surface a primary CTA
+          // that re-requests permission. Disabled "Check-in" stays visible so
+          // users still see what they're trying to do.
+          <div className="flex items-center gap-2">
+            <Button
+              disabled
+              className="bg-emerald-600/40 text-white cursor-not-allowed"
+              title="Enable location to check in"
+            >
+              <LogIn className="size-4 me-1" />
+              <div className="flex flex-col items-start">
+                <span className="text-xs leading-none">Check-in</span>
+                <span className="text-[10px] leading-none opacity-80">Location required</span>
+              </div>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => geo.request()}
+              disabled={locationUnsupported}
+              title={locationUnsupported
+                ? 'This device does not support geolocation'
+                : geo.status === 'denied'
+                  ? 'Permission was blocked — re-enable it in your browser/OS settings'
+                  : 'Allow location access to check in'}
+              className="gap-1.5"
+            >
+              {locationUnsupported ? (
+                <MapPinOff className="size-4" />
+              ) : (
+                <MapPin className="size-4" />
+              )}
+              <span className="text-xs">
+                {locationUnsupported
+                  ? 'Not supported'
+                  : geo.status === 'denied'
+                    ? 'Unblock location'
+                    : 'Enable location'}
+              </span>
+            </Button>
+          </div>
         )}
       </div>
+      {!isCheckedIn && !locationReady && (
+        // Helper text under the widget so users understand why the action is
+        // gated. Kept short — the button title="" carries the long-form hint.
+        <p className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
+          <MapPinOff className="size-3.5" />
+          {locationUnsupported
+            ? 'Your device does not provide geolocation, so attendance check-in is unavailable here.'
+            : geo.status === 'denied'
+              ? 'Location is blocked. Open your browser settings and allow location for this site, then click "Unblock location".'
+              : 'Click "Enable location" so we can record where the check-in happened.'}
+        </p>
+      )}
 
       {/* Body */}
       <div className="mt-4">

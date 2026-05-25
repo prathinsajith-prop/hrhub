@@ -12,6 +12,7 @@ import {
 import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { findById } from '../../repositories/employees.repo.js'
 import { e400, e403 } from '../../lib/errors.js'
+import { buildAppOrJwtAuth } from './external-auth.js'
 
 // ─── Calendar helpers (single tenant-scoped read model) ──────────────────
 
@@ -566,7 +567,15 @@ export async function attendanceRoutes(fastify: any) {
     })
 
     // POST /api/v1/attendance/external-punch — biometric / mobile device integration
-    fastify.post('/attendance/external-punch', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
+    //
+    // Dual auth: accepts either an HR JWT (Authorization: Bearer <jwt>) or a
+    // Connected-App key pair (X-App-Key + X-API-Secret) with the
+    // `attendance:write` scope. Vendor devices should use the app-key path —
+    // see Org → Connected Apps for issuance + rotation.
+    fastify.post('/attendance/external-punch', {
+        preHandler: [buildAppOrJwtAuth(fastify, 'attendance:write')],
+        schema: { tags: ['Attendance'] },
+    }, async (request: any, reply: any) => {
         const { employeeId, timestamp, deviceId, deviceName, punchType, source } = request.body as {
             employeeId: string
             timestamp?: string
@@ -583,10 +592,15 @@ export async function attendanceRoutes(fastify: any) {
         const emp = await findById(request.user.tenantId, employeeId)
         if (!emp) return reply.code(403).send(e403('Employee not found in your organization'))
 
-        // Non-elevated roles can only punch for themselves.
-        const isElevated = ['hr_manager', 'super_admin', 'pro_officer'].includes(request.user.role)
-        if (!isElevated && request.user.employeeId !== employeeId) {
-            return reply.code(403).send(e403('You can only record attendance for yourself'))
+        // App-key callers are scoped at app creation time (attendance:write) and
+        // bypass the per-user role gate. JWT callers retain the existing
+        // role-based check (employees can only punch for themselves).
+        const isAppCall = !!request.appCtx
+        if (!isAppCall) {
+            const isElevated = ['hr_manager', 'super_admin', 'pro_officer'].includes(request.user.role)
+            if (!isElevated && request.user.employeeId !== employeeId) {
+                return reply.code(403).send(e403('You can only record attendance for yourself'))
+            }
         }
         const data = await externalPunch(request.user.tenantId, { employeeId, timestamp, deviceId, deviceName, punchType, source })
         return reply.send({ data })

@@ -6,6 +6,7 @@ import {
     CalendarDays, Clock, UserCheck, UserX,
     AlarmClock, Home, CalendarOff, TrendingUp, Edit2, RefreshCcw, Zap, Fingerprint,
     Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, X, Check,
+    ArrowUpRight,
 } from 'lucide-react'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -21,6 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { DatePicker } from '@/components/ui/date-picker'
 import { toast } from '@/components/ui/overlays'
 import {
     StatusBadge, EmptyState, TableSkeleton, InitialsAvatar,
@@ -30,7 +33,7 @@ import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { useAttendance, useAttendanceCalendar, useUpsertAttendance, useExternalPunch, useAddManualPunch, type AttendanceRecord } from '@/hooks/useAttendance'
-import { AttendanceCalendarGrid } from '@/components/shared/AttendanceCalendarGrid'
+import { AttendanceCalendarGrid, AttendanceLegendPopover } from '@/components/shared/AttendanceCalendarGrid'
 import { MonthSwitcher } from '@/components/shared/MonthSwitcher'
 import { resolveMonthFromOffset } from '@/lib/monthRange'
 import { useEmployees } from '@/hooks/useEmployees'
@@ -90,6 +93,21 @@ function fmtTime(ts: string | undefined) {
     return new Date(ts).toLocaleTimeString('en-AE', { hour: '2-digit', minute: '2-digit' })
 }
 
+/**
+ * Format a Date as the two pieces the external-punch form needs:
+ *   - `date` is ISO `YYYY-MM-DD` (consumed by our shadcn DatePicker)
+ *   - `time` is 24-h `HH:mm` (consumed by `<Input type="time">`)
+ * Both default to "now" in the user's local time zone so HR rarely has to
+ * change them.
+ */
+function nowDateTimePieces(d: Date = new Date()): { date: string; time: string } {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return {
+        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+        time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    }
+}
+
 // ─────────────────────────── Page ────────────────────────────────────────
 
 export function AttendancePage() {
@@ -98,12 +116,21 @@ export function AttendancePage() {
     const { can } = usePermissions()
     const canManage = can('manage_attendance')
     const [monthOffset, setMonthOffset] = useState(0)
-    const [filterEmployee, setFilterEmployee] = useState('')
-    const [filterStatus, setFilterStatus] = useState<'all' | AttendanceRecord['status']>('all')
     const [editing, setEditing] = useState<AttendanceRecord | null>(null)
     const [punchEmpId, setPunchEmpId] = useState('')
     const [punchType, setPunchType] = useState<'in' | 'out'>('in')
-    const [punchTimestamp, setPunchTimestamp] = useState('')
+    const [punchDate, setPunchDate] = useState<string>(() => nowDateTimePieces().date)
+    const [punchTime, setPunchTime] = useState<string>(() => nowDateTimePieces().time)
+    // Punch-history filters. Date defaults to "today" so the table opens to
+    // the most-relevant day; HR can step back via the DatePicker. Employee +
+    // status default to "all".
+    const [historyDate, setHistoryDate] = useState<string>(() => nowDateTimePieces().date)
+    const [filterEmployee, setFilterEmployee] = useState('')
+    const [filterStatus, setFilterStatus] = useState<'all' | AttendanceRecord['status']>('all')
+    // Row-click opens a modal previewing the employee's full month of
+    // attendance instead of leaving the page. The modal exposes a CTA to
+    // navigate to their profile when HR actually needs the full record.
+    const [attendanceModal, setAttendanceModal] = useState<{ id: string; name: string; avatarUrl: string | null } | null>(null)
     const externalPunch = useExternalPunch()
     const [importOpen, setImportOpen] = useState(false)
 
@@ -134,8 +161,7 @@ export function AttendancePage() {
     const { data: records, isLoading, refetch, isFetching } = useAttendance({
         startDate: start,
         endDate: end,
-        employeeId: filterEmployee || undefined,
-        status: advancedStatus || (filterStatus !== 'all' ? filterStatus : undefined),
+        status: advancedStatus,
         filter: filterStr,
         limit: 10000,
     })
@@ -202,6 +228,18 @@ export function AttendancePage() {
             },
         }) as unknown as AttendanceRecord[],
         [list, attendanceClientFilters, search.searchInput],
+    )
+    // Punch-history view shows only the day + employee + status the user
+    // picked. Built on top of the existing filter chain so the advanced
+    // filter system still feeds into it.
+    const historyRows = useMemo(
+        () => filteredAttendance.filter((r) => {
+            if (r.date !== historyDate) return false
+            if (filterEmployee && r.employeeId !== filterEmployee) return false
+            if (filterStatus !== 'all' && r.status !== filterStatus) return false
+            return true
+        }),
+        [filteredAttendance, historyDate, filterEmployee, filterStatus],
     )
 
     const summary = useMemo(() => {
@@ -491,8 +529,36 @@ export function AttendancePage() {
                 }
             />
 
-            {/* KPI strip - 8 tiles */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+            <Tabs defaultValue="summary" className="space-y-4">
+                {/* Underlined-tab pattern (Material / GitHub style): bold primary
+                    text + 2-px accent bar at the bottom of the active tab reads
+                    unambiguously as "selected" without relying on a faint
+                    background tint. */}
+                <TabsList className="bg-background border-b border-border rounded-none h-auto p-0 gap-0 w-full justify-start flex-wrap">
+                    {([
+                        { value: 'summary',         label: t('attendance.tabs.summary', 'Summary') },
+                        { value: 'punch-history',   label: t('attendance.tabs.punchHistory', 'Punch history') },
+                        { value: 'calendar',        label: t('attendance.tabs.calendar', 'Calendar view') },
+                        ...(canManage ? [{ value: 'external-punch', label: t('attendance.tabs.externalPunch', 'External Punch') }] : []),
+                    ] as const).map((tab) => (
+                        <TabsTrigger
+                            key={tab.value}
+                            value={tab.value}
+                            className={cn(
+                                'rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground -mb-px',
+                                'shadow-none transition-colors hover:text-foreground',
+                                'data-[state=active]:border-primary data-[state=active]:text-primary',
+                                'data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:shadow-none',
+                            )}
+                        >
+                            {tab.label}
+                        </TabsTrigger>
+                    ))}
+                </TabsList>
+
+                <TabsContent value="summary" className="space-y-4 mt-4">
+                    {/* KPI strip - 8 tiles */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
                 <KpiCardCompact
                     label={STATUS_LABEL.present}
                     value={summary.counts.present ?? 0}
@@ -648,9 +714,11 @@ export function AttendancePage() {
                     </CardContent>
                 </Card>
             )}
+                </TabsContent>
 
-            {/* External punch - HR only */}
-            {canManage && (
+                <TabsContent value="external-punch" className="space-y-4 mt-4">
+                    {/* External punch - HR only */}
+                    {canManage && (
                 <Card>
                     <CardHeader className="pb-3">
                         <CardTitle className="text-sm flex items-center gap-1.5">
@@ -679,32 +747,60 @@ export function AttendancePage() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-1.5 w-52">
-                                <Label className="text-xs">Timestamp (optional)</Label>
-                                <Input
-                                    type="datetime-local"
-                                    value={punchTimestamp}
-                                    onChange={(e) => setPunchTimestamp(e.target.value)}
-                                    className="h-9 text-sm"
-                                />
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between gap-2">
+                                    <Label className="text-xs">Punch time</Label>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const now = nowDateTimePieces()
+                                            setPunchDate(now.date)
+                                            setPunchTime(now.time)
+                                        }}
+                                        className="text-[10px] font-medium text-primary hover:underline"
+                                    >
+                                        Now
+                                    </button>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <DatePicker
+                                        value={punchDate}
+                                        onChange={(v) => setPunchDate(v)}
+                                        className="w-40"
+                                    />
+                                    <Input
+                                        type="time"
+                                        value={punchTime}
+                                        onChange={(e) => setPunchTime(e.target.value)}
+                                        className="h-9 w-28 text-sm tabular-nums"
+                                    />
+                                </div>
                             </div>
                             <Button
                                 size="sm"
                                 loading={externalPunch.isPending}
                                 disabled={!punchEmpId}
                                 onClick={() => {
+                                    // Build an ISO timestamp from the (date, time) pair. The DatePicker
+                                    // and `<input type="time">` both emit local-time strings, so we
+                                    // combine into the local Date and toISOString() applies the offset.
+                                    const combinedIso = (punchDate && punchTime)
+                                        ? new Date(`${punchDate}T${punchTime}`).toISOString()
+                                        : undefined
                                     externalPunch.mutate(
                                         {
                                             employeeId: punchEmpId,
                                             punchType,
-                                            timestamp: punchTimestamp ? new Date(punchTimestamp).toISOString() : undefined,
+                                            timestamp: combinedIso,
                                             source: 'hr_manual',
                                         },
                                         {
                                             onSuccess: () => {
                                                 toast.success('Punch recorded', `Punch-${punchType} logged successfully.`)
                                                 setPunchEmpId('')
-                                                setPunchTimestamp('')
+                                                const now = nowDateTimePieces()
+                                                setPunchDate(now.date)
+                                                setPunchTime(now.time)
                                             },
                                             onError: () => toast.error('Punch failed', 'Could not record the punch. Please try again.'),
                                         },
@@ -718,30 +814,50 @@ export function AttendancePage() {
                     </CardContent>
                 </Card>
             )}
+                </TabsContent>
 
-            {/* Monthly calendar grid (HR / dept_head whole-team view) */}
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Calendar view</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                        Day-by-day status for every employee in {label}.
-                    </p>
-                </CardHeader>
-                <CardContent>
-                    <AttendanceCalendarGrid data={calendarData} loading={calendarLoading} />
-                </CardContent>
-            </Card>
+                <TabsContent value="calendar" className="space-y-4 mt-4">
+                    {/* Monthly calendar grid (HR / dept_head whole-team view) */}
+                    <Card>
+                        <CardHeader className="flex-row items-start justify-between gap-3 pb-3">
+                            <div className="min-w-0">
+                                <CardTitle className="text-base">Calendar view</CardTitle>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Day-by-day status for every employee in {label}.
+                                </p>
+                            </div>
+                            <AttendanceLegendPopover />
+                        </CardHeader>
+                        <CardContent>
+                            <AttendanceCalendarGrid data={calendarData} loading={calendarLoading} showLegend={false} />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
 
-            {/* Records */}
-            <Card>
+                <TabsContent value="punch-history" className="space-y-4 mt-4">
+                    {/* Records */}
+                    <Card>
                 <CardHeader className="flex-row items-start sm:items-center justify-between gap-3 flex-wrap pb-4">
                     <div>
                         <CardTitle className="text-base">Punch history</CardTitle>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                            {summary.totalRecords} records in {label}
+                            {historyRows.length} record{historyRows.length === 1 ? '' : 's'} on {historyDate}
                         </p>
                     </div>
-                    <div className="flex flex-wrap gap-2 items-center">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <DatePicker
+                            value={historyDate}
+                            onChange={(v) => setHistoryDate(v || nowDateTimePieces().date)}
+                            className="w-44"
+                        />
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => setHistoryDate(nowDateTimePieces().date)}
+                        >
+                            Today
+                        </Button>
                         <EmployeeSelect
                             value={filterEmployee}
                             onValueChange={setFilterEmployee}
@@ -768,28 +884,47 @@ export function AttendancePage() {
                 <CardContent>
                     {isLoading ? (
                         <TableSkeleton columns={8} rows={8} />
-                    ) : filteredAttendance.length === 0 ? (
+                    ) : historyRows.length === 0 ? (
                         <EmptyState
                             icon={CalendarDays}
                             title={t('attendance.noRecords')}
-                            description={`No matching records in ${label}.`}
+                            description={`No attendance records on ${historyDate}.`}
                         />
                     ) : (
                         <DataTable
                             columns={columns}
-                            data={filteredAttendance}
-                            advancedFilter={{
-                                search,
-                                filters: ATTENDANCE_FILTERS,
-                                placeholder: 'Search by employee, status…',
-                            }}
+                            data={historyRows}
                             pageSize={10}
                             emptyMessage={t('attendance.noRecords')}
-                            onRowClick={(row) => navigate(`/employees/${row.employeeId}`)}
+                            onRowClick={(row) => {
+                                const emp = empMap.get(row.employeeId)
+                                setAttendanceModal({
+                                    id: row.employeeId,
+                                    name: row.employeeName ?? emp?.name ?? '—',
+                                    // Prefer the row's avatar URL (already resolved by the
+                                    // attendance endpoint), fall back to the empMap entry
+                                    // (resolved by the employees list endpoint) so the
+                                    // user-uploaded image shows up either way.
+                                    avatarUrl: row.employeeAvatarUrl ?? emp?.avatarUrl ?? null,
+                                })
+                            }}
                         />
                     )}
                 </CardContent>
             </Card>
+                </TabsContent>
+            </Tabs>
+
+            <EmployeeMonthAttendanceDialog
+                state={attendanceModal}
+                onClose={() => setAttendanceModal(null)}
+                monthLabel={label}
+                calendarData={calendarData}
+                onViewProfile={(id) => {
+                    setAttendanceModal(null)
+                    navigate(`/employees/${id}`)
+                }}
+            />
 
             <EditAttendanceDialog
                 key={editing?.id ?? 'none'}
@@ -838,6 +973,132 @@ export function AttendancePage() {
         </PageWrapper>
     )
 }
+
+// ─── Employee Month-Attendance Dialog ─────────────────────────────
+//
+// Opens when HR clicks a punch-history row. Shows the employee's current-
+// month calendar slice + summary KPIs, with a CTA to jump to their full
+// profile when they need more than the at-a-glance view.
+
+interface EmployeeMonthAttendanceDialogProps {
+    state: { id: string; name: string; avatarUrl: string | null } | null
+    onClose: () => void
+    monthLabel: string
+    calendarData: import('@/hooks/useAttendance').CalendarResponse | undefined
+    onViewProfile: (id: string) => void
+}
+
+function EmployeeMonthAttendanceDialog({
+    state, onClose, monthLabel, calendarData, onViewProfile,
+}: EmployeeMonthAttendanceDialogProps) {
+    const open = !!state
+    // Slice the calendar payload to just the chosen employee so we can reuse
+    // AttendanceCalendarGrid in its hideEmployeeColumn mode.
+    const employeeSlice = useMemo(() => {
+        if (!state || !calendarData) return undefined
+        const emp = calendarData.employees.find((e) => e.id === state.id)
+        if (!emp) return undefined
+        return { ...calendarData, employees: [emp] }
+    }, [state, calendarData])
+    const employee = employeeSlice?.employees[0]
+    // Per-status counts from the same cells the grid renders — keeps the
+    // summary perfectly consistent with what the user sees in the calendar.
+    const counts = useMemo(() => {
+        const acc = { present: 0, late: 0, absent: 0, leave: 0, wfh: 0, holiday: 0, weekOff: 0, other: 0 }
+        if (!employee) return acc
+        for (const c of employee.cells) {
+            if (!c.code) continue
+            if (c.code === 'P') acc.present++
+            else if (c.code === 'P-late' || c.code === 'P-short') acc.late++
+            else if (c.code === 'A') acc.absent++
+            else if (['AL', 'SL', 'ML', 'PL', 'BL', 'HJ'].includes(c.code)) acc.leave++
+            else if (c.code === 'WFH') acc.wfh++
+            else if (c.code === 'H') acc.holiday++
+            else if (c.code === 'WO') acc.weekOff++
+            else acc.other++
+        }
+        return acc
+    }, [employee])
+
+    return (
+        <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+            <DialogContent className="sm:max-w-5xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+                <DialogHeader className="px-6 pt-5 pb-3 border-b">
+                    <div className="flex items-start justify-between gap-3 pe-8">
+                        <div className="flex items-center gap-3 min-w-0">
+                            {/* Avatar source order: state.avatarUrl (resolved on the
+                                punch-history row click) → calendar-slice avatarUrl →
+                                initials fallback. Ensures the user-uploaded photo
+                                appears whether or not the calendar slice has resolved. */}
+                            <InitialsAvatar
+                                name={employee?.name ?? state?.name ?? '—'}
+                                src={state?.avatarUrl ?? employee?.avatarUrl ?? undefined}
+                                size="lg"
+                            />
+                            <div className="min-w-0">
+                                <DialogTitle className="truncate text-base">
+                                    {employee?.name ?? state?.name ?? '—'}
+                                </DialogTitle>
+                                <p className="text-xs text-muted-foreground truncate">
+                                    {employee?.designation ?? employee?.department ?? 'Attendance summary'} · {monthLabel}
+                                </p>
+                            </div>
+                        </div>
+                        {state ? (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 shrink-0"
+                                onClick={() => onViewProfile(state.id)}
+                            >
+                                <ArrowUpRight className="size-3.5" />
+                                View profile
+                            </Button>
+                        ) : null}
+                    </div>
+                </DialogHeader>
+                <div className="overflow-y-auto px-6 py-4 space-y-4">
+                    {/* KPI strip */}
+                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                        <KpiCardCompact label="Present" value={counts.present} color="green" icon={UserCheck} />
+                        <KpiCardCompact label="Late" value={counts.late} color="amber" icon={AlarmClock} />
+                        <KpiCardCompact label="Absent" value={counts.absent} color="red" icon={UserX} />
+                        <KpiCardCompact label="Leave" value={counts.leave} color="cyan" icon={CalendarOff} />
+                        <KpiCardCompact label="WFH" value={counts.wfh} color="blue" icon={Home} />
+                        <KpiCardCompact label="Holiday" value={counts.holiday} color="red" icon={CalendarDays} />
+                        <KpiCardCompact label="Week Off" value={counts.weekOff} color="amber" icon={Clock} />
+                    </div>
+                    {/* Original tabular grid (one row, 31 cells) in compact mode so a
+                        full month fits without horizontal scroll. */}
+                    {employeeSlice ? (
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                    {monthLabel}
+                                </h3>
+                                <AttendanceLegendPopover />
+                            </div>
+                            <AttendanceCalendarGrid
+                                data={employeeSlice}
+                                loading={false}
+                                hideEmployeeColumn
+                                showLegend={false}
+                                compact
+                            />
+                        </div>
+                    ) : (
+                        <EmptyState
+                            icon={CalendarDays}
+                            title="No attendance loaded"
+                            description="This employee has no attendance records in the selected month."
+                        />
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 
 // ─── Edit Attendance Dialog ───────────────────────────────────────
 function toLocalDateTimeInput(iso?: string): string {

@@ -61,6 +61,7 @@ import {
 } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { RichTextEditor } from '@/components/ui/rich-text-editor'
 import {
     Dialog,
     DialogContent,
@@ -1106,7 +1107,7 @@ function DocumentsStep() {
             ) : !data || data.length === 0 ? (
                 <EmptyState text={t('orgSettings.offboardingFlow.documents.empty')} />
             ) : (
-                <ul className="grid sm:grid-cols-2 gap-3">
+                <ul className="flex flex-col gap-2">
                     {data.map(d => (
                         <li
                             key={d.id}
@@ -1260,11 +1261,18 @@ function DocumentEditorDialog({
             <DialogContent className="max-w-4xl 3xl:max-w-6xl">
                 <DialogHeader>
                     <div className="flex items-center justify-between gap-3 pe-8">
-                        <DialogTitle className="flex items-center gap-2">
-                            <FileText className="size-4 text-muted-foreground" />
-                            {editing
-                                ? t('orgSettings.offboardingFlow.documents.editTitle')
-                                : t('orgSettings.offboardingFlow.documents.addTitle')}
+                        <DialogTitle className="flex items-center gap-2 min-w-0">
+                            <FileText className="size-4 text-muted-foreground shrink-0" />
+                            {editing ? (
+                                <span className="flex items-baseline gap-2 min-w-0">
+                                    <span className="text-muted-foreground text-sm font-normal shrink-0">
+                                        {t('orgSettings.offboardingFlow.documents.editTitle')}:
+                                    </span>
+                                    <span className="truncate">{editing.name}</span>
+                                </span>
+                            ) : (
+                                t('orgSettings.offboardingFlow.documents.addTitle')
+                            )}
                         </DialogTitle>
                         <div className="flex items-center gap-1 rounded-md border bg-muted/30 p-0.5">
                             <button
@@ -1301,23 +1309,32 @@ function DocumentEditorDialog({
                             </div>
                             <div>
                                 <Label className="text-xs">
-                                    {t('orgSettings.offboardingFlow.documents.bodyTemplate', { defaultValue: 'Letter body (HTML)' })}
+                                    {t('orgSettings.offboardingFlow.documents.bodyTemplate', { defaultValue: 'Letter body' })}
                                 </Label>
-                                <Textarea
-                                    rows={16}
+                                <RichTextEditor
                                     value={bodyTemplate}
-                                    onChange={(e) => setBodyTemplate(e.target.value)}
-                                    className="font-mono text-xs leading-relaxed"
-                                    placeholder={'<p>{{today}}</p>\n<p>Dear {{employeeName}}, …</p>'}
+                                    onChange={setBodyTemplate}
+                                    placeholder={t('orgSettings.offboardingFlow.documents.bodyPlaceholder', { defaultValue: 'Write the letter body. Use the variables below to insert dynamic fields.' })}
+                                    minHeight={300}
                                 />
                                 <p className="text-[11px] text-muted-foreground mt-1.5">
-                                    {t('orgSettings.offboardingFlow.documents.vars', { defaultValue: 'Variables:' })}{' '}
+                                    {t('orgSettings.offboardingFlow.documents.vars', { defaultValue: 'Click a variable to insert at the end:' })}{' '}
                                     {Object.keys(SAMPLE_VARS).map(k => (
                                         <button
                                             key={k}
                                             type="button"
                                             className="font-mono mx-0.5 px-1.5 py-0.5 rounded border bg-muted/40 hover:bg-muted text-[10px] cursor-pointer"
-                                            onClick={() => setBodyTemplate(prev => `${prev}{{${k}}}`)}
+                                            onClick={() => setBodyTemplate(prev => {
+                                                // Append the {{var}} token at the end of the HTML. Tiptap
+                                                // normalises loose text into a paragraph on re-sync, so the
+                                                // editor stays well-formed regardless of where the existing
+                                                // content ends.
+                                                const token = `{{${k}}}`
+                                                if (!prev) return `<p>${token}</p>`
+                                                return prev.replace(/(<\/p>)\s*$/, ` ${token}$1`) === prev
+                                                    ? `${prev}<p>${token}</p>`
+                                                    : prev.replace(/(<\/p>)\s*$/, ` ${token}$1`)
+                                            })}
                                         >
                                             {`{{${k}}}`}
                                         </button>
