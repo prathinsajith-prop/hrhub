@@ -12,6 +12,18 @@ import {
 import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { findById } from '../../repositories/employees.repo.js'
 import { e400, e403 } from '../../lib/errors.js'
+import { z } from 'zod'
+import { validate, uuidSchema } from '../../lib/validation.js'
+
+// ── External punch (biometric / mobile / API) ─────────────────────────
+const externalPunchSchema = z.object({
+    employeeId: uuidSchema,
+    punchType: z.enum(['in', 'out']),
+    timestamp: z.string().datetime({ offset: true }).optional(),
+    deviceId: z.string().max(200).optional(),
+    deviceName: z.string().max(200).optional(),
+    source: z.enum(['biometric', 'api', 'mobile']).optional(),
+})
 
 // ─── Calendar helpers (single tenant-scoped read model) ──────────────────
 
@@ -567,17 +579,7 @@ export async function attendanceRoutes(fastify: any) {
 
     // POST /api/v1/attendance/external-punch — biometric / mobile device integration
     fastify.post('/attendance/external-punch', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
-        const { employeeId, timestamp, deviceId, deviceName, punchType, source } = request.body as {
-            employeeId: string
-            timestamp?: string
-            deviceId?: string
-            deviceName?: string
-            punchType: 'in' | 'out'
-            source?: 'biometric' | 'api' | 'mobile'
-        }
-        if (!employeeId || !punchType) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId and punchType are required' })
-        }
+        const { employeeId, timestamp, deviceId, deviceName, punchType, source } = validate(externalPunchSchema, request.body)
         // Verify the employee belongs to the caller's tenant before accepting any punch —
         // without this an attacker from tenant A could punch in/out for employees in tenant B.
         const emp = await findById(request.user.tenantId, employeeId)
