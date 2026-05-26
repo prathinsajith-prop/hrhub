@@ -49,10 +49,31 @@ export function useAttendance(params: {
     })
 }
 
+/**
+ * Punch payload accepted by /attendance/check-in and /attendance/check-out.
+ * Callers can pass just the employee ID (back-compat) or an object with
+ * geolocation + notes — the route stores whatever it receives. Coords are
+ * optional from the backend's perspective but, if the caller asks the
+ * browser for them, we want them on the wire so the punch is geo-tagged.
+ */
+export interface PunchInput {
+    employeeId: string
+    latitude?: number | null
+    longitude?: number | null
+    locationName?: string | null
+    notes?: string | null
+    deviceId?: string | null
+}
+
+function normalizePunch(input: string | PunchInput): PunchInput {
+    return typeof input === 'string' ? { employeeId: input } : input
+}
+
 export function useCheckIn() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (employeeId: string) => api.post('/attendance/check-in', { employeeId }),
+        mutationFn: (input: string | PunchInput) =>
+            api.post('/attendance/check-in', normalizePunch(input)),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
     })
 }
@@ -60,7 +81,8 @@ export function useCheckIn() {
 export function useCheckOut() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (employeeId: string) => api.post('/attendance/check-out', { employeeId }),
+        mutationFn: (input: string | PunchInput) =>
+            api.post('/attendance/check-out', normalizePunch(input)),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
     })
 }

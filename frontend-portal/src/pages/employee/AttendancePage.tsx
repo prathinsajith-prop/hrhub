@@ -11,7 +11,7 @@ import {
 import {
   useAttendanceCalendar, useCheckIn, useCheckOut,
   usePunchesForDay, useAddManualPunch, useDeletePunch,
-  type CalendarCell, type CalendarEmployee, type AttendancePunch, type PunchBody,
+  type CalendarEmployee, type AttendancePunch, type PunchBody,
 } from '@/hooks/useAttendance'
 import { useAuthStore } from '@/store/authStore'
 import { useAccountFlags } from '@/hooks/useMe'
@@ -25,18 +25,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertModal } from '@/components/shared/AlertModal'
 import { cn } from '@/lib/utils'
 import { ROUTES } from '@/lib/routes'
+import { formatTime, formatDayLabel, toISODate, toISOMonth } from '@/lib/datetime'
+import {
+  classify, statusLabel, statusTone, computeStats,
+  type DayInfo, type DayClassification, type AttendanceWeekStats,
+} from '@/lib/attendance/calendar'
+import { useLiveDuration } from '@/hooks/useLiveDuration'
 
-// ─── Helpers (mirror main app's MyAttendancePage) ─────────────────────────
+// ─── Local helpers ────────────────────────────────────────────────────
+// Calendar window arithmetic — kept local because they're only used by
+// this page and the parent week selector. The day-format / ISO helpers
+// live in lib/datetime.ts and are imported above.
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-function toISODate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-function formatDayLabel(d: Date): string {
-  return `${String(d.getDate()).padStart(2, '0')}-${MONTHS_SHORT[d.getMonth()]}-${d.getFullYear()}`
-}
 function startOfWeek(d: Date): Date {
   const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
   out.setDate(out.getDate() - out.getDay())
@@ -47,31 +49,6 @@ function addDays(d: Date, n: number): Date {
   out.setDate(out.getDate() + n)
   return out
 }
-function isoMonth(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-/** Ticks every second so the check-in / check-out button can show a live
- *  H:MM:SS timer. When `endIso` is set, the duration is frozen at end−start;
- *  when only `startIso` is set, it counts up from now. */
-function useLiveDuration(startIso: string | null | undefined, endIso: string | null | undefined): string {
-    const [now, setNow] = useState(() => Date.now())
-    const running = !!startIso && !endIso
-    useEffect(() => {
-        if (!running) return
-        const id = setInterval(() => setNow(Date.now()), 1000)
-        return () => clearInterval(id)
-    }, [running])
-    if (!startIso) return '0:00:00'
-    const startMs = Date.parse(startIso)
-    if (Number.isNaN(startMs)) return '0:00:00'
-    const endMs = endIso ? Date.parse(endIso) : now
-    const secs = Math.max(0, Math.floor((endMs - startMs) / 1000))
-    const h = Math.floor(secs / 3600)
-    const m = Math.floor((secs % 3600) / 60)
-    const s = secs % 60
-    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-}
-
 /** Try to read the browser's current geolocation, but never block the
  *  punch — we resolve with `null` after 6s if the user hasn't granted
  *  permission so check-in still goes through on a kiosk / desktop. */
@@ -102,88 +79,6 @@ function readGeolocation(): Promise<{ latitude: number; longitude: number } | nu
     })
 }
 
-function formatTime(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-type DayClassification =
-  | 'weekend' | 'holiday' | 'present' | 'late' | 'short' | 'absent' | 'wfh' | 'on_leave' | 'future'
-
-interface DayInfo {
-  date: Date
-  iso: string
-  cell: CalendarCell | null
-  label: { weekday: string; day: string }
-  classification: DayClassification
-}
-
-function classify(cell: CalendarCell | null, date: Date, today: Date): DayClassification {
-  if (date > today) return 'future'
-  if (!cell) return 'absent'
-  if (cell.code === 'WO') return 'weekend'
-  if (cell.code === 'H') return 'holiday'
-  if (cell.code === 'A' || cell.code === 'N/A') return 'absent'
-  if (cell.code === 'WFH') return 'wfh'
-  if (cell.code === 'P-late') return 'late'
-  if (cell.code === 'P-short') return 'short'
-  if (cell.code.endsWith('L')) return 'on_leave'
-  return 'present'
-}
-
-function statusLabel(c: DayClassification): string {
-  switch (c) {
-    case 'weekend': return 'Weekend'
-    case 'holiday': return 'Holiday'
-    case 'present': return 'Present'
-    case 'late': return 'Late'
-    case 'short': return 'Early out'
-    case 'absent': return 'Absent'
-    case 'wfh': return 'WFH'
-    case 'on_leave': return 'On leave'
-    case 'future': return ''
-  }
-}
-
-function statusTone(c: DayClassification): { bar: string; pill: string } {
-  switch (c) {
-    case 'weekend': return { bar: 'bg-amber-200/60 dark:bg-amber-900/30', pill: 'border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/30' }
-    case 'holiday': return { bar: 'bg-sky-200/60 dark:bg-sky-900/30', pill: 'border-sky-300 text-sky-800 dark:text-sky-300 bg-sky-50/70 dark:bg-sky-950/30' }
-    case 'present':
-    case 'late':
-    case 'short':
-      return { bar: 'bg-emerald-200/60 dark:bg-emerald-900/30', pill: 'border-emerald-300 text-emerald-800 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/30' }
-    case 'absent': return { bar: 'bg-rose-200/60 dark:bg-rose-900/30', pill: 'border-rose-300 text-rose-700 dark:text-rose-300 bg-rose-50/70 dark:bg-rose-950/30' }
-    case 'wfh': return { bar: 'bg-violet-200/60 dark:bg-violet-900/30', pill: 'border-violet-300 text-violet-800 dark:text-violet-300 bg-violet-50/70 dark:bg-violet-950/30' }
-    case 'on_leave': return { bar: 'bg-blue-200/60 dark:bg-blue-900/30', pill: 'border-blue-300 text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/30' }
-    case 'future': return { bar: 'bg-muted/40', pill: 'border-border text-muted-foreground' }
-  }
-}
-
-interface Stats {
-  payable: number
-  present: number
-  onDuty: number
-  paidLeave: number
-  holidays: number
-  weekend: number
-}
-
-function computeStats(days: DayInfo[]): Stats {
-  const s: Stats = { payable: 0, present: 0, onDuty: 0, paidLeave: 0, holidays: 0, weekend: 0 }
-  for (const d of days) {
-    if (d.classification === 'future') continue
-    if (d.classification === 'present' || d.classification === 'late' || d.classification === 'short') { s.present++; s.payable++; s.onDuty++ }
-    if (d.classification === 'wfh') { s.present++; s.payable++; s.onDuty++ }
-    if (d.classification === 'on_leave') { s.paidLeave++; s.payable++ }
-    if (d.classification === 'holiday') { s.holidays++; s.payable++ }
-    if (d.classification === 'weekend') s.weekend++
-  }
-  return s
-}
-
 // ─── Page ────────────────────────────────────────────────────────────────
 
 type ViewMode = 'timeline' | 'list' | 'calendar'
@@ -200,7 +95,7 @@ export function EmployeeAttendancePage() {
   const [detail, setDetail] = useState<DayInfo | null>(null)
   const [note, setNote] = useState('')
 
-  const monthQuery = isoMonth(weekStart)
+  const monthQuery = toISOMonth(weekStart)
   const { data: calendar, isLoading } = useAttendanceCalendar(monthQuery, 'me')
   const myRow = (calendar?.employees?.[0] ?? null) as CalendarEmployee | null
 
@@ -636,13 +531,15 @@ function MonthCalendar({ month, setMonth }: { month: string; setMonth: (m: strin
 
 // ─── Footer stats ─────────────────────────────────────────────────────────
 
-function FooterStats({ stats, shift }: { stats: Stats; shift: string }) {
+function FooterStats({ stats, shift }: { stats: AttendanceWeekStats; shift: string }) {
   const entries = [
-    { label: 'Payable Days', value: stats.payable, tone: 'bg-emerald-500' },
-    { label: 'Present', value: stats.present, tone: 'bg-green-500' },
+    // Alphabetical by label — mirrors the order used in the main HR app so
+    // employees see the same arrangement everywhere.
+    { label: 'Holidays', value: stats.holidays, tone: 'bg-sky-500' },
     { label: 'On Duty', value: stats.onDuty, tone: 'bg-violet-500' },
     { label: 'Paid leave', value: stats.paidLeave, tone: 'bg-amber-500' },
-    { label: 'Holidays', value: stats.holidays, tone: 'bg-sky-500' },
+    { label: 'Payable Days', value: stats.payable, tone: 'bg-emerald-500' },
+    { label: 'Present', value: stats.present, tone: 'bg-green-500' },
     { label: 'Weekend', value: stats.weekend, tone: 'bg-blue-400' },
   ]
   return (

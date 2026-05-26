@@ -17,6 +17,7 @@ import {
 import { BulkMappingsImportDialog } from './BulkMappingsImportDialog'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, Input, Label } from '@/components/ui/primitives'
@@ -119,7 +120,17 @@ function BiometricMappingTab() {
                         </thead>
                         <tbody className="divide-y">
                             {isLoading ? (
-                                <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">{t('common.loading', 'Loading...')}</td></tr>
+                                // Render 3 placeholder rows that match the column shape so the
+                                // table doesn't collapse during the fetch.
+                                Array.from({ length: 3 }).map((_, i) => (
+                                    <tr key={`bm-skel-${i}`}>
+                                        <td className="px-3 py-3"><Skeleton className="h-4 w-24" /></td>
+                                        <td className="px-3 py-3"><Skeleton className="h-4 w-40" /></td>
+                                        <td className="px-3 py-3"><Skeleton className="h-4 w-32" /></td>
+                                        <td className="px-3 py-3"><Skeleton className="h-4 w-20" /></td>
+                                        <td className="px-3 py-3 text-right"><Skeleton className="h-7 w-16 ms-auto" /></td>
+                                    </tr>
+                                ))
                             ) : rows.length === 0 ? (
                                 <tr>
                                     <td colSpan={5} className="px-3 py-12 text-center">

@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { Plus, Pencil, Check, XCircle, Briefcase } from 'lucide-react'
+import { Plus, Pencil, Check, XCircle, Briefcase, Upload } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { toast, ConfirmDialog } from '@/components/ui/overlays'
+import { BulkImportDialog } from '@/components/shared/BulkImportDialog'
 import { useDesignations, useCreateDesignation, useUpdateDesignation } from '@/hooks/useDesignations'
 import type { Designation } from '@/hooks/useDesignations'
 import { Section } from './_shared'
@@ -11,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 
 export function DesignationsTab() {
     const { t } = useTranslation()
+    const qc = useQueryClient()
     const { data: items = [], isLoading } = useDesignations()
     const designations = Array.isArray(items) ? items as Designation[] : []
     const create = useCreateDesignation()
@@ -21,6 +25,7 @@ export function DesignationsTab() {
     const [editingId, setEditingId] = useState<string | null>(null)
     const [editName, setEditName] = useState('')
     const [toggleTarget, setToggleTarget] = useState<Designation | null>(null)
+    const [importOpen, setImportOpen] = useState(false)
 
     function handleAdd() {
         const name = newName.trim()
@@ -56,17 +61,23 @@ export function DesignationsTab() {
     return (
         <>
         <div className="space-y-6">
-            <div>
-                <h3 className="text-base font-semibold">{t('orgSettings.designations.title')}</h3>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                    {t('orgSettings.designations.desc')}
-                </p>
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <h3 className="text-base font-semibold">{t('orgSettings.designations.title')}</h3>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        {t('orgSettings.designations.desc')}
+                    </p>
+                </div>
+                <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setImportOpen(true)}>
+                    <Upload className="size-3.5" />
+                    Bulk import
+                </Button>
             </div>
 
             <Section icon={Briefcase} title={t('orgSettings.designations.jobTitlesTitle')} description={t('orgSettings.designations.jobTitlesDesc')}>
                 <div className="space-y-2">
                     {isLoading ? (
-                        <div className="space-y-2">{[1, 2, 3].map(i => <div key={`div-${i}`} className="h-9 rounded-lg bg-muted animate-pulse" />)}</div>
+                        <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`div-${i}`} className="h-9 rounded-lg" />)}</div>
                     ) : designations.length === 0 && !addingNew ? (
                         <p className="text-sm text-muted-foreground text-center py-4">{t('orgSettings.designations.empty')}</p>
                     ) : (
@@ -164,6 +175,30 @@ export function DesignationsTab() {
             onConfirm={handleToggle}
         />
 
+        {/* Bulk import — template / upload / preview / commit wizard. Same
+            shape and shared component used by Public Holidays + Performance
+            Reviews + Biometric punches, so the UX is identical everywhere. */}
+        <BulkImportDialog
+            open={importOpen}
+            onOpenChange={setImportOpen}
+            config={{
+                title: 'Import designations',
+                description: 'Upload an .xlsx or .csv of job titles. Validates each row before saving.',
+                fileLabel: 'designations file',
+                templateUrl: '/designations/import/template',
+                validateUrl: '/designations/import/validate',
+                commitUrl: '/designations/import/commit',
+                columns: [
+                    { key: 'name', label: 'Name', hint: 'Required. Max 120 chars. Must be unique per tenant.' },
+                    { key: 'sortOrder', label: 'Sort order', hint: 'Optional integer for display ordering. Defaults to 0.' },
+                    { key: 'isActive', label: 'Active', hint: 'true / false. Defaults to true.' },
+                ],
+                onCommitted: () => {
+                    qc.invalidateQueries({ queryKey: ['designations'] })
+                    toast.success('Designations imported', 'Your job-title list is now up to date.')
+                },
+            }}
+        />
 </>
     )
 }

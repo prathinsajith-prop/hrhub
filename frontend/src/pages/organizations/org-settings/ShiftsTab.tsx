@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast, ConfirmDialog } from '@/components/ui/overlays'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -266,7 +267,7 @@ export function ShiftsTab() {
 
                 <Section icon={Clock} title={t('orgSettings.shifts.listTitle')} description={t('orgSettings.shifts.listDesc')}>
                     {isLoading ? (
-                        <div className="space-y-2">{[1, 2, 3].map(i => <div key={`div-${i}`} className="h-14 rounded-lg bg-muted animate-pulse" />)}</div>
+                        <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`div-${i}`} className="h-14 rounded-lg" />)}</div>
                     ) : shifts.length === 0 ? (
                         <div className="text-center py-8 text-sm text-muted-foreground">
                             <Clock className="size-8 mx-auto mb-2 opacity-40" />

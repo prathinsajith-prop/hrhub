@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, toast, ConfirmDialog } from '@/components/ui/overlays'
 import { cn } from '@/lib/utils'
 import {
@@ -375,7 +376,7 @@ function GradeLevelsSection() {
             >
                 {isLoading ? (
                     <div className="space-y-2">
-                        {[1, 2, 3].map(i => <div key={`div-${i}`} className="h-12 rounded-lg bg-muted animate-pulse" />)}
+                        {[1, 2, 3].map(i => <Skeleton key={`div-${i}`} className="h-12 rounded-lg" />)}
                     </div>
                 ) : levels.length === 0 ? (
                     <div className="rounded-xl border border-dashed bg-muted/30 flex flex-col items-center justify-center py-12 text-center gap-4">
@@ -562,7 +563,7 @@ function MasterList({
         <div className="space-y-3">
             {isLoading ? (
                 <div className="space-y-2">
-                    {[1, 2, 3].map(i => <div key={`div-${i}`} className="h-10 rounded-lg bg-muted animate-pulse" />)}
+                    {[1, 2, 3].map(i => <Skeleton key={`div-${i}`} className="h-10 rounded-lg" />)}
                 </div>
             ) : (
                 <div className="rounded-xl border bg-card overflow-hidden">
