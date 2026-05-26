@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import {
     Users, Plus, CheckCircle2, Shield, ShieldOff, ShieldCheck,
     Search, MailCheck, UserPlus, Check, Mail, Clock,
-    AlertCircle, MinusCircle, KeyRound, Timer, Pencil,
+    AlertCircle, MinusCircle, KeyRound, Timer, Pencil, UserX, UserCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -836,8 +836,35 @@ export function UsersPage() {
                                 // department name. Falls back to the bare department name when
                                 // the user sits at the root or the unit hasn't loaded yet.
                                 const fullPath = departmentPath(u.department) ?? u.department ?? null
+                                // Whole-row click opens the Manage Access modal — the
+                                // same destination as the shield button. Saves HR from
+                                // having to hit the tiny icon target. Gated by the
+                                // same permission as the button (can-manage + not-self)
+                                // so read-only viewers and the user's own row stay
+                                // inert. Inline interactive elements (role chips, the
+                                // shield button, the email-copy control) stop
+                                // propagation in their own handlers, so the row click
+                                // only fires from "dead space".
+                                const rowClickable = canManageUsers && !isSelf
+                                const openAccess = () => { if (rowClickable) setAccessTarget(u) }
                                 return (
-                                    <div key={u.id} className={cn(
+                                    <div
+                                        key={u.id}
+                                        role={rowClickable ? 'button' : undefined}
+                                        tabIndex={rowClickable ? 0 : undefined}
+                                        onClick={openAccess}
+                                        onKeyDown={(e) => {
+                                            if (!rowClickable) return
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                // Skip when focus is inside an interactive
+                                                // child (chip / button / link) — let that
+                                                // element own the key event.
+                                                if (e.target !== e.currentTarget) return
+                                                e.preventDefault()
+                                                openAccess()
+                                            }
+                                        }}
+                                        className={cn(
                                         // Three-column row: identity (left, flex) — roles (middle,
                                         // flex) — actions (right, intrinsic). The middle column
                                         // surfaces every assigned role inline so HR can scan
@@ -845,6 +872,7 @@ export function UsersPage() {
                                         'grid items-center gap-4 px-4 py-3 transition-colors',
                                         'grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]',
                                         u.isActive ? 'hover:bg-muted/30' : 'bg-muted/20 opacity-70',
+                                        rowClickable && 'cursor-pointer focus:bg-muted/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                                     )}>
                                         {/* ── Left: identity ─────────────────────────────────── */}
                                         <div className="flex items-center gap-3 min-w-0">
@@ -855,33 +883,66 @@ export function UsersPage() {
                                                 </AvatarFallback>
                                             </Avatar>
                                             <div className="min-w-0 flex-1">
-                                                {/* Name + feature-flag chips + status badges */}
+                                                {/* Name line — name on the left, status icon
+                                                    cluster on the right. A thin vertical bar
+                                                    visually separates the two so the cluster
+                                                    reads as "status of THIS user" and never
+                                                    bleeds into the email/path subline below.
+                                                    Icons collapse into a tight 1px gap so two
+                                                    chips look like one unit, not two ornaments. */}
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <p className="text-sm font-medium truncate">{u.name}</p>
-                                                    <FeatureFlagChip
-                                                        icon={Timer}
-                                                        enabled={u.attendancePunchEnabled !== false}
-                                                        onLabel={t('settingsDetail.users.flagPunchOn', { defaultValue: 'Self check-in / check-out enabled' })}
-                                                        offLabel={t('settingsDetail.users.flagPunchOff', { defaultValue: 'Self check-in / check-out disabled' })}
-                                                    />
-                                                    <FeatureFlagChip
-                                                        icon={Pencil}
-                                                        enabled={u.attendanceManualEntryEnabled !== false}
-                                                        onLabel={t('settingsDetail.users.flagManualOn', { defaultValue: 'Manual attendance entry enabled' })}
-                                                        offLabel={t('settingsDetail.users.flagManualOff', { defaultValue: 'Manual attendance entry disabled' })}
-                                                    />
                                                     {isSelf && (
                                                         <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                                                             {t('settingsDetail.users.youLabel')}
                                                         </span>
                                                     )}
-                                                    {!u.isActive && (
-                                                        <Badge variant="secondary" className="text-[10px]">{t('common.inactive')}</Badge>
-                                                    )}
+                                                    <span aria-hidden className="h-3.5 w-px bg-border/60" />
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <FeatureFlagChip
+                                                            icon={Timer}
+                                                            enabled={u.attendancePunchEnabled !== false}
+                                                            onLabel={t('settingsDetail.users.flagPunchOn', { defaultValue: 'Self check-in / check-out enabled' })}
+                                                            offLabel={t('settingsDetail.users.flagPunchOff', { defaultValue: 'Self check-in / check-out disabled' })}
+                                                        />
+                                                        <FeatureFlagChip
+                                                            icon={Pencil}
+                                                            enabled={u.attendanceManualEntryEnabled !== false}
+                                                            onLabel={t('settingsDetail.users.flagManualOn', { defaultValue: 'Manual attendance entry enabled' })}
+                                                            offLabel={t('settingsDetail.users.flagManualOff', { defaultValue: 'Manual attendance entry disabled' })}
+                                                        />
+                                                        {/* Active/inactive uses the same visual
+                                                            grammar as the feature flags — a 5x5
+                                                            ring-pill. Both states render so HR
+                                                            can confirm at a glance: emerald
+                                                            check = active, rose X = inactive.
+                                                            Hiding the active state used to feel
+                                                            "clean" but it left HR inferring
+                                                            health from absence, which is the
+                                                            opposite of self-evident. */}
+                                                        <span
+                                                            title={u.isActive ? (t('common.active') as string) : (t('common.inactive') as string)}
+                                                            aria-label={u.isActive ? (t('common.active') as string) : (t('common.inactive') as string)}
+                                                            className={cn(
+                                                                'inline-flex items-center justify-center size-5 rounded-md ring-1',
+                                                                u.isActive
+                                                                    ? 'bg-emerald-50 text-emerald-600 ring-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-900/60'
+                                                                    : 'bg-rose-50 text-rose-600 ring-rose-200/70 dark:bg-rose-950/40 dark:text-rose-400 dark:ring-rose-900/60',
+                                                            )}
+                                                        >
+                                                            {u.isActive ? <UserCheck className="size-3" /> : <UserX className="size-3" />}
+                                                        </span>
+                                                    </span>
                                                 </div>
-                                                {/* Email + designation + full org path */}
+                                                {/* Email + designation + full org path.
+                                                    CopyableEmail's copy button is an interactive
+                                                    target — wrap in stopPropagation so copying
+                                                    the email doesn't also trigger the row-level
+                                                    open-Manage-Access click. */}
                                                 <div className="text-xs text-muted-foreground truncate flex items-center gap-1.5 flex-wrap">
-                                                    <CopyableEmail email={u.email} className="text-xs text-muted-foreground" />
+                                                    <span onClick={(e) => e.stopPropagation()}>
+                                                        <CopyableEmail email={u.email} className="text-xs text-muted-foreground" />
+                                                    </span>
                                                     {u.designation && (
                                                         <>
                                                             <span aria-hidden className="opacity-50">·</span>
@@ -903,7 +964,7 @@ export function UsersPage() {
                                              a chip to flip its state — same backend mutation as
                                              the Manage Access modal. Hidden on narrow screens so
                                              the action button can't get pushed off the row. */}
-                                        <div className="hidden md:flex min-w-0">
+                                        <div className="hidden md:flex min-w-0" onClick={(e) => e.stopPropagation()}>
                                             <RoleChipToggleRow
                                                 user={u}
                                                 canManage={canManageUsers}
@@ -911,8 +972,21 @@ export function UsersPage() {
                                             />
                                         </div>
 
-                                        {/* ── Right: last-login + manage-access ──────────────── */}
-                                        <div className="flex items-center gap-2.5 shrink-0 flex-wrap justify-end">
+                                        {/* ── Right: status chips + last-login + manage-access ────
+                                             Status icons (self-punch / manual entry) and the
+                                             Inactive badge live here, grouped with the action
+                                             button so HR scans "state + controls" in one place.
+                                             stopPropagation: clicks inside this cluster
+                                             (shield button, future per-icon controls) should
+                                             NOT also fire the row-level "open Manage Access"
+                                             — the shield already targets the same modal,
+                                             and a double-trigger feels janky. */}
+                                        <div
+                                            className="flex items-center gap-2.5 shrink-0 flex-wrap justify-end"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            {/* Last-login is purely informational — kept compact
+                                                so the action button stays the dominant element. */}
                                             <span
                                                 className="hidden md:inline text-[11px] text-muted-foreground tabular-nums"
                                                 title={u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : undefined}
@@ -1129,29 +1203,24 @@ function FeatureFlagChip({
     onLabel: string
     offLabel: string
 }) {
+    // Single visual signal — colour fill — to show state. The old design
+    // layered a tiny absolute-positioned check / minus dot on top of every
+    // icon, which made a row of two chips read as "what are all these dots?"
+    // before HR could parse the actual icon. One signal per chip is enough:
+    // emerald = enabled, muted = disabled. Tooltip carries the precise
+    // meaning for anyone who hovers.
     return (
         <span
             title={enabled ? onLabel : offLabel}
             aria-label={enabled ? onLabel : offLabel}
             className={cn(
-                // Tighter than before (was size-7) so the chip sits inline
-                // next to the user's name without dominating the row.
-                'relative inline-flex items-center justify-center size-5 rounded-md border transition-colors',
+                'inline-flex items-center justify-center size-5 rounded-md transition-colors ring-1',
                 enabled
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-900/60 dark:text-emerald-300'
-                    : 'bg-muted/40 border-border text-muted-foreground/60',
+                    ? 'bg-emerald-50 text-emerald-600 ring-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-900/60'
+                    : 'bg-muted/30 text-muted-foreground/50 ring-border/60',
             )}
         >
             <Icon className="size-3" />
-            {enabled ? (
-                <span className="absolute -top-1 -right-1 inline-flex size-2.5 items-center justify-center rounded-full bg-emerald-500 text-white shadow ring-2 ring-background">
-                    <Check className="size-1.5" />
-                </span>
-            ) : (
-                <span className="absolute -top-1 -right-1 inline-flex size-2.5 items-center justify-center rounded-full bg-muted text-muted-foreground border border-border">
-                    <MinusCircle className="size-1.5" />
-                </span>
-            )}
         </span>
     )
 }
@@ -1226,39 +1295,75 @@ function ManageUserAccessModal({
     return (
         <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
             <DialogContent className="sm:max-w-lg p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col">
-                {/* Header */}
+                {/* Header — identity block.
+                    The active/inactive indicator went through two iterations:
+                    first as a chunky pill in the top-right corner (clashed
+                    with the X close); then as a dot-chip inline with the
+                    name (got pushed off-screen when the name was long).
+                    Final form is a small absolute-positioned status dot
+                    on the avatar — the universal "online indicator" pattern
+                    from chat apps. It's instantly readable, never collides
+                    with the close button, and survives any name length. The
+                    Last login meta strip in the body re-states "Active"/
+                    "Inactive" in words for users who want the explicit
+                    label rather than the colour cue. */}
                 <DialogHeader className="px-6 py-5 border-b">
                     <div className="flex items-center gap-3 min-w-0">
-                        <Avatar className="size-10 shrink-0">
-                            {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                                {initials(user.name)}
-                            </AvatarFallback>
-                        </Avatar>
+                        <div className="relative shrink-0">
+                            <Avatar className="size-10">
+                                {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
+                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                                    {initials(user.name)}
+                                </AvatarFallback>
+                            </Avatar>
+                            <span
+                                title={user.isActive ? (t('common.active') as string) : (t('common.inactive') as string)}
+                                aria-label={user.isActive ? (t('common.active') as string) : (t('common.inactive') as string)}
+                                className={cn(
+                                    'absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-background',
+                                    user.isActive ? 'bg-emerald-500' : 'bg-rose-500',
+                                )}
+                            />
+                        </div>
                         <div className="min-w-0 flex-1">
-                            <DialogTitle className="text-sm font-semibold truncate">{user.name}</DialogTitle>
-                            <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5">
+                            <DialogTitle className="text-sm font-semibold truncate">
+                                {user.name}
+                            </DialogTitle>
+                            <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
                                 <Mail className="size-3 shrink-0" />
-                                {user.email}
+                                <span className="truncate">{user.email}</span>
                             </p>
                         </div>
-                        <Badge
-                            variant={user.isActive ? 'success' : 'destructive'}
-                            className="text-[10px] shrink-0"
-                        >
-                            {user.isActive ? t('common.active') : t('common.inactive')}
-                        </Badge>
                     </div>
                 </DialogHeader>
 
                 {/* Body */}
                 <div className="overflow-y-auto px-6 py-5 space-y-5">
-                    {/* Meta strip */}
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                        <Clock className="size-3.5 shrink-0" />
-                        <span>
+                    {/* Meta strip — last login + explicit Active/Inactive
+                        label. The avatar dot is the at-a-glance cue; this
+                        text is the screen-reader-friendly fallback for
+                        anyone who can't (or doesn't want to) parse the
+                        colour. Separator dot ties them visually. */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                            <Clock className="size-3.5 shrink-0" />
                             {t('settingsDetail.users.lastLogin', { defaultValue: 'Last login' })}:{' '}
                             {user.lastLoginAt ? formatDate(user.lastLoginAt) : t('settingsDetail.users.lastLoginNever')}
+                        </span>
+                        <span aria-hidden className="opacity-40">·</span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <span
+                                className={cn(
+                                    'size-1.5 rounded-full',
+                                    user.isActive ? 'bg-emerald-500' : 'bg-rose-500',
+                                )}
+                            />
+                            <span className={cn(
+                                'font-medium',
+                                user.isActive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400',
+                            )}>
+                                {user.isActive ? t('common.active') : t('common.inactive')}
+                            </span>
                         </span>
                     </div>
 

@@ -271,6 +271,39 @@ export async function getPunchesForDay(tenantId: string, employeeId: string, day
         .orderBy(asc(attendancePunches.recordedAt))
 }
 
+/**
+ * Fetch every punch for a single day across an arbitrary scope.
+ *
+ * Used by the HR-facing Punch History view: instead of querying punches
+ * employee-by-employee (N+1 round-trips), HR hits this once and the
+ * client buckets by `employeeId` to enrich each rollup row with its
+ * first check-in's source + location.
+ *
+ *   • `employeeIds` undefined → tenant-wide (HR / super_admin)
+ *   • `employeeIds` provided   → scoped to those employees (dept_head)
+ */
+export async function getPunchesForDayScoped(
+    tenantId: string,
+    day: string,
+    employeeIds?: string[],
+) {
+    const conds = [
+        eq(attendancePunches.tenantId, tenantId),
+        eq(attendancePunches.date, day),
+    ]
+    if (employeeIds !== undefined) {
+        if (employeeIds.length === 0) return [] // empty scope → empty result
+        // Drizzle's `inArray` would be ideal here but importing it costs
+        // a wider refactor; use ANY() via sql template instead.
+        conds.push(sql`${attendancePunches.employeeId} = ANY(${employeeIds})`)
+    }
+    return db
+        .select()
+        .from(attendancePunches)
+        .where(and(...conds))
+        .orderBy(asc(attendancePunches.recordedAt))
+}
+
 export async function deletePunch(tenantId: string, employeeId: string, punchId: string) {
     const [row] = await db
         .delete(attendancePunches)
@@ -488,40 +521,81 @@ export async function getAttendanceSummary(tenantId: string, month: number, year
     return records
 }
 
+/**
+ * External-punch entry point (Connected-App / mobile-app integration).
+ *
+ * Previously this bypassed `attendance_punches` and wrote a row straight
+ * into the daily rollup — which meant biometric and mobile-device punches
+ * lost their event-level audit trail (no row per press, no latitude /
+ * longitude / locationName / deviceId columns). That was fine for a
+ * "punch in once, punch out once" flow but the moment a single employee
+ * had multiple sessions in a day (lunch out, lunch back, leave for the
+ * day) the rollup got clobbered.
+ *
+ * We now route through `recordPunch` like every other punch path. That
+ * gives us:
+ *   • One row per press in `attendance_punches` (full audit trail).
+ *   • `latitude`, `longitude`, `locationName` columns populated when the
+ *     device supplies them (mobile apps with GPS, geofenced kiosks).
+ *   • `deviceId` stored as a real column instead of stuffed into `notes`.
+ *   • Daily rollup rebuilt deterministically from the canonical event log.
+ *   • Reverse-geocoding into `locationName` when the device only sends
+ *     coords — same Nominatim path as web punches.
+ *
+ * `deviceName` is folded into `notes` for visibility on HR's punch log
+ * (the rollup column is still device-agnostic).
+ */
 export async function externalPunch(tenantId: string, params: {
     employeeId: string
     timestamp?: string
     deviceId?: string
     deviceName?: string
     punchType: 'in' | 'out'
-    source?: string
+    source?: 'biometric' | 'api' | 'mobile'
+    latitude?: number | null
+    longitude?: number | null
+    locationName?: string | null
+    notes?: string | null
 }) {
-    const now = params.timestamp ? new Date(params.timestamp) : new Date()
-    const date = now.toISOString().split('T')[0]
+    // The route's Zod enum already restricts `source` to one of three
+    // values; we narrow further to what the punch row accepts (`api`
+    // collapses to `biometric` since the schema column doesn't carry it).
+    const punchSource: PunchInput['source'] =
+        params.source === 'mobile' ? 'mobile'
+            : params.source === 'biometric' ? 'biometric'
+                : 'biometric' // 'api' or unset → biometric (the audit-trail bucket vendor integrations land in)
 
-    const [existing] = await db.select().from(attendanceRecords)
-        .where(and(eq(attendanceRecords.tenantId, tenantId), eq(attendanceRecords.employeeId, params.employeeId), eq(attendanceRecords.date, date)))
+    // Compose a useful notes string when the device supplied a name.
+    // HR sees "Punched via Suprema BioStation A2 — wing-3-door" in the
+    // punch log, which is more actionable than a bare UUID.
+    const notes = params.notes
+        ?? (params.deviceName ? `Punched via ${params.deviceName}` : null)
+
+    const { row } = await recordPunch(
+        tenantId,
+        params.employeeId,
+        params.punchType,
+        {
+            recordedAt: params.timestamp,
+            latitude: params.latitude ?? null,
+            longitude: params.longitude ?? null,
+            locationName: params.locationName ?? null,
+            source: punchSource,
+            deviceId: params.deviceId ?? null,
+            notes,
+        },
+        null, // No user account behind a device punch; createdBy stays null.
+    )
+
+    // Return the freshly-rebuilt rollup so existing callers keep their
+    // response shape (`{ data: AttendanceRecord }`).
+    const day = row.date
+    const [rec] = await db.select().from(attendanceRecords)
+        .where(and(
+            eq(attendanceRecords.tenantId, tenantId),
+            eq(attendanceRecords.employeeId, params.employeeId),
+            eq(attendanceRecords.date, day),
+        ))
         .limit(1)
-
-    if (params.punchType === 'in') {
-        if (existing) return existing
-        const [rec] = await db.insert(attendanceRecords).values({
-            tenantId,
-            employeeId: params.employeeId,
-            date,
-            status: 'present',
-            checkIn: now,
-            notes: params.deviceName ? `Punched via ${params.deviceName}` : params.source ? `Source: ${params.source}` : undefined,
-        }).returning()
-        return rec
-    } else {
-        if (!existing) throw Object.assign(new Error('No check-in found for today'), { statusCode: 422 })
-        const checkInTime = existing.checkIn ? new Date(existing.checkIn) : now
-        const hoursWorked = ((now.getTime() - checkInTime.getTime()) / 3600000).toFixed(2)
-        const [rec] = await db.update(attendanceRecords)
-            .set({ checkOut: now, hoursWorked })
-            .where(eq(attendanceRecords.id, existing.id))
-            .returning()
-        return rec
-    }
+    return rec
 }

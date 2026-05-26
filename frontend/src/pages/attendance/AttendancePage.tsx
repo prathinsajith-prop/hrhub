@@ -7,6 +7,7 @@ import {
     AlarmClock, Home, CalendarOff, TrendingUp, Edit2, RefreshCcw, Zap, Fingerprint,
     Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, X, Check,
     ArrowUpRight, ChevronLeft, ChevronRight,
+    MapPin, Globe, Smartphone, Hand, ExternalLink,
 } from 'lucide-react'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -32,7 +33,7 @@ import {
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
-import { useAttendance, useAttendanceCalendar, useUpsertAttendance, useExternalPunch, useAddManualPunch, type AttendanceRecord } from '@/hooks/useAttendance'
+import { useAttendance, useAttendanceCalendar, useUpsertAttendance, useExternalPunch, useAddManualPunch, usePunchesForDay, type AttendanceRecord, type AttendancePunchEvent } from '@/hooks/useAttendance'
 import { AttendanceCalendarGrid } from '@/components/shared/AttendanceCalendarGrid'
 import { AttendanceLegendPopover } from '@/components/shared/AttendanceLegend'
 import { MonthSwitcher } from '@/components/shared/MonthSwitcher'
@@ -243,6 +244,38 @@ export function AttendancePage() {
         [filteredAttendance, historyDate, filterEmployee, filterStatus],
     )
 
+    // ─── Per-row punch enrichment ────────────────────────────────────
+    //
+    // The daily rollup (`attendance_records`) doesn't carry source/location —
+    // those live on `attendance_punches`. We fetch every punch for the
+    // selected `historyDate` in one round-trip, then build a map of
+    // `employeeId → first 'in' punch` so each row in Punch History can
+    // surface "how the check-in was recorded" and "where".
+    const { data: punchesData } = usePunchesForDay(historyDate, filterEmployee || undefined)
+    const firstInByEmployee = useMemo(() => {
+        const map = new Map<string, AttendancePunchEvent>()
+        const list = punchesData ?? []
+        // Backend already sorts by recordedAt ASC, so the first 'in' we
+        // encounter per employee is the one that opens the day.
+        for (const p of list) {
+            if (p.punchType !== 'in') continue
+            if (!map.has(p.employeeId)) map.set(p.employeeId, p)
+        }
+        return map
+    }, [punchesData])
+
+    // Map-preview modal for clicking a row's location pin. Renders an
+    // embedded OpenStreetMap iframe so HR can verify the punch happened
+    // where the employee says — without leaving the page.
+    const [locationModal, setLocationModal] = useState<{
+        employeeName: string
+        recordedAt: string
+        source: AttendancePunchEvent['source']
+        locationName: string | null
+        latitude: string | null
+        longitude: string | null
+    } | null>(null)
+
     const summary = useMemo(() => {
         const counts: Record<string, number> = {
             present: 0, absent: 0, late: 0, wfh: 0, half_day: 0, on_leave: 0,
@@ -451,6 +484,70 @@ export function AttendancePage() {
             size: 90,
         },
         {
+            id: 'source',
+            header: 'Source',
+            // Surfaces *how* the check-in was recorded: the employee tapping
+            // the web button, a mobile app, a biometric / device punch from
+            // a vendor integration, or HR back-filling the row manually.
+            // Knowing this matters when HR audits a punch — a manual entry
+            // by an HR Manager is fundamentally different from a biometric
+            // device reading at the office door.
+            cell: ({ row }) => {
+                const p = firstInByEmployee.get(row.original.employeeId)
+                return <PunchSourceBadge source={p?.source ?? null} />
+            },
+            size: 120,
+        },
+        {
+            id: 'location',
+            header: 'Location',
+            // Place name from reverse-geocoding (or the device's registered
+            // location). Click → modal with an embedded map. When no coords
+            // were captured (desktop without GPS, location permission denied,
+            // manual HR entry) we render a quiet dash so the column never
+            // looks broken.
+            cell: ({ row }) => {
+                const p = firstInByEmployee.get(row.original.employeeId)
+                if (!p) return <span className="text-xs text-muted-foreground">—</span>
+                const hasCoords = !!(p.latitude && p.longitude)
+                const label = p.locationName ?? (hasCoords ? `${p.latitude}, ${p.longitude}` : null)
+                if (!label) return <span className="text-xs text-muted-foreground">—</span>
+                return (
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            setLocationModal({
+                                employeeName: row.original.employeeName ?? empMap.get(row.original.employeeId)?.name ?? '—',
+                                recordedAt: p.recordedAt,
+                                source: p.source,
+                                locationName: p.locationName,
+                                latitude: p.latitude,
+                                longitude: p.longitude,
+                            })
+                        }}
+                        className={cn(
+                            'group flex items-center gap-1.5 text-left text-xs max-w-[220px]',
+                            hasCoords
+                                ? 'text-foreground hover:text-primary'
+                                : 'text-muted-foreground cursor-default',
+                        )}
+                        disabled={!hasCoords}
+                        title={hasCoords ? 'View on map' : 'No coordinates captured'}
+                    >
+                        <MapPin
+                            className={cn(
+                                'size-3.5 shrink-0',
+                                hasCoords ? 'text-rose-500 group-hover:text-primary' : 'text-muted-foreground/60',
+                            )}
+                        />
+                        <span className="truncate">{label}</span>
+                    </button>
+                )
+            },
+            size: 220,
+        },
+        {
             accessorKey: 'notes',
             header: 'Notes',
             cell: ({ getValue }) => (
@@ -478,7 +575,7 @@ export function AttendancePage() {
             ),
             size: 80,
         },
-    ], [empMap, orgMap, handleEdit])
+    ], [empMap, orgMap, handleEdit, firstInByEmployee])
 
     return (
         <PageWrapper>
@@ -924,6 +1021,11 @@ export function AttendancePage() {
                     setAttendanceModal(null)
                     navigate(`/employees/${id}`)
                 }}
+            />
+
+            <PunchLocationDialog
+                state={locationModal}
+                onClose={() => setLocationModal(null)}
             />
 
             <EditAttendanceDialog
@@ -2029,4 +2131,173 @@ function normalizeImportTime(raw: string): string {
     if (/^\d{1}:\d{2}$/.test(s)) return `0${s}`
     if (/^\d{4}$/.test(s)) return `${s.slice(0, 2)}:${s.slice(2)}`
     return s
+}
+
+// ─── Punch source / location UI ───────────────────────────────────────────
+//
+// Source pill: visualises *how* the punch was recorded. Each source gets a
+// distinct icon + colour so HR can spot at a glance whether an entry came
+// from a self-service web punch, a mobile app, a biometric/vendor device,
+// or an HR back-fill.
+//
+//   Web        → blue   (the employee tapped the button in the browser)
+//   Mobile     → indigo (mobile app / responsive web on a phone)
+//   Biometric  → violet (fingerprint device, kiosk, vendor API)
+//   Manual     → amber  (HR back-filled the row — i.e. *not* a real punch)
+//   — (null)   → grey   (no punch event recorded; the row is rollup-only)
+
+const SOURCE_META: Record<AttendancePunchEvent['source'], { label: string; icon: typeof Globe; tone: string }> = {
+    web: { label: 'Web check-in', icon: Globe, tone: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900' },
+    mobile: { label: 'Mobile', icon: Smartphone, tone: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-900' },
+    biometric: { label: 'Biometric', icon: Fingerprint, tone: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900' },
+    manual: { label: 'HR Manual', icon: Hand, tone: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900' },
+}
+
+function PunchSourceBadge({ source }: { source: AttendancePunchEvent['source'] | null }) {
+    if (!source) {
+        return (
+            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                <span className="size-1 rounded-full bg-muted-foreground/40" />
+                No event
+            </span>
+        )
+    }
+    const meta = SOURCE_META[source]
+    const Icon = meta.icon
+    return (
+        <span className={cn(
+            'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium tabular-nums',
+            meta.tone,
+        )}>
+            <Icon className="size-3" />
+            {meta.label}
+        </span>
+    )
+}
+
+// Map-preview modal. Embeds an OpenStreetMap iframe so HR can verify the
+// punch happened where the employee says, without leaving the page or
+// hitting a third-party SDK. Same vendor as our reverse-geocoder, so
+// what's labelled matches what's pinned. Falls back gracefully when
+// coordinates are missing — the modal still surfaces the locationName /
+// recorded time, just without the map.
+function PunchLocationDialog({
+    state,
+    onClose,
+}: {
+    state: {
+        employeeName: string
+        recordedAt: string
+        source: AttendancePunchEvent['source']
+        locationName: string | null
+        latitude: string | null
+        longitude: string | null
+    } | null
+    onClose: () => void
+}) {
+    const open = !!state
+    const lat = state?.latitude ? Number(state.latitude) : null
+    const lng = state?.longitude ? Number(state.longitude) : null
+    const hasCoords = lat !== null && lng !== null && Number.isFinite(lat) && Number.isFinite(lng)
+
+    // OpenStreetMap embed URL — bounding box ~250 m around the punch, marker
+    // pinned at the exact coordinate. Same vendor we reverse-geocode against
+    // so the label and the pin always match.
+    const delta = 0.0025
+    const bbox = hasCoords
+        ? `${(lng! - delta).toFixed(6)},${(lat! - delta).toFixed(6)},${(lng! + delta).toFixed(6)},${(lat! + delta).toFixed(6)}`
+        : null
+    const mapSrc = hasCoords
+        ? `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat!.toFixed(6)},${lng!.toFixed(6)}`
+        : null
+    const externalMapHref = hasCoords
+        ? `https://www.openstreetmap.org/?mlat=${lat!.toFixed(6)}&mlon=${lng!.toFixed(6)}#map=18/${lat!.toFixed(6)}/${lng!.toFixed(6)}`
+        : null
+    const googleMapsHref = hasCoords
+        ? `https://maps.google.com/?q=${lat!.toFixed(6)},${lng!.toFixed(6)}`
+        : null
+
+    return (
+        <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+            <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
+                <DialogHeader className="px-6 pt-5 pb-3 border-b">
+                    <DialogTitle className="text-base font-semibold">Punch location</DialogTitle>
+                    {state && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            {state.employeeName} - {new Date(state.recordedAt).toLocaleString()}
+                        </p>
+                    )}
+                </DialogHeader>
+
+                {/* Metadata strip — recorded source, place name, coords. Compact
+                    so the map gets the bulk of the dialog real estate. */}
+                {state && (
+                    <div className="px-6 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs border-b bg-muted/30">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Recorded via</p>
+                            <PunchSourceBadge source={state.source} />
+                        </div>
+                        <div className="sm:col-span-2 min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Place</p>
+                            <p className="font-medium truncate" title={state.locationName ?? undefined}>
+                                {state.locationName ?? <span className="text-muted-foreground">No place name resolved</span>}
+                            </p>
+                            {hasCoords && (
+                                <p className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                                    {lat!.toFixed(6)}, {lng!.toFixed(6)}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Map (iframe — no API key, no JS SDK, no tracking script). */}
+                <div className="relative bg-muted/20" style={{ aspectRatio: '16 / 10' }}>
+                    {hasCoords && mapSrc ? (
+                        <iframe
+                            key={mapSrc}
+                            title="Punch location map"
+                            src={mapSrc}
+                            className="absolute inset-0 size-full border-0"
+                            loading="lazy"
+                        />
+                    ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+                            <MapPin className="size-8 text-muted-foreground/40 mb-2" />
+                            <p className="text-sm font-medium">No coordinates captured</p>
+                            <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                                This punch was recorded without a GPS reading - common for desktop browsers or when location permission is off.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter className="px-6 py-3 border-t bg-background">
+                    <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
+                    {hasCoords && (
+                        <>
+                            <a
+                                href={externalMapHref!}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground px-2 py-1"
+                            >
+                                <ExternalLink className="size-3.5" />
+                                OpenStreetMap
+                            </a>
+                            <a
+                                href={googleMapsHref!}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline px-2 py-1"
+                            >
+                                <ExternalLink className="size-3.5" />
+                                Open in Google Maps
+                            </a>
+                        </>
+                    )}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
 }

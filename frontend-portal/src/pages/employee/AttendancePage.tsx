@@ -274,6 +274,12 @@ export function EmployeeAttendancePage() {
                   employeeId,
                   notes: note || null,
                   ...(coords ?? {}),
+                  // Forward the already-resolved place name when we have one
+                  // (the strip preview's reverseGeocodeClient call). Saves the
+                  // backend a redundant Nominatim round-trip *and* guarantees
+                  // the stored locationName matches what the user just saw on
+                  // screen — no surprises in the punch log after the fact.
+                  ...(coords && geoName ? { locationName: geoName } : {}),
                 }
                 const mutation = isCheckedIn ? checkOut : checkIn
                 const successLabel = isCheckedIn ? t('attendance.checkOut') : t('attendance.checkIn')

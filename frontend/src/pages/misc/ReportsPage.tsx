@@ -6,6 +6,7 @@ import { labelFor } from '@/lib/enums'
 import {
     Calendar, Clock, CheckCircle2, XCircle, Download, BarChart3, Users,
     Shield, AlertTriangle, UserPlus, UserMinus, PauseCircle, Receipt, TrendingUp, RefreshCcw,
+    CalendarCheck, Plane, Timer, Hourglass, GitCommit, ClipboardCheck, Star, AlertOctagon,
 } from 'lucide-react'
 import {
     AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -22,7 +23,13 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useReportsSummary } from '@/hooks/useReports'
 import { usePermissions } from '@/hooks/usePermissions'
-import type { PayrollTrendRow, VisaExpiryEmployee } from '@/hooks/useReports'
+import type {
+    PayrollTrendRow, VisaExpiryEmployee,
+    AttendanceByDepartment, AttendanceLeader,
+    LeaveTopTaker,
+    StalledChecklist, OnboardingByDepartment,
+    PerformanceDeptRow, RecentReview,
+} from '@/hooks/useReports'
 import { COST_CATEGORY_LABELS } from '@/hooks/useVisaCosts'
 import type { CostReportEmployee } from '@/hooks/useVisaCosts'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
@@ -111,8 +118,23 @@ export function ReportsPage() {
     const payrollSummary = reportsSummary?.payrollSummary
     const visaExpiry = reportsSummary?.visaExpiry
     const proCosts = reportsSummary?.proCosts
+    const attendanceSummary = reportsSummary?.attendanceSummary
+    const leaveSummary = reportsSummary?.leaveSummary
+    const turnover = reportsSummary?.turnover
+    const onboarding = reportsSummary?.onboarding
+    const performance = reportsSummary?.performance
     const isLoading = summaryLoading
     const isRefreshing = summaryFetching
+
+    // ─── Permission gates for the new tabs ─────────────────────────────
+    // No dedicated `view_attendance` / `view_leave` permission yet — fall
+    // back to the `manage_*` versions every HR/PRO role already holds.
+    // dept_head sees their subtree scoping server-side in the BFF.
+    const canViewAttendance = can('manage_attendance')
+    const canViewLeave = can('manage_leave')
+    const canViewTurnover = can('view_employees')
+    const canViewOnboarding = can('view_employees')
+    const canViewPerformance = can('view_employees')
 
     const payrollSearch = useSearchFilters({
         storageKey: 'hrhub.reports.payroll.searchHistory',
@@ -210,26 +232,64 @@ export function ReportsPage() {
             />
 
             <Tabs defaultValue="headcount">
-                <TabsList className="inline-flex h-auto rounded-xl border bg-card p-1 shadow-sm gap-1 mb-5">
-                    <TabsTrigger value="headcount" className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors">
-                        <Users className="size-4" /> Headcount
-                    </TabsTrigger>
-                    {canViewPayroll && (
-                        <TabsTrigger value="payroll" className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors">
-                            <BarChart3 className="size-4" /> Payroll Summary
-                        </TabsTrigger>
-                    )}
-                    {canViewVisa && (
-                        <TabsTrigger value="visa" className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors">
-                            <Shield className="size-4" /> Visa Expiry
-                        </TabsTrigger>
-                    )}
-                    {canViewPayroll && (
-                        <TabsTrigger value="pro-costs" className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors">
-                            <Receipt className="size-4" /> PRO Costs
-                        </TabsTrigger>
-                    )}
-                </TabsList>
+                {/* Tab navigation — config-driven so we don't repeat trigger
+                    classes 9 times. Each tab knows its category and accent
+                    colour; the bar renders in a single horizontally-scrollable
+                    row with subtle category-coloured icon halos so the
+                    People / Time / Compensation / Compliance grouping reads
+                    visually without separator chips that broke onto a second
+                    row on narrow widths. */}
+                {(() => {
+                    type Category = 'people' | 'time' | 'comp' | 'compliance'
+                    const CATEGORY_TONE: Record<Category, { tint: string; text: string; ring: string }> = {
+                        people:     { tint: 'bg-blue-50 dark:bg-blue-950/40',     text: 'text-blue-600 dark:text-blue-400',     ring: 'data-[state=active]:ring-blue-200 dark:data-[state=active]:ring-blue-900/60' },
+                        time:       { tint: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-600 dark:text-emerald-400', ring: 'data-[state=active]:ring-emerald-200 dark:data-[state=active]:ring-emerald-900/60' },
+                        comp:       { tint: 'bg-amber-50 dark:bg-amber-950/40',   text: 'text-amber-600 dark:text-amber-400',   ring: 'data-[state=active]:ring-amber-200 dark:data-[state=active]:ring-amber-900/60' },
+                        compliance: { tint: 'bg-rose-50 dark:bg-rose-950/40',     text: 'text-rose-600 dark:text-rose-400',     ring: 'data-[state=active]:ring-rose-200 dark:data-[state=active]:ring-rose-900/60' },
+                    }
+                    interface TabSpec { value: string; label: string; icon: typeof Users; category: Category; visible: boolean }
+                    const tabs: TabSpec[] = [
+                        { value: 'headcount',   label: 'Headcount',       icon: Users,            category: 'people',     visible: true },
+                        { value: 'turnover',    label: 'Turnover',        icon: GitCommit,        category: 'people',     visible: canViewTurnover },
+                        { value: 'onboarding',  label: 'Onboarding',      icon: ClipboardCheck,   category: 'people',     visible: canViewOnboarding },
+                        { value: 'performance', label: 'Performance',     icon: Star,             category: 'people',     visible: canViewPerformance },
+                        { value: 'attendance',  label: 'Attendance',      icon: CalendarCheck,    category: 'time',       visible: canViewAttendance },
+                        { value: 'leave',       label: 'Leave',           icon: Plane,            category: 'time',       visible: canViewLeave },
+                        { value: 'payroll',     label: 'Payroll',         icon: BarChart3,        category: 'comp',       visible: canViewPayroll },
+                        { value: 'visa',        label: 'Visa Expiry',     icon: Shield,           category: 'compliance', visible: canViewVisa },
+                        { value: 'pro-costs',   label: 'PRO Costs',       icon: Receipt,          category: 'compliance', visible: canViewPayroll },
+                    ]
+                    return (
+                        <div className="mb-5 -mx-1 overflow-x-auto scrollbar-thin">
+                            <TabsList className="inline-flex h-auto items-center rounded-xl border bg-card p-1 shadow-sm gap-0.5 mx-1 min-w-fit">
+                                {tabs.filter((t) => t.visible).map((tab) => {
+                                    const tone = CATEGORY_TONE[tab.category]
+                                    const Icon = tab.icon
+                                    return (
+                                        <TabsTrigger
+                                            key={tab.value}
+                                            value={tab.value}
+                                            className={cn(
+                                                'group relative flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground transition-colors',
+                                                'data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1',
+                                                tone.ring,
+                                            )}
+                                        >
+                                            <span className={cn(
+                                                'inline-flex items-center justify-center size-6 rounded-md transition-colors',
+                                                tone.tint, tone.text,
+                                                'group-data-[state=active]:scale-105',
+                                            )}>
+                                                <Icon className="size-3.5" />
+                                            </span>
+                                            {tab.label}
+                                        </TabsTrigger>
+                                    )
+                                })}
+                            </TabsList>
+                        </div>
+                    )
+                })()}
 
                 {/* ── Headcount ── */}
                 <TabsContent value="headcount" className="space-y-4">
@@ -319,6 +379,451 @@ export function ReportsPage() {
                         )}
                     </Card>
                 </TabsContent>
+
+                {/* ── Turnover & Attrition ──
+                    Joins vs exits trend, turnover rate, by-department exits,
+                    tenure distribution of the current workforce, exit-type pie. */}
+                {canViewTurnover && (
+                    <TabsContent value="turnover" className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <KpiCardCompact label="Turnover Rate" value={`${turnover?.turnoverRate ?? 0}%`} icon={TrendingUp} color={(turnover?.turnoverRate ?? 0) > 15 ? 'red' : (turnover?.turnoverRate ?? 0) > 8 ? 'amber' : 'green'} loading={isLoading} />
+                            <KpiCardCompact label="Joins" value={turnover?.totalJoins ?? 0} icon={UserPlus} color="green" loading={isLoading} />
+                            <KpiCardCompact label="Exits" value={turnover?.totalExits ?? 0} icon={UserMinus} color="red" loading={isLoading} />
+                            <KpiCardCompact label="Net Change" value={`${(turnover?.netChange ?? 0) >= 0 ? '+' : ''}${turnover?.netChange ?? 0}`} icon={BarChart3} color={(turnover?.netChange ?? 0) >= 0 ? 'green' : 'red'} loading={isLoading} />
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Monthly Joins vs Exits (last 12 months)</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(turnover?.trend ?? [], 'turnover-trend.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            {isLoading ? <ChartSkeleton height={240} /> : (turnover?.trend ?? []).length === 0 ? <EmptyChart /> : (
+                                <ResponsiveContainer width="100%" height={240}>
+                                    <BarChart data={turnover?.trend ?? []} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                                        <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                                        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={30} />
+                                        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                                        <Bar dataKey="joins" name="Joins" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                                        <Bar dataKey="exits" name="Exits" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            )}
+                        </Card>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <Card className="p-4">
+                                <h3 className="font-semibold text-sm mb-4">Tenure of Current Workforce</h3>
+                                {isLoading ? <ChartSkeleton height={180} /> : (turnover?.tenureDistribution ?? []).length === 0 ? <EmptyChart /> : (
+                                    <ResponsiveContainer width="100%" height={180}>
+                                        <BarChart data={turnover?.tenureDistribution ?? []} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                                            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={30} />
+                                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                            <Bar dataKey="count" name="Employees" fill="#0ea5e9" radius={[4, 4, 0, 0]} maxBarSize={56} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </Card>
+
+                            <Card className="p-4">
+                                <h3 className="font-semibold text-sm mb-4">Exits by Type</h3>
+                                {isLoading ? <ChartSkeleton height={180} /> : (turnover?.byExitType ?? []).length === 0 ? <EmptyChart message="No exits in this window" /> : (
+                                    <div className="flex flex-col items-center gap-3">
+                                        <ResponsiveContainer width="100%" height={140}>
+                                            <PieChart>
+                                                <Pie data={(turnover?.byExitType ?? []).map((d, i) => ({ name: labelFor(d.label), value: d.count, color: ['#ef4444', '#f59e0b', '#8b5cf6', '#6b7280'][i % 4] }))} cx="50%" cy="50%" innerRadius={36} outerRadius={56} paddingAngle={3} dataKey="value">
+                                                    {(turnover?.byExitType ?? []).map((_, i) => (
+                                                        <Cell key={i} fill={['#ef4444', '#f59e0b', '#8b5cf6', '#6b7280'][i % 4]} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                        <div className="space-y-1.5 w-full">
+                                            {(turnover?.byExitType ?? []).map((d, i) => (
+                                                <div key={d.label} className="flex items-center justify-between text-xs">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="size-2.5 rounded-full" style={{ background: ['#ef4444', '#f59e0b', '#8b5cf6', '#6b7280'][i % 4] }} />
+                                                        <span className="text-muted-foreground capitalize">{labelFor(d.label)}</span>
+                                                    </div>
+                                                    <span className="font-semibold">{d.count}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </Card>
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Exits by Department</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(turnover?.byDepartment ?? [], 'turnover-by-dept.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            {isLoading ? <ChartSkeleton height={200} /> : (turnover?.byDepartment ?? []).length === 0 ? <EmptyChart message="No exits in this window" /> : (
+                                <ResponsiveContainer width="100%" height={200}>
+                                    <BarChart data={turnover?.byDepartment ?? []} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                                        <YAxis type="category" dataKey="department" tick={{ fontSize: 10 }} width={110} />
+                                        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                        <Bar dataKey="exits" name="Exits" fill="#ef4444" radius={[0, 4, 4, 0]} maxBarSize={18}
+                                            label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            )}
+                        </Card>
+                    </TabsContent>
+                )}
+
+                {/* ── Onboarding Completion ──
+                    Completion rate KPI, in-progress vs done, stalled checklists,
+                    by-department breakdown. */}
+                {canViewOnboarding && (
+                    <TabsContent value="onboarding" className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <KpiCardCompact label="Completion Rate" value={`${onboarding?.completionRate ?? 0}%`} icon={CheckCircle2} color="green" loading={isLoading} />
+                            <KpiCardCompact label="In Progress" value={onboarding?.inProgress ?? 0} icon={Clock} color="amber" loading={isLoading} />
+                            <KpiCardCompact label="Stalled (>30d)" value={onboarding?.stalled ?? 0} icon={AlertOctagon} color="red" loading={isLoading} />
+                            <KpiCardCompact label="Avg Days to Complete" value={(onboarding?.avgDaysToComplete ?? 0).toFixed(1)} icon={Hourglass} color="blue" loading={isLoading} />
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Completion Rate by Department</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(onboarding?.byDepartment ?? [], 'onboarding-by-dept.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            <DataTable
+                                isLoading={isLoading}
+                                columns={[
+                                    { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<OnboardingByDepartment, unknown>) => <span className="text-sm font-medium">{getValue() as string}</span> },
+                                    { accessorKey: 'total', header: 'Total', cell: ({ getValue }: CellContext<OnboardingByDepartment, unknown>) => <span className="text-sm tabular-nums">{getValue() as number}</span> },
+                                    { accessorKey: 'completed', header: 'Completed', cell: ({ getValue }: CellContext<OnboardingByDepartment, unknown>) => <span className="text-sm text-success tabular-nums">{getValue() as number}</span> },
+                                    { accessorKey: 'inProgress', header: 'In Progress', cell: ({ getValue }: CellContext<OnboardingByDepartment, unknown>) => <span className="text-sm text-amber-600 tabular-nums">{getValue() as number}</span> },
+                                    { accessorKey: 'completionRate', header: 'Rate', cell: ({ getValue }: CellContext<OnboardingByDepartment, unknown>) => <span className={cn('text-sm font-semibold', (getValue() as number) >= 80 ? 'text-success' : (getValue() as number) >= 50 ? 'text-amber-600' : 'text-destructive')}>{`${getValue() as number}%`}</span> },
+                                ]}
+                                data={(onboarding?.byDepartment ?? []) as unknown as OnboardingByDepartment[]}
+                                pageSize={12}
+                            />
+                        </Card>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Stalled Checklists (no progress &gt; 30 days)</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(onboarding?.stalledList ?? [], 'onboarding-stalled.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            <DataTable
+                                isLoading={isLoading}
+                                columns={[
+                                    { accessorKey: 'fullName', header: 'Employee', cell: ({ row }: CellContext<StalledChecklist, unknown>) => (
+                                        <div className="flex items-center gap-2">
+                                            <InitialsAvatar name={row.original.fullName} size="sm" />
+                                            <div className="min-w-0">
+                                                <EmployeeLink id={row.original.employeeId} name={row.original.fullName} className="text-sm font-medium truncate block" />
+                                                <span className="text-[11px] text-muted-foreground truncate block">{row.original.designation ?? '—'}</span>
+                                            </div>
+                                        </div>
+                                    ) },
+                                    { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<StalledChecklist, unknown>) => <span className="text-xs text-muted-foreground">{(getValue() as string) || '—'}</span> },
+                                    { accessorKey: 'progress', header: 'Progress', cell: ({ getValue }: CellContext<StalledChecklist, unknown>) => <Badge variant="secondary" className="tabular-nums">{`${getValue() as number}%`}</Badge> },
+                                    { accessorKey: 'stalledDays', header: 'Stalled', cell: ({ getValue }: CellContext<StalledChecklist, unknown>) => <span className="text-sm font-semibold text-destructive">{`${getValue() as number}d`}</span> },
+                                    { accessorKey: 'dueDate', header: 'Due', cell: ({ getValue }: CellContext<StalledChecklist, unknown>) => <span className="text-xs text-muted-foreground">{(getValue() as string) ? formatDate(getValue() as string) : '—'}</span> },
+                                ]}
+                                data={(onboarding?.stalledList ?? []) as unknown as StalledChecklist[]}
+                                pageSize={10}
+                            />
+                        </Card>
+                    </TabsContent>
+                )}
+
+                {/* ── Performance Reviews ──
+                    Status counts, rating distribution, per-department averages,
+                    recent submitted/completed reviews. */}
+                {canViewPerformance && (
+                    <TabsContent value="performance" className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <KpiCardCompact label="Avg Rating" value={(performance?.avgRating ?? 0).toFixed(2)} icon={Star} color={(performance?.avgRating ?? 0) >= 4 ? 'green' : (performance?.avgRating ?? 0) >= 3 ? 'amber' : 'red'} loading={isLoading} />
+                            <KpiCardCompact label="Completion Rate" value={`${performance?.completionRate ?? 0}%`} icon={TrendingUp} color="green" loading={isLoading} />
+                            <KpiCardCompact label="Total Reviews" value={performance?.total ?? 0} icon={BarChart3} color="blue" loading={isLoading} />
+                            <KpiCardCompact label="In Draft" value={performance?.draft ?? 0} icon={Clock} color="amber" loading={isLoading} />
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <Card className="lg:col-span-1 p-4">
+                                <h3 className="font-semibold text-sm mb-4">Rating Distribution</h3>
+                                {isLoading ? <ChartSkeleton height={200} /> : (performance?.ratingDistribution ?? []).length === 0 ? <EmptyChart message="No ratings yet" /> : (
+                                    <ResponsiveContainer width="100%" height={200}>
+                                        <BarChart data={(performance?.ratingDistribution ?? []).map((r) => ({ name: `${r.rating} ★`, count: r.count }))} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={30} />
+                                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                            <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </Card>
+
+                            <Card className="lg:col-span-2 p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-semibold text-sm">Average Rating by Department</h3>
+                                    <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                        onClick={() => exportCsv(performance?.byDepartment ?? [], 'performance-by-dept.csv')}>
+                                        Export
+                                    </Button>
+                                </div>
+                                <DataTable
+                                    isLoading={isLoading}
+                                    columns={[
+                                        { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<PerformanceDeptRow, unknown>) => <span className="text-sm font-medium">{getValue() as string}</span> },
+                                        { accessorKey: 'avgRating', header: 'Avg Rating', cell: ({ getValue }: CellContext<PerformanceDeptRow, unknown>) => <span className={cn('text-sm font-semibold tabular-nums', (getValue() as number) >= 4 ? 'text-success' : (getValue() as number) >= 3 ? 'text-amber-600' : 'text-destructive')}>{(getValue() as number).toFixed(2)} ★</span> },
+                                        { accessorKey: 'count', header: 'Reviews', cell: ({ getValue }: CellContext<PerformanceDeptRow, unknown>) => <span className="text-sm tabular-nums">{getValue() as number}</span> },
+                                    ]}
+                                    data={(performance?.byDepartment ?? []) as unknown as PerformanceDeptRow[]}
+                                    pageSize={12}
+                                />
+                            </Card>
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Recent Reviews</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(performance?.recent ?? [], 'performance-recent.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            <DataTable
+                                isLoading={isLoading}
+                                columns={[
+                                    { accessorKey: 'fullName', header: 'Employee', cell: ({ row }: CellContext<RecentReview, unknown>) => (
+                                        <div className="flex items-center gap-2">
+                                            <InitialsAvatar name={row.original.fullName} size="sm" />
+                                            <div className="min-w-0">
+                                                <EmployeeLink id={row.original.employeeId} name={row.original.fullName} className="text-sm font-medium truncate block" />
+                                                <span className="text-[11px] text-muted-foreground truncate block">{row.original.designation ?? '—'}</span>
+                                            </div>
+                                        </div>
+                                    ) },
+                                    { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<RecentReview, unknown>) => <span className="text-xs text-muted-foreground">{(getValue() as string) || '—'}</span> },
+                                    { accessorKey: 'period', header: 'Period', cell: ({ getValue }: CellContext<RecentReview, unknown>) => <span className="text-sm">{getValue() as string}</span> },
+                                    { accessorKey: 'overallRating', header: 'Rating', cell: ({ getValue }: CellContext<RecentReview, unknown>) => {
+                                        const v = getValue() as number | null
+                                        if (v == null) return <span className="text-xs text-muted-foreground">—</span>
+                                        return <span className={cn('text-sm font-semibold tabular-nums', v >= 4 ? 'text-success' : v >= 3 ? 'text-amber-600' : 'text-destructive')}>{v} ★</span>
+                                    } },
+                                    { accessorKey: 'status', header: 'Status', cell: ({ getValue }: CellContext<RecentReview, unknown>) => <Badge variant="secondary" className="capitalize text-[11px]">{labelFor(getValue() as string)}</Badge> },
+                                ]}
+                                data={(performance?.recent ?? []) as unknown as RecentReview[]}
+                                pageSize={10}
+                            />
+                        </Card>
+                    </TabsContent>
+                )}
+
+                {/* ── Attendance Summary ──
+                    KPI strip + monthly attendance-rate trend + per-department
+                    breakdown + late-arrivals leaderboard. Window matches the
+                    visa report's 90-day default. */}
+                {canViewAttendance && (
+                    <TabsContent value="attendance" className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <KpiCardCompact label="Attendance Rate" value={`${attendanceSummary?.attendanceRate ?? 0}%`} icon={TrendingUp} color="green" loading={isLoading} />
+                            <KpiCardCompact label="Late Arrivals" value={attendanceSummary?.late ?? 0} icon={Timer} color="amber" loading={isLoading} />
+                            <KpiCardCompact label="Absences" value={attendanceSummary?.absent ?? 0} icon={XCircle} color="red" loading={isLoading} />
+                            <KpiCardCompact label="Avg Hrs / Day" value={(attendanceSummary?.avgHoursPerDay ?? 0).toFixed(1)} icon={Hourglass} color="blue" loading={isLoading} />
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Monthly Attendance Rate</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(attendanceSummary?.trend ?? [], 'attendance-trend.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            {isLoading ? <ChartSkeleton height={220} /> : (attendanceSummary?.trend ?? []).length === 0 ? <EmptyChart message="No attendance data in this window" /> : (
+                                <ResponsiveContainer width="100%" height={220}>
+                                    <AreaChart data={attendanceSummary?.trend ?? []} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="gradAttRate" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                                        <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} domain={[0, 100]} width={42} />
+                                        <Tooltip formatter={(v: unknown) => [`${Number(v ?? 0)}%`, 'Rate']} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                        <Area type="monotone" dataKey="rate" stroke="#10b981" fill="url(#gradAttRate)" strokeWidth={2} dot={{ r: 3 }} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            )}
+                        </Card>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <Card className="p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-semibold text-sm">By Department</h3>
+                                    <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                        onClick={() => exportCsv(attendanceSummary?.byDepartment ?? [], 'attendance-by-dept.csv')}>
+                                        Export
+                                    </Button>
+                                </div>
+                                <DataTable
+                                    isLoading={isLoading}
+                                    columns={[
+                                        { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<AttendanceByDepartment, unknown>) => <span className="text-sm font-medium">{getValue() as string}</span> },
+                                        { accessorKey: 'rate', header: 'Rate', cell: ({ getValue }: CellContext<AttendanceByDepartment, unknown>) => <span className={cn('text-sm font-semibold', (getValue() as number) >= 95 ? 'text-success' : (getValue() as number) >= 85 ? 'text-amber-600' : 'text-destructive')}>{`${getValue() as number}%`}</span> },
+                                        { accessorKey: 'late', header: 'Late', cell: ({ getValue }: CellContext<AttendanceByDepartment, unknown>) => <span className="text-sm tabular-nums">{getValue() as number}</span> },
+                                        { accessorKey: 'absent', header: 'Absent', cell: ({ getValue }: CellContext<AttendanceByDepartment, unknown>) => <span className="text-sm tabular-nums">{getValue() as number}</span> },
+                                    ]}
+                                    data={(attendanceSummary?.byDepartment ?? []) as unknown as AttendanceByDepartment[]}
+                                    pageSize={12}
+                                />
+                            </Card>
+
+                            <Card className="p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-semibold text-sm">Top Late Arrivals</h3>
+                                    <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                        onClick={() => exportCsv(attendanceSummary?.lateLeaderboard ?? [], 'attendance-late-leaders.csv')}>
+                                        Export
+                                    </Button>
+                                </div>
+                                <DataTable
+                                    isLoading={isLoading}
+                                    columns={[
+                                        { accessorKey: 'fullName', header: 'Employee', cell: ({ row }: CellContext<AttendanceLeader, unknown>) => (
+                                            <div className="flex items-center gap-2">
+                                                <InitialsAvatar name={row.original.fullName} size="sm" />
+                                                <div className="min-w-0">
+                                                    <EmployeeLink id={row.original.employeeId} name={row.original.fullName} className="text-sm font-medium truncate block" />
+                                                    <span className="text-[11px] text-muted-foreground truncate block">{row.original.designation ?? '—'}</span>
+                                                </div>
+                                            </div>
+                                        ) },
+                                        { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<AttendanceLeader, unknown>) => <span className="text-xs text-muted-foreground">{(getValue() as string) || '—'}</span> },
+                                        { accessorKey: 'lateCount', header: 'Late count', cell: ({ getValue }: CellContext<AttendanceLeader, unknown>) => <Badge variant="warning" className="tabular-nums">{getValue() as number}</Badge> },
+                                    ]}
+                                    data={(attendanceSummary?.lateLeaderboard ?? []) as unknown as AttendanceLeader[]}
+                                    pageSize={10}
+                                />
+                            </Card>
+                        </div>
+                    </TabsContent>
+                )}
+
+                {/* ── Leave Summary ──
+                    YTD breakdown of leave requests: status KPIs, by-type pie,
+                    by-department days-taken table, top-takers leaderboard. */}
+                {canViewLeave && (
+                    <TabsContent value="leave" className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <KpiCardCompact label="Approved Days" value={leaveSummary?.approvedDays ?? 0} icon={CheckCircle2} color="green" loading={isLoading} />
+                            <KpiCardCompact label="Pending Requests" value={leaveSummary?.pendingRequests ?? 0} icon={Clock} color="amber" loading={isLoading} />
+                            <KpiCardCompact label="Approved Requests" value={leaveSummary?.approvedRequests ?? 0} icon={UserPlus} color="blue" loading={isLoading} />
+                            <KpiCardCompact label="Rejected / Cancelled" value={(leaveSummary?.rejectedRequests ?? 0) + (leaveSummary?.cancelledRequests ?? 0)} icon={XCircle} color="red" loading={isLoading} />
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <Card className="lg:col-span-2 p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-semibold text-sm">Approved Days by Department</h3>
+                                    <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                        onClick={() => exportCsv(leaveSummary?.byDepartment ?? [], 'leave-by-dept.csv')}>
+                                        Export
+                                    </Button>
+                                </div>
+                                {isLoading ? <ChartSkeleton height={220} /> : (leaveSummary?.byDepartment ?? []).length === 0 ? <EmptyChart /> : (
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <BarChart data={(leaveSummary?.byDepartment ?? []).map((d) => ({ name: d.department, days: d.days }))} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                                            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} />
+                                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                            <Bar dataKey="days" name="Days" fill="#6366f1" radius={[0, 4, 4, 0]} maxBarSize={18}
+                                                label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </Card>
+
+                            <Card className="p-4">
+                                <h3 className="font-semibold text-sm mb-4">By Leave Type</h3>
+                                {isLoading ? <ChartSkeleton height={220} /> : (leaveSummary?.byType ?? []).length === 0 ? <EmptyChart /> : (
+                                    <div className="flex flex-col items-center gap-3">
+                                        <ResponsiveContainer width="100%" height={160}>
+                                            <PieChart>
+                                                <Pie data={(leaveSummary?.byType ?? []).map((tp, i) => ({ name: labelFor(tp.leaveType), value: tp.days, color: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#6b7280'][i % 8] }))} cx="50%" cy="50%" innerRadius={44} outerRadius={68} paddingAngle={3} dataKey="value">
+                                                    {(leaveSummary?.byType ?? []).map((_, i) => (
+                                                        <Cell key={i} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#6b7280'][i % 8]} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip formatter={(v: unknown, name: unknown) => [`${Number(v ?? 0)} d`, String(name ?? '')]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                        <div className="space-y-1.5 w-full">
+                                            {(leaveSummary?.byType ?? []).map((tp, i) => (
+                                                <div key={tp.leaveType} className="flex items-center justify-between text-xs">
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <div className="size-2.5 rounded-full shrink-0" style={{ background: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#6b7280'][i % 8] }} />
+                                                        <span className="text-muted-foreground truncate">{labelFor(tp.leaveType)}</span>
+                                                    </div>
+                                                    <span className="font-semibold tabular-nums">{tp.days} d</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </Card>
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Top Leave Takers</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(leaveSummary?.topTakers ?? [], 'leave-top-takers.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            <DataTable
+                                isLoading={isLoading}
+                                columns={[
+                                    { accessorKey: 'fullName', header: 'Employee', cell: ({ row }: CellContext<LeaveTopTaker, unknown>) => (
+                                        <div className="flex items-center gap-2">
+                                            <InitialsAvatar name={row.original.fullName} size="sm" />
+                                            <div className="min-w-0">
+                                                <EmployeeLink id={row.original.employeeId} name={row.original.fullName} className="text-sm font-medium truncate block" />
+                                                <span className="text-[11px] text-muted-foreground truncate block">{row.original.designation ?? '—'}</span>
+                                            </div>
+                                        </div>
+                                    ) },
+                                    { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<LeaveTopTaker, unknown>) => <span className="text-xs text-muted-foreground">{(getValue() as string) || '—'}</span> },
+                                    { accessorKey: 'days', header: 'Days taken', cell: ({ getValue }: CellContext<LeaveTopTaker, unknown>) => <span className="text-sm font-bold tabular-nums">{getValue() as number}</span> },
+                                    { accessorKey: 'requests', header: 'Requests', cell: ({ getValue }: CellContext<LeaveTopTaker, unknown>) => <span className="text-sm tabular-nums">{getValue() as number}</span> },
+                                ]}
+                                data={(leaveSummary?.topTakers ?? []) as unknown as LeaveTopTaker[]}
+                                pageSize={10}
+                            />
+                        </Card>
+                    </TabsContent>
+                )}
 
                 {/* ── Payroll Summary ── */}
                 <TabsContent value="payroll" className="space-y-4">

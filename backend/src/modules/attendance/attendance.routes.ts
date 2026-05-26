@@ -1,4 +1,4 @@
-import { checkIn, checkOut, getAttendance, upsertAttendance, getAttendanceSummary, externalPunch, getPunchesForDay, recordPunch, deletePunch } from './attendance.service.js'
+import { checkIn, checkOut, getAttendance, upsertAttendance, getAttendanceSummary, externalPunch, getPunchesForDay, getPunchesForDayScoped, recordPunch, deletePunch } from './attendance.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { db } from '../../db/index.js'
 import {
@@ -28,6 +28,13 @@ const externalPunchSchema = z.object({
     deviceId: z.string().max(200).optional(),
     deviceName: z.string().max(200).optional(),
     source: z.enum(['biometric', 'api', 'mobile']).optional(),
+    // Geolocation — accepted from mobile apps and geofenced kiosks.
+    // Bounds checked here so we don't store garbage (the punch log links
+    // straight to Google Maps; out-of-range coords would 404 there).
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    locationName: z.string().max(200).optional(),
+    notes: z.string().max(500).optional(),
 })
 
 // ─── Calendar helpers (single tenant-scoped read model) ──────────────────
@@ -473,8 +480,17 @@ export async function attendanceRoutes(fastify: any) {
     })
 
     // GET /api/v1/attendance/punches?date=YYYY-MM-DD&employeeId=
-    // Returns every individual check-in / out for a single day. Employees
-    // see their own; admins / dept_head respect scoping.
+    // Returns every individual check-in / out for a single day.
+    //
+    //   • employees: always see only their own punches
+    //   • dept_head: with employeeId → that employee (must be in their dept);
+    //                without          → every employee in their department
+    //   • hr_manager / super_admin: with employeeId → that employee;
+    //                                without          → tenant-wide
+    //
+    // The tenant-wide / department-wide path is what powers HR's Punch
+    // History view — one round trip, then the client buckets by employee
+    // to surface each row's source and location.
     fastify.get('/attendance/punches', { ...auth, schema: { tags: ['Attendance'] } }, async (request: any, reply: any) => {
         const q = (request.query ?? {}) as { date?: string; employeeId?: string }
         const date = q.date
@@ -484,18 +500,41 @@ export async function attendanceRoutes(fastify: any) {
         const role = request.user.role
         const isHrAdmin = ['hr_manager', 'super_admin'].includes(role)
         const isDeptHead = role === 'dept_head'
-        const resolvedEmployeeId = (isHrAdmin || isDeptHead) && q.employeeId ? q.employeeId : request.user.employeeId
-        if (!resolvedEmployeeId) {
-            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
-        }
-        if (isDeptHead && q.employeeId && q.employeeId !== request.user.employeeId) {
-            const emp = await findById(request.user.tenantId, resolvedEmployeeId)
-            if (!emp || emp.department !== request.user.department) {
-                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only view punches for employees in your department.' })
+
+        // Self-view path (or HR/dept_head explicitly asking for one employee).
+        if (q.employeeId || (!isHrAdmin && !isDeptHead)) {
+            const resolvedEmployeeId = (isHrAdmin || isDeptHead) && q.employeeId ? q.employeeId : request.user.employeeId
+            if (!resolvedEmployeeId) {
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
             }
+            if (isDeptHead && q.employeeId && q.employeeId !== request.user.employeeId) {
+                const emp = await findById(request.user.tenantId, resolvedEmployeeId)
+                if (!emp || emp.department !== request.user.department) {
+                    return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only view punches for employees in your department.' })
+                }
+            }
+            const data = await getPunchesForDay(request.user.tenantId, resolvedEmployeeId, date)
+            return reply.send({ data })
         }
-        const data = await getPunchesForDay(request.user.tenantId, resolvedEmployeeId, date)
-        return reply.send({ data })
+
+        // Wide-scope path (no employeeId).
+        if (isHrAdmin) {
+            const data = await getPunchesForDayScoped(request.user.tenantId, date)
+            return reply.send({ data })
+        }
+        // dept_head — fetch the department member list and scope to it.
+        if (isDeptHead) {
+            if (!request.user.department) {
+                return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Your account has no department assigned.' })
+            }
+            const deptEmps = await db.select({ id: employees.id })
+                .from(employees)
+                .where(and(eq(employees.tenantId, request.user.tenantId), eq(employees.department, request.user.department)))
+            const ids = deptEmps.map((e) => e.id)
+            const data = await getPunchesForDayScoped(request.user.tenantId, date, ids)
+            return reply.send({ data })
+        }
+        return reply.send({ data: [] })
     })
 
     // POST /api/v1/attendance/punches — manual HR entry (paired in + out).
@@ -658,7 +697,7 @@ export async function attendanceRoutes(fastify: any) {
         preHandler: [buildAppOrJwtAuth(fastify, 'attendance:write')],
         schema: { tags: ['Attendance'] },
     }, async (request: any, reply: any) => {
-        const { employeeId, timestamp, deviceId, deviceName, punchType, source } =
+        const { employeeId, timestamp, deviceId, deviceName, punchType, source, latitude, longitude, locationName, notes } =
             validate(externalPunchSchema, request.body)
         // Verify the employee belongs to the caller's tenant before accepting any punch —
         // without this an attacker from tenant A could punch in/out for employees in tenant B.
@@ -681,7 +720,18 @@ export async function attendanceRoutes(fastify: any) {
             const punchDenied = await enforceAttendanceFlag(request.user.tenantId, employeeId, 'punch')
             if (punchDenied) return reply.code(punchDenied.code).send({ statusCode: punchDenied.code, error: 'Forbidden', message: punchDenied.message })
         }
-        const data = await externalPunch(request.user.tenantId, { employeeId, timestamp, deviceId, deviceName, punchType, source })
+        const data = await externalPunch(request.user.tenantId, {
+            employeeId,
+            timestamp,
+            deviceId,
+            deviceName,
+            punchType,
+            source,
+            latitude: latitude ?? null,
+            longitude: longitude ?? null,
+            locationName: locationName ?? null,
+            notes: notes ?? null,
+        })
         return reply.send({ data })
     })
 
