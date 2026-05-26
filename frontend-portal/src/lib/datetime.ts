@@ -41,3 +41,68 @@ export function toISODate(d: Date): string {
 export function toISOMonth(d: Date): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
+
+/** Sunday-anchored start-of-week (UAE convention). Returns a fresh Date
+ *  so callers can mutate it without affecting the original. */
+export function startOfWeek(d: Date): Date {
+    const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    out.setDate(out.getDate() - out.getDay())
+    return out
+}
+
+/** Add `n` days to a date and return a fresh Date. */
+export function addDays(d: Date, n: number): Date {
+    const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    out.setDate(out.getDate() + n)
+    return out
+}
+
+/**
+ * Render an attendance day's worked time as `H:MM:SS`.
+ *
+ * Prefers the exact second-level delta between `checkIn` and `checkOut`
+ * when both are present — the backend's `hoursWorked` field is stored as
+ * decimal hours rounded to 2dp, which loses ~36 seconds of precision per
+ * 1.0 hour and reads awkwardly to employees ("1.79 hrs" → "1:47:24").
+ * Falls back to converting the decimal when only the rollup is available.
+ *
+ * Returns `'0:00:00'` for nullish / unparseable input so call sites can
+ * render the value directly.
+ */
+export function formatHoursWorked(
+    hoursDecimal: string | null | undefined,
+    checkIn?: string | null,
+    checkOut?: string | null,
+): string {
+    // Prefer direct calc when we have both ends of the punch — gives
+    // second-level precision that the decimal field can't carry.
+    if (checkIn && checkOut) {
+        const startMs = Date.parse(checkIn)
+        const endMs = Date.parse(checkOut)
+        if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs > startMs) {
+            return formatSeconds(Math.floor((endMs - startMs) / 1000))
+        }
+    }
+    if (hoursDecimal) {
+        // Backend may already use `H:MM` / `H:MM:SS` — keep it untouched.
+        if (/^\d+:\d{2}(:\d{2})?$/.test(hoursDecimal)) {
+            return hoursDecimal.includes(':') && hoursDecimal.split(':').length === 3
+                ? hoursDecimal
+                : `${hoursDecimal}:00`
+        }
+        // Decimal hours → seconds → H:MM:SS.
+        const decimal = parseFloat(hoursDecimal)
+        if (Number.isFinite(decimal) && decimal > 0) {
+            return formatSeconds(Math.round(decimal * 3600))
+        }
+    }
+    return '0:00:00'
+}
+
+function formatSeconds(totalSec: number): string {
+    const safe = Math.max(0, totalSec)
+    const h = Math.floor(safe / 3600)
+    const m = Math.floor((safe % 3600) / 60)
+    const s = safe % 60
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}

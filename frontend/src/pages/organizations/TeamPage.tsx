@@ -16,8 +16,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -553,25 +554,22 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                 ))}
                             </div>
                         ) : filtered.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-8 gap-2 text-center px-4 pb-4">
-                                <div className="size-10 rounded-full bg-muted flex items-center justify-center">
-                                    <Users className="size-5 text-muted-foreground/40" />
-                                </div>
-                                <p className="text-xs text-muted-foreground font-medium">
-                                    {search ? t('team.noMembersMatch') : t('team.noMembersYet')}
-                                </p>
-                                {canManage && !search && (
+                            <EmptyState
+                                icon={Users}
+                                title={search ? t('team.noMembersMatch') : t('team.noMembersYet')}
+                                size="sm"
+                                action={canManage && !search ? (
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-7 text-xs mt-1"
+                                        className="h-7 text-xs"
                                         leftIcon={<UserPlus className="size-3" />}
                                         onClick={e => { e.stopPropagation(); setAddOpen(true) }}
                                     >
                                         {t('team.addMembers')}
                                     </Button>
-                                )}
-                            </div>
+                                ) : undefined}
+                            />
                         ) : (
                             <ScrollArea className={filtered.length > 5 ? 'h-[220px]' : undefined}>
                                 <TooltipProvider delayDuration={300}>
@@ -836,21 +834,23 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
                         {teamsLoading ? (
                             <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                         ) : allTeams.length === 0 ? (
-                            <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                                <Users className="size-8 text-muted-foreground/40" />
-                                <p className="text-sm text-muted-foreground">{t('team.noTeamsYet')}</p>
-                                {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>{t('team.createTeam')}</Button>}
-                            </CardContent></Card>
+                            <EmptyState
+                                icon={Users}
+                                title={t('team.noTeamsYet')}
+                                variant="card"
+                                action={canManage ? (
+                                    <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
+                                        {t('team.createTeam')}
+                                    </Button>
+                                ) : undefined}
+                            />
                         ) : teamGrid(allTeams, true)}
                     </TabsContent>
                     <TabsContent value="mine">
                         {myTeamsLoading ? (
                             <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                         ) : myTeams.length === 0 ? (
-                            <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                                <Users className="size-8 text-muted-foreground/40" />
-                                <p className="text-sm text-muted-foreground">{t('team.notAssignedToTeams')}</p>
-                            </CardContent></Card>
+                            <EmptyState icon={Users} title={t('team.notAssignedToTeams')} variant="card" />
                         ) : teamGrid(myTeams, false)}
                     </TabsContent>
                 </Tabs>
@@ -860,13 +860,16 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
                     {myTeamsLoading ? (
                         <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                     ) : myTeams.length === 0 ? (
-                        <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                            <Users className="size-8 text-muted-foreground/40" />
-                            <p className="text-sm text-muted-foreground">
-                                {canManage ? t('team.createToGetStarted') : t('team.notAssignedToTeams')}
-                            </p>
-                            {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>{t('team.createTeam')}</Button>}
-                        </CardContent></Card>
+                        <EmptyState
+                            icon={Users}
+                            title={canManage ? t('team.createToGetStarted') : t('team.notAssignedToTeams')}
+                            variant="card"
+                            action={canManage ? (
+                                <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
+                                    {t('team.createTeam')}
+                                </Button>
+                            ) : undefined}
+                        />
                     ) : teamGrid(myTeams, true)}
                 </div>
             )}

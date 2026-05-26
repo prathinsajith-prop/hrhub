@@ -1068,9 +1068,15 @@ function EmployeeMonthAttendanceDialog({
         if (!employee) return acc
         for (const c of employee.cells) {
             if (!c.code) continue
-            if (c.code === 'P') acc.present++
+            // 'IP' (In Progress, still checked in today) counts as Present
+            // for the headline KPI — the employee is on shift, just hasn't
+            // punched out yet. 'INC' (Incomplete, past day missing checkout)
+            // still counts as Absent so HR sees the impact on attendance
+            // until they close out the day. Both are distinct hues on the
+            // grid so HR can tell them apart visually.
+            if (c.code === 'P' || c.code === 'IP') acc.present++
             else if (c.code === 'P-late' || c.code === 'P-short') acc.late++
-            else if (c.code === 'A') acc.absent++
+            else if (c.code === 'A' || c.code === 'INC') acc.absent++
             else if (['AL', 'SL', 'ML', 'PL', 'BL', 'HJ'].includes(c.code)) acc.leave++
             else if (c.code === 'WFH') acc.wfh++
             else if (c.code === 'H') acc.holiday++

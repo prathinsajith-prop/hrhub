@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import { BulkImportDialog } from '@/components/shared/BulkImportDialog'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { useDesignations, useCreateDesignation, useUpdateDesignation } from '@/hooks/useDesignations'
 import type { Designation } from '@/hooks/useDesignations'
 import { Section } from './_shared'
@@ -79,7 +80,7 @@ export function DesignationsTab() {
                     {isLoading ? (
                         <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={`div-${i}`} className="h-9 rounded-lg" />)}</div>
                     ) : designations.length === 0 && !addingNew ? (
-                        <p className="text-sm text-muted-foreground text-center py-4">{t('orgSettings.designations.empty')}</p>
+                        <EmptyState icon={Briefcase} title={t('orgSettings.designations.empty')} size="sm" />
                     ) : (
                         <div className="divide-y divide-border/50 rounded-lg border bg-background">
                             {designations.map(d => (

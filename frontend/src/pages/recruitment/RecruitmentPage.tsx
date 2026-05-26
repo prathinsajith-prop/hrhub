@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
 import { Plus, Briefcase, Users, Clock, TrendingUp, Star, Mail, Phone, Eye, Edit2, UserCheck, RefreshCcw, LayoutList, LayoutGrid, ChevronRight, Loader2, AlertCircle, FileText, XCircle, Upload } from 'lucide-react'
 import { BulkImportJobsDialog } from './BulkImportJobsDialog'
+import { BulkImportCandidatesDialog } from './BulkImportCandidatesDialog'
 import {
   DndContext,
   PointerSensor,
@@ -23,6 +24,7 @@ import { Tabs } from '@/components/ui/form-controls'
 import { DataTable } from '@/components/ui/data-table'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { cn, formatCurrency, formatDate, getInitials, onActivate, splitFullName } from '@/lib/utils'
@@ -714,6 +716,7 @@ export function RecruitmentPage() {
   const [listStageFilter, setListStageFilter] = useState<ApplicationStage | 'all'>('all')
   const [jobDialogOpen, setJobDialogOpen] = useState(false)
   const [bulkJobsOpen, setBulkJobsOpen] = useState(false)
+  const [bulkCandidatesOpen, setBulkCandidatesOpen] = useState(false)
   const [editJob, setEditJob] = useState<Job | null>(null)
   const [closeConfirm, setCloseConfirm] = useState<string[] | null>(null)
   const [addCandidateOpen, setAddCandidateOpen] = useState(false)
@@ -843,6 +846,10 @@ export function RecruitmentPage() {
               onExportCsv={() => exportRecruitment({ format: 'csv' })}
               onExportPdf={() => exportRecruitment({ format: 'pdf' })}
             />
+            <Button variant="outline" className="gap-2" onClick={() => setBulkCandidatesOpen(true)} disabled={jobs.filter((j) => j.status === 'open').length === 0}>
+              <Upload className="size-4" />
+              <span className="hidden sm:inline">Bulk candidates</span>
+            </Button>
             <Button variant="outline" className="gap-2" onClick={() => setAddCandidateOpen(true)} disabled={jobs.filter((j) => j.status === 'open').length === 0}>
               <Plus className="size-4" />
               <span className="hidden sm:inline">Add Candidate</span>
@@ -985,20 +992,19 @@ export function RecruitmentPage() {
                 <CardContent className="p-0">
                   {listAppsLoading ? (
                     <div className="p-4 space-y-2">
-                      {[1, 2, 3, 4, 5].map(i => <div key={`div-${i}`} className="h-14 rounded-lg bg-muted/50 animate-pulse" />)}
+                      {[1, 2, 3, 4, 5].map(i => <Skeleton key={`div-${i}`} className="h-14 rounded-lg" />)}
                     </div>
                   ) : filteredListCandidates.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                      <AlertCircle className="size-8 text-muted-foreground/20 mb-2" />
-                      <p className="text-sm font-semibold">
-                        {allListCandidates.length === 0 ? 'No candidates yet' : 'No candidates in this stage'}
-                      </p>
-                      {listStageFilter !== 'all' && (
-                        <button type="button" onClick={() => setListStageFilter('all')} className="text-xs text-primary mt-2 hover:underline">
+                    <EmptyState
+                      icon={AlertCircle}
+                      title={allListCandidates.length === 0 ? 'No candidates yet' : 'No candidates in this stage'}
+                      size="lg"
+                      action={listStageFilter !== 'all' ? (
+                        <button type="button" onClick={() => setListStageFilter('all')} className="text-xs text-primary hover:underline">
                           Show all
                         </button>
-                      )}
-                    </div>
+                      ) : undefined}
+                    />
                   ) : (
                     <>
                       <div className="sticky top-0 z-10 hidden sm:flex items-center gap-3 px-4 py-2 border-b bg-card/95 backdrop-blur-sm">
@@ -1095,6 +1101,7 @@ export function RecruitmentPage() {
 
       <NewJobDialog open={jobDialogOpen} onOpenChange={setJobDialogOpen} />
       <BulkImportJobsDialog open={bulkJobsOpen} onOpenChange={setBulkJobsOpen} />
+      <BulkImportCandidatesDialog open={bulkCandidatesOpen} onOpenChange={setBulkCandidatesOpen} />
       <AddCandidateDialog
         open={addCandidateOpen}
         onOpenChange={setAddCandidateOpen}

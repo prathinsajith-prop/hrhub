@@ -18,6 +18,7 @@ import { BulkMappingsImportDialog } from './BulkMappingsImportDialog'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, Input, Label } from '@/components/ui/primitives'
@@ -133,14 +134,13 @@ function BiometricMappingTab() {
                                 ))
                             ) : rows.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-3 py-12 text-center">
-                                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                                            <Fingerprint className="size-8 opacity-30" />
-                                            <p>{t('biometric.mapping.empty', 'No mappings yet')}</p>
-                                            <p className="text-[11px] text-muted-foreground/80 max-w-md">
-                                                {t('biometric.mapping.emptyHint', 'Add a mapping for each biometric / device user ID that you want to recognise during punch imports.')}
-                                            </p>
-                                        </div>
+                                    <td colSpan={5} className="px-3 py-0">
+                                        <EmptyState
+                                            icon={Fingerprint}
+                                            title={t('biometric.mapping.empty', 'No mappings yet')}
+                                            description={t('biometric.mapping.emptyHint', 'Add a mapping for each biometric / device user ID that you want to recognise during punch imports.')}
+                                            size="sm"
+                                        />
                                     </td>
                                 </tr>
                             ) : rows.map((r) => (

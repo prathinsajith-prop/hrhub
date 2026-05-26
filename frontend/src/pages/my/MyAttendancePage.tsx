@@ -46,12 +46,13 @@ import {
 import { useShifts } from '@/hooks/useShifts'
 import { useGeolocationPermission } from '@/hooks/useGeolocationPermission'
 import { useAccountFlags } from '@/hooks/useAccountFlags'
-import { formatTime, formatDayLabel, toISODate, toISOMonth } from '@/lib/datetime'
+import { formatTime, formatDayLabel, toISODate, toISOMonth, startOfWeek, addDays, formatHoursWorked } from '@/lib/datetime'
 import {
   classify, statusLabel, statusTone, computeStats,
   type DayInfo, type AttendanceWeekStats,
 } from '@/lib/attendance/calendar'
 import { useLiveDuration } from '@/hooks/useLiveDuration'
+import { EmptyState } from '@/components/shared/EmptyState'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 // The day-format / ISO helpers (`formatTime`, `formatDayLabel`,
@@ -61,17 +62,6 @@ import { useLiveDuration } from '@/hooks/useLiveDuration'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-function startOfWeek(d: Date): Date {
-  const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  out.setDate(out.getDate() - out.getDay()) // Sunday-start
-  return out
-}
-
-function addDays(d: Date, n: number): Date {
-  const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  out.setDate(out.getDate() + n)
-  return out
-}
 
 
 function hhmmToMinutes(hhmm: string): number {
@@ -639,7 +629,7 @@ function TimelineView({
             </div>
             {/* Hours */}
             <div className="text-right">
-              <p className="text-sm font-semibold tabular-nums">{d.cell?.hoursWorked ?? '00:00'}</p>
+              <p className="text-sm font-semibold tabular-nums">{formatHoursWorked(d.cell?.hoursWorked, d.cell?.checkIn, d.cell?.checkOut)}</p>
               <p className="text-[10px] text-muted-foreground">Hrs worked</p>
             </div>
           </button>
@@ -682,7 +672,7 @@ function ListView({ days }: { days: DayInfo[] }) {
         <tbody className="divide-y">
           {days.map((d) => {
             const tone = statusTone(d.classification)
-            const hours = d.cell?.hoursWorked ?? '—'
+            const hours = d.cell?.checkIn ? formatHoursWorked(d.cell?.hoursWorked, d.cell?.checkIn, d.cell?.checkOut) : '—'
             return (
               <tr key={d.iso} className="hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-2.5 whitespace-nowrap">
@@ -750,7 +740,7 @@ function CalendarView({ month, myRow }: { month: string; myRow: CalendarEmployee
               )}
             >
               <span className="font-medium tabular-nums">{c.day}</span>
-              {c.cell?.hoursWorked && <span className="text-[9px] text-muted-foreground tabular-nums">{c.cell.hoursWorked}</span>}
+              {c.cell?.hoursWorked && <span className="text-[9px] text-muted-foreground tabular-nums">{formatHoursWorked(c.cell?.hoursWorked, c.cell?.checkIn, c.cell?.checkOut)}</span>}
             </div>
           )
         })}
@@ -911,7 +901,7 @@ function DayDetailSheet({
           </div>
           <div className="border-l-2 border-blue-500 ps-2 text-right">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Hours</p>
-            <p className="text-sm font-medium tabular-nums">{cell?.hoursWorked ?? '00:00'}</p>
+            <p className="text-sm font-medium tabular-nums">{formatHoursWorked(cell?.hoursWorked, cell?.checkIn, cell?.checkOut)}</p>
           </div>
         </div>
       </SheetContent>
@@ -955,10 +945,7 @@ function AuditHistoryDialog({
         </DialogHeader>
         <DialogBody className="overflow-y-auto">
           {events.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              <FileClock className="size-8 mb-2 opacity-40" />
-              <p className="text-sm">No events recorded for this day.</p>
-            </div>
+            <EmptyState icon={FileClock} title="No events recorded for this day." size="sm" />
           ) : (
             <ol className="relative border-l-2 border-border ms-4 pt-2 space-y-5">
               {events.map((e, i) => (

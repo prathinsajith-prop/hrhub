@@ -50,8 +50,16 @@ export const CODE_META: Record<string, CodeMeta> = {
     'P-late':  { label: 'Late',          short: 'P',  bg: 'bg-orange-100 dark:bg-orange-950/40',   text: 'text-orange-800 dark:text-orange-200',   weight: 'badge' },
     'P-short': { label: 'Short Hours',   short: 'P',  bg: 'bg-amber-100 dark:bg-amber-950/40',     text: 'text-amber-800 dark:text-amber-200',     weight: 'badge' },
 
-    // Hard absence (filled red)
-    A:         { label: 'Absent / Unpaid Leave / Only Punch In', short: 'A', bg: 'bg-rose-600', text: 'text-white', weight: 'badge' },
+    // Hard absence (filled red) — strict no-show only. The "checked in
+    // but never checked out" path now lives in 'INC' (Incomplete) below,
+    // so a red A always means a true no-show.
+    A:         { label: 'Absent',                                short: 'A',   bg: 'bg-rose-600',                            text: 'text-white',                              weight: 'badge' },
+
+    // Active / partial states. IP keeps a still-checked-in employee
+    // from showing as red Absent on today's row; INC distinguishes a
+    // forgot-to-checkout from a true no-show on past days.
+    IP:        { label: 'In Progress (checked in)',              short: 'IP',  bg: 'bg-emerald-200 dark:bg-emerald-900/60',  text: 'text-emerald-900 dark:text-emerald-50',   weight: 'badge' },
+    INC:       { label: 'Incomplete (no check-out)',             short: 'INC', bg: 'bg-amber-200 dark:bg-amber-900/60',      text: 'text-amber-900 dark:text-amber-50',       weight: 'badge' },
 
     // Leaves (each a distinct hue)
     AL:        { label: 'Annual Leave',     short: 'AL', bg: 'bg-sky-100 dark:bg-sky-950/40',       text: 'text-sky-800 dark:text-sky-200',          weight: 'badge' },
@@ -80,7 +88,7 @@ export const CODE_META: Record<string, CodeMeta> = {
 //   Hajj Leave → Holiday → Late → Maternity Leave → New Employees → Offset →
 //   Paternity Leave → Present → Short Hours → Sick Leave → Week Off →
 //   Work from home
-export const LEGEND_ORDER: string[] = ['A', 'AL', 'BL', 'BT', 'E', 'HJ', 'H', 'P-late', 'ML', 'N/A', 'OS', 'PL', 'P', 'P-short', 'SL', 'WO', 'WFH']
+export const LEGEND_ORDER: string[] = ['A', 'AL', 'BL', 'BT', 'E', 'HJ', 'H', 'IP', 'INC', 'P-late', 'ML', 'N/A', 'OS', 'PL', 'P', 'P-short', 'SL', 'WO', 'WFH']
 
 /**
  * Standalone legend popover. Drop next to any surface that renders status

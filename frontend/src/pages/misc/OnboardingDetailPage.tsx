@@ -7,6 +7,7 @@ import { Badge, Card, Progress } from '@/components/ui/primitives'
 import { ConfirmDialog, toast, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, DialogClose } from '@/components/ui/overlays'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { ActionBadge } from '@/components/shared'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
@@ -63,13 +64,17 @@ export function OnboardingDetailPage() {
     if (!checklist) {
         return (
             <PageWrapper>
-                <Card className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                    <Clock className="size-10 text-muted-foreground" />
-                    <p className="text-sm font-medium">Onboarding checklist not found</p>
-                    <Button variant="outline" size="sm" onClick={() => navigate('/onboarding')}>
-                        <ArrowLeft className="size-3.5 mr-1.5" />Back to onboarding
-                    </Button>
-                </Card>
+                <EmptyState
+                    icon={Clock}
+                    title="Onboarding checklist not found"
+                    variant="card"
+                    size="lg"
+                    action={(
+                        <Button variant="outline" size="sm" onClick={() => navigate('/onboarding')}>
+                            <ArrowLeft className="size-3.5 mr-1.5" />Back to onboarding
+                        </Button>
+                    )}
+                />
             </PageWrapper>
         )
     }
@@ -873,10 +878,12 @@ function DocumentsTab({ checklist }: { checklist: OnboardingChecklist }) {
 
             {/* Per-step panels */}
             {checklist.steps.length === 0 ? (
-                <Card className="flex flex-col items-center justify-center py-10 text-center gap-2">
-                    <FileText className="size-8 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">No onboarding steps yet. Add steps first, then upload documents against each one.</p>
-                </Card>
+                <EmptyState
+                    icon={FileText}
+                    title="No onboarding steps yet. Add steps first, then upload documents against each one."
+                    variant="card"
+                    size="sm"
+                />
             ) : (
                 <div className="space-y-2">
                     {checklist.steps.map((step) => (
@@ -932,10 +939,7 @@ function ActivityTab({ employeeId }: { employeeId: string }) {
         <Card className="p-4">
             <h3 className="text-sm font-semibold mb-3">Recent activity</h3>
             {logs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
-                    <Activity className="size-8 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">No activity recorded yet.</p>
-                </div>
+                <EmptyState icon={Activity} title="No activity recorded yet." size="sm" />
             ) : (
                 <div className="space-y-2">
                     {logs.map((log) => (

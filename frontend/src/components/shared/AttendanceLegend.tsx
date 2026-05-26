@@ -34,8 +34,20 @@ export const CODE_META: Record<string, CodeMeta> = {
     'P-late':  { label: 'Late',          short: 'P',  bg: 'bg-orange-100 dark:bg-orange-950/40',   text: 'text-orange-800 dark:text-orange-200',   weight: 'badge' },
     'P-short': { label: 'Short Hours',   short: 'P',  bg: 'bg-amber-100 dark:bg-amber-950/40',     text: 'text-amber-800 dark:text-amber-200',     weight: 'badge' },
 
-    // Hard absence (filled red)
-    A:         { label: 'Absent / Unpaid Leave / Only Punch In', short: 'A', bg: 'bg-rose-600', text: 'text-white', weight: 'badge' },
+    // Hard absence (filled red) — "didn't show up" only. The old label
+    // bundled missing-checkout into this code; that path now lives in
+    // 'INC' below so a red A always means a true no-show.
+    A:         { label: 'Absent',                                short: 'A',   bg: 'bg-rose-600',                            text: 'text-white',                              weight: 'badge' },
+
+    // Active / partial states — distinct from Absent so HR can tell at
+    // a glance whether someone is currently working vs. forgot to
+    // punch out vs. didn't show up.
+    //   IP  = "In Progress": today, employee checked in, no checkout
+    //         yet. Bright green — they're on shift right now.
+    //   INC = "Incomplete":  past day with a check-in but no check-out.
+    //         Amber — HR needs to close the day out or follow up.
+    IP:        { label: 'In Progress (checked in)',              short: 'IP',  bg: 'bg-emerald-200 dark:bg-emerald-900/60',  text: 'text-emerald-900 dark:text-emerald-50',   weight: 'badge' },
+    INC:       { label: 'Incomplete (no check-out)',             short: 'INC', bg: 'bg-amber-200 dark:bg-amber-900/60',      text: 'text-amber-900 dark:text-amber-50',       weight: 'badge' },
 
     // Leaves (each a distinct hue)
     AL:        { label: 'Annual Leave',     short: 'AL', bg: 'bg-sky-100 dark:bg-sky-950/40',       text: 'text-sky-800 dark:text-sky-200',          weight: 'badge' },
@@ -60,10 +72,10 @@ export const CODE_META: Record<string, CodeMeta> = {
 // Alphabetical by label. Source of truth is `CODE_META[code].label`. If you
 // add/rename a code, keep this list ordered:
 //   Absent → Annual Leave → Bereavement Leave → Business Trip → Excuse →
-//   Hajj Leave → Holiday → Late → Maternity Leave → New Employees → Offset →
-//   Paternity Leave → Present → Short Hours → Sick Leave → Week Off →
-//   Work from home
-export const LEGEND_ORDER: string[] = ['A', 'AL', 'BL', 'BT', 'E', 'HJ', 'H', 'P-late', 'ML', 'N/A', 'OS', 'PL', 'P', 'P-short', 'SL', 'WO', 'WFH']
+//   Hajj Leave → Holiday → In Progress → Incomplete → Late → Maternity Leave
+//   → New Employees → Offset → Paternity Leave → Present → Short Hours →
+//   Sick Leave → Week Off → Work from home
+export const LEGEND_ORDER: string[] = ['A', 'AL', 'BL', 'BT', 'E', 'HJ', 'H', 'IP', 'INC', 'P-late', 'ML', 'N/A', 'OS', 'PL', 'P', 'P-short', 'SL', 'WO', 'WFH']
 
 export function AttendanceLegendPopover({ width = 340 }: { width?: 320 | 340 }) {
     return (

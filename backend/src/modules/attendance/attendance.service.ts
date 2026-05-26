@@ -4,6 +4,7 @@ import { eq, and, asc, gte, lte, sql } from 'drizzle-orm'
 import { encodeCursor, decodeCursor } from '../../lib/db-helpers.js'
 import { Conditions } from '../../lib/filters.js'
 import { resolveAvatarUrls } from '../../plugins/s3.js'
+import { reverseGeocode } from '../../lib/geocoding.js'
 
 // ─── Punch log helpers ─────────────────────────────────────────────────────
 //
@@ -192,6 +193,31 @@ export async function recordPunch(
         }
     }
 
+    // Resolve a place name from the coordinates when we have them.
+    // Client-supplied `locationName` (e.g. from a fixed kiosk or biometric
+    // device that knows its address) always wins. Otherwise the helper
+    // calls Nominatim with a 3-second budget + in-memory cache, so back-
+    // to-back punches from the same office are essentially free and a
+    // dead network never freezes the punch write.
+    let resolvedLocationName: string | null = input.locationName ?? null
+    const numericLat = typeof input.latitude === 'number'
+        ? input.latitude
+        : (typeof input.latitude === 'string' && input.latitude !== '' ? Number(input.latitude) : null)
+    const numericLng = typeof input.longitude === 'number'
+        ? input.longitude
+        : (typeof input.longitude === 'string' && input.longitude !== '' ? Number(input.longitude) : null)
+    if (
+        !resolvedLocationName
+        && numericLat !== null && Number.isFinite(numericLat)
+        && numericLng !== null && Number.isFinite(numericLng)
+    ) {
+        try {
+            resolvedLocationName = await reverseGeocode(numericLat, numericLng)
+        } catch {
+            resolvedLocationName = null
+        }
+    }
+
     try {
         const [row] = await db.insert(attendancePunches).values({
             tenantId,
@@ -199,7 +225,7 @@ export async function recordPunch(
             date: day,
             punchType,
             recordedAt,
-            locationName: input.locationName ?? null,
+            locationName: resolvedLocationName,
             latitude: input.latitude != null ? String(input.latitude) : null,
             longitude: input.longitude != null ? String(input.longitude) : null,
             source: input.source ?? 'web',

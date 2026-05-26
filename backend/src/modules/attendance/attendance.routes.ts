@@ -54,6 +54,19 @@ function attendanceCode(
     checkIn: Date | null,
     checkOut: Date | null,
     hoursWorked: string | null,
+    /**
+     * True when the row being classified represents *today* (in tenant
+     * time). Affects how a "checked-in but no checkout" row is rendered:
+     *   - today  → 'IP'  (In Progress — the employee is currently
+     *                    on-shift and just hasn't punched out yet)
+     *   - past   → 'INC' (Incomplete — they forgot to punch out, or
+     *                    left early without punching; HR needs to act)
+     *
+     * The old behaviour coded both as 'A' (Absent), which confused HR
+     * because someone currently checked in showed as red Absent on
+     * the grid.
+     */
+    isToday = false,
 ): string {
     if (status === 'on_leave') return 'AL'
     if (status === 'wfh') return 'WFH'
@@ -61,7 +74,7 @@ function attendanceCode(
     if (status === 'half_day') return 'P-short'
     if (status === 'late') return 'P-late'
     if (status === 'present' || status === 'half_day') {
-        if (!checkOut && checkIn) return 'A'
+        if (!checkOut && checkIn) return isToday ? 'IP' : 'INC'
         const h = hoursWorked ? Number(hoursWorked) : null
         if (h != null && h > 0 && h < 4) return 'P-short'
         return 'P'
@@ -289,6 +302,14 @@ export async function attendanceRoutes(fastify: any) {
                 holidayName?: string
             }> = []
 
+            // Compute today's ISO once per employee instead of per cell.
+            // Used to decide whether a "checked in but no checkout" row
+            // is In Progress (today, employee still on shift) or
+            // Incomplete (past day, forgot to punch out).
+            const todayObj = new Date()
+            todayObj.setUTCHours(0, 0, 0, 0)
+            const todayIso = `${todayObj.getUTCFullYear()}-${String(todayObj.getUTCMonth() + 1).padStart(2, '0')}-${String(todayObj.getUTCDate()).padStart(2, '0')}`
+
             for (let day = 1; day <= daysInMonth; day++) {
                 const dateObj = new Date(Date.UTC(yearN, monthN - 1, day))
                 const iso = `${monthStr}-${String(day).padStart(2, '0')}`
@@ -325,7 +346,7 @@ export async function attendanceRoutes(fastify: any) {
                 const att = attByEmpDate.get(`${emp.id}|${iso}`)
                 if (att) {
                     cells.push({
-                        code: attendanceCode(att.status, att.checkIn, att.checkOut, att.hoursWorked),
+                        code: attendanceCode(att.status, att.checkIn, att.checkOut, att.hoursWorked, iso === todayIso),
                         checkIn: att.checkIn ? new Date(att.checkIn).toISOString() : null,
                         checkOut: att.checkOut ? new Date(att.checkOut).toISOString() : null,
                         hoursWorked: att.hoursWorked ?? null,
@@ -333,9 +354,7 @@ export async function attendanceRoutes(fastify: any) {
                     continue
                 }
 
-                const today = new Date()
-                today.setUTCHours(0, 0, 0, 0)
-                if (dateObj < today) {
+                if (dateObj < todayObj) {
                     cells.push({ code: 'A', checkIn: null, checkOut: null, hoursWorked: null })
                 } else {
                     cells.push({ code: '', checkIn: null, checkOut: null, hoursWorked: null })

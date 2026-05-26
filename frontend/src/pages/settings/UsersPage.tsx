@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
 import { cn, formatDate } from '@/lib/utils'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
@@ -21,6 +20,7 @@ import {
     type InvitableEmployee, type TenantUser,
 } from '@/hooks/useSettings'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyableEmail, MultiRoleToggle, MULTI_ROLE_OPTIONS, MULTI_ROLE_OPTIONS_WITH_SUPER } from '@/components/shared'
@@ -48,12 +48,162 @@ function initials(name: string) {
     return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
 }
 
+/**
+ * Build a "branch → division → department" path string for a leaf
+ * department name by walking the org-unit parent chain. Returns the bare
+ * department name if no ancestors are found, or `null` when the input
+ * isn't a known department.
+ *
+ * Memoise the returned function at the call site with `useMemo` so we
+ * don't rebuild the id-index on every render.
+ */
+function buildDepartmentPathLookup(orgUnits: OrgUnit[]): (departmentName: string | null | undefined) => string | null {
+    const byId = new Map<string, OrgUnit>()
+    for (const u of orgUnits) byId.set(u.id, u)
+    // The user model carries `department` as a string — match by name so we
+    // don't need an extra id on the user payload. Tenant-wide unique names
+    // for departments is the existing convention.
+    const departmentsByName = new Map<string, OrgUnit>()
+    for (const u of orgUnits) {
+        if (u.type === 'department') departmentsByName.set(u.name.toLowerCase(), u)
+    }
+    return (departmentName) => {
+        if (!departmentName) return null
+        const dept = departmentsByName.get(departmentName.toLowerCase())
+        if (!dept) return departmentName // not a known department — render as-is
+        const chain: string[] = []
+        let cursor: OrgUnit | null = dept
+        // Walk parents until we hit the root. Cap at 6 hops as a paranoia
+        // guard against a malformed cycle in the data.
+        for (let i = 0; i < 6 && cursor; i++) {
+            chain.unshift(cursor.name)
+            cursor = cursor.parentId ? byId.get(cursor.parentId) ?? null : null
+        }
+        return chain.join(' → ')
+    }
+}
+
 const ROLE_LABEL: Record<UserRole, string> = {
     super_admin: 'Super Admin',
     hr_manager: 'HR Manager',
     pro_officer: 'PRO Officer',
     dept_head: 'Department Manager',
     employee: 'Employee',
+}
+
+/**
+ * Inline role-chip row that renders EVERY assignable role and styles the
+ * ones the user currently holds as filled badges. Clicking a chip toggles
+ * that role for the user — same mutation as the Manage Access modal, just
+ * without leaving the list.
+ *
+ * Constraints enforced inline:
+ *   - At least one role must remain selected (last chip is non-clickable).
+ *   - When `disabled` is true (read-only viewers, or row belongs to caller)
+ *     all chips render as static badges.
+ *   - Super Admin chip is only visible when the caller is themselves a
+ *     super admin (matches the Manage Access modal's `availableOptions`).
+ */
+function RoleChipToggleRow({
+    user,
+    canManage,
+    disabled,
+}: {
+    user: TenantUser
+    canManage: boolean
+    disabled: boolean
+}) {
+    const { t } = useTranslation()
+    const updateUser = useUpdateUser()
+    const callerRole = useAuthStore((s) => s.user?.role)
+    const callerIsSuperAdmin = callerRole === 'super_admin'
+    const availableOptions = callerIsSuperAdmin ? MULTI_ROLE_OPTIONS_WITH_SUPER : MULTI_ROLE_OPTIONS
+
+    const assigned = useMemo<UserRole[]>(
+        () => ((user.roles?.length ? user.roles : [user.role]) as UserRole[]),
+        [user.roles, user.role],
+    )
+    const assignedSet = useMemo(() => new Set(assigned), [assigned])
+    const interactive = canManage && !disabled
+
+    async function toggleRole(role: UserRole) {
+        const isActive = assignedSet.has(role)
+        // Prevent removing the last role — every user must keep at least one.
+        if (isActive && assigned.length === 1) {
+            toast.error('A user must keep at least one role.')
+            return
+        }
+        const next: UserRole[] = isActive ? assigned.filter((r) => r !== role) : [...assigned, role]
+        const optLabel =
+            MULTI_ROLE_OPTIONS_WITH_SUPER.find((o) => o.id === role)?.label ?? ROLE_LABEL[role] ?? role
+        try {
+            await updateUser.mutateAsync({ id: user.id, roles: next, role: next[0] })
+            // Errors get auto-toasted via the global MutationCache; success
+            // toasts must be explicit so HR sees the action landed.
+            toast.success(
+                isActive
+                    ? t('settingsDetail.users.roleRemoved', { role: optLabel, defaultValue: `${optLabel} removed` })
+                    : t('settingsDetail.users.roleAssigned', { role: optLabel, defaultValue: `${optLabel} assigned` }),
+            )
+        } catch {
+            // No-op — the MutationCache handler already surfaced the error.
+        }
+    }
+
+    return (
+        <div className="flex items-center gap-1 flex-wrap min-w-0">
+            {availableOptions.map((opt) => {
+                const role = opt.id as UserRole
+                const active = assignedSet.has(role)
+                const isLastActive = active && assigned.length === 1
+                // Static badge when caller can't manage — keeps the visual
+                // grammar identical to the editable case so the column never
+                // shifts on permission changes.
+                if (!interactive) {
+                    return active ? (
+                        <span
+                            key={role}
+                            className={cn(
+                                'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border whitespace-nowrap',
+                                ROLE_BADGE_STYLE[role] ?? 'border-border text-foreground/70',
+                            )}
+                        >
+                            {opt.label}
+                        </span>
+                    ) : null
+                }
+                return (
+                    <button
+                        key={role}
+                        type="button"
+                        onClick={() => void toggleRole(role)}
+                        disabled={isLastActive || updateUser.isPending}
+                        title={
+                            active
+                                ? isLastActive
+                                    ? 'A user must keep at least one role'
+                                    : `Remove ${opt.label}`
+                                : `Assign ${opt.label}`
+                        }
+                        className={cn(
+                            'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border whitespace-nowrap transition-all',
+                            active
+                                ? cn(
+                                    ROLE_BADGE_STYLE[role] ?? 'border-border text-foreground/70',
+                                    'shadow-sm',
+                                    !isLastActive && 'hover:opacity-70 hover:scale-[0.97]',
+                                )
+                                : 'border-dashed border-border bg-transparent text-muted-foreground/70 hover:text-foreground hover:border-foreground/40 hover:bg-muted/40',
+                            isLastActive && 'cursor-not-allowed opacity-90',
+                            updateUser.isPending && 'cursor-progress',
+                        )}
+                    >
+                        {opt.label}
+                    </button>
+                )
+            })}
+        </div>
+    )
 }
 
 type PermGroupKey = 'people' | 'time' | 'payroll' | 'compliance' | 'hiring' | 'assets' | 'admin' | 'reports' | 'other'
@@ -476,6 +626,11 @@ export function UsersPage() {
     const { user: me } = useAuthStore()
     const canManageUsers = can('manage_users')
     const { data: tenantUsers, isLoading } = useTenantUsers()
+    // Org-unit tree is loaded so we can render the user's full
+    // branch → division → department path instead of just the leaf name.
+    // Cached at 5min so it doesn't refetch when switching tabs.
+    const { data: orgUnits = [] } = useOrgUnits()
+    const departmentPath = useMemo(() => buildDepartmentPathLookup(orgUnits), [orgUnits])
     const updateUser = useUpdateUser()
     const resendInvite = useResendUserInvite()
     const [showInvite, setShowInvite] = useState(false)
@@ -676,21 +831,45 @@ export function UsersPage() {
                         <div className="divide-y border rounded-lg overflow-hidden">
                             {filteredUsers.map((u) => {
                                 const isSelf = u.id === me?.id
+                                // Resolve the user's full org path (Branch → Division → Department)
+                                // so the row carries hierarchy context instead of just the leaf
+                                // department name. Falls back to the bare department name when
+                                // the user sits at the root or the unit hasn't loaded yet.
+                                const fullPath = departmentPath(u.department) ?? u.department ?? null
                                 return (
                                     <div key={u.id} className={cn(
-                                        'flex items-center justify-between gap-3 px-4 py-3 transition-colors',
+                                        // Three-column row: identity (left, flex) — roles (middle,
+                                        // flex) — actions (right, intrinsic). The middle column
+                                        // surfaces every assigned role inline so HR can scan
+                                        // who-has-what without opening a popover.
+                                        'grid items-center gap-4 px-4 py-3 transition-colors',
+                                        'grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]',
                                         u.isActive ? 'hover:bg-muted/30' : 'bg-muted/20 opacity-70',
                                     )}>
-                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                        {/* ── Left: identity ─────────────────────────────────── */}
+                                        <div className="flex items-center gap-3 min-w-0">
                                             <Avatar className="size-9 shrink-0">
                                                 {u.avatarUrl && <AvatarImage src={u.avatarUrl} alt={u.name} />}
                                                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                                                     {initials(u.name)}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            <div className="min-w-0">
+                                            <div className="min-w-0 flex-1">
+                                                {/* Name + feature-flag chips + status badges */}
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <p className="text-sm font-medium truncate">{u.name}</p>
+                                                    <FeatureFlagChip
+                                                        icon={Timer}
+                                                        enabled={u.attendancePunchEnabled !== false}
+                                                        onLabel={t('settingsDetail.users.flagPunchOn', { defaultValue: 'Self check-in / check-out enabled' })}
+                                                        offLabel={t('settingsDetail.users.flagPunchOff', { defaultValue: 'Self check-in / check-out disabled' })}
+                                                    />
+                                                    <FeatureFlagChip
+                                                        icon={Pencil}
+                                                        enabled={u.attendanceManualEntryEnabled !== false}
+                                                        onLabel={t('settingsDetail.users.flagManualOn', { defaultValue: 'Manual attendance entry enabled' })}
+                                                        offLabel={t('settingsDetail.users.flagManualOff', { defaultValue: 'Manual attendance entry disabled' })}
+                                                    />
                                                     {isSelf && (
                                                         <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                                                             {t('settingsDetail.users.youLabel')}
@@ -700,20 +879,39 @@ export function UsersPage() {
                                                         <Badge variant="secondary" className="text-[10px]">{t('common.inactive')}</Badge>
                                                     )}
                                                 </div>
+                                                {/* Email + designation + full org path */}
                                                 <div className="text-xs text-muted-foreground truncate flex items-center gap-1.5 flex-wrap">
                                                     <CopyableEmail email={u.email} className="text-xs text-muted-foreground" />
-                                                    {(u.designation || u.department) && (
+                                                    {u.designation && (
                                                         <>
                                                             <span aria-hidden className="opacity-50">·</span>
-                                                            <span className="opacity-80 truncate">
-                                                                {[u.designation, u.department].filter(Boolean).join(' · ')}
-                                                            </span>
+                                                            <span className="opacity-80 truncate">{u.designation}</span>
+                                                        </>
+                                                    )}
+                                                    {fullPath && (
+                                                        <>
+                                                            <span aria-hidden className="opacity-50">·</span>
+                                                            <span className="opacity-80 truncate" title={fullPath}>{fullPath}</span>
                                                         </>
                                                     )}
                                                 </div>
                                             </div>
                                         </div>
 
+                                        {/* ── Middle: every assignable role as a toggle chip ─
+                                             Filled = assigned, dashed-outline = unassigned. Click
+                                             a chip to flip its state — same backend mutation as
+                                             the Manage Access modal. Hidden on narrow screens so
+                                             the action button can't get pushed off the row. */}
+                                        <div className="hidden md:flex min-w-0">
+                                            <RoleChipToggleRow
+                                                user={u}
+                                                canManage={canManageUsers}
+                                                disabled={isSelf}
+                                            />
+                                        </div>
+
+                                        {/* ── Right: last-login + manage-access ──────────────── */}
                                         <div className="flex items-center gap-2.5 shrink-0 flex-wrap justify-end">
                                             <span
                                                 className="hidden md:inline text-[11px] text-muted-foreground tabular-nums"
@@ -721,29 +919,6 @@ export function UsersPage() {
                                             >
                                                 {formatLastLogin(u.lastLoginAt, t)}
                                             </span>
-
-                                            {/* Feature switches — small icon chips so HR can see
-                                                punch / manual-entry state at a glance without
-                                                opening Manage Access. Green = on, slate = off.
-                                                Tooltip surfaces the long-form label on hover. */}
-                                            <FeatureFlagChip
-                                                icon={Timer}
-                                                enabled={u.attendancePunchEnabled !== false}
-                                                onLabel={t('settingsDetail.users.flagPunchOn', { defaultValue: 'Self check-in / check-out enabled' })}
-                                                offLabel={t('settingsDetail.users.flagPunchOff', { defaultValue: 'Self check-in / check-out disabled' })}
-                                            />
-                                            <FeatureFlagChip
-                                                icon={Pencil}
-                                                enabled={u.attendanceManualEntryEnabled !== false}
-                                                onLabel={t('settingsDetail.users.flagManualOn', { defaultValue: 'Manual attendance entry enabled' })}
-                                                offLabel={t('settingsDetail.users.flagManualOff', { defaultValue: 'Manual attendance entry disabled' })}
-                                            />
-
-                                            {/* Roles popover — click to see the full assigned set.
-                                                Keeps the row tidy when employees stack many roles. */}
-                                            <RolesPopoverButton
-                                                roles={(u.roles?.length ? u.roles : [u.role]) as string[]}
-                                            />
 
                                             {canManageUsers && !isSelf ? (
                                                 <Button
@@ -959,64 +1134,25 @@ function FeatureFlagChip({
             title={enabled ? onLabel : offLabel}
             aria-label={enabled ? onLabel : offLabel}
             className={cn(
-                'relative inline-flex items-center justify-center size-7 rounded-md border transition-colors',
+                // Tighter than before (was size-7) so the chip sits inline
+                // next to the user's name without dominating the row.
+                'relative inline-flex items-center justify-center size-5 rounded-md border transition-colors',
                 enabled
                     ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-900/60 dark:text-emerald-300'
                     : 'bg-muted/40 border-border text-muted-foreground/60',
             )}
         >
-            <Icon className="size-3.5" />
+            <Icon className="size-3" />
             {enabled ? (
-                <span className="absolute -top-1 -right-1 inline-flex size-3 items-center justify-center rounded-full bg-emerald-500 text-white shadow ring-2 ring-background">
-                    <Check className="size-2" />
+                <span className="absolute -top-1 -right-1 inline-flex size-2.5 items-center justify-center rounded-full bg-emerald-500 text-white shadow ring-2 ring-background">
+                    <Check className="size-1.5" />
                 </span>
             ) : (
-                <span className="absolute -top-1 -right-1 inline-flex size-3 items-center justify-center rounded-full bg-muted text-muted-foreground border border-border">
-                    <MinusCircle className="size-2" />
+                <span className="absolute -top-1 -right-1 inline-flex size-2.5 items-center justify-center rounded-full bg-muted text-muted-foreground border border-border">
+                    <MinusCircle className="size-1.5" />
                 </span>
             )}
         </span>
-    )
-}
-
-/**
- * Click-to-reveal popover that surfaces a user's full role list. Lives on the
- * row instead of inline chips so HR stays focused on the user's *identity*
- * and can drill into roles only when they need to.
- */
-function RolesPopoverButton({ roles }: { roles: string[] }) {
-    const { t } = useTranslation()
-    if (roles.length === 0) return null
-    return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border bg-background text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
-                >
-                    <KeyRound className="size-3" />
-                    {t('settingsDetail.users.rolesCount', { count: roles.length, defaultValue: '{{count}} role(s)' })}
-                </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-56 p-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1 pb-1.5">
-                    {t('settingsDetail.users.assignedRoles', { defaultValue: 'Assigned roles' })}
-                </p>
-                <div className="flex flex-col gap-1">
-                    {roles.map((r) => (
-                        <span
-                            key={r}
-                            className={cn(
-                                'text-[11px] font-semibold px-2 py-1 rounded-md border',
-                                ROLE_BADGE_STYLE[r as UserRole] ?? 'bg-muted text-muted-foreground border-border',
-                            )}
-                        >
-                            {ROLE_LABEL[r as UserRole] ?? r}
-                        </span>
-                    ))}
-                </div>
-            </PopoverContent>
-        </Popover>
     )
 }
 

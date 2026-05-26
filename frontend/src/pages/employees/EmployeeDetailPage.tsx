@@ -51,6 +51,7 @@ import { ExpiryStatus } from '@/components/shared/ExpiryStatus'
 import { useEmployeeAssets } from '@/hooks/useAssets'
 import { useAttendance, useAttendanceCalendar } from '@/hooks/useAttendance'
 import { AttendanceCalendarGrid } from '@/components/shared/AttendanceCalendarGrid'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { MonthSwitcher } from '@/components/shared/MonthSwitcher'
 import { resolveMonthFromOffset } from '@/lib/monthRange'
 import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
@@ -2155,24 +2156,27 @@ export function EmployeeDetailPage() {
                   </div>
 
                 ) : docs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-                    <div className="size-14 rounded-2xl bg-muted/60 border border-border flex items-center justify-center mb-4">
-                      <FolderOpen className="size-7 text-muted-foreground/40" />
-                    </div>
-                    <p className="text-sm font-semibold text-foreground">No documents yet</p>
-                    <p className="text-xs text-muted-foreground mt-1 max-w-xs">Upload passports, visas, contracts, qualifications and other compliance files for this employee.</p>
-                    <Button size="sm" variant="outline" className="mt-5" leftIcon={<Plus className="size-3.5" />} onClick={() => setAddDocOpen(true)}>
-                      Add First Document
-                    </Button>
-                  </div>
+                  <EmptyState
+                    icon={FolderOpen}
+                    title="No documents yet"
+                    description="Upload passports, visas, contracts, qualifications and other compliance files for this employee."
+                    size="lg"
+                    action={(
+                      <Button size="sm" variant="outline" leftIcon={<Plus className="size-3.5" />} onClick={() => setAddDocOpen(true)}>
+                        Add First Document
+                      </Button>
+                    )}
+                  />
 
                 ) : filteredDocs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-14 px-6 text-center">
-                    <Search className="size-9 text-muted-foreground/25 mb-3" />
-                    <p className="text-sm font-medium text-foreground">No results for "{docSearch}"</p>
-                    <p className="text-xs text-muted-foreground mt-1">Try a different name or category</p>
-                    <button onClick={() => setDocSearch('')} className="text-xs text-primary mt-3 hover:underline font-medium">Clear search</button>
-                  </div>
+                  <EmptyState
+                    icon={Search}
+                    title={`No results for "${docSearch}"`}
+                    description="Try a different name or category"
+                    action={(
+                      <button onClick={() => setDocSearch('')} className="text-xs text-primary hover:underline font-medium">Clear search</button>
+                    )}
+                  />
 
                 ) : (
                   <div className="p-6 space-y-8">

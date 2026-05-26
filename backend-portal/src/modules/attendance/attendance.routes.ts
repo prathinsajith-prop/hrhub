@@ -15,6 +15,7 @@ import { e400, e403, e404 } from '../../lib/errors.js'
 import { checkInOutSchema, listAttendanceSchema, validate } from '../../lib/validation.js'
 import { recordActivity } from '../../lib/audit.js'
 import { canAccessEmployee, isElevated, resolveAllowedEmployeeIds } from '../../lib/scoping.js'
+import { reverseGeocode } from '../../lib/geocoding.js'
 
 function todayISO(): string {
     return new Date().toISOString().slice(0, 10)
@@ -53,6 +54,14 @@ function attendanceCode(
     checkIn: Date | null,
     checkOut: Date | null,
     hoursWorked: string | null,
+    /**
+     * True when the row being classified is today (tenant time).
+     *   - today  → 'IP'  (In Progress — employee is still on-shift)
+     *   - past   → 'INC' (Incomplete — forgot to punch out)
+     * Replaces the old behaviour where both rendered as 'A' (Absent),
+     * which made a currently-checked-in employee show as red Absent.
+     */
+    isToday = false,
 ): string {
     if (status === 'on_leave') return 'AL'
     if (status === 'wfh') return 'WFH'
@@ -60,7 +69,7 @@ function attendanceCode(
     if (status === 'half_day') return 'P-short'
     if (status === 'late') return 'P-late'
     if (status === 'present' || status === 'half_day') {
-        if (!checkOut && checkIn) return 'A' // only punch-in, never punched out
+        if (!checkOut && checkIn) return isToday ? 'IP' : 'INC'
         const h = hoursWorked ? Number(hoursWorked) : null
         if (h != null && h > 0 && h < 4) return 'P-short'
         return 'P'
@@ -283,6 +292,13 @@ export default async function attendanceRoutes(fastify: FastifyInstance) {
                 holidayName?: string
             }> = []
 
+            // Compute today's ISO once per employee. Used to distinguish
+            // In Progress (still checked in today) from Incomplete (past
+            // day, never punched out).
+            const todayObj = new Date()
+            todayObj.setUTCHours(0, 0, 0, 0)
+            const todayIso = `${todayObj.getUTCFullYear()}-${String(todayObj.getUTCMonth() + 1).padStart(2, '0')}-${String(todayObj.getUTCDate()).padStart(2, '0')}`
+
             for (let day = 1; day <= daysInMonth; day++) {
                 const dateObj = new Date(Date.UTC(yearN, monthN - 1, day))
                 const iso = `${monthStr}-${String(day).padStart(2, '0')}`
@@ -322,7 +338,10 @@ export default async function attendanceRoutes(fastify: FastifyInstance) {
                 const att = attByEmpDate.get(`${emp.id}|${iso}`)
                 if (att) {
                     cells.push({
-                        code: attendanceCode(att.status, att.checkIn, att.checkOut, att.hoursWorked),
+                        // Pass `iso === todayIso` so a still-checked-in
+                        // employee shows In Progress (today) vs Incomplete
+                        // (past). The old code lumped both under 'A'.
+                        code: attendanceCode(att.status, att.checkIn, att.checkOut, att.hoursWorked, iso === todayIso),
                         checkIn: att.checkIn ? new Date(att.checkIn).toISOString() : null,
                         checkOut: att.checkOut ? new Date(att.checkOut).toISOString() : null,
                         hoursWorked: att.hoursWorked ?? null,
@@ -331,9 +350,7 @@ export default async function attendanceRoutes(fastify: FastifyInstance) {
                 }
 
                 // Past day with no record → absent. Future day → empty.
-                const today = new Date()
-                today.setUTCHours(0, 0, 0, 0)
-                if (dateObj < today) {
+                if (dateObj < todayObj) {
                     cells.push({ code: 'A', checkIn: null, checkOut: null, hoursWorked: null })
                 } else {
                     cells.push({ code: '', checkIn: null, checkOut: null, hoursWorked: null })
@@ -633,11 +650,29 @@ async function handlePunch(
     const denied = await isAttendanceFlagDisabled(user.tenantId, targetEmpId, 'punch')
     if (denied) return reply.code(403).send(e403(denied))
 
-    // Location is required for every self-service punch — guards against a
-    // user spoofing a punch via devtools/curl. The portal UI already blocks
-    // submit when geo is null; this is the server-side back-stop.
-    if (typeof body.latitude !== 'number' || typeof body.longitude !== 'number') {
-        return reply.code(400).send(e400('Location is required to record a punch. Enable location and try again.'))
+    // Location is *best-effort*, not a hard gate. We store the coordinates
+    // when the client supplies them (the punch is geo-tagged for audit) and
+    // accept the punch when it can't — desktops without GPS, browsers that
+    // never return a fix indoors, in-app webviews with permission quirks,
+    // etc. Hard-rejecting on missing coords (the old behaviour) repeatedly
+    // stranded users whose device couldn't lock onto GPS even though they
+    // had granted permission — they were stuck with no way to record
+    // attendance.
+    //
+    // Spoofing concern: a malicious user can already submit arbitrary
+    // coordinates via curl — the schema accepts any number. The hard gate
+    // didn't actually prevent spoofing, only inconvenienced honest users.
+    // Real spoof detection (geofencing against the tenant's known sites)
+    // is a future enhancement; until then we keep this lenient.
+    //
+    // Sanity bounds when present: latitude must be in [-90, 90], longitude
+    // in [-180, 180]. Anything outside is a malformed payload — reject so
+    // we don't store garbage that breaks the Google Maps link in the UI.
+    if (typeof body.latitude === 'number' && (body.latitude < -90 || body.latitude > 90)) {
+        return reply.code(400).send(e400('latitude must be between -90 and 90.'))
+    }
+    if (typeof body.longitude === 'number' && (body.longitude < -180 || body.longitude > 180)) {
+        return reply.code(400).send(e400('longitude must be between -180 and 180.'))
     }
 
     const date = todayISO()
@@ -670,6 +705,27 @@ async function handlePunch(
         return reply.code(400).send(e400('You are already checked out. Check in before checking out again.'))
     }
 
+    // Resolve a human-readable place name from the coordinates when we
+    // have them. The client can also pass an explicit `locationName`
+    // (e.g. a kiosk that knows its location) — that always wins. Reverse-
+    // geocoding is best-effort: if the service is unreachable or doesn't
+    // recognise the area, we store null and HR sees the raw lat/lng link.
+    //
+    // The helper itself has a 3-second timeout + in-memory cache, so
+    // back-to-back punches from the same building are essentially free
+    // and a dead network never freezes the punch write.
+    let resolvedLocationName: string | null = body.locationName ?? null
+    if (!resolvedLocationName && typeof body.latitude === 'number' && typeof body.longitude === 'number') {
+        try {
+            resolvedLocationName = await reverseGeocode(body.latitude, body.longitude)
+        } catch {
+            // Defensive — `reverseGeocode` already swallows errors, but
+            // belt and braces. We never let a geocoding failure block
+            // the punch insert.
+            resolvedLocationName = null
+        }
+    }
+
     // Insert the punch event.
     const [punch] = await db
         .insert(attendancePunches)
@@ -679,7 +735,7 @@ async function handlePunch(
             date,
             punchType,
             recordedAt: now,
-            locationName: body.locationName ?? null,
+            locationName: resolvedLocationName,
             latitude: body.latitude != null ? String(body.latitude) : null,
             longitude: body.longitude != null ? String(body.longitude) : null,
             source: 'web',
